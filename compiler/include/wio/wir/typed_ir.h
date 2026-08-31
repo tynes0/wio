@@ -44,11 +44,18 @@ namespace wio::wir::typed
         ShiftRight
     };
 
+    enum class ConversionKind : std::uint8_t
+    {
+        NumericWiden,
+        NumericFit
+    };
+
     enum class Opcode : std::uint8_t
     {
         Constant,
         Unary,
         Binary,
+        Convert,
         Call,
         // SSA value selection. All operands are already evaluated, so builders
         // may only use this for side-effect-free alternatives.
@@ -87,6 +94,7 @@ namespace wio::wir::typed
         Literal literal;
         UnaryOperator unaryOperator = UnaryOperator::Negate;
         BinaryOperator binaryOperator = BinaryOperator::Add;
+        ConversionKind conversionKind = ConversionKind::NumericWiden;
         SourceSpan source;
     };
 
@@ -123,4 +131,5 @@ namespace wio::wir::typed
     [[nodiscard]] std::string_view opcodeName(Opcode opcode);
     [[nodiscard]] std::string_view unaryOperatorName(UnaryOperator op);
     [[nodiscard]] std::string_view binaryOperatorName(BinaryOperator op);
+    [[nodiscard]] std::string_view conversionKindName(ConversionKind kind);
 }

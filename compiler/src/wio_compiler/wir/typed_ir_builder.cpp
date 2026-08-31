@@ -338,7 +338,10 @@ namespace wio::wir::typed
 
                 ValueId value;
                 if (declaration->initializer)
-                    value = buildExpression(declaration->initializer, state);
+                    value = buildExpressionAs(
+                        declaration->initializer,
+                        mapType(symbol->type, declaration),
+                        state);
                 else
                     value = buildDefaultValue(mapType(symbol->type, declaration), declaration, state);
                 if (!value)
@@ -380,7 +383,10 @@ namespace wio::wir::typed
                 };
                 if (returnStatement->value)
                 {
-                    if (const ValueId value = buildExpression(returnStatement->value, state))
+                    if (const ValueId value = buildExpressionAs(
+                            returnStatement->value,
+                            state.function->returnType,
+                            state))
                         instruction.operands.push_back(value);
                 }
                 currentBlock(state).instructions.push_back(std::move(instruction));
@@ -507,6 +513,33 @@ namespace wio::wir::typed
                     .source = SourceSpan::at(expression->location())
                 });
             }
+            if (const auto* fit = expression->as<FitExpression>())
+            {
+                if (fit->operatorDispatchKind != OperatorDispatchKind::None)
+                {
+                    report("WIR2312", "Overloaded fit conversion is not yet supported by Typed WIR.", expression.Get());
+                    return {};
+                }
+                const TypeId sourceTypeId = mapType(fit->operand->refType.Lock(), fit->operand.Get());
+                const TypeId destinationTypeId = mapType(expression->refType.Lock(), expression.Get());
+                const Type* sourceType = result_.module_.types.tryGet(sourceTypeId);
+                const Type* destinationType = result_.module_.types.tryGet(destinationTypeId);
+                if (!sourceType || !destinationType ||
+                    !isNumericType(sourceType->kind) || !isNumericType(destinationType->kind))
+                {
+                    report("WIR2313", "Initial Typed WIR fit lowering supports numeric conversions only.", expression.Get());
+                    return {};
+                }
+                const ValueId operand = buildExpression(fit->operand, state);
+                if (!operand)
+                    return {};
+                return appendValue(Instruction{
+                    .opcode = Opcode::Convert,
+                    .operands = {operand},
+                    .conversionKind = ConversionKind::NumericFit,
+                    .source = SourceSpan::at(expression->location())
+                });
+            }
             if (const auto* identifier = expression->as<Identifier>())
             {
                 const Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
@@ -533,7 +566,8 @@ namespace wio::wir::typed
                     return {};
                 }
 
-                const ValueId right = buildExpression(assignment->right, state);
+                const TypeId targetType = mapType(symbol->type, target);
+                const ValueId right = buildExpressionAs(assignment->right, targetType, state);
                 if (!right)
                     return {};
                 ValueId assigned = right;
@@ -549,7 +583,7 @@ namespace wio::wir::typed
                     currentBlock(state).instructions.push_back(Instruction{
                         .opcode = Opcode::Binary,
                         .result = assigned,
-                        .resultType = mapType(symbol->type, target),
+                        .resultType = targetType,
                         .operands = {current->second, right},
                         .binaryOperator = *compoundOperator,
                         .source = SourceSpan::at(expression->location())
@@ -609,8 +643,9 @@ namespace wio::wir::typed
                     return {};
                 }
                 const ValueId condition = buildExpression(conditional->condition, state);
-                const ValueId whenTrue = buildExpression(conditional->whenTrue, state);
-                const ValueId whenFalse = buildExpression(conditional->whenFalse, state);
+                const TypeId resultType = mapType(expression->refType.Lock(), expression.Get());
+                const ValueId whenTrue = buildExpressionAs(conditional->whenTrue, resultType, state);
+                const ValueId whenFalse = buildExpressionAs(conditional->whenFalse, resultType, state);
                 if (!condition || !whenTrue || !whenFalse)
                     return {};
                 return appendValue(Instruction{
@@ -637,9 +672,17 @@ namespace wio::wir::typed
                     .callee = functionIt->second,
                     .source = SourceSpan::at(expression->location())
                 };
-                for (const auto& argument : call->arguments)
+                const auto functionType = calleeSymbol->type &&
+                    calleeSymbol->type->kind() == sema::TypeKind::Function
+                    ? calleeSymbol->type.AsFast<sema::FunctionType>()
+                    : nullptr;
+                for (std::size_t index = 0; index < call->arguments.size(); ++index)
                 {
-                    const ValueId value = buildExpression(argument, state);
+                    const auto& argument = call->arguments[index];
+                    const TypeId expectedType = functionType && index < functionType->paramTypes.size()
+                        ? mapType(functionType->paramTypes[index], argument.Get())
+                        : mapType(argument->refType.Lock(), argument.Get());
+                    const ValueId value = buildExpressionAs(argument, expectedType, state);
                     if (!value)
                         return {};
                     instruction.operands.push_back(value);
@@ -656,6 +699,42 @@ namespace wio::wir::typed
 
             report("WIR2305", "Expression kind '" + getKindNameStr(expression->kind()) + "' is not supported by the initial Typed WIR slice.", expression.Get());
             return {};
+        }
+
+        ValueId buildExpressionAs(
+            const NodePtr<Expression>& expression,
+            const TypeId destinationType,
+            FunctionState& state)
+        {
+            const ValueId value = buildExpression(expression, state);
+            if (!value)
+                return {};
+            const TypeId sourceType = mapType(expression->refType.Lock(), expression.Get());
+            if (sourceType == destinationType)
+                return value;
+
+            const Type* source = result_.module_.types.tryGet(sourceType);
+            const Type* destination = result_.module_.types.tryGet(destinationType);
+            if (!source || !destination ||
+                !isSafeNumericWiden(source->kind, destination->kind))
+            {
+                report(
+                    "WIR2314",
+                    "Expression requires a conversion that is not a safe implicit numeric widening.",
+                    expression.Get());
+                return {};
+            }
+
+            const ValueId converted{state.nextValue++};
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::Convert,
+                .result = converted,
+                .resultType = destinationType,
+                .operands = {value},
+                .conversionKind = ConversionKind::NumericWiden,
+                .source = SourceSpan::at(expression->location())
+            });
+            return converted;
         }
 
         ValueId buildDefaultValue(
@@ -1281,6 +1360,60 @@ namespace wio::wir::typed
             if (kind == TypeKind::F64)
                 return FloatType::f64;
             return std::nullopt;
+        }
+
+        static bool isNumericType(const TypeKind kind)
+        {
+            return mapIntegerType(kind).has_value() || mapFloatType(kind).has_value();
+        }
+
+        struct NumericTypeInfo
+        {
+            int bits;
+            bool isSigned;
+            bool isFloat;
+        };
+
+        static std::optional<NumericTypeInfo> numericTypeInfo(const TypeKind kind)
+        {
+            switch (kind)
+            {
+            case TypeKind::I8: return NumericTypeInfo{8, true, false};
+            case TypeKind::I16: return NumericTypeInfo{16, true, false};
+            case TypeKind::I32: return NumericTypeInfo{32, true, false};
+            case TypeKind::I64:
+            case TypeKind::ISize: return NumericTypeInfo{64, true, false};
+            case TypeKind::U8: return NumericTypeInfo{8, false, false};
+            case TypeKind::U16: return NumericTypeInfo{16, false, false};
+            case TypeKind::U32: return NumericTypeInfo{32, false, false};
+            case TypeKind::U64:
+            case TypeKind::USize: return NumericTypeInfo{64, false, false};
+            case TypeKind::F32: return NumericTypeInfo{32, true, true};
+            case TypeKind::F64: return NumericTypeInfo{64, true, true};
+            default: return std::nullopt;
+            }
+        }
+
+        static bool isSafeNumericWiden(const TypeKind sourceKind, const TypeKind destinationKind)
+        {
+            if (sourceKind == destinationKind)
+                return true;
+            const auto source = numericTypeInfo(sourceKind);
+            const auto destination = numericTypeInfo(destinationKind);
+            if (!source || !destination)
+                return false;
+            if (destination->isFloat)
+            {
+                if (source->isFloat)
+                    return destination->bits >= source->bits;
+                const int exactIntegerBits = destination->bits == 32 ? 24 : 53;
+                return source->bits - (source->isSigned ? 1 : 0) <= exactIntegerBits;
+            }
+            if (source->isFloat)
+                return false;
+            if (destination->isSigned == source->isSigned)
+                return destination->bits >= source->bits;
+            return destination->isSigned && !source->isSigned && destination->bits > source->bits;
         }
 
         static std::optional<Literal> integerLiteral(const IntegerResult& value)

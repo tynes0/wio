@@ -29,6 +29,7 @@ namespace wio::wir
             case typed::Opcode::Constant: opcode = lowered::Opcode::Constant; break;
             case typed::Opcode::Unary: opcode = lowered::Opcode::Unary; break;
             case typed::Opcode::Binary: opcode = lowered::Opcode::Binary; break;
+            case typed::Opcode::Convert: opcode = lowered::Opcode::Convert; break;
             case typed::Opcode::Call: opcode = lowered::Opcode::Call; break;
             case typed::Opcode::Return: opcode = lowered::Opcode::Return; break;
             case typed::Opcode::Unreachable: opcode = lowered::Opcode::Unreachable; break;
@@ -46,6 +47,7 @@ namespace wio::wir
                 .literal = instruction.literal,
                 .unaryOperator = instruction.unaryOperator,
                 .binaryOperator = instruction.binaryOperator,
+                .conversionKind = instruction.conversionKind,
                 .source = instruction.source
             };
         }

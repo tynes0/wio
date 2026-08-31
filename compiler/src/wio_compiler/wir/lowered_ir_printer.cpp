@@ -107,6 +107,10 @@ namespace wio::wir::lowered
                 stream << typed::binaryOperatorName(instruction.binaryOperator) << " "
                        << valueRef(instruction.operands.at(0)) << ", " << valueRef(instruction.operands.at(1));
                 break;
+            case Opcode::Convert:
+                stream << typed::conversionKindName(instruction.conversionKind) << " "
+                       << valueRef(instruction.operands.at(0));
+                break;
             case Opcode::Call:
                 stream << "call " << functionRef(instruction.callee) << "(";
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)

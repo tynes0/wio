@@ -11,7 +11,8 @@ namespace wio::wir::typed
     bool producesValue(const Opcode opcode)
     {
         return opcode == Opcode::Constant || opcode == Opcode::Unary ||
-               opcode == Opcode::Binary || opcode == Opcode::Call || opcode == Opcode::Select;
+               opcode == Opcode::Binary || opcode == Opcode::Convert ||
+               opcode == Opcode::Call || opcode == Opcode::Select;
     }
 
     std::string_view opcodeName(const Opcode opcode)
@@ -21,6 +22,7 @@ namespace wio::wir::typed
         case Opcode::Constant: return "const";
         case Opcode::Unary: return "unary";
         case Opcode::Binary: return "binary";
+        case Opcode::Convert: return "convert";
         case Opcode::Call: return "call";
         case Opcode::Select: return "select";
         case Opcode::Return: return "return";
@@ -62,6 +64,16 @@ namespace wio::wir::typed
         case BinaryOperator::BitwiseXor: return "bitwise-xor";
         case BinaryOperator::ShiftLeft: return "shift-left";
         case BinaryOperator::ShiftRight: return "shift-right";
+        }
+        return "unknown";
+    }
+
+    std::string_view conversionKindName(const ConversionKind kind)
+    {
+        switch (kind)
+        {
+        case ConversionKind::NumericWiden: return "numeric-widen";
+        case ConversionKind::NumericFit: return "numeric-fit";
         }
         return "unknown";
     }

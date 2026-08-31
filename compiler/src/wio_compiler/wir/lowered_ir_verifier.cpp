@@ -17,6 +17,15 @@ namespace wio::wir::lowered
                    op == typed::BinaryOperator::Less || op == typed::BinaryOperator::LessEqual ||
                    op == typed::BinaryOperator::Greater || op == typed::BinaryOperator::GreaterEqual;
         }
+
+        bool isNumeric(const TypeKind kind)
+        {
+            return kind == TypeKind::I8 || kind == TypeKind::I16 || kind == TypeKind::I32 ||
+                   kind == TypeKind::I64 || kind == TypeKind::ISize ||
+                   kind == TypeKind::U8 || kind == TypeKind::U16 || kind == TypeKind::U32 ||
+                   kind == TypeKind::U64 || kind == TypeKind::USize ||
+                   kind == TypeKind::F32 || kind == TypeKind::F64;
+        }
     }
 
     VerificationResult Verifier::verify(const Module& module) const
@@ -181,6 +190,18 @@ namespace wio::wir::lowered
                             report("LIR1405", "Lowered WIR comparison result must be bool.", instruction.source, function.id, block.id);
                         else if (!isComparison(instruction.binaryOperator) && instruction.resultType != valueType(instruction.operands[0]))
                             report("LIR1406", "Lowered WIR binary result must match its operand type.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::Convert)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const Type* destinationType = module.types.tryGet(instruction.resultType);
+                        if (!sourceType || !destinationType ||
+                            !isNumeric(sourceType->kind) || !isNumeric(destinationType->kind))
+                        {
+                            report("LIR1417", "Lowered WIR numeric conversion requires one numeric operand and a numeric result.", instruction.source, function.id, block.id);
+                        }
                     }
                     else if (instruction.opcode == Opcode::Call)
                     {

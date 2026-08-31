@@ -230,7 +230,13 @@
 
     void SemanticAnalyzer::visit(FitExpression& node)
     {
+        Ref<Type> previousExpectedExpressionType = currentExpectedExpressionType_;
+        bool previousAllowContextualNumericLiteralTyping = allowContextualNumericLiteralTyping_;
+        currentExpectedExpressionType_ = nullptr;
+        allowContextualNumericLiteralTyping_ = false;
         node.operand->accept(*this);
+        currentExpectedExpressionType_ = previousExpectedExpressionType;
+        allowContextualNumericLiteralTyping_ = previousAllowContextualNumericLiteralTyping;
         node.targetType->accept(*this);
 
         auto srcType = node.operand->refType.Lock();

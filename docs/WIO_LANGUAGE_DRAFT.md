@@ -1214,6 +1214,12 @@ This area is part of the intended `v1` reference/mutation contract:
 
 `fit` is Wio’s explicit conversion operator.
 
+The operand of an explicit `fit` is inferred independently from any expected
+type surrounding the whole expression. For example, `return 500 fit i8;`
+first forms the ordinary `i32` literal `500` and then applies the clamping
+conversion to `i8`; the return type cannot prematurely force the literal to
+`i8` and reject it before `fit` runs.
+
 It is used for:
 
 - numeric conversion,

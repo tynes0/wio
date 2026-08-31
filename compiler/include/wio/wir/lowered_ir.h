@@ -17,6 +17,7 @@ namespace wio::wir::lowered
         Constant,
         Unary,
         Binary,
+        Convert,
         Call,
         Return,
         Jump,
@@ -49,6 +50,7 @@ namespace wio::wir::lowered
         typed::Literal literal;
         typed::UnaryOperator unaryOperator = typed::UnaryOperator::Negate;
         typed::BinaryOperator binaryOperator = typed::BinaryOperator::Add;
+        typed::ConversionKind conversionKind = typed::ConversionKind::NumericWiden;
         SourceSpan source;
     };
 

@@ -29,6 +29,15 @@ namespace wio::wir::typed
                    op == BinaryOperator::Greater || op == BinaryOperator::GreaterEqual;
         }
 
+        bool isNumeric(const TypeKind kind)
+        {
+            return kind == TypeKind::I8 || kind == TypeKind::I16 || kind == TypeKind::I32 ||
+                   kind == TypeKind::I64 || kind == TypeKind::ISize ||
+                   kind == TypeKind::U8 || kind == TypeKind::U16 || kind == TypeKind::U32 ||
+                   kind == TypeKind::U64 || kind == TypeKind::USize ||
+                   kind == TypeKind::F32 || kind == TypeKind::F64;
+        }
+
         bool literalMatches(const Literal& literal, const TypeKind kind)
         {
             if (std::holds_alternative<NullLiteral>(literal))
@@ -356,6 +365,18 @@ namespace wio::wir::typed
                         else if (instruction.resultType != valueType(instruction.operands[0]))
                         {
                             report("WIR1407", "Typed WIR binary result must match its operand type.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::Convert)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const Type* destinationType = module.types.tryGet(instruction.resultType);
+                        if (!sourceType || !destinationType ||
+                            !isNumeric(sourceType->kind) || !isNumeric(destinationType->kind))
+                        {
+                            report("WIR1422", "Typed WIR numeric conversion requires one numeric operand and a numeric result.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::Select)
