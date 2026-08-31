@@ -635,13 +635,7 @@ namespace wio::wir::typed
             if (const auto* conditional = expression->as<ConditionalExpression>())
             {
                 if (!isSideEffectFree(conditional->whenTrue) || !isSideEffectFree(conditional->whenFalse))
-                {
-                    report(
-                        "WIR2306",
-                        "Conditional expressions with side effects require region-based Typed WIR lowering.",
-                        expression.Get());
-                    return {};
-                }
+                    return buildConditionalControlFlow(*conditional, state);
                 const ValueId condition = buildExpression(conditional->condition, state);
                 const TypeId resultType = mapType(expression->refType.Lock(), expression.Get());
                 const ValueId whenTrue = buildExpressionAs(conditional->whenTrue, resultType, state);
@@ -783,6 +777,110 @@ namespace wio::wir::typed
                 .literal = std::move(literal),
                 .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
             });
+            return result;
+        }
+
+        ValueId buildConditionalControlFlow(
+            const ConditionalExpression& expression,
+            FunctionState& state)
+        {
+            const ValueId condition = buildExpression(expression.condition, state);
+            if (!condition)
+                return {};
+
+            const auto incomingValues = state.values;
+            const auto incomingOrder = state.valueOrder;
+            const std::size_t conditionBlockIndex = state.blockIndex;
+            const std::size_t trueBlockIndex = createBlock(
+                state, "conditional.true", SourceSpan::at(expression.whenTrue->location()));
+            const std::size_t falseBlockIndex = createBlock(
+                state, "conditional.false", SourceSpan::at(expression.whenFalse->location()));
+            const std::size_t mergeBlockIndex = createBlock(
+                state, "conditional.merge", SourceSpan::at(expression.location()));
+            const BlockId trueBlock = currentBlockAt(state, trueBlockIndex).id;
+            const BlockId falseBlock = currentBlockAt(state, falseBlockIndex).id;
+            const BlockId mergeBlock = currentBlockAt(state, mergeBlockIndex).id;
+
+            currentBlockAt(state, conditionBlockIndex).instructions.push_back(Instruction{
+                .opcode = Opcode::CondBranch,
+                .operands = {condition},
+                .targets = {trueBlock, falseBlock},
+                .source = SourceSpan::at(expression.condition->location())
+            });
+
+            const TypeId resultType = mapType(expression.refType.Lock(), &expression);
+            FunctionState trueState = state;
+            trueState.blockIndex = trueBlockIndex;
+            trueState.values = incomingValues;
+            trueState.valueOrder = incomingOrder;
+            const ValueId whenTrue = buildExpressionAs(expression.whenTrue, resultType, trueState);
+            if (!whenTrue)
+                return {};
+            state.nextValue = trueState.nextValue;
+            state.nextBlock = trueState.nextBlock;
+
+            FunctionState falseState = state;
+            falseState.blockIndex = falseBlockIndex;
+            falseState.values = incomingValues;
+            falseState.valueOrder = incomingOrder;
+            const ValueId whenFalse = buildExpressionAs(expression.whenFalse, resultType, falseState);
+            if (!whenFalse)
+                return {};
+            state.nextValue = falseState.nextValue;
+            state.nextBlock = falseState.nextBlock;
+
+            BasicBlock& merge = currentBlockAt(state, mergeBlockIndex);
+            const ValueId result{state.nextValue++};
+            merge.parameters.push_back(Parameter{
+                .id = result,
+                .name = "conditional.result",
+                .type = resultType,
+                .source = SourceSpan::at(expression.location())
+            });
+            std::vector<ValueId> trueArguments{whenTrue};
+            std::vector<ValueId> falseArguments{whenFalse};
+            auto mergedValues = incomingValues;
+
+            for (const sema::Symbol* symbol : incomingOrder)
+            {
+                const ValueId incoming = incomingValues.at(symbol);
+                const ValueId trueValue = trueState.values.contains(symbol)
+                    ? trueState.values.at(symbol)
+                    : incoming;
+                const ValueId falseValue = falseState.values.contains(symbol)
+                    ? falseState.values.at(symbol)
+                    : incoming;
+                if (trueValue == falseValue)
+                    continue;
+
+                const ValueId merged{state.nextValue++};
+                merge.parameters.push_back(Parameter{
+                    .id = merged,
+                    .name = symbol->name + ".conditional",
+                    .type = mapType(symbol->type, &expression),
+                    .source = SourceSpan::at(expression.location())
+                });
+                trueArguments.push_back(trueValue);
+                falseArguments.push_back(falseValue);
+                mergedValues[symbol] = merged;
+            }
+
+            currentBlock(trueState).instructions.push_back(Instruction{
+                .opcode = Opcode::Branch,
+                .operands = std::move(trueArguments),
+                .targets = {mergeBlock},
+                .source = SourceSpan::at(expression.whenTrue->location())
+            });
+            currentBlock(falseState).instructions.push_back(Instruction{
+                .opcode = Opcode::Branch,
+                .operands = std::move(falseArguments),
+                .targets = {mergeBlock},
+                .source = SourceSpan::at(expression.whenFalse->location())
+            });
+
+            state.blockIndex = mergeBlockIndex;
+            state.values = std::move(mergedValues);
+            state.valueOrder = incomingOrder;
             return result;
         }
 

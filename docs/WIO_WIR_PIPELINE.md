@@ -34,6 +34,11 @@ as deterministic SSA merge-block parameters rather than hidden memory slots. Uns
 language constructs fail with stable `WIR2xxx` diagnostics; they never silently
 fall back or guess semantics.
 
+Conditional expressions retain `select` only when both alternatives are free
+of side effects. Calls and other effectful alternatives are placed in explicit
+`conditional.true`, `conditional.false`, and `conditional.merge` regions so an
+unselected alternative cannot execute.
+
 ## Lowered WIR
 
 Lowered WIR is the shared backend contract. Its first canonicalization pass
