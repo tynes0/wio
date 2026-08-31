@@ -21,9 +21,10 @@ if(NOT EXISTS "${typed_output}")
 endif()
 file(READ "${typed_output}" typed_text)
 if(NOT typed_text MATCHES "typed-wir module" OR
-   NOT typed_text MATCHES "cond-branch %v0" OR
-   NOT typed_text MATCHES "if.merge")
-    message(FATAL_ERROR "Typed WIR output does not contain the expected local control flow")
+   NOT typed_text MATCHES "cond-branch" OR
+   NOT typed_text MATCHES "while.header" OR
+   NOT typed_text MATCHES "while.exit")
+    message(FATAL_ERROR "Typed WIR output does not contain the expected loop control flow")
 endif()
 
 execute_process(
@@ -38,8 +39,9 @@ if(NOT lowered_result EQUAL 0)
 endif()
 file(READ "${lowered_output}" lowered_text)
 if(NOT lowered_text MATCHES "lowered-wir module" OR
-   NOT lowered_text MATCHES "cond-jump %v0" OR
-   NOT lowered_text MATCHES "if.merge")
+   NOT lowered_text MATCHES "cond-jump" OR
+   NOT lowered_text MATCHES "while.header" OR
+   NOT lowered_text MATCHES "while.exit")
     message(FATAL_ERROR "Lowered WIR output does not contain canonical conditional control flow")
 endif()
 

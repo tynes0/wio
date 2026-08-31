@@ -41,10 +41,18 @@ namespace wio::wir::typed
             std::vector<const sema::Symbol*> valueOrder;
         };
 
+        struct LoopContext
+        {
+            BlockId continueTarget;
+            BlockId breakTarget;
+            std::vector<const sema::Symbol*> carriedSymbols;
+        };
+
         BuildResult& result_;
         std::vector<const FunctionDeclaration*> declarations_;
         std::unordered_map<const sema::Symbol*, FunctionId> functionsBySymbol_;
         std::unordered_map<const sema::Type*, TypeId> typesBySemanticType_;
+        std::vector<LoopContext> loopContexts_;
 
         static BasicBlock& currentBlock(FunctionState& state)
         {
@@ -340,6 +348,21 @@ namespace wio::wir::typed
             if (const auto* ifStatement = statement->as<IfStatement>())
             {
                 buildIfStatement(*ifStatement, state);
+                return;
+            }
+            if (const auto* whileStatement = statement->as<WhileStatement>())
+            {
+                buildWhileStatement(*whileStatement, state);
+                return;
+            }
+            if (statement->is<BreakStatement>())
+            {
+                buildLoopTransfer(statement.Get(), false, state);
+                return;
+            }
+            if (statement->is<ContinueStatement>())
+            {
+                buildLoopTransfer(statement.Get(), true, state);
                 return;
             }
             if (const auto* returnStatement = statement->as<ReturnStatement>())
@@ -713,6 +736,154 @@ namespace wio::wir::typed
             state.blockIndex = mergeBlockIndex;
             state.values = std::move(mergedValues);
             state.valueOrder = incomingOrder;
+        }
+
+        std::unordered_map<const sema::Symbol*, ValueId> addBlockParameters(
+            FunctionState& state,
+            const std::size_t blockIndex,
+            const std::vector<const sema::Symbol*>& symbols,
+            const ASTNode& source,
+            const std::string_view nameSuffix)
+        {
+            auto values = state.values;
+            BasicBlock& block = currentBlockAt(state, blockIndex);
+            for (const sema::Symbol* symbol : symbols)
+            {
+                const ValueId value{state.nextValue++};
+                block.parameters.push_back(Parameter{
+                    .id = value,
+                    .name = symbol->name + std::string(nameSuffix),
+                    .type = mapType(symbol->type, &source),
+                    .source = SourceSpan::at(source.location())
+                });
+                values[symbol] = value;
+            }
+            return values;
+        }
+
+        std::vector<ValueId> collectCarriedValues(
+            const std::unordered_map<const sema::Symbol*, ValueId>& availableValues,
+            const std::vector<const sema::Symbol*>& symbols,
+            const ASTNode* source)
+        {
+            std::vector<ValueId> values;
+            values.reserve(symbols.size());
+            for (const sema::Symbol* symbol : symbols)
+            {
+                const auto found = availableValues.find(symbol);
+                if (found == availableValues.end())
+                {
+                    report("WIR2204", "Loop-carried local value is unavailable on a control-flow edge.", source);
+                    values.push_back(ValueId{});
+                }
+                else
+                    values.push_back(found->second);
+            }
+            return values;
+        }
+
+        void buildLoopTransfer(
+            const ASTNode* statement,
+            const bool isContinue,
+            FunctionState& state)
+        {
+            if (loopContexts_.empty())
+            {
+                report(
+                    isContinue ? "WIR2206" : "WIR2205",
+                    isContinue
+                        ? "Continue statement has no active Typed WIR loop target."
+                        : "Break statement has no active Typed WIR loop target.",
+                    statement);
+                return;
+            }
+
+            const LoopContext& loop = loopContexts_.back();
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::Branch,
+                .operands = collectCarriedValues(state.values, loop.carriedSymbols, statement),
+                .targets = {isContinue ? loop.continueTarget : loop.breakTarget},
+                .source = statement ? SourceSpan::at(statement->location()) : SourceSpan{}
+            });
+        }
+
+        void buildWhileStatement(const WhileStatement& statement, FunctionState& state)
+        {
+            const auto carriedSymbols = state.valueOrder;
+            const auto incomingValues = state.values;
+            const std::size_t preheaderBlockIndex = state.blockIndex;
+            const std::size_t headerBlockIndex = createBlock(
+                state, "while.header", SourceSpan::at(statement.location()));
+            const std::size_t bodyBlockIndex = createBlock(
+                state, "while.body", SourceSpan::at(statement.body->location()));
+            const std::size_t conditionExitBlockIndex = createBlock(
+                state, "while.condition-exit", SourceSpan::at(statement.condition->location()));
+            const std::size_t exitBlockIndex = createBlock(
+                state, "while.exit", SourceSpan::at(statement.location()));
+
+            const auto headerValues = addBlockParameters(
+                state, headerBlockIndex, carriedSymbols, statement, ".loop");
+            const auto exitValues = addBlockParameters(
+                state, exitBlockIndex, carriedSymbols, statement, ".after");
+
+            currentBlockAt(state, preheaderBlockIndex).instructions.push_back(Instruction{
+                .opcode = Opcode::Branch,
+                .operands = collectCarriedValues(incomingValues, carriedSymbols, &statement),
+                .targets = {currentBlockAt(state, headerBlockIndex).id},
+                .source = SourceSpan::at(statement.location())
+            });
+
+            state.blockIndex = headerBlockIndex;
+            state.values = headerValues;
+            state.valueOrder = carriedSymbols;
+            const ValueId condition = buildExpression(statement.condition, state);
+            if (!condition)
+                return;
+
+            const auto conditionValues = state.values;
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::CondBranch,
+                .operands = {condition},
+                .targets = {
+                    currentBlockAt(state, bodyBlockIndex).id,
+                    currentBlockAt(state, conditionExitBlockIndex).id
+                },
+                .source = SourceSpan::at(statement.condition->location())
+            });
+            currentBlockAt(state, conditionExitBlockIndex).instructions.push_back(Instruction{
+                .opcode = Opcode::Branch,
+                .operands = collectCarriedValues(conditionValues, carriedSymbols, &statement),
+                .targets = {currentBlockAt(state, exitBlockIndex).id},
+                .source = SourceSpan::at(statement.condition->location())
+            });
+
+            FunctionState bodyState = state;
+            bodyState.blockIndex = bodyBlockIndex;
+            bodyState.values = conditionValues;
+            bodyState.valueOrder = carriedSymbols;
+            loopContexts_.push_back(LoopContext{
+                .continueTarget = currentBlockAt(state, headerBlockIndex).id,
+                .breakTarget = currentBlockAt(state, exitBlockIndex).id,
+                .carriedSymbols = carriedSymbols
+            });
+            buildStatement(statement.body, bodyState);
+            loopContexts_.pop_back();
+            state.nextValue = bodyState.nextValue;
+            state.nextBlock = bodyState.nextBlock;
+
+            if (!blockIsTerminated(bodyState))
+            {
+                currentBlock(bodyState).instructions.push_back(Instruction{
+                    .opcode = Opcode::Branch,
+                    .operands = collectCarriedValues(bodyState.values, carriedSymbols, &statement),
+                    .targets = {currentBlockAt(state, headerBlockIndex).id},
+                    .source = SourceSpan::at(statement.body->location())
+                });
+            }
+
+            state.blockIndex = exitBlockIndex;
+            state.values = exitValues;
+            state.valueOrder = carriedSymbols;
         }
 
         static BasicBlock& currentBlockAt(FunctionState& state, const std::size_t index)

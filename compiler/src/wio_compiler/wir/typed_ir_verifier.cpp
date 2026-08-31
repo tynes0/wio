@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <optional>
 #include <utility>
 
 namespace wio::wir::typed
@@ -11,6 +12,15 @@ namespace wio::wir::typed
         using ValueTypeMap = std::unordered_map<ValueId::ValueType, TypeId>;
         using FunctionMap = std::unordered_map<FunctionId::ValueType, const Function*>;
         using BlockMap = std::unordered_map<BlockId::ValueType, const BasicBlock*>;
+
+        struct ValueDefinition
+        {
+            BlockId block;
+            std::optional<std::size_t> instructionIndex;
+        };
+
+        using ValueDefinitionMap = std::unordered_map<ValueId::ValueType, ValueDefinition>;
+        using BlockSet = std::unordered_set<BlockId::ValueType>;
 
         bool isComparison(const BinaryOperator op)
         {
@@ -120,7 +130,10 @@ namespace wio::wir::typed
 
             BlockMap blocks;
             ValueTypeMap values;
-            auto defineValue = [&](const Parameter& value, const BlockId block)
+            ValueDefinitionMap definitions;
+            auto defineValue = [&](const Parameter& value,
+                                   const BlockId block,
+                                   const std::optional<std::size_t> instructionIndex = std::nullopt)
             {
                 if (!value.id)
                 {
@@ -131,6 +144,8 @@ namespace wio::wir::typed
                     report("WIR1201", "Typed WIR value has an invalid type.", value.source, function.id, block);
                 if (!values.emplace(value.id.value(), value.type).second)
                     report("WIR1202", "Typed WIR value id is defined more than once.", value.source, function.id, block);
+                else
+                    definitions.emplace(value.id.value(), ValueDefinition{block, instructionIndex});
             };
 
             for (const Parameter& parameter : function.parameters)
@@ -144,8 +159,9 @@ namespace wio::wir::typed
                     report("WIR1301", "Typed WIR block id is duplicated.", block.source, function.id, block.id);
                 for (const Parameter& parameter : block.parameters)
                     defineValue(parameter, block.id);
-                for (const Instruction& instruction : block.instructions)
+                for (std::size_t instructionIndex = 0; instructionIndex < block.instructions.size(); ++instructionIndex)
                 {
+                    const Instruction& instruction = block.instructions[instructionIndex];
                     if (!instruction.result)
                         continue;
                     Parameter resultValue{
@@ -153,7 +169,7 @@ namespace wio::wir::typed
                         .type = instruction.resultType,
                         .source = instruction.source
                     };
-                    defineValue(resultValue, block.id);
+                    defineValue(resultValue, block.id, instructionIndex);
                 }
             }
 
@@ -164,6 +180,87 @@ namespace wio::wir::typed
                 const auto found = values.find(id.value());
                 return found == values.end() ? TypeId{} : found->second;
             };
+
+            std::unordered_map<BlockId::ValueType, std::vector<BlockId::ValueType>> predecessors;
+            for (const BasicBlock& block : function.blocks)
+                predecessors[block.id.value()];
+            for (const BasicBlock& block : function.blocks)
+            {
+                if (block.instructions.empty())
+                    continue;
+                for (const BlockId target : block.instructions.back().targets)
+                {
+                    if (target && blocks.contains(target.value()))
+                        predecessors[target.value()].push_back(block.id.value());
+                }
+            }
+
+            BlockSet reachableBlocks;
+            if (!function.blocks.empty() && function.blocks.front().id)
+            {
+                std::vector<BlockId::ValueType> pending{function.blocks.front().id.value()};
+                while (!pending.empty())
+                {
+                    const BlockId::ValueType blockId = pending.back();
+                    pending.pop_back();
+                    if (!reachableBlocks.insert(blockId).second)
+                        continue;
+                    const BasicBlock* block = blocks.contains(blockId) ? blocks.at(blockId) : nullptr;
+                    if (!block || block->instructions.empty())
+                        continue;
+                    for (const BlockId target : block->instructions.back().targets)
+                    {
+                        if (target && blocks.contains(target.value()))
+                            pending.push_back(target.value());
+                    }
+                }
+            }
+
+            std::unordered_map<BlockId::ValueType, BlockSet> dominators;
+            if (!function.blocks.empty() && function.blocks.front().id)
+            {
+                const BlockId::ValueType entryId = function.blocks.front().id.value();
+                for (const BlockId::ValueType blockId : reachableBlocks)
+                    dominators[blockId] = blockId == entryId ? BlockSet{entryId} : reachableBlocks;
+
+                bool changed = true;
+                while (changed)
+                {
+                    changed = false;
+                    for (const BlockId::ValueType blockId : reachableBlocks)
+                    {
+                        if (blockId == entryId)
+                            continue;
+
+                        BlockSet intersection;
+                        bool hasReachablePredecessor = false;
+                        for (const BlockId::ValueType predecessor : predecessors[blockId])
+                        {
+                            if (!reachableBlocks.contains(predecessor))
+                                continue;
+                            if (!hasReachablePredecessor)
+                            {
+                                intersection = dominators[predecessor];
+                                hasReachablePredecessor = true;
+                                continue;
+                            }
+                            for (auto iterator = intersection.begin(); iterator != intersection.end();)
+                            {
+                                if (!dominators[predecessor].contains(*iterator))
+                                    iterator = intersection.erase(iterator);
+                                else
+                                    ++iterator;
+                            }
+                        }
+                        intersection.insert(blockId);
+                        if (intersection != dominators[blockId])
+                        {
+                            dominators[blockId] = std::move(intersection);
+                            changed = true;
+                        }
+                    }
+                }
+            }
 
             for (const BasicBlock& block : function.blocks)
             {
@@ -191,7 +288,29 @@ namespace wio::wir::typed
                     for (const ValueId operand : instruction.operands)
                     {
                         if (!valueType(operand))
+                        {
                             report("WIR1400", "Typed WIR instruction references an unknown value.", instruction.source, function.id, block.id);
+                            continue;
+                        }
+
+                        const ValueDefinition& definition = definitions.at(operand.value());
+                        if (!definition.block)
+                            continue;
+                        if (definition.block == block.id)
+                        {
+                            if (definition.instructionIndex.has_value() &&
+                                *definition.instructionIndex >= instructionIndex)
+                            {
+                                report("WIR1420", "Typed WIR value is used before its definition in the same block.", instruction.source, function.id, block.id);
+                            }
+                            continue;
+                        }
+                        if (reachableBlocks.contains(block.id.value()) &&
+                            (!dominators.contains(block.id.value()) ||
+                             !dominators.at(block.id.value()).contains(definition.block.value())))
+                        {
+                            report("WIR1421", "Typed WIR value definition does not dominate its use.", instruction.source, function.id, block.id);
+                        }
                     }
 
                     bool callReturnsVoid = false;
