@@ -25,7 +25,7 @@ The initial builder supports top-level functions, parameters, primitive and
 reference-family types, constants, direct calls, unary/binary expressions,
 pure conditional values, local declarations and default initialization,
 identifier assignment, compound assignment, `if`/`else` control flow, returns,
-`while` loops, `break`, `continue`, and expression statements. Mutable values
+`while` loops, C-style `for` loops, `break`, `continue`, and expression statements. Mutable values
 crossing branches and loop iterations are represented
 as deterministic SSA merge-block parameters rather than hidden memory slots. Unsupported
 language constructs fail with stable `WIR2xxx` diagnostics; they never silently

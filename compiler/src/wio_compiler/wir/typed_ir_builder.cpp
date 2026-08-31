@@ -355,6 +355,11 @@ namespace wio::wir::typed
                 buildWhileStatement(*whileStatement, state);
                 return;
             }
+            if (const auto* cForStatement = statement->as<CForStatement>())
+            {
+                buildCForStatement(*cForStatement, state);
+                return;
+            }
             if (statement->is<BreakStatement>())
             {
                 buildLoopTransfer(statement.Get(), false, state);
@@ -884,6 +889,134 @@ namespace wio::wir::typed
             state.blockIndex = exitBlockIndex;
             state.values = exitValues;
             state.valueOrder = carriedSymbols;
+        }
+
+        void buildCForStatement(const CForStatement& statement, FunctionState& state)
+        {
+            const std::size_t outerValueCount = state.valueOrder.size();
+            if (statement.initializer)
+                buildStatement(statement.initializer, state);
+            if (blockIsTerminated(state))
+                return;
+
+            const auto carriedSymbols = state.valueOrder;
+            const auto incomingValues = state.values;
+            const std::size_t preheaderBlockIndex = state.blockIndex;
+            const std::size_t headerBlockIndex = createBlock(
+                state, "for.header", SourceSpan::at(statement.location()));
+            const std::size_t bodyBlockIndex = createBlock(
+                state, "for.body", SourceSpan::at(statement.body->location()));
+            const std::size_t incrementBlockIndex = createBlock(
+                state, "for.increment", SourceSpan::at(
+                    statement.increment ? statement.increment->location() : statement.location()));
+            const std::size_t conditionExitBlockIndex = createBlock(
+                state, "for.condition-exit", SourceSpan::at(
+                    statement.condition ? statement.condition->location() : statement.location()));
+            const std::size_t exitBlockIndex = createBlock(
+                state, "for.exit", SourceSpan::at(statement.location()));
+
+            const auto headerValues = addBlockParameters(
+                state, headerBlockIndex, carriedSymbols, statement, ".loop");
+            const auto incrementValues = addBlockParameters(
+                state, incrementBlockIndex, carriedSymbols, statement, ".next");
+            const auto exitValues = addBlockParameters(
+                state, exitBlockIndex, carriedSymbols, statement, ".after");
+
+            currentBlockAt(state, preheaderBlockIndex).instructions.push_back(Instruction{
+                .opcode = Opcode::Branch,
+                .operands = collectCarriedValues(incomingValues, carriedSymbols, &statement),
+                .targets = {currentBlockAt(state, headerBlockIndex).id},
+                .source = SourceSpan::at(statement.location())
+            });
+
+            state.blockIndex = headerBlockIndex;
+            state.values = headerValues;
+            state.valueOrder = carriedSymbols;
+            ValueId condition;
+            if (statement.condition)
+                condition = buildExpression(statement.condition, state);
+            else
+            {
+                condition = ValueId{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::Constant,
+                    .result = condition,
+                    .resultType = result_.module_.types.boolType(),
+                    .literal = true,
+                    .source = SourceSpan::at(statement.location())
+                });
+            }
+            if (!condition)
+                return;
+
+            const auto conditionValues = state.values;
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::CondBranch,
+                .operands = {condition},
+                .targets = {
+                    currentBlockAt(state, bodyBlockIndex).id,
+                    currentBlockAt(state, conditionExitBlockIndex).id
+                },
+                .source = SourceSpan::at(
+                    statement.condition ? statement.condition->location() : statement.location())
+            });
+            currentBlockAt(state, conditionExitBlockIndex).instructions.push_back(Instruction{
+                .opcode = Opcode::Branch,
+                .operands = collectCarriedValues(conditionValues, carriedSymbols, &statement),
+                .targets = {currentBlockAt(state, exitBlockIndex).id},
+                .source = SourceSpan::at(statement.location())
+            });
+
+            FunctionState bodyState = state;
+            bodyState.blockIndex = bodyBlockIndex;
+            bodyState.values = conditionValues;
+            bodyState.valueOrder = carriedSymbols;
+            loopContexts_.push_back(LoopContext{
+                .continueTarget = currentBlockAt(state, incrementBlockIndex).id,
+                .breakTarget = currentBlockAt(state, exitBlockIndex).id,
+                .carriedSymbols = carriedSymbols
+            });
+            buildStatement(statement.body, bodyState);
+            loopContexts_.pop_back();
+            state.nextValue = bodyState.nextValue;
+            state.nextBlock = bodyState.nextBlock;
+            if (!blockIsTerminated(bodyState))
+            {
+                currentBlock(bodyState).instructions.push_back(Instruction{
+                    .opcode = Opcode::Branch,
+                    .operands = collectCarriedValues(bodyState.values, carriedSymbols, &statement),
+                    .targets = {currentBlockAt(state, incrementBlockIndex).id},
+                    .source = SourceSpan::at(statement.body->location())
+                });
+            }
+
+            FunctionState incrementState = state;
+            incrementState.blockIndex = incrementBlockIndex;
+            incrementState.values = incrementValues;
+            incrementState.valueOrder = carriedSymbols;
+            if (statement.increment)
+                buildExpression(statement.increment, incrementState);
+            if (!blockIsTerminated(incrementState))
+            {
+                currentBlock(incrementState).instructions.push_back(Instruction{
+                    .opcode = Opcode::Branch,
+                    .operands = collectCarriedValues(incrementState.values, carriedSymbols, &statement),
+                    .targets = {currentBlockAt(state, headerBlockIndex).id},
+                    .source = SourceSpan::at(
+                        statement.increment ? statement.increment->location() : statement.location())
+                });
+            }
+            state.nextValue = incrementState.nextValue;
+            state.nextBlock = incrementState.nextBlock;
+
+            state.blockIndex = exitBlockIndex;
+            state.values = exitValues;
+            state.valueOrder = carriedSymbols;
+            while (state.valueOrder.size() > outerValueCount)
+            {
+                state.values.erase(state.valueOrder.back());
+                state.valueOrder.pop_back();
+            }
         }
 
         static BasicBlock& currentBlockAt(FunctionState& state, const std::size_t index)
