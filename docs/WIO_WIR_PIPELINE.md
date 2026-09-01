@@ -25,8 +25,10 @@ Named types retain their semantic category instead of collapsing to a backend
 spelling: `component`, `object`, `interface`, `enum`, and `flagset` are distinct
 nominal kinds. Components use value semantics while object/interface types are
 identity-bearing handles. Native POD components additionally carry the
-`native-pod` representation marker. These properties are copied unchanged into
-Lowered WIR so each backend receives the same ownership and layout contract.
+`native-pod` representation marker. Nominal records also retain ordered field
+layouts, field types, mutability, visibility, base types, and constructor/
+destructor capabilities. These properties are copied unchanged into Lowered
+WIR so each backend receives the same ownership and layout contract.
 
 The initial builder supports top-level functions, parameters, primitive and
 reference-family types, contextually typed integer and floating-point constants,
@@ -82,6 +84,27 @@ so C++ and bytecode backends do not independently reconstruct that rule. Local,
 field, and indexed mutation—including compound assignment—now use the same place
 operations and remain valid across structured control-flow edges.
 
+## Construction and Lifecycle
+
+Construction distinguishes stack/value components from identity-bearing object
+allocations. `construct-component` creates an independent component value;
+`construct-object` creates an owning object handle. Each instruction records the
+selected constructor's stable name and typed argument signature, which both
+verifiers check before a backend consumes it.
+
+`drop` closes the lifetime of an addressable component value or releases one
+owning object handle. Component loads therefore represent value copies, while
+object loads represent strong-handle copies; dropping the last object handle is
+the edge that invokes `OnDestruct`. `store` replaces the previous destination
+value under the same ownership rules. The builder emits drops in reverse lexical
+order on ordinary scope exit, `return`, `break`, and `continue` edges. A return
+value is materialized before local cleanup, preserving the returned owner/value.
+
+Field projections are checked against the nominal layout rather than trusted as
+free-form strings. Missing fields, type mismatches, writes through read-only
+fields, incorrect construction kind, malformed constructor signatures, and
+non-nominal drops are rejected in both Typed and Lowered WIR.
+
 ## Lowered WIR
 
 Lowered WIR is the shared backend contract. Its first canonicalization pass
@@ -96,8 +119,8 @@ The deterministic pass order is currently:
 2. `lower-canonical-control-flow`
 3. `verify-lowered-wir`
 
-Future lowering stages will own object/component layout, async state machines,
-cleanup and lifetime edges, native ABI adaptation, and other semantics that
+Future lowering stages will own async state machines, exceptional cleanup edges,
+native ABI adaptation, and other semantics that
 must be identical for C++ and bytecode.
 
 ## Inspecting WIR

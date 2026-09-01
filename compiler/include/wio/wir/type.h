@@ -58,6 +58,23 @@ namespace wio::wir
         NativePod
     };
 
+    enum class FieldVisibility : std::uint8_t
+    {
+        Private,
+        Protected,
+        Public
+    };
+
+    struct FieldLayout
+    {
+        std::string name;
+        TypeId type;
+        bool isMutable = true;
+        FieldVisibility visibility = FieldVisibility::Private;
+
+        auto operator<=>(const FieldLayout&) const = default;
+    };
+
     struct Type
     {
         TypeKind kind = TypeKind::Invalid;
@@ -67,6 +84,10 @@ namespace wio::wir
         std::optional<std::size_t> staticExtent;
         NominalKind nominalKind = NominalKind::None;
         NominalRepresentation nominalRepresentation = NominalRepresentation::Wio;
+        std::vector<TypeId> baseTypes;
+        std::vector<FieldLayout> fields;
+        bool hasConstructor = false;
+        bool hasDestructor = false;
 
         auto operator<=>(const Type&) const = default;
     };
@@ -77,8 +98,10 @@ namespace wio::wir
         TypeTable();
 
         [[nodiscard]] TypeId intern(Type type);
+        [[nodiscard]] TypeId internNominal(Type type);
         [[nodiscard]] const Type* tryGet(TypeId id) const;
         [[nodiscard]] const Type& get(TypeId id) const;
+        [[nodiscard]] Type& getMutable(TypeId id);
         [[nodiscard]] std::size_t size() const { return types_.size(); }
         [[nodiscard]] const std::vector<Type>& types() const { return types_; }
 
@@ -98,4 +121,5 @@ namespace wio::wir
     [[nodiscard]] std::string_view typeKindName(TypeKind kind);
     [[nodiscard]] std::string_view nominalKindName(NominalKind kind);
     [[nodiscard]] std::string_view nominalRepresentationName(NominalRepresentation representation);
+    [[nodiscard]] std::string_view fieldVisibilityName(FieldVisibility visibility);
 }

@@ -26,6 +26,25 @@ namespace wio::wir
         return id;
     }
 
+    TypeId TypeTable::internNominal(Type type)
+    {
+        if (type.kind != TypeKind::Named)
+            return intern(std::move(type));
+        for (std::size_t index = 0; index < types_.size(); ++index)
+        {
+            const Type& existing = types_[index];
+            if (existing.kind == TypeKind::Named && existing.name == type.name &&
+                existing.arguments == type.arguments && existing.nominalKind == type.nominalKind &&
+                existing.nominalRepresentation == type.nominalRepresentation)
+            {
+                return TypeId{static_cast<TypeId::ValueType>(index)};
+            }
+        }
+        const TypeId id{static_cast<TypeId::ValueType>(types_.size())};
+        types_.push_back(std::move(type));
+        return id;
+    }
+
     const Type* TypeTable::tryGet(const TypeId id) const
     {
         if (!id || id.value() >= types_.size())
@@ -39,6 +58,13 @@ namespace wio::wir
         if (!type)
             throw std::out_of_range("WIR type id is invalid");
         return *type;
+    }
+
+    Type& TypeTable::getMutable(const TypeId id)
+    {
+        if (!id || id.value() >= types_.size())
+            throw std::out_of_range("WIR type id is invalid");
+        return types_[id.value()];
     }
 
     std::string_view typeKindName(const TypeKind kind)
@@ -97,5 +123,16 @@ namespace wio::wir
         case NominalRepresentation::NativePod: return "native-pod";
         }
         return "wio";
+    }
+
+    std::string_view fieldVisibilityName(const FieldVisibility visibility)
+    {
+        switch (visibility)
+        {
+        case FieldVisibility::Private: return "private";
+        case FieldVisibility::Protected: return "protected";
+        case FieldVisibility::Public: return "public";
+        }
+        return "private";
     }
 }

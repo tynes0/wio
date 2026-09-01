@@ -89,6 +89,36 @@ namespace wio::wir::typed
                 stream << " nominal=" << nominalKindName(type.nominalKind);
             if (type.nominalRepresentation != NominalRepresentation::Wio)
                 stream << " representation=" << nominalRepresentationName(type.nominalRepresentation);
+            if (!type.baseTypes.empty())
+            {
+                stream << " bases=[";
+                for (std::size_t index = 0; index < type.baseTypes.size(); ++index)
+                {
+                    if (index > 0)
+                        stream << ", ";
+                    stream << typeRef(type.baseTypes[index]);
+                }
+                stream << "]";
+            }
+            if (!type.fields.empty())
+            {
+                stream << " fields={";
+                for (std::size_t index = 0; index < type.fields.size(); ++index)
+                {
+                    if (index > 0)
+                        stream << ", ";
+                    const FieldLayout& field = type.fields[index];
+                    stream << std::quoted(field.name) << ":" << typeRef(field.type) << " "
+                           << fieldVisibilityName(field.visibility);
+                    if (field.isMutable)
+                        stream << " mutable";
+                }
+                stream << "}";
+            }
+            if (type.hasConstructor)
+                stream << " has-constructor";
+            if (type.hasDestructor)
+                stream << " has-destructor";
             return stream.str();
         }
 
@@ -177,6 +207,20 @@ namespace wio::wir::typed
                 break;
             case Opcode::Borrow:
                 stream << "borrow " << valueRef(instruction.operands.at(0));
+                break;
+            case Opcode::ConstructComponent:
+            case Opcode::ConstructObject:
+                stream << opcodeName(instruction.opcode) << " " << std::quoted(instruction.selector) << "(";
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 0)
+                        stream << ", ";
+                    stream << valueRef(instruction.operands[index]);
+                }
+                stream << ")";
+                break;
+            case Opcode::Drop:
+                stream << "drop " << valueRef(instruction.operands.at(0));
                 break;
             case Opcode::Select:
                 stream << "select " << valueRef(instruction.operands.at(0)) << ", "

@@ -32,6 +32,9 @@ namespace wio::wir::lowered
         FieldPlace,
         ArrayPlace,
         Borrow,
+        ConstructComponent,
+        ConstructObject,
+        Drop,
         Return,
         Jump,
         CondJump,
@@ -66,6 +69,7 @@ namespace wio::wir::lowered
         typed::ConversionKind conversionKind = typed::ConversionKind::NumericWiden;
         std::string selector;
         std::uint32_t projectionIndex = 0;
+        std::vector<TypeId> signatureTypes;
         SourceSpan source;
     };
 

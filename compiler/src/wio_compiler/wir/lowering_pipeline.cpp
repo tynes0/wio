@@ -44,6 +44,9 @@ namespace wio::wir
             case typed::Opcode::FieldPlace: opcode = lowered::Opcode::FieldPlace; break;
             case typed::Opcode::ArrayPlace: opcode = lowered::Opcode::ArrayPlace; break;
             case typed::Opcode::Borrow: opcode = lowered::Opcode::Borrow; break;
+            case typed::Opcode::ConstructComponent: opcode = lowered::Opcode::ConstructComponent; break;
+            case typed::Opcode::ConstructObject: opcode = lowered::Opcode::ConstructObject; break;
+            case typed::Opcode::Drop: opcode = lowered::Opcode::Drop; break;
             case typed::Opcode::Return: opcode = lowered::Opcode::Return; break;
             case typed::Opcode::Unreachable: opcode = lowered::Opcode::Unreachable; break;
             case typed::Opcode::Select:
@@ -63,6 +66,7 @@ namespace wio::wir
                 .conversionKind = instruction.conversionKind,
                 .selector = instruction.selector,
                 .projectionIndex = instruction.projectionIndex,
+                .signatureTypes = instruction.signatureTypes,
                 .source = instruction.source
             };
         }

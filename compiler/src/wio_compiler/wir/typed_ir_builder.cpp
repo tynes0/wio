@@ -1,6 +1,7 @@
 #include "wio/wir/typed_ir_builder.h"
 
 #include "wio/common/utility.h"
+#include "wio/sema/scope.h"
 #include "wio/sema/symbol.h"
 #include "wio/sema/type.h"
 
@@ -49,6 +50,7 @@ namespace wio::wir::typed
             BlockId continueTarget;
             BlockId breakTarget;
             std::vector<const sema::Symbol*> carriedSymbols;
+            std::size_t placeDepth = 0;
         };
 
         BuildResult& result_;
@@ -90,6 +92,35 @@ namespace wio::wir::typed
                 .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
             });
             return result;
+        }
+
+        bool isLifecycleValue(const TypeId typeId) const
+        {
+            const Type* type = result_.module_.types.tryGet(typeId);
+            return type && type->kind == TypeKind::Named &&
+                (type->nominalKind == NominalKind::Component || type->nominalKind == NominalKind::Object);
+        }
+
+        void emitDropsFrom(
+            const std::size_t firstPlace,
+            FunctionState& state,
+            const ASTNode* source)
+        {
+            for (std::size_t index = state.placeOrder.size(); index > firstPlace; --index)
+            {
+                const sema::Symbol* symbol = state.placeOrder[index - 1];
+                const auto place = state.places.find(symbol);
+                if (place == state.places.end())
+                    continue;
+                const TypeId valueType = mapType(symbol->type, source);
+                if (!isLifecycleValue(valueType))
+                    continue;
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::Drop,
+                    .operands = {place->second},
+                    .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
+                });
+            }
         }
 
         ValueId adaptPlaceMutability(
@@ -300,7 +331,50 @@ namespace wio::wir::typed
                 wirType.nominalRepresentation = structure->isNativePodComponent
                     ? NominalRepresentation::NativePod
                     : NominalRepresentation::Wio;
-                break;
+                for (const TypeId argument : wirType.arguments)
+                {
+                    if (!argument)
+                        return {};
+                }
+
+                const TypeId id = result_.module_.types.internNominal(std::move(wirType));
+                typesBySemanticType_[type.Get()] = id;
+
+                std::vector<TypeId> baseTypes;
+                baseTypes.reserve(structure->baseTypes.size());
+                for (const Ref<sema::Type>& baseType : structure->baseTypes)
+                    baseTypes.push_back(mapType(baseType, source));
+
+                std::vector<FieldLayout> fields;
+                fields.reserve(structure->fieldNames.size());
+                const Ref<sema::Scope> structScope = structure->structScope.Lock();
+                for (std::size_t index = 0;
+                     index < structure->fieldNames.size() && index < structure->fieldTypes.size();
+                     ++index)
+                {
+                    const std::string& fieldName = structure->fieldNames[index];
+                    const Ref<sema::Symbol> fieldSymbol = structScope
+                        ? structScope->resolveLocally(fieldName)
+                        : nullptr;
+                    FieldVisibility visibility = FieldVisibility::Private;
+                    if (fieldSymbol && fieldSymbol->flags.get_isPublic())
+                        visibility = FieldVisibility::Public;
+                    else if (fieldSymbol && fieldSymbol->flags.get_isProtected())
+                        visibility = FieldVisibility::Protected;
+                    fields.push_back(FieldLayout{
+                        .name = fieldName,
+                        .type = mapType(structure->fieldTypes[index], source),
+                        .isMutable = !fieldSymbol || !fieldSymbol->flags.get_isReadOnly(),
+                        .visibility = visibility
+                    });
+                }
+
+                Type& storedType = result_.module_.types.getMutable(id);
+                storedType.baseTypes = std::move(baseTypes);
+                storedType.fields = std::move(fields);
+                storedType.hasConstructor = structScope && structScope->resolveLocally("OnConstruct");
+                storedType.hasDestructor = structScope && structScope->resolveLocally("OnDestruct");
+                return id;
             }
             default:
                 report("WIR2003", "Semantic type '" + type->toString() + "' is not representable in the initial Typed WIR slice.", source);
@@ -402,7 +476,10 @@ namespace wio::wir::typed
                 {
                     const Type* returnType = result_.module_.types.tryGet(function.returnType);
                     if (returnType && returnType->kind == TypeKind::Void)
+                    {
+                        emitDropsFrom(0, state, &declaration);
                         currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Return});
+                    }
                     else
                     {
                         report("WIR2102", "Non-void function does not end with a return in the initial Typed WIR slice.", &declaration);
@@ -431,6 +508,8 @@ namespace wio::wir::typed
                     }
                     buildStatement(child, state);
                 }
+                if (!blockIsTerminated(state))
+                    emitDropsFrom(visiblePlaceCount, state, block);
                 while (state.valueOrder.size() > visibleValueCount)
                 {
                     state.values.erase(state.valueOrder.back());
@@ -522,6 +601,7 @@ namespace wio::wir::typed
                             state))
                         instruction.operands.push_back(value);
                 }
+                emitDropsFrom(0, state, returnStatement);
                 currentBlock(state).instructions.push_back(std::move(instruction));
                 return;
             }
@@ -871,9 +951,64 @@ namespace wio::wir::typed
                 return buildMatchExpression(*match, state);
             if (const auto* call = expression->as<FunctionCallExpression>())
             {
-                const Ref<sema::Symbol> calleeSymbol = call->callee
-                    ? call->callee->referencedSymbol.Lock()
-                    : nullptr;
+                Ref<sema::Symbol> calleeSymbol = call->referencedSymbol.Lock();
+                if (!calleeSymbol && call->callee)
+                    calleeSymbol = call->callee->referencedSymbol.Lock();
+                const TypeId callResultType = mapType(expression->refType.Lock(), expression.Get());
+                const Type* callResultTypeInfo = result_.module_.types.tryGet(callResultType);
+                const bool hasNominalConstructionResult = callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Named &&
+                    (callResultTypeInfo->nominalKind == NominalKind::Component ||
+                     callResultTypeInfo->nominalKind == NominalKind::Object);
+                const bool isConstructor = hasNominalConstructionResult && calleeSymbol &&
+                    (calleeSymbol->name == "OnConstruct" || calleeSymbol->kind == sema::SymbolKind::Struct ||
+                     calleeSymbol->kind == sema::SymbolKind::TypeAlias);
+                if (isConstructor)
+                {
+                    const NominalKind nominalKind = callResultTypeInfo->nominalKind;
+                    Ref<sema::Symbol> constructorSymbol = calleeSymbol;
+                    Ref<sema::Type> constructorOwnerType = calleeSymbol->kind == sema::SymbolKind::TypeAlias
+                        ? calleeSymbol->aliasTargetType
+                        : calleeSymbol->type;
+                    while (constructorOwnerType && constructorOwnerType->kind() == sema::TypeKind::Alias)
+                        constructorOwnerType = constructorOwnerType.AsFast<sema::AliasType>()->aliasedType;
+                    if (calleeSymbol->name != "OnConstruct" && constructorOwnerType &&
+                        constructorOwnerType->kind() == sema::TypeKind::Struct)
+                    {
+                        const Ref<sema::Scope> ownerScope = constructorOwnerType.AsFast<sema::StructType>()->structScope.Lock();
+                        if (ownerScope)
+                            constructorSymbol = ownerScope->resolveLocally("OnConstruct");
+                    }
+                    const auto constructorType = constructorSymbol && constructorSymbol->type &&
+                        constructorSymbol->type->kind() == sema::TypeKind::Function
+                        ? constructorSymbol->type.AsFast<sema::FunctionType>()
+                        : nullptr;
+                    Instruction instruction{
+                        .opcode = nominalKind == NominalKind::Object
+                            ? Opcode::ConstructObject
+                            : Opcode::ConstructComponent,
+                        .selector = callResultTypeInfo->name + "::OnConstruct",
+                        .source = SourceSpan::at(expression->location())
+                    };
+                    for (std::size_t index = 0; index < call->arguments.size(); ++index)
+                    {
+                        const auto& argument = call->arguments[index];
+                        const TypeId expectedType = constructorType && index < constructorType->paramTypes.size()
+                            ? mapType(constructorType->paramTypes[index], argument.Get())
+                            : mapType(argument->refType.Lock(), argument.Get());
+                        const ValueId value = buildExpressionAs(argument, expectedType, state);
+                        if (!value)
+                            return {};
+                        instruction.operands.push_back(value);
+                        instruction.signatureTypes.push_back(expectedType);
+                    }
+                    return appendValue(std::move(instruction));
+                }
+
+                if (call->callee)
+                {
+                    if (const Ref<sema::Symbol> directSymbol = call->callee->referencedSymbol.Lock())
+                        calleeSymbol = directSymbol;
+                }
                 const auto functionIt = calleeSymbol
                     ? functionsBySymbol_.find(calleeSymbol.Get())
                     : functionsBySymbol_.end();
@@ -2007,6 +2142,7 @@ namespace wio::wir::typed
             }
 
             const LoopContext& loop = loopContexts_.back();
+            emitDropsFrom(loop.placeDepth, state, statement);
             currentBlock(state).instructions.push_back(Instruction{
                 .opcode = Opcode::Branch,
                 .operands = collectCarriedValues(state.values, loop.carriedSymbols, statement),
@@ -2072,7 +2208,8 @@ namespace wio::wir::typed
             loopContexts_.push_back(LoopContext{
                 .continueTarget = currentBlockAt(state, headerBlockIndex).id,
                 .breakTarget = currentBlockAt(state, exitBlockIndex).id,
-                .carriedSymbols = carriedSymbols
+                .carriedSymbols = carriedSymbols,
+                .placeDepth = state.placeOrder.size()
             });
             buildStatement(statement.body, bodyState);
             loopContexts_.pop_back();
@@ -2097,6 +2234,7 @@ namespace wio::wir::typed
         void buildCForStatement(const CForStatement& statement, FunctionState& state)
         {
             const std::size_t outerValueCount = state.valueOrder.size();
+            const std::size_t outerPlaceCount = state.placeOrder.size();
             if (statement.initializer)
                 buildStatement(statement.initializer, state);
             if (blockIsTerminated(state))
@@ -2177,7 +2315,8 @@ namespace wio::wir::typed
             loopContexts_.push_back(LoopContext{
                 .continueTarget = currentBlockAt(state, incrementBlockIndex).id,
                 .breakTarget = currentBlockAt(state, exitBlockIndex).id,
-                .carriedSymbols = carriedSymbols
+                .carriedSymbols = carriedSymbols,
+                .placeDepth = state.placeOrder.size()
             });
             buildStatement(statement.body, bodyState);
             loopContexts_.pop_back();
@@ -2215,6 +2354,12 @@ namespace wio::wir::typed
             state.blockIndex = exitBlockIndex;
             state.values = exitValues;
             state.valueOrder = carriedSymbols;
+            emitDropsFrom(outerPlaceCount, state, &statement);
+            while (state.placeOrder.size() > outerPlaceCount)
+            {
+                state.places.erase(state.placeOrder.back());
+                state.placeOrder.pop_back();
+            }
             while (state.valueOrder.size() > outerValueCount)
             {
                 state.values.erase(state.valueOrder.back());

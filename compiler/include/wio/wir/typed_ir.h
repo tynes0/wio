@@ -70,6 +70,9 @@ namespace wio::wir::typed
         FieldPlace,
         ArrayPlace,
         Borrow,
+        ConstructComponent,
+        ConstructObject,
+        Drop,
         // SSA value selection. All operands are already evaluated, so builders
         // may only use this for side-effect-free alternatives.
         Select,
@@ -110,6 +113,7 @@ namespace wio::wir::typed
         ConversionKind conversionKind = ConversionKind::NumericWiden;
         std::string selector;
         std::uint32_t projectionIndex = 0;
+        std::vector<TypeId> signatureTypes;
         SourceSpan source;
     };
 

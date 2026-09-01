@@ -67,6 +67,31 @@ namespace wio::wir::typed
                 return std::holds_alternative<std::string>(literal);
             return false;
         }
+
+        const FieldLayout* findFieldLayout(
+            const TypeTable& types,
+            const Type& owner,
+            const std::string_view name,
+            std::unordered_set<TypeId::ValueType>& visited)
+        {
+            const auto field = std::ranges::find_if(
+                owner.fields,
+                [&](const FieldLayout& layout) { return layout.name == name; });
+            if (field != owner.fields.end())
+                return &*field;
+            for (const TypeId baseTypeId : owner.baseTypes)
+            {
+                if (!baseTypeId || !visited.insert(baseTypeId.value()).second)
+                    continue;
+                const Type* baseType = types.tryGet(baseTypeId);
+                if (baseType)
+                {
+                    if (const FieldLayout* inherited = findFieldLayout(types, *baseType, name, visited))
+                        return inherited;
+                }
+            }
+            return nullptr;
+        }
     }
 
     VerificationResult Verifier::verify(const Module& module) const
@@ -119,6 +144,23 @@ namespace wio::wir::typed
                 (type.kind != TypeKind::Named || type.nominalKind != NominalKind::Component))
             {
                 report("WIR1008", "Native POD representation requires a named component type.");
+            }
+            if (type.kind != TypeKind::Named &&
+                (!type.baseTypes.empty() || !type.fields.empty() || type.hasConstructor || type.hasDestructor))
+            {
+                report("WIR1009", "Only named Typed WIR types may carry layout or lifecycle metadata.");
+            }
+            std::unordered_set<std::string> fieldNames;
+            for (const FieldLayout& field : type.fields)
+            {
+                if (field.name.empty() || !module.types.tryGet(field.type) || !fieldNames.insert(field.name).second)
+                    report("WIR1010", "Typed WIR field layouts require unique names and valid field types.");
+            }
+            for (const TypeId baseTypeId : type.baseTypes)
+            {
+                const Type* baseType = module.types.tryGet(baseTypeId);
+                if (!baseType || baseType->kind != TypeKind::Named)
+                    report("WIR1011", "Typed WIR nominal base layouts must reference named types.");
             }
         }
 
@@ -538,6 +580,16 @@ namespace wio::wir::typed
                         {
                             report("WIR1433", "Typed WIR field place requires a named base, field selector, and non-strengthening reference result.", instruction.source, function.id, block.id);
                         }
+                        else
+                        {
+                            std::unordered_set<TypeId::ValueType> visited;
+                            const FieldLayout* field = findFieldLayout(module.types, *baseValueType, instruction.selector, visited);
+                            if (!field || field->type != placeType->arguments.front() ||
+                                (placeType->isMutable && !field->isMutable))
+                            {
+                                report("WIR1437", "Typed WIR field place must match the nominal field layout and field mutability.", instruction.source, function.id, block.id);
+                            }
+                        }
                     }
                     else if (instruction.opcode == Opcode::ArrayPlace)
                     {
@@ -571,6 +623,40 @@ namespace wio::wir::typed
                             (resultType->isMutable && !sourceType->isMutable))
                         {
                             report("WIR1435", "Typed WIR borrow cannot change the referred type or strengthen mutability.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::ConstructComponent || instruction.opcode == Opcode::ConstructObject)
+                    {
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        const NominalKind expectedKind = instruction.opcode == Opcode::ConstructObject
+                            ? NominalKind::Object
+                            : NominalKind::Component;
+                        if (!resultType || resultType->kind != TypeKind::Named || resultType->nominalKind != expectedKind ||
+                            !resultType->hasConstructor || instruction.selector.empty() ||
+                            instruction.signatureTypes.size() != instruction.operands.size() ||
+                            !std::ranges::all_of(instruction.signatureTypes, [&](const TypeId type) { return module.types.tryGet(type) != nullptr; }) ||
+                            !std::ranges::equal(
+                                instruction.signatureTypes,
+                                instruction.operands,
+                                {},
+                                [](const TypeId type) { return type; },
+                                [&](const ValueId value) { return valueType(value); }))
+                        {
+                            report("WIR1438", "Typed WIR construction requires a matching constructible component/object result and typed constructor signature.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::Drop)
+                    {
+                        const Type* placeType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const Type* valueTypeInfo = placeType && placeType->kind == TypeKind::Reference && placeType->arguments.size() == 1
+                            ? module.types.tryGet(placeType->arguments.front())
+                            : nullptr;
+                        if (!valueTypeInfo || valueTypeInfo->kind != TypeKind::Named ||
+                            (valueTypeInfo->nominalKind != NominalKind::Component && valueTypeInfo->nominalKind != NominalKind::Object))
+                        {
+                            report("WIR1439", "Typed WIR drop requires a place containing a component or object value.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::Select)

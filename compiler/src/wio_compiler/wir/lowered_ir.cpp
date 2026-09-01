@@ -17,7 +17,8 @@ namespace wio::wir::lowered
                opcode == Opcode::ArrayCreate || opcode == Opcode::ArrayGet ||
                opcode == Opcode::LocalPlace || opcode == Opcode::Load ||
                opcode == Opcode::FieldPlace || opcode == Opcode::ArrayPlace ||
-               opcode == Opcode::Borrow;
+               opcode == Opcode::Borrow || opcode == Opcode::ConstructComponent ||
+               opcode == Opcode::ConstructObject;
     }
 
     std::string_view opcodeName(const Opcode opcode)
@@ -42,6 +43,9 @@ namespace wio::wir::lowered
         case Opcode::FieldPlace: return "field-place";
         case Opcode::ArrayPlace: return "array-place";
         case Opcode::Borrow: return "borrow";
+        case Opcode::ConstructComponent: return "construct-component";
+        case Opcode::ConstructObject: return "construct-object";
+        case Opcode::Drop: return "drop";
         case Opcode::Return: return "return";
         case Opcode::Jump: return "jump";
         case Opcode::CondJump: return "cond-jump";
