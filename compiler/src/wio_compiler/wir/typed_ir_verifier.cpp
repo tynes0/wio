@@ -47,7 +47,7 @@ namespace wio::wir::typed
         bool literalMatches(const Literal& literal, const TypeKind kind)
         {
             if (std::holds_alternative<NullLiteral>(literal))
-                return kind == TypeKind::Nullable;
+                return kind == TypeKind::Nullable || kind == TypeKind::Any;
             if (kind == TypeKind::Bool)
                 return std::holds_alternative<bool>(literal);
             if (kind == TypeKind::I8 || kind == TypeKind::I16 || kind == TypeKind::I32 ||
@@ -173,6 +173,8 @@ namespace wio::wir::typed
                 report("WIR1006", "Only array Typed WIR types may carry a static extent.");
             if (type.kind != TypeKind::Named && type.nominalKind != NominalKind::None)
                 report("WIR1007", "Only named Typed WIR types may carry a nominal kind.");
+            if (type.kind != TypeKind::Named && type.nominalValueModel != NominalValueModel::Regular)
+                report("WIR1015", "Only named Typed WIR types may carry a nominal value model.");
             if (type.nominalRepresentation == NominalRepresentation::NativePod &&
                 (type.kind != TypeKind::Named || type.nominalKind != NominalKind::Component))
             {
@@ -508,7 +510,8 @@ namespace wio::wir::typed
                         instruction.opcode == Opcode::ExtensionCall ||
                         instruction.opcode == Opcode::MethodCall ||
                         instruction.opcode == Opcode::VirtualCall ||
-                        instruction.opcode == Opcode::InterfaceCall;
+                        instruction.opcode == Opcode::InterfaceCall ||
+                        instruction.opcode == Opcode::IntrinsicCall;
                     if (isCallInstruction && instruction.callee)
                     {
                         const auto calleeIt = functions.find(instruction.callee.value());
@@ -526,6 +529,8 @@ namespace wio::wir::typed
                             : nullptr;
                         callReturnsVoid = returnType && returnType->kind == TypeKind::Void;
                     }
+                    if (instruction.opcode == Opcode::IntrinsicCall && !instruction.result)
+                        callReturnsVoid = true;
                     const bool shouldHaveResult = producesValue(instruction.opcode) && !callReturnsVoid;
                     if (shouldHaveResult && (!instruction.result || !module.types.tryGet(instruction.resultType)))
                         report("WIR1401", "Value-producing Typed WIR instruction requires a typed result.", instruction.source, function.id, block.id);
@@ -585,6 +590,13 @@ namespace wio::wir::typed
                             instruction.resultType != module.types.boolType() || instruction.selector.empty())
                         {
                             report("WIR1423", "Typed WIR variant test requires one named value, a variant selector, and a bool result.", instruction.source, function.id, block.id);
+                        }
+                        else if ((sourceType->nominalValueModel == NominalValueModel::Option &&
+                                  instruction.selector != "Some" && instruction.selector != "None") ||
+                                 (sourceType->nominalValueModel == NominalValueModel::Result &&
+                                  instruction.selector != "Ok" && instruction.selector != "Err"))
+                        {
+                            report("WIR1455", "Typed WIR Option/Result variant test has an invalid variant selector.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::VariantPayload)
@@ -652,6 +664,115 @@ namespace wio::wir::typed
                             arrayType->arguments.front() != instruction.resultType)
                         {
                             report("WIR1428", "Typed WIR array get requires an array, an integer index, and its element result type.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::DictionaryCreate)
+                    {
+                        const Type* dictionaryType = module.types.tryGet(instruction.resultType);
+                        bool valid = dictionaryType && dictionaryType->kind == TypeKind::Dictionary &&
+                            dictionaryType->arguments.size() == 2 && instruction.operands.size() % 2 == 0 &&
+                            instruction.signatureTypes.size() == instruction.operands.size() &&
+                            (instruction.selector == "ordered" || instruction.selector == "unordered");
+                        for (std::size_t entryIndex = 0; valid && entryIndex < instruction.operands.size(); ++entryIndex)
+                        {
+                            const TypeId expected = dictionaryType->arguments[entryIndex % 2];
+                            valid = valueType(instruction.operands[entryIndex]) == expected &&
+                                instruction.signatureTypes[entryIndex] == expected;
+                        }
+                        if (!valid)
+                            report("WIR1456", "Typed WIR dictionary creation requires alternating key/value operands matching its concrete dictionary type.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::DictionaryGet)
+                    {
+                        const Type* dictionaryType = instruction.operands.size() == 2
+                            ? module.types.tryGet(valueType(instruction.operands[0]))
+                            : nullptr;
+                        if (!dictionaryType || dictionaryType->kind != TypeKind::Dictionary ||
+                            dictionaryType->arguments.size() != 2 ||
+                            valueType(instruction.operands[1]) != dictionaryType->arguments[0] ||
+                            instruction.resultType != dictionaryType->arguments[1])
+                        {
+                            report("WIR1457", "Typed WIR dictionary get requires matching dictionary, key, and mapped result types.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::Interpolate)
+                    {
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        const bool familyMatches = resultType &&
+                            ((resultType->kind == TypeKind::String && instruction.intrinsicFamily == IntrinsicFamily::String) ||
+                             (resultType->kind == TypeKind::Text && instruction.intrinsicFamily == IntrinsicFamily::Text));
+                        bool signaturesMatch = instruction.signatureTypes.size() == instruction.operands.size();
+                        for (std::size_t operandIndex = 0;
+                             signaturesMatch && operandIndex < instruction.operands.size(); ++operandIndex)
+                        {
+                            signaturesMatch = instruction.signatureTypes[operandIndex] ==
+                                valueType(instruction.operands[operandIndex]);
+                        }
+                        if (!familyMatches || instruction.stringSegments.size() != instruction.operands.size() + 1 ||
+                            !signaturesMatch)
+                        {
+                            report("WIR1458", "Typed WIR interpolation requires string/text identity, one more segment than values, and concrete value signatures.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::EnumConstant)
+                    {
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        if (!instruction.operands.empty() || instruction.selector.empty() ||
+                            instruction.targetType != instruction.resultType || !resultType ||
+                            resultType->kind != TypeKind::Named ||
+                            (resultType->nominalKind != NominalKind::Enum && resultType->nominalKind != NominalKind::Flagset))
+                        {
+                            report("WIR1459", "Typed WIR enum constant requires a named enum/flagset result and stable member selector.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::IntrinsicCall)
+                    {
+                        bool signaturesMatch = instruction.signatureTypes.size() == instruction.operands.size();
+                        for (std::size_t operandIndex = 0;
+                             signaturesMatch && operandIndex < instruction.operands.size(); ++operandIndex)
+                        {
+                            signaturesMatch = instruction.signatureTypes[operandIndex] ==
+                                valueType(instruction.operands[operandIndex]);
+                        }
+                        if (instruction.intrinsicFamily == IntrinsicFamily::None || instruction.selector.empty() ||
+                            instruction.operands.empty() || instruction.signatureTypes.size() != instruction.operands.size() ||
+                            !module.types.tryGet(instruction.targetType) || !signaturesMatch)
+                        {
+                            report("WIR1460", "Typed WIR intrinsic call requires a family, selector, receiver, target type, and concrete operand signature.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::AnyBox)
+                    {
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        if (instruction.operands.size() != 1 || !resultType || resultType->kind != TypeKind::Any ||
+                            instruction.targetType != valueType(instruction.operands.front()) ||
+                            instruction.signatureTypes != std::vector<TypeId>{instruction.targetType})
+                        {
+                            report("WIR1461", "Typed WIR any box requires one operand and preserves its concrete source type.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::AnyCheckedCast || instruction.opcode == Opcode::AnyTypeTest)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const bool validResult = instruction.opcode == Opcode::AnyTypeTest
+                            ? instruction.resultType == module.types.boolType()
+                            : instruction.resultType == instruction.targetType;
+                        if (!sourceType || sourceType->kind != TypeKind::Any ||
+                            !module.types.tryGet(instruction.targetType) || !validResult)
+                        {
+                            report("WIR1462", "Typed WIR any test/cast requires one any operand and a valid concrete target type.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::NullableWrap)
+                    {
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        if (instruction.operands.size() != 1 || !resultType || resultType->kind != TypeKind::Nullable ||
+                            resultType->arguments.size() != 1 || resultType->arguments.front() != valueType(instruction.operands.front()) ||
+                            instruction.targetType != instruction.resultType)
+                        {
+                            report("WIR1463", "Typed WIR nullable wrap requires one value matching the nullable payload type.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::LocalPlace)
@@ -748,6 +869,24 @@ namespace wio::wir::typed
                             (placeType->isMutable && !baseType->isMutable))
                         {
                             report("WIR1434", "Typed WIR array place requires an array reference, integer index, and non-strengthening element reference.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::DictionaryPlace)
+                    {
+                        const Type* baseType = instruction.operands.size() == 2
+                            ? module.types.tryGet(valueType(instruction.operands[0]))
+                            : nullptr;
+                        const Type* dictionaryType = baseType && baseType->kind == TypeKind::Reference && baseType->arguments.size() == 1
+                            ? module.types.tryGet(baseType->arguments.front())
+                            : nullptr;
+                        const Type* placeType = module.types.tryGet(instruction.resultType);
+                        if (!baseType || !dictionaryType || dictionaryType->kind != TypeKind::Dictionary ||
+                            dictionaryType->arguments.size() != 2 || valueType(instruction.operands[1]) != dictionaryType->arguments[0] ||
+                            !placeType || placeType->kind != TypeKind::Reference || placeType->arguments.size() != 1 ||
+                            placeType->arguments.front() != dictionaryType->arguments[1] ||
+                            (placeType->isMutable && !baseType->isMutable))
+                        {
+                            report("WIR1464", "Typed WIR dictionary place requires a dictionary reference, matching key, and mapped-value reference.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::Borrow)

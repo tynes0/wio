@@ -238,6 +238,18 @@ if(BUILD_TESTING)
         COMMAND wio_typed_wir_callable_model_test
     )
 
+    add_executable(wio_typed_wir_value_container_surface_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_value_container_surface_test.cpp"
+    )
+    target_include_directories(wio_typed_wir_value_container_surface_test PRIVATE
+        "${CMAKE_SOURCE_DIR}/runtime/include"
+    )
+    target_link_libraries(wio_typed_wir_value_container_surface_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_value_container_surface
+        COMMAND wio_typed_wir_value_container_surface_test
+    )
+
     add_executable(wio_function_type_cpp_string_test
         "${CMAKE_SOURCE_DIR}/tests/function_type_cpp_string_test.cpp"
     )

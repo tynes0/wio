@@ -35,7 +35,8 @@ namespace wio::wir
             const Type& existing = types_[index];
             if (existing.kind == TypeKind::Named && existing.name == type.name &&
                 existing.arguments == type.arguments && existing.nominalKind == type.nominalKind &&
-                existing.nominalRepresentation == type.nominalRepresentation)
+                existing.nominalRepresentation == type.nominalRepresentation &&
+                existing.nominalValueModel == type.nominalValueModel)
             {
                 return TypeId{static_cast<TypeId::ValueType>(index)};
             }
@@ -90,6 +91,7 @@ namespace wio::wir
         case TypeKind::Char: return "char";
         case TypeKind::String: return "string";
         case TypeKind::Text: return "text";
+        case TypeKind::Any: return "any";
         case TypeKind::GenericParameter: return "generic-parameter";
         case TypeKind::Named: return "named";
         case TypeKind::Reference: return "reference";
@@ -124,6 +126,40 @@ namespace wio::wir
         case NominalRepresentation::NativePod: return "native-pod";
         }
         return "wio";
+    }
+
+    std::string_view nominalValueModelName(const NominalValueModel model)
+    {
+        switch (model)
+        {
+        case NominalValueModel::Regular: return "regular";
+        case NominalValueModel::Tuple: return "tuple";
+        case NominalValueModel::Span: return "span";
+        case NominalValueModel::Option: return "option";
+        case NominalValueModel::Result: return "result";
+        }
+        return "regular";
+    }
+
+    std::string_view intrinsicFamilyName(const IntrinsicFamily family)
+    {
+        switch (family)
+        {
+        case IntrinsicFamily::None: return "none";
+        case IntrinsicFamily::Array: return "array";
+        case IntrinsicFamily::Dictionary: return "dictionary";
+        case IntrinsicFamily::String: return "string";
+        case IntrinsicFamily::Text: return "text";
+        case IntrinsicFamily::Enum: return "enum";
+        case IntrinsicFamily::Flagset: return "flagset";
+        case IntrinsicFamily::Nullable: return "nullable";
+        case IntrinsicFamily::Any: return "any";
+        case IntrinsicFamily::Option: return "option";
+        case IntrinsicFamily::Result: return "result";
+        case IntrinsicFamily::Tuple: return "tuple";
+        case IntrinsicFamily::Span: return "span";
+        }
+        return "none";
     }
 
     std::string_view fieldVisibilityName(const FieldVisibility visibility)

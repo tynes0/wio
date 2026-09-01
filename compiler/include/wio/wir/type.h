@@ -33,6 +33,7 @@ namespace wio::wir
         Char,
         String,
         Text,
+        Any,
         GenericParameter,
         Named,
         Reference,
@@ -57,6 +58,32 @@ namespace wio::wir
     {
         Wio,
         NativePod
+    };
+
+    enum class NominalValueModel : std::uint8_t
+    {
+        Regular,
+        Tuple,
+        Span,
+        Option,
+        Result
+    };
+
+    enum class IntrinsicFamily : std::uint8_t
+    {
+        None,
+        Array,
+        Dictionary,
+        String,
+        Text,
+        Enum,
+        Flagset,
+        Nullable,
+        Any,
+        Option,
+        Result,
+        Tuple,
+        Span
     };
 
     enum class FieldVisibility : std::uint8_t
@@ -114,6 +141,7 @@ namespace wio::wir
         std::optional<std::size_t> staticExtent;
         NominalKind nominalKind = NominalKind::None;
         NominalRepresentation nominalRepresentation = NominalRepresentation::Wio;
+        NominalValueModel nominalValueModel = NominalValueModel::Regular;
         std::vector<TypeId> baseTypes;
         std::vector<FieldLayout> fields;
         std::vector<MethodLayout> methods;
@@ -152,6 +180,8 @@ namespace wio::wir
     [[nodiscard]] std::string_view typeKindName(TypeKind kind);
     [[nodiscard]] std::string_view nominalKindName(NominalKind kind);
     [[nodiscard]] std::string_view nominalRepresentationName(NominalRepresentation representation);
+    [[nodiscard]] std::string_view nominalValueModelName(NominalValueModel model);
+    [[nodiscard]] std::string_view intrinsicFamilyName(IntrinsicFamily family);
     [[nodiscard]] std::string_view fieldVisibilityName(FieldVisibility visibility);
     [[nodiscard]] std::string_view captureKindName(CaptureKind kind);
 }

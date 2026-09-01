@@ -21,7 +21,12 @@ namespace wio::wir::typed
                opcode == Opcode::VariantTest ||
                opcode == Opcode::VariantPayload || opcode == Opcode::ArrayLength ||
                opcode == Opcode::ArrayElement || opcode == Opcode::ArrayCreate ||
-               opcode == Opcode::ArrayGet || opcode == Opcode::LocalPlace ||
+               opcode == Opcode::ArrayGet || opcode == Opcode::DictionaryCreate ||
+               opcode == Opcode::DictionaryGet || opcode == Opcode::DictionaryPlace ||
+               opcode == Opcode::Interpolate || opcode == Opcode::EnumConstant ||
+               opcode == Opcode::IntrinsicCall || opcode == Opcode::AnyBox ||
+               opcode == Opcode::AnyCheckedCast || opcode == Opcode::AnyTypeTest ||
+               opcode == Opcode::NullableWrap || opcode == Opcode::LocalPlace ||
                opcode == Opcode::Load || opcode == Opcode::FieldPlace ||
                opcode == Opcode::ArrayPlace || opcode == Opcode::Borrow ||
                opcode == Opcode::ConstructComponent || opcode == Opcode::ConstructObject ||
@@ -54,6 +59,16 @@ namespace wio::wir::typed
         case Opcode::ArrayElement: return "array-element";
         case Opcode::ArrayCreate: return "array-create";
         case Opcode::ArrayGet: return "array-get";
+        case Opcode::DictionaryCreate: return "dictionary-create";
+        case Opcode::DictionaryGet: return "dictionary-get";
+        case Opcode::DictionaryPlace: return "dictionary-place";
+        case Opcode::Interpolate: return "interpolate";
+        case Opcode::EnumConstant: return "enum-constant";
+        case Opcode::IntrinsicCall: return "intrinsic-call";
+        case Opcode::AnyBox: return "any-box";
+        case Opcode::AnyCheckedCast: return "any-checked-cast";
+        case Opcode::AnyTypeTest: return "any-type-test";
+        case Opcode::NullableWrap: return "nullable-wrap";
         case Opcode::LocalPlace: return "local-place";
         case Opcode::PlaceInit: return "place-init";
         case Opcode::Load: return "load";

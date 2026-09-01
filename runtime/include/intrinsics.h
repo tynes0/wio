@@ -635,9 +635,17 @@ namespace wio::intrinsics
     inline decltype(auto) Index(TContainer&& container, const TIndex index)
     {
         using RawIndex = std::remove_cv_t<std::remove_reference_t<TIndex>>;
+        using RawContainer = std::remove_cv_t<std::remove_reference_t<TContainer>>;
         auto&& resolvedContainer = std::forward<TContainer>(container);
 
-        if constexpr (!std::is_integral_v<RawIndex>)
+        if constexpr (requires { typename RawContainer::key_type; })
+        {
+            const auto found = resolvedContainer.find(index);
+            if (found == resolvedContainer.end())
+                detail::throwRuntimeError("Dictionary index key was not found.");
+            return (found->second);
+        }
+        else if constexpr (!std::is_integral_v<RawIndex>)
         {
             detail::throwRuntimeError("Index access requires an integer index.");
         }

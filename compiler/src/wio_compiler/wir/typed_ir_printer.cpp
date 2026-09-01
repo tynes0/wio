@@ -89,6 +89,8 @@ namespace wio::wir::typed
                 stream << " nominal=" << nominalKindName(type.nominalKind);
             if (type.nominalRepresentation != NominalRepresentation::Wio)
                 stream << " representation=" << nominalRepresentationName(type.nominalRepresentation);
+            if (type.nominalValueModel != NominalValueModel::Regular)
+                stream << " value-model=" << nominalValueModelName(type.nominalValueModel);
             if (!type.baseTypes.empty())
             {
                 stream << " bases=[";
@@ -255,6 +257,52 @@ namespace wio::wir::typed
             case Opcode::ArrayGet:
                 stream << "array-get " << valueRef(instruction.operands.at(0)) << ", "
                        << valueRef(instruction.operands.at(1));
+                break;
+            case Opcode::DictionaryCreate:
+                stream << "dictionary-create " << std::quoted(instruction.selector) << " [";
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 0) stream << ", ";
+                    stream << valueRef(instruction.operands[index]);
+                }
+                stream << "]";
+                break;
+            case Opcode::DictionaryGet:
+            case Opcode::DictionaryPlace:
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0))
+                       << ", " << valueRef(instruction.operands.at(1));
+                break;
+            case Opcode::Interpolate:
+                stream << "interpolate " << intrinsicFamilyName(instruction.intrinsicFamily) << " [";
+                for (std::size_t index = 0; index < instruction.stringSegments.size(); ++index)
+                {
+                    if (index > 0) stream << ", ";
+                    stream << std::quoted(instruction.stringSegments[index]);
+                    if (index < instruction.operands.size())
+                        stream << ", " << valueRef(instruction.operands[index]);
+                }
+                stream << "]";
+                break;
+            case Opcode::EnumConstant:
+                stream << "enum-constant " << typeRef(instruction.targetType) << "::"
+                       << std::quoted(instruction.selector);
+                break;
+            case Opcode::IntrinsicCall:
+                stream << "intrinsic-call " << intrinsicFamilyName(instruction.intrinsicFamily) << "::"
+                       << std::quoted(instruction.selector) << "(";
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 0) stream << ", ";
+                    stream << valueRef(instruction.operands[index]);
+                }
+                stream << ")";
+                break;
+            case Opcode::AnyBox:
+            case Opcode::AnyCheckedCast:
+            case Opcode::AnyTypeTest:
+            case Opcode::NullableWrap:
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0))
+                       << " to " << typeRef(instruction.targetType);
                 break;
             case Opcode::LocalPlace:
                 stream << "local-place " << std::quoted(instruction.selector);

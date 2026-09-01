@@ -415,11 +415,29 @@
         }
 
         if (resolvedObjType->kind() != TypeKind::Array &&
+            resolvedObjType->kind() != TypeKind::Dictionary &&
             !isStringType(resolvedObjType) &&
             !isTextType(resolvedObjType))
         {
-            WIO_LOG_ADD_ERROR(node.object->location(), "Type '{}' is not an array, string, or text and cannot be indexed.", objType->toString());
+            WIO_LOG_ADD_ERROR(node.object->location(), "Type '{}' is not an array, dictionary, string, or text and cannot be indexed.", objType->toString());
             node.refType = Compiler::get().getTypeContext().getUnknown();
+            return;
+        }
+
+        if (resolvedObjType->kind() == TypeKind::Dictionary)
+        {
+            auto dictionaryType = resolvedObjType.AsFast<DictionaryType>();
+            if (!isAssignmentLikeCompatible(dictionaryType->keyType, idxType))
+            {
+                WIO_LOG_ADD_ERROR(
+                    node.index->location(),
+                    "Dictionary index type '{}' is not compatible with key type '{}'.",
+                    idxType ? idxType->toString() : "<unknown>",
+                    dictionaryType->keyType ? dictionaryType->keyType->toString() : "<unknown>"
+                );
+            }
+            node.refType = dictionaryType->valueType;
+            node.borrowOrigin = classifyBorrowOrigin(node.object);
             return;
         }
 

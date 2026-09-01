@@ -861,3 +861,11 @@ here as historical evidence rather than active work:
       value/reference/retained-self environments, indirect calls, and
       extension implementation calls are distinct verified operations that
       survive canonical lowering unchanged.
+- [x] The Value and Container Model preserves dictionary construction and
+      keyed read/write places, array/string/text indexing, structured string
+      and Unicode interpolation, enum/flagset constants and intrinsics, `any`
+      boxing/testing/casting, nullable wrapping, and nominal
+      Option/Result/Tuple/Span identities through verified canonical lowering.
+- [x] Direct `dictionary[key]` reads and writes are accepted by semantic
+      analysis and use the same checked native intrinsic as existing direct
+      array/string/text indexing.

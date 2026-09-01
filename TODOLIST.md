@@ -495,11 +495,16 @@ Rider, and CLion are defined in
    Callable identity is also frozen: exact overload targets, concrete generic
    specialization keys, named function values, ordered closure environments,
    value/reference/retained-self captures, indirect calls, and extension calls
-   survive verified Typed-to-Lowered WIR unchanged. Keep
+   survive verified Typed-to-Lowered WIR unchanged. Dictionary literals and
+   keyed places, string/text interpolation and indexing, enum/flagset values,
+   backend-neutral intrinsics, `any`, nullable wrapping, and the nominal
+   Option/Result/Tuple/Span value models now survive the same verified path.
+   Keep
    the current C++ generator as the production path while finishing remaining
    language coverage, then consume Lowered WIR from a new C++ backend and a
    bytecode VM. Add native ABI operations, async state-machine lowering,
-   exceptions/panic cleanup, globals/constants, dictionaries, reflection
+   exceptions/panic cleanup, globals/constants, remaining tuple/span
+   operations, reflection
    payloads, backend parity tests, and compile-time/
    runtime benchmarks before changing the default backend.
 

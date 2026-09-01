@@ -1,6 +1,7 @@
 #include "wio/wir/typed_ir_builder.h"
 
 #include "wio/common/utility.h"
+#include "wio/sema/intrinsic_member_resolver.h"
 #include "wio/sema/scope.h"
 #include "wio/sema/symbol.h"
 #include "wio/sema/type.h"
@@ -96,6 +97,38 @@ namespace wio::wir::typed
             if (nominalTypeId)
                 *nominalTypeId = typeId;
             return type;
+        }
+
+        IntrinsicFamily intrinsicFamilyFor(TypeId typeId) const
+        {
+            const Type* type = result_.module_.types.tryGet(typeId);
+            if (type && type->kind == TypeKind::Reference && type->arguments.size() == 1)
+                type = result_.module_.types.tryGet(type->arguments.front());
+            if (!type)
+                return IntrinsicFamily::None;
+            switch (type->kind)
+            {
+            case TypeKind::Array: return IntrinsicFamily::Array;
+            case TypeKind::Dictionary: return IntrinsicFamily::Dictionary;
+            case TypeKind::String: return IntrinsicFamily::String;
+            case TypeKind::Text: return IntrinsicFamily::Text;
+            case TypeKind::Nullable: return IntrinsicFamily::Nullable;
+            case TypeKind::Any: return IntrinsicFamily::Any;
+            case TypeKind::Named:
+                if (type->nominalKind == NominalKind::Enum) return IntrinsicFamily::Enum;
+                if (type->nominalKind == NominalKind::Flagset) return IntrinsicFamily::Flagset;
+                switch (type->nominalValueModel)
+                {
+                case NominalValueModel::Tuple: return IntrinsicFamily::Tuple;
+                case NominalValueModel::Span: return IntrinsicFamily::Span;
+                case NominalValueModel::Option: return IntrinsicFamily::Option;
+                case NominalValueModel::Result: return IntrinsicFamily::Result;
+                case NominalValueModel::Regular: break;
+                }
+                break;
+            default: break;
+            }
+            return IntrinsicFamily::None;
         }
 
         bool nominalDerivesFrom(const TypeId sourceType, const TypeId destinationType) const
@@ -422,7 +455,8 @@ namespace wio::wir::typed
                     {"u64", TypeKind::U64}, {"usize", TypeKind::USize},
                     {"f32", TypeKind::F32}, {"f64", TypeKind::F64},
                     {"byte", TypeKind::Byte}, {"char", TypeKind::Char},
-                    {"string", TypeKind::String}, {"text", TypeKind::Text}
+                    {"string", TypeKind::String}, {"text", TypeKind::Text},
+                    {"any", TypeKind::Any}
                 };
                 const auto found = primitiveKinds.find(name);
                 if (found == primitiveKinds.end())
@@ -510,6 +544,14 @@ namespace wio::wir::typed
                 wirType.nominalRepresentation = structure->isNativePodComponent
                     ? NominalRepresentation::NativePod
                     : NominalRepresentation::Wio;
+                if (structure->name == "Tuple")
+                    wirType.nominalValueModel = NominalValueModel::Tuple;
+                else if (structure->name == "Span")
+                    wirType.nominalValueModel = NominalValueModel::Span;
+                else if (structure->name == "Option")
+                    wirType.nominalValueModel = NominalValueModel::Option;
+                else if (structure->name == "Result")
+                    wirType.nominalValueModel = NominalValueModel::Result;
                 for (const TypeId argument : wirType.arguments)
                 {
                     if (!argument)
@@ -1241,6 +1283,33 @@ namespace wio::wir::typed
                     .source = SourceSpan::at(expression->location())
                 });
             }
+            if (const auto* interpolated = expression->as<InterpolatedStringLiteral>())
+            {
+                Instruction instruction{
+                    .opcode = Opcode::Interpolate,
+                    .intrinsicFamily = interpolated->isUnicode
+                        ? IntrinsicFamily::Text
+                        : IntrinsicFamily::String,
+                    .source = SourceSpan::at(expression->location())
+                };
+                instruction.stringSegments.emplace_back();
+                for (const auto& part : interpolated->parts)
+                {
+                    if (const auto* literalPart = part ? part->as<StringLiteral>() : nullptr)
+                    {
+                        instruction.stringSegments.back() += literalPart->token.value;
+                        continue;
+                    }
+                    const ValueId value = buildAutoReadableExpression(part, state);
+                    const TypeId valueType = part ? mapType(part->refType.Lock(), part.Get()) : TypeId{};
+                    if (!value || !valueType)
+                        return {};
+                    instruction.operands.push_back(value);
+                    instruction.signatureTypes.push_back(valueType);
+                    instruction.stringSegments.emplace_back();
+                }
+                return appendValue(std::move(instruction));
+            }
             if (const auto* character = expression->as<CharLiteral>())
             {
                 if (character->token.value.size() != 1)
@@ -1291,6 +1360,38 @@ namespace wio::wir::typed
                     if (!value)
                         return {};
                     instruction.operands.push_back(value);
+                }
+                return appendValue(std::move(instruction));
+            }
+            if (const auto* dictionary = expression->as<DictionaryLiteral>())
+            {
+                const TypeId dictionaryTypeId = mapType(expression->refType.Lock(), expression.Get());
+                const Type* dictionaryType = result_.module_.types.tryGet(dictionaryTypeId);
+                if (!dictionaryType || dictionaryType->kind != TypeKind::Dictionary ||
+                    dictionaryType->arguments.size() != 2)
+                {
+                    report("WIR2345", "Dictionary literal requires resolved key and value types.", expression.Get());
+                    return {};
+                }
+                const TypeId keyType = dictionaryType->arguments[0];
+                const TypeId valueType = dictionaryType->arguments[1];
+                Instruction instruction{
+                    .opcode = Opcode::DictionaryCreate,
+                    .selector = dictionary->isOrdered ? "ordered" : "unordered",
+                    .source = SourceSpan::at(expression->location())
+                };
+                instruction.operands.reserve(dictionary->pairs.size() * 2);
+                instruction.signatureTypes.reserve(dictionary->pairs.size() * 2);
+                for (const auto& [key, valueExpression] : dictionary->pairs)
+                {
+                    const ValueId keyValue = buildExpressionAs(key, keyType, state);
+                    const ValueId mappedValue = buildExpressionAs(valueExpression, valueType, state);
+                    if (!keyValue || !mappedValue)
+                        return {};
+                    instruction.operands.push_back(keyValue);
+                    instruction.operands.push_back(mappedValue);
+                    instruction.signatureTypes.push_back(keyType);
+                    instruction.signatureTypes.push_back(valueType);
                 }
                 return appendValue(std::move(instruction));
             }
@@ -1394,9 +1495,10 @@ namespace wio::wir::typed
                 const Type* destinationType = result_.module_.types.tryGet(destinationTypeId);
                 const bool numeric = sourceType && destinationType &&
                     isNumericType(sourceType->kind) && isNumericType(destinationType->kind);
+                const bool anyCast = sourceType && sourceType->kind == TypeKind::Any;
                 const bool objectLike = underlyingNominalType(sourceTypeId) &&
                     underlyingNominalType(destinationTypeId);
-                if (!numeric && !objectLike)
+                if (!numeric && !objectLike && !anyCast)
                 {
                     report("WIR2313", "Typed WIR fit lowering requires numeric or object/interface operands.", expression.Get());
                     return {};
@@ -1405,7 +1507,9 @@ namespace wio::wir::typed
                 if (!operand)
                     return {};
                 return appendValue(Instruction{
-                    .opcode = objectLike ? Opcode::CheckedCast : Opcode::Convert,
+                    .opcode = anyCast
+                        ? Opcode::AnyCheckedCast
+                        : objectLike ? Opcode::CheckedCast : Opcode::Convert,
                     .operands = {operand},
                     .conversionKind = ConversionKind::NumericFit,
                     .targetType = destinationTypeId,
@@ -1452,6 +1556,31 @@ namespace wio::wir::typed
             }
             if (const auto* member = expression->as<MemberAccessExpression>())
             {
+                const Ref<sema::Symbol> ownerSymbol = member->object
+                    ? member->object->referencedSymbol.Lock()
+                    : nullptr;
+                const TypeId ownerType = member->object
+                    ? mapType(member->object->refType.Lock(), member->object.Get())
+                    : TypeId{};
+                const Type* ownerTypeInfo = result_.module_.types.tryGet(ownerType);
+                const bool isStaticNominalAccess = member->object &&
+                    (member->object->is<TypeExpression>() ||
+                     (ownerSymbol && (ownerSymbol->kind == sema::SymbolKind::Struct ||
+                                      ownerSymbol->kind == sema::SymbolKind::TypeAlias)));
+                if (isStaticNominalAccess && ownerTypeInfo && ownerTypeInfo->kind == TypeKind::Named &&
+                    (ownerTypeInfo->nominalKind == NominalKind::Enum ||
+                     ownerTypeInfo->nominalKind == NominalKind::Flagset))
+                {
+                    return appendValue(Instruction{
+                        .opcode = Opcode::EnumConstant,
+                        .selector = member->member ? member->member->token.value : std::string{},
+                        .intrinsicFamily = ownerTypeInfo->nominalKind == NominalKind::Enum
+                            ? IntrinsicFamily::Enum
+                            : IntrinsicFamily::Flagset,
+                        .targetType = ownerType,
+                        .source = SourceSpan::at(expression->location())
+                    });
+                }
                 if (!member->referencedSymbol.Lock() ||
                     member->referencedSymbol.Lock()->kind != sema::SymbolKind::Variable)
                 {
@@ -1477,9 +1606,11 @@ namespace wio::wir::typed
                     objectTypeId = objectType->arguments.front();
                     objectType = result_.module_.types.tryGet(objectTypeId);
                 }
-                if (!objectType || objectType->kind != TypeKind::Array)
+                if (!objectType || (objectType->kind != TypeKind::Array &&
+                    objectType->kind != TypeKind::Dictionary &&
+                    objectType->kind != TypeKind::String && objectType->kind != TypeKind::Text))
                 {
-                    report("WIR2322", "Initial Typed WIR index access supports arrays only.", expression.Get());
+                    report("WIR2322", "Typed WIR index access requires an array, dictionary, string, or text value.", expression.Get());
                     return {};
                 }
                 const ValueId object = buildExpressionAs(access->object, objectTypeId, state);
@@ -1487,8 +1618,18 @@ namespace wio::wir::typed
                 if (!object || !index)
                     return {};
                 return appendValue(Instruction{
-                    .opcode = Opcode::ArrayGet,
+                    .opcode = objectType->kind == TypeKind::Array
+                        ? Opcode::ArrayGet
+                        : objectType->kind == TypeKind::Dictionary
+                            ? Opcode::DictionaryGet
+                            : Opcode::IntrinsicCall,
                     .operands = {object, index},
+                    .selector = objectType->kind == TypeKind::String || objectType->kind == TypeKind::Text
+                        ? "Get"
+                        : std::string{},
+                    .signatureTypes = {objectTypeId, mapType(access->index->refType.Lock(), access->index.Get())},
+                    .intrinsicFamily = intrinsicFamilyFor(objectTypeId),
+                    .targetType = objectTypeId,
                     .source = SourceSpan::at(expression->location())
                 });
             }
@@ -1570,14 +1711,17 @@ namespace wio::wir::typed
                 if (binary->op.type == TokenType::kwIs)
                 {
                     const ValueId operand = buildExpression(binary->left, state);
+                    const TypeId sourceType = mapType(binary->left->refType.Lock(), binary->left.Get());
                     const TypeId targetType = mapType(binary->right->refType.Lock(), binary->right.Get());
-                    if (!operand || !underlyingNominalType(targetType))
+                    const Type* sourceTypeInfo = result_.module_.types.tryGet(sourceType);
+                    const bool anyTest = sourceTypeInfo && sourceTypeInfo->kind == TypeKind::Any;
+                    if (!operand || (!anyTest && !underlyingNominalType(targetType)))
                     {
                         report("WIR2333", "Object/interface type test is missing a representable target type.", expression.Get());
                         return {};
                     }
                     return appendValue(Instruction{
-                        .opcode = Opcode::TypeTest,
+                        .opcode = anyTest ? Opcode::AnyTypeTest : Opcode::TypeTest,
                         .operands = {operand},
                         .targetType = targetType,
                         .source = SourceSpan::at(expression->location())
@@ -1678,6 +1822,60 @@ namespace wio::wir::typed
                 const auto* memberCallee = call->callee
                     ? call->callee->as<MemberAccessExpression>()
                     : nullptr;
+                if (memberCallee && memberCallee->object &&
+                    memberCallee->intrinsicMember != IntrinsicMember::None)
+                {
+                    TypeId receiverType = mapType(
+                        memberCallee->object->refType.Lock(), memberCallee->object.Get());
+                    const Type* receiverTypeInfo = result_.module_.types.tryGet(receiverType);
+                    if (receiverTypeInfo && receiverTypeInfo->kind == TypeKind::Reference &&
+                        receiverTypeInfo->arguments.size() == 1)
+                    {
+                        receiverType = receiverTypeInfo->arguments.front();
+                    }
+                    const bool mutating = sema::isMutatingIntrinsicMember(memberCallee->intrinsicMember);
+                    const ValueId receiver = mutating
+                        ? buildPlace(memberCallee->object, true, state)
+                        : buildAutoReadableExpression(memberCallee->object, state);
+                    if (!receiver)
+                        return {};
+                    Instruction instruction{
+                        .opcode = Opcode::IntrinsicCall,
+                        .operands = {receiver},
+                        .selector = memberCallee->member
+                            ? memberCallee->member->token.value
+                            : std::string{},
+                        .intrinsicFamily = intrinsicFamilyFor(receiverType),
+                        .targetType = receiverType,
+                        .source = SourceSpan::at(expression->location())
+                    };
+                    instruction.signatureTypes.push_back(mutating
+                        ? referenceType(receiverType, true)
+                        : receiverType);
+                    const Ref<sema::Type> selectedCallableType = call->callee->refType.Lock();
+                    const auto functionType = selectedCallableType &&
+                        selectedCallableType->kind() == sema::TypeKind::Function
+                        ? selectedCallableType.AsFast<sema::FunctionType>()
+                        : nullptr;
+                    for (std::size_t index = 0; index < call->arguments.size(); ++index)
+                    {
+                        const auto& argument = call->arguments[index];
+                        const TypeId expectedType = functionType && index < functionType->paramTypes.size()
+                            ? mapType(functionType->paramTypes[index], argument.Get())
+                            : mapType(argument->refType.Lock(), argument.Get());
+                        const ValueId argumentValue = buildExpressionAs(argument, expectedType, state);
+                        if (!argumentValue)
+                            return {};
+                        instruction.operands.push_back(argumentValue);
+                        instruction.signatureTypes.push_back(expectedType);
+                    }
+                    if (callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Void)
+                    {
+                        currentBlock(state).instructions.push_back(std::move(instruction));
+                        return {};
+                    }
+                    return appendValue(std::move(instruction));
+                }
                 if (memberCallee && memberCallee->object &&
                     !memberCallee->object->is<TypeExpression>())
                 {
@@ -1977,13 +2175,28 @@ namespace wio::wir::typed
                     report("WIR2328", "Overloaded index places are not yet supported by Typed WIR.", expression.Get());
                     return {};
                 }
+                TypeId containerType = mapType(access->object->refType.Lock(), access->object.Get());
+                const Type* container = result_.module_.types.tryGet(containerType);
+                if (container && container->kind == TypeKind::Reference && container->arguments.size() == 1)
+                {
+                    containerType = container->arguments.front();
+                    container = result_.module_.types.tryGet(containerType);
+                }
+                if (!container || (container->kind != TypeKind::Array &&
+                    container->kind != TypeKind::Dictionary))
+                {
+                    report("WIR2328", "Only array and dictionary index expressions are addressable WIR places.", expression.Get());
+                    return {};
+                }
                 const ValueId base = buildPlace(access->object, needsMutable, state);
                 const ValueId index = buildAutoReadableExpression(access->index, state);
                 if (!base || !index)
                     return {};
                 const ValueId result{state.nextValue++};
                 currentBlock(state).instructions.push_back(Instruction{
-                    .opcode = Opcode::ArrayPlace,
+                    .opcode = container->kind == TypeKind::Dictionary
+                        ? Opcode::DictionaryPlace
+                        : Opcode::ArrayPlace,
                     .result = result,
                     .resultType = referenceType(mapType(expression->refType.Lock(), expression.Get()), needsMutable),
                     .operands = {base, index},
@@ -2100,6 +2313,36 @@ namespace wio::wir::typed
             if (sourceType == destinationType)
                 return value;
 
+            if (destination && destination->kind == TypeKind::Any)
+            {
+                const ValueId boxed{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::AnyBox,
+                    .result = boxed,
+                    .resultType = destinationType,
+                    .operands = {value},
+                    .signatureTypes = {sourceType},
+                    .targetType = sourceType,
+                    .source = SourceSpan::at(expression->location())
+                });
+                return boxed;
+            }
+
+            if (source && destination && destination->kind == TypeKind::Nullable &&
+                destination->arguments.size() == 1 && destination->arguments.front() == sourceType)
+            {
+                const ValueId wrapped{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::NullableWrap,
+                    .result = wrapped,
+                    .resultType = destinationType,
+                    .operands = {value},
+                    .targetType = destinationType,
+                    .source = SourceSpan::at(expression->location())
+                });
+                return wrapped;
+            }
+
             if (!source || !destination ||
                 !isSafeNumericWiden(source->kind, destination->kind))
             {
@@ -2151,6 +2394,7 @@ namespace wio::wir::typed
             case TypeKind::F64: literal = 0.0; break;
             case TypeKind::String:
             case TypeKind::Text: literal = std::string{}; break;
+            case TypeKind::Any: literal = NullLiteral{}; break;
             default:
                 report(
                     "WIR2203",

@@ -48,6 +48,16 @@ namespace wio::wir
             case typed::Opcode::ArrayElement: opcode = lowered::Opcode::ArrayElement; break;
             case typed::Opcode::ArrayCreate: opcode = lowered::Opcode::ArrayCreate; break;
             case typed::Opcode::ArrayGet: opcode = lowered::Opcode::ArrayGet; break;
+            case typed::Opcode::DictionaryCreate: opcode = lowered::Opcode::DictionaryCreate; break;
+            case typed::Opcode::DictionaryGet: opcode = lowered::Opcode::DictionaryGet; break;
+            case typed::Opcode::DictionaryPlace: opcode = lowered::Opcode::DictionaryPlace; break;
+            case typed::Opcode::Interpolate: opcode = lowered::Opcode::Interpolate; break;
+            case typed::Opcode::EnumConstant: opcode = lowered::Opcode::EnumConstant; break;
+            case typed::Opcode::IntrinsicCall: opcode = lowered::Opcode::IntrinsicCall; break;
+            case typed::Opcode::AnyBox: opcode = lowered::Opcode::AnyBox; break;
+            case typed::Opcode::AnyCheckedCast: opcode = lowered::Opcode::AnyCheckedCast; break;
+            case typed::Opcode::AnyTypeTest: opcode = lowered::Opcode::AnyTypeTest; break;
+            case typed::Opcode::NullableWrap: opcode = lowered::Opcode::NullableWrap; break;
             case typed::Opcode::LocalPlace: opcode = lowered::Opcode::LocalPlace; break;
             case typed::Opcode::PlaceInit: opcode = lowered::Opcode::PlaceInit; break;
             case typed::Opcode::Load: opcode = lowered::Opcode::Load; break;
@@ -80,7 +90,9 @@ namespace wio::wir
                 .signatureTypes = instruction.signatureTypes,
                 .genericArguments = instruction.genericArguments,
                 .captureKinds = instruction.captureKinds,
+                .stringSegments = instruction.stringSegments,
                 .specializationKey = instruction.specializationKey,
+                .intrinsicFamily = instruction.intrinsicFamily,
                 .targetType = instruction.targetType,
                 .source = instruction.source
             };

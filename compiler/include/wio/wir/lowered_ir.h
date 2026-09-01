@@ -36,6 +36,16 @@ namespace wio::wir::lowered
         ArrayElement,
         ArrayCreate,
         ArrayGet,
+        DictionaryCreate,
+        DictionaryGet,
+        DictionaryPlace,
+        Interpolate,
+        EnumConstant,
+        IntrinsicCall,
+        AnyBox,
+        AnyCheckedCast,
+        AnyTypeTest,
+        NullableWrap,
         LocalPlace,
         PlaceInit,
         Load,
@@ -83,7 +93,9 @@ namespace wio::wir::lowered
         std::vector<TypeId> signatureTypes;
         std::vector<TypeId> genericArguments;
         std::vector<CaptureKind> captureKinds;
+        std::vector<std::string> stringSegments;
         std::string specializationKey;
+        IntrinsicFamily intrinsicFamily = IntrinsicFamily::None;
         TypeId targetType;
         SourceSpan source;
     };

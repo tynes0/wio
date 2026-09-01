@@ -41,8 +41,10 @@ direct/virtual/interface method calls, object/interface `fit` and `is`, identity
 equality, explicit clamping numeric `fit` conversions, safe implicit numeric
 widening, pure conditional values, local declarations and default initialization,
 place-based local/field/index assignment, compound assignment, `ref`/`view`
-borrows, explicit `deref`, contextually typed and inferred array literals, array
-index reads, `if`/`else` control flow, returns,
+borrows, explicit `deref`, contextually typed and inferred array literals,
+dictionary literals and keyed reads/writes, array/string/text index reads,
+string/text interpolation, enum/flagset values, `any` boxing/testing/casting,
+nullable wrapping, backend-neutral container/string/text intrinsics, `if`/`else` control flow, returns,
 `while` loops, C-style `for` loops, `break`, `continue`, short-circuit `and`/`or`,
 and expression statements. Logical expressions use explicit right-hand, short,
 and merge blocks, so calls in the right operand are only evaluated on the
@@ -163,6 +165,37 @@ to the closure body through stable environment places, while retained `self`
 keeps object identity alive for an escaping closure. Both IR levels verify
 capture order/kind/type, indirect-call arity and result shape, extension
 receiver compatibility, generic metadata, and exact callable targets.
+
+## Value and Container Model
+
+Container construction and access no longer depend on C++ spellings.
+`dictionary-create` preserves ordered versus unordered identity plus alternating
+concrete key/value types. `dictionary-get` and `dictionary-place` distinguish
+keyed reads from mutable storage projection, just as `array-get` and
+`array-place` do for positional containers. Wio source now accepts direct
+`dictionary[key]` reads and writes; the production native path and WIR path
+share the same missing-key failure rule.
+
+`intrinsic-call` freezes the semantic intrinsic family (`array`, `dictionary`,
+`string`, `text`, `enum`, or `flagset`), source selector, receiver target, and
+complete concrete operand signature. Backends implement that contract instead
+of rerunning member lookup. String/text interpolation uses `interpolate` with
+ordered literal segments and typed value holes, so nested calls and Unicode
+text remain structured until backend emission.
+
+Enum and flagset members use `enum-constant`; enum/flagset operations remain
+typed intrinsics. Dynamic values use distinct `any-box`, `any-type-test`, and
+`any-checked-cast` operations, while implicit non-null-to-nullable conversion is
+`nullable-wrap`. Null remains a valid `any` payload. `Option<T>` and `Result<T>`
+retain nominal value-model markers and continue to use verified
+`variant-test`/`variant-payload` operations. Standard-library `Tuple` and `Span`
+types likewise retain `tuple` and `span` markers even though their ordinary
+construction and methods remain nominal component/object operations.
+
+Typed and Lowered verifiers check dictionary key/value pairing and places,
+interpolation segment/hole shape, intrinsic signatures, enum/flagset targets,
+dynamic source identities, nullable payload types, and nominal value-model
+placement. Canonical lowering copies every field unchanged.
 
 ## Lowered WIR
 
