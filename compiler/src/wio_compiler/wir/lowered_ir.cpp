@@ -14,7 +14,10 @@ namespace wio::wir::lowered
                opcode == Opcode::Binary || opcode == Opcode::Convert || opcode == Opcode::Call ||
                opcode == Opcode::VariantTest || opcode == Opcode::VariantPayload ||
                opcode == Opcode::ArrayLength || opcode == Opcode::ArrayElement ||
-               opcode == Opcode::ArrayCreate || opcode == Opcode::ArrayGet;
+               opcode == Opcode::ArrayCreate || opcode == Opcode::ArrayGet ||
+               opcode == Opcode::LocalPlace || opcode == Opcode::Load ||
+               opcode == Opcode::FieldPlace || opcode == Opcode::ArrayPlace ||
+               opcode == Opcode::Borrow;
     }
 
     std::string_view opcodeName(const Opcode opcode)
@@ -32,6 +35,13 @@ namespace wio::wir::lowered
         case Opcode::ArrayElement: return "array-element";
         case Opcode::ArrayCreate: return "array-create";
         case Opcode::ArrayGet: return "array-get";
+        case Opcode::LocalPlace: return "local-place";
+        case Opcode::PlaceInit: return "place-init";
+        case Opcode::Load: return "load";
+        case Opcode::Store: return "store";
+        case Opcode::FieldPlace: return "field-place";
+        case Opcode::ArrayPlace: return "array-place";
+        case Opcode::Borrow: return "borrow";
         case Opcode::Return: return "return";
         case Opcode::Jump: return "jump";
         case Opcode::CondJump: return "cond-jump";

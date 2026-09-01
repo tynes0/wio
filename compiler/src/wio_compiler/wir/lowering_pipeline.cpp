@@ -37,6 +37,13 @@ namespace wio::wir
             case typed::Opcode::ArrayElement: opcode = lowered::Opcode::ArrayElement; break;
             case typed::Opcode::ArrayCreate: opcode = lowered::Opcode::ArrayCreate; break;
             case typed::Opcode::ArrayGet: opcode = lowered::Opcode::ArrayGet; break;
+            case typed::Opcode::LocalPlace: opcode = lowered::Opcode::LocalPlace; break;
+            case typed::Opcode::PlaceInit: opcode = lowered::Opcode::PlaceInit; break;
+            case typed::Opcode::Load: opcode = lowered::Opcode::Load; break;
+            case typed::Opcode::Store: opcode = lowered::Opcode::Store; break;
+            case typed::Opcode::FieldPlace: opcode = lowered::Opcode::FieldPlace; break;
+            case typed::Opcode::ArrayPlace: opcode = lowered::Opcode::ArrayPlace; break;
+            case typed::Opcode::Borrow: opcode = lowered::Opcode::Borrow; break;
             case typed::Opcode::Return: opcode = lowered::Opcode::Return; break;
             case typed::Opcode::Unreachable: opcode = lowered::Opcode::Unreachable; break;
             case typed::Opcode::Select:

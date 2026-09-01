@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace wio::wir::lowered
@@ -88,6 +89,7 @@ namespace wio::wir::lowered
         for (const Function& function : module.functions)
         {
             ValueTypeMap values;
+            std::unordered_map<ValueId::ValueType, Opcode> producerOpcodes;
             auto defineValue = [&](const Parameter& parameter, const BlockId block)
             {
                 if (!parameter.id)
@@ -133,6 +135,7 @@ namespace wio::wir::lowered
                             .type = instruction.resultType,
                             .source = instruction.source
                         }, block.id);
+                        producerOpcodes.emplace(instruction.result.value(), instruction.opcode);
                     }
                 }
             }
@@ -145,6 +148,7 @@ namespace wio::wir::lowered
                 return found == values.end() ? TypeId{} : found->second;
             };
 
+            std::unordered_set<ValueId::ValueType> initializedPlaces;
             for (const BasicBlock& block : function.blocks)
             {
                 if (block.instructions.empty())
@@ -292,6 +296,106 @@ namespace wio::wir::lowered
                             arrayType->arguments.front() != instruction.resultType)
                         {
                             report("LIR1423", "Lowered WIR array get requires an array, an integer index, and its element result type.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::LocalPlace)
+                    {
+                        const Type* placeType = module.types.tryGet(instruction.resultType);
+                        if (!instruction.operands.empty() || !placeType || placeType->kind != TypeKind::Reference ||
+                            placeType->arguments.size() != 1 || instruction.selector.empty())
+                        {
+                            report("LIR1424", "Lowered WIR local place requires a named reference result and no operands.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::PlaceInit || instruction.opcode == Opcode::Store)
+                    {
+                        const Type* placeType = instruction.operands.size() == 2
+                            ? module.types.tryGet(valueType(instruction.operands[0]))
+                            : nullptr;
+                        const bool mutabilityValid = instruction.opcode == Opcode::PlaceInit ||
+                            (placeType && placeType->isMutable);
+                        if (!placeType || placeType->kind != TypeKind::Reference || placeType->arguments.size() != 1 ||
+                            valueType(instruction.operands[1]) != placeType->arguments.front() || !mutabilityValid)
+                        {
+                            report(
+                                instruction.opcode == Opcode::PlaceInit ? "LIR1425" : "LIR1426",
+                                instruction.opcode == Opcode::PlaceInit
+                                    ? "Lowered WIR place initialization requires a reference place and a matching value."
+                                    : "Lowered WIR store requires a mutable reference place and a matching value.",
+                                instruction.source, function.id, block.id);
+                        }
+                        if (instruction.opcode == Opcode::PlaceInit && instruction.operands.size() == 2)
+                        {
+                            const ValueId place = instruction.operands.front();
+                            const auto producer = producerOpcodes.find(place.value());
+                            if (producer == producerOpcodes.end() || producer->second != Opcode::LocalPlace ||
+                                !initializedPlaces.insert(place.value()).second)
+                            {
+                                report("LIR1431", "Lowered WIR place initialization must target an uninitialized local place exactly once.", instruction.source, function.id, block.id);
+                            }
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::Load)
+                    {
+                        const Type* placeType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        if (!placeType || placeType->kind != TypeKind::Reference || placeType->arguments.size() != 1 ||
+                            instruction.resultType != placeType->arguments.front())
+                        {
+                            report("LIR1427", "Lowered WIR load requires a reference place and its referred result type.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::FieldPlace)
+                    {
+                        const Type* baseType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const Type* placeType = module.types.tryGet(instruction.resultType);
+                        const Type* baseValueType = baseType;
+                        if (baseType && baseType->kind == TypeKind::Reference && baseType->arguments.size() == 1)
+                            baseValueType = module.types.tryGet(baseType->arguments.front());
+                        const bool strengthensMutability = baseType && baseType->kind == TypeKind::Reference &&
+                            placeType && placeType->isMutable && !baseType->isMutable;
+                        if (!baseValueType || baseValueType->kind != TypeKind::Named || !placeType ||
+                            placeType->kind != TypeKind::Reference || placeType->arguments.size() != 1 ||
+                            instruction.selector.empty() || strengthensMutability)
+                        {
+                            report("LIR1428", "Lowered WIR field place requires a named base, field selector, and non-strengthening reference result.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::ArrayPlace)
+                    {
+                        const Type* baseType = instruction.operands.size() == 2
+                            ? module.types.tryGet(valueType(instruction.operands[0]))
+                            : nullptr;
+                        const Type* indexType = instruction.operands.size() == 2
+                            ? module.types.tryGet(valueType(instruction.operands[1]))
+                            : nullptr;
+                        const Type* placeType = module.types.tryGet(instruction.resultType);
+                        const Type* arrayType = baseType && baseType->kind == TypeKind::Reference && baseType->arguments.size() == 1
+                            ? module.types.tryGet(baseType->arguments.front())
+                            : nullptr;
+                        if (!baseType || !arrayType || arrayType->kind != TypeKind::Array || arrayType->arguments.size() != 1 ||
+                            !indexType || !isInteger(indexType->kind) || !placeType || placeType->kind != TypeKind::Reference ||
+                            placeType->arguments.size() != 1 || placeType->arguments.front() != arrayType->arguments.front() ||
+                            (placeType->isMutable && !baseType->isMutable))
+                        {
+                            report("LIR1429", "Lowered WIR array place requires an array reference, integer index, and non-strengthening element reference.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::Borrow)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        if (!sourceType || sourceType->kind != TypeKind::Reference || sourceType->arguments.size() != 1 ||
+                            !resultType || resultType->kind != TypeKind::Reference || resultType->arguments.size() != 1 ||
+                            sourceType->arguments.front() != resultType->arguments.front() ||
+                            (resultType->isMutable && !sourceType->isMutable))
+                        {
+                            report("LIR1430", "Lowered WIR borrow cannot change the referred type or strengthen mutability.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::Call)

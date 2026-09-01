@@ -40,6 +40,8 @@ namespace wio::wir::typed
             BlockId::ValueType nextBlock = 0;
             std::unordered_map<const sema::Symbol*, ValueId> values;
             std::vector<const sema::Symbol*> valueOrder;
+            std::unordered_map<const sema::Symbol*, ValueId> places;
+            std::vector<const sema::Symbol*> placeOrder;
         };
 
         struct LoopContext
@@ -54,6 +56,73 @@ namespace wio::wir::typed
         std::unordered_map<const sema::Symbol*, FunctionId> functionsBySymbol_;
         std::unordered_map<const sema::Type*, TypeId> typesBySemanticType_;
         std::vector<LoopContext> loopContexts_;
+
+        TypeId referenceType(const TypeId referredType, const bool isMutable)
+        {
+            return result_.module_.types.intern(Type{
+                .kind = TypeKind::Reference,
+                .arguments = {referredType},
+                .isMutable = isMutable
+            });
+        }
+
+        bool autoReadableReference(const Type& reference) const
+        {
+            if (reference.kind != TypeKind::Reference || reference.arguments.size() != 1)
+                return false;
+            const Type* referred = result_.module_.types.tryGet(reference.arguments.front());
+            return referred && !(referred->kind == TypeKind::Named &&
+                (referred->nominalKind == NominalKind::Object || referred->nominalKind == NominalKind::Interface));
+        }
+
+        ValueId emitLoad(
+            const ValueId place,
+            const TypeId valueType,
+            const ASTNode* source,
+            FunctionState& state)
+        {
+            const ValueId result{state.nextValue++};
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::Load,
+                .result = result,
+                .resultType = valueType,
+                .operands = {place},
+                .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
+            });
+            return result;
+        }
+
+        ValueId adaptPlaceMutability(
+            const ValueId place,
+            const TypeId placeTypeId,
+            const bool needsMutable,
+            const ASTNode* source,
+            FunctionState& state)
+        {
+            const Type* placeType = result_.module_.types.tryGet(placeTypeId);
+            if (!placeType || placeType->kind != TypeKind::Reference || placeType->arguments.size() != 1)
+            {
+                report("WIR2323", "Addressable expression did not produce a reference place.", source);
+                return {};
+            }
+            if (needsMutable && !placeType->isMutable)
+            {
+                report("WIR2324", "A mutable place was requested from a read-only view.", source);
+                return {};
+            }
+            if (needsMutable || !placeType->isMutable)
+                return place;
+
+            const ValueId result{state.nextValue++};
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::Borrow,
+                .result = result,
+                .resultType = referenceType(placeType->arguments.front(), false),
+                .operands = {place},
+                .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
+            });
+            return result;
+        }
 
         static BasicBlock& currentBlock(FunctionState& state)
         {
@@ -273,6 +342,13 @@ namespace wio::wir::typed
             function.isExternal = declaration.body == nullptr;
 
             FunctionState state{.function = &function};
+            if (!function.isExternal)
+            {
+                state.blockIndex = createBlock(
+                    state,
+                    "entry",
+                    SourceSpan::at(declaration.body->location()));
+            }
             for (std::size_t index = 0; index < declaration.parameters.size(); ++index)
             {
                 const wio::Parameter& parameter = declaration.parameters[index];
@@ -291,16 +367,36 @@ namespace wio::wir::typed
                     .type = mapType(functionType->paramTypes[index], parameter.name.Get()),
                     .source = SourceSpan::at(parameter.name->location())
                 });
-                state.values[parameterSymbol.Get()] = value;
-                state.valueOrder.push_back(parameterSymbol.Get());
+                const TypeId parameterType = mapType(functionType->paramTypes[index], parameter.name.Get());
+                const Type* parameterTypeInfo = result_.module_.types.tryGet(parameterType);
+                if (function.isExternal || (parameterTypeInfo && parameterTypeInfo->kind == TypeKind::Reference))
+                {
+                    state.values[parameterSymbol.Get()] = value;
+                    state.valueOrder.push_back(parameterSymbol.Get());
+                }
+                else
+                {
+                    const TypeId placeType = referenceType(parameterType, parameterSymbol->flags.get_isMutable());
+                    const ValueId place{state.nextValue++};
+                    currentBlock(state).instructions.push_back(Instruction{
+                        .opcode = Opcode::LocalPlace,
+                        .result = place,
+                        .resultType = placeType,
+                        .selector = parameterSymbol->name,
+                        .source = SourceSpan::at(parameter.name->location())
+                    });
+                    currentBlock(state).instructions.push_back(Instruction{
+                        .opcode = Opcode::PlaceInit,
+                        .operands = {place, value},
+                        .source = SourceSpan::at(parameter.name->location())
+                    });
+                    state.places[parameterSymbol.Get()] = place;
+                    state.placeOrder.push_back(parameterSymbol.Get());
+                }
             }
 
             if (!function.isExternal)
             {
-                state.blockIndex = createBlock(
-                    state,
-                    "entry",
-                    SourceSpan::at(declaration.body->location()));
                 buildStatement(declaration.body, state);
                 if (!blockIsTerminated(state))
                 {
@@ -325,6 +421,7 @@ namespace wio::wir::typed
             if (const auto* block = statement->as<BlockStatement>())
             {
                 const std::size_t visibleValueCount = state.valueOrder.size();
+                const std::size_t visiblePlaceCount = state.placeOrder.size();
                 for (const auto& child : block->statements)
                 {
                     if (blockIsTerminated(state))
@@ -338,6 +435,11 @@ namespace wio::wir::typed
                 {
                     state.values.erase(state.valueOrder.back());
                     state.valueOrder.pop_back();
+                }
+                while (state.placeOrder.size() > visiblePlaceCount)
+                {
+                    state.places.erase(state.placeOrder.back());
+                    state.placeOrder.pop_back();
                 }
                 return;
             }
@@ -362,8 +464,23 @@ namespace wio::wir::typed
                     value = buildDefaultValue(mapType(symbol->type, declaration), declaration, state);
                 if (!value)
                     return;
-                state.values[symbol.Get()] = value;
-                state.valueOrder.push_back(symbol.Get());
+                const TypeId valueType = mapType(symbol->type, declaration);
+                const TypeId placeType = referenceType(valueType, symbol->flags.get_isMutable());
+                const ValueId place{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::LocalPlace,
+                    .result = place,
+                    .resultType = placeType,
+                    .selector = symbol->name,
+                    .source = SourceSpan::at(declaration->location())
+                });
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::PlaceInit,
+                    .operands = {place, value},
+                    .source = SourceSpan::at(declaration->location())
+                });
+                state.places[symbol.Get()] = place;
+                state.placeOrder.push_back(symbol.Get());
                 return;
             }
             if (const auto* ifStatement = statement->as<IfStatement>())
@@ -584,11 +701,36 @@ namespace wio::wir::typed
             if (const auto* identifier = expression->as<Identifier>())
             {
                 const Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
+                const auto place = symbol ? state.places.find(symbol.Get()) : state.places.end();
+                if (place != state.places.end())
+                    return emitLoad(place->second, mapType(symbol->type, expression.Get()), expression.Get(), state);
                 const auto found = symbol ? state.values.find(symbol.Get()) : state.values.end();
                 if (found != state.values.end())
                     return found->second;
                 report("WIR2301", "Identifier is not a value available in the current Typed WIR function.", expression.Get());
                 return {};
+            }
+            if (const auto* reference = expression->as<RefExpression>())
+            {
+                const TypeId referenceTypeId = mapType(expression->refType.Lock(), expression.Get());
+                const Type* referenceTypeInfo = result_.module_.types.tryGet(referenceTypeId);
+                return buildPlace(
+                    reference->operand,
+                    referenceTypeInfo && referenceTypeInfo->kind == TypeKind::Reference && referenceTypeInfo->isMutable,
+                    state);
+            }
+            if (const auto* member = expression->as<MemberAccessExpression>())
+            {
+                if (!member->referencedSymbol.Lock() ||
+                    member->referencedSymbol.Lock()->kind != sema::SymbolKind::Variable)
+                {
+                    report("WIR2325", "Initial Typed WIR member reads currently require a resolved data field.", expression.Get());
+                    return {};
+                }
+                const ValueId place = buildPlace(expression, false, state);
+                if (!place)
+                    return {};
+                return emitLoad(place, mapType(expression->refType.Lock(), expression.Get()), expression.Get(), state);
             }
             if (const auto* access = expression->as<ArrayAccessExpression>())
             {
@@ -597,15 +739,20 @@ namespace wio::wir::typed
                     report("WIR2321", "Overloaded index access is not yet supported by Typed WIR.", expression.Get());
                     return {};
                 }
-                const TypeId objectTypeId = mapType(access->object->refType.Lock(), access->object.Get());
+                TypeId objectTypeId = mapType(access->object->refType.Lock(), access->object.Get());
                 const Type* objectType = result_.module_.types.tryGet(objectTypeId);
+                if (objectType && objectType->kind == TypeKind::Reference && autoReadableReference(*objectType))
+                {
+                    objectTypeId = objectType->arguments.front();
+                    objectType = result_.module_.types.tryGet(objectTypeId);
+                }
                 if (!objectType || objectType->kind != TypeKind::Array)
                 {
                     report("WIR2322", "Initial Typed WIR index access supports arrays only.", expression.Get());
                     return {};
                 }
-                const ValueId object = buildExpression(access->object, state);
-                const ValueId index = buildExpression(access->index, state);
+                const ValueId object = buildExpressionAs(access->object, objectTypeId, state);
+                const ValueId index = buildAutoReadableExpression(access->index, state);
                 if (!object || !index)
                     return {};
                 return appendValue(Instruction{
@@ -616,22 +763,17 @@ namespace wio::wir::typed
             }
             if (const auto* assignment = expression->as<AssignmentExpression>())
             {
-                const auto* target = assignment->left
-                    ? assignment->left->as<Identifier>()
-                    : nullptr;
-                const Ref<sema::Symbol> symbol = target
-                    ? target->referencedSymbol.Lock()
-                    : nullptr;
-                const auto current = symbol
-                    ? state.values.find(symbol.Get())
-                    : state.values.end();
-                if (!symbol || current == state.values.end())
-                {
-                    report("WIR2307", "Initial Typed WIR assignments require a local identifier target.", expression.Get());
+                TypeId targetType = mapType(assignment->left->refType.Lock(), assignment->left.Get());
+                const Type* targetTypeInfo = result_.module_.types.tryGet(targetType);
+                const bool assignsThroughReadableReference = targetTypeInfo &&
+                    targetTypeInfo->kind == TypeKind::Reference && autoReadableReference(*targetTypeInfo);
+                const ValueId target = assignsThroughReadableReference
+                    ? buildExpression(assignment->left, state)
+                    : buildPlace(assignment->left, true, state);
+                if (!target)
                     return {};
-                }
-
-                const TypeId targetType = mapType(symbol->type, target);
+                if (assignsThroughReadableReference)
+                    targetType = targetTypeInfo->arguments.front();
                 const ValueId right = buildExpressionAs(assignment->right, targetType, state);
                 if (!right)
                     return {};
@@ -645,22 +787,34 @@ namespace wio::wir::typed
                         return {};
                     }
                     assigned = ValueId{state.nextValue++};
+                    const ValueId currentValue = emitLoad(target, targetType, assignment->left.Get(), state);
                     currentBlock(state).instructions.push_back(Instruction{
                         .opcode = Opcode::Binary,
                         .result = assigned,
                         .resultType = targetType,
-                        .operands = {current->second, right},
+                        .operands = {currentValue, right},
                         .binaryOperator = *compoundOperator,
                         .source = SourceSpan::at(expression->location())
                     });
                 }
-                state.values[symbol.Get()] = assigned;
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::Store,
+                    .operands = {target, assigned},
+                    .source = SourceSpan::at(expression->location())
+                });
                 return assigned;
             }
             if (const auto* unary = expression->as<UnaryExpression>())
             {
+                if (unary->op.type == TokenType::kwDeref)
+                {
+                    const ValueId place = buildExpression(unary->operand, state);
+                    if (!place)
+                        return {};
+                    return emitLoad(place, mapType(expression->refType.Lock(), expression.Get()), expression.Get(), state);
+                }
                 const auto op = mapUnaryOperator(unary->op.type);
-                const ValueId operand = buildExpression(unary->operand, state);
+                const ValueId operand = buildAutoReadableExpression(unary->operand, state);
                 if (!op || !operand)
                 {
                     report("WIR2302", "Unary expression is not supported by the initial Typed WIR slice.", expression.Get());
@@ -683,8 +837,8 @@ namespace wio::wir::typed
                         state);
                 }
                 const auto op = mapBinaryOperator(binary->op.type);
-                const ValueId left = buildExpression(binary->left, state);
-                const ValueId right = buildExpression(binary->right, state);
+                const ValueId left = buildAutoReadableExpression(binary->left, state);
+                const ValueId right = buildAutoReadableExpression(binary->right, state);
                 if (!op || !left || !right)
                 {
                     report("WIR2303", "Binary expression is not supported by the initial Typed WIR slice.", expression.Get());
@@ -762,20 +916,161 @@ namespace wio::wir::typed
             return {};
         }
 
+        ValueId buildPlace(
+            const NodePtr<Expression>& expression,
+            const bool needsMutable,
+            FunctionState& state)
+        {
+            if (!expression)
+                return {};
+
+            if (const auto* identifier = expression->as<Identifier>())
+            {
+                const Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
+                if (!symbol)
+                {
+                    report("WIR2326", "Addressable identifier is missing its semantic symbol.", expression.Get());
+                    return {};
+                }
+                if (const auto place = state.places.find(symbol.Get()); place != state.places.end())
+                {
+                    return adaptPlaceMutability(
+                        place->second,
+                        referenceType(mapType(symbol->type, expression.Get()), symbol->flags.get_isMutable()),
+                        needsMutable,
+                        expression.Get(),
+                        state);
+                }
+                if (const auto value = state.values.find(symbol.Get()); value != state.values.end())
+                {
+                    const TypeId valueType = mapType(symbol->type, expression.Get());
+                    return adaptPlaceMutability(value->second, valueType, needsMutable, expression.Get(), state);
+                }
+                report("WIR2327", "Addressable identifier is not available in the current Typed WIR function.", expression.Get());
+                return {};
+            }
+
+            if (const auto* unary = expression->as<UnaryExpression>();
+                unary && unary->op.type == TokenType::kwDeref)
+            {
+                const ValueId place = buildExpression(unary->operand, state);
+                const TypeId placeType = mapType(unary->operand->refType.Lock(), unary->operand.Get());
+                return place ? adaptPlaceMutability(place, placeType, needsMutable, expression.Get(), state) : ValueId{};
+            }
+
+            if (const auto* access = expression->as<ArrayAccessExpression>())
+            {
+                if (access->operatorDispatchKind != OperatorDispatchKind::None)
+                {
+                    report("WIR2328", "Overloaded index places are not yet supported by Typed WIR.", expression.Get());
+                    return {};
+                }
+                const ValueId base = buildPlace(access->object, needsMutable, state);
+                const ValueId index = buildAutoReadableExpression(access->index, state);
+                if (!base || !index)
+                    return {};
+                const ValueId result{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::ArrayPlace,
+                    .result = result,
+                    .resultType = referenceType(mapType(expression->refType.Lock(), expression.Get()), needsMutable),
+                    .operands = {base, index},
+                    .source = SourceSpan::at(expression->location())
+                });
+                return result;
+            }
+
+            if (const auto* member = expression->as<MemberAccessExpression>())
+            {
+                const Ref<sema::Symbol> memberSymbol = member->referencedSymbol.Lock();
+                if (!memberSymbol || memberSymbol->kind != sema::SymbolKind::Variable)
+                {
+                    report("WIR2329", "Addressable member must resolve to a data field.", expression.Get());
+                    return {};
+                }
+                const ValueId base = buildPlace(member->object, needsMutable, state);
+                if (!base)
+                    return {};
+                const ValueId result{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::FieldPlace,
+                    .result = result,
+                    .resultType = referenceType(mapType(expression->refType.Lock(), expression.Get()), needsMutable),
+                    .operands = {base},
+                    .selector = memberSymbol->name,
+                    .source = SourceSpan::at(expression->location())
+                });
+                return result;
+            }
+
+            if (const auto* call = expression->as<FunctionCallExpression>())
+            {
+                const TypeId callType = mapType(expression->refType.Lock(), expression.Get());
+                const Type* callTypeInfo = result_.module_.types.tryGet(callType);
+                if (callTypeInfo && callTypeInfo->kind == TypeKind::Reference)
+                {
+                    const ValueId place = buildExpression(expression, state);
+                    return place ? adaptPlaceMutability(place, callType, needsMutable, expression.Get(), state) : ValueId{};
+                }
+            }
+
+            report("WIR2330", "Expression kind '" + getKindNameStr(expression->kind()) + "' is not an addressable Typed WIR place.", expression.Get());
+            return {};
+        }
+
+        ValueId buildAutoReadableExpression(
+            const NodePtr<Expression>& expression,
+            FunctionState& state)
+        {
+            ValueId value = buildExpression(expression, state);
+            TypeId currentType = mapType(expression->refType.Lock(), expression.Get());
+            const Type* type = result_.module_.types.tryGet(currentType);
+            while (value && type && autoReadableReference(*type))
+            {
+                currentType = type->arguments.front();
+                value = emitLoad(value, currentType, expression.Get(), state);
+                type = result_.module_.types.tryGet(currentType);
+            }
+            return value;
+        }
+
         ValueId buildExpressionAs(
             const NodePtr<Expression>& expression,
             const TypeId destinationType,
             FunctionState& state)
         {
-            const ValueId value = buildExpression(expression, state);
+            ValueId value = buildExpression(expression, state);
             if (!value)
                 return {};
-            const TypeId sourceType = mapType(expression->refType.Lock(), expression.Get());
+            TypeId sourceType = mapType(expression->refType.Lock(), expression.Get());
             if (sourceType == destinationType)
                 return value;
 
             const Type* source = result_.module_.types.tryGet(sourceType);
             const Type* destination = result_.module_.types.tryGet(destinationType);
+            if (source && destination && source->kind == TypeKind::Reference &&
+                destination->kind == TypeKind::Reference && source->arguments == destination->arguments &&
+                source->isMutable && !destination->isMutable)
+            {
+                const ValueId borrowed{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::Borrow,
+                    .result = borrowed,
+                    .resultType = destinationType,
+                    .operands = {value},
+                    .source = SourceSpan::at(expression->location())
+                });
+                return borrowed;
+            }
+            while (source && autoReadableReference(*source) && sourceType != destinationType)
+            {
+                sourceType = source->arguments.front();
+                value = emitLoad(value, sourceType, expression.Get(), state);
+                source = result_.module_.types.tryGet(sourceType);
+            }
+            if (sourceType == destinationType)
+                return value;
+
             if (!source || !destination ||
                 !isSafeNumericWiden(source->kind, destination->kind))
             {

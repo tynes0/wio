@@ -154,6 +154,31 @@ namespace wio::wir::lowered
                 stream << "array-get " << valueRef(instruction.operands.at(0)) << ", "
                        << valueRef(instruction.operands.at(1));
                 break;
+            case Opcode::LocalPlace:
+                stream << "local-place " << std::quoted(instruction.selector);
+                break;
+            case Opcode::PlaceInit:
+                stream << "place-init " << valueRef(instruction.operands.at(0)) << ", "
+                       << valueRef(instruction.operands.at(1));
+                break;
+            case Opcode::Load:
+                stream << "load " << valueRef(instruction.operands.at(0));
+                break;
+            case Opcode::Store:
+                stream << "store " << valueRef(instruction.operands.at(0)) << ", "
+                       << valueRef(instruction.operands.at(1));
+                break;
+            case Opcode::FieldPlace:
+                stream << "field-place " << valueRef(instruction.operands.at(0)) << ", "
+                       << std::quoted(instruction.selector);
+                break;
+            case Opcode::ArrayPlace:
+                stream << "array-place " << valueRef(instruction.operands.at(0)) << ", "
+                       << valueRef(instruction.operands.at(1));
+                break;
+            case Opcode::Borrow:
+                stream << "borrow " << valueRef(instruction.operands.at(0));
+                break;
             case Opcode::Return:
                 stream << "return";
                 if (!instruction.operands.empty())

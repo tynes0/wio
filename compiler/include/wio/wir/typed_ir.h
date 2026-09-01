@@ -63,6 +63,13 @@ namespace wio::wir::typed
         ArrayElement,
         ArrayCreate,
         ArrayGet,
+        LocalPlace,
+        PlaceInit,
+        Load,
+        Store,
+        FieldPlace,
+        ArrayPlace,
+        Borrow,
         // SSA value selection. All operands are already evaluated, so builders
         // may only use this for side-effect-free alternatives.
         Select,

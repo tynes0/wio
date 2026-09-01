@@ -32,13 +32,15 @@ The initial builder supports top-level functions, parameters, primitive and
 reference-family types, contextually typed integer and floating-point constants,
 Unicode `text`, `string`, `char`, and nullable `null` constants, direct calls, unary/binary expressions,
 explicit clamping numeric `fit` conversions, safe implicit numeric widening, pure conditional values, local declarations and default initialization,
-identifier assignment, compound assignment, contextually typed and inferred array
-literals, array index reads, `if`/`else` control flow, returns,
+place-based local/field/index assignment, compound assignment, `ref`/`view`
+borrows, explicit `deref`, contextually typed and inferred array literals, array
+index reads, `if`/`else` control flow, returns,
 `while` loops, C-style `for` loops, `break`, `continue`, short-circuit `and`/`or`,
 and expression statements. Logical expressions use explicit right-hand, short,
 and merge blocks, so calls in the right operand are only evaluated on the
-required edge. Mutable values crossing branches, logical expressions, and loop iterations are represented
-as deterministic SSA merge-block parameters rather than hidden memory slots. Unsupported
+required edge. Immutable temporary values crossing branches, logical expressions,
+and loop iterations use deterministic SSA block parameters. Addressable source
+variables instead keep a stable explicit place across those edges. Unsupported
 language constructs fail with stable `WIR2xxx` diagnostics; they never silently
 fall back or guess semantics.
 
@@ -62,8 +64,23 @@ Option/Result or array pattern semantics independently.
 Ordinary array expressions use `array-create` and `array-get`. Array literal
 elements are converted against the semantic element type before construction,
 and inferred literal arrays retain their fixed extent in the WIR type table.
-Indexed mutation remains gated on the upcoming place/memory model rather than
-being represented as a misleading pure operation.
+
+## Place and Memory Model
+
+Addressability is explicit and backend-neutral. `local-place` creates storage;
+`place-init` performs its declaration-time initialization; `load` reads a value;
+and `store` mutates only a mutable reference. `field-place` and `array-place`
+project stable sub-places without copying their aggregate, while `borrow`
+weakens a mutable `ref T` to a read-only `view T`. The verifier rejects stores
+through views, reference-type mismatches, non-integer array indices, and any
+projection that attempts to strengthen mutability.
+
+Wio's source ergonomics remain unchanged: references to primitives, components,
+and arrays auto-read in value contexts, while object/interface references retain
+identity unless explicitly dereferenced. Typed WIR records every implicit read,
+so C++ and bytecode backends do not independently reconstruct that rule. Local,
+field, and indexed mutation—including compound assignment—now use the same place
+operations and remain valid across structured control-flow edges.
 
 ## Lowered WIR
 
