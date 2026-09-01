@@ -29,7 +29,8 @@ namespace wio::wir::lowered
                opcode == Opcode::LocalPlace || opcode == Opcode::Load ||
                opcode == Opcode::FieldPlace || opcode == Opcode::ArrayPlace ||
                opcode == Opcode::Borrow || opcode == Opcode::ConstructComponent ||
-               opcode == Opcode::ConstructObject;
+               opcode == Opcode::ConstructObject || opcode == Opcode::Retain ||
+               opcode == Opcode::CopyValue || opcode == Opcode::MoveValue;
     }
 
     std::string_view opcodeName(const Opcode opcode)
@@ -77,7 +78,14 @@ namespace wio::wir::lowered
         case Opcode::Borrow: return "borrow";
         case Opcode::ConstructComponent: return "construct-component";
         case Opcode::ConstructObject: return "construct-object";
-        case Opcode::Drop: return "drop";
+        case Opcode::Retain: return "retain";
+        case Opcode::CopyValue: return "copy-value";
+        case Opcode::MoveValue: return "move-value";
+        case Opcode::Replace: return "replace";
+        case Opcode::Release: return "release";
+        case Opcode::DropValue: return "drop-value";
+        case Opcode::ReleasePlace: return "release-place";
+        case Opcode::DropPlace: return "drop-place";
         case Opcode::Return: return "return";
         case Opcode::Jump: return "jump";
         case Opcode::CondJump: return "cond-jump";

@@ -50,6 +50,20 @@ namespace wio::wir::typed
         NumericFit
     };
 
+    enum class ValueOwnership : std::uint8_t
+    {
+        Trivial,
+        Borrowed,
+        Owned
+    };
+
+    enum class BorrowLifetime : std::uint8_t
+    {
+        None,
+        Caller,
+        Lexical
+    };
+
     enum class Opcode : std::uint8_t
     {
         Constant,
@@ -93,6 +107,10 @@ namespace wio::wir::typed
         Borrow,
         ConstructComponent,
         ConstructObject,
+        Copy,
+        Move,
+        Replace,
+        Release,
         Drop,
         // SSA value selection. All operands are already evaluated, so builders
         // may only use this for side-effect-free alternatives.
@@ -117,6 +135,8 @@ namespace wio::wir::typed
         ValueId id;
         std::string name;
         TypeId type;
+        ValueOwnership ownership = ValueOwnership::Trivial;
+        BorrowLifetime borrowLifetime = BorrowLifetime::None;
         SourceSpan source;
     };
 
@@ -141,6 +161,9 @@ namespace wio::wir::typed
         std::string specializationKey;
         IntrinsicFamily intrinsicFamily = IntrinsicFamily::None;
         TypeId targetType;
+        ValueOwnership resultOwnership = ValueOwnership::Trivial;
+        BorrowLifetime borrowLifetime = BorrowLifetime::None;
+        ValueId borrowOrigin;
         SourceSpan source;
     };
 
@@ -188,4 +211,6 @@ namespace wio::wir::typed
     [[nodiscard]] std::string_view unaryOperatorName(UnaryOperator op);
     [[nodiscard]] std::string_view binaryOperatorName(BinaryOperator op);
     [[nodiscard]] std::string_view conversionKindName(ConversionKind kind);
+    [[nodiscard]] std::string_view valueOwnershipName(ValueOwnership ownership);
+    [[nodiscard]] std::string_view borrowLifetimeName(BorrowLifetime lifetime);
 }

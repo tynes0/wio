@@ -113,6 +113,7 @@ int main()
     std::size_t componentConstructions = 0;
     std::size_t objectConstructions = 0;
     std::size_t drops = 0;
+    std::size_t moves = 0;
     std::size_t fieldPlaces = 0;
     for (const typed::Function& function : build.module().functions)
     {
@@ -123,14 +124,15 @@ int main()
                 componentConstructions += instruction.opcode == typed::Opcode::ConstructComponent;
                 objectConstructions += instruction.opcode == typed::Opcode::ConstructObject;
                 drops += instruction.opcode == typed::Opcode::Drop;
+                moves += instruction.opcode == typed::Opcode::Move;
                 fieldPlaces += instruction.opcode == typed::Opcode::FieldPlace;
             }
         }
     }
     ok &= expect(componentConstructions == 3 && objectConstructions == 1,
         "Typed WIR must distinguish stack component construction from owning object allocation");
-    ok &= expect(drops >= 9 && fieldPlaces >= 2,
-        "Typed WIR must expose reverse lexical cleanup on normal, early-return, break, and continue paths");
+    ok &= expect(drops >= 8 && moves >= 1 && fieldPlaces >= 2,
+        "Typed WIR must expose reverse lexical cleanup and move returned locals without a redundant drop");
 
     const std::string typedText = typed::Printer{}.print(build.module());
     ok &= expect(

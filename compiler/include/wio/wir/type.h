@@ -100,6 +100,24 @@ namespace wio::wir
         RetainedSelf
     };
 
+    // A backend-neutral ownership contract. ReferenceCounted values use the
+    // same intrusive strong/weak protocol in generated C++ and in the VM.
+    enum class OwnershipModel : std::uint8_t
+    {
+        Trivial,
+        OwnedValue,
+        ReferenceCounted,
+        Borrowed,
+        Generic
+    };
+
+    enum class CleanupKind : std::uint8_t
+    {
+        None,
+        DestroyValue,
+        ReleaseReference
+    };
+
     struct CaptureLayout
     {
         std::string name;
@@ -147,6 +165,8 @@ namespace wio::wir
         std::vector<MethodLayout> methods;
         bool hasConstructor = false;
         bool hasDestructor = false;
+        OwnershipModel ownership = OwnershipModel::Trivial;
+        CleanupKind cleanup = CleanupKind::None;
 
         auto operator<=>(const Type&) const = default;
     };
@@ -184,4 +204,7 @@ namespace wio::wir
     [[nodiscard]] std::string_view intrinsicFamilyName(IntrinsicFamily family);
     [[nodiscard]] std::string_view fieldVisibilityName(FieldVisibility visibility);
     [[nodiscard]] std::string_view captureKindName(CaptureKind kind);
+    [[nodiscard]] std::string_view ownershipModelName(OwnershipModel ownership);
+    [[nodiscard]] std::string_view cleanupKindName(CleanupKind cleanup);
+    [[nodiscard]] bool requiresCleanup(const Type& type);
 }

@@ -10,7 +10,11 @@ namespace wio::wir
         voidType_ = intern(Type{.kind = TypeKind::Void});
         boolType_ = intern(Type{.kind = TypeKind::Bool});
         i32Type_ = intern(Type{.kind = TypeKind::I32});
-        stringType_ = intern(Type{.kind = TypeKind::String});
+        stringType_ = intern(Type{
+            .kind = TypeKind::String,
+            .ownership = OwnershipModel::OwnedValue,
+            .cleanup = CleanupKind::DestroyValue
+        });
     }
 
     TypeId TypeTable::intern(Type type)
@@ -182,5 +186,34 @@ namespace wio::wir
         case CaptureKind::RetainedSelf: return "retained-self";
         }
         return "value";
+    }
+
+    std::string_view ownershipModelName(const OwnershipModel ownership)
+    {
+        switch (ownership)
+        {
+        case OwnershipModel::Trivial: return "trivial";
+        case OwnershipModel::OwnedValue: return "owned-value";
+        case OwnershipModel::ReferenceCounted: return "reference-counted";
+        case OwnershipModel::Borrowed: return "borrowed";
+        case OwnershipModel::Generic: return "generic";
+        }
+        return "trivial";
+    }
+
+    std::string_view cleanupKindName(const CleanupKind cleanup)
+    {
+        switch (cleanup)
+        {
+        case CleanupKind::None: return "none";
+        case CleanupKind::DestroyValue: return "destroy-value";
+        case CleanupKind::ReleaseReference: return "release-reference";
+        }
+        return "none";
+    }
+
+    bool requiresCleanup(const Type& type)
+    {
+        return type.cleanup != CleanupKind::None;
     }
 }

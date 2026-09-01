@@ -499,11 +499,16 @@ Rider, and CLion are defined in
    keyed places, string/text interpolation and indexing, enum/flagset values,
    backend-neutral intrinsics, `any`, nullable wrapping, and the nominal
    Option/Result/Tuple/Span value models now survive the same verified path.
+   Ownership and cleanup are backend-neutral as well: every type records
+   trivial/owned-value/reference-counted/borrowed semantics, managed loads are
+   explicit borrows, copy/move/replace/release/drop are verified operations,
+   return moves and reverse lexical cleanup cover structured exits, and
+   Lowered WIR separates intrusive retain/release from value copy/drop glue.
    Keep
    the current C++ generator as the production path while finishing remaining
    language coverage, then consume Lowered WIR from a new C++ backend and a
    bytecode VM. Add native ABI operations, async state-machine lowering,
-   exceptions/panic cleanup, globals/constants, remaining tuple/span
+   exceptional/panic cleanup edges, globals/constants, remaining tuple/span
    operations, reflection
    payloads, backend parity tests, and compile-time/
    runtime benchmarks before changing the default backend.

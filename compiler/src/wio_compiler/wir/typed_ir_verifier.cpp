@@ -44,6 +44,13 @@ namespace wio::wir::typed
             return isNumeric(kind) && kind != TypeKind::F32 && kind != TypeKind::F64;
         }
 
+        ValueOwnership expectedOwnership(const Type& type)
+        {
+            if (type.ownership == OwnershipModel::Borrowed)
+                return ValueOwnership::Borrowed;
+            return requiresCleanup(type) ? ValueOwnership::Owned : ValueOwnership::Trivial;
+        }
+
         bool literalMatches(const Literal& literal, const TypeKind kind)
         {
             if (std::holds_alternative<NullLiteral>(literal))
@@ -186,6 +193,15 @@ namespace wio::wir::typed
             {
                 report("WIR1009", "Only named Typed WIR types may carry layout or lifecycle metadata.");
             }
+            if ((type.ownership == OwnershipModel::Trivial && type.cleanup != CleanupKind::None) ||
+                (type.ownership == OwnershipModel::Borrowed && type.cleanup != CleanupKind::None) ||
+                (type.ownership == OwnershipModel::ReferenceCounted &&
+                 type.cleanup != CleanupKind::ReleaseReference) ||
+                (type.cleanup == CleanupKind::ReleaseReference &&
+                 type.ownership != OwnershipModel::ReferenceCounted))
+            {
+                report("WIR1016", "Typed WIR ownership and cleanup metadata are inconsistent.");
+            }
             std::unordered_set<std::string> fieldNames;
             for (const FieldLayout& field : type.fields)
             {
@@ -322,7 +338,8 @@ namespace wio::wir::typed
             std::unordered_map<ValueId::ValueType, Opcode> producerOpcodes;
             auto defineValue = [&](const Parameter& value,
                                    const BlockId block,
-                                   const std::optional<std::size_t> instructionIndex = std::nullopt)
+                                   const std::optional<std::size_t> instructionIndex = std::nullopt,
+                                   const bool enforceTypeOwnership = true)
             {
                 if (!value.id)
                 {
@@ -331,6 +348,13 @@ namespace wio::wir::typed
                 }
                 if (!module.types.tryGet(value.type))
                     report("WIR1201", "Typed WIR value has an invalid type.", value.source, function.id, block);
+                else if (enforceTypeOwnership && value.ownership != expectedOwnership(module.types.get(value.type)))
+                    report("WIR1204", "Typed WIR parameter ownership does not match its type contract.", value.source, function.id, block);
+                if ((value.ownership == ValueOwnership::Borrowed) !=
+                    (value.borrowLifetime != BorrowLifetime::None))
+                {
+                    report("WIR1205", "Borrowed Typed WIR values require lifetime metadata, and owned values cannot carry it.", value.source, function.id, block);
+                }
                 if (!values.emplace(value.id.value(), value.type).second)
                     report("WIR1202", "Typed WIR value id is defined more than once.", value.source, function.id, block);
                 else
@@ -356,9 +380,11 @@ namespace wio::wir::typed
                     Parameter resultValue{
                         .id = instruction.result,
                         .type = instruction.resultType,
+                        .ownership = instruction.resultOwnership,
+                        .borrowLifetime = instruction.borrowLifetime,
                         .source = instruction.source
                     };
-                    defineValue(resultValue, block.id, instructionIndex);
+                    defineValue(resultValue, block.id, instructionIndex, false);
                     producerOpcodes.emplace(instruction.result.value(), instruction.opcode);
                 }
             }
@@ -784,21 +810,31 @@ namespace wio::wir::typed
                             report("WIR1429", "Typed WIR local place requires a named reference result and no operands.", instruction.source, function.id, block.id);
                         }
                     }
-                    else if (instruction.opcode == Opcode::PlaceInit || instruction.opcode == Opcode::Store)
+                    else if (instruction.opcode == Opcode::PlaceInit || instruction.opcode == Opcode::Store ||
+                             instruction.opcode == Opcode::Replace)
                     {
                         const Type* placeType = instruction.operands.size() == 2
                             ? module.types.tryGet(valueType(instruction.operands[0]))
                             : nullptr;
                         const bool mutabilityValid = instruction.opcode == Opcode::PlaceInit ||
                             (placeType && placeType->isMutable);
+                        const Type* storedType = placeType && placeType->kind == TypeKind::Reference &&
+                            placeType->arguments.size() == 1
+                            ? module.types.tryGet(placeType->arguments.front())
+                            : nullptr;
+                        const bool ownershipOperationValid = instruction.opcode == Opcode::PlaceInit ||
+                            (instruction.opcode == Opcode::Replace
+                                ? storedType && requiresCleanup(*storedType)
+                                : !storedType || !requiresCleanup(*storedType));
                         if (!placeType || placeType->kind != TypeKind::Reference || placeType->arguments.size() != 1 ||
-                            valueType(instruction.operands[1]) != placeType->arguments.front() || !mutabilityValid)
+                            valueType(instruction.operands[1]) != placeType->arguments.front() || !mutabilityValid ||
+                            !ownershipOperationValid)
                         {
                             report(
                                 instruction.opcode == Opcode::PlaceInit ? "WIR1430" : "WIR1431",
                                 instruction.opcode == Opcode::PlaceInit
                                     ? "Typed WIR place initialization requires a reference place and a matching value."
-                                    : "Typed WIR store requires a mutable reference place and a matching value.",
+                                    : "Typed WIR store/replace requires a mutable reference place, matching value, and correct cleanup semantics.",
                                 instruction.source, function.id, block.id);
                         }
                         if (instruction.opcode == Opcode::PlaceInit && instruction.operands.size() == 2)
@@ -821,6 +857,15 @@ namespace wio::wir::typed
                             instruction.resultType != placeType->arguments.front())
                         {
                             report("WIR1432", "Typed WIR load requires a reference place and its referred result type.", instruction.source, function.id, block.id);
+                        }
+                        else
+                        {
+                            const Type& loaded = module.types.get(instruction.resultType);
+                            const ValueOwnership expected = requiresCleanup(loaded)
+                                ? ValueOwnership::Borrowed
+                                : expectedOwnership(loaded);
+                            if (instruction.resultOwnership != expected)
+                                report("WIR1465", "Typed WIR load ownership must be borrowed for cleanup-bearing values.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::FieldPlace)
@@ -923,6 +968,38 @@ namespace wio::wir::typed
                             report("WIR1438", "Typed WIR construction requires a matching constructible component/object result and typed constructor signature.", instruction.source, function.id, block.id);
                         }
                     }
+                    else if (instruction.opcode == Opcode::Copy)
+                    {
+                        const Type* copiedType = module.types.tryGet(instruction.resultType);
+                        if (instruction.operands.size() != 1 ||
+                            valueType(instruction.operands.front()) != instruction.resultType ||
+                            !copiedType || !requiresCleanup(*copiedType) ||
+                            instruction.resultOwnership != ValueOwnership::Owned)
+                        {
+                            report("WIR1466", "Typed WIR copy must create one owned claim for a cleanup-bearing value.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::Move)
+                    {
+                        const Type* placeType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const Type* movedType = module.types.tryGet(instruction.resultType);
+                        if (!placeType || placeType->kind != TypeKind::Reference || placeType->arguments.size() != 1 ||
+                            placeType->arguments.front() != instruction.resultType || !movedType ||
+                            !requiresCleanup(*movedType) || instruction.resultOwnership != ValueOwnership::Owned)
+                        {
+                            report("WIR1467", "Typed WIR move must transfer a cleanup-bearing place into one owned value.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::Release)
+                    {
+                        const Type* releasedType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        if (!releasedType || !requiresCleanup(*releasedType))
+                            report("WIR1468", "Typed WIR release requires one cleanup-bearing owned value.", instruction.source, function.id, block.id);
+                    }
                     else if (instruction.opcode == Opcode::Drop)
                     {
                         const Type* placeType = instruction.operands.size() == 1
@@ -931,10 +1008,9 @@ namespace wio::wir::typed
                         const Type* valueTypeInfo = placeType && placeType->kind == TypeKind::Reference && placeType->arguments.size() == 1
                             ? module.types.tryGet(placeType->arguments.front())
                             : nullptr;
-                        if (!valueTypeInfo || valueTypeInfo->kind != TypeKind::Named ||
-                            (valueTypeInfo->nominalKind != NominalKind::Component && valueTypeInfo->nominalKind != NominalKind::Object))
+                        if (!valueTypeInfo || !requiresCleanup(*valueTypeInfo))
                         {
-                            report("WIR1439", "Typed WIR drop requires a place containing a component or object value.", instruction.source, function.id, block.id);
+                            report("WIR1439", "Typed WIR drop requires a place containing a cleanup-bearing value.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::Select)
@@ -1203,6 +1279,81 @@ namespace wio::wir::typed
                     {
                         if (!target || !blocks.contains(target.value()))
                             report("WIR1416", "Typed WIR instruction references an unknown block.", instruction.source, function.id, block.id);
+                    }
+                }
+            }
+
+            // Verify cleanup as a control-flow property, not just an opcode
+            // shape. Every reachable edge must agree on which cleanup-bearing
+            // local places are live, and every exit must consume them once.
+            using LivePlaces = std::unordered_set<ValueId::ValueType>;
+            std::unordered_set<ValueId::ValueType> cleanupPlaces;
+            for (const BasicBlock& block : function.blocks)
+            {
+                for (const Instruction& instruction : block.instructions)
+                {
+                    if (instruction.opcode != Opcode::LocalPlace || !instruction.result)
+                        continue;
+                    const Type* placeType = module.types.tryGet(instruction.resultType);
+                    const Type* storedType = placeType && placeType->kind == TypeKind::Reference &&
+                        placeType->arguments.size() == 1
+                        ? module.types.tryGet(placeType->arguments.front())
+                        : nullptr;
+                    if (storedType && requiresCleanup(*storedType))
+                        cleanupPlaces.insert(instruction.result.value());
+                }
+            }
+
+            if (!function.blocks.empty() && function.blocks.front().id)
+            {
+                std::unordered_map<BlockId::ValueType, LivePlaces> entryStates;
+                std::vector<BlockId::ValueType> pending{function.blocks.front().id.value()};
+                entryStates.emplace(function.blocks.front().id.value(), LivePlaces{});
+                std::unordered_set<BlockId::ValueType> mismatchReported;
+                while (!pending.empty())
+                {
+                    const BlockId::ValueType blockId = pending.back();
+                    pending.pop_back();
+                    const BasicBlock* block = blocks.contains(blockId) ? blocks.at(blockId) : nullptr;
+                    if (!block)
+                        continue;
+                    LivePlaces live = entryStates.at(blockId);
+                    for (const Instruction& instruction : block->instructions)
+                    {
+                        if (instruction.opcode == Opcode::PlaceInit && !instruction.operands.empty() &&
+                            cleanupPlaces.contains(instruction.operands.front().value()))
+                        {
+                            if (!live.insert(instruction.operands.front().value()).second)
+                                report("WIR1469", "Cleanup-bearing place is initialized while already live.", instruction.source, function.id, block->id);
+                        }
+                        else if ((instruction.opcode == Opcode::Drop || instruction.opcode == Opcode::Move) &&
+                                 !instruction.operands.empty() &&
+                                 cleanupPlaces.contains(instruction.operands.front().value()))
+                        {
+                            if (live.erase(instruction.operands.front().value()) != 1)
+                                report("WIR1470", "Cleanup-bearing place is moved or dropped more than once.", instruction.source, function.id, block->id);
+                        }
+                        else if (instruction.opcode == Opcode::Replace && !instruction.operands.empty() &&
+                                 cleanupPlaces.contains(instruction.operands.front().value()) &&
+                                 !live.contains(instruction.operands.front().value()))
+                        {
+                            report("WIR1471", "Replace requires an initialized cleanup-bearing place.", instruction.source, function.id, block->id);
+                        }
+                        if (instruction.opcode == Opcode::Return && !live.empty())
+                            report("WIR1472", "Function exit leaves cleanup-bearing local places live.", instruction.source, function.id, block->id);
+                    }
+
+                    if (block->instructions.empty())
+                        continue;
+                    for (const BlockId successor : block->instructions.back().targets)
+                    {
+                        if (!successor || !blocks.contains(successor.value()))
+                            continue;
+                        const auto [found, inserted] = entryStates.emplace(successor.value(), live);
+                        if (inserted)
+                            pending.push_back(successor.value());
+                        else if (found->second != live && mismatchReported.insert(successor.value()).second)
+                            report("WIR1473", "Control-flow merge disagrees on live cleanup-bearing places.", blocks.at(successor.value())->source, function.id, successor);
                     }
                 }
             }

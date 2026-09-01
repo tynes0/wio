@@ -55,7 +55,14 @@ namespace wio::wir::lowered
         Borrow,
         ConstructComponent,
         ConstructObject,
-        Drop,
+        Retain,
+        CopyValue,
+        MoveValue,
+        Replace,
+        Release,
+        DropValue,
+        ReleasePlace,
+        DropPlace,
         Return,
         Jump,
         CondJump,
@@ -67,6 +74,8 @@ namespace wio::wir::lowered
         ValueId id;
         std::string name;
         TypeId type;
+        typed::ValueOwnership ownership = typed::ValueOwnership::Trivial;
+        typed::BorrowLifetime borrowLifetime = typed::BorrowLifetime::None;
         SourceSpan source;
     };
 
@@ -97,6 +106,9 @@ namespace wio::wir::lowered
         std::string specializationKey;
         IntrinsicFamily intrinsicFamily = IntrinsicFamily::None;
         TypeId targetType;
+        typed::ValueOwnership resultOwnership = typed::ValueOwnership::Trivial;
+        typed::BorrowLifetime borrowLifetime = typed::BorrowLifetime::None;
+        ValueId borrowOrigin;
         SourceSpan source;
     };
 

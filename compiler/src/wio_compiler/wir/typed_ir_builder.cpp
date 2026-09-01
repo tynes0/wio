@@ -10,6 +10,7 @@
 #include <optional>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace wio::wir::typed
 {
@@ -46,6 +47,8 @@ namespace wio::wir::typed
             std::vector<const sema::Symbol*> valueOrder;
             std::unordered_map<const sema::Symbol*, ValueId> places;
             std::vector<const sema::Symbol*> placeOrder;
+            std::unordered_map<ValueId::ValueType, ValueOwnership> ownerships;
+            std::unordered_set<const sema::Symbol*> movedPlaces;
             ValueId selfValue;
             TypeId selfType;
         };
@@ -79,7 +82,8 @@ namespace wio::wir::typed
             return result_.module_.types.intern(Type{
                 .kind = TypeKind::Reference,
                 .arguments = {referredType},
-                .isMutable = isMutable
+                .isMutable = isMutable,
+                .ownership = OwnershipModel::Borrowed
             });
         }
 
@@ -166,6 +170,69 @@ namespace wio::wir::typed
                 (referred->nominalKind == NominalKind::Object || referred->nominalKind == NominalKind::Interface));
         }
 
+        ValueOwnership ownershipForType(const TypeId typeId) const
+        {
+            const Type* type = result_.module_.types.tryGet(typeId);
+            if (!type || type->ownership == OwnershipModel::Trivial)
+                return ValueOwnership::Trivial;
+            if (type->ownership == OwnershipModel::Borrowed)
+                return ValueOwnership::Borrowed;
+            return ValueOwnership::Owned;
+        }
+
+        bool typeRequiresCleanup(const TypeId typeId) const
+        {
+            const Type* type = result_.module_.types.tryGet(typeId);
+            return type && requiresCleanup(*type);
+        }
+
+        void rememberOwnership(FunctionState& state, const ValueId value, const ValueOwnership ownership)
+        {
+            if (value)
+                state.ownerships[value.value()] = ownership;
+        }
+
+        ValueOwnership valueOwnership(const FunctionState& state, const ValueId value) const
+        {
+            const auto found = value ? state.ownerships.find(value.value()) : state.ownerships.end();
+            return found != state.ownerships.end() ? found->second : ValueOwnership::Trivial;
+        }
+
+        ValueId ensureOwned(
+            const ValueId value,
+            const TypeId type,
+            const ASTNode* source,
+            FunctionState& state)
+        {
+            if (!value || !typeRequiresCleanup(type) || valueOwnership(state, value) == ValueOwnership::Owned)
+                return value;
+            const ValueId copy{state.nextValue++};
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::Copy,
+                .result = copy,
+                .resultType = type,
+                .operands = {value},
+                .resultOwnership = ValueOwnership::Owned,
+                .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
+            });
+            rememberOwnership(state, copy, ValueOwnership::Owned);
+            return copy;
+        }
+
+        void releaseOwnedTemporary(
+            const ValueId value,
+            const ASTNode* source,
+            FunctionState& state)
+        {
+            if (!value || valueOwnership(state, value) != ValueOwnership::Owned)
+                return;
+            currentBlock(state).instructions.push_back(Instruction{
+                .opcode = Opcode::Release,
+                .operands = {value},
+                .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
+            });
+        }
+
         ValueId emitLoad(
             const ValueId place,
             const TypeId valueType,
@@ -178,16 +245,20 @@ namespace wio::wir::typed
                 .result = result,
                 .resultType = valueType,
                 .operands = {place},
+                .resultOwnership = typeRequiresCleanup(valueType)
+                    ? ValueOwnership::Borrowed
+                    : ValueOwnership::Trivial,
+                .borrowLifetime = typeRequiresCleanup(valueType)
+                    ? BorrowLifetime::Lexical
+                    : BorrowLifetime::None,
+                .borrowOrigin = typeRequiresCleanup(valueType) ? place : ValueId{},
                 .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
             });
+            rememberOwnership(
+                state,
+                result,
+                typeRequiresCleanup(valueType) ? ValueOwnership::Borrowed : ValueOwnership::Trivial);
             return result;
-        }
-
-        bool isLifecycleValue(const TypeId typeId) const
-        {
-            const Type* type = result_.module_.types.tryGet(typeId);
-            return type && type->kind == TypeKind::Named &&
-                (type->nominalKind == NominalKind::Component || type->nominalKind == NominalKind::Object);
         }
 
         void emitDropsFrom(
@@ -198,11 +269,13 @@ namespace wio::wir::typed
             for (std::size_t index = state.placeOrder.size(); index > firstPlace; --index)
             {
                 const sema::Symbol* symbol = state.placeOrder[index - 1];
+                if (state.movedPlaces.contains(symbol))
+                    continue;
                 const auto place = state.places.find(symbol);
                 if (place == state.places.end())
                     continue;
                 const TypeId valueType = mapType(symbol->type, source);
-                if (!isLifecycleValue(valueType))
+                if (!typeRequiresCleanup(valueType))
                     continue;
                 currentBlock(state).instructions.push_back(Instruction{
                     .opcode = Opcode::Drop,
@@ -239,8 +312,12 @@ namespace wio::wir::typed
                 .result = result,
                 .resultType = referenceType(placeType->arguments.front(), false),
                 .operands = {place},
+                .resultOwnership = ValueOwnership::Borrowed,
+                .borrowLifetime = BorrowLifetime::Lexical,
+                .borrowOrigin = place,
                 .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
             });
+            rememberOwnership(state, result, ValueOwnership::Borrowed);
             return result;
         }
 
@@ -465,11 +542,19 @@ namespace wio::wir::typed
                     return {};
                 }
                 wirType.kind = found->second;
+                if (wirType.kind == TypeKind::String || wirType.kind == TypeKind::Text ||
+                    wirType.kind == TypeKind::Any)
+                {
+                    wirType.ownership = OwnershipModel::OwnedValue;
+                    wirType.cleanup = CleanupKind::DestroyValue;
+                }
                 break;
             }
             case sema::TypeKind::GenericParameter:
                 wirType.kind = TypeKind::GenericParameter;
                 wirType.name = type.AsFast<sema::GenericParameterType>()->name;
+                wirType.ownership = OwnershipModel::Generic;
+                wirType.cleanup = CleanupKind::DestroyValue;
                 break;
             case sema::TypeKind::Reference:
             {
@@ -477,12 +562,19 @@ namespace wio::wir::typed
                 wirType.kind = TypeKind::Reference;
                 wirType.arguments.push_back(mapType(reference->referredType, source));
                 wirType.isMutable = reference->isMutable;
+                wirType.ownership = OwnershipModel::Borrowed;
                 break;
             }
             case sema::TypeKind::Nullable:
             {
                 wirType.kind = TypeKind::Nullable;
                 wirType.arguments.push_back(mapType(type.AsFast<sema::NullableType>()->valueType, source));
+                if (const Type* valueType = result_.module_.types.tryGet(wirType.arguments.front());
+                    valueType && requiresCleanup(*valueType))
+                {
+                    wirType.ownership = OwnershipModel::OwnedValue;
+                    wirType.cleanup = CleanupKind::DestroyValue;
+                }
                 break;
             }
             case sema::TypeKind::Null:
@@ -497,6 +589,8 @@ namespace wio::wir::typed
                 {
                     wirType.staticExtent = array->size;
                 }
+                wirType.ownership = OwnershipModel::OwnedValue;
+                wirType.cleanup = CleanupKind::DestroyValue;
                 break;
             }
             case sema::TypeKind::Dictionary:
@@ -508,6 +602,8 @@ namespace wio::wir::typed
                     mapType(dictionary->keyType, source),
                     mapType(dictionary->valueType, source)
                 };
+                wirType.ownership = OwnershipModel::OwnedValue;
+                wirType.cleanup = CleanupKind::DestroyValue;
                 break;
             }
             case sema::TypeKind::Function:
@@ -517,11 +613,15 @@ namespace wio::wir::typed
                 for (const auto& parameterType : function->paramTypes)
                     wirType.arguments.push_back(mapType(parameterType, source));
                 wirType.arguments.push_back(mapType(function->returnType, source));
+                wirType.ownership = OwnershipModel::ReferenceCounted;
+                wirType.cleanup = CleanupKind::ReleaseReference;
                 break;
             }
             case sema::TypeKind::AsyncTask:
                 wirType.kind = TypeKind::AsyncTask;
                 wirType.arguments.push_back(mapType(type.AsFast<sema::AsyncTaskType>()->valueType, source));
+                wirType.ownership = OwnershipModel::ReferenceCounted;
+                wirType.cleanup = CleanupKind::ReleaseReference;
                 break;
             case sema::TypeKind::Struct:
             {
@@ -544,6 +644,16 @@ namespace wio::wir::typed
                 wirType.nominalRepresentation = structure->isNativePodComponent
                     ? NominalRepresentation::NativePod
                     : NominalRepresentation::Wio;
+                if (wirType.nominalKind == NominalKind::Object ||
+                    wirType.nominalKind == NominalKind::Interface)
+                {
+                    wirType.ownership = OwnershipModel::ReferenceCounted;
+                    wirType.cleanup = CleanupKind::ReleaseReference;
+                }
+                else if (wirType.nominalKind == NominalKind::Component)
+                {
+                    wirType.ownership = OwnershipModel::OwnedValue;
+                }
                 if (structure->name == "Tuple")
                     wirType.nominalValueModel = NominalValueModel::Tuple;
                 else if (structure->name == "Span")
@@ -622,6 +732,21 @@ namespace wio::wir::typed
                 storedType.methods = std::move(methods);
                 storedType.hasConstructor = structScope && structScope->resolveLocally("OnConstruct");
                 storedType.hasDestructor = structScope && structScope->resolveLocally("OnDestruct");
+                if (storedType.nominalKind == NominalKind::Component)
+                {
+                    const bool managedField = std::ranges::any_of(storedType.fields, [&](const FieldLayout& field)
+                    {
+                        const Type* fieldType = result_.module_.types.tryGet(field.type);
+                        return fieldType && requiresCleanup(*fieldType);
+                    });
+                    const bool managedArgument = std::ranges::any_of(storedType.arguments, [&](const TypeId argument)
+                    {
+                        const Type* argumentType = result_.module_.types.tryGet(argument);
+                        return argumentType && requiresCleanup(*argumentType);
+                    });
+                    if (storedType.hasDestructor || managedField || managedArgument)
+                        storedType.cleanup = CleanupKind::DestroyValue;
+                }
                 return id;
             }
             default:
@@ -846,8 +971,11 @@ namespace wio::wir::typed
                     .id = parameter,
                     .name = "$capture." + capture.name,
                     .type = environmentPlaceType,
+                    .ownership = ValueOwnership::Borrowed,
+                    .borrowLifetime = BorrowLifetime::Caller,
                     .source = SourceSpan::at(lambda.location())
                 });
+                rememberOwnership(state, parameter, ValueOwnership::Borrowed);
                 state.places[symbol.Get()] = parameter;
             }
             if (lambda.capturesSelf)
@@ -857,8 +985,11 @@ namespace wio::wir::typed
                     .id = parameter,
                     .name = "$capture.self",
                     .type = selfCaptureType,
+                    .ownership = ValueOwnership::Borrowed,
+                    .borrowLifetime = BorrowLifetime::Caller,
                     .source = SourceSpan::at(lambda.location())
                 });
+                rememberOwnership(state, parameter, ValueOwnership::Borrowed);
                 state.selfValue = parameter;
                 state.selfType = selfCaptureType;
             }
@@ -880,8 +1011,12 @@ namespace wio::wir::typed
                     .id = value,
                     .name = symbol->name,
                     .type = parameterType,
+                    .ownership = ownershipForType(parameterType),
+                    .borrowLifetime = ownershipForType(parameterType) == ValueOwnership::Borrowed
+                        ? BorrowLifetime::Caller : BorrowLifetime::None,
                     .source = SourceSpan::at(parameter.name->location())
                 });
+                rememberOwnership(state, value, ownershipForType(parameterType));
                 const Type* parameterTypeInfo = result_.module_.types.tryGet(parameterType);
                 if (parameterTypeInfo && parameterTypeInfo->kind == TypeKind::Reference)
                 {
@@ -1006,8 +1141,11 @@ namespace wio::wir::typed
                     .id = receiver,
                     .name = "self",
                     .type = receiverType,
+                    .ownership = ValueOwnership::Borrowed,
+                    .borrowLifetime = BorrowLifetime::Caller,
                     .source = SourceSpan::at(declaration.location())
                 });
+                rememberOwnership(state, receiver, ValueOwnership::Borrowed);
                 state.selfValue = receiver;
                 state.selfType = receiverType;
             }
@@ -1027,9 +1165,13 @@ namespace wio::wir::typed
                     .id = value,
                     .name = parameterSymbol->name,
                     .type = mapType(functionType->paramTypes[index], parameter.name.Get()),
+                    .ownership = ownershipForType(mapType(functionType->paramTypes[index], parameter.name.Get())),
+                    .borrowLifetime = ownershipForType(mapType(functionType->paramTypes[index], parameter.name.Get())) == ValueOwnership::Borrowed
+                        ? BorrowLifetime::Caller : BorrowLifetime::None,
                     .source = SourceSpan::at(parameter.name->location())
                 });
                 const TypeId parameterType = mapType(functionType->paramTypes[index], parameter.name.Get());
+                rememberOwnership(state, value, ownershipForType(parameterType));
                 const Type* parameterTypeInfo = result_.module_.types.tryGet(parameterType);
                 if (function.isExtension && index == 0)
                 {
@@ -1188,10 +1330,31 @@ namespace wio::wir::typed
                 };
                 if (returnStatement->value)
                 {
-                    if (const ValueId value = buildExpressionAs(
-                            returnStatement->value,
-                            state.function->returnType,
-                            state))
+                    ValueId value;
+                    if (const auto* identifier = returnStatement->value->as<Identifier>())
+                    {
+                        const Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
+                        const auto place = symbol ? state.places.find(symbol.Get()) : state.places.end();
+                        const TypeId valueType = symbol ? mapType(symbol->type, returnStatement) : TypeId{};
+                        if (place != state.places.end() && valueType == state.function->returnType &&
+                            typeRequiresCleanup(valueType))
+                        {
+                            value = ValueId{state.nextValue++};
+                            currentBlock(state).instructions.push_back(Instruction{
+                                .opcode = Opcode::Move,
+                                .result = value,
+                                .resultType = valueType,
+                                .operands = {place->second},
+                                .resultOwnership = ValueOwnership::Owned,
+                                .source = SourceSpan::at(returnStatement->location())
+                            });
+                            rememberOwnership(state, value, ValueOwnership::Owned);
+                            state.movedPlaces.insert(symbol.Get());
+                        }
+                    }
+                    if (!value)
+                        value = buildExpressionAs(returnStatement->value, state.function->returnType, state);
+                    if (value)
                         instruction.operands.push_back(value);
                 }
                 emitDropsFrom(0, state, returnStatement);
@@ -1200,7 +1363,19 @@ namespace wio::wir::typed
             }
             if (const auto* expressionStatement = statement->as<ExpressionStatement>())
             {
-                buildExpression(expressionStatement->expression, state);
+                const ValueId discarded = buildExpression(expressionStatement->expression, state);
+                const TypeId discardedType = expressionStatement->expression
+                    ? mapType(expressionStatement->expression->refType.Lock(), expressionStatement)
+                    : TypeId{};
+                if (discarded && typeRequiresCleanup(discardedType) &&
+                    valueOwnership(state, discarded) == ValueOwnership::Owned)
+                {
+                    currentBlock(state).instructions.push_back(Instruction{
+                        .opcode = Opcode::Release,
+                        .operands = {discarded},
+                        .source = SourceSpan::at(expressionStatement->location())
+                    });
+                }
                 return;
             }
             report("WIR2201", "Statement kind '" + getKindNameStr(statement->kind()) + "' is not supported by the initial Typed WIR slice.", statement.Get());
@@ -1214,8 +1389,16 @@ namespace wio::wir::typed
             {
                 instruction.result = ValueId{state.nextValue++};
                 instruction.resultType = mapType(expression->refType.Lock(), expression.Get());
+                if (instruction.resultOwnership == ValueOwnership::Trivial)
+                    instruction.resultOwnership = ownershipForType(instruction.resultType);
+                if (instruction.resultOwnership == ValueOwnership::Borrowed &&
+                    instruction.borrowLifetime == BorrowLifetime::None)
+                {
+                    instruction.borrowLifetime = BorrowLifetime::Caller;
+                }
                 const ValueId result = instruction.result;
                 currentBlock(state).instructions.push_back(std::move(instruction));
+                rememberOwnership(state, result, currentBlock(state).instructions.back().resultOwnership);
                 return result;
             };
 
@@ -1292,6 +1475,7 @@ namespace wio::wir::typed
                         : IntrinsicFamily::String,
                     .source = SourceSpan::at(expression->location())
                 };
+                std::vector<ValueId> ownedTemporaries;
                 instruction.stringSegments.emplace_back();
                 for (const auto& part : interpolated->parts)
                 {
@@ -1305,10 +1489,15 @@ namespace wio::wir::typed
                     if (!value || !valueType)
                         return {};
                     instruction.operands.push_back(value);
+                    if (valueOwnership(state, value) == ValueOwnership::Owned)
+                        ownedTemporaries.push_back(value);
                     instruction.signatureTypes.push_back(valueType);
                     instruction.stringSegments.emplace_back();
                 }
-                return appendValue(std::move(instruction));
+                const ValueId result = appendValue(std::move(instruction));
+                for (const ValueId temporary : ownedTemporaries)
+                    releaseOwnedTemporary(temporary, expression.Get(), state);
+                return result;
             }
             if (const auto* character = expression->as<CharLiteral>())
             {
@@ -1429,6 +1618,8 @@ namespace wio::wir::typed
                     const CaptureKind kind = captureTypeInfo && captureTypeInfo->kind == TypeKind::Reference
                         ? CaptureKind::Reference
                         : CaptureKind::Value;
+                    if (kind == CaptureKind::Value)
+                        value = ensureOwned(value, captureType, expression.Get(), state);
                     captures.push_back(CaptureLayout{.name = symbol->name, .type = captureType, .kind = kind});
                     operands.push_back(value);
                     signatureTypes.push_back(captureType);
@@ -1613,11 +1804,11 @@ namespace wio::wir::typed
                     report("WIR2322", "Typed WIR index access requires an array, dictionary, string, or text value.", expression.Get());
                     return {};
                 }
-                const ValueId object = buildExpressionAs(access->object, objectTypeId, state);
+                const ValueId object = buildAutoReadableExpression(access->object, state);
                 const ValueId index = buildAutoReadableExpression(access->index, state);
                 if (!object || !index)
                     return {};
-                return appendValue(Instruction{
+                const ValueId result = appendValue(Instruction{
                     .opcode = objectType->kind == TypeKind::Array
                         ? Opcode::ArrayGet
                         : objectType->kind == TypeKind::Dictionary
@@ -1632,6 +1823,8 @@ namespace wio::wir::typed
                     .targetType = objectTypeId,
                     .source = SourceSpan::at(expression->location())
                 });
+                releaseOwnedTemporary(object, expression.Get(), state);
+                return result;
             }
             if (const auto* assignment = expression->as<AssignmentExpression>())
             {
@@ -1666,15 +1859,20 @@ namespace wio::wir::typed
                         .resultType = targetType,
                         .operands = {currentValue, right},
                         .binaryOperator = *compoundOperator,
+                        .resultOwnership = ownershipForType(targetType),
                         .source = SourceSpan::at(expression->location())
                     });
+                    rememberOwnership(state, assigned, ownershipForType(targetType));
                 }
+                const bool managedTarget = typeRequiresCleanup(targetType);
                 currentBlock(state).instructions.push_back(Instruction{
-                    .opcode = Opcode::Store,
+                    .opcode = managedTarget ? Opcode::Replace : Opcode::Store,
                     .operands = {target, assigned},
                     .source = SourceSpan::at(expression->location())
                 });
-                return assigned;
+                return managedTarget
+                    ? emitLoad(target, targetType, expression.Get(), state)
+                    : assigned;
             }
             if (const auto* unary = expression->as<UnaryExpression>())
             {
@@ -1692,12 +1890,14 @@ namespace wio::wir::typed
                     report("WIR2302", "Unary expression is not supported by the initial Typed WIR slice.", expression.Get());
                     return {};
                 }
-                return appendValue(Instruction{
+                const ValueId result = appendValue(Instruction{
                     .opcode = Opcode::Unary,
                     .operands = {operand},
                     .unaryOperator = *op,
                     .source = SourceSpan::at(expression->location())
                 });
+                releaseOwnedTemporary(operand, expression.Get(), state);
+                return result;
             }
             if (const auto* binary = expression->as<BinaryExpression>())
             {
@@ -1720,12 +1920,14 @@ namespace wio::wir::typed
                         report("WIR2333", "Object/interface type test is missing a representable target type.", expression.Get());
                         return {};
                     }
-                    return appendValue(Instruction{
+                    const ValueId result = appendValue(Instruction{
                         .opcode = anyTest ? Opcode::AnyTypeTest : Opcode::TypeTest,
                         .operands = {operand},
                         .targetType = targetType,
                         .source = SourceSpan::at(expression->location())
                     });
+                    releaseOwnedTemporary(operand, expression.Get(), state);
+                    return result;
                 }
                 const auto op = mapBinaryOperator(binary->op.type);
                 const ValueId left = buildAutoReadableExpression(binary->left, state);
@@ -1739,19 +1941,23 @@ namespace wio::wir::typed
                     (binary->op.type == TokenType::opEqual || binary->op.type == TokenType::opNotEqual) &&
                     underlyingNominalType(mapType(binary->left->refType.Lock(), binary->left.Get())) &&
                     underlyingNominalType(mapType(binary->right->refType.Lock(), binary->right.Get()));
-                return appendValue(Instruction{
+                const ValueId result = appendValue(Instruction{
                     .opcode = identityComparison ? Opcode::IdentityEqual : Opcode::Binary,
                     .operands = {left, right},
                     .binaryOperator = *op,
                     .source = SourceSpan::at(expression->location())
                 });
+                releaseOwnedTemporary(left, expression.Get(), state);
+                releaseOwnedTemporary(right, expression.Get(), state);
+                return result;
             }
             if (const auto* conditional = expression->as<ConditionalExpression>())
             {
-                if (!isSideEffectFree(conditional->whenTrue) || !isSideEffectFree(conditional->whenFalse))
+                const TypeId resultType = mapType(expression->refType.Lock(), expression.Get());
+                if (typeRequiresCleanup(resultType) ||
+                    !isSideEffectFree(conditional->whenTrue) || !isSideEffectFree(conditional->whenFalse))
                     return buildConditionalControlFlow(*conditional, state);
                 const ValueId condition = buildExpression(conditional->condition, state);
-                const TypeId resultType = mapType(expression->refType.Lock(), expression.Get());
                 const ValueId whenTrue = buildExpressionAs(conditional->whenTrue, resultType, state);
                 const ValueId whenFalse = buildExpressionAs(conditional->whenFalse, resultType, state);
                 if (!condition || !whenTrue || !whenFalse)
@@ -1872,9 +2078,14 @@ namespace wio::wir::typed
                     if (callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Void)
                     {
                         currentBlock(state).instructions.push_back(std::move(instruction));
+                        if (!mutating)
+                            releaseOwnedTemporary(receiver, expression.Get(), state);
                         return {};
                     }
-                    return appendValue(std::move(instruction));
+                    const ValueId result = appendValue(std::move(instruction));
+                    if (!mutating)
+                        releaseOwnedTemporary(receiver, expression.Get(), state);
+                    return result;
                 }
                 if (memberCallee && memberCallee->object &&
                     !memberCallee->object->is<TypeExpression>())
@@ -1909,7 +2120,11 @@ namespace wio::wir::typed
                         const TypeId receiverType = implementationType && !implementationType->paramTypes.empty()
                             ? mapType(implementationType->paramTypes.front(), memberCallee->object.Get())
                             : mapType(memberCallee->object->refType.Lock(), memberCallee->object.Get());
-                        const ValueId receiver = buildExpression(memberCallee->object, state);
+                        const Type* receiverTypeInfo = result_.module_.types.tryGet(receiverType);
+                        const bool borrowedReceiver = receiverTypeInfo && receiverTypeInfo->kind == TypeKind::Reference;
+                        const ValueId receiver = borrowedReceiver
+                            ? buildExpression(memberCallee->object, state)
+                            : buildExpressionAs(memberCallee->object, receiverType, state);
                         if (!receiver)
                             return {};
                         instruction.operands.push_back(receiver);
@@ -1938,9 +2153,14 @@ namespace wio::wir::typed
                         if (callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Void)
                         {
                             currentBlock(state).instructions.push_back(std::move(instruction));
+                            if (borrowedReceiver)
+                                releaseOwnedTemporary(receiver, expression.Get(), state);
                             return {};
                         }
-                        return appendValue(std::move(instruction));
+                        const ValueId result = appendValue(std::move(instruction));
+                        if (borrowedReceiver)
+                            releaseOwnedTemporary(receiver, expression.Get(), state);
+                        return result;
                     }
 
                     TypeId receiverNominalType;
@@ -2002,9 +2222,12 @@ namespace wio::wir::typed
                         if (type && type->kind == TypeKind::Void)
                         {
                             currentBlock(state).instructions.push_back(std::move(instruction));
+                            releaseOwnedTemporary(receiver, expression.Get(), state);
                             return {};
                         }
-                        return appendValue(std::move(instruction));
+                        const ValueId result = appendValue(std::move(instruction));
+                        releaseOwnedTemporary(receiver, expression.Get(), state);
+                        return result;
                     }
                 }
 
@@ -2054,9 +2277,12 @@ namespace wio::wir::typed
                     if (type && type->kind == TypeKind::Void)
                     {
                         currentBlock(state).instructions.push_back(std::move(instruction));
+                        releaseOwnedTemporary(callableValue, expression.Get(), state);
                         return {};
                     }
-                    return appendValue(std::move(instruction));
+                    const ValueId result = appendValue(std::move(instruction));
+                    releaseOwnedTemporary(callableValue, expression.Get(), state);
+                    return result;
                 }
 
                 calleeSymbol = resolveCallableSymbol(calleeSymbol, selectedCallableType);
@@ -2269,7 +2495,7 @@ namespace wio::wir::typed
                 return {};
             TypeId sourceType = mapType(expression->refType.Lock(), expression.Get());
             if (sourceType == destinationType)
-                return value;
+                return ensureOwned(value, destinationType, expression.Get(), state);
 
             const Type* source = result_.module_.types.tryGet(sourceType);
             const Type* destination = result_.module_.types.tryGet(destinationType);
@@ -2300,9 +2526,13 @@ namespace wio::wir::typed
                     .resultType = destinationType,
                     .operands = {value},
                     .targetType = destinationType,
+                    .resultOwnership = valueOwnership(state, value),
+                    .borrowLifetime = valueOwnership(state, value) == ValueOwnership::Borrowed
+                        ? BorrowLifetime::Caller : BorrowLifetime::None,
                     .source = SourceSpan::at(expression->location())
                 });
-                return upcast;
+                rememberOwnership(state, upcast, valueOwnership(state, value));
+                return ensureOwned(upcast, destinationType, expression.Get(), state);
             }
             while (source && autoReadableReference(*source) && sourceType != destinationType)
             {
@@ -2311,10 +2541,11 @@ namespace wio::wir::typed
                 source = result_.module_.types.tryGet(sourceType);
             }
             if (sourceType == destinationType)
-                return value;
+                return ensureOwned(value, destinationType, expression.Get(), state);
 
             if (destination && destination->kind == TypeKind::Any)
             {
+                value = ensureOwned(value, sourceType, expression.Get(), state);
                 const ValueId boxed{state.nextValue++};
                 currentBlock(state).instructions.push_back(Instruction{
                     .opcode = Opcode::AnyBox,
@@ -2323,14 +2554,17 @@ namespace wio::wir::typed
                     .operands = {value},
                     .signatureTypes = {sourceType},
                     .targetType = sourceType,
+                    .resultOwnership = ValueOwnership::Owned,
                     .source = SourceSpan::at(expression->location())
                 });
+                rememberOwnership(state, boxed, ValueOwnership::Owned);
                 return boxed;
             }
 
             if (source && destination && destination->kind == TypeKind::Nullable &&
                 destination->arguments.size() == 1 && destination->arguments.front() == sourceType)
             {
+                value = ensureOwned(value, sourceType, expression.Get(), state);
                 const ValueId wrapped{state.nextValue++};
                 currentBlock(state).instructions.push_back(Instruction{
                     .opcode = Opcode::NullableWrap,
@@ -2338,8 +2572,10 @@ namespace wio::wir::typed
                     .resultType = destinationType,
                     .operands = {value},
                     .targetType = destinationType,
+                    .resultOwnership = ownershipForType(destinationType),
                     .source = SourceSpan::at(expression->location())
                 });
+                rememberOwnership(state, wrapped, ownershipForType(destinationType));
                 return wrapped;
             }
 
@@ -2669,8 +2905,12 @@ namespace wio::wir::typed
                     .id = result,
                     .name = "match.result",
                     .type = resultType,
+                    .ownership = ownershipForType(resultType),
+                    .borrowLifetime = ownershipForType(resultType) == ValueOwnership::Borrowed
+                        ? BorrowLifetime::Caller : BorrowLifetime::None,
                     .source = SourceSpan::at(expression.location())
                 });
+                rememberOwnership(state, result, ownershipForType(resultType));
             }
             const bool hasAssumed = std::ranges::any_of(
                 expression.cases,
@@ -2860,8 +3100,12 @@ namespace wio::wir::typed
                     .id = merged,
                     .name = symbol->name + ".match",
                     .type = mapType(symbol->type, &expression),
+                    .ownership = ownershipForType(mapType(symbol->type, &expression)),
+                    .borrowLifetime = ownershipForType(mapType(symbol->type, &expression)) == ValueOwnership::Borrowed
+                        ? BorrowLifetime::Caller : BorrowLifetime::None,
                     .source = SourceSpan::at(expression.location())
                 });
+                rememberOwnership(state, merged, ownershipForType(mapType(symbol->type, &expression)));
                 mergedSymbols.push_back(symbol);
                 mergedValues[symbol] = merged;
             }
@@ -2949,8 +3193,12 @@ namespace wio::wir::typed
                 .id = result,
                 .name = "conditional.result",
                 .type = resultType,
+                .ownership = ownershipForType(resultType),
+                .borrowLifetime = ownershipForType(resultType) == ValueOwnership::Borrowed
+                    ? BorrowLifetime::Caller : BorrowLifetime::None,
                 .source = SourceSpan::at(expression.location())
             });
+            rememberOwnership(state, result, ownershipForType(resultType));
             std::vector<ValueId> trueArguments{whenTrue};
             std::vector<ValueId> falseArguments{whenFalse};
             auto mergedValues = incomingValues;
@@ -2972,8 +3220,12 @@ namespace wio::wir::typed
                     .id = merged,
                     .name = symbol->name + ".conditional",
                     .type = mapType(symbol->type, &expression),
+                    .ownership = ownershipForType(mapType(symbol->type, &expression)),
+                    .borrowLifetime = ownershipForType(mapType(symbol->type, &expression)) == ValueOwnership::Borrowed
+                        ? BorrowLifetime::Caller : BorrowLifetime::None,
                     .source = SourceSpan::at(expression.location())
                 });
+                rememberOwnership(state, merged, ownershipForType(mapType(symbol->type, &expression)));
                 trueArguments.push_back(trueValue);
                 falseArguments.push_back(falseValue);
                 mergedValues[symbol] = merged;
@@ -3061,8 +3313,12 @@ namespace wio::wir::typed
                 .id = result,
                 .name = "logical.result",
                 .type = mapType(expression.refType.Lock(), &expression),
+                .ownership = ownershipForType(mapType(expression.refType.Lock(), &expression)),
+                .borrowLifetime = ownershipForType(mapType(expression.refType.Lock(), &expression)) == ValueOwnership::Borrowed
+                    ? BorrowLifetime::Caller : BorrowLifetime::None,
                 .source = SourceSpan::at(expression.location())
             });
+            rememberOwnership(state, result, ownershipForType(mapType(expression.refType.Lock(), &expression)));
 
             std::vector<ValueId> rightArguments{right};
             std::vector<ValueId> shortArguments{shortValue};
@@ -3081,8 +3337,12 @@ namespace wio::wir::typed
                     .id = merged,
                     .name = symbol->name + ".logical",
                     .type = mapType(symbol->type, &expression),
+                    .ownership = ownershipForType(mapType(symbol->type, &expression)),
+                    .borrowLifetime = ownershipForType(mapType(symbol->type, &expression)) == ValueOwnership::Borrowed
+                        ? BorrowLifetime::Caller : BorrowLifetime::None,
                     .source = SourceSpan::at(expression.location())
                 });
+                rememberOwnership(state, merged, ownershipForType(mapType(symbol->type, &expression)));
                 rightArguments.push_back(rightValue);
                 shortArguments.push_back(incoming);
                 mergedValues[symbol] = merged;
@@ -3183,8 +3443,12 @@ namespace wio::wir::typed
                         .id = merged,
                         .name = symbol->name,
                         .type = mapType(symbol->type, &statement),
+                        .ownership = ownershipForType(mapType(symbol->type, &statement)),
+                        .borrowLifetime = ownershipForType(mapType(symbol->type, &statement)) == ValueOwnership::Borrowed
+                            ? BorrowLifetime::Caller : BorrowLifetime::None,
                         .source = SourceSpan::at(statement.location())
                     });
+                    rememberOwnership(state, merged, ownershipForType(mapType(symbol->type, &statement)));
                     thenArguments.push_back(thenValue);
                     elseArguments.push_back(elseValue);
                     mergedValues[symbol] = merged;
@@ -3235,8 +3499,12 @@ namespace wio::wir::typed
                     .id = value,
                     .name = symbol->name + std::string(nameSuffix),
                     .type = mapType(symbol->type, &source),
+                    .ownership = ownershipForType(mapType(symbol->type, &source)),
+                    .borrowLifetime = ownershipForType(mapType(symbol->type, &source)) == ValueOwnership::Borrowed
+                        ? BorrowLifetime::Caller : BorrowLifetime::None,
                     .source = SourceSpan::at(source.location())
                 });
+                rememberOwnership(state, value, ownershipForType(mapType(symbol->type, &source)));
                 values[symbol] = value;
             }
             return values;

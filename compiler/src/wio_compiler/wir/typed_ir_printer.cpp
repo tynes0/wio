@@ -61,6 +61,10 @@ namespace wio::wir::typed
                 if (!parameter.name.empty())
                     stream << " " << std::quoted(parameter.name);
                 stream << ": " << typeRef(parameter.type);
+                if (parameter.ownership != ValueOwnership::Trivial)
+                    stream << " [" << valueOwnershipName(parameter.ownership) << "]";
+                if (parameter.borrowLifetime != BorrowLifetime::None)
+                    stream << " lifetime=" << borrowLifetimeName(parameter.borrowLifetime);
             }
         }
 
@@ -135,6 +139,10 @@ namespace wio::wir::typed
                 stream << " has-constructor";
             if (type.hasDestructor)
                 stream << " has-destructor";
+            if (type.ownership != OwnershipModel::Trivial)
+                stream << " ownership=" << ownershipModelName(type.ownership);
+            if (type.cleanup != CleanupKind::None)
+                stream << " cleanup=" << cleanupKindName(type.cleanup);
             return stream.str();
         }
 
@@ -142,7 +150,18 @@ namespace wio::wir::typed
         {
             stream << "    ";
             if (instruction.result)
-                stream << valueRef(instruction.result) << ": " << typeRef(instruction.resultType) << " = ";
+            {
+                stream << valueRef(instruction.result) << ": " << typeRef(instruction.resultType);
+                if (instruction.resultOwnership != ValueOwnership::Trivial)
+                    stream << " [" << valueOwnershipName(instruction.resultOwnership) << "]";
+                if (instruction.borrowLifetime != BorrowLifetime::None)
+                {
+                    stream << " lifetime=" << borrowLifetimeName(instruction.borrowLifetime);
+                    if (instruction.borrowOrigin)
+                        stream << " origin=" << valueRef(instruction.borrowOrigin);
+                }
+                stream << " = ";
+            }
 
             switch (instruction.opcode)
             {
@@ -339,6 +358,17 @@ namespace wio::wir::typed
                     stream << valueRef(instruction.operands[index]);
                 }
                 stream << ")";
+                break;
+            case Opcode::Copy:
+            case Opcode::Move:
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0));
+                break;
+            case Opcode::Replace:
+                stream << "replace " << valueRef(instruction.operands.at(0)) << ", "
+                       << valueRef(instruction.operands.at(1));
+                break;
+            case Opcode::Release:
+                stream << "release " << valueRef(instruction.operands.at(0));
                 break;
             case Opcode::Drop:
                 stream << "drop " << valueRef(instruction.operands.at(0));

@@ -46,6 +46,10 @@ namespace wio::wir::lowered
                 if (!parameter.name.empty())
                     stream << " " << std::quoted(parameter.name);
                 stream << ": " << typeRef(parameter.type);
+                if (parameter.ownership != typed::ValueOwnership::Trivial)
+                    stream << " [" << typed::valueOwnershipName(parameter.ownership) << "]";
+                if (parameter.borrowLifetime != typed::BorrowLifetime::None)
+                    stream << " lifetime=" << typed::borrowLifetimeName(parameter.borrowLifetime);
             }
         }
 
@@ -120,6 +124,10 @@ namespace wio::wir::lowered
                 stream << " has-constructor";
             if (type.hasDestructor)
                 stream << " has-destructor";
+            if (type.ownership != OwnershipModel::Trivial)
+                stream << " ownership=" << ownershipModelName(type.ownership);
+            if (type.cleanup != CleanupKind::None)
+                stream << " cleanup=" << cleanupKindName(type.cleanup);
             return stream.str();
         }
 
@@ -143,7 +151,18 @@ namespace wio::wir::lowered
         {
             stream << "    ";
             if (instruction.result)
-                stream << valueRef(instruction.result) << ": " << typeRef(instruction.resultType) << " = ";
+            {
+                stream << valueRef(instruction.result) << ": " << typeRef(instruction.resultType);
+                if (instruction.resultOwnership != typed::ValueOwnership::Trivial)
+                    stream << " [" << typed::valueOwnershipName(instruction.resultOwnership) << "]";
+                if (instruction.borrowLifetime != typed::BorrowLifetime::None)
+                {
+                    stream << " lifetime=" << typed::borrowLifetimeName(instruction.borrowLifetime);
+                    if (instruction.borrowOrigin)
+                        stream << " origin=" << valueRef(instruction.borrowOrigin);
+                }
+                stream << " = ";
+            }
 
             switch (instruction.opcode)
             {
@@ -341,8 +360,20 @@ namespace wio::wir::lowered
                 }
                 stream << ")";
                 break;
-            case Opcode::Drop:
-                stream << "drop " << valueRef(instruction.operands.at(0));
+            case Opcode::Retain:
+            case Opcode::CopyValue:
+            case Opcode::MoveValue:
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0));
+                break;
+            case Opcode::Replace:
+                stream << "replace " << valueRef(instruction.operands.at(0)) << ", "
+                       << valueRef(instruction.operands.at(1));
+                break;
+            case Opcode::Release:
+            case Opcode::DropValue:
+            case Opcode::ReleasePlace:
+            case Opcode::DropPlace:
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0));
                 break;
             case Opcode::Return:
                 stream << "return";

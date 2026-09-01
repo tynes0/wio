@@ -869,3 +869,8 @@ here as historical evidence rather than active work:
 - [x] Direct `dictionary[key]` reads and writes are accepted by semantic
       analysis and use the same checked native intrinsic as existing direct
       array/string/text indexing.
+- [x] The Ownership and Cleanup Model classifies trivial, owned-value,
+      intrusive-reference-counted, borrowed, and generic types; records borrow
+      lifetimes; makes managed copy/move/replace/release/drop explicit; lowers
+      object copies and drops to retain/release while keeping component/value
+      glue distinct; and verifies exactly-once local cleanup across CFG exits.

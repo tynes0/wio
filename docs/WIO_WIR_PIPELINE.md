@@ -100,18 +100,33 @@ allocations. `construct-component` creates an independent component value;
 selected constructor's stable name and typed argument signature, which both
 verifiers check before a backend consumes it.
 
-`drop` closes the lifetime of an addressable component value or releases one
-owning object handle. Component loads therefore represent value copies, while
-object loads represent strong-handle copies; dropping the last object handle is
-the edge that invokes `OnDestruct`. `store` replaces the previous destination
-value under the same ownership rules. The builder emits drops in reverse lexical
-order on ordinary scope exit, `return`, `break`, and `continue` edges. A return
-value is materialized before local cleanup, preserving the returned owner/value.
+Every WIR type publishes an ownership model and cleanup kind. Objects,
+interfaces, function values, and async tasks are `reference-counted` with
+`release-reference`; components and managed values such as string, text, any,
+arrays, and dictionaries are `owned-value` with `destroy-value`; `ref` and
+`view` values are borrowed and never own their referent. Borrowed parameters
+and results also carry caller or lexical lifetime metadata.
+
+A managed `load` is a lexical borrow. When that value crosses an owning
+boundary, `copy` creates a new ownership claim. `move` transfers a local claim
+without retaining or copying it, and `replace` drops the previous destination
+before consuming its replacement. Discarded owned temporaries use `release`;
+`drop` closes an initialized local place. Lowered WIR specializes these
+operations into intrusive `retain`/`release`/`release-place` for shared objects
+and `copy-value`/`drop-value`/`drop-place` glue for owned values.
+
+The builder emits cleanup in reverse lexical order on ordinary scope exit,
+`return`, `break`, and `continue` edges. Direct local returns use `move`, while
+other returns create an independent owned claim before local cleanup. The
+Typed WIR verifier propagates live cleanup-bearing places over the CFG, rejects
+double cleanup, replacement of dead storage, inconsistent merge states, and
+any function exit that leaves a managed local live.
 
 Field projections are checked against the nominal layout rather than trusted as
 free-form strings. Missing fields, type mismatches, writes through read-only
-fields, incorrect construction kind, malformed constructor signatures, and
-non-nominal drops are rejected in both Typed and Lowered WIR.
+fields, incorrect construction kind, malformed constructor signatures,
+ownership/cleanup mismatches, and cleanup operations on trivial values are
+rejected in both Typed and Lowered WIR.
 
 ## Object and Interface Model
 

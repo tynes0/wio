@@ -30,6 +30,7 @@ namespace wio::wir::typed
                opcode == Opcode::Load || opcode == Opcode::FieldPlace ||
                opcode == Opcode::ArrayPlace || opcode == Opcode::Borrow ||
                opcode == Opcode::ConstructComponent || opcode == Opcode::ConstructObject ||
+               opcode == Opcode::Copy || opcode == Opcode::Move ||
                opcode == Opcode::Select;
     }
 
@@ -78,6 +79,10 @@ namespace wio::wir::typed
         case Opcode::Borrow: return "borrow";
         case Opcode::ConstructComponent: return "construct-component";
         case Opcode::ConstructObject: return "construct-object";
+        case Opcode::Copy: return "copy";
+        case Opcode::Move: return "move";
+        case Opcode::Replace: return "replace";
+        case Opcode::Release: return "release";
         case Opcode::Drop: return "drop";
         case Opcode::Select: return "select";
         case Opcode::Return: return "return";
@@ -131,5 +136,27 @@ namespace wio::wir::typed
         case ConversionKind::NumericFit: return "numeric-fit";
         }
         return "unknown";
+    }
+
+    std::string_view valueOwnershipName(const ValueOwnership ownership)
+    {
+        switch (ownership)
+        {
+        case ValueOwnership::Trivial: return "trivial";
+        case ValueOwnership::Borrowed: return "borrowed";
+        case ValueOwnership::Owned: return "owned";
+        }
+        return "trivial";
+    }
+
+    std::string_view borrowLifetimeName(const BorrowLifetime lifetime)
+    {
+        switch (lifetime)
+        {
+        case BorrowLifetime::None: return "none";
+        case BorrowLifetime::Caller: return "caller";
+        case BorrowLifetime::Lexical: return "lexical";
+        }
+        return "none";
     }
 }

@@ -17,11 +17,16 @@ namespace wio::wir
                 .id = parameter.id,
                 .name = parameter.name,
                 .type = parameter.type,
+                .ownership = parameter.ownership,
+                .borrowLifetime = parameter.borrowLifetime,
                 .source = parameter.source
             };
         }
 
-        lowered::Instruction lowerSimpleInstruction(const typed::Instruction& instruction)
+        lowered::Instruction lowerSimpleInstruction(
+            const typed::Instruction& instruction,
+            const TypeTable& types,
+            const std::unordered_map<ValueId::ValueType, TypeId>& valueTypes)
         {
             lowered::Opcode opcode = lowered::Opcode::Unreachable;
             switch (instruction.opcode)
@@ -67,7 +72,41 @@ namespace wio::wir
             case typed::Opcode::Borrow: opcode = lowered::Opcode::Borrow; break;
             case typed::Opcode::ConstructComponent: opcode = lowered::Opcode::ConstructComponent; break;
             case typed::Opcode::ConstructObject: opcode = lowered::Opcode::ConstructObject; break;
-            case typed::Opcode::Drop: opcode = lowered::Opcode::Drop; break;
+            case typed::Opcode::Copy:
+            {
+                const Type* type = types.tryGet(instruction.resultType);
+                opcode = type && type->cleanup == CleanupKind::ReleaseReference
+                    ? lowered::Opcode::Retain
+                    : lowered::Opcode::CopyValue;
+                break;
+            }
+            case typed::Opcode::Move: opcode = lowered::Opcode::MoveValue; break;
+            case typed::Opcode::Replace: opcode = lowered::Opcode::Replace; break;
+            case typed::Opcode::Release:
+            {
+                const auto operand = !instruction.operands.empty()
+                    ? valueTypes.find(instruction.operands.front().value())
+                    : valueTypes.end();
+                const Type* type = operand != valueTypes.end() ? types.tryGet(operand->second) : nullptr;
+                opcode = type && type->cleanup == CleanupKind::ReleaseReference
+                    ? lowered::Opcode::Release
+                    : lowered::Opcode::DropValue;
+                break;
+            }
+            case typed::Opcode::Drop:
+            {
+                const auto operand = !instruction.operands.empty()
+                    ? valueTypes.find(instruction.operands.front().value())
+                    : valueTypes.end();
+                const Type* place = operand != valueTypes.end() ? types.tryGet(operand->second) : nullptr;
+                const Type* stored = place && place->kind == TypeKind::Reference && place->arguments.size() == 1
+                    ? types.tryGet(place->arguments.front())
+                    : nullptr;
+                opcode = stored && stored->cleanup == CleanupKind::ReleaseReference
+                    ? lowered::Opcode::ReleasePlace
+                    : lowered::Opcode::DropPlace;
+                break;
+            }
             case typed::Opcode::Return: opcode = lowered::Opcode::Return; break;
             case typed::Opcode::Unreachable: opcode = lowered::Opcode::Unreachable; break;
             case typed::Opcode::Select:
@@ -94,6 +133,9 @@ namespace wio::wir
                 .specializationKey = instruction.specializationKey,
                 .intrinsicFamily = instruction.intrinsicFamily,
                 .targetType = instruction.targetType,
+                .resultOwnership = instruction.resultOwnership,
+                .borrowLifetime = instruction.borrowLifetime,
+                .borrowOrigin = instruction.borrowOrigin,
                 .source = instruction.source
             };
         }
@@ -172,6 +214,18 @@ namespace wio::wir
                     }));
             }
             function.blocks.reserve(sourceFunction.blocks.size() + selectCount * 3);
+
+            std::unordered_map<ValueId::ValueType, TypeId> valueTypes;
+            for (const typed::Parameter& parameter : sourceFunction.parameters)
+                valueTypes.emplace(parameter.id.value(), parameter.type);
+            for (const typed::BasicBlock& block : sourceFunction.blocks)
+            {
+                for (const typed::Parameter& parameter : block.parameters)
+                    valueTypes.emplace(parameter.id.value(), parameter.type);
+                for (const typed::Instruction& instruction : block.instructions)
+                    if (instruction.result)
+                        valueTypes.emplace(instruction.result.value(), instruction.resultType);
+            }
 
             std::unordered_map<BlockId::ValueType, std::size_t> blockIndices;
             for (const typed::BasicBlock& sourceBlock : sourceFunction.blocks)
@@ -252,6 +306,8 @@ namespace wio::wir
                             .id = instruction.result,
                             .name = "select.result",
                             .type = instruction.resultType,
+                            .ownership = instruction.resultOwnership,
+                            .borrowLifetime = instruction.borrowLifetime,
                             .source = instruction.source
                         });
                         currentIndex = mergeIndex;
@@ -295,7 +351,8 @@ namespace wio::wir
                         continue;
                     }
 
-                    function.blocks[currentIndex].instructions.push_back(lowerSimpleInstruction(instruction));
+                    function.blocks[currentIndex].instructions.push_back(
+                        lowerSimpleInstruction(instruction, source_.types, valueTypes));
                 }
             }
             result_.module_.functions.push_back(std::move(function));

@@ -262,6 +262,8 @@ namespace wio::wir::lowered
                         defineValue(Parameter{
                             .id = instruction.result,
                             .type = instruction.resultType,
+                            .ownership = instruction.resultOwnership,
+                            .borrowLifetime = instruction.borrowLifetime,
                             .source = instruction.source
                         }, block.id);
                         producerOpcodes.emplace(instruction.result.value(), instruction.opcode);
@@ -562,7 +564,8 @@ namespace wio::wir::lowered
                             report("LIR1424", "Lowered WIR local place requires a named reference result and no operands.", instruction.source, function.id, block.id);
                         }
                     }
-                    else if (instruction.opcode == Opcode::PlaceInit || instruction.opcode == Opcode::Store)
+                    else if (instruction.opcode == Opcode::PlaceInit || instruction.opcode == Opcode::Store ||
+                             instruction.opcode == Opcode::Replace)
                     {
                         const Type* placeType = instruction.operands.size() == 2
                             ? module.types.tryGet(valueType(instruction.operands[0]))
@@ -701,7 +704,45 @@ namespace wio::wir::lowered
                             report("LIR1433", "Lowered WIR construction requires a matching constructible component/object result and typed constructor signature.", instruction.source, function.id, block.id);
                         }
                     }
-                    else if (instruction.opcode == Opcode::Drop)
+                    else if (instruction.opcode == Opcode::Retain || instruction.opcode == Opcode::CopyValue)
+                    {
+                        const Type* copiedType = module.types.tryGet(instruction.resultType);
+                        const bool expectsReferenceCounted = instruction.opcode == Opcode::Retain;
+                        if (instruction.operands.size() != 1 ||
+                            valueType(instruction.operands.front()) != instruction.resultType || !copiedType ||
+                            !requiresCleanup(*copiedType) ||
+                            (expectsReferenceCounted != (copiedType->cleanup == CleanupKind::ReleaseReference)) ||
+                            instruction.resultOwnership != typed::ValueOwnership::Owned)
+                        {
+                            report("LIR1446", "Lowered WIR retain/copy-value must match the type cleanup protocol.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::MoveValue)
+                    {
+                        const Type* placeType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const Type* movedType = module.types.tryGet(instruction.resultType);
+                        if (!placeType || placeType->kind != TypeKind::Reference || placeType->arguments.size() != 1 ||
+                            placeType->arguments.front() != instruction.resultType || !movedType ||
+                            !requiresCleanup(*movedType) || instruction.resultOwnership != typed::ValueOwnership::Owned)
+                        {
+                            report("LIR1447", "Lowered WIR move-value must transfer one cleanup-bearing place.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::Release || instruction.opcode == Opcode::DropValue)
+                    {
+                        const Type* releasedType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const bool expectsReferenceCounted = instruction.opcode == Opcode::Release;
+                        if (!releasedType || !requiresCleanup(*releasedType) ||
+                            (expectsReferenceCounted != (releasedType->cleanup == CleanupKind::ReleaseReference)))
+                        {
+                            report("LIR1448", "Lowered WIR release/drop-value must match the value cleanup protocol.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::ReleasePlace || instruction.opcode == Opcode::DropPlace)
                     {
                         const Type* placeType = instruction.operands.size() == 1
                             ? module.types.tryGet(valueType(instruction.operands.front()))
@@ -709,10 +750,11 @@ namespace wio::wir::lowered
                         const Type* valueTypeInfo = placeType && placeType->kind == TypeKind::Reference && placeType->arguments.size() == 1
                             ? module.types.tryGet(placeType->arguments.front())
                             : nullptr;
-                        if (!valueTypeInfo || valueTypeInfo->kind != TypeKind::Named ||
-                            (valueTypeInfo->nominalKind != NominalKind::Component && valueTypeInfo->nominalKind != NominalKind::Object))
+                        const bool expectsReferenceCounted = instruction.opcode == Opcode::ReleasePlace;
+                        if (!valueTypeInfo || !requiresCleanup(*valueTypeInfo) ||
+                            (expectsReferenceCounted != (valueTypeInfo->cleanup == CleanupKind::ReleaseReference)))
                         {
-                            report("LIR1434", "Lowered WIR drop requires a place containing a component or object value.", instruction.source, function.id, block.id);
+                            report("LIR1434", "Lowered WIR release/drop-place must match the stored value cleanup protocol.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::FunctionReference)
