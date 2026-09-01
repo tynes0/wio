@@ -12,6 +12,8 @@ namespace wio::wir::lowered
     {
         return opcode == Opcode::Constant || opcode == Opcode::Unary ||
                opcode == Opcode::Binary || opcode == Opcode::Convert || opcode == Opcode::Call ||
+               opcode == Opcode::FunctionReference || opcode == Opcode::ClosureCreate ||
+               opcode == Opcode::IndirectCall || opcode == Opcode::ExtensionCall ||
                opcode == Opcode::MethodCall || opcode == Opcode::VirtualCall ||
                opcode == Opcode::InterfaceCall || opcode == Opcode::Upcast ||
                opcode == Opcode::CheckedCast || opcode == Opcode::TypeTest ||
@@ -34,6 +36,10 @@ namespace wio::wir::lowered
         case Opcode::Binary: return "binary";
         case Opcode::Convert: return "convert";
         case Opcode::Call: return "call";
+        case Opcode::FunctionReference: return "function-ref";
+        case Opcode::ClosureCreate: return "closure-create";
+        case Opcode::IndirectCall: return "indirect-call";
+        case Opcode::ExtensionCall: return "extension-call";
         case Opcode::MethodCall: return "method-call";
         case Opcode::VirtualCall: return "virtual-call";
         case Opcode::InterfaceCall: return "interface-call";

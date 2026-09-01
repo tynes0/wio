@@ -856,3 +856,8 @@ here as historical evidence rather than active work:
 - [x] Safe object/interface upcasts, checked `fit`, runtime `is`, object
       identity equality, and `self`/`deref self`/`ref`/`view` return semantics
       survive unchanged into Lowered WIR.
+- [x] The Callable Model freezes overload results and generic specialization
+      identities in WIR; named function values, closures with ordered
+      value/reference/retained-self environments, indirect calls, and
+      extension implementation calls are distinct verified operations that
+      survive canonical lowering unchanged.

@@ -33,6 +33,7 @@ namespace wio::wir
         Char,
         String,
         Text,
+        GenericParameter,
         Named,
         Reference,
         Nullable,
@@ -63,6 +64,22 @@ namespace wio::wir
         Private,
         Protected,
         Public
+    };
+
+    enum class CaptureKind : std::uint8_t
+    {
+        Value,
+        Reference,
+        RetainedSelf
+    };
+
+    struct CaptureLayout
+    {
+        std::string name;
+        TypeId type;
+        CaptureKind kind = CaptureKind::Value;
+
+        auto operator<=>(const CaptureLayout&) const = default;
     };
 
     struct FieldLayout
@@ -136,4 +153,5 @@ namespace wio::wir
     [[nodiscard]] std::string_view nominalKindName(NominalKind kind);
     [[nodiscard]] std::string_view nominalRepresentationName(NominalRepresentation representation);
     [[nodiscard]] std::string_view fieldVisibilityName(FieldVisibility visibility);
+    [[nodiscard]] std::string_view captureKindName(CaptureKind kind);
 }

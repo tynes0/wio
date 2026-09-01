@@ -168,6 +168,28 @@ namespace wio::wir::lowered
                 report("LIR1102", "Lowered WIR function name cannot be empty.", function.source, function.id);
             if (!module.types.tryGet(function.returnType))
                 report("LIR1103", "Lowered WIR function return type is invalid.", function.source, function.id);
+            const Type* callableType = module.types.tryGet(function.callableType);
+            if (!callableType || callableType->kind != TypeKind::Function || callableType->arguments.empty() ||
+                callableType->arguments.back() != function.returnType)
+                report("LIR1110", "Lowered WIR function requires a callable type ending in its return type.", function.source, function.id);
+            else
+            {
+                const std::size_t hiddenParameterCount = function.captureParameterCount + (function.isMethod ? 1u : 0u);
+                bool signatureMatches = function.parameters.size() >= hiddenParameterCount &&
+                    callableType->arguments.size() == function.parameters.size() - hiddenParameterCount + 1;
+                for (std::size_t parameterIndex = hiddenParameterCount;
+                     signatureMatches && parameterIndex < function.parameters.size(); ++parameterIndex)
+                {
+                    signatureMatches = function.parameters[parameterIndex].type ==
+                        callableType->arguments[parameterIndex - hiddenParameterCount];
+                }
+                if (!signatureMatches)
+                    report("LIR1112", "Lowered WIR visible parameters must match the callable type after hidden receiver/capture parameters.", function.source, function.id);
+            }
+            if (function.captureParameterCount != function.captures.size() ||
+                function.captureParameterCount > function.parameters.size() ||
+                (!function.isClosureBody && !function.captures.empty()))
+                report("LIR1111", "Lowered WIR closure capture metadata is inconsistent.", function.source, function.id);
             if (function.isMethod)
             {
                 const Type* owner = module.types.tryGet(function.ownerType);
@@ -285,6 +307,8 @@ namespace wio::wir::lowered
 
                     bool callReturnsVoid = false;
                     const bool isCallInstruction = instruction.opcode == Opcode::Call ||
+                        instruction.opcode == Opcode::IndirectCall ||
+                        instruction.opcode == Opcode::ExtensionCall ||
                         instruction.opcode == Opcode::MethodCall ||
                         instruction.opcode == Opcode::VirtualCall ||
                         instruction.opcode == Opcode::InterfaceCall;
@@ -296,6 +320,14 @@ namespace wio::wir::lowered
                             const Type* returnType = module.types.tryGet(calleeIt->second->returnType);
                             callReturnsVoid = returnType && returnType->kind == TypeKind::Void;
                         }
+                    }
+                    if (instruction.opcode == Opcode::IndirectCall && !instruction.operands.empty())
+                    {
+                        const Type* callable = module.types.tryGet(valueType(instruction.operands.front()));
+                        const Type* returnType = callable && callable->kind == TypeKind::Function && !callable->arguments.empty()
+                            ? module.types.tryGet(callable->arguments.back())
+                            : nullptr;
+                        callReturnsVoid = returnType && returnType->kind == TypeKind::Void;
                     }
                     const bool shouldHaveResult = producesValue(instruction.opcode) && !callReturnsVoid;
                     if (shouldHaveResult && (!instruction.result || !module.types.tryGet(instruction.resultType)))
@@ -551,6 +583,83 @@ namespace wio::wir::lowered
                             report("LIR1434", "Lowered WIR drop requires a place containing a component or object value.", instruction.source, function.id, block.id);
                         }
                     }
+                    else if (instruction.opcode == Opcode::FunctionReference)
+                    {
+                        const auto calleeIt = instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        if (calleeIt == functions.end() || !resultType || resultType->kind != TypeKind::Function ||
+                            !instruction.operands.empty() ||
+                            (calleeIt->second->genericParameters.empty() && instruction.resultType != calleeIt->second->callableType))
+                            report("LIR1439", "Lowered WIR function reference must pin a known callable declaration.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::ClosureCreate)
+                    {
+                        const auto calleeIt = instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        bool valid = calleeIt != functions.end() && calleeIt->second->isClosureBody && resultType &&
+                            resultType->kind == TypeKind::Function && instruction.resultType == calleeIt->second->callableType &&
+                            instruction.operands.size() == instruction.signatureTypes.size() &&
+                            instruction.operands.size() == instruction.captureKinds.size() &&
+                            instruction.operands.size() == calleeIt->second->captures.size();
+                        if (valid)
+                        {
+                            for (std::size_t captureIndex = 0; captureIndex < instruction.operands.size(); ++captureIndex)
+                                valid = valid && valueType(instruction.operands[captureIndex]) == instruction.signatureTypes[captureIndex] &&
+                                    instruction.signatureTypes[captureIndex] == calleeIt->second->captures[captureIndex].type &&
+                                    instruction.captureKinds[captureIndex] == calleeIt->second->captures[captureIndex].kind;
+                        }
+                        if (!valid)
+                            report("LIR1440", "Lowered WIR closure creation must match its capture layout.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::IndirectCall)
+                    {
+                        const Type* callable = !instruction.operands.empty()
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        bool valid = callable && callable->kind == TypeKind::Function && !callable->arguments.empty() &&
+                            instruction.signatureTypes.size() == instruction.operands.size() &&
+                            instruction.signatureTypes.front() == valueType(instruction.operands.front()) &&
+                            callable->arguments.size() == instruction.operands.size();
+                        if (valid)
+                        {
+                            for (std::size_t argumentIndex = 1; argumentIndex < instruction.operands.size(); ++argumentIndex)
+                                valid = valid && valueType(instruction.operands[argumentIndex]) == instruction.signatureTypes[argumentIndex] &&
+                                    instruction.signatureTypes[argumentIndex] == callable->arguments[argumentIndex - 1];
+                            const TypeId returnType = callable->arguments.back();
+                            const Type* returnTypeInfo = module.types.tryGet(returnType);
+                            valid = valid && returnTypeInfo &&
+                                (returnTypeInfo->kind == TypeKind::Void ? !instruction.result : instruction.resultType == returnType);
+                        }
+                        if (!valid)
+                            report("LIR1441", "Lowered WIR indirect call must match its function value signature.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::ExtensionCall)
+                    {
+                        const auto calleeIt = instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Type* target = module.types.tryGet(instruction.targetType);
+                        bool valid = calleeIt != functions.end() && calleeIt->second->isExtension && target &&
+                            target->kind == TypeKind::Named && !instruction.operands.empty() &&
+                            instruction.signatureTypes.size() == instruction.operands.size() &&
+                            !instruction.selector.empty() && !instruction.specializationKey.empty();
+                        if (valid)
+                        {
+                            for (std::size_t argumentIndex = 1; argumentIndex < instruction.operands.size(); ++argumentIndex)
+                                valid = valid && valueType(instruction.operands[argumentIndex]) == instruction.signatureTypes[argumentIndex];
+                            const Type* receiver = module.types.tryGet(instruction.signatureTypes.front());
+                            valid = valid && (valueType(instruction.operands.front()) == instruction.signatureTypes.front() ||
+                                (receiver && receiver->kind == TypeKind::Reference && receiver->arguments.size() == 1 &&
+                                 receiver->arguments.front() == valueType(instruction.operands.front())));
+                            const Type* returnType = module.types.tryGet(calleeIt->second->returnType);
+                            valid = valid && returnType &&
+                                (returnType->kind == TypeKind::Void
+                                    ? !instruction.result
+                                    : calleeIt->second->genericParameters.empty()
+                                        ? instruction.resultType == calleeIt->second->returnType
+                                        : module.types.tryGet(instruction.resultType) && !instruction.specializationKey.empty());
+                        }
+                        if (!valid)
+                            report("LIR1442", "Lowered WIR extension call must pin its implementation and concrete signature.", instruction.source, function.id, block.id);
+                    }
                     else if (instruction.opcode == Opcode::MethodCall ||
                              instruction.opcode == Opcode::VirtualCall ||
                              instruction.opcode == Opcode::InterfaceCall)
@@ -583,7 +692,11 @@ namespace wio::wir::lowered
                             const Type* returnType = module.types.tryGet(callee.returnType);
                             const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
                             valid = valid && returnType &&
-                                (returnsVoid ? !instruction.result : instruction.resultType == callee.returnType);
+                                (returnsVoid
+                                    ? !instruction.result
+                                    : callee.genericParameters.empty()
+                                        ? instruction.resultType == callee.returnType
+                                        : module.types.tryGet(instruction.resultType) && !instruction.specializationKey.empty());
                         }
                         if (!valid)
                             report("LIR1435", "Lowered WIR method dispatch must match its owner slot, receiver, signature, and callee.", instruction.source, function.id, block.id);
@@ -632,19 +745,26 @@ namespace wio::wir::lowered
                         else
                         {
                             const Function& callee = *calleeIt->second;
-                            if (callee.parameters.size() != instruction.operands.size())
+                            const bool concreteSignature = instruction.signatureTypes.size() == instruction.operands.size() &&
+                                std::ranges::all_of(instruction.signatureTypes, [&](const TypeId type)
+                                    { return module.types.tryGet(type) != nullptr; });
+                            if (callee.parameters.size() != instruction.operands.size() || !concreteSignature)
                                 report("LIR1408", "Lowered WIR call argument count does not match its callee.", instruction.source, function.id, block.id);
                             else
                             {
                                 for (std::size_t argumentIndex = 0; argumentIndex < instruction.operands.size(); ++argumentIndex)
                                 {
-                                    if (valueType(instruction.operands[argumentIndex]) != callee.parameters[argumentIndex].type)
+                                    if (valueType(instruction.operands[argumentIndex]) != instruction.signatureTypes[argumentIndex] ||
+                                        (callee.genericParameters.empty() && instruction.signatureTypes[argumentIndex] != callee.parameters[argumentIndex].type))
                                         report("LIR1409", "Lowered WIR call argument type does not match its parameter.", instruction.source, function.id, block.id);
                                 }
                             }
                             const Type* returnType = module.types.tryGet(callee.returnType);
                             const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
-                            if (!returnType || (returnsVoid ? instruction.result.isValid() : instruction.resultType != callee.returnType))
+                            const bool resultMatches = callee.genericParameters.empty()
+                                ? instruction.resultType == callee.returnType
+                                : module.types.tryGet(instruction.resultType) != nullptr && !instruction.specializationKey.empty();
+                            if (!returnType || (returnsVoid ? instruction.result.isValid() : !resultMatches))
                                 report("LIR1410", "Lowered WIR call result does not match its callee.", instruction.source, function.id, block.id);
                         }
                     }

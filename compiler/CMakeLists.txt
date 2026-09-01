@@ -229,6 +229,15 @@ if(BUILD_TESTING)
         COMMAND wio_typed_wir_object_interface_test
     )
 
+    add_executable(wio_typed_wir_callable_model_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_callable_model_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_callable_model_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_callable_model
+        COMMAND wio_typed_wir_callable_model_test
+    )
+
     add_executable(wio_function_type_cpp_string_test
         "${CMAKE_SOURCE_DIR}/tests/function_type_cpp_string_test.cpp"
     )

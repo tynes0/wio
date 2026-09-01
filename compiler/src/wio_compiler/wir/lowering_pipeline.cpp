@@ -31,6 +31,10 @@ namespace wio::wir
             case typed::Opcode::Binary: opcode = lowered::Opcode::Binary; break;
             case typed::Opcode::Convert: opcode = lowered::Opcode::Convert; break;
             case typed::Opcode::Call: opcode = lowered::Opcode::Call; break;
+            case typed::Opcode::FunctionReference: opcode = lowered::Opcode::FunctionReference; break;
+            case typed::Opcode::ClosureCreate: opcode = lowered::Opcode::ClosureCreate; break;
+            case typed::Opcode::IndirectCall: opcode = lowered::Opcode::IndirectCall; break;
+            case typed::Opcode::ExtensionCall: opcode = lowered::Opcode::ExtensionCall; break;
             case typed::Opcode::MethodCall: opcode = lowered::Opcode::MethodCall; break;
             case typed::Opcode::VirtualCall: opcode = lowered::Opcode::VirtualCall; break;
             case typed::Opcode::InterfaceCall: opcode = lowered::Opcode::InterfaceCall; break;
@@ -74,6 +78,9 @@ namespace wio::wir
                 .selector = instruction.selector,
                 .projectionIndex = instruction.projectionIndex,
                 .signatureTypes = instruction.signatureTypes,
+                .genericArguments = instruction.genericArguments,
+                .captureKinds = instruction.captureKinds,
+                .specializationKey = instruction.specializationKey,
                 .targetType = instruction.targetType,
                 .source = instruction.source
             };
@@ -117,13 +124,19 @@ namespace wio::wir
                 .id = sourceFunction.id,
                 .name = sourceFunction.name,
                 .returnType = sourceFunction.returnType,
+                .callableType = sourceFunction.callableType,
                 .ownerType = sourceFunction.ownerType,
                 .methodSlot = sourceFunction.methodSlot,
+                .captureParameterCount = sourceFunction.captureParameterCount,
+                .captures = sourceFunction.captures,
+                .genericParameters = sourceFunction.genericParameters,
                 .source = sourceFunction.source,
                 .isAsync = sourceFunction.isAsync,
                 .isExternal = sourceFunction.isExternal,
                 .isMethod = sourceFunction.isMethod,
-                .isAbstract = sourceFunction.isAbstract
+                .isAbstract = sourceFunction.isAbstract,
+                .isExtension = sourceFunction.isExtension,
+                .isClosureBody = sourceFunction.isClosureBody
             };
             for (const typed::Parameter& parameter : sourceFunction.parameters)
                 function.parameters.push_back(lowerParameter(parameter));

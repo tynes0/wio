@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <sstream>
 #include <unordered_map>
 
 namespace wio::wir::typed
@@ -28,6 +29,7 @@ namespace wio::wir::typed
             }
 
             collectFunctions(program->statements);
+            nextFunctionId_ = static_cast<FunctionId::ValueType>(declarations_.size());
             for (const DeclarationInfo& declaration : declarations_)
                 buildFunction(declaration);
         }
@@ -51,6 +53,7 @@ namespace wio::wir::typed
         {
             const FunctionDeclaration* declaration = nullptr;
             Ref<sema::Type> ownerType;
+            bool isExtension = false;
         };
 
         struct LoopContext
@@ -66,6 +69,8 @@ namespace wio::wir::typed
         std::unordered_map<const sema::Symbol*, FunctionId> functionsBySymbol_;
         std::unordered_map<const sema::Symbol*, const FunctionDeclaration*> declarationsBySymbol_;
         std::unordered_map<const sema::Type*, TypeId> typesBySemanticType_;
+        std::unordered_map<const LambdaExpression*, FunctionId> lambdaFunctions_;
+        FunctionId::ValueType nextFunctionId_ = 0;
         std::vector<LoopContext> loopContexts_;
 
         TypeId referenceType(const TypeId referredType, const bool isMutable)
@@ -242,14 +247,16 @@ namespace wio::wir::typed
 
         void collectFunction(
             const FunctionDeclaration* function,
-            Ref<sema::Type> ownerType = nullptr)
+            Ref<sema::Type> ownerType = nullptr,
+            const bool isExtension = false)
         {
             if (!function)
                 return;
             const FunctionId id{static_cast<FunctionId::ValueType>(declarations_.size())};
             declarations_.push_back(DeclarationInfo{
                 .declaration = function,
-                .ownerType = std::move(ownerType)
+                .ownerType = std::move(ownerType),
+                .isExtension = isExtension
             });
             const Ref<sema::Symbol> symbol = function->name
                 ? function->name->referencedSymbol.Lock()
@@ -297,6 +304,12 @@ namespace wio::wir::typed
                     const Ref<sema::Type> owner = declaredOwnerType(object->name);
                     for (const ObjectMember& member : object->members)
                         collectFunction(member.declaration ? member.declaration->as<FunctionDeclaration>() : nullptr, owner);
+                    continue;
+                }
+                if (const auto* extension = statement->as<ExtensionDeclaration>())
+                {
+                    for (const ExtensionMember& member : extension->members)
+                        collectFunction(member.method.Get(), nullptr, true);
                     continue;
                 }
                 if (const auto* group = statement->as<DeclarationGroup>())
@@ -420,6 +433,10 @@ namespace wio::wir::typed
                 wirType.kind = found->second;
                 break;
             }
+            case sema::TypeKind::GenericParameter:
+                wirType.kind = TypeKind::GenericParameter;
+                wirType.name = type.AsFast<sema::GenericParameterType>()->name;
+                break;
             case sema::TypeKind::Reference:
             {
                 const auto reference = type.AsFast<sema::ReferenceType>();
@@ -580,6 +597,313 @@ namespace wio::wir::typed
             return id;
         }
 
+        Ref<sema::Symbol> resolveCallableSymbol(
+            Ref<sema::Symbol> symbol,
+            const Ref<sema::Type>& selectedType = nullptr) const
+        {
+            if (!symbol)
+                return nullptr;
+            if (symbol->kind == sema::SymbolKind::FunctionGroup)
+            {
+                for (const Ref<sema::Symbol>& overload : symbol->overloads)
+                {
+                    if (overload && (!selectedType || sema::Type::matchTypes(overload->type, selectedType)))
+                    {
+                        symbol = overload;
+                        break;
+                    }
+                }
+            }
+            if (symbol->flags.get_isExtension() && symbol->extensionImplementation)
+                symbol = symbol->extensionImplementation;
+            return symbol;
+        }
+
+        void bindGenericArguments(
+            Ref<sema::Type> pattern,
+            Ref<sema::Type> concrete,
+            std::unordered_map<std::string, Ref<sema::Type>>& bindings) const
+        {
+            while (pattern && pattern->kind() == sema::TypeKind::Alias)
+                pattern = pattern.AsFast<sema::AliasType>()->aliasedType;
+            while (concrete && concrete->kind() == sema::TypeKind::Alias)
+                concrete = concrete.AsFast<sema::AliasType>()->aliasedType;
+            if (!pattern || !concrete)
+                return;
+            if (pattern->kind() == sema::TypeKind::GenericParameter)
+            {
+                bindings.try_emplace(pattern.AsFast<sema::GenericParameterType>()->name, concrete);
+                return;
+            }
+            if (pattern->kind() != concrete->kind())
+                return;
+            switch (pattern->kind())
+            {
+            case sema::TypeKind::Reference:
+                bindGenericArguments(
+                    pattern.AsFast<sema::ReferenceType>()->referredType,
+                    concrete.AsFast<sema::ReferenceType>()->referredType,
+                    bindings);
+                break;
+            case sema::TypeKind::Nullable:
+                bindGenericArguments(
+                    pattern.AsFast<sema::NullableType>()->valueType,
+                    concrete.AsFast<sema::NullableType>()->valueType,
+                    bindings);
+                break;
+            case sema::TypeKind::Array:
+                bindGenericArguments(
+                    pattern.AsFast<sema::ArrayType>()->elementType,
+                    concrete.AsFast<sema::ArrayType>()->elementType,
+                    bindings);
+                break;
+            case sema::TypeKind::Dictionary:
+            {
+                const auto patternDictionary = pattern.AsFast<sema::DictionaryType>();
+                const auto concreteDictionary = concrete.AsFast<sema::DictionaryType>();
+                bindGenericArguments(patternDictionary->keyType, concreteDictionary->keyType, bindings);
+                bindGenericArguments(patternDictionary->valueType, concreteDictionary->valueType, bindings);
+                break;
+            }
+            case sema::TypeKind::Function:
+            {
+                const auto patternFunction = pattern.AsFast<sema::FunctionType>();
+                const auto concreteFunction = concrete.AsFast<sema::FunctionType>();
+                for (std::size_t index = 0;
+                     index < patternFunction->paramTypes.size() && index < concreteFunction->paramTypes.size();
+                     ++index)
+                {
+                    bindGenericArguments(patternFunction->paramTypes[index], concreteFunction->paramTypes[index], bindings);
+                }
+                bindGenericArguments(patternFunction->returnType, concreteFunction->returnType, bindings);
+                break;
+            }
+            case sema::TypeKind::Struct:
+            {
+                const auto patternStructure = pattern.AsFast<sema::StructType>();
+                const auto concreteStructure = concrete.AsFast<sema::StructType>();
+                for (std::size_t index = 0;
+                     index < patternStructure->genericArguments.size() && index < concreteStructure->genericArguments.size();
+                     ++index)
+                {
+                    bindGenericArguments(
+                        patternStructure->genericArguments[index],
+                        concreteStructure->genericArguments[index],
+                        bindings);
+                }
+                break;
+            }
+            default:
+                break;
+            }
+        }
+
+        std::vector<TypeId> genericArguments(
+            const FunctionCallExpression& call,
+            const Ref<sema::Symbol>& symbol,
+            const Ref<sema::Type>& selectedCallableType)
+        {
+            std::unordered_map<std::string, Ref<sema::Type>> bindings;
+            for (std::size_t index = 0; index < call.explicitTypeArguments.size() &&
+                 symbol && index < symbol->genericParameterNames.size(); ++index)
+            {
+                if (const Ref<sema::Type> argument = call.explicitTypeArguments[index]
+                    ? call.explicitTypeArguments[index]->refType.Lock()
+                    : nullptr)
+                {
+                    bindings[symbol->genericParameterNames[index]] = argument;
+                }
+            }
+            for (std::size_t index = 0; index < call.resolvedGenericArguments.size(); ++index)
+            {
+                if (const Ref<sema::Type> argument = call.resolvedGenericArguments[index].Lock();
+                    symbol && index < symbol->genericParameterNames.size())
+                {
+                    bindings.try_emplace(symbol->genericParameterNames[index], argument);
+                }
+            }
+            if (symbol)
+                bindGenericArguments(symbol->type, selectedCallableType, bindings);
+
+            std::vector<TypeId> arguments;
+            if (symbol)
+            {
+                for (const std::string& name : symbol->genericParameterNames)
+                {
+                    const auto found = bindings.find(name);
+                    if (found != bindings.end())
+                        arguments.push_back(mapType(found->second, &call));
+                }
+            }
+            return arguments;
+        }
+
+        static std::string specializationKey(
+            const FunctionId callee,
+            const std::vector<TypeId>& genericArguments,
+            const std::vector<TypeId>& signature,
+            const TypeId resultType)
+        {
+            std::ostringstream key;
+            key << 'f' << callee.value() << '<';
+            for (std::size_t index = 0; index < genericArguments.size(); ++index)
+            {
+                if (index != 0)
+                    key << ',';
+                key << 't' << genericArguments[index].value();
+            }
+            key << ">(";
+            for (std::size_t index = 0; index < signature.size(); ++index)
+            {
+                if (index != 0)
+                    key << ',';
+                key << 't' << signature[index].value();
+            }
+            key << ")->t" << resultType.value();
+            return key.str();
+        }
+
+        FunctionId buildLambdaFunction(
+            const LambdaExpression& lambda,
+            const std::vector<CaptureLayout>& captures,
+            const TypeId selfCaptureType)
+        {
+            if (const auto found = lambdaFunctions_.find(&lambda); found != lambdaFunctions_.end())
+                return found->second;
+
+            const FunctionId id{nextFunctionId_++};
+            lambdaFunctions_[&lambda] = id;
+            const Ref<sema::Type> semanticCallable = lambda.refType.Lock();
+            const auto callable = semanticCallable && semanticCallable->kind() == sema::TypeKind::Function
+                ? semanticCallable.AsFast<sema::FunctionType>()
+                : nullptr;
+
+            Function function;
+            function.id = id;
+            function.name = "$lambda." + std::to_string(id.value());
+            function.callableType = mapType(semanticCallable, &lambda);
+            function.returnType = callable ? mapType(callable->returnType, &lambda) : TypeId{};
+            function.captureParameterCount = static_cast<std::uint32_t>(captures.size());
+            function.captures = captures;
+            function.source = SourceSpan::at(lambda.location());
+            function.isClosureBody = true;
+
+            FunctionState state{.function = &function};
+            state.blockIndex = createBlock(state, "entry", SourceSpan::at(lambda.location()));
+
+            std::size_t captureIndex = 0;
+            for (const WeakRef<sema::Symbol>& weakSymbol : lambda.capturedSymbols)
+            {
+                const Ref<sema::Symbol> symbol = weakSymbol.Lock();
+                if (!symbol || captureIndex >= captures.size())
+                    continue;
+                const CaptureLayout& capture = captures[captureIndex++];
+                const TypeId environmentPlaceType = referenceType(capture.type, true);
+                const ValueId parameter{state.nextValue++};
+                function.parameters.push_back(Parameter{
+                    .id = parameter,
+                    .name = "$capture." + capture.name,
+                    .type = environmentPlaceType,
+                    .source = SourceSpan::at(lambda.location())
+                });
+                state.places[symbol.Get()] = parameter;
+            }
+            if (lambda.capturesSelf)
+            {
+                const ValueId parameter{state.nextValue++};
+                function.parameters.push_back(Parameter{
+                    .id = parameter,
+                    .name = "$capture.self",
+                    .type = selfCaptureType,
+                    .source = SourceSpan::at(lambda.location())
+                });
+                state.selfValue = parameter;
+                state.selfType = selfCaptureType;
+            }
+
+            for (std::size_t index = 0; index < lambda.parameters.size(); ++index)
+            {
+                const wio::Parameter& parameter = lambda.parameters[index];
+                const Ref<sema::Symbol> symbol = parameter.name
+                    ? parameter.name->referencedSymbol.Lock()
+                    : nullptr;
+                if (!symbol || !callable || index >= callable->paramTypes.size())
+                {
+                    report("WIR2340", "Lambda parameter is missing its resolved callable type.", parameter.name.Get());
+                    continue;
+                }
+                const TypeId parameterType = mapType(callable->paramTypes[index], parameter.name.Get());
+                const ValueId value{state.nextValue++};
+                function.parameters.push_back(Parameter{
+                    .id = value,
+                    .name = symbol->name,
+                    .type = parameterType,
+                    .source = SourceSpan::at(parameter.name->location())
+                });
+                const Type* parameterTypeInfo = result_.module_.types.tryGet(parameterType);
+                if (parameterTypeInfo && parameterTypeInfo->kind == TypeKind::Reference)
+                {
+                    state.values[symbol.Get()] = value;
+                    state.valueOrder.push_back(symbol.Get());
+                }
+                else
+                {
+                    const ValueId place{state.nextValue++};
+                    currentBlock(state).instructions.push_back(Instruction{
+                        .opcode = Opcode::LocalPlace,
+                        .result = place,
+                        .resultType = referenceType(parameterType, symbol->flags.get_isMutable()),
+                        .selector = symbol->name,
+                        .source = SourceSpan::at(parameter.name->location())
+                    });
+                    currentBlock(state).instructions.push_back(Instruction{
+                        .opcode = Opcode::PlaceInit,
+                        .operands = {place, value},
+                        .source = SourceSpan::at(parameter.name->location())
+                    });
+                    state.places[symbol.Get()] = place;
+                    state.placeOrder.push_back(symbol.Get());
+                }
+            }
+
+            std::vector<LoopContext> savedLoops = std::move(loopContexts_);
+            loopContexts_.clear();
+            if (const auto* expressionBody = lambda.body ? lambda.body->as<ExpressionStatement>() : nullptr)
+            {
+                Instruction resultInstruction{.opcode = Opcode::Return, .source = SourceSpan::at(lambda.location())};
+                const Type* returnType = result_.module_.types.tryGet(function.returnType);
+                if (returnType && returnType->kind != TypeKind::Void)
+                {
+                    const ValueId value = buildExpressionAs(expressionBody->expression, function.returnType, state);
+                    if (value)
+                        resultInstruction.operands.push_back(value);
+                }
+                emitDropsFrom(0, state, &lambda);
+                currentBlock(state).instructions.push_back(std::move(resultInstruction));
+            }
+            else
+            {
+                buildStatement(lambda.body, state);
+                if (!blockIsTerminated(state))
+                {
+                    const Type* returnType = result_.module_.types.tryGet(function.returnType);
+                    if (returnType && returnType->kind == TypeKind::Void)
+                    {
+                        emitDropsFrom(0, state, &lambda);
+                        currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Return});
+                    }
+                    else
+                    {
+                        report("WIR2341", "Non-void lambda does not end with a return.", &lambda);
+                        currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Unreachable});
+                    }
+                }
+            }
+            loopContexts_ = std::move(savedLoops);
+            result_.module_.functions.push_back(std::move(function));
+            return id;
+        }
+
         void buildFunction(const DeclarationInfo& declarationInfo)
         {
             const FunctionDeclaration& declaration = *declarationInfo.declaration;
@@ -601,6 +925,7 @@ namespace wio::wir::typed
                 ? symbol->name
                 : symbol->scopePath + "::" + symbol->name;
             function.returnType = mapType(functionType->returnType, &declaration);
+            function.callableType = mapType(functionType, &declaration);
             function.ownerType = declarationInfo.ownerType
                 ? mapType(declarationInfo.ownerType, &declaration)
                 : TypeId{};
@@ -608,6 +933,9 @@ namespace wio::wir::typed
             function.isAsync = declaration.isAsync;
             function.isExternal = declaration.body == nullptr;
             function.isMethod = static_cast<bool>(function.ownerType);
+            function.isExtension = declarationInfo.isExtension;
+            for (const Ref<sema::Type>& genericParameter : symbol->genericParameterTypes)
+                function.genericParameters.push_back(mapType(genericParameter, &declaration));
             const Type* ownerType = function.isMethod
                 ? result_.module_.types.tryGet(function.ownerType)
                 : nullptr;
@@ -661,6 +989,11 @@ namespace wio::wir::typed
                 });
                 const TypeId parameterType = mapType(functionType->paramTypes[index], parameter.name.Get());
                 const Type* parameterTypeInfo = result_.module_.types.tryGet(parameterType);
+                if (function.isExtension && index == 0)
+                {
+                    state.selfValue = value;
+                    state.selfType = parameterType;
+                }
                 if (function.isExternal || (parameterTypeInfo && parameterTypeInfo->kind == TypeKind::Reference))
                 {
                     state.values[parameterSymbol.Get()] = value;
@@ -969,6 +1302,65 @@ namespace wio::wir::typed
                     .source = SourceSpan::at(expression->location())
                 });
             }
+            if (const auto* lambda = expression->as<LambdaExpression>())
+            {
+                std::vector<CaptureLayout> captures;
+                std::vector<ValueId> operands;
+                std::vector<TypeId> signatureTypes;
+                std::vector<CaptureKind> captureKinds;
+                for (const WeakRef<sema::Symbol>& weakSymbol : lambda->capturedSymbols)
+                {
+                    const Ref<sema::Symbol> symbol = weakSymbol.Lock();
+                    if (!symbol)
+                        continue;
+                    const TypeId captureType = mapType(symbol->type, expression.Get());
+                    ValueId value;
+                    if (const auto place = state.places.find(symbol.Get()); place != state.places.end())
+                        value = emitLoad(place->second, captureType, expression.Get(), state);
+                    else if (const auto available = state.values.find(symbol.Get()); available != state.values.end())
+                        value = available->second;
+                    if (!value)
+                    {
+                        report("WIR2342", "Lambda capture '" + symbol->name + "' is unavailable in the enclosing callable.", expression.Get());
+                        return {};
+                    }
+                    const Type* captureTypeInfo = result_.module_.types.tryGet(captureType);
+                    const CaptureKind kind = captureTypeInfo && captureTypeInfo->kind == TypeKind::Reference
+                        ? CaptureKind::Reference
+                        : CaptureKind::Value;
+                    captures.push_back(CaptureLayout{.name = symbol->name, .type = captureType, .kind = kind});
+                    operands.push_back(value);
+                    signatureTypes.push_back(captureType);
+                    captureKinds.push_back(kind);
+                }
+                TypeId selfCaptureType;
+                if (lambda->capturesSelf)
+                {
+                    if (!state.selfValue || !state.selfType)
+                    {
+                        report("WIR2343", "Lambda requested a self capture outside a receiver-aware callable.", expression.Get());
+                        return {};
+                    }
+                    selfCaptureType = state.selfType;
+                    captures.push_back(CaptureLayout{
+                        .name = "self",
+                        .type = selfCaptureType,
+                        .kind = CaptureKind::RetainedSelf
+                    });
+                    operands.push_back(state.selfValue);
+                    signatureTypes.push_back(selfCaptureType);
+                    captureKinds.push_back(CaptureKind::RetainedSelf);
+                }
+                const FunctionId lambdaFunction = buildLambdaFunction(*lambda, captures, selfCaptureType);
+                return appendValue(Instruction{
+                    .opcode = Opcode::ClosureCreate,
+                    .operands = std::move(operands),
+                    .callee = lambdaFunction,
+                    .signatureTypes = std::move(signatureTypes),
+                    .captureKinds = std::move(captureKinds),
+                    .source = SourceSpan::at(expression->location())
+                });
+            }
             if (expression->is<SelfExpression>())
             {
                 if (!state.selfValue)
@@ -1029,6 +1421,23 @@ namespace wio::wir::typed
                 const auto found = symbol ? state.values.find(symbol.Get()) : state.values.end();
                 if (found != state.values.end())
                     return found->second;
+                const Ref<sema::Symbol> callable = resolveCallableSymbol(symbol, expression->refType.Lock());
+                const auto function = callable
+                    ? functionsBySymbol_.find(callable.Get())
+                    : functionsBySymbol_.end();
+                if (function != functionsBySymbol_.end())
+                {
+                    return appendValue(Instruction{
+                        .opcode = Opcode::FunctionReference,
+                        .callee = function->second,
+                        .specializationKey = specializationKey(
+                            function->second,
+                            {},
+                            {},
+                            mapType(expression->refType.Lock(), expression.Get())),
+                        .source = SourceSpan::at(expression->location())
+                    });
+                }
                 report("WIR2301", "Identifier is not a value available in the current Typed WIR function.", expression.Get());
                 return {};
             }
@@ -1272,6 +1681,70 @@ namespace wio::wir::typed
                 if (memberCallee && memberCallee->object &&
                     !memberCallee->object->is<TypeExpression>())
                 {
+                    const Ref<sema::Symbol> selectedMember = calleeSymbol;
+                    const Ref<sema::Symbol> extensionImplementation = selectedMember &&
+                        selectedMember->flags.get_isExtension()
+                        ? resolveCallableSymbol(selectedMember, call->callee->refType.Lock())
+                        : nullptr;
+                    const auto extensionFunction = extensionImplementation
+                        ? functionsBySymbol_.find(extensionImplementation.Get())
+                        : functionsBySymbol_.end();
+                    if (extensionFunction != functionsBySymbol_.end())
+                    {
+                        const auto implementationType = extensionImplementation->type &&
+                            extensionImplementation->type->kind() == sema::TypeKind::Function
+                            ? extensionImplementation->type.AsFast<sema::FunctionType>()
+                            : nullptr;
+                        const auto visibleType = call->callee->refType.Lock() &&
+                            call->callee->refType.Lock()->kind() == sema::TypeKind::Function
+                            ? call->callee->refType.Lock().AsFast<sema::FunctionType>()
+                            : nullptr;
+                        Instruction instruction{
+                            .opcode = Opcode::ExtensionCall,
+                            .callee = extensionFunction->second,
+                            .selector = selectedMember->extensionMemberName.empty()
+                                ? selectedMember->name
+                                : selectedMember->extensionMemberName,
+                            .targetType = mapType(selectedMember->extensionTargetType, expression.Get()),
+                            .source = SourceSpan::at(expression->location())
+                        };
+                        const TypeId receiverType = implementationType && !implementationType->paramTypes.empty()
+                            ? mapType(implementationType->paramTypes.front(), memberCallee->object.Get())
+                            : mapType(memberCallee->object->refType.Lock(), memberCallee->object.Get());
+                        const ValueId receiver = buildExpression(memberCallee->object, state);
+                        if (!receiver)
+                            return {};
+                        instruction.operands.push_back(receiver);
+                        instruction.signatureTypes.push_back(receiverType);
+                        for (std::size_t index = 0; index < call->arguments.size(); ++index)
+                        {
+                            const auto& argument = call->arguments[index];
+                            const TypeId expectedType = visibleType && index < visibleType->paramTypes.size()
+                                ? mapType(visibleType->paramTypes[index], argument.Get())
+                                : mapType(argument->refType.Lock(), argument.Get());
+                            const ValueId value = buildExpressionAs(argument, expectedType, state);
+                            if (!value)
+                                return {};
+                            instruction.operands.push_back(value);
+                            instruction.signatureTypes.push_back(expectedType);
+                        }
+                        instruction.genericArguments = genericArguments(
+                            *call,
+                            extensionImplementation,
+                            implementationType);
+                        instruction.specializationKey = specializationKey(
+                            instruction.callee,
+                            instruction.genericArguments,
+                            instruction.signatureTypes,
+                            callResultType);
+                        if (callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Void)
+                        {
+                            currentBlock(state).instructions.push_back(std::move(instruction));
+                            return {};
+                        }
+                        return appendValue(std::move(instruction));
+                    }
+
                     TypeId receiverNominalType;
                     const TypeId rawReceiverType = mapType(
                         memberCallee->object->refType.Lock(), memberCallee->object.Get());
@@ -1318,6 +1791,15 @@ namespace wio::wir::typed
                             instruction.signatureTypes.push_back(expectedType);
                         }
                         const TypeId resultType = mapType(expression->refType.Lock(), expression.Get());
+                        instruction.genericArguments = genericArguments(
+                            *call,
+                            calleeSymbol,
+                            call->callee->refType.Lock());
+                        instruction.specializationKey = specializationKey(
+                            instruction.callee,
+                            instruction.genericArguments,
+                            instruction.signatureTypes,
+                            resultType);
                         const Type* type = result_.module_.types.tryGet(resultType);
                         if (type && type->kind == TypeKind::Void)
                         {
@@ -1333,6 +1815,53 @@ namespace wio::wir::typed
                     if (const Ref<sema::Symbol> directSymbol = call->callee->referencedSymbol.Lock())
                         calleeSymbol = directSymbol;
                 }
+                const Ref<sema::Type> selectedCallableType = call->callee
+                    ? call->callee->refType.Lock()
+                    : nullptr;
+                const auto visibleFunctionType = selectedCallableType &&
+                    selectedCallableType->kind() == sema::TypeKind::Function
+                    ? selectedCallableType.AsFast<sema::FunctionType>()
+                    : nullptr;
+                const bool isIndirect = !calleeSymbol ||
+                    calleeSymbol->kind == sema::SymbolKind::Variable ||
+                    calleeSymbol->kind == sema::SymbolKind::Parameter ||
+                    (call->callee && call->callee->is<LambdaExpression>());
+                if (isIndirect)
+                {
+                    const ValueId callableValue = buildExpression(call->callee, state);
+                    if (!callableValue || !visibleFunctionType)
+                    {
+                        report("WIR2344", "Indirect call requires a resolved function value.", expression.Get());
+                        return {};
+                    }
+                    Instruction instruction{
+                        .opcode = Opcode::IndirectCall,
+                        .operands = {callableValue},
+                        .source = SourceSpan::at(expression->location())
+                    };
+                    instruction.signatureTypes.push_back(mapType(selectedCallableType, call->callee.Get()));
+                    for (std::size_t index = 0; index < call->arguments.size(); ++index)
+                    {
+                        const auto& argument = call->arguments[index];
+                        const TypeId expectedType = index < visibleFunctionType->paramTypes.size()
+                            ? mapType(visibleFunctionType->paramTypes[index], argument.Get())
+                            : mapType(argument->refType.Lock(), argument.Get());
+                        const ValueId value = buildExpressionAs(argument, expectedType, state);
+                        if (!value)
+                            return {};
+                        instruction.operands.push_back(value);
+                        instruction.signatureTypes.push_back(expectedType);
+                    }
+                    const Type* type = result_.module_.types.tryGet(callResultType);
+                    if (type && type->kind == TypeKind::Void)
+                    {
+                        currentBlock(state).instructions.push_back(std::move(instruction));
+                        return {};
+                    }
+                    return appendValue(std::move(instruction));
+                }
+
+                calleeSymbol = resolveCallableSymbol(calleeSymbol, selectedCallableType);
                 const auto functionIt = calleeSymbol
                     ? functionsBySymbol_.find(calleeSymbol.Get())
                     : functionsBySymbol_.end();
@@ -1346,23 +1875,25 @@ namespace wio::wir::typed
                     .callee = functionIt->second,
                     .source = SourceSpan::at(expression->location())
                 };
-                const auto functionType = calleeSymbol->type &&
-                    calleeSymbol->type->kind() == sema::TypeKind::Function
-                    ? calleeSymbol->type.AsFast<sema::FunctionType>()
-                    : nullptr;
                 for (std::size_t index = 0; index < call->arguments.size(); ++index)
                 {
                     const auto& argument = call->arguments[index];
-                    const TypeId expectedType = functionType && index < functionType->paramTypes.size()
-                        ? mapType(functionType->paramTypes[index], argument.Get())
+                    const TypeId expectedType = visibleFunctionType && index < visibleFunctionType->paramTypes.size()
+                        ? mapType(visibleFunctionType->paramTypes[index], argument.Get())
                         : mapType(argument->refType.Lock(), argument.Get());
                     const ValueId value = buildExpressionAs(argument, expectedType, state);
                     if (!value)
                         return {};
                     instruction.operands.push_back(value);
+                    instruction.signatureTypes.push_back(expectedType);
                 }
-                const TypeId resultType = mapType(expression->refType.Lock(), expression.Get());
-                const Type* type = result_.module_.types.tryGet(resultType);
+                instruction.genericArguments = genericArguments(*call, calleeSymbol, selectedCallableType);
+                instruction.specializationKey = specializationKey(
+                    instruction.callee,
+                    instruction.genericArguments,
+                    instruction.signatureTypes,
+                    callResultType);
+                const Type* type = result_.module_.types.tryGet(callResultType);
                 if (type && type->kind == TypeKind::Void)
                 {
                     currentBlock(state).instructions.push_back(std::move(instruction));

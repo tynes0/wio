@@ -138,6 +138,32 @@ invalid receiver ancestry, malformed call signatures, wrong dispatch kinds,
 and invalid cast/test targets. This freezes one model for the C++ and bytecode
 backends instead of allowing each backend to rediscover object semantics.
 
+## Callable Model
+
+Callable identity is resolved before a backend sees the program. A direct
+`call` carries the exact declaration id selected by overload resolution, its
+concrete argument signature, ordered generic arguments, and a deterministic
+specialization key. Backends therefore never repeat overload selection or
+invent independent generic-instantiation names.
+
+Function values and closures are explicit:
+
+- `function-ref` materializes one exact named function as a typed value;
+- `closure-create` binds a synthetic closure-body function to an ordered
+  environment layout;
+- `indirect-call` invokes a function value using its verified visible
+  signature;
+- `extension-call` records the selected extension implementation, receiver
+  target, receiver/argument signature, and specialization identity.
+
+Closure layouts distinguish copied value captures, explicit reference
+captures, and retained object `self` captures. Hidden environment parameters
+are separate from the visible callable signature. Captured values are exposed
+to the closure body through stable environment places, while retained `self`
+keeps object identity alive for an escaping closure. Both IR levels verify
+capture order/kind/type, indirect-call arity and result shape, extension
+receiver compatibility, generic metadata, and exact callable targets.
+
 ## Lowered WIR
 
 Lowered WIR is the shared backend contract. Its first canonicalization pass

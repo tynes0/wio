@@ -57,6 +57,10 @@ namespace wio::wir::typed
         Binary,
         Convert,
         Call,
+        FunctionReference,
+        ClosureCreate,
+        IndirectCall,
+        ExtensionCall,
         MethodCall,
         VirtualCall,
         InterfaceCall,
@@ -121,6 +125,9 @@ namespace wio::wir::typed
         std::string selector;
         std::uint32_t projectionIndex = 0;
         std::vector<TypeId> signatureTypes;
+        std::vector<TypeId> genericArguments;
+        std::vector<CaptureKind> captureKinds;
+        std::string specializationKey;
         TypeId targetType;
         SourceSpan source;
     };
@@ -140,14 +147,20 @@ namespace wio::wir::typed
         std::string name;
         std::vector<Parameter> parameters;
         TypeId returnType;
+        TypeId callableType;
         TypeId ownerType;
         std::uint32_t methodSlot = 0;
+        std::uint32_t captureParameterCount = 0;
+        std::vector<CaptureLayout> captures;
+        std::vector<TypeId> genericParameters;
         std::vector<BasicBlock> blocks;
         SourceSpan source;
         bool isAsync = false;
         bool isExternal = false;
         bool isMethod = false;
         bool isAbstract = false;
+        bool isExtension = false;
+        bool isClosureBody = false;
     };
 
     struct Module

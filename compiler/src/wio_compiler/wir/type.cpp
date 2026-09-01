@@ -90,6 +90,7 @@ namespace wio::wir
         case TypeKind::Char: return "char";
         case TypeKind::String: return "string";
         case TypeKind::Text: return "text";
+        case TypeKind::GenericParameter: return "generic-parameter";
         case TypeKind::Named: return "named";
         case TypeKind::Reference: return "reference";
         case TypeKind::Nullable: return "nullable";
@@ -134,5 +135,16 @@ namespace wio::wir
         case FieldVisibility::Public: return "public";
         }
         return "private";
+    }
+
+    std::string_view captureKindName(const CaptureKind kind)
+    {
+        switch (kind)
+        {
+        case CaptureKind::Value: return "value";
+        case CaptureKind::Reference: return "reference";
+        case CaptureKind::RetainedSelf: return "retained-self";
+        }
+        return "value";
     }
 }

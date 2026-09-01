@@ -169,6 +169,41 @@ namespace wio::wir::lowered
                 }
                 stream << ")";
                 break;
+            case Opcode::FunctionReference:
+                stream << "function-ref " << functionRef(instruction.callee);
+                break;
+            case Opcode::ClosureCreate:
+                stream << "closure-create " << functionRef(instruction.callee) << " captures(";
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 0)
+                        stream << ", ";
+                    stream << captureKindName(instruction.captureKinds.at(index)) << " "
+                           << valueRef(instruction.operands[index]);
+                }
+                stream << ")";
+                break;
+            case Opcode::IndirectCall:
+                stream << "indirect-call " << valueRef(instruction.operands.at(0)) << "(";
+                for (std::size_t index = 1; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 1)
+                        stream << ", ";
+                    stream << valueRef(instruction.operands[index]);
+                }
+                stream << ")";
+                break;
+            case Opcode::ExtensionCall:
+                stream << "extension-call " << typeRef(instruction.targetType) << "::"
+                       << std::quoted(instruction.selector) << " " << functionRef(instruction.callee) << "(";
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 0)
+                        stream << ", ";
+                    stream << valueRef(instruction.operands[index]);
+                }
+                stream << ")";
+                break;
             case Opcode::MethodCall:
             case Opcode::VirtualCall:
             case Opcode::InterfaceCall:
@@ -280,6 +315,19 @@ namespace wio::wir::lowered
                 stream << "unreachable";
                 break;
             }
+            if (!instruction.genericArguments.empty())
+            {
+                stream << " generic<";
+                for (std::size_t index = 0; index < instruction.genericArguments.size(); ++index)
+                {
+                    if (index > 0)
+                        stream << ", ";
+                    stream << typeRef(instruction.genericArguments[index]);
+                }
+                stream << ">";
+            }
+            if (!instruction.specializationKey.empty())
+                stream << " specialization=" << std::quoted(instruction.specializationKey);
             stream << '\n';
         }
     }
@@ -303,11 +351,28 @@ namespace wio::wir::lowered
                 stream << "async ";
             if (function.isAbstract)
                 stream << "abstract ";
+            if (function.isExtension)
+                stream << "extension ";
+            if (function.isClosureBody)
+                stream << "closure-body ";
             stream << "func " << functionRef(function.id) << " " << std::quoted(function.name) << "(";
             printParameters(stream, function.parameters);
-            stream << ") -> " << typeRef(function.returnType);
+            stream << ") -> " << typeRef(function.returnType) << " callable=" << typeRef(function.callableType);
             if (function.isMethod)
                 stream << " owner=" << typeRef(function.ownerType) << " slot=" << function.methodSlot;
+            if (!function.captures.empty())
+            {
+                stream << " captures={";
+                for (std::size_t index = 0; index < function.captures.size(); ++index)
+                {
+                    if (index > 0)
+                        stream << ", ";
+                    const CaptureLayout& capture = function.captures[index];
+                    stream << std::quoted(capture.name) << ":" << typeRef(capture.type)
+                           << " " << captureKindName(capture.kind);
+                }
+                stream << "}";
+            }
             if (function.isExternal)
             {
                 stream << '\n';

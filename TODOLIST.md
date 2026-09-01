@@ -491,12 +491,16 @@ Rider, and CLion are defined in
    values, places/borrows, arrays, matching, component/object construction,
    lexical cleanup, receiver-aware methods, deterministic object/interface
    slots, direct/virtual/interface dispatch, object casts/type tests, and
-   identity equality are implemented with verifier and printer coverage. Keep
+   identity equality are implemented with verifier and printer coverage.
+   Callable identity is also frozen: exact overload targets, concrete generic
+   specialization keys, named function values, ordered closure environments,
+   value/reference/retained-self captures, indirect calls, and extension calls
+   survive verified Typed-to-Lowered WIR unchanged. Keep
    the current C++ generator as the production path while finishing remaining
    language coverage, then consume Lowered WIR from a new C++ backend and a
    bytecode VM. Add native ABI operations, async state-machine lowering,
-   exceptions/panic cleanup, globals/constants, dictionaries, closures,
-   generics, reflection payloads, backend parity tests, and compile-time/
+   exceptions/panic cleanup, globals/constants, dictionaries, reflection
+   payloads, backend parity tests, and compile-time/
    runtime benchmarks before changing the default backend.
 
 ## P3 - Product Direction

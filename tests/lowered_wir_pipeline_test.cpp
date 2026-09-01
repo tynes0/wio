@@ -28,6 +28,10 @@ namespace
         function.id = FunctionId{0};
         function.name = "Choose";
         function.returnType = module.types.i32Type();
+        function.callableType = module.types.intern(Type{
+            .kind = TypeKind::Function,
+            .arguments = {module.types.boolType(), module.types.i32Type()}
+        });
         function.parameters.push_back(typed::Parameter{
             .id = ValueId{0},
             .name = "condition",

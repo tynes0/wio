@@ -159,6 +159,8 @@ namespace wio::wir::typed
             }
             if (type.kind == TypeKind::Named && type.name.empty())
                 report("WIR1003", "Named Typed WIR types require a stable logical name.");
+            if (type.kind == TypeKind::GenericParameter && type.name.empty())
+                report("WIR1014", "Generic parameter Typed WIR types require a stable source name.");
             if ((type.kind == TypeKind::Reference || type.kind == TypeKind::Nullable ||
                  type.kind == TypeKind::Array || type.kind == TypeKind::AsyncTask) &&
                 type.arguments.size() != 1)
@@ -222,6 +224,52 @@ namespace wio::wir::typed
                 report("WIR1102", "Typed WIR function name cannot be empty.", function.source, function.id);
             if (!module.types.tryGet(function.returnType))
                 report("WIR1103", "Typed WIR function return type is invalid.", function.source, function.id);
+            const Type* callableType = module.types.tryGet(function.callableType);
+            if (!callableType || callableType->kind != TypeKind::Function || callableType->arguments.empty() ||
+                callableType->arguments.back() != function.returnType)
+            {
+                report("WIR1108", "Typed WIR function requires a callable type ending in its return type.", function.source, function.id);
+            }
+            else
+            {
+                const std::size_t hiddenParameterCount = function.captureParameterCount + (function.isMethod ? 1u : 0u);
+                bool signatureMatches = function.parameters.size() >= hiddenParameterCount &&
+                    callableType->arguments.size() == function.parameters.size() - hiddenParameterCount + 1;
+                for (std::size_t index = hiddenParameterCount;
+                     signatureMatches && index < function.parameters.size(); ++index)
+                {
+                    signatureMatches = function.parameters[index].type ==
+                        callableType->arguments[index - hiddenParameterCount];
+                }
+                if (!signatureMatches)
+                    report("WIR1112", "Typed WIR visible parameters must match the callable type after hidden receiver/capture parameters.", function.source, function.id);
+            }
+            if (!std::ranges::all_of(function.genericParameters, [&](const TypeId parameter)
+                {
+                    const Type* type = module.types.tryGet(parameter);
+                    return type && type->kind == TypeKind::GenericParameter;
+                }))
+            {
+                report("WIR1109", "Typed WIR generic parameter metadata must reference generic parameter types.", function.source, function.id);
+            }
+            if (function.captureParameterCount != function.captures.size() ||
+                function.captureParameterCount > function.parameters.size() ||
+                (!function.isClosureBody && !function.captures.empty()))
+            {
+                report("WIR1110", "Typed WIR closure capture layout and hidden parameter count are inconsistent.", function.source, function.id);
+            }
+            for (std::size_t captureIndex = 0; captureIndex < function.captures.size(); ++captureIndex)
+            {
+                const CaptureLayout& capture = function.captures[captureIndex];
+                const Type* hiddenType = module.types.tryGet(function.parameters[captureIndex].type);
+                const bool retainedSelf = capture.kind == CaptureKind::RetainedSelf;
+                const bool validHiddenType = retainedSelf
+                    ? function.parameters[captureIndex].type == capture.type
+                    : hiddenType && hiddenType->kind == TypeKind::Reference && hiddenType->arguments.size() == 1 &&
+                        hiddenType->arguments.front() == capture.type;
+                if (capture.name.empty() || !module.types.tryGet(capture.type) || !validHiddenType)
+                    report("WIR1111", "Typed WIR closure capture layout does not match its hidden parameter.", function.source, function.id);
+            }
             if (function.isMethod)
             {
                 const Type* owner = module.types.tryGet(function.ownerType);
@@ -456,6 +504,8 @@ namespace wio::wir::typed
 
                     bool callReturnsVoid = false;
                     const bool isCallInstruction = instruction.opcode == Opcode::Call ||
+                        instruction.opcode == Opcode::IndirectCall ||
+                        instruction.opcode == Opcode::ExtensionCall ||
                         instruction.opcode == Opcode::MethodCall ||
                         instruction.opcode == Opcode::VirtualCall ||
                         instruction.opcode == Opcode::InterfaceCall;
@@ -468,11 +518,24 @@ namespace wio::wir::typed
                             callReturnsVoid = returnType && returnType->kind == TypeKind::Void;
                         }
                     }
+                    if (instruction.opcode == Opcode::IndirectCall && !instruction.operands.empty())
+                    {
+                        const Type* callable = module.types.tryGet(valueType(instruction.operands.front()));
+                        const Type* returnType = callable && callable->kind == TypeKind::Function && !callable->arguments.empty()
+                            ? module.types.tryGet(callable->arguments.back())
+                            : nullptr;
+                        callReturnsVoid = returnType && returnType->kind == TypeKind::Void;
+                    }
                     const bool shouldHaveResult = producesValue(instruction.opcode) && !callReturnsVoid;
                     if (shouldHaveResult && (!instruction.result || !module.types.tryGet(instruction.resultType)))
                         report("WIR1401", "Value-producing Typed WIR instruction requires a typed result.", instruction.source, function.id, block.id);
                     if (!shouldHaveResult && !isCallInstruction && instruction.result)
                         report("WIR1402", "Typed WIR terminator cannot produce a value.", instruction.source, function.id, block.id);
+                    if (!std::ranges::all_of(instruction.genericArguments, [&](const TypeId type)
+                        { return module.types.tryGet(type) != nullptr; }))
+                    {
+                        report("WIR1444", "Typed WIR callable generic arguments must reference valid types.", instruction.source, function.id, block.id);
+                    }
 
                     if (instruction.opcode == Opcode::Constant && module.types.tryGet(instruction.resultType) &&
                         !literalMatches(instruction.literal, module.types.get(instruction.resultType).kind))
@@ -745,6 +808,92 @@ namespace wio::wir::typed
                             report("WIR1408", "Typed WIR select requires bool condition and matching result arms.", instruction.source, function.id, block.id);
                         }
                     }
+                    else if (instruction.opcode == Opcode::FunctionReference)
+                    {
+                        const auto calleeIt = instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        const bool valid = calleeIt != functions.end() && resultType &&
+                            resultType->kind == TypeKind::Function && instruction.operands.empty() &&
+                            (calleeIt->second->genericParameters.empty()
+                                ? instruction.resultType == calleeIt->second->callableType
+                                : !instruction.specializationKey.empty());
+                        if (!valid)
+                            report("WIR1445", "Typed WIR function reference must pin a known callable declaration and callable type.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::ClosureCreate)
+                    {
+                        const auto calleeIt = instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Type* resultType = module.types.tryGet(instruction.resultType);
+                        bool valid = calleeIt != functions.end() && calleeIt->second->isClosureBody &&
+                            resultType && resultType->kind == TypeKind::Function &&
+                            instruction.resultType == calleeIt->second->callableType &&
+                            instruction.operands.size() == instruction.signatureTypes.size() &&
+                            instruction.operands.size() == instruction.captureKinds.size() &&
+                            instruction.operands.size() == calleeIt->second->captures.size();
+                        if (valid)
+                        {
+                            for (std::size_t captureIndex = 0; captureIndex < instruction.operands.size(); ++captureIndex)
+                            {
+                                valid = valid && valueType(instruction.operands[captureIndex]) == instruction.signatureTypes[captureIndex] &&
+                                    instruction.signatureTypes[captureIndex] == calleeIt->second->captures[captureIndex].type &&
+                                    instruction.captureKinds[captureIndex] == calleeIt->second->captures[captureIndex].kind;
+                            }
+                        }
+                        if (!valid)
+                            report("WIR1446", "Typed WIR closure creation must match its closure body capture layout exactly.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::IndirectCall)
+                    {
+                        const Type* callable = !instruction.operands.empty()
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        bool valid = callable && callable->kind == TypeKind::Function && !callable->arguments.empty() &&
+                            instruction.signatureTypes.size() == instruction.operands.size() &&
+                            instruction.signatureTypes.front() == valueType(instruction.operands.front()) &&
+                            callable->arguments.size() == instruction.operands.size();
+                        if (valid)
+                        {
+                            for (std::size_t argumentIndex = 1; argumentIndex < instruction.operands.size(); ++argumentIndex)
+                            {
+                                valid = valid && valueType(instruction.operands[argumentIndex]) == instruction.signatureTypes[argumentIndex] &&
+                                    instruction.signatureTypes[argumentIndex] == callable->arguments[argumentIndex - 1];
+                            }
+                            const TypeId returnType = callable->arguments.back();
+                            const Type* returnTypeInfo = module.types.tryGet(returnType);
+                            valid = valid && returnTypeInfo &&
+                                (returnTypeInfo->kind == TypeKind::Void ? !instruction.result : instruction.resultType == returnType);
+                        }
+                        if (!valid)
+                            report("WIR1447", "Typed WIR indirect call must match its function value signature.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::ExtensionCall)
+                    {
+                        const auto calleeIt = instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Type* target = module.types.tryGet(instruction.targetType);
+                        bool valid = calleeIt != functions.end() && calleeIt->second->isExtension && target &&
+                            target->kind == TypeKind::Named && !instruction.operands.empty() &&
+                            instruction.signatureTypes.size() == instruction.operands.size() &&
+                            instruction.selector.size() > 0 && !instruction.specializationKey.empty();
+                        if (valid)
+                        {
+                            for (std::size_t argumentIndex = 1; argumentIndex < instruction.operands.size(); ++argumentIndex)
+                                valid = valid && valueType(instruction.operands[argumentIndex]) == instruction.signatureTypes[argumentIndex];
+                            const Type* receiverSignature = module.types.tryGet(instruction.signatureTypes.front());
+                            const TypeId receiverValue = valueType(instruction.operands.front());
+                            valid = valid && (receiverValue == instruction.signatureTypes.front() ||
+                                (receiverSignature && receiverSignature->kind == TypeKind::Reference &&
+                                 receiverSignature->arguments.size() == 1 && receiverSignature->arguments.front() == receiverValue));
+                            const Type* returnType = module.types.tryGet(calleeIt->second->returnType);
+                            valid = valid && returnType &&
+                                (returnType->kind == TypeKind::Void
+                                    ? !instruction.result
+                                    : calleeIt->second->genericParameters.empty()
+                                        ? instruction.resultType == calleeIt->second->returnType
+                                        : module.types.tryGet(instruction.resultType) && !instruction.specializationKey.empty());
+                        }
+                        if (!valid)
+                            report("WIR1448", "Typed WIR extension call must pin its implementation, receiver, signature, and specialization.", instruction.source, function.id, block.id);
+                    }
                     else if (instruction.opcode == Opcode::MethodCall ||
                              instruction.opcode == Opcode::VirtualCall ||
                              instruction.opcode == Opcode::InterfaceCall)
@@ -777,7 +926,11 @@ namespace wio::wir::typed
                             const Type* returnType = module.types.tryGet(callee.returnType);
                             const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
                             valid = valid && returnType &&
-                                (returnsVoid ? !instruction.result : instruction.resultType == callee.returnType);
+                                (returnsVoid
+                                    ? !instruction.result
+                                    : callee.genericParameters.empty()
+                                        ? instruction.resultType == callee.returnType
+                                        : module.types.tryGet(instruction.resultType) && !instruction.specializationKey.empty());
                         }
                         if (!valid)
                             report("WIR1440", "Typed WIR method dispatch must match its owner slot, receiver, signature, and callee.", instruction.source, function.id, block.id);
@@ -830,7 +983,10 @@ namespace wio::wir::typed
                         else
                         {
                             const Function& callee = *calleeIt->second;
-                            if (callee.parameters.size() != instruction.operands.size())
+                            const bool concreteSignature = instruction.signatureTypes.size() == instruction.operands.size() &&
+                                std::ranges::all_of(instruction.signatureTypes, [&](const TypeId type)
+                                    { return module.types.tryGet(type) != nullptr; });
+                            if (callee.parameters.size() != instruction.operands.size() || !concreteSignature)
                             {
                                 report("WIR1410", "Typed WIR call argument count does not match its callee.", instruction.source, function.id, block.id);
                             }
@@ -838,14 +994,18 @@ namespace wio::wir::typed
                             {
                                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                                 {
-                                    if (valueType(instruction.operands[index]) != callee.parameters[index].type)
+                                    if (valueType(instruction.operands[index]) != instruction.signatureTypes[index] ||
+                                        (callee.genericParameters.empty() && instruction.signatureTypes[index] != callee.parameters[index].type))
                                         report("WIR1411", "Typed WIR call argument type does not match its parameter.", instruction.source, function.id, block.id);
                                 }
                             }
                             const Type* calleeReturnType = module.types.tryGet(callee.returnType);
                             const bool calleeReturnsVoid = calleeReturnType && calleeReturnType->kind == TypeKind::Void;
+                            const bool resultMatches = callee.genericParameters.empty()
+                                ? instruction.resultType == callee.returnType
+                                : module.types.tryGet(instruction.resultType) != nullptr && !instruction.specializationKey.empty();
                             if (!calleeReturnType ||
-                                (calleeReturnsVoid ? instruction.result.isValid() : instruction.resultType != callee.returnType))
+                                (calleeReturnsVoid ? instruction.result.isValid() : !resultMatches))
                                 report("WIR1412", "Typed WIR call result does not match its callee return type.", instruction.source, function.id, block.id);
                         }
                     }
