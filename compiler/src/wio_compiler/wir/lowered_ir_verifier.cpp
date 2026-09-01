@@ -58,6 +58,37 @@ namespace wio::wir::lowered
             }
             return nullptr;
         }
+
+        const Type* underlyingObjectType(const TypeTable& types, TypeId typeId, TypeId* nominalId = nullptr)
+        {
+            const Type* type = types.tryGet(typeId);
+            if (type && type->kind == TypeKind::Reference && type->arguments.size() == 1)
+            {
+                typeId = type->arguments.front();
+                type = types.tryGet(typeId);
+            }
+            if (!type || type->kind != TypeKind::Named ||
+                (type->nominalKind != NominalKind::Object && type->nominalKind != NominalKind::Interface))
+                return nullptr;
+            if (nominalId)
+                *nominalId = typeId;
+            return type;
+        }
+
+        bool nominalDerivesFrom(
+            const TypeTable& types,
+            const TypeId source,
+            const TypeId destination,
+            std::unordered_set<TypeId::ValueType>& visited)
+        {
+            if (source == destination)
+                return true;
+            if (!source || !visited.insert(source.value()).second)
+                return false;
+            const Type* type = types.tryGet(source);
+            return type && std::ranges::any_of(type->baseTypes, [&](const TypeId base)
+                { return nominalDerivesFrom(types, base, destination, visited); });
+        }
     }
 
     VerificationResult Verifier::verify(const Module& module) const
@@ -97,7 +128,8 @@ namespace wio::wir::lowered
                 report("LIR1004", "Native POD representation requires a named component type.");
             }
             if (type.kind != TypeKind::Named &&
-                (!type.baseTypes.empty() || !type.fields.empty() || type.hasConstructor || type.hasDestructor))
+                (!type.baseTypes.empty() || !type.fields.empty() || !type.methods.empty() ||
+                 type.hasConstructor || type.hasDestructor))
             {
                 report("LIR1005", "Only named Lowered WIR types may carry layout or lifecycle metadata.");
             }
@@ -113,6 +145,16 @@ namespace wio::wir::lowered
                 if (!baseType || baseType->kind != TypeKind::Named)
                     report("LIR1007", "Lowered WIR nominal base layouts must reference named types.");
             }
+            std::unordered_set<std::uint32_t> methodSlots;
+            for (const MethodLayout& method : type.methods)
+            {
+                const bool signatureValid = module.types.tryGet(method.returnType) &&
+                    std::ranges::all_of(method.parameterTypes, [&](const TypeId parameter)
+                        { return module.types.tryGet(parameter) != nullptr; });
+                if (method.name.empty() || !method.function || !signatureValid ||
+                    !methodSlots.insert(method.slot).second)
+                    report("LIR1008", "Lowered WIR method layouts require valid signatures and unique slots.");
+            }
         }
 
         FunctionMap functions;
@@ -126,6 +168,27 @@ namespace wio::wir::lowered
                 report("LIR1102", "Lowered WIR function name cannot be empty.", function.source, function.id);
             if (!module.types.tryGet(function.returnType))
                 report("LIR1103", "Lowered WIR function return type is invalid.", function.source, function.id);
+            if (function.isMethod)
+            {
+                const Type* owner = module.types.tryGet(function.ownerType);
+                const Type* receiver = !function.parameters.empty()
+                    ? module.types.tryGet(function.parameters.front().type)
+                    : nullptr;
+                if (!owner || owner->kind != TypeKind::Named || !receiver ||
+                    receiver->kind != TypeKind::Reference || receiver->arguments.size() != 1 ||
+                    receiver->arguments.front() != function.ownerType)
+                    report("LIR1106", "Lowered WIR methods require a named owner and leading self parameter.", function.source, function.id);
+            }
+        }
+
+        for (const Type& type : module.types.types())
+        {
+            for (const MethodLayout& method : type.methods)
+            {
+                const auto function = functions.find(method.function.value());
+                if (function == functions.end() || !function->second->isMethod)
+                    report("LIR1009", "Lowered WIR method layout references an unknown or non-method function.");
+            }
         }
 
         for (const Function& function : module.functions)
@@ -221,7 +284,11 @@ namespace wio::wir::lowered
                     }
 
                     bool callReturnsVoid = false;
-                    if (instruction.opcode == Opcode::Call && instruction.callee)
+                    const bool isCallInstruction = instruction.opcode == Opcode::Call ||
+                        instruction.opcode == Opcode::MethodCall ||
+                        instruction.opcode == Opcode::VirtualCall ||
+                        instruction.opcode == Opcode::InterfaceCall;
+                    if (isCallInstruction && instruction.callee)
                     {
                         const auto calleeIt = functions.find(instruction.callee.value());
                         if (calleeIt != functions.end())
@@ -233,7 +300,7 @@ namespace wio::wir::lowered
                     const bool shouldHaveResult = producesValue(instruction.opcode) && !callReturnsVoid;
                     if (shouldHaveResult && (!instruction.result || !module.types.tryGet(instruction.resultType)))
                         report("LIR1401", "Value-producing Lowered WIR instruction requires a typed result.", instruction.source, function.id, block.id);
-                    if (!shouldHaveResult && instruction.opcode != Opcode::Call && instruction.result)
+                    if (!shouldHaveResult && !isCallInstruction && instruction.result)
                         report("LIR1402", "Lowered WIR terminator cannot produce a value.", instruction.source, function.id, block.id);
 
                     if (instruction.opcode == Opcode::Unary)
@@ -483,6 +550,77 @@ namespace wio::wir::lowered
                         {
                             report("LIR1434", "Lowered WIR drop requires a place containing a component or object value.", instruction.source, function.id, block.id);
                         }
+                    }
+                    else if (instruction.opcode == Opcode::MethodCall ||
+                             instruction.opcode == Opcode::VirtualCall ||
+                             instruction.opcode == Opcode::InterfaceCall)
+                    {
+                        const Type* owner = module.types.tryGet(instruction.targetType);
+                        const auto calleeIt = instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const auto method = owner ? std::ranges::find_if(owner->methods, [&](const MethodLayout& layout)
+                        {
+                            return layout.slot == instruction.projectionIndex &&
+                                layout.name == instruction.selector && layout.function == instruction.callee;
+                        }) : std::vector<MethodLayout>::const_iterator{};
+                        const bool dispatchKindValid = owner && owner->kind == TypeKind::Named &&
+                            (instruction.opcode != Opcode::VirtualCall || owner->nominalKind == NominalKind::Object) &&
+                            (instruction.opcode != Opcode::InterfaceCall || owner->nominalKind == NominalKind::Interface);
+                        bool valid = dispatchKindValid && calleeIt != functions.end() &&
+                            method != owner->methods.end() && !instruction.operands.empty() &&
+                            instruction.signatureTypes.size() == instruction.operands.size();
+                        if (valid)
+                        {
+                            for (std::size_t argumentIndex = 1; argumentIndex < instruction.operands.size(); ++argumentIndex)
+                            {
+                                valid = valid && valueType(instruction.operands[argumentIndex]) ==
+                                    instruction.signatureTypes[argumentIndex];
+                            }
+                            TypeId receiverNominal;
+                            std::unordered_set<TypeId::ValueType> visited;
+                            valid = valid && underlyingObjectType(module.types, valueType(instruction.operands.front()), &receiverNominal) &&
+                                nominalDerivesFrom(module.types, receiverNominal, instruction.targetType, visited);
+                            const Function& callee = *calleeIt->second;
+                            const Type* returnType = module.types.tryGet(callee.returnType);
+                            const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
+                            valid = valid && returnType &&
+                                (returnsVoid ? !instruction.result : instruction.resultType == callee.returnType);
+                        }
+                        if (!valid)
+                            report("LIR1435", "Lowered WIR method dispatch must match its owner slot, receiver, signature, and callee.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::Upcast || instruction.opcode == Opcode::CheckedCast)
+                    {
+                        TypeId sourceNominal;
+                        TypeId targetNominal;
+                        const bool hasObjectTypes = instruction.operands.size() == 1 &&
+                            underlyingObjectType(module.types, valueType(instruction.operands.front()), &sourceNominal) &&
+                            underlyingObjectType(module.types, instruction.targetType, &targetNominal);
+                        bool valid = hasObjectTypes && instruction.resultType == instruction.targetType;
+                        if (valid && instruction.opcode == Opcode::Upcast)
+                        {
+                            std::unordered_set<TypeId::ValueType> visited;
+                            valid = nominalDerivesFrom(module.types, sourceNominal, targetNominal, visited);
+                        }
+                        if (!valid)
+                            report("LIR1436", "Lowered WIR object cast requires compatible object/interface source and target types.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::TypeTest)
+                    {
+                        if (instruction.operands.size() != 1 ||
+                            !underlyingObjectType(module.types, valueType(instruction.operands.front())) ||
+                            !underlyingObjectType(module.types, instruction.targetType) ||
+                            instruction.resultType != module.types.boolType())
+                            report("LIR1437", "Lowered WIR type test requires an object/interface value, target type, and bool result.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::IdentityEqual)
+                    {
+                        if (instruction.operands.size() != 2 ||
+                            !underlyingObjectType(module.types, valueType(instruction.operands[0])) ||
+                            !underlyingObjectType(module.types, valueType(instruction.operands[1])) ||
+                            instruction.resultType != module.types.boolType() ||
+                            (instruction.binaryOperator != typed::BinaryOperator::Equal &&
+                             instruction.binaryOperator != typed::BinaryOperator::NotEqual))
+                            report("LIR1438", "Lowered WIR identity equality requires object/interface operands and bool result.", instruction.source, function.id, block.id);
                     }
                     else if (instruction.opcode == Opcode::Call)
                     {

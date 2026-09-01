@@ -92,6 +92,37 @@ namespace wio::wir::typed
             }
             return nullptr;
         }
+
+        const Type* underlyingObjectType(const TypeTable& types, TypeId typeId, TypeId* nominalId = nullptr)
+        {
+            const Type* type = types.tryGet(typeId);
+            if (type && type->kind == TypeKind::Reference && type->arguments.size() == 1)
+            {
+                typeId = type->arguments.front();
+                type = types.tryGet(typeId);
+            }
+            if (!type || type->kind != TypeKind::Named ||
+                (type->nominalKind != NominalKind::Object && type->nominalKind != NominalKind::Interface))
+                return nullptr;
+            if (nominalId)
+                *nominalId = typeId;
+            return type;
+        }
+
+        bool nominalDerivesFrom(
+            const TypeTable& types,
+            const TypeId source,
+            const TypeId destination,
+            std::unordered_set<TypeId::ValueType>& visited)
+        {
+            if (source == destination)
+                return true;
+            if (!source || !visited.insert(source.value()).second)
+                return false;
+            const Type* type = types.tryGet(source);
+            return type && std::ranges::any_of(type->baseTypes, [&](const TypeId base)
+                { return nominalDerivesFrom(types, base, destination, visited); });
+        }
     }
 
     VerificationResult Verifier::verify(const Module& module) const
@@ -146,7 +177,8 @@ namespace wio::wir::typed
                 report("WIR1008", "Native POD representation requires a named component type.");
             }
             if (type.kind != TypeKind::Named &&
-                (!type.baseTypes.empty() || !type.fields.empty() || type.hasConstructor || type.hasDestructor))
+                (!type.baseTypes.empty() || !type.fields.empty() || !type.methods.empty() ||
+                 type.hasConstructor || type.hasDestructor))
             {
                 report("WIR1009", "Only named Typed WIR types may carry layout or lifecycle metadata.");
             }
@@ -161,6 +193,18 @@ namespace wio::wir::typed
                 const Type* baseType = module.types.tryGet(baseTypeId);
                 if (!baseType || baseType->kind != TypeKind::Named)
                     report("WIR1011", "Typed WIR nominal base layouts must reference named types.");
+            }
+            std::unordered_set<std::uint32_t> methodSlots;
+            for (const MethodLayout& method : type.methods)
+            {
+                const bool signatureValid = module.types.tryGet(method.returnType) &&
+                    std::ranges::all_of(method.parameterTypes, [&](const TypeId parameter)
+                        { return module.types.tryGet(parameter) != nullptr; });
+                if (method.name.empty() || !method.function || !signatureValid ||
+                    !methodSlots.insert(method.slot).second)
+                {
+                    report("WIR1012", "Typed WIR method layouts require names, functions, valid signatures, and unique slots.");
+                }
             }
         }
 
@@ -178,6 +222,34 @@ namespace wio::wir::typed
                 report("WIR1102", "Typed WIR function name cannot be empty.", function.source, function.id);
             if (!module.types.tryGet(function.returnType))
                 report("WIR1103", "Typed WIR function return type is invalid.", function.source, function.id);
+            if (function.isMethod)
+            {
+                const Type* owner = module.types.tryGet(function.ownerType);
+                const Type* receiver = !function.parameters.empty()
+                    ? module.types.tryGet(function.parameters.front().type)
+                    : nullptr;
+                if (!owner || owner->kind != TypeKind::Named || !receiver ||
+                    receiver->kind != TypeKind::Reference || receiver->arguments.size() != 1 ||
+                    receiver->arguments.front() != function.ownerType)
+                {
+                    report("WIR1106", "Typed WIR methods require a named owner and leading self reference parameter.", function.source, function.id);
+                }
+            }
+            else if (function.ownerType)
+            {
+                report("WIR1107", "Non-method Typed WIR functions cannot carry an owner type.", function.source, function.id);
+            }
+        }
+
+
+        for (const Type& type : module.types.types())
+        {
+            for (const MethodLayout& method : type.methods)
+            {
+                const auto function = functions.find(method.function.value());
+                if (function == functions.end() || !function->second->isMethod)
+                    report("WIR1013", "Typed WIR method layout references an unknown or non-method function.");
+            }
         }
 
         for (const Function& function : module.functions)
@@ -383,7 +455,11 @@ namespace wio::wir::typed
                     }
 
                     bool callReturnsVoid = false;
-                    if (instruction.opcode == Opcode::Call && instruction.callee)
+                    const bool isCallInstruction = instruction.opcode == Opcode::Call ||
+                        instruction.opcode == Opcode::MethodCall ||
+                        instruction.opcode == Opcode::VirtualCall ||
+                        instruction.opcode == Opcode::InterfaceCall;
+                    if (isCallInstruction && instruction.callee)
                     {
                         const auto calleeIt = functions.find(instruction.callee.value());
                         if (calleeIt != functions.end())
@@ -395,7 +471,7 @@ namespace wio::wir::typed
                     const bool shouldHaveResult = producesValue(instruction.opcode) && !callReturnsVoid;
                     if (shouldHaveResult && (!instruction.result || !module.types.tryGet(instruction.resultType)))
                         report("WIR1401", "Value-producing Typed WIR instruction requires a typed result.", instruction.source, function.id, block.id);
-                    if (!shouldHaveResult && instruction.opcode != Opcode::Call && instruction.result)
+                    if (!shouldHaveResult && !isCallInstruction && instruction.result)
                         report("WIR1402", "Typed WIR terminator cannot produce a value.", instruction.source, function.id, block.id);
 
                     if (instruction.opcode == Opcode::Constant && module.types.tryGet(instruction.resultType) &&
@@ -667,6 +743,81 @@ namespace wio::wir::typed
                             valueType(instruction.operands[2]) != instruction.resultType)
                         {
                             report("WIR1408", "Typed WIR select requires bool condition and matching result arms.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::MethodCall ||
+                             instruction.opcode == Opcode::VirtualCall ||
+                             instruction.opcode == Opcode::InterfaceCall)
+                    {
+                        const Type* owner = module.types.tryGet(instruction.targetType);
+                        const auto calleeIt = instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const auto method = owner ? std::ranges::find_if(owner->methods, [&](const MethodLayout& layout)
+                        {
+                            return layout.slot == instruction.projectionIndex &&
+                                layout.name == instruction.selector && layout.function == instruction.callee;
+                        }) : std::vector<MethodLayout>::const_iterator{};
+                        const bool dispatchKindValid = owner && owner->kind == TypeKind::Named &&
+                            (instruction.opcode != Opcode::VirtualCall || owner->nominalKind == NominalKind::Object) &&
+                            (instruction.opcode != Opcode::InterfaceCall || owner->nominalKind == NominalKind::Interface);
+                        bool valid = dispatchKindValid && calleeIt != functions.end() &&
+                            method != owner->methods.end() && !instruction.operands.empty() &&
+                            instruction.signatureTypes.size() == instruction.operands.size();
+                        if (valid)
+                        {
+                            for (std::size_t argumentIndex = 1; argumentIndex < instruction.operands.size(); ++argumentIndex)
+                            {
+                                valid = valid && valueType(instruction.operands[argumentIndex]) ==
+                                    instruction.signatureTypes[argumentIndex];
+                            }
+                            TypeId receiverNominal;
+                            std::unordered_set<TypeId::ValueType> visited;
+                            valid = valid && underlyingObjectType(module.types, valueType(instruction.operands.front()), &receiverNominal) &&
+                                nominalDerivesFrom(module.types, receiverNominal, instruction.targetType, visited);
+                            const Function& callee = *calleeIt->second;
+                            const Type* returnType = module.types.tryGet(callee.returnType);
+                            const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
+                            valid = valid && returnType &&
+                                (returnsVoid ? !instruction.result : instruction.resultType == callee.returnType);
+                        }
+                        if (!valid)
+                            report("WIR1440", "Typed WIR method dispatch must match its owner slot, receiver, signature, and callee.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::Upcast || instruction.opcode == Opcode::CheckedCast)
+                    {
+                        TypeId sourceNominal;
+                        TypeId targetNominal;
+                        const bool hasObjectTypes = instruction.operands.size() == 1 &&
+                            underlyingObjectType(module.types, valueType(instruction.operands.front()), &sourceNominal) &&
+                            underlyingObjectType(module.types, instruction.targetType, &targetNominal);
+                        bool valid = hasObjectTypes && instruction.resultType == instruction.targetType;
+                        if (valid && instruction.opcode == Opcode::Upcast)
+                        {
+                            std::unordered_set<TypeId::ValueType> visited;
+                            valid = nominalDerivesFrom(module.types, sourceNominal, targetNominal, visited);
+                        }
+                        if (!valid)
+                            report("WIR1441", "Typed WIR object cast requires compatible object/interface source and target types.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::TypeTest)
+                    {
+                        if (instruction.operands.size() != 1 ||
+                            !underlyingObjectType(module.types, valueType(instruction.operands.front())) ||
+                            !underlyingObjectType(module.types, instruction.targetType) ||
+                            instruction.resultType != module.types.boolType())
+                        {
+                            report("WIR1442", "Typed WIR type test requires an object/interface value, target type, and bool result.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::IdentityEqual)
+                    {
+                        if (instruction.operands.size() != 2 ||
+                            !underlyingObjectType(module.types, valueType(instruction.operands[0])) ||
+                            !underlyingObjectType(module.types, valueType(instruction.operands[1])) ||
+                            instruction.resultType != module.types.boolType() ||
+                            (instruction.binaryOperator != BinaryOperator::Equal &&
+                             instruction.binaryOperator != BinaryOperator::NotEqual))
+                        {
+                            report("WIR1443", "Typed WIR identity equality requires two object/interface values and a bool result.", instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::Call)

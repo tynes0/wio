@@ -27,13 +27,19 @@ nominal kinds. Components use value semantics while object/interface types are
 identity-bearing handles. Native POD components additionally carry the
 `native-pod` representation marker. Nominal records also retain ordered field
 layouts, field types, mutability, visibility, base types, and constructor/
-destructor capabilities. These properties are copied unchanged into Lowered
-WIR so each backend receives the same ownership and layout contract.
+destructor capabilities. Object and interface records additionally retain
+method names, parameter/return signatures, abstractness, implementation IDs,
+and deterministic dispatch slots. These properties are copied unchanged into
+Lowered WIR so each backend receives the same ownership, layout, and dispatch
+contract.
 
-The initial builder supports top-level functions, parameters, primitive and
+The initial builder supports top-level functions plus component/object/
+interface methods, explicit receiver parameters, parameters, primitive and
 reference-family types, contextually typed integer and floating-point constants,
 Unicode `text`, `string`, `char`, and nullable `null` constants, direct calls, unary/binary expressions,
-explicit clamping numeric `fit` conversions, safe implicit numeric widening, pure conditional values, local declarations and default initialization,
+direct/virtual/interface method calls, object/interface `fit` and `is`, identity
+equality, explicit clamping numeric `fit` conversions, safe implicit numeric
+widening, pure conditional values, local declarations and default initialization,
 place-based local/field/index assignment, compound assignment, `ref`/`view`
 borrows, explicit `deref`, contextually typed and inferred array literals, array
 index reads, `if`/`else` control flow, returns,
@@ -104,6 +110,33 @@ Field projections are checked against the nominal layout rather than trusted as
 free-form strings. Missing fields, type mismatches, writes through read-only
 fields, incorrect construction kind, malformed constructor signatures, and
 non-nominal drops are rejected in both Typed and Lowered WIR.
+
+## Object and Interface Model
+
+Every method is represented as an ordinary WIR function with a synthetic,
+leading `self` reference. Consequently `self`, `deref self`, mutable field
+access, and `ref`/`view` self returns follow the same place and borrow rules as
+other expressions; a backend does not need a special AST-only interpretation
+of the receiver.
+
+Nominal method tables are deterministic. An override keeps the inherited slot,
+while a new signature receives the next slot. Interface declarations retain
+abstract entries and object implementations replace matching entries without
+changing their identity. `method-call`, `virtual-call`, and `interface-call`
+remain distinct operations and carry the static owner, selector, slot,
+implementation function, receiver, and typed argument signature.
+
+Object conversion is explicit in the IR:
+
+- `upcast` is a statically proven object/interface base conversion;
+- `checked-cast` is the runtime-checked object/interface form of `fit`;
+- `type-test` is the runtime predicate behind `is`;
+- `identity-equal` compares object/interface identity rather than payload.
+
+Both verifiers reject missing method slots, selector/function mismatches,
+invalid receiver ancestry, malformed call signatures, wrong dispatch kinds,
+and invalid cast/test targets. This freezes one model for the C++ and bytecode
+backends instead of allowing each backend to rediscover object semantics.
 
 ## Lowered WIR
 

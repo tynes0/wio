@@ -28,8 +28,8 @@ namespace wio::wir::typed
             }
 
             collectFunctions(program->statements);
-            for (const FunctionDeclaration* declaration : declarations_)
-                buildFunction(*declaration);
+            for (const DeclarationInfo& declaration : declarations_)
+                buildFunction(declaration);
         }
 
     private:
@@ -43,6 +43,14 @@ namespace wio::wir::typed
             std::vector<const sema::Symbol*> valueOrder;
             std::unordered_map<const sema::Symbol*, ValueId> places;
             std::vector<const sema::Symbol*> placeOrder;
+            ValueId selfValue;
+            TypeId selfType;
+        };
+
+        struct DeclarationInfo
+        {
+            const FunctionDeclaration* declaration = nullptr;
+            Ref<sema::Type> ownerType;
         };
 
         struct LoopContext
@@ -54,8 +62,9 @@ namespace wio::wir::typed
         };
 
         BuildResult& result_;
-        std::vector<const FunctionDeclaration*> declarations_;
+        std::vector<DeclarationInfo> declarations_;
         std::unordered_map<const sema::Symbol*, FunctionId> functionsBySymbol_;
+        std::unordered_map<const sema::Symbol*, const FunctionDeclaration*> declarationsBySymbol_;
         std::unordered_map<const sema::Type*, TypeId> typesBySemanticType_;
         std::vector<LoopContext> loopContexts_;
 
@@ -66,6 +75,48 @@ namespace wio::wir::typed
                 .arguments = {referredType},
                 .isMutable = isMutable
             });
+        }
+
+        const Type* underlyingNominalType(TypeId typeId, TypeId* nominalTypeId = nullptr) const
+        {
+            const Type* type = result_.module_.types.tryGet(typeId);
+            if (type && type->kind == TypeKind::Reference && type->arguments.size() == 1)
+            {
+                typeId = type->arguments.front();
+                type = result_.module_.types.tryGet(typeId);
+            }
+            if (!type || type->kind != TypeKind::Named ||
+                (type->nominalKind != NominalKind::Object && type->nominalKind != NominalKind::Interface))
+                return nullptr;
+            if (nominalTypeId)
+                *nominalTypeId = typeId;
+            return type;
+        }
+
+        bool nominalDerivesFrom(const TypeId sourceType, const TypeId destinationType) const
+        {
+            if (sourceType == destinationType)
+                return true;
+            const Type* source = result_.module_.types.tryGet(sourceType);
+            if (!source || source->kind != TypeKind::Named)
+                return false;
+            return std::ranges::any_of(source->baseTypes, [&](const TypeId base)
+                { return nominalDerivesFrom(base, destinationType); });
+        }
+
+        const MethodLayout* findMethodLayout(
+            const TypeId ownerTypeId,
+            const Ref<sema::Symbol>& symbol) const
+        {
+            const Type* owner = result_.module_.types.tryGet(ownerTypeId);
+            if (!owner || !symbol)
+                return nullptr;
+            const auto function = functionsBySymbol_.find(symbol.Get());
+            const auto found = std::ranges::find_if(owner->methods, [&](const MethodLayout& method)
+            {
+                return function != functionsBySymbol_.end() && method.function == function->second;
+            });
+            return found == owner->methods.end() ? nullptr : &*found;
         }
 
         bool autoReadableReference(const Type& reference) const
@@ -189,6 +240,33 @@ namespace wio::wir::typed
             });
         }
 
+        void collectFunction(
+            const FunctionDeclaration* function,
+            Ref<sema::Type> ownerType = nullptr)
+        {
+            if (!function)
+                return;
+            const FunctionId id{static_cast<FunctionId::ValueType>(declarations_.size())};
+            declarations_.push_back(DeclarationInfo{
+                .declaration = function,
+                .ownerType = std::move(ownerType)
+            });
+            const Ref<sema::Symbol> symbol = function->name
+                ? function->name->referencedSymbol.Lock()
+                : nullptr;
+            if (symbol)
+            {
+                functionsBySymbol_[symbol.Get()] = id;
+                declarationsBySymbol_[symbol.Get()] = function;
+            }
+        }
+
+        static Ref<sema::Type> declaredOwnerType(const NodePtr<Identifier>& name)
+        {
+            const Ref<sema::Symbol> symbol = name ? name->referencedSymbol.Lock() : nullptr;
+            return symbol ? symbol->type : nullptr;
+        }
+
         void collectFunctions(const std::vector<NodePtr<Statement>>& statements)
         {
             for (const auto& statement : statements)
@@ -197,13 +275,28 @@ namespace wio::wir::typed
                     continue;
                 if (const auto* function = statement->as<FunctionDeclaration>())
                 {
-                    const FunctionId id{static_cast<FunctionId::ValueType>(declarations_.size())};
-                    declarations_.push_back(function);
-                    const Ref<sema::Symbol> symbol = function->name
-                        ? function->name->referencedSymbol.Lock()
-                        : nullptr;
-                    if (symbol)
-                        functionsBySymbol_[symbol.Get()] = id;
+                    collectFunction(function);
+                    continue;
+                }
+                if (const auto* interfaceDeclaration = statement->as<InterfaceDeclaration>())
+                {
+                    const Ref<sema::Type> owner = declaredOwnerType(interfaceDeclaration->name);
+                    for (const auto& method : interfaceDeclaration->methods)
+                        collectFunction(method.Get(), owner);
+                    continue;
+                }
+                if (const auto* component = statement->as<ComponentDeclaration>())
+                {
+                    const Ref<sema::Type> owner = declaredOwnerType(component->name);
+                    for (const ComponentMember& member : component->members)
+                        collectFunction(member.declaration ? member.declaration->as<FunctionDeclaration>() : nullptr, owner);
+                    continue;
+                }
+                if (const auto* object = statement->as<ObjectDeclaration>())
+                {
+                    const Ref<sema::Type> owner = declaredOwnerType(object->name);
+                    for (const ObjectMember& member : object->members)
+                        collectFunction(member.declaration ? member.declaration->as<FunctionDeclaration>() : nullptr, owner);
                     continue;
                 }
                 if (const auto* group = statement->as<DeclarationGroup>())
@@ -214,6 +307,75 @@ namespace wio::wir::typed
                 if (const auto* realm = statement->as<RealmDeclaration>())
                     collectFunctions(realm->statements);
             }
+        }
+
+        static bool isLifecycleMethod(const std::string_view name)
+        {
+            return name == "OnConstruct" || name == "OnDestruct";
+        }
+
+        static bool sameMethodSignature(const MethodLayout& left, const MethodLayout& right)
+        {
+            return left.name == right.name && left.parameterTypes == right.parameterTypes &&
+                left.returnType == right.returnType;
+        }
+
+        void appendMethodLayout(
+            const Ref<sema::Symbol>& methodSymbol,
+            std::vector<MethodLayout>& methods,
+            const ASTNode* source)
+        {
+            if (!methodSymbol)
+                return;
+            if (methodSymbol->kind == sema::SymbolKind::FunctionGroup)
+            {
+                for (const Ref<sema::Symbol>& overload : methodSymbol->overloads)
+                    appendMethodLayout(overload, methods, source);
+                return;
+            }
+            if (methodSymbol->kind != sema::SymbolKind::Function || isLifecycleMethod(methodSymbol->name))
+                return;
+            const auto function = functionsBySymbol_.find(methodSymbol.Get());
+            const auto functionType = methodSymbol->type && methodSymbol->type->kind() == sema::TypeKind::Function
+                ? methodSymbol->type.AsFast<sema::FunctionType>()
+                : nullptr;
+            if (function == functionsBySymbol_.end() || !functionType)
+                return;
+
+            MethodLayout layout{
+                .name = methodSymbol->name,
+                .returnType = mapType(functionType->returnType, source),
+                .function = function->second,
+                .receiverMutable = true,
+                .isAbstract = !declarationsBySymbol_.contains(methodSymbol.Get()) ||
+                    declarationsBySymbol_.at(methodSymbol.Get())->body == nullptr
+            };
+            for (const Ref<sema::Type>& parameterType : functionType->paramTypes)
+                layout.parameterTypes.push_back(mapType(parameterType, source));
+
+            const auto overridden = std::ranges::find_if(methods, [&](const MethodLayout& inherited)
+            {
+                if (sameMethodSignature(inherited, layout))
+                    return true;
+                return std::ranges::any_of(methodSymbol->overriddenSymbols, [&](const WeakRef<sema::Symbol>& candidate)
+                {
+                    const Ref<sema::Symbol> symbol = candidate.Lock();
+                    const auto implementation = symbol
+                        ? functionsBySymbol_.find(symbol.Get())
+                        : functionsBySymbol_.end();
+                    return implementation != functionsBySymbol_.end() &&
+                        inherited.function == implementation->second;
+                });
+            });
+            if (overridden != methods.end())
+            {
+                layout.slot = overridden->slot;
+                *overridden = std::move(layout);
+                return;
+            }
+
+            layout.slot = static_cast<std::uint32_t>(methods.size());
+            methods.push_back(std::move(layout));
         }
 
         TypeId mapType(Ref<sema::Type> type, const ASTNode* source)
@@ -369,9 +531,36 @@ namespace wio::wir::typed
                     });
                 }
 
+                std::vector<MethodLayout> methods;
+                for (const TypeId baseTypeId : baseTypes)
+                {
+                    const Type* baseType = result_.module_.types.tryGet(baseTypeId);
+                    if (!baseType)
+                        continue;
+                    for (const MethodLayout& inherited : baseType->methods)
+                    {
+                        if (std::ranges::none_of(methods, [&](const MethodLayout& existing)
+                            { return sameMethodSignature(existing, inherited); }))
+                        {
+                            MethodLayout copy = inherited;
+                            copy.slot = static_cast<std::uint32_t>(methods.size());
+                            methods.push_back(std::move(copy));
+                        }
+                    }
+                }
+                if (structScope)
+                {
+                    for (const auto& [name, member] : structScope->getSymbols())
+                    {
+                        WIO_UNUSED(name);
+                        appendMethodLayout(member, methods, source);
+                    }
+                }
+
                 Type& storedType = result_.module_.types.getMutable(id);
                 storedType.baseTypes = std::move(baseTypes);
                 storedType.fields = std::move(fields);
+                storedType.methods = std::move(methods);
                 storedType.hasConstructor = structScope && structScope->resolveLocally("OnConstruct");
                 storedType.hasDestructor = structScope && structScope->resolveLocally("OnDestruct");
                 return id;
@@ -391,8 +580,9 @@ namespace wio::wir::typed
             return id;
         }
 
-        void buildFunction(const FunctionDeclaration& declaration)
+        void buildFunction(const DeclarationInfo& declarationInfo)
         {
+            const FunctionDeclaration& declaration = *declarationInfo.declaration;
             const Ref<sema::Symbol> symbol = declaration.name
                 ? declaration.name->referencedSymbol.Lock()
                 : nullptr;
@@ -411,9 +601,24 @@ namespace wio::wir::typed
                 ? symbol->name
                 : symbol->scopePath + "::" + symbol->name;
             function.returnType = mapType(functionType->returnType, &declaration);
+            function.ownerType = declarationInfo.ownerType
+                ? mapType(declarationInfo.ownerType, &declaration)
+                : TypeId{};
             function.source = SourceSpan::at(declaration.location());
             function.isAsync = declaration.isAsync;
             function.isExternal = declaration.body == nullptr;
+            function.isMethod = static_cast<bool>(function.ownerType);
+            const Type* ownerType = function.isMethod
+                ? result_.module_.types.tryGet(function.ownerType)
+                : nullptr;
+            function.isAbstract = function.isExternal && ownerType && ownerType->nominalKind == NominalKind::Interface;
+            if (ownerType)
+            {
+                const auto method = std::ranges::find_if(ownerType->methods, [&](const MethodLayout& layout)
+                    { return layout.function == function.id; });
+                if (method != ownerType->methods.end())
+                    function.methodSlot = method->slot;
+            }
 
             FunctionState state{.function = &function};
             if (!function.isExternal)
@@ -422,6 +627,19 @@ namespace wio::wir::typed
                     state,
                     "entry",
                     SourceSpan::at(declaration.body->location()));
+            }
+            if (function.isMethod)
+            {
+                const TypeId receiverType = referenceType(function.ownerType, true);
+                const ValueId receiver{state.nextValue++};
+                function.parameters.push_back(Parameter{
+                    .id = receiver,
+                    .name = "self",
+                    .type = receiverType,
+                    .source = SourceSpan::at(declaration.location())
+                });
+                state.selfValue = receiver;
+                state.selfType = receiverType;
             }
             for (std::size_t index = 0; index < declaration.parameters.size(); ++index)
             {
@@ -751,6 +969,26 @@ namespace wio::wir::typed
                     .source = SourceSpan::at(expression->location())
                 });
             }
+            if (expression->is<SelfExpression>())
+            {
+                if (!state.selfValue)
+                    report("WIR2331", "'self' is unavailable outside a receiver-aware WIR function.", expression.Get());
+                return state.selfValue;
+            }
+            if (expression->is<SuperExpression>())
+            {
+                if (!state.selfValue)
+                {
+                    report("WIR2332", "'super' is unavailable outside a receiver-aware WIR function.", expression.Get());
+                    return {};
+                }
+                return appendValue(Instruction{
+                    .opcode = Opcode::Upcast,
+                    .operands = {state.selfValue},
+                    .targetType = mapType(expression->refType.Lock(), expression.Get()),
+                    .source = SourceSpan::at(expression->location())
+                });
+            }
             if (const auto* fit = expression->as<FitExpression>())
             {
                 if (fit->operatorDispatchKind != OperatorDispatchKind::None)
@@ -762,19 +1000,23 @@ namespace wio::wir::typed
                 const TypeId destinationTypeId = mapType(expression->refType.Lock(), expression.Get());
                 const Type* sourceType = result_.module_.types.tryGet(sourceTypeId);
                 const Type* destinationType = result_.module_.types.tryGet(destinationTypeId);
-                if (!sourceType || !destinationType ||
-                    !isNumericType(sourceType->kind) || !isNumericType(destinationType->kind))
+                const bool numeric = sourceType && destinationType &&
+                    isNumericType(sourceType->kind) && isNumericType(destinationType->kind);
+                const bool objectLike = underlyingNominalType(sourceTypeId) &&
+                    underlyingNominalType(destinationTypeId);
+                if (!numeric && !objectLike)
                 {
-                    report("WIR2313", "Initial Typed WIR fit lowering supports numeric conversions only.", expression.Get());
+                    report("WIR2313", "Typed WIR fit lowering requires numeric or object/interface operands.", expression.Get());
                     return {};
                 }
                 const ValueId operand = buildExpression(fit->operand, state);
                 if (!operand)
                     return {};
                 return appendValue(Instruction{
-                    .opcode = Opcode::Convert,
+                    .opcode = objectLike ? Opcode::CheckedCast : Opcode::Convert,
                     .operands = {operand},
                     .conversionKind = ConversionKind::NumericFit,
+                    .targetType = destinationTypeId,
                     .source = SourceSpan::at(expression->location())
                 });
             }
@@ -916,6 +1158,22 @@ namespace wio::wir::typed
                         isLogicalAnd(binary->op.type),
                         state);
                 }
+                if (binary->op.type == TokenType::kwIs)
+                {
+                    const ValueId operand = buildExpression(binary->left, state);
+                    const TypeId targetType = mapType(binary->right->refType.Lock(), binary->right.Get());
+                    if (!operand || !underlyingNominalType(targetType))
+                    {
+                        report("WIR2333", "Object/interface type test is missing a representable target type.", expression.Get());
+                        return {};
+                    }
+                    return appendValue(Instruction{
+                        .opcode = Opcode::TypeTest,
+                        .operands = {operand},
+                        .targetType = targetType,
+                        .source = SourceSpan::at(expression->location())
+                    });
+                }
                 const auto op = mapBinaryOperator(binary->op.type);
                 const ValueId left = buildAutoReadableExpression(binary->left, state);
                 const ValueId right = buildAutoReadableExpression(binary->right, state);
@@ -924,8 +1182,12 @@ namespace wio::wir::typed
                     report("WIR2303", "Binary expression is not supported by the initial Typed WIR slice.", expression.Get());
                     return {};
                 }
+                const bool identityComparison =
+                    (binary->op.type == TokenType::opEqual || binary->op.type == TokenType::opNotEqual) &&
+                    underlyingNominalType(mapType(binary->left->refType.Lock(), binary->left.Get())) &&
+                    underlyingNominalType(mapType(binary->right->refType.Lock(), binary->right.Get()));
                 return appendValue(Instruction{
-                    .opcode = Opcode::Binary,
+                    .opcode = identityComparison ? Opcode::IdentityEqual : Opcode::Binary,
                     .operands = {left, right},
                     .binaryOperator = *op,
                     .source = SourceSpan::at(expression->location())
@@ -1004,6 +1266,68 @@ namespace wio::wir::typed
                     return appendValue(std::move(instruction));
                 }
 
+                const auto* memberCallee = call->callee
+                    ? call->callee->as<MemberAccessExpression>()
+                    : nullptr;
+                if (memberCallee && memberCallee->object &&
+                    !memberCallee->object->is<TypeExpression>())
+                {
+                    TypeId receiverNominalType;
+                    const TypeId rawReceiverType = mapType(
+                        memberCallee->object->refType.Lock(), memberCallee->object.Get());
+                    const Type* receiverOwner = underlyingNominalType(rawReceiverType, &receiverNominalType);
+                    const auto functionIt = calleeSymbol
+                        ? functionsBySymbol_.find(calleeSymbol.Get())
+                        : functionsBySymbol_.end();
+                    const MethodLayout* method = findMethodLayout(receiverNominalType, calleeSymbol);
+                    if (receiverOwner && functionIt != functionsBySymbol_.end() && method)
+                    {
+                        const ValueId receiver = buildExpression(memberCallee->object, state);
+                        if (!receiver)
+                            return {};
+                        Instruction instruction{
+                            .opcode = memberCallee->object->is<SuperExpression>()
+                                ? Opcode::MethodCall
+                                : receiverOwner->nominalKind == NominalKind::Interface
+                                    ? Opcode::InterfaceCall
+                                    : receiverOwner->nominalKind == NominalKind::Object
+                                        ? Opcode::VirtualCall
+                                        : Opcode::MethodCall,
+                            .operands = {receiver},
+                            .callee = functionIt->second,
+                            .selector = method->name,
+                            .projectionIndex = method->slot,
+                            .targetType = receiverNominalType,
+                            .source = SourceSpan::at(expression->location())
+                        };
+                        instruction.signatureTypes.push_back(referenceType(receiverNominalType, method->receiverMutable));
+                        const auto functionType = calleeSymbol->type &&
+                            calleeSymbol->type->kind() == sema::TypeKind::Function
+                            ? calleeSymbol->type.AsFast<sema::FunctionType>()
+                            : nullptr;
+                        for (std::size_t index = 0; index < call->arguments.size(); ++index)
+                        {
+                            const auto& argument = call->arguments[index];
+                            const TypeId expectedType = functionType && index < functionType->paramTypes.size()
+                                ? mapType(functionType->paramTypes[index], argument.Get())
+                                : mapType(argument->refType.Lock(), argument.Get());
+                            const ValueId value = buildExpressionAs(argument, expectedType, state);
+                            if (!value)
+                                return {};
+                            instruction.operands.push_back(value);
+                            instruction.signatureTypes.push_back(expectedType);
+                        }
+                        const TypeId resultType = mapType(expression->refType.Lock(), expression.Get());
+                        const Type* type = result_.module_.types.tryGet(resultType);
+                        if (type && type->kind == TypeKind::Void)
+                        {
+                            currentBlock(state).instructions.push_back(std::move(instruction));
+                            return {};
+                        }
+                        return appendValue(std::move(instruction));
+                    }
+                }
+
                 if (call->callee)
                 {
                     if (const Ref<sema::Symbol> directSymbol = call->callee->referencedSymbol.Lock())
@@ -1058,6 +1382,28 @@ namespace wio::wir::typed
         {
             if (!expression)
                 return {};
+
+            if (expression->is<SelfExpression>())
+            {
+                if (!state.selfValue)
+                {
+                    report("WIR2331", "'self' is unavailable outside a receiver-aware WIR function.", expression.Get());
+                    return {};
+                }
+                return adaptPlaceMutability(
+                    state.selfValue,
+                    state.selfType,
+                    needsMutable,
+                    expression.Get(),
+                    state);
+            }
+
+            if (expression->is<SuperExpression>())
+            {
+                const ValueId value = buildExpression(expression, state);
+                const TypeId type = mapType(expression->refType.Lock(), expression.Get());
+                return value ? adaptPlaceMutability(value, type, needsMutable, expression.Get(), state) : ValueId{};
+            }
 
             if (const auto* identifier = expression->as<Identifier>())
             {
@@ -1196,6 +1542,23 @@ namespace wio::wir::typed
                     .source = SourceSpan::at(expression->location())
                 });
                 return borrowed;
+            }
+            TypeId sourceNominalType;
+            TypeId destinationNominalType;
+            if (underlyingNominalType(sourceType, &sourceNominalType) &&
+                underlyingNominalType(destinationType, &destinationNominalType) &&
+                nominalDerivesFrom(sourceNominalType, destinationNominalType))
+            {
+                const ValueId upcast{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::Upcast,
+                    .result = upcast,
+                    .resultType = destinationType,
+                    .operands = {value},
+                    .targetType = destinationType,
+                    .source = SourceSpan::at(expression->location())
+                });
+                return upcast;
             }
             while (source && autoReadableReference(*source) && sourceType != destinationType)
             {

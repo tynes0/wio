@@ -115,6 +115,20 @@ namespace wio::wir::typed
                 }
                 stream << "}";
             }
+            if (!type.methods.empty())
+            {
+                stream << " methods={";
+                for (std::size_t index = 0; index < type.methods.size(); ++index)
+                {
+                    if (index > 0)
+                        stream << ", ";
+                    const MethodLayout& method = type.methods[index];
+                    stream << std::quoted(method.name) << "#" << method.slot << "=" << functionRef(method.function);
+                    if (method.isAbstract)
+                        stream << " abstract";
+                }
+                stream << "}";
+            }
             if (type.hasConstructor)
                 stream << " has-constructor";
             if (type.hasDestructor)
@@ -153,6 +167,30 @@ namespace wio::wir::typed
                     stream << valueRef(instruction.operands[index]);
                 }
                 stream << ")";
+                break;
+            case Opcode::MethodCall:
+            case Opcode::VirtualCall:
+            case Opcode::InterfaceCall:
+                stream << opcodeName(instruction.opcode) << " " << typeRef(instruction.targetType)
+                       << "::" << std::quoted(instruction.selector) << "#" << instruction.projectionIndex
+                       << " " << functionRef(instruction.callee) << "(";
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 0)
+                        stream << ", ";
+                    stream << valueRef(instruction.operands[index]);
+                }
+                stream << ")";
+                break;
+            case Opcode::Upcast:
+            case Opcode::CheckedCast:
+            case Opcode::TypeTest:
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0))
+                       << " to " << typeRef(instruction.targetType);
+                break;
+            case Opcode::IdentityEqual:
+                stream << "identity-" << binaryOperatorName(instruction.binaryOperator) << " "
+                       << valueRef(instruction.operands.at(0)) << ", " << valueRef(instruction.operands.at(1));
                 break;
             case Opcode::VariantTest:
                 stream << "variant-test " << valueRef(instruction.operands.at(0)) << ", "
@@ -275,9 +313,13 @@ namespace wio::wir::typed
                 stream << "external ";
             if (function.isAsync)
                 stream << "async ";
+            if (function.isAbstract)
+                stream << "abstract ";
             stream << "func " << functionRef(function.id) << " " << std::quoted(function.name) << "(";
             printParameters(stream, function.parameters);
             stream << ") -> " << typeRef(function.returnType);
+            if (function.isMethod)
+                stream << " owner=" << typeRef(function.ownerType) << " slot=" << function.methodSlot;
             if (function.isExternal)
             {
                 stream << '\n';

@@ -19,6 +19,13 @@ namespace wio::wir::lowered
         Binary,
         Convert,
         Call,
+        MethodCall,
+        VirtualCall,
+        InterfaceCall,
+        Upcast,
+        CheckedCast,
+        TypeTest,
+        IdentityEqual,
         VariantTest,
         VariantPayload,
         ArrayLength,
@@ -70,6 +77,7 @@ namespace wio::wir::lowered
         std::string selector;
         std::uint32_t projectionIndex = 0;
         std::vector<TypeId> signatureTypes;
+        TypeId targetType;
         SourceSpan source;
     };
 
@@ -88,10 +96,14 @@ namespace wio::wir::lowered
         std::string name;
         std::vector<Parameter> parameters;
         TypeId returnType;
+        TypeId ownerType;
+        std::uint32_t methodSlot = 0;
         std::vector<BasicBlock> blocks;
         SourceSpan source;
         bool isAsync = false;
         bool isExternal = false;
+        bool isMethod = false;
+        bool isAbstract = false;
     };
 
     struct Module

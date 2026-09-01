@@ -31,6 +31,13 @@ namespace wio::wir
             case typed::Opcode::Binary: opcode = lowered::Opcode::Binary; break;
             case typed::Opcode::Convert: opcode = lowered::Opcode::Convert; break;
             case typed::Opcode::Call: opcode = lowered::Opcode::Call; break;
+            case typed::Opcode::MethodCall: opcode = lowered::Opcode::MethodCall; break;
+            case typed::Opcode::VirtualCall: opcode = lowered::Opcode::VirtualCall; break;
+            case typed::Opcode::InterfaceCall: opcode = lowered::Opcode::InterfaceCall; break;
+            case typed::Opcode::Upcast: opcode = lowered::Opcode::Upcast; break;
+            case typed::Opcode::CheckedCast: opcode = lowered::Opcode::CheckedCast; break;
+            case typed::Opcode::TypeTest: opcode = lowered::Opcode::TypeTest; break;
+            case typed::Opcode::IdentityEqual: opcode = lowered::Opcode::IdentityEqual; break;
             case typed::Opcode::VariantTest: opcode = lowered::Opcode::VariantTest; break;
             case typed::Opcode::VariantPayload: opcode = lowered::Opcode::VariantPayload; break;
             case typed::Opcode::ArrayLength: opcode = lowered::Opcode::ArrayLength; break;
@@ -67,6 +74,7 @@ namespace wio::wir
                 .selector = instruction.selector,
                 .projectionIndex = instruction.projectionIndex,
                 .signatureTypes = instruction.signatureTypes,
+                .targetType = instruction.targetType,
                 .source = instruction.source
             };
         }
@@ -109,9 +117,13 @@ namespace wio::wir
                 .id = sourceFunction.id,
                 .name = sourceFunction.name,
                 .returnType = sourceFunction.returnType,
+                .ownerType = sourceFunction.ownerType,
+                .methodSlot = sourceFunction.methodSlot,
                 .source = sourceFunction.source,
                 .isAsync = sourceFunction.isAsync,
-                .isExternal = sourceFunction.isExternal
+                .isExternal = sourceFunction.isExternal,
+                .isMethod = sourceFunction.isMethod,
+                .isAbstract = sourceFunction.isAbstract
             };
             for (const typed::Parameter& parameter : sourceFunction.parameters)
                 function.parameters.push_back(lowerParameter(parameter));

@@ -486,10 +486,18 @@ Rider, and CLion are defined in
    sanitizer builds on Ubuntu. Add macOS, x64/arm64 coverage, static/shared/PIC
    qualification, endian/alignment audits, and alternative-backend evidence.
 
-8. [ ] Evaluate an independent backend/IR only with evidence.
-   Keep C++ as the production backend while measuring whether a Wio IR,
-   LLVM-based path, or interpreter would materially improve diagnostics,
-   compile time, tooling, or portability.
+8. [~] Complete the backend-neutral WIR and independent fast backend.
+   Typed WIR, canonical Lowered WIR, stable IDs/source spans, control flow,
+   values, places/borrows, arrays, matching, component/object construction,
+   lexical cleanup, receiver-aware methods, deterministic object/interface
+   slots, direct/virtual/interface dispatch, object casts/type tests, and
+   identity equality are implemented with verifier and printer coverage. Keep
+   the current C++ generator as the production path while finishing remaining
+   language coverage, then consume Lowered WIR from a new C++ backend and a
+   bytecode VM. Add native ABI operations, async state-machine lowering,
+   exceptions/panic cleanup, globals/constants, dictionaries, closures,
+   generics, reflection payloads, backend parity tests, and compile-time/
+   runtime benchmarks before changing the default backend.
 
 ## P3 - Product Direction
 

@@ -838,3 +838,21 @@ here as historical evidence rather than active work:
 - [x] SDK ABI v11 and `ApplicationHost::stages()` expose the normalized stage
       graph, dependencies, fixed frequencies, order, affinity, and stage kind
       flags to native hosts.
+
+## Backend-neutral WIR Foundation
+
+- [x] Typed WIR and canonical Lowered WIR gained stable type/function/block/
+      value identities, source spans, deterministic printers, and independent
+      structural verifiers.
+- [x] Structured control flow, SSA block arguments, conditionals, loops,
+      short-circuiting, match projections, arrays, numeric conversion, and
+      literal typing lower without backend-specific recovery guesses.
+- [x] The place and memory model now makes locals, initialization, loads,
+      stores, fields, indices, borrows, construction, and reverse lexical
+      cleanup explicit for component values and owning object handles.
+- [x] Object/interface methods are receiver-aware WIR functions; nominal types
+      retain deterministic override slots and abstract entries, while direct,
+      virtual, and interface dispatch remain distinct verified operations.
+- [x] Safe object/interface upcasts, checked `fit`, runtime `is`, object
+      identity equality, and `self`/`deref self`/`ref`/`view` return semantics
+      survive unchanged into Lowered WIR.

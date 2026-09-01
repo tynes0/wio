@@ -75,6 +75,19 @@ namespace wio::wir
         auto operator<=>(const FieldLayout&) const = default;
     };
 
+    struct MethodLayout
+    {
+        std::string name;
+        std::vector<TypeId> parameterTypes;
+        TypeId returnType;
+        FunctionId function;
+        std::uint32_t slot = 0;
+        bool receiverMutable = true;
+        bool isAbstract = false;
+
+        auto operator<=>(const MethodLayout&) const = default;
+    };
+
     struct Type
     {
         TypeKind kind = TypeKind::Invalid;
@@ -86,6 +99,7 @@ namespace wio::wir
         NominalRepresentation nominalRepresentation = NominalRepresentation::Wio;
         std::vector<TypeId> baseTypes;
         std::vector<FieldLayout> fields;
+        std::vector<MethodLayout> methods;
         bool hasConstructor = false;
         bool hasDestructor = false;
 

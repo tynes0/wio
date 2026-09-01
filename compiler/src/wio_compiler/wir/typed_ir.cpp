@@ -12,7 +12,11 @@ namespace wio::wir::typed
     {
         return opcode == Opcode::Constant || opcode == Opcode::Unary ||
                opcode == Opcode::Binary || opcode == Opcode::Convert ||
-               opcode == Opcode::Call || opcode == Opcode::VariantTest ||
+               opcode == Opcode::Call || opcode == Opcode::MethodCall ||
+               opcode == Opcode::VirtualCall || opcode == Opcode::InterfaceCall ||
+               opcode == Opcode::Upcast || opcode == Opcode::CheckedCast ||
+               opcode == Opcode::TypeTest || opcode == Opcode::IdentityEqual ||
+               opcode == Opcode::VariantTest ||
                opcode == Opcode::VariantPayload || opcode == Opcode::ArrayLength ||
                opcode == Opcode::ArrayElement || opcode == Opcode::ArrayCreate ||
                opcode == Opcode::ArrayGet || opcode == Opcode::LocalPlace ||
@@ -31,6 +35,13 @@ namespace wio::wir::typed
         case Opcode::Binary: return "binary";
         case Opcode::Convert: return "convert";
         case Opcode::Call: return "call";
+        case Opcode::MethodCall: return "method-call";
+        case Opcode::VirtualCall: return "virtual-call";
+        case Opcode::InterfaceCall: return "interface-call";
+        case Opcode::Upcast: return "upcast";
+        case Opcode::CheckedCast: return "checked-cast";
+        case Opcode::TypeTest: return "type-test";
+        case Opcode::IdentityEqual: return "identity-equal";
         case Opcode::VariantTest: return "variant-test";
         case Opcode::VariantPayload: return "variant-payload";
         case Opcode::ArrayLength: return "array-length";
