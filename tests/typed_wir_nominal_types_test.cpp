@@ -77,7 +77,8 @@ int main()
         .kind = TypeKind::Named,
         .name = "ffi::NativePoint",
         .nominalKind = NominalKind::Component,
-        .nominalRepresentation = NominalRepresentation::NativePod
+        .nominalRepresentation = NominalRepresentation::NativePod,
+        .nativeBinding = NativeTypeBinding{.cppName = "ffi::NativePoint", .header = "native_point.h"}
     });
     ok &= expect(nativeType.isValid(), "Native POD component type must receive a stable type id");
     ok &= expect(

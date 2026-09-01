@@ -54,7 +54,7 @@ namespace wio::wir::typed
         bool literalMatches(const Literal& literal, const TypeKind kind)
         {
             if (std::holds_alternative<NullLiteral>(literal))
-                return kind == TypeKind::Nullable || kind == TypeKind::Any;
+                return kind == TypeKind::Nullable || kind == TypeKind::Any || kind == TypeKind::Opaque;
             if (kind == TypeKind::Bool)
                 return std::holds_alternative<bool>(literal);
             if (kind == TypeKind::I8 || kind == TypeKind::I16 || kind == TypeKind::I32 ||
@@ -130,6 +130,55 @@ namespace wio::wir::typed
             return type && std::ranges::any_of(type->baseTypes, [&](const TypeId base)
                 { return nominalDerivesFrom(types, base, destination, visited); });
         }
+
+        bool validNativeAbiValue(const TypeTable& types, const NativeAbiValue& value)
+        {
+            const Type* type = types.tryGet(value.type);
+            if (!type)
+                return false;
+            if (value.nullable != (type->kind == TypeKind::Nullable))
+                return false;
+            if (value.passing == NativePassingMode::Borrow || value.passing == NativePassingMode::BorrowMut)
+            {
+                if (type->kind != TypeKind::Reference || type->arguments.size() != 1)
+                    return false;
+                if ((value.passing == NativePassingMode::BorrowMut) != type->isMutable)
+                    return false;
+            }
+            const Type* base = type;
+            while (base && (base->kind == TypeKind::Reference || base->kind == TypeKind::Nullable) &&
+                   base->arguments.size() == 1)
+                base = types.tryGet(base->arguments.front());
+            if (!base)
+                return false;
+            switch (value.marshalling)
+            {
+            case NativeMarshallingKind::Void: return base->kind == TypeKind::Void;
+            case NativeMarshallingKind::Utf8String: return base->kind == TypeKind::String;
+            case NativeMarshallingKind::UnicodeText: return base->kind == TypeKind::Text;
+            case NativeMarshallingKind::NativePod:
+                return base->nominalRepresentation == NominalRepresentation::NativePod;
+            case NativeMarshallingKind::OpaqueHandle: return base->kind == TypeKind::Opaque;
+            case NativeMarshallingKind::ObjectHandle:
+                return base->kind == TypeKind::Named &&
+                    (base->nominalKind == NominalKind::Object || base->nominalKind == NominalKind::Interface);
+            case NativeMarshallingKind::Callback: return base->kind == TypeKind::Function;
+            case NativeMarshallingKind::Generic: return base->kind == TypeKind::GenericParameter;
+            case NativeMarshallingKind::Scalar:
+                if (base->kind == TypeKind::Named)
+                    return base->nominalKind == NominalKind::Enum || base->nominalKind == NominalKind::Flagset;
+                return base->kind != TypeKind::Void && base->kind != TypeKind::String &&
+                    base->kind != TypeKind::Text && base->kind != TypeKind::Any &&
+                    base->kind != TypeKind::Opaque && base->kind != TypeKind::Function &&
+                    base->kind != TypeKind::Array && base->kind != TypeKind::Dictionary &&
+                    base->kind != TypeKind::AsyncTask;
+            case NativeMarshallingKind::RuntimeValue:
+                return base->kind == TypeKind::Any || base->kind == TypeKind::Array ||
+                    base->kind == TypeKind::Dictionary || base->kind == TypeKind::AsyncTask ||
+                    base->kind == TypeKind::Named;
+            }
+            return false;
+        }
     }
 
     VerificationResult Verifier::verify(const Module& module) const
@@ -187,6 +236,11 @@ namespace wio::wir::typed
             {
                 report("WIR1008", "Native POD representation requires a named component type.");
             }
+            if (type.nominalRepresentation == NominalRepresentation::NativePod &&
+                (!type.nativeBinding || type.nativeBinding->cppName.empty()))
+                report("WIR1017", "Native POD types require canonical C++ type binding metadata.");
+            if (type.nativeBinding && type.nominalRepresentation != NominalRepresentation::NativePod)
+                report("WIR1018", "Only Native POD types may carry native type binding metadata.");
             if (type.kind != TypeKind::Named &&
                 (!type.baseTypes.empty() || !type.fields.empty() || !type.methods.empty() ||
                  type.hasConstructor || type.hasDestructor))
@@ -304,6 +358,25 @@ namespace wio::wir::typed
             else if (function.ownerType)
             {
                 report("WIR1107", "Non-method Typed WIR functions cannot carry an owner type.", function.source, function.id);
+            }
+            if (function.nativeBinding)
+            {
+                const NativeBinding& binding = *function.nativeBinding;
+                const std::size_t hiddenParameterCount = function.captureParameterCount + (function.isMethod ? 1u : 0u);
+                const bool validIdentity = function.isExternal && !function.isAbstract &&
+                    !binding.symbol.empty() && !binding.stableKey.empty() && !binding.thunkSymbol.empty();
+                const bool validSignature = function.parameters.size() >= hiddenParameterCount &&
+                    binding.parameters.size() == function.parameters.size() - hiddenParameterCount &&
+                    std::ranges::all_of(binding.parameters, [&](const NativeAbiValue& value)
+                        { return value.passing != NativePassingMode::ReturnOwned && validNativeAbiValue(module.types, value); }) &&
+                    validNativeAbiValue(module.types, binding.result) && binding.result.type == function.returnType;
+                bool parameterTypesMatch = validSignature;
+                for (std::size_t index = 0; parameterTypesMatch && index < binding.parameters.size(); ++index)
+                    parameterTypesMatch = binding.parameters[index].type == function.parameters[index + hiddenParameterCount].type;
+                const bool thunkMatches = binding.requiresAdapter == (binding.thunkKind != NativeThunkKind::Direct) &&
+                    (function.genericParameters.empty() || binding.thunkKind == NativeThunkKind::TemplateSpecialization);
+                if (!validIdentity || !parameterTypesMatch || !thunkMatches)
+                    report("WIR1113", "Native Typed WIR function binding has an invalid identity, ABI signature, or thunk contract.", function.source, function.id);
             }
         }
 
@@ -532,6 +605,7 @@ namespace wio::wir::typed
 
                     bool callReturnsVoid = false;
                     const bool isCallInstruction = instruction.opcode == Opcode::Call ||
+                        instruction.opcode == Opcode::NativeCall ||
                         instruction.opcode == Opcode::IndirectCall ||
                         instruction.opcode == Opcode::ExtensionCall ||
                         instruction.opcode == Opcode::MethodCall ||
@@ -1188,7 +1262,7 @@ namespace wio::wir::typed
                             report("WIR1443", "Typed WIR identity equality requires two object/interface values and a bool result.", instruction.source, function.id, block.id);
                         }
                     }
-                    else if (instruction.opcode == Opcode::Call)
+                    else if (instruction.opcode == Opcode::Call || instruction.opcode == Opcode::NativeCall)
                     {
                         const auto calleeIt = instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
                         if (calleeIt == functions.end())
@@ -1198,6 +1272,10 @@ namespace wio::wir::typed
                         else
                         {
                             const Function& callee = *calleeIt->second;
+                            const bool nativeOpcodeMatches =
+                                (instruction.opcode == Opcode::NativeCall) == callee.nativeBinding.has_value();
+                            if (!nativeOpcodeMatches)
+                                report("WIR1470", "Typed WIR native calls and ordinary calls must match the callee ABI binding.", instruction.source, function.id, block.id);
                             const bool concreteSignature = instruction.signatureTypes.size() == instruction.operands.size() &&
                                 std::ranges::all_of(instruction.signatureTypes, [&](const TypeId type)
                                     { return module.types.tryGet(type) != nullptr; });
@@ -1209,7 +1287,12 @@ namespace wio::wir::typed
                             {
                                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                                 {
-                                    if (valueType(instruction.operands[index]) != instruction.signatureTypes[index] ||
+                                    const TypeId operandType = valueType(instruction.operands[index]);
+                                    const Type* signatureType = module.types.tryGet(instruction.signatureTypes[index]);
+                                    const bool extensionReceiverMatch = callee.isExtension && index == 0 && signatureType &&
+                                        signatureType->kind == TypeKind::Reference && signatureType->arguments.size() == 1 &&
+                                        signatureType->arguments.front() == operandType;
+                                    if ((!extensionReceiverMatch && operandType != instruction.signatureTypes[index]) ||
                                         (callee.genericParameters.empty() && instruction.signatureTypes[index] != callee.parameters[index].type))
                                         report("WIR1411", "Typed WIR call argument type does not match its parameter.", instruction.source, function.id, block.id);
                                 }

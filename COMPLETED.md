@@ -874,3 +874,15 @@ here as historical evidence rather than active work:
       lifetimes; makes managed copy/move/replace/release/drop explicit; lowers
       object copies and drops to retain/release while keeping component/value
       glue distinct; and verifies exactly-once local cleanup across CFG exits.
+- [x] The Native Interop and ABI Model gives native declarations a canonical
+      C/C++ symbol, header, stable identity, failure boundary, receiver mode,
+      parameter/result ownership and marshalling contract. Native POD,
+      `opaque`, ref/view, callbacks, and generic template specializations now
+      lower through explicit `native-call`/`native-invoke` operations.
+- [x] Deterministic native thunk planning and the C-shaped
+      `wio_native_abi.h` SDK contract define concrete specialization adapters,
+      owner-provided intrusive handle operations, callback lifetimes/thread
+      policy, contained failures, and exactly-once foreign-resource release.
+- [x] Realm-qualified calls no longer probe namespace identifiers as method
+      receivers, and contextual `ref` arguments use the selected ABI parameter
+      instead of leaking semantic `<unknown>` placeholders into WIR.

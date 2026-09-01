@@ -68,6 +68,37 @@ namespace wio::wir::typed
             }
         }
 
+        void printNativeBinding(std::ostringstream& stream, const NativeBinding& binding)
+        {
+            stream << " native[symbol=" << std::quoted(binding.symbol)
+                   << " header=" << std::quoted(binding.header)
+                   << " key=" << std::quoted(binding.stableKey)
+                   << " thunk=" << std::quoted(binding.thunkSymbol)
+                   << " language=" << nativeSymbolLanguageName(binding.language)
+                   << " calling-convention=" << nativeCallingConventionName(binding.callingConvention)
+                   << " exception=" << nativeExceptionBoundaryName(binding.exceptionBoundary)
+                   << " thunk-kind=" << nativeThunkKindName(binding.thunkKind)
+                   << " receiver=" << nativeReceiverKindName(binding.receiver)
+                   << " params={";
+            for (std::size_t index = 0; index < binding.parameters.size(); ++index)
+            {
+                if (index > 0) stream << ", ";
+                const NativeAbiValue& parameter = binding.parameters[index];
+                stream << typeRef(parameter.type) << ":" << nativePassingModeName(parameter.passing)
+                       << "/" << nativeMarshallingKindName(parameter.marshalling);
+                if (parameter.marshalling == NativeMarshallingKind::Callback)
+                    stream << "/" << nativeCallbackLifetimeName(parameter.callbackLifetime)
+                           << "/" << nativeCallbackThreadName(parameter.callbackThread);
+                if (parameter.nullable) stream << "?";
+            }
+            stream << "} result=" << typeRef(binding.result.type) << ":"
+                   << nativePassingModeName(binding.result.passing) << "/"
+                   << nativeMarshallingKindName(binding.result.marshalling);
+            if (binding.result.nullable) stream << "?";
+            if (binding.requiresAdapter) stream << " adapter";
+            stream << "]";
+        }
+
         std::string printType(const Type& type)
         {
             std::ostringstream stream;
@@ -143,6 +174,12 @@ namespace wio::wir::typed
                 stream << " ownership=" << ownershipModelName(type.ownership);
             if (type.cleanup != CleanupKind::None)
                 stream << " cleanup=" << cleanupKindName(type.cleanup);
+            if (type.nativeBinding)
+                stream << " native-type[cpp=" << std::quoted(type.nativeBinding->cppName)
+                       << " header=" << std::quoted(type.nativeBinding->header)
+                       << " standard-layout=" << (type.nativeBinding->standardLayout ? "true" : "false")
+                       << " trivially-copyable=" << (type.nativeBinding->triviallyCopyable ? "true" : "false")
+                       << "]";
             return stream.str();
         }
 
@@ -185,6 +222,15 @@ namespace wio::wir::typed
                 {
                     if (index > 0)
                         stream << ", ";
+                    stream << valueRef(instruction.operands[index]);
+                }
+                stream << ")";
+                break;
+            case Opcode::NativeCall:
+                stream << "native-call " << functionRef(instruction.callee) << "(";
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 0) stream << ", ";
                     stream << valueRef(instruction.operands[index]);
                 }
                 stream << ")";
@@ -450,6 +496,8 @@ namespace wio::wir::typed
             stream << ") -> " << typeRef(function.returnType) << " callable=" << typeRef(function.callableType);
             if (function.isMethod)
                 stream << " owner=" << typeRef(function.ownerType) << " slot=" << function.methodSlot;
+            if (function.nativeBinding)
+                printNativeBinding(stream, *function.nativeBinding);
             if (!function.captures.empty())
             {
                 stream << " captures={";

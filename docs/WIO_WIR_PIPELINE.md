@@ -212,6 +212,51 @@ interpolation segment/hole shape, intrinsic signatures, enum/flagset targets,
 dynamic source identities, nullable payload types, and nominal value-model
 placement. Canonical lowering copies every field unchanged.
 
+## Native Interop and ABI
+
+Native declarations are no longer indistinguishable from abstract/external
+functions. A native declaration carries one canonical `NativeBinding` with:
+
+- the C/C++ symbol and source header;
+- a deterministic signature-based stable key and thunk symbol;
+- source language and calling convention;
+- the mandatory exception-to-Wio-failure boundary;
+- direct, adapter, or template-specialization thunk strategy;
+- const/mutable free-extension receiver behavior;
+- one ABI record per parameter and result.
+
+Each ABI value fixes its Wio type, value/borrow/borrow-mut/consume/owned-return
+mode, nullability, and scalar/string/text/POD/opaque/object/callback/runtime
+marshalling class. Callback records additionally fix call-scoped versus retained
+lifetime and caller-thread versus any-thread entry. Current source defaults are
+call-scoped and caller-thread; future attributes may select broader contracts
+without changing the IR shape.
+
+Native POD components retain their exact C++ name, header, standard-layout, and
+trivially-copyable requirements in the type table. `opaque` has its own WIR
+type and crosses the boundary as pointer identity, never as an object handle.
+`ref T` and `view T` become mutable and immutable borrowed ABI parameters.
+
+A source call to a native-bound declaration is `native-call`, not `call` or an
+ordinary `extension-call`. Canonical lowering turns it into `native-invoke`
+without losing the concrete signature or generic specialization key. The
+`NativeAbiPlanner` then creates a deterministic thunk inventory. Ordinary
+native declarations receive one entry; C++ templates receive one entry per
+concrete specialization actually referenced by Lowered WIR. This is the common
+input for the new C++ backend and the future VM native registry.
+
+The public `sdk/include/wio_native_abi.h` defines the matching C-shaped ABI:
+tagged values, slices, failure records, callbacks, function descriptors, and
+owner-supplied handle operations. An object or runtime handle is never deleted
+by foreign code. Aliases call the owner's `retain`, and each transferred claim
+calls the owner's `release` exactly once. C++ exceptions cannot unwind through
+a thunk; they return a `WioNativeAbiStatus` plus `WioNativeAbiFailure`.
+
+Both verifiers reject native/ordinary opcode mismatches, incomplete symbols or
+thunk identities, malformed POD bindings, invalid ref mutability, callback or
+opaque marshalling on the wrong type, generic bindings without specialization
+thunks, and inconsistent adapter flags.
+
 ## Lowered WIR
 
 Lowered WIR is the shared backend contract. Its first canonicalization pass
@@ -227,7 +272,7 @@ The deterministic pass order is currently:
 3. `verify-lowered-wir`
 
 Future lowering stages will own async state machines, exceptional cleanup edges,
-native ABI adaptation, and other semantics that
+and other semantics that
 must be identical for C++ and bytecode.
 
 ## Inspecting WIR

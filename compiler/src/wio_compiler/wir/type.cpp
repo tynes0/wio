@@ -96,6 +96,7 @@ namespace wio::wir
         case TypeKind::String: return "string";
         case TypeKind::Text: return "text";
         case TypeKind::Any: return "any";
+        case TypeKind::Opaque: return "opaque";
         case TypeKind::GenericParameter: return "generic-parameter";
         case TypeKind::Named: return "named";
         case TypeKind::Reference: return "reference";
@@ -208,6 +209,91 @@ namespace wio::wir
         case CleanupKind::None: return "none";
         case CleanupKind::DestroyValue: return "destroy-value";
         case CleanupKind::ReleaseReference: return "release-reference";
+        }
+        return "none";
+    }
+
+    std::string_view nativeSymbolLanguageName(const NativeSymbolLanguage language)
+    {
+        return language == NativeSymbolLanguage::C ? "c" : "cpp";
+    }
+
+    std::string_view nativeCallingConventionName(const NativeCallingConvention convention)
+    {
+        switch (convention)
+        {
+        case NativeCallingConvention::PlatformDefault: return "default";
+        case NativeCallingConvention::Cdecl: return "cdecl";
+        case NativeCallingConvention::StdCall: return "stdcall";
+        case NativeCallingConvention::FastCall: return "fastcall";
+        }
+        return "default";
+    }
+
+    std::string_view nativeExceptionBoundaryName(const NativeExceptionBoundary boundary)
+    {
+        return boundary == NativeExceptionBoundary::None ? "none" : "translate-to-wio-failure";
+    }
+
+    std::string_view nativePassingModeName(const NativePassingMode mode)
+    {
+        switch (mode)
+        {
+        case NativePassingMode::Value: return "value";
+        case NativePassingMode::Borrow: return "borrow";
+        case NativePassingMode::BorrowMut: return "borrow-mut";
+        case NativePassingMode::Consume: return "consume";
+        case NativePassingMode::ReturnOwned: return "return-owned";
+        }
+        return "value";
+    }
+
+    std::string_view nativeMarshallingKindName(const NativeMarshallingKind kind)
+    {
+        switch (kind)
+        {
+        case NativeMarshallingKind::Void: return "void";
+        case NativeMarshallingKind::Scalar: return "scalar";
+        case NativeMarshallingKind::Utf8String: return "utf8-string";
+        case NativeMarshallingKind::UnicodeText: return "unicode-text";
+        case NativeMarshallingKind::NativePod: return "native-pod";
+        case NativeMarshallingKind::OpaqueHandle: return "opaque-handle";
+        case NativeMarshallingKind::ObjectHandle: return "object-handle";
+        case NativeMarshallingKind::Callback: return "callback";
+        case NativeMarshallingKind::RuntimeValue: return "runtime-value";
+        case NativeMarshallingKind::Generic: return "generic";
+        }
+        return "scalar";
+    }
+
+    std::string_view nativeCallbackLifetimeName(const NativeCallbackLifetime lifetime)
+    {
+        return lifetime == NativeCallbackLifetime::Retained ? "retained" : "call";
+    }
+
+    std::string_view nativeCallbackThreadName(const NativeCallbackThread thread)
+    {
+        return thread == NativeCallbackThread::Any ? "any" : "caller";
+    }
+
+    std::string_view nativeThunkKindName(const NativeThunkKind kind)
+    {
+        switch (kind)
+        {
+        case NativeThunkKind::Direct: return "direct";
+        case NativeThunkKind::Adapter: return "adapter";
+        case NativeThunkKind::TemplateSpecialization: return "template-specialization";
+        }
+        return "direct";
+    }
+
+    std::string_view nativeReceiverKindName(const NativeReceiverKind receiver)
+    {
+        switch (receiver)
+        {
+        case NativeReceiverKind::None: return "none";
+        case NativeReceiverKind::ConstReference: return "const-reference";
+        case NativeReceiverKind::MutableReference: return "mutable-reference";
         }
         return "none";
     }

@@ -34,6 +34,7 @@ namespace wio::wir
         String,
         Text,
         Any,
+        Opaque,
         GenericParameter,
         Named,
         Reference,
@@ -118,6 +119,118 @@ namespace wio::wir
         ReleaseReference
     };
 
+    enum class NativeSymbolLanguage : std::uint8_t
+    {
+        Cpp,
+        C
+    };
+
+    enum class NativeCallingConvention : std::uint8_t
+    {
+        PlatformDefault,
+        Cdecl,
+        StdCall,
+        FastCall
+    };
+
+    enum class NativeExceptionBoundary : std::uint8_t
+    {
+        None,
+        TranslateToWioFailure
+    };
+
+    enum class NativePassingMode : std::uint8_t
+    {
+        Value,
+        Borrow,
+        BorrowMut,
+        Consume,
+        ReturnOwned
+    };
+
+    enum class NativeMarshallingKind : std::uint8_t
+    {
+        Void,
+        Scalar,
+        Utf8String,
+        UnicodeText,
+        NativePod,
+        OpaqueHandle,
+        ObjectHandle,
+        Callback,
+        RuntimeValue,
+        Generic
+    };
+
+    enum class NativeCallbackLifetime : std::uint8_t
+    {
+        Call,
+        Retained
+    };
+
+    enum class NativeCallbackThread : std::uint8_t
+    {
+        Caller,
+        Any
+    };
+
+    enum class NativeThunkKind : std::uint8_t
+    {
+        Direct,
+        Adapter,
+        TemplateSpecialization
+    };
+
+    enum class NativeReceiverKind : std::uint8_t
+    {
+        None,
+        ConstReference,
+        MutableReference
+    };
+
+    struct NativeTypeBinding
+    {
+        std::string cppName;
+        std::string header;
+        bool standardLayout = true;
+        bool triviallyCopyable = true;
+
+        auto operator<=>(const NativeTypeBinding&) const = default;
+    };
+
+    struct NativeAbiValue
+    {
+        TypeId type;
+        NativePassingMode passing = NativePassingMode::Value;
+        NativeMarshallingKind marshalling = NativeMarshallingKind::Scalar;
+        NativeCallbackLifetime callbackLifetime = NativeCallbackLifetime::Call;
+        NativeCallbackThread callbackThread = NativeCallbackThread::Caller;
+        bool nullable = false;
+
+        auto operator<=>(const NativeAbiValue&) const = default;
+    };
+
+    // Canonical backend-neutral description of a C/C++ boundary. Both the
+    // native backend and the VM bridge consume this contract; neither backend
+    // is allowed to infer ref/view, callback, ownership, or failure behavior.
+    struct NativeBinding
+    {
+        std::string symbol;
+        std::string header;
+        std::string stableKey;
+        std::string thunkSymbol;
+        NativeSymbolLanguage language = NativeSymbolLanguage::Cpp;
+        NativeCallingConvention callingConvention = NativeCallingConvention::PlatformDefault;
+        NativeExceptionBoundary exceptionBoundary = NativeExceptionBoundary::TranslateToWioFailure;
+        NativeThunkKind thunkKind = NativeThunkKind::Direct;
+        NativeReceiverKind receiver = NativeReceiverKind::None;
+        std::vector<NativeAbiValue> parameters;
+        NativeAbiValue result;
+        bool requiresAdapter = false;
+
+        auto operator<=>(const NativeBinding&) const = default;
+    };
+
     struct CaptureLayout
     {
         std::string name;
@@ -167,6 +280,7 @@ namespace wio::wir
         bool hasDestructor = false;
         OwnershipModel ownership = OwnershipModel::Trivial;
         CleanupKind cleanup = CleanupKind::None;
+        std::optional<NativeTypeBinding> nativeBinding;
 
         auto operator<=>(const Type&) const = default;
     };
@@ -206,5 +320,14 @@ namespace wio::wir
     [[nodiscard]] std::string_view captureKindName(CaptureKind kind);
     [[nodiscard]] std::string_view ownershipModelName(OwnershipModel ownership);
     [[nodiscard]] std::string_view cleanupKindName(CleanupKind cleanup);
+    [[nodiscard]] std::string_view nativeSymbolLanguageName(NativeSymbolLanguage language);
+    [[nodiscard]] std::string_view nativeCallingConventionName(NativeCallingConvention convention);
+    [[nodiscard]] std::string_view nativeExceptionBoundaryName(NativeExceptionBoundary boundary);
+    [[nodiscard]] std::string_view nativePassingModeName(NativePassingMode mode);
+    [[nodiscard]] std::string_view nativeMarshallingKindName(NativeMarshallingKind kind);
+    [[nodiscard]] std::string_view nativeCallbackLifetimeName(NativeCallbackLifetime lifetime);
+    [[nodiscard]] std::string_view nativeCallbackThreadName(NativeCallbackThread thread);
+    [[nodiscard]] std::string_view nativeThunkKindName(NativeThunkKind kind);
+    [[nodiscard]] std::string_view nativeReceiverKindName(NativeReceiverKind receiver);
     [[nodiscard]] bool requiresCleanup(const Type& type);
 }

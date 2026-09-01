@@ -71,6 +71,7 @@ namespace wio::wir::typed
         Binary,
         Convert,
         Call,
+        NativeCall,
         FunctionReference,
         ClosureCreate,
         IndirectCall,
@@ -196,6 +197,7 @@ namespace wio::wir::typed
         bool isAbstract = false;
         bool isExtension = false;
         bool isClosureBody = false;
+        std::optional<NativeBinding> nativeBinding;
     };
 
     struct Module

@@ -504,10 +504,16 @@ Rider, and CLion are defined in
    explicit borrows, copy/move/replace/release/drop are verified operations,
    return moves and reverse lexical cleanup cover structured exits, and
    Lowered WIR separates intrusive retain/release from value copy/drop glue.
+   Native interop is now backend-neutral too: native POD C++ identity,
+   `opaque`, ref/view mutability, callbacks, exception boundaries, stable
+   symbols, generic specialization keys, adapter strategy, `native-call` /
+   `native-invoke`, deterministic thunk planning, and the C-shaped SDK handle
+   contract survive verified Typed-to-Lowered WIR. Concrete thunk bodies remain
+   work for the new C++ backend and VM native bridge rather than the frontend.
    Keep
    the current C++ generator as the production path while finishing remaining
    language coverage, then consume Lowered WIR from a new C++ backend and a
-   bytecode VM. Add native ABI operations, async state-machine lowering,
+   bytecode VM. Add async state-machine lowering,
    exceptional/panic cleanup edges, globals/constants, remaining tuple/span
    operations, reflection
    payloads, backend parity tests, and compile-time/

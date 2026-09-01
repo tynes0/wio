@@ -6,6 +6,7 @@ set(WIO_SDK_HEADERS
     "${WIO_SDK_INCLUDE_DIR}/wio_features.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_sdk.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_values.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_native_abi.h"
 )
 
 add_library(wio_sdk INTERFACE)

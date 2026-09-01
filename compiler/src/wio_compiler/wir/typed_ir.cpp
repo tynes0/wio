@@ -12,7 +12,7 @@ namespace wio::wir::typed
     {
         return opcode == Opcode::Constant || opcode == Opcode::Unary ||
                opcode == Opcode::Binary || opcode == Opcode::Convert ||
-               opcode == Opcode::Call || opcode == Opcode::FunctionReference ||
+               opcode == Opcode::Call || opcode == Opcode::NativeCall || opcode == Opcode::FunctionReference ||
                opcode == Opcode::ClosureCreate || opcode == Opcode::IndirectCall ||
                opcode == Opcode::ExtensionCall || opcode == Opcode::MethodCall ||
                opcode == Opcode::VirtualCall || opcode == Opcode::InterfaceCall ||
@@ -43,6 +43,7 @@ namespace wio::wir::typed
         case Opcode::Binary: return "binary";
         case Opcode::Convert: return "convert";
         case Opcode::Call: return "call";
+        case Opcode::NativeCall: return "native-call";
         case Opcode::FunctionReference: return "function-ref";
         case Opcode::ClosureCreate: return "closure-create";
         case Opcode::IndirectCall: return "indirect-call";

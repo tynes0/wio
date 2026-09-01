@@ -1,5 +1,6 @@
 #include "wio/wir/typed_ir_builder.h"
 
+#include "wio/ast/attribute_queries.h"
 #include "wio/common/utility.h"
 #include "wio/sema/intrinsic_member_resolver.h"
 #include "wio/sema/scope.h"
@@ -7,6 +8,7 @@
 #include "wio/sema/type.h"
 
 #include <algorithm>
+#include <iomanip>
 #include <optional>
 #include <sstream>
 #include <unordered_map>
@@ -184,6 +186,148 @@ namespace wio::wir::typed
         {
             const Type* type = result_.module_.types.tryGet(typeId);
             return type && requiresCleanup(*type);
+        }
+
+        static bool hasBuiltinAttribute(
+            const std::vector<NodePtr<AttributeStatement>>& attributes,
+            const Attribute attribute)
+        {
+            return attribute_queries::hasAttribute(attributes, attribute);
+        }
+
+        static std::string attributeValue(
+            const std::vector<NodePtr<AttributeStatement>>& attributes,
+            const Attribute attribute)
+        {
+            const Token* token = attribute_queries::getFirstAttributeArg(attributes, attribute);
+            return token ? token->value : std::string{};
+        }
+
+        static std::uint64_t stableHash(const std::string_view text)
+        {
+            std::uint64_t hash = 14695981039346656037ull;
+            for (const unsigned char byte : text)
+            {
+                hash ^= byte;
+                hash *= 1099511628211ull;
+            }
+            return hash;
+        }
+
+        static std::string nativeThunkSymbol(const std::string_view stableKey)
+        {
+            std::ostringstream stream;
+            stream << "_wio_native_" << std::hex << std::setfill('0') << std::setw(16)
+                   << stableHash(stableKey);
+            return stream.str();
+        }
+
+        NativeMarshallingKind nativeMarshallingKind(TypeId typeId) const
+        {
+            const Type* type = result_.module_.types.tryGet(typeId);
+            if (!type)
+                return NativeMarshallingKind::Generic;
+            if (type->kind == TypeKind::Reference && type->arguments.size() == 1)
+                return nativeMarshallingKind(type->arguments.front());
+            if (type->kind == TypeKind::Nullable && type->arguments.size() == 1)
+                return nativeMarshallingKind(type->arguments.front());
+            switch (type->kind)
+            {
+            case TypeKind::Void: return NativeMarshallingKind::Void;
+            case TypeKind::String: return NativeMarshallingKind::Utf8String;
+            case TypeKind::Text: return NativeMarshallingKind::UnicodeText;
+            case TypeKind::Opaque: return NativeMarshallingKind::OpaqueHandle;
+            case TypeKind::Function: return NativeMarshallingKind::Callback;
+            case TypeKind::GenericParameter: return NativeMarshallingKind::Generic;
+            case TypeKind::Named:
+                if (type->nominalKind == NominalKind::Enum || type->nominalKind == NominalKind::Flagset)
+                    return NativeMarshallingKind::Scalar;
+                if (type->nominalRepresentation == NominalRepresentation::NativePod)
+                    return NativeMarshallingKind::NativePod;
+                if (type->nominalKind == NominalKind::Object ||
+                    type->nominalKind == NominalKind::Interface)
+                    return NativeMarshallingKind::ObjectHandle;
+                return NativeMarshallingKind::RuntimeValue;
+            case TypeKind::Any:
+            case TypeKind::Array:
+            case TypeKind::Dictionary:
+            case TypeKind::AsyncTask:
+                return NativeMarshallingKind::RuntimeValue;
+            default:
+                return NativeMarshallingKind::Scalar;
+            }
+        }
+
+        NativeAbiValue nativeAbiValue(const TypeId typeId, const bool isReturn) const
+        {
+            NativeAbiValue result{
+                .type = typeId,
+                .passing = NativePassingMode::Value,
+                .marshalling = nativeMarshallingKind(typeId)
+            };
+            const Type* type = result_.module_.types.tryGet(typeId);
+            if (!type)
+                return result;
+            result.nullable = type->kind == TypeKind::Nullable;
+            if (type->kind == TypeKind::Reference && type->arguments.size() == 1)
+                result.passing = type->isMutable ? NativePassingMode::BorrowMut : NativePassingMode::Borrow;
+            else if (isReturn && requiresCleanup(*type))
+                result.passing = NativePassingMode::ReturnOwned;
+            return result;
+        }
+
+        NativeBinding makeNativeBinding(
+            const FunctionDeclaration& declaration,
+            const Function& function,
+            const sema::FunctionType& functionType)
+        {
+            std::string symbol = attributeValue(declaration.attributes, Attribute::CppName);
+            if (symbol.empty())
+                symbol = declaration.extensionMemberName.empty()
+                    ? (declaration.name ? declaration.name->token.value : function.name)
+                    : declaration.extensionMemberName;
+            NativeBinding binding{
+                .symbol = std::move(symbol),
+                .header = attributeValue(declaration.attributes, Attribute::CppHeader),
+                .language = NativeSymbolLanguage::Cpp,
+                .callingConvention = NativeCallingConvention::PlatformDefault,
+                .exceptionBoundary = NativeExceptionBoundary::TranslateToWioFailure,
+                .receiver = function.isExtension
+                    ? (declaration.extensionMutableReceiver
+                        ? NativeReceiverKind::MutableReference
+                        : NativeReceiverKind::ConstReference)
+                    : NativeReceiverKind::None
+            };
+            binding.stableKey = "cpp:" + binding.symbol + ":" + functionType.toString();
+            binding.thunkSymbol = nativeThunkSymbol(binding.stableKey);
+            for (const Ref<sema::Type>& parameter : functionType.paramTypes)
+                binding.parameters.push_back(nativeAbiValue(mapType(parameter, &declaration), false));
+            binding.result = nativeAbiValue(function.returnType, true);
+            const bool needsMarshalling = std::ranges::any_of(
+                binding.parameters,
+                [](const NativeAbiValue& value)
+                {
+                    return value.marshalling != NativeMarshallingKind::Scalar &&
+                        value.marshalling != NativeMarshallingKind::NativePod &&
+                        value.marshalling != NativeMarshallingKind::OpaqueHandle;
+                }) || (binding.result.marshalling != NativeMarshallingKind::Void &&
+                        binding.result.marshalling != NativeMarshallingKind::Scalar &&
+                        binding.result.marshalling != NativeMarshallingKind::NativePod &&
+                        binding.result.marshalling != NativeMarshallingKind::OpaqueHandle);
+            if (!function.genericParameters.empty())
+                binding.thunkKind = NativeThunkKind::TemplateSpecialization;
+            else if (needsMarshalling || binding.receiver != NativeReceiverKind::None)
+                binding.thunkKind = NativeThunkKind::Adapter;
+            binding.requiresAdapter = binding.thunkKind != NativeThunkKind::Direct;
+            return binding;
+        }
+
+        bool isNativeFunction(const FunctionId id) const
+        {
+            if (!id || id.value() >= declarations_.size())
+                return false;
+            const FunctionDeclaration* declaration = declarations_[id.value()].declaration;
+            return declaration && hasBuiltinAttribute(declaration->attributes, Attribute::Native);
         }
 
         void rememberOwnership(FunctionState& state, const ValueId value, const ValueOwnership ownership)
@@ -533,12 +677,13 @@ namespace wio::wir::typed
                     {"f32", TypeKind::F32}, {"f64", TypeKind::F64},
                     {"byte", TypeKind::Byte}, {"char", TypeKind::Char},
                     {"string", TypeKind::String}, {"text", TypeKind::Text},
-                    {"any", TypeKind::Any}
+                    {"any", TypeKind::Any}, {"opaque", TypeKind::Opaque}
                 };
                 const auto found = primitiveKinds.find(name);
                 if (found == primitiveKinds.end())
                 {
-                    report("WIR2002", "Unsupported semantic primitive type '" + name + "'.", source);
+                    report("WIR2002", "Unsupported semantic primitive type '" + name + "' while mapping " +
+                        (source ? getKindNameStr(source->kind()) : std::string{"an unknown source"}) + ".", source);
                     return {};
                 }
                 wirType.kind = found->second;
@@ -644,6 +789,13 @@ namespace wio::wir::typed
                 wirType.nominalRepresentation = structure->isNativePodComponent
                     ? NominalRepresentation::NativePod
                     : NominalRepresentation::Wio;
+                if (structure->isNativePodComponent)
+                {
+                    wirType.nativeBinding = NativeTypeBinding{
+                        .cppName = structure->nativeCppName.empty() ? structure->name : structure->nativeCppName,
+                        .header = structure->nativeCppHeader
+                    };
+                }
                 if (wirType.nominalKind == NominalKind::Object ||
                     wirType.nominalKind == NominalKind::Interface)
                 {
@@ -1204,6 +1356,9 @@ namespace wio::wir::typed
                 }
             }
 
+            if (hasBuiltinAttribute(declaration.attributes, Attribute::Native))
+                function.nativeBinding = makeNativeBinding(declaration, function, *functionType);
+
             if (!function.isExternal)
             {
                 buildStatement(declaration.body, state);
@@ -1365,7 +1520,7 @@ namespace wio::wir::typed
             {
                 const ValueId discarded = buildExpression(expressionStatement->expression, state);
                 const TypeId discardedType = expressionStatement->expression
-                    ? mapType(expressionStatement->expression->refType.Lock(), expressionStatement)
+                    ? mapExpressionType(expressionStatement->expression, expressionStatement)
                     : TypeId{};
                 if (discarded && typeRequiresCleanup(discardedType) &&
                     valueOwnership(state, discarded) == ValueOwnership::Owned)
@@ -1388,7 +1543,7 @@ namespace wio::wir::typed
             auto appendValue = [&](Instruction instruction)
             {
                 instruction.result = ValueId{state.nextValue++};
-                instruction.resultType = mapType(expression->refType.Lock(), expression.Get());
+                instruction.resultType = mapExpressionType(expression, expression.Get());
                 if (instruction.resultOwnership == ValueOwnership::Trivial)
                     instruction.resultOwnership = ownershipForType(instruction.resultType);
                 if (instruction.resultOwnership == ValueOwnership::Borrowed &&
@@ -1975,7 +2130,7 @@ namespace wio::wir::typed
                 Ref<sema::Symbol> calleeSymbol = call->referencedSymbol.Lock();
                 if (!calleeSymbol && call->callee)
                     calleeSymbol = call->callee->referencedSymbol.Lock();
-                const TypeId callResultType = mapType(expression->refType.Lock(), expression.Get());
+                const TypeId callResultType = mapExpressionType(expression, expression.Get());
                 const Type* callResultTypeInfo = result_.module_.types.tryGet(callResultType);
                 const bool hasNominalConstructionResult = callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Named &&
                     (callResultTypeInfo->nominalKind == NominalKind::Component ||
@@ -2088,7 +2243,9 @@ namespace wio::wir::typed
                     return result;
                 }
                 if (memberCallee && memberCallee->object &&
-                    !memberCallee->object->is<TypeExpression>())
+                    !memberCallee->object->is<TypeExpression>() &&
+                    (!memberCallee->object->referencedSymbol.Lock() ||
+                     memberCallee->object->referencedSymbol.Lock()->kind != sema::SymbolKind::Namespace))
                 {
                     const Ref<sema::Symbol> selectedMember = calleeSymbol;
                     const Ref<sema::Symbol> extensionImplementation = selectedMember &&
@@ -2109,7 +2266,9 @@ namespace wio::wir::typed
                             ? call->callee->refType.Lock().AsFast<sema::FunctionType>()
                             : nullptr;
                         Instruction instruction{
-                            .opcode = Opcode::ExtensionCall,
+                            .opcode = isNativeFunction(extensionFunction->second)
+                                ? Opcode::NativeCall
+                                : Opcode::ExtensionCall,
                             .callee = extensionFunction->second,
                             .selector = selectedMember->extensionMemberName.empty()
                                 ? selectedMember->name
@@ -2150,14 +2309,21 @@ namespace wio::wir::typed
                             instruction.genericArguments,
                             instruction.signatureTypes,
                             callResultType);
+                        const bool nativeCall = instruction.opcode == Opcode::NativeCall;
+                        const std::vector<ValueId> nativeArguments = nativeCall
+                            ? instruction.operands : std::vector<ValueId>{};
                         if (callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Void)
                         {
                             currentBlock(state).instructions.push_back(std::move(instruction));
+                            for (const ValueId argument : nativeArguments)
+                                releaseOwnedTemporary(argument, expression.Get(), state);
                             if (borrowedReceiver)
                                 releaseOwnedTemporary(receiver, expression.Get(), state);
                             return {};
                         }
                         const ValueId result = appendValue(std::move(instruction));
+                        for (const ValueId argument : nativeArguments)
+                            releaseOwnedTemporary(argument, expression.Get(), state);
                         if (borrowedReceiver)
                             releaseOwnedTemporary(receiver, expression.Get(), state);
                         return result;
@@ -2295,7 +2461,7 @@ namespace wio::wir::typed
                     return {};
                 }
                 Instruction instruction{
-                    .opcode = Opcode::Call,
+                    .opcode = isNativeFunction(functionIt->second) ? Opcode::NativeCall : Opcode::Call,
                     .callee = functionIt->second,
                     .source = SourceSpan::at(expression->location())
                 };
@@ -2317,13 +2483,21 @@ namespace wio::wir::typed
                     instruction.genericArguments,
                     instruction.signatureTypes,
                     callResultType);
+                const bool nativeCall = instruction.opcode == Opcode::NativeCall;
+                const std::vector<ValueId> nativeArguments = nativeCall
+                    ? instruction.operands : std::vector<ValueId>{};
                 const Type* type = result_.module_.types.tryGet(callResultType);
                 if (type && type->kind == TypeKind::Void)
                 {
                     currentBlock(state).instructions.push_back(std::move(instruction));
+                    for (const ValueId argument : nativeArguments)
+                        releaseOwnedTemporary(argument, expression.Get(), state);
                     return {};
                 }
-                return appendValue(std::move(instruction));
+                const ValueId result = appendValue(std::move(instruction));
+                for (const ValueId argument : nativeArguments)
+                    releaseOwnedTemporary(argument, expression.Get(), state);
+                return result;
             }
 
             report("WIR2305", "Expression kind '" + getKindNameStr(expression->kind()) + "' is not supported by the initial Typed WIR slice.", expression.Get());
@@ -2485,15 +2659,47 @@ namespace wio::wir::typed
             return value;
         }
 
+        TypeId mapExpressionType(const NodePtr<Expression>& expression, const ASTNode* source)
+        {
+            Ref<sema::Type> semanticType = expression ? expression->refType.Lock() : nullptr;
+            const auto primitive = semanticType && semanticType->kind() == sema::TypeKind::Primitive
+                ? semanticType.AsFast<sema::PrimitiveType>()
+                : nullptr;
+            if (primitive && primitive->name == "<unknown>")
+            {
+                const auto* call = expression->as<FunctionCallExpression>();
+                const Ref<sema::Type> callableType = call && call->callee
+                    ? call->callee->refType.Lock()
+                    : nullptr;
+                if (callableType && callableType->kind() == sema::TypeKind::Function)
+                    semanticType = callableType.AsFast<sema::FunctionType>()->returnType;
+            }
+            return mapType(semanticType, source);
+        }
+
         ValueId buildExpressionAs(
             const NodePtr<Expression>& expression,
             const TypeId destinationType,
             FunctionState& state)
         {
+            // Ref expressions are contextual: semantic analysis intentionally
+            // leaves their placeholder type unresolved and the selected
+            // parameter supplies view/ref mutability. Do not leak that
+            // placeholder into WIR; materialize the canonical destination
+            // place directly.
+            if (const auto* reference = expression ? expression->as<RefExpression>() : nullptr)
+            {
+                const Type* destination = result_.module_.types.tryGet(destinationType);
+                if (destination && destination->kind == TypeKind::Reference &&
+                    destination->arguments.size() == 1)
+                {
+                    return buildPlace(reference->operand, destination->isMutable, state);
+                }
+            }
             ValueId value = buildExpression(expression, state);
             if (!value)
                 return {};
-            TypeId sourceType = mapType(expression->refType.Lock(), expression.Get());
+            TypeId sourceType = mapExpressionType(expression, expression.Get());
             if (sourceType == destinationType)
                 return ensureOwned(value, destinationType, expression.Get(), state);
 

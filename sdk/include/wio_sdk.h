@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "module_api.h"
+#include "wio_native_abi.h"
 #include "wio_features.h"
 #include "wio_values.h"
 

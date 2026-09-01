@@ -36,6 +36,7 @@ namespace wio::wir
             case typed::Opcode::Binary: opcode = lowered::Opcode::Binary; break;
             case typed::Opcode::Convert: opcode = lowered::Opcode::Convert; break;
             case typed::Opcode::Call: opcode = lowered::Opcode::Call; break;
+            case typed::Opcode::NativeCall: opcode = lowered::Opcode::NativeInvoke; break;
             case typed::Opcode::FunctionReference: opcode = lowered::Opcode::FunctionReference; break;
             case typed::Opcode::ClosureCreate: opcode = lowered::Opcode::ClosureCreate; break;
             case typed::Opcode::IndirectCall: opcode = lowered::Opcode::IndirectCall; break;
@@ -190,7 +191,8 @@ namespace wio::wir
                 .isMethod = sourceFunction.isMethod,
                 .isAbstract = sourceFunction.isAbstract,
                 .isExtension = sourceFunction.isExtension,
-                .isClosureBody = sourceFunction.isClosureBody
+                .isClosureBody = sourceFunction.isClosureBody,
+                .nativeBinding = sourceFunction.nativeBinding
             };
             for (const typed::Parameter& parameter : sourceFunction.parameters)
                 function.parameters.push_back(lowerParameter(parameter));
