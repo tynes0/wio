@@ -682,7 +682,16 @@ namespace wio
                 ? makeDefaultWirPath(sourcePath, intermediateDir, kind)
                 : std::filesystem::absolute(std::filesystem::path(configuredOutputs.front())).make_preferred();
 
-            wir::typed::BuildResult typedResult = wir::typed::Builder{}.build(program);
+            wir::typed::BuildOptions buildOptions;
+            const std::vector<std::string> configuredBinaries =
+                gAppData.argParser.GetValuesOf<std::string>("OUTPUT");
+            buildOptions.logicalModuleName = configuredBinaries.empty()
+                ? sourcePath.filename().generic_string()
+                : std::filesystem::path(configuredBinaries.front()).stem().generic_string();
+            buildOptions.moduleKind = Compiler::get().getBuildTarget() == BuildTarget::Executable
+                ? wir::ModuleKind::Program
+                : wir::ModuleKind::WioLibrary;
+            wir::typed::BuildResult typedResult = wir::typed::Builder{}.build(program, buildOptions);
             reportTypedWirDiagnostics(typedResult);
             WIO_LOG_PROCESS_ERRORS(CompilationError);
             const wir::typed::VerificationResult typedVerification =

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "wio/wir/id.h"
+#include "wio/wir/module.h"
 #include "wio/wir/source_span.h"
 #include "wio/wir/type.h"
 #include "wio/wir/typed_ir.h"
@@ -148,6 +149,7 @@ namespace wio::wir::lowered
     struct Module
     {
         std::string name;
+        ModuleContract contract;
         TypeTable types;
         std::vector<Function> functions;
     };

@@ -153,6 +153,7 @@ namespace wio::wir
         void run()
         {
             result_.module_.name = source_.name;
+            result_.module_.contract = source_.contract;
             result_.module_.types = source_.types;
             result_.module_.functions.reserve(source_.functions.size());
             for (const typed::Function& sourceFunction : source_.functions)

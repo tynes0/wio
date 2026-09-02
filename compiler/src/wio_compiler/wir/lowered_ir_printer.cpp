@@ -461,6 +461,38 @@ namespace wio::wir::lowered
     {
         std::ostringstream stream;
         stream << "lowered-wir module " << std::quoted(module.name) << " {\n";
+        stream << "  contract kind=" << moduleKindName(module.contract.kind)
+               << " logical-name=" << std::quoted(module.contract.logicalName)
+               << " stable-key=" << std::quoted(module.contract.stableKey)
+               << " stable-id=" << module.contract.stableId
+               << " abi-v" << module.contract.callTable.descriptorVersion << '\n';
+        for (const ModuleImport& import : module.contract.imports)
+            stream << "  import " << moduleImportKindName(import.kind) << " "
+                   << std::quoted(import.logicalName) << " from " << std::quoted(import.sourcePath)
+                   << " stable-id=" << import.stableId << '\n';
+        for (const ModuleExport& entry : module.contract.exports)
+        {
+            stream << "  export[" << entry.callTableSlot << "] " << moduleExportKindName(entry.kind)
+                   << "/" << moduleExportRoleName(entry.role) << " " << std::quoted(entry.logicalName)
+                   << " symbol=" << std::quoted(entry.symbolName) << " stable-id=" << entry.stableId;
+            if (!entry.roleName.empty()) stream << " role-name=" << std::quoted(entry.roleName);
+            if (entry.function) stream << " function=" << functionRef(entry.function);
+            if (entry.type) stream << " type=" << typeRef(entry.type);
+            stream << '\n';
+        }
+        for (const ReflectionDescriptor& descriptor : module.contract.reflection)
+            stream << "  reflect " << typeRef(descriptor.type) << " " << std::quoted(descriptor.logicalName)
+                   << " stable-type-id=" << descriptor.stableTypeId
+                   << " exported=" << (descriptor.isExported ? "true" : "false") << '\n';
+        const ModuleLifecycle& lifecycle = module.contract.lifecycle;
+        if (lifecycle.apiVersion || lifecycle.load || lifecycle.update || lifecycle.unload ||
+            lifecycle.saveState || lifecycle.restoreState)
+            stream << "  lifecycle api-version=" << functionRef(lifecycle.apiVersion)
+                   << " load=" << functionRef(lifecycle.load)
+                   << " update=" << functionRef(lifecycle.update)
+                   << " save=" << functionRef(lifecycle.saveState)
+                   << " restore=" << functionRef(lifecycle.restoreState)
+                   << " unload=" << functionRef(lifecycle.unload) << '\n';
         for (std::size_t index = 0; index < module.types.size(); ++index)
         {
             const TypeId id{static_cast<TypeId::ValueType>(index)};

@@ -274,6 +274,61 @@ namespace wio::wir::lowered
             }
         }
 
+        if (module.contract.logicalName.empty() || module.contract.stableKey.empty() || module.contract.stableId == 0 ||
+            module.contract.stableId != stableModuleHash(module.contract.stableKey))
+            report("LIR1500", "Lowered WIR module contract requires a canonical stable identity.");
+        if (module.contract.callTable.descriptorVersion != ModuleAbiDescriptorVersion ||
+            module.contract.callTable.stableId == 0 ||
+            module.contract.callTable.stableId != stableModuleHash(module.contract.stableKey +
+                ":sdk-call-table:v" + std::to_string(ModuleAbiDescriptorVersion)) ||
+            module.contract.callTable.entries.size() != module.contract.exports.size())
+            report("LIR1501", "Lowered WIR SDK call table version, identity, and export cardinality must be canonical.");
+        std::unordered_set<std::uint64_t> importIds;
+        for (const ModuleImport& import : module.contract.imports)
+            if (import.stableId == 0 || import.logicalName.empty() || !importIds.insert(import.stableId).second)
+                report("LIR1504", "Lowered WIR module imports require unique stable identities and logical names.");
+        std::unordered_set<std::uint64_t> exportIds;
+        for (std::size_t index = 0; index < module.contract.exports.size(); ++index)
+        {
+            const ModuleExport& entry = module.contract.exports[index];
+            const bool identityValid = entry.stableId != 0 && !entry.stableKey.empty() &&
+                entry.stableId == stableModuleHash(entry.stableKey) && exportIds.insert(entry.stableId).second;
+            const bool slotValid = entry.callTableSlot == index &&
+                module.contract.callTable.entries[index] == entry.stableId;
+            bool targetValid = false;
+            if (entry.kind == ModuleExportKind::Function ||
+                entry.kind == ModuleExportKind::GenericFunctionSpecialization)
+                targetValid = entry.function && functions.contains(entry.function.value()) &&
+                    module.types.tryGet(entry.returnType) != nullptr;
+            else
+            {
+                const Type* type = module.types.tryGet(entry.type);
+                targetValid = type && type->kind == TypeKind::Named;
+            }
+            const bool roleValid = entry.role == ModuleExportRole::Ordinary
+                ? entry.roleName.empty()
+                : !entry.roleName.empty();
+            if (!identityValid || !slotValid || !roleValid || !targetValid)
+                report("LIR1502", "Lowered WIR export descriptor has an invalid stable identity, slot, or target.");
+        }
+        const ModuleLifecycle& lifecycle = module.contract.lifecycle;
+        const auto lifecycleKnown = [&](const FunctionId id)
+            { return !id || functions.contains(id.value()); };
+        if (!lifecycleKnown(lifecycle.apiVersion) || !lifecycleKnown(lifecycle.load) ||
+            !lifecycleKnown(lifecycle.update) || !lifecycleKnown(lifecycle.unload) ||
+            !lifecycleKnown(lifecycle.saveState) || !lifecycleKnown(lifecycle.restoreState) ||
+            static_cast<bool>(lifecycle.saveState) != static_cast<bool>(lifecycle.restoreState))
+            report("LIR1503", "Lowered WIR module lifecycle must reference known functions and pair save/restore state hooks.");
+        std::unordered_set<std::uint64_t> reflectedTypes;
+        for (const ReflectionDescriptor& descriptor : module.contract.reflection)
+        {
+            const Type* type = module.types.tryGet(descriptor.type);
+            if (descriptor.stableTypeId == 0 || descriptor.logicalName.empty() || !type ||
+                type->kind != TypeKind::Named || descriptor.nominalKind != type->nominalKind ||
+                !reflectedTypes.insert(descriptor.stableTypeId).second)
+                report("LIR1505", "Lowered WIR reflection descriptors require unique identities and matching nominal types.");
+        }
+
         for (const Type& type : module.types.types())
         {
             for (const MethodLayout& method : type.methods)

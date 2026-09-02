@@ -380,6 +380,78 @@ namespace wio::wir::typed
             }
         }
 
+        if (module.contract.logicalName.empty() || module.contract.stableKey.empty() || module.contract.stableId == 0 ||
+            module.contract.stableId != stableModuleHash(module.contract.stableKey))
+            report("WIR1500", "Typed WIR module contract requires a canonical stable identity.");
+        if (module.contract.callTable.descriptorVersion != ModuleAbiDescriptorVersion ||
+            module.contract.callTable.stableId == 0 ||
+            module.contract.callTable.stableId != stableModuleHash(module.contract.stableKey +
+                ":sdk-call-table:v" + std::to_string(ModuleAbiDescriptorVersion)) ||
+            module.contract.callTable.entries.size() != module.contract.exports.size())
+            report("WIR1501", "Typed WIR SDK call table version, identity, and export cardinality must be canonical.");
+
+        std::unordered_set<std::uint64_t> importIds;
+        for (const ModuleImport& import : module.contract.imports)
+            if (import.stableId == 0 || import.logicalName.empty() || !importIds.insert(import.stableId).second)
+                report("WIR1502", "Typed WIR module imports require unique stable identities and logical names.");
+
+        std::unordered_set<std::uint64_t> exportIds;
+        for (std::size_t index = 0; index < module.contract.exports.size(); ++index)
+        {
+            const ModuleExport& entry = module.contract.exports[index];
+            const bool identityValid = entry.stableId != 0 && !entry.stableKey.empty() &&
+                entry.stableId == stableModuleHash(entry.stableKey) && exportIds.insert(entry.stableId).second;
+            const bool slotValid = entry.callTableSlot == index &&
+                module.contract.callTable.entries[index] == entry.stableId;
+            bool targetValid = false;
+            if (entry.kind == ModuleExportKind::Function ||
+                entry.kind == ModuleExportKind::GenericFunctionSpecialization)
+            {
+                const auto function = entry.function ? functions.find(entry.function.value()) : functions.end();
+                targetValid = function != functions.end() && module.types.tryGet(entry.returnType) &&
+                    std::ranges::all_of(entry.parameterTypes, [&](const TypeId type)
+                        { return module.types.tryGet(type) != nullptr; }) &&
+                    std::ranges::all_of(entry.genericArguments, [&](const TypeId type)
+                        { return module.types.tryGet(type) != nullptr; });
+                if (entry.kind == ModuleExportKind::GenericFunctionSpecialization)
+                    targetValid = targetValid && !entry.genericArguments.empty();
+                else
+                    targetValid = targetValid && entry.returnType == function->second->returnType;
+            }
+            else
+            {
+                const Type* type = module.types.tryGet(entry.type);
+                targetValid = type && type->kind == TypeKind::Named &&
+                    ((entry.kind == ModuleExportKind::ObjectType && type->nominalKind == NominalKind::Object) ||
+                     (entry.kind == ModuleExportKind::ComponentType && type->nominalKind == NominalKind::Component));
+            }
+            const bool roleValid = entry.role == ModuleExportRole::Ordinary
+                ? entry.roleName.empty()
+                : !entry.roleName.empty();
+            if (!identityValid || !slotValid || entry.logicalName.empty() || entry.symbolName.empty() ||
+                !roleValid || !targetValid)
+                report("WIR1503", "Typed WIR export descriptor has an invalid stable identity, slot, signature, or target.");
+        }
+
+        std::unordered_set<std::uint64_t> reflectedTypes;
+        for (const ReflectionDescriptor& descriptor : module.contract.reflection)
+        {
+            const Type* type = module.types.tryGet(descriptor.type);
+            if (descriptor.stableTypeId == 0 || descriptor.logicalName.empty() || !type ||
+                type->kind != TypeKind::Named || descriptor.nominalKind != type->nominalKind ||
+                !reflectedTypes.insert(descriptor.stableTypeId).second)
+                report("WIR1504", "Typed WIR reflection descriptors require unique identities and matching nominal types.");
+        }
+
+        const ModuleLifecycle& lifecycle = module.contract.lifecycle;
+        const auto lifecycleKnown = [&](const FunctionId id)
+            { return !id || functions.contains(id.value()); };
+        if (!lifecycleKnown(lifecycle.apiVersion) || !lifecycleKnown(lifecycle.load) ||
+            !lifecycleKnown(lifecycle.update) || !lifecycleKnown(lifecycle.unload) ||
+            !lifecycleKnown(lifecycle.saveState) || !lifecycleKnown(lifecycle.restoreState) ||
+            static_cast<bool>(lifecycle.saveState) != static_cast<bool>(lifecycle.restoreState))
+            report("WIR1505", "Typed WIR module lifecycle must reference known functions and pair save/restore state hooks.");
+
 
         for (const Type& type : module.types.types())
         {

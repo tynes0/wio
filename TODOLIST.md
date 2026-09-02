@@ -510,13 +510,17 @@ Rider, and CLion are defined in
    `native-invoke`, deterministic thunk planning, and the C-shaped SDK handle
    contract survive verified Typed-to-Lowered WIR. Concrete thunk bodies remain
    work for the new C++ backend and VM native bridge rather than the frontend.
+   Module/import/export identity, concrete generic export signatures,
+   reflection descriptors, lifecycle/state-transfer hooks, and deterministic
+   SDK call-table slots also survive through one verified canonical contract.
+   The compatible SDK sidecar is frozen; generated sidecar emission and loader
+   preference switching remain backend-integration work.
    Keep
    the current C++ generator as the production path while finishing remaining
    language coverage, then consume Lowered WIR from a new C++ backend and a
    bytecode VM. Add async state-machine lowering,
    exceptional/panic cleanup edges, globals/constants, remaining tuple/span
-   operations, reflection
-   payloads, backend parity tests, and compile-time/
+   operations, attribute reflection payloads, backend parity tests, and compile-time/
    runtime benchmarks before changing the default backend.
 
 ## P3 - Product Direction

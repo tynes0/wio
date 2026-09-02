@@ -886,3 +886,12 @@ here as historical evidence rather than active work:
 - [x] Realm-qualified calls no longer probe namespace identifiers as method
       receivers, and contextual `ref` arguments use the selected ABI parameter
       instead of leaking semantic `<unknown>` placeholders into WIR.
+- [x] The Module, Export, and SDK Model gives each module a
+      checkout-independent identity and retains explicit Wio/standard/native
+      dependencies, stable exports, concrete generic SDK signatures,
+      reflection descriptors, lifecycle/state-transfer hooks, and deterministic
+      call-table slots through Typed and Lowered WIR.
+- [x] Module verifiers reject stable-ID drift, duplicate exports, call-table
+      mismatch, invalid targets, malformed reflection, and unpaired hot-reload
+      hooks. The versioned C-shaped `wio_module_contract.h` sidecar adds
+      stable-ID lookup without breaking the existing `WioModuleApi` v11 ABI.

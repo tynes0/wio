@@ -19,7 +19,8 @@ namespace wio::wir::typed
     class BuildContext final
     {
     public:
-        explicit BuildContext(BuildResult& result) : result_(result) {}
+        BuildContext(BuildResult& result, const BuildOptions& options)
+            : result_(result), options_(options) {}
 
         void build(const Ref<Program>& program)
         {
@@ -32,10 +33,33 @@ namespace wio::wir::typed
                 return;
             }
 
+            std::string logicalName = options_.logicalModuleName.empty()
+                ? result_.module_.name
+                : options_.logicalModuleName;
+            std::ranges::replace(logicalName, '\\', '/');
+            if (options_.logicalModuleName.empty())
+                if (const std::size_t slash = logicalName.find_last_of('/'); slash != std::string::npos)
+                    logicalName.erase(0, slash + 1);
+            result_.module_.contract.logicalName = logicalName;
+            if (options_.moduleKind)
+                result_.module_.contract.kind = *options_.moduleKind;
+            result_.module_.contract.lifecycle.stateSchemaVersion = options_.stateSchemaVersion;
+            result_.module_.contract.stableKey = "wio.module:" + logicalName;
+            result_.module_.contract.stableId = stableModuleHash(result_.module_.contract.stableKey);
+            result_.module_.contract.callTable.stableId = stableModuleHash(
+                result_.module_.contract.stableKey + ":sdk-call-table:v" +
+                std::to_string(ModuleAbiDescriptorVersion));
+            collectImports(program->statements);
             collectFunctions(program->statements);
+            collectTypeDeclarations(program->statements);
             nextFunctionId_ = static_cast<FunctionId::ValueType>(declarations_.size());
             for (const DeclarationInfo& declaration : declarations_)
                 buildFunction(declaration);
+            buildTypeExportsAndReflection();
+            const ModuleLifecycle& lifecycle = result_.module_.contract.lifecycle;
+            if (!options_.moduleKind && (!result_.module_.contract.exports.empty() || lifecycle.apiVersion || lifecycle.load ||
+                lifecycle.update || lifecycle.unload || lifecycle.saveState || lifecycle.restoreState))
+                result_.module_.contract.kind = ModuleKind::WioLibrary;
         }
 
     private:
@@ -62,6 +86,14 @@ namespace wio::wir::typed
             bool isExtension = false;
         };
 
+        struct TypeDeclarationInfo
+        {
+            const ASTNode* declaration = nullptr;
+            const std::vector<NodePtr<AttributeStatement>>* attributes = nullptr;
+            Ref<sema::Type> type;
+            ModuleExportKind exportKind = ModuleExportKind::ComponentType;
+        };
+
         struct LoopContext
         {
             BlockId continueTarget;
@@ -71,7 +103,9 @@ namespace wio::wir::typed
         };
 
         BuildResult& result_;
+        const BuildOptions& options_;
         std::vector<DeclarationInfo> declarations_;
+        std::vector<TypeDeclarationInfo> typeDeclarations_;
         std::unordered_map<const sema::Symbol*, FunctionId> functionsBySymbol_;
         std::unordered_map<const sema::Symbol*, const FunctionDeclaration*> declarationsBySymbol_;
         std::unordered_map<const sema::Type*, TypeId> typesBySemanticType_;
@@ -212,6 +246,76 @@ namespace wio::wir::typed
                 hash *= 1099511628211ull;
             }
             return hash;
+        }
+
+        std::string typeStableKey(const TypeId typeId) const
+        {
+            const Type* type = result_.module_.types.tryGet(typeId);
+            if (!type)
+                return "invalid";
+            std::string key{typeKindName(type->kind)};
+            if (!type->name.empty())
+                key += ":" + type->name;
+            if (!type->arguments.empty())
+            {
+                key += "<";
+                for (std::size_t index = 0; index < type->arguments.size(); ++index)
+                {
+                    if (index > 0) key += ",";
+                    key += typeStableKey(type->arguments[index]);
+                }
+                key += ">";
+            }
+            return key;
+        }
+
+        std::string exportStableKey(
+            const Function& function,
+            const std::string_view logicalName,
+            const std::vector<TypeId>& genericArguments) const
+        {
+            std::string key = result_.module_.contract.stableKey + ":export:" +
+                std::string{logicalName} + "(";
+            const std::size_t hidden = function.captureParameterCount + (function.isMethod ? 1u : 0u);
+            for (std::size_t index = hidden; index < function.parameters.size(); ++index)
+            {
+                if (index > hidden) key += ",";
+                key += typeStableKey(function.parameters[index].type);
+            }
+            key += ")->" + typeStableKey(function.returnType);
+            if (!genericArguments.empty())
+            {
+                key += "<";
+                for (std::size_t index = 0; index < genericArguments.size(); ++index)
+                {
+                    if (index > 0) key += ",";
+                    key += typeStableKey(genericArguments[index]);
+                }
+                key += ">";
+            }
+            return key;
+        }
+
+        TypeId substituteGenericType(
+            const TypeId source,
+            const std::vector<TypeId>& parameters,
+            const std::vector<TypeId>& arguments)
+        {
+            for (std::size_t index = 0; index < parameters.size() && index < arguments.size(); ++index)
+                if (source == parameters[index])
+                    return arguments[index];
+            const Type* sourceType = result_.module_.types.tryGet(source);
+            if (!sourceType || sourceType->arguments.empty())
+                return source;
+            Type instantiated = *sourceType;
+            bool changed = false;
+            for (TypeId& argument : instantiated.arguments)
+            {
+                const TypeId replacement = substituteGenericType(argument, parameters, arguments);
+                changed |= replacement != argument;
+                argument = replacement;
+            }
+            return changed ? result_.module_.types.intern(std::move(instantiated)) : source;
         }
 
         static std::string nativeThunkSymbol(const std::string_view stableKey)
@@ -526,6 +630,116 @@ namespace wio::wir::typed
         {
             const Ref<sema::Symbol> symbol = name ? name->referencedSymbol.Lock() : nullptr;
             return symbol ? symbol->type : nullptr;
+        }
+
+        void collectImports(const std::vector<NodePtr<Statement>>& statements)
+        {
+            for (const auto& statement : statements)
+            {
+                if (!statement)
+                    continue;
+                if (const auto* use = statement->as<UseStatement>())
+                {
+                    ModuleImport import;
+                    import.logicalName = use->moduleName.empty() ? use->modulePath : use->moduleName;
+                    import.sourcePath = use->modulePath;
+                    import.alias = use->aliasName;
+                    import.importedSymbols = use->importedSymbols;
+                    import.kind = use->isCppHeader
+                        ? ModuleImportKind::NativeHeader
+                        : (use->isStdLib ? ModuleImportKind::StandardModule : ModuleImportKind::WioModule);
+                    import.importAll = use->importAllIntoScope;
+                    const std::string identity = result_.module_.contract.stableKey + ":import:" +
+                        std::string{moduleImportKindName(import.kind)} + ":" + import.sourcePath +
+                        ":" + import.logicalName;
+                    import.stableId = stableHash(identity);
+                    result_.module_.contract.imports.push_back(std::move(import));
+                    continue;
+                }
+                if (const auto* group = statement->as<DeclarationGroup>())
+                    collectImports(group->declarations);
+                else if (const auto* realm = statement->as<RealmDeclaration>())
+                    collectImports(realm->statements);
+            }
+        }
+
+        void collectTypeDeclarations(const std::vector<NodePtr<Statement>>& statements)
+        {
+            for (const auto& statement : statements)
+            {
+                if (!statement)
+                    continue;
+                if (const auto* component = statement->as<ComponentDeclaration>())
+                {
+                    typeDeclarations_.push_back(TypeDeclarationInfo{
+                        .declaration = component,
+                        .attributes = &component->attributes,
+                        .type = declaredOwnerType(component->name),
+                        .exportKind = ModuleExportKind::ComponentType
+                    });
+                    continue;
+                }
+                if (const auto* object = statement->as<ObjectDeclaration>())
+                {
+                    typeDeclarations_.push_back(TypeDeclarationInfo{
+                        .declaration = object,
+                        .attributes = &object->attributes,
+                        .type = declaredOwnerType(object->name),
+                        .exportKind = ModuleExportKind::ObjectType
+                    });
+                    continue;
+                }
+                if (const auto* group = statement->as<DeclarationGroup>())
+                    collectTypeDeclarations(group->declarations);
+                else if (const auto* realm = statement->as<RealmDeclaration>())
+                    collectTypeDeclarations(realm->statements);
+            }
+        }
+
+        void buildTypeExportsAndReflection()
+        {
+            std::unordered_set<TypeId::ValueType> exportedTypes;
+            for (const TypeDeclarationInfo& declaration : typeDeclarations_)
+            {
+                if (!declaration.type)
+                    continue;
+                const TypeId type = mapType(declaration.type, declaration.declaration);
+                const Type* descriptor = result_.module_.types.tryGet(type);
+                if (!descriptor || descriptor->kind != TypeKind::Named)
+                    continue;
+                const bool exported = declaration.attributes &&
+                    hasBuiltinAttribute(*declaration.attributes, Attribute::Export);
+                if (!exported)
+                    continue;
+                exportedTypes.insert(type.value());
+                ModuleExport entry;
+                entry.logicalName = descriptor->name;
+                entry.symbolName = descriptor->name;
+                entry.kind = declaration.exportKind;
+                entry.type = type;
+                entry.callTableSlot = static_cast<std::uint32_t>(result_.module_.contract.exports.size());
+                entry.stableKey = result_.module_.contract.stableKey + ":type-export:" +
+                    typeStableKey(type);
+                entry.stableId = stableHash(entry.stableKey);
+                result_.module_.contract.callTable.entries.push_back(entry.stableId);
+                result_.module_.contract.exports.push_back(std::move(entry));
+            }
+
+            for (std::size_t index = 0; index < result_.module_.types.size(); ++index)
+            {
+                const TypeId typeId{static_cast<TypeId::ValueType>(index)};
+                const Type& type = result_.module_.types.get(typeId);
+                if (type.kind != TypeKind::Named)
+                    continue;
+                result_.module_.contract.reflection.push_back(ReflectionDescriptor{
+                    .stableTypeId = stableHash(result_.module_.contract.stableKey + ":type:" +
+                        typeStableKey(typeId)),
+                    .logicalName = type.name,
+                    .type = typeId,
+                    .nominalKind = type.nominalKind,
+                    .isExported = exportedTypes.contains(typeId.value())
+                });
+            }
         }
 
         void collectFunctions(const std::vector<NodePtr<Statement>>& statements)
@@ -1233,6 +1447,92 @@ namespace wio::wir::typed
             return id;
         }
 
+        void bindLifecycleFunction(const FunctionDeclaration& declaration, const FunctionId function)
+        {
+            ModuleLifecycle& lifecycle = result_.module_.contract.lifecycle;
+            if (hasBuiltinAttribute(declaration.attributes, Attribute::ModuleApiVersion)) lifecycle.apiVersion = function;
+            if (hasBuiltinAttribute(declaration.attributes, Attribute::ModuleLoad)) lifecycle.load = function;
+            if (hasBuiltinAttribute(declaration.attributes, Attribute::ModuleUpdate)) lifecycle.update = function;
+            if (hasBuiltinAttribute(declaration.attributes, Attribute::ModuleUnload)) lifecycle.unload = function;
+            if (hasBuiltinAttribute(declaration.attributes, Attribute::ModuleSaveState)) lifecycle.saveState = function;
+            if (hasBuiltinAttribute(declaration.attributes, Attribute::ModuleRestoreState)) lifecycle.restoreState = function;
+        }
+
+        void appendFunctionExport(
+            const FunctionDeclaration& declaration,
+            const Ref<sema::Symbol>& symbol,
+            const Function& function,
+            std::vector<TypeId> genericArguments)
+        {
+            ModuleExport entry;
+            entry.function = function.id;
+            entry.kind = genericArguments.empty()
+                ? ModuleExportKind::Function
+                : ModuleExportKind::GenericFunctionSpecialization;
+            entry.logicalName = symbol->name;
+            if (!genericArguments.empty())
+            {
+                entry.logicalName += "<";
+                for (std::size_t index = 0; index < genericArguments.size(); ++index)
+                {
+                    if (index > 0) entry.logicalName += ",";
+                    entry.logicalName += typeStableKey(genericArguments[index]);
+                }
+                entry.logicalName += ">";
+            }
+            entry.symbolName = attributeValue(declaration.attributes, Attribute::CppName);
+            if (entry.symbolName.empty())
+                entry.symbolName = entry.logicalName;
+            if (hasBuiltinAttribute(declaration.attributes, Attribute::Command))
+            {
+                entry.role = ModuleExportRole::Command;
+                entry.roleName = attributeValue(declaration.attributes, Attribute::Command);
+            }
+            else if (hasBuiltinAttribute(declaration.attributes, Attribute::Event))
+            {
+                entry.role = ModuleExportRole::EventHook;
+                entry.roleName = attributeValue(declaration.attributes, Attribute::Event);
+            }
+            if (entry.role != ModuleExportRole::Ordinary && entry.roleName.empty())
+                entry.roleName = entry.logicalName;
+            const std::size_t hidden = function.captureParameterCount + (function.isMethod ? 1u : 0u);
+            for (std::size_t index = hidden; index < function.parameters.size(); ++index)
+                entry.parameterTypes.push_back(substituteGenericType(
+                    function.parameters[index].type, function.genericParameters, genericArguments));
+            entry.returnType = substituteGenericType(
+                function.returnType, function.genericParameters, genericArguments);
+            entry.genericArguments = std::move(genericArguments);
+            entry.callTableSlot = static_cast<std::uint32_t>(result_.module_.contract.exports.size());
+            entry.isAsync = function.isAsync;
+            entry.stableKey = exportStableKey(function, entry.logicalName, entry.genericArguments);
+            entry.stableId = stableHash(entry.stableKey);
+            result_.module_.contract.callTable.entries.push_back(entry.stableId);
+            result_.module_.contract.exports.push_back(std::move(entry));
+        }
+
+        void buildFunctionContract(
+            const FunctionDeclaration& declaration,
+            const Ref<sema::Symbol>& symbol,
+            const Function& function)
+        {
+            bindLifecycleFunction(declaration, function.id);
+            if (!hasBuiltinAttribute(declaration.attributes, Attribute::Export))
+                return;
+            if (!symbol->genericParameterTypes.empty() && !symbol->resolvedGenericInstantiations.empty())
+            {
+                for (const auto& instantiation : symbol->resolvedGenericInstantiations)
+                {
+                    std::vector<TypeId> arguments;
+                    arguments.reserve(instantiation.size());
+                    for (const Ref<sema::Type>& argument : instantiation)
+                        arguments.push_back(mapType(argument, &declaration));
+                    appendFunctionExport(declaration, symbol, function, std::move(arguments));
+                }
+                return;
+            }
+            appendFunctionExport(declaration, symbol, function, {});
+        }
+
         void buildFunction(const DeclarationInfo& declarationInfo)
         {
             const FunctionDeclaration& declaration = *declarationInfo.declaration;
@@ -1378,6 +1678,7 @@ namespace wio::wir::typed
                 }
             }
 
+            buildFunctionContract(declaration, symbol, function);
             result_.module_.functions.push_back(std::move(function));
         }
 
@@ -4176,10 +4477,10 @@ namespace wio::wir::typed
         }
     };
 
-    BuildResult Builder::build(const Ref<Program>& program) const
+    BuildResult Builder::build(const Ref<Program>& program, const BuildOptions& options) const
     {
         BuildResult result;
-        BuildContext{result}.build(program);
+        BuildContext{result, options}.build(program);
         return result;
     }
 }

@@ -4,11 +4,19 @@
 #include "wio/wir/typed_ir.h"
 
 #include <string>
+#include <optional>
 #include <utility>
 #include <vector>
 
 namespace wio::wir::typed
 {
+    struct BuildOptions
+    {
+        std::string logicalModuleName;
+        std::optional<ModuleKind> moduleKind;
+        std::uint32_t stateSchemaVersion = 0;
+    };
+
     struct BuildDiagnostic
     {
         std::string code;
@@ -34,6 +42,8 @@ namespace wio::wir::typed
     class Builder final
     {
     public:
-        [[nodiscard]] BuildResult build(const Ref<Program>& program) const;
+        [[nodiscard]] BuildResult build(
+            const Ref<Program>& program,
+            const BuildOptions& options = {}) const;
     };
 }

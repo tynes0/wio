@@ -257,6 +257,20 @@ thunk identities, malformed POD bindings, invalid ref mutability, callback or
 opaque marshalling on the wrong type, generic bindings without specialization
 thunks, and inconsistent adapter flags.
 
+## Module, Export, and SDK Model
+
+Module boundaries are explicit in WIR. `ModuleContract` records a
+checkout-independent logical identity, Wio/standard/native dependencies,
+stable function/type exports, concrete generic specializations, reflection
+descriptors, lifecycle and state-transfer hooks, and deterministic SDK
+call-table order. Canonical lowering preserves the complete contract exactly.
+
+The public `wio_module_contract.h` mirrors this as a fixed-width SDK sidecar.
+It coexists with `WioModuleApi` v11 during backend migration and lets future
+C++ and VM loaders resolve an export by stable ID and slot rather than by
+guessing a generated C++ symbol. See
+[`WIO_MODULE_SDK_MODEL.md`](WIO_MODULE_SDK_MODEL.md) for the frozen rules.
+
 ## Lowered WIR
 
 Lowered WIR is the shared backend contract. Its first canonicalization pass
