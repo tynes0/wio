@@ -101,6 +101,42 @@ namespace wio::wir
         RetainedSelf
     };
 
+    enum class AsyncExecutorKind : std::uint8_t
+    {
+        Inherit,
+        Main,
+        Worker,
+        Blocking,
+        Io
+    };
+
+    enum class AsyncOperation : std::uint8_t
+    {
+        None,
+        AwaitTask,
+        SwitchExecutor,
+        Start,
+        Spawn,
+        SpawnWorker,
+        SpawnBlocking,
+        SpawnIo,
+        Join,
+        Cancel,
+        CancelAfter,
+        Detach,
+        Yield,
+        Sleep,
+        Wait
+    };
+
+    enum class CoroutineFrameSlotKind : std::uint8_t
+    {
+        Parameter,
+        Local,
+        AwaitedTask,
+        Temporary
+    };
+
     // A backend-neutral ownership contract. ReferenceCounted values use the
     // same intrusive strong/weak protocol in generated C++ and in the VM.
     enum class OwnershipModel : std::uint8_t
@@ -117,6 +153,43 @@ namespace wio::wir
         None,
         DestroyValue,
         ReleaseReference
+    };
+
+    struct CoroutineFrameSlot
+    {
+        std::uint32_t slot = 0;
+        ValueId value;
+        TypeId type;
+        CoroutineFrameSlotKind kind = CoroutineFrameSlotKind::Temporary;
+        OwnershipModel ownership = OwnershipModel::Trivial;
+        CleanupKind cleanup = CleanupKind::None;
+
+        auto operator<=>(const CoroutineFrameSlot&) const = default;
+    };
+
+    struct CoroutineState
+    {
+        std::uint32_t index = 0;
+        BlockId suspendBlock;
+        BlockId resumeBlock;
+        ValueId awaitedTask;
+        ValueId resumedValue;
+        TypeId resultType;
+        AsyncExecutorKind executor = AsyncExecutorKind::Inherit;
+        bool cancellationPoint = true;
+
+        auto operator<=>(const CoroutineState&) const = default;
+    };
+
+    struct CoroutineLayout
+    {
+        TypeId resultType;
+        std::vector<CoroutineFrameSlot> frameSlots;
+        std::vector<CoroutineState> states;
+        bool cooperativeCancellation = true;
+        bool maySwitchThreads = false;
+
+        auto operator<=>(const CoroutineLayout&) const = default;
     };
 
     enum class NativeSymbolLanguage : std::uint8_t
@@ -318,6 +391,9 @@ namespace wio::wir
     [[nodiscard]] std::string_view intrinsicFamilyName(IntrinsicFamily family);
     [[nodiscard]] std::string_view fieldVisibilityName(FieldVisibility visibility);
     [[nodiscard]] std::string_view captureKindName(CaptureKind kind);
+    [[nodiscard]] std::string_view asyncExecutorKindName(AsyncExecutorKind executor);
+    [[nodiscard]] std::string_view asyncOperationName(AsyncOperation operation);
+    [[nodiscard]] std::string_view coroutineFrameSlotKindName(CoroutineFrameSlotKind kind);
     [[nodiscard]] std::string_view ownershipModelName(OwnershipModel ownership);
     [[nodiscard]] std::string_view cleanupKindName(CleanupKind cleanup);
     [[nodiscard]] std::string_view nativeSymbolLanguageName(NativeSymbolLanguage language);

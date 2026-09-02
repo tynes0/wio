@@ -370,6 +370,24 @@ namespace wio::wir::lowered
                 stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0))
                        << " to " << typeRef(instruction.targetType);
                 break;
+            case Opcode::CancellationCheck:
+                stream << "cancellation-check state=" << instruction.projectionIndex;
+                break;
+            case Opcode::CoroutineSuspend:
+                stream << "coroutine-suspend state=" << instruction.projectionIndex;
+                if (!instruction.operands.empty())
+                    stream << " task=" << valueRef(instruction.operands.front());
+                stream << " resume=";
+                printTarget(stream, instruction.targets.at(0));
+                break;
+            case Opcode::CoroutineResume:
+                stream << "coroutine-resume state=" << instruction.projectionIndex;
+                break;
+            case Opcode::CoroutineComplete:
+                stream << "coroutine-complete";
+                if (!instruction.operands.empty())
+                    stream << " " << valueRef(instruction.operands.front());
+                break;
             case Opcode::LocalPlace:
                 stream << "local-place " << std::quoted(instruction.selector);
                 break;
@@ -453,6 +471,9 @@ namespace wio::wir::lowered
             }
             if (!instruction.specializationKey.empty())
                 stream << " specialization=" << std::quoted(instruction.specializationKey);
+            if (instruction.asyncOperation != AsyncOperation::None)
+                stream << " async=" << asyncOperationName(instruction.asyncOperation)
+                       << " executor=" << asyncExecutorKindName(instruction.asyncExecutor);
             stream << '\n';
         }
     }
@@ -531,6 +552,15 @@ namespace wio::wir::lowered
                            << " " << captureKindName(capture.kind);
                 }
                 stream << "}";
+            }
+            if (function.coroutine)
+            {
+                stream << " coroutine[result=" << typeRef(function.coroutine->resultType)
+                       << " states=" << function.coroutine->states.size()
+                       << " frame-slots=" << function.coroutine->frameSlots.size()
+                       << " cancellation=" << (function.coroutine->cooperativeCancellation ? "cooperative" : "none")
+                       << " thread-switch=" << (function.coroutine->maySwitchThreads ? "true" : "false")
+                       << "]";
             }
             if (function.isExternal)
             {

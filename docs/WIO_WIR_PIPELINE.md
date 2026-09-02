@@ -279,14 +279,20 @@ with block arguments, and a merge-block parameter. The verifier checks target
 existence, argument arity and types, terminators, value definitions, and use
 sites before any backend consumes the module.
 
-The deterministic pass order is currently:
+Async functions are also canonicalized here. Typed `await` and executor
+handoffs become explicit cancellation-check, suspend, resume, and completion
+operations backed by a stable coroutine frame/state layout. See
+[`WIO_ASYNC_WIR.md`](WIO_ASYNC_WIR.md).
+
+The deterministic pass order for an async module is currently:
 
 1. `verify-typed-wir`
 2. `lower-canonical-control-flow`
-3. `verify-lowered-wir`
+3. `lower-async-state-machines`
+4. `verify-lowered-wir`
 
-Future lowering stages will own async state machines, exceptional cleanup edges,
-and other semantics that
+Non-async modules omit step 3. Future lowering stages will own exceptional
+cleanup edges and other semantics that
 must be identical for C++ and bytecode.
 
 ## Inspecting WIR

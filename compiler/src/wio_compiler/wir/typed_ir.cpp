@@ -26,7 +26,8 @@ namespace wio::wir::typed
                opcode == Opcode::Interpolate || opcode == Opcode::EnumConstant ||
                opcode == Opcode::IntrinsicCall || opcode == Opcode::AnyBox ||
                opcode == Opcode::AnyCheckedCast || opcode == Opcode::AnyTypeTest ||
-               opcode == Opcode::NullableWrap || opcode == Opcode::LocalPlace ||
+               opcode == Opcode::NullableWrap || opcode == Opcode::Await ||
+               opcode == Opcode::LocalPlace ||
                opcode == Opcode::Load || opcode == Opcode::FieldPlace ||
                opcode == Opcode::ArrayPlace || opcode == Opcode::Borrow ||
                opcode == Opcode::ConstructComponent || opcode == Opcode::ConstructObject ||
@@ -71,6 +72,8 @@ namespace wio::wir::typed
         case Opcode::AnyCheckedCast: return "any-checked-cast";
         case Opcode::AnyTypeTest: return "any-type-test";
         case Opcode::NullableWrap: return "nullable-wrap";
+        case Opcode::Await: return "await";
+        case Opcode::ExecutorSwitch: return "executor-switch";
         case Opcode::LocalPlace: return "local-place";
         case Opcode::PlaceInit: return "place-init";
         case Opcode::Load: return "load";

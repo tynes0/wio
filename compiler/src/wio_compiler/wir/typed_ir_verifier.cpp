@@ -44,6 +44,16 @@ namespace wio::wir::typed
             return isNumeric(kind) && kind != TypeKind::F32 && kind != TypeKind::F64;
         }
 
+        TypeId coroutineResultType(const TypeTable& types, const Function& function)
+        {
+            if (!function.isAsync)
+                return function.returnType;
+            const Type* task = types.tryGet(function.returnType);
+            return task && task->kind == TypeKind::AsyncTask && task->arguments.size() == 1
+                ? task->arguments.front()
+                : TypeId{};
+        }
+
         ValueOwnership expectedOwnership(const Type& type)
         {
             if (type.ownership == OwnershipModel::Borrowed)
@@ -296,6 +306,16 @@ namespace wio::wir::typed
                 report("WIR1102", "Typed WIR function name cannot be empty.", function.source, function.id);
             if (!module.types.tryGet(function.returnType))
                 report("WIR1103", "Typed WIR function return type is invalid.", function.source, function.id);
+            const Type* asyncTaskType = module.types.tryGet(function.returnType);
+            const bool validAsyncResult = asyncTaskType && asyncTaskType->kind == TypeKind::AsyncTask &&
+                asyncTaskType->arguments.size() == 1;
+            if (function.isAsync && (!validAsyncResult || !function.coroutine ||
+                function.coroutine->resultType != asyncTaskType->arguments.front()))
+            {
+                report("WIR1114", "Async Typed WIR function requires coroutine<T> return and matching coroutine layout.", function.source, function.id);
+            }
+            if (!function.isAsync && function.coroutine)
+                report("WIR1115", "Non-async Typed WIR function cannot carry coroutine layout.", function.source, function.id);
             const Type* callableType = module.types.tryGet(function.callableType);
             if (!callableType || callableType->kind != TypeKind::Function || callableType->arguments.empty() ||
                 callableType->arguments.back() != function.returnType)
@@ -703,7 +723,16 @@ namespace wio::wir::typed
                     }
                     if (instruction.opcode == Opcode::IntrinsicCall && !instruction.result)
                         callReturnsVoid = true;
-                    const bool shouldHaveResult = producesValue(instruction.opcode) && !callReturnsVoid;
+                    bool awaitReturnsVoid = false;
+                    if (instruction.opcode == Opcode::Await && instruction.operands.size() == 1)
+                    {
+                        const Type* task = module.types.tryGet(valueType(instruction.operands.front()));
+                        const Type* payload = task && task->kind == TypeKind::AsyncTask && task->arguments.size() == 1
+                            ? module.types.tryGet(task->arguments.front())
+                            : nullptr;
+                        awaitReturnsVoid = payload && payload->kind == TypeKind::Void;
+                    }
+                    const bool shouldHaveResult = producesValue(instruction.opcode) && !callReturnsVoid && !awaitReturnsVoid;
                     if (shouldHaveResult && (!instruction.result || !module.types.tryGet(instruction.resultType)))
                         report("WIR1401", "Value-producing Typed WIR instruction requires a typed result.", instruction.source, function.id, block.id);
                     if (!shouldHaveResult && !isCallInstruction && instruction.result)
@@ -712,6 +741,13 @@ namespace wio::wir::typed
                         { return module.types.tryGet(type) != nullptr; }))
                     {
                         report("WIR1444", "Typed WIR callable generic arguments must reference valid types.", instruction.source, function.id, block.id);
+                    }
+                    const bool asyncMetadataCarrier = isCallInstruction || instruction.opcode == Opcode::Await ||
+                        instruction.opcode == Opcode::ExecutorSwitch;
+                    if (!asyncMetadataCarrier && (instruction.asyncOperation != AsyncOperation::None ||
+                        instruction.asyncExecutor != AsyncExecutorKind::Inherit))
+                    {
+                        report("WIR1473", "Typed WIR async metadata is attached to an unsupported instruction.", instruction.source, function.id, block.id);
                     }
 
                     if (instruction.opcode == Opcode::Constant && module.types.tryGet(instruction.resultType) &&
@@ -1379,12 +1415,42 @@ namespace wio::wir::typed
                                 report("WIR1412", "Typed WIR call result does not match its callee return type.", instruction.source, function.id, block.id);
                         }
                     }
+                    else if (instruction.opcode == Opcode::Await)
+                    {
+                        const Type* task = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const TypeId payloadType = task && task->kind == TypeKind::AsyncTask && task->arguments.size() == 1
+                            ? task->arguments.front()
+                            : TypeId{};
+                        const Type* payload = module.types.tryGet(payloadType);
+                        const bool resultValid = payload && payload->kind == TypeKind::Void
+                            ? !instruction.result
+                            : instruction.result && instruction.resultType == payloadType;
+                        if (!function.isAsync || !task || task->kind != TypeKind::AsyncTask ||
+                            task->arguments.size() != 1 || !resultValid ||
+                            instruction.asyncOperation != AsyncOperation::AwaitTask ||
+                            instruction.asyncExecutor != AsyncExecutorKind::Inherit)
+                        {
+                            report("WIR1474", "Typed WIR await requires an async function, one coroutine<T>, and its exact payload result.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::ExecutorSwitch)
+                    {
+                        if (!function.isAsync || !instruction.operands.empty() || instruction.result ||
+                            instruction.asyncOperation != AsyncOperation::SwitchExecutor ||
+                            instruction.asyncExecutor == AsyncExecutorKind::Inherit)
+                        {
+                            report("WIR1475", "Typed WIR executor switch requires an async function and an explicit destination executor.", instruction.source, function.id, block.id);
+                        }
+                    }
                     else if (instruction.opcode == Opcode::Return)
                     {
-                        const bool returnsVoid = module.types.tryGet(function.returnType) &&
-                            module.types.get(function.returnType).kind == TypeKind::Void;
+                        const TypeId resultType = coroutineResultType(module.types, function);
+                        const bool returnsVoid = module.types.tryGet(resultType) &&
+                            module.types.get(resultType).kind == TypeKind::Void;
                         if (returnsVoid ? !instruction.operands.empty()
-                                        : instruction.operands.size() != 1 || valueType(instruction.operands.front()) != function.returnType)
+                                        : instruction.operands.size() != 1 || valueType(instruction.operands.front()) != resultType)
                         {
                             report("WIR1413", "Typed WIR return value does not match its function return type.", instruction.source, function.id, block.id);
                         }

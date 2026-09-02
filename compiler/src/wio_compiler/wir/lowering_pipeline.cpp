@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace wio::wir
@@ -111,6 +112,8 @@ namespace wio::wir
             case typed::Opcode::Return: opcode = lowered::Opcode::Return; break;
             case typed::Opcode::Unreachable: opcode = lowered::Opcode::Unreachable; break;
             case typed::Opcode::Select:
+            case typed::Opcode::Await:
+            case typed::Opcode::ExecutorSwitch:
             case typed::Opcode::Branch:
             case typed::Opcode::CondBranch:
                 break;
@@ -133,6 +136,8 @@ namespace wio::wir
                 .stringSegments = instruction.stringSegments,
                 .specializationKey = instruction.specializationKey,
                 .intrinsicFamily = instruction.intrinsicFamily,
+                .asyncOperation = instruction.asyncOperation,
+                .asyncExecutor = instruction.asyncExecutor,
                 .targetType = instruction.targetType,
                 .resultOwnership = instruction.resultOwnership,
                 .borrowLifetime = instruction.borrowLifetime,
@@ -193,7 +198,8 @@ namespace wio::wir
                 .isAbstract = sourceFunction.isAbstract,
                 .isExtension = sourceFunction.isExtension,
                 .isClosureBody = sourceFunction.isClosureBody,
-                .nativeBinding = sourceFunction.nativeBinding
+                .nativeBinding = sourceFunction.nativeBinding,
+                .coroutine = sourceFunction.coroutine
             };
             for (const typed::Parameter& parameter : sourceFunction.parameters)
                 function.parameters.push_back(lowerParameter(parameter));
@@ -204,6 +210,7 @@ namespace wio::wir
             }
 
             std::size_t selectCount = 0;
+            std::size_t suspensionCount = 0;
             BlockId::ValueType nextBlockId = 0;
             for (const typed::BasicBlock& block : sourceFunction.blocks)
             {
@@ -215,8 +222,15 @@ namespace wio::wir
                     {
                         return instruction.opcode == typed::Opcode::Select;
                     }));
+                suspensionCount += static_cast<std::size_t>(std::ranges::count_if(
+                    block.instructions,
+                    [](const typed::Instruction& instruction)
+                    {
+                        return instruction.opcode == typed::Opcode::Await ||
+                            instruction.opcode == typed::Opcode::ExecutorSwitch;
+                    }));
             }
-            function.blocks.reserve(sourceFunction.blocks.size() + selectCount * 3);
+            function.blocks.reserve(sourceFunction.blocks.size() + selectCount * 3 + suspensionCount);
 
             std::unordered_map<ValueId::ValueType, TypeId> valueTypes;
             for (const typed::Parameter& parameter : sourceFunction.parameters)
@@ -258,12 +272,133 @@ namespace wio::wir
                 return index;
             };
 
+            if (function.coroutine)
+            {
+                function.coroutine->frameSlots.clear();
+                function.coroutine->states.clear();
+                std::unordered_set<ValueId::ValueType> framedValues;
+                const auto appendFrameSlot = [&](const ValueId value, const TypeId typeId,
+                                                 const CoroutineFrameSlotKind kind)
+                {
+                    if (!value || !typeId || !framedValues.insert(value.value()).second)
+                        return;
+                    const Type* type = source_.types.tryGet(typeId);
+                    function.coroutine->frameSlots.push_back(CoroutineFrameSlot{
+                        .slot = static_cast<std::uint32_t>(function.coroutine->frameSlots.size()),
+                        .value = value,
+                        .type = typeId,
+                        .kind = kind,
+                        .ownership = type ? type->ownership : OwnershipModel::Trivial,
+                        .cleanup = type ? type->cleanup : CleanupKind::None
+                    });
+                };
+                for (const typed::Parameter& parameter : sourceFunction.parameters)
+                    appendFrameSlot(parameter.id, parameter.type, CoroutineFrameSlotKind::Parameter);
+                for (const typed::BasicBlock& block : sourceFunction.blocks)
+                {
+                    for (const typed::Parameter& parameter : block.parameters)
+                        appendFrameSlot(parameter.id, parameter.type, CoroutineFrameSlotKind::Temporary);
+                    for (const typed::Instruction& instruction : block.instructions)
+                    {
+                        if (instruction.result)
+                            appendFrameSlot(
+                                instruction.result,
+                                instruction.resultType,
+                                instruction.opcode == typed::Opcode::LocalPlace
+                                    ? CoroutineFrameSlotKind::Local
+                                    : CoroutineFrameSlotKind::Temporary);
+                        if (instruction.opcode == typed::Opcode::Await && !instruction.operands.empty())
+                        {
+                            appendFrameSlot(
+                                instruction.operands.front(),
+                                valueTypes.at(instruction.operands.front().value()),
+                                CoroutineFrameSlotKind::AwaitedTask);
+                            const auto slot = std::ranges::find_if(
+                                function.coroutine->frameSlots,
+                                [&](const CoroutineFrameSlot& candidate)
+                                {
+                                    return candidate.value == instruction.operands.front();
+                                });
+                            if (slot != function.coroutine->frameSlots.end())
+                                slot->kind = CoroutineFrameSlotKind::AwaitedTask;
+                        }
+                    }
+                }
+            }
+
             std::size_t selectOrdinal = 0;
             for (const typed::BasicBlock& sourceBlock : sourceFunction.blocks)
             {
                 std::size_t currentIndex = blockIndices.at(sourceBlock.id.value());
                 for (const typed::Instruction& instruction : sourceBlock.instructions)
                 {
+                    if (instruction.opcode == typed::Opcode::Await ||
+                        instruction.opcode == typed::Opcode::ExecutorSwitch)
+                    {
+                        if (!function.coroutine)
+                        {
+                            report("WIR3004", "Suspension instruction appears outside an async function.", instruction.source);
+                            continue;
+                        }
+                        const std::uint32_t stateIndex = static_cast<std::uint32_t>(function.coroutine->states.size());
+                        TypeId suspensionResultType = source_.types.voidType();
+                        if (instruction.opcode == typed::Opcode::Await && !instruction.operands.empty())
+                        {
+                            const Type* task = source_.types.tryGet(valueTypes.at(instruction.operands.front().value()));
+                            if (task && task->kind == TypeKind::AsyncTask && task->arguments.size() == 1)
+                                suspensionResultType = task->arguments.front();
+                        }
+                        const std::size_t resumeIndex = createBlock(
+                            "coroutine.resume." + std::to_string(stateIndex), instruction.source);
+                        const BlockId suspendBlock = function.blocks[currentIndex].id;
+                        const BlockId resumeBlock = function.blocks[resumeIndex].id;
+                        function.blocks[currentIndex].instructions.push_back(lowered::Instruction{
+                            .opcode = lowered::Opcode::CancellationCheck,
+                            .projectionIndex = stateIndex,
+                            .asyncOperation = instruction.asyncOperation,
+                            .asyncExecutor = instruction.asyncExecutor,
+                            .source = instruction.source
+                        });
+                        function.blocks[currentIndex].instructions.push_back(lowered::Instruction{
+                            .opcode = lowered::Opcode::CoroutineSuspend,
+                            .operands = instruction.operands,
+                            .targets = {lowered::BranchTarget{.block = resumeBlock}},
+                            .projectionIndex = stateIndex,
+                            .asyncOperation = instruction.asyncOperation,
+                            .asyncExecutor = instruction.asyncExecutor,
+                            .source = instruction.source
+                        });
+                        if (instruction.result)
+                        {
+                            function.blocks[resumeIndex].instructions.push_back(lowered::Instruction{
+                                .opcode = lowered::Opcode::CoroutineResume,
+                                .result = instruction.result,
+                                .resultType = instruction.resultType,
+                                .projectionIndex = stateIndex,
+                                .asyncOperation = instruction.asyncOperation,
+                                .asyncExecutor = instruction.asyncExecutor,
+                                .resultOwnership = instruction.resultOwnership,
+                                .borrowLifetime = instruction.borrowLifetime,
+                                .borrowOrigin = instruction.borrowOrigin,
+                                .source = instruction.source
+                            });
+                        }
+                        function.coroutine->states.push_back(CoroutineState{
+                            .index = stateIndex,
+                            .suspendBlock = suspendBlock,
+                            .resumeBlock = resumeBlock,
+                            .awaitedTask = instruction.operands.empty() ? ValueId{} : instruction.operands.front(),
+                            .resumedValue = instruction.result,
+                            .resultType = suspensionResultType,
+                            .executor = instruction.asyncExecutor,
+                            .cancellationPoint = true
+                        });
+                        if (instruction.asyncExecutor != AsyncExecutorKind::Inherit)
+                            function.coroutine->maySwitchThreads = true;
+                        currentIndex = resumeIndex;
+                        continue;
+                    }
+
                     if (instruction.opcode == typed::Opcode::Select)
                     {
                         if (instruction.operands.size() != 3 || !instruction.result || !instruction.resultType)
@@ -354,8 +489,13 @@ namespace wio::wir
                         continue;
                     }
 
-                    function.blocks[currentIndex].instructions.push_back(
-                        lowerSimpleInstruction(instruction, source_.types, valueTypes));
+                    lowered::Instruction loweredInstruction =
+                        lowerSimpleInstruction(instruction, source_.types, valueTypes);
+                    if (function.isAsync && instruction.opcode == typed::Opcode::Return)
+                        loweredInstruction.opcode = lowered::Opcode::CoroutineComplete;
+                    if (function.coroutine && instruction.asyncExecutor != AsyncExecutorKind::Inherit)
+                        function.coroutine->maySwitchThreads = true;
+                    function.blocks[currentIndex].instructions.push_back(std::move(loweredInstruction));
                 }
             }
             result_.module_.functions.push_back(std::move(function));
@@ -386,6 +526,8 @@ namespace wio::wir
         if (!result.diagnostics_.empty())
             return result;
         result.completedPasses_.push_back("lower-canonical-control-flow");
+        if (std::ranges::any_of(module.functions, [](const typed::Function& function) { return function.isAsync; }))
+            result.completedPasses_.push_back("lower-async-state-machines");
 
         const lowered::VerificationResult loweredVerification = lowered::Verifier{}.verify(result.module_);
         if (!loweredVerification.succeeded())

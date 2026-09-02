@@ -518,8 +518,10 @@ Rider, and CLion are defined in
    Keep
    the current C++ generator as the production path while finishing remaining
    language coverage, then consume Lowered WIR from a new C++ backend and a
-   bytecode VM. Add async state-machine lowering,
-   exceptional/panic cleanup edges, globals/constants, remaining tuple/span
+   bytecode VM. Async functions now carry payload/frame/state contracts;
+   awaits and executor handoffs lower to cancellation-safe suspend/resume state
+   machines, and async exits lower to coroutine completion. Add executor
+   runtime emission, exceptional/panic cleanup edges, globals/constants, remaining tuple/span
    operations, attribute reflection payloads, backend parity tests, and compile-time/
    runtime benchmarks before changing the default backend.
 

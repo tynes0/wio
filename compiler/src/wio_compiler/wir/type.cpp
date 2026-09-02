@@ -189,6 +189,54 @@ namespace wio::wir
         return "value";
     }
 
+    std::string_view asyncExecutorKindName(const AsyncExecutorKind executor)
+    {
+        switch (executor)
+        {
+        case AsyncExecutorKind::Inherit: return "inherit";
+        case AsyncExecutorKind::Main: return "main";
+        case AsyncExecutorKind::Worker: return "worker";
+        case AsyncExecutorKind::Blocking: return "blocking";
+        case AsyncExecutorKind::Io: return "io";
+        }
+        return "inherit";
+    }
+
+    std::string_view asyncOperationName(const AsyncOperation operation)
+    {
+        switch (operation)
+        {
+        case AsyncOperation::None: return "none";
+        case AsyncOperation::AwaitTask: return "await-task";
+        case AsyncOperation::SwitchExecutor: return "switch-executor";
+        case AsyncOperation::Start: return "start";
+        case AsyncOperation::Spawn: return "spawn";
+        case AsyncOperation::SpawnWorker: return "spawn-worker";
+        case AsyncOperation::SpawnBlocking: return "spawn-blocking";
+        case AsyncOperation::SpawnIo: return "spawn-io";
+        case AsyncOperation::Join: return "join";
+        case AsyncOperation::Cancel: return "cancel";
+        case AsyncOperation::CancelAfter: return "cancel-after";
+        case AsyncOperation::Detach: return "detach";
+        case AsyncOperation::Yield: return "yield";
+        case AsyncOperation::Sleep: return "sleep";
+        case AsyncOperation::Wait: return "wait";
+        }
+        return "none";
+    }
+
+    std::string_view coroutineFrameSlotKindName(const CoroutineFrameSlotKind kind)
+    {
+        switch (kind)
+        {
+        case CoroutineFrameSlotKind::Parameter: return "parameter";
+        case CoroutineFrameSlotKind::Local: return "local";
+        case CoroutineFrameSlotKind::AwaitedTask: return "awaited-task";
+        case CoroutineFrameSlotKind::Temporary: return "temporary";
+        }
+        return "temporary";
+    }
+
     std::string_view ownershipModelName(const OwnershipModel ownership)
     {
         switch (ownership)

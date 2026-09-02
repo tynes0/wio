@@ -369,6 +369,12 @@ namespace wio::wir::typed
                 stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0))
                        << " to " << typeRef(instruction.targetType);
                 break;
+            case Opcode::Await:
+                stream << "await " << valueRef(instruction.operands.at(0));
+                break;
+            case Opcode::ExecutorSwitch:
+                stream << "executor-switch " << asyncExecutorKindName(instruction.asyncExecutor);
+                break;
             case Opcode::LocalPlace:
                 stream << "local-place " << std::quoted(instruction.selector);
                 break;
@@ -463,6 +469,9 @@ namespace wio::wir::typed
             }
             if (!instruction.specializationKey.empty())
                 stream << " specialization=" << std::quoted(instruction.specializationKey);
+            if (instruction.asyncOperation != AsyncOperation::None)
+                stream << " async=" << asyncOperationName(instruction.asyncOperation)
+                       << " executor=" << asyncExecutorKindName(instruction.asyncExecutor);
             stream << '\n';
         }
     }
@@ -543,6 +552,13 @@ namespace wio::wir::typed
                            << " " << captureKindName(capture.kind);
                 }
                 stream << "}";
+            }
+            if (function.coroutine)
+            {
+                stream << " coroutine[result=" << typeRef(function.coroutine->resultType)
+                       << " cancellation=" << (function.coroutine->cooperativeCancellation ? "cooperative" : "none")
+                       << " thread-switch=" << (function.coroutine->maySwitchThreads ? "true" : "false")
+                       << "]";
             }
             if (function.isExternal)
             {

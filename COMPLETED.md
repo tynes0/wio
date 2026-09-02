@@ -895,3 +895,13 @@ here as historical evidence rather than active work:
       mismatch, invalid targets, malformed reflection, and unpaired hot-reload
       hooks. The versioned C-shaped `wio_module_contract.h` sidecar adds
       stable-ID lookup without breaking the existing `WioModuleApi` v11 ABI.
+- [x] The Async, Coroutine, and Thread WIR Model distinguishes task await from
+      executor handoff, records known scheduler operations and affinity, and
+      lowers every suspension into a cancellation check plus canonical
+      suspend/resume state. Async returns become coroutine completion, while
+      conservative frame slots retain explicit ownership and cleanup metadata
+      for both the future C++ backend and VM.
+- [x] Typed and Lowered async verifiers reject payload drift, coroutine layout
+      misuse, missing cancellation checks, malformed state/resume edges, and
+      ordinary returns inside lowered async functions. Deterministic printers
+      expose state ids, affinity, frame size, and thread-switch behavior.

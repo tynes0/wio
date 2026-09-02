@@ -48,6 +48,10 @@ namespace wio::wir::lowered
         AnyCheckedCast,
         AnyTypeTest,
         NullableWrap,
+        CancellationCheck,
+        CoroutineSuspend,
+        CoroutineResume,
+        CoroutineComplete,
         LocalPlace,
         PlaceInit,
         Load,
@@ -107,6 +111,8 @@ namespace wio::wir::lowered
         std::vector<std::string> stringSegments;
         std::string specializationKey;
         IntrinsicFamily intrinsicFamily = IntrinsicFamily::None;
+        AsyncOperation asyncOperation = AsyncOperation::None;
+        AsyncExecutorKind asyncExecutor = AsyncExecutorKind::Inherit;
         TypeId targetType;
         typed::ValueOwnership resultOwnership = typed::ValueOwnership::Trivial;
         typed::BorrowLifetime borrowLifetime = typed::BorrowLifetime::None;
@@ -144,6 +150,7 @@ namespace wio::wir::lowered
         bool isExtension = false;
         bool isClosureBody = false;
         std::optional<NativeBinding> nativeBinding;
+        std::optional<CoroutineLayout> coroutine;
     };
 
     struct Module

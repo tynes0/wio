@@ -5,7 +5,8 @@ namespace wio::wir::lowered
     bool isTerminator(const Opcode opcode)
     {
         return opcode == Opcode::Return || opcode == Opcode::Jump ||
-               opcode == Opcode::CondJump || opcode == Opcode::Unreachable;
+               opcode == Opcode::CondJump || opcode == Opcode::CoroutineSuspend ||
+               opcode == Opcode::CoroutineComplete || opcode == Opcode::Unreachable;
     }
 
     bool producesValue(const Opcode opcode)
@@ -27,6 +28,7 @@ namespace wio::wir::lowered
                opcode == Opcode::EnumConstant || opcode == Opcode::IntrinsicCall ||
                opcode == Opcode::AnyBox || opcode == Opcode::AnyCheckedCast ||
                opcode == Opcode::AnyTypeTest || opcode == Opcode::NullableWrap ||
+               opcode == Opcode::CoroutineResume ||
                opcode == Opcode::LocalPlace || opcode == Opcode::Load ||
                opcode == Opcode::FieldPlace || opcode == Opcode::ArrayPlace ||
                opcode == Opcode::Borrow || opcode == Opcode::ConstructComponent ||
@@ -71,6 +73,10 @@ namespace wio::wir::lowered
         case Opcode::AnyCheckedCast: return "any-checked-cast";
         case Opcode::AnyTypeTest: return "any-type-test";
         case Opcode::NullableWrap: return "nullable-wrap";
+        case Opcode::CancellationCheck: return "cancellation-check";
+        case Opcode::CoroutineSuspend: return "coroutine-suspend";
+        case Opcode::CoroutineResume: return "coroutine-resume";
+        case Opcode::CoroutineComplete: return "coroutine-complete";
         case Opcode::LocalPlace: return "local-place";
         case Opcode::PlaceInit: return "place-init";
         case Opcode::Load: return "load";

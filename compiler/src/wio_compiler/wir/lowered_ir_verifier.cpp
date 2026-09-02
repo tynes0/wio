@@ -34,6 +34,16 @@ namespace wio::wir::lowered
             return isNumeric(kind) && kind != TypeKind::F32 && kind != TypeKind::F64;
         }
 
+        TypeId coroutineResultType(const TypeTable& types, const Function& function)
+        {
+            if (!function.isAsync)
+                return function.returnType;
+            const Type* task = types.tryGet(function.returnType);
+            return task && task->kind == TypeKind::AsyncTask && task->arguments.size() == 1
+                ? task->arguments.front()
+                : TypeId{};
+        }
+
         const FieldLayout* findFieldLayout(
             const TypeTable& types,
             const Type& owner,
@@ -221,6 +231,14 @@ namespace wio::wir::lowered
                 report("LIR1102", "Lowered WIR function name cannot be empty.", function.source, function.id);
             if (!module.types.tryGet(function.returnType))
                 report("LIR1103", "Lowered WIR function return type is invalid.", function.source, function.id);
+            const Type* asyncTaskType = module.types.tryGet(function.returnType);
+            const bool validAsyncResult = asyncTaskType && asyncTaskType->kind == TypeKind::AsyncTask &&
+                asyncTaskType->arguments.size() == 1;
+            if (function.isAsync && (!validAsyncResult || !function.coroutine ||
+                function.coroutine->resultType != asyncTaskType->arguments.front()))
+                report("LIR1114", "Async Lowered WIR function requires coroutine<T> return and matching coroutine layout.", function.source, function.id);
+            if (!function.isAsync && function.coroutine)
+                report("LIR1115", "Non-async Lowered WIR function cannot carry coroutine layout.", function.source, function.id);
             const Type* callableType = module.types.tryGet(function.callableType);
             if (!callableType || callableType->kind != TypeKind::Function || callableType->arguments.empty() ||
                 callableType->arguments.back() != function.returnType)
@@ -395,6 +413,35 @@ namespace wio::wir::lowered
                 }
             }
 
+            if (function.coroutine)
+            {
+                std::unordered_set<std::uint32_t> frameSlots;
+                std::unordered_set<ValueId::ValueType> frameValues;
+                for (const CoroutineFrameSlot& slot : function.coroutine->frameSlots)
+                {
+                    const Type* type = module.types.tryGet(slot.type);
+                    if (!frameSlots.insert(slot.slot).second || slot.slot >= function.coroutine->frameSlots.size() ||
+                        !slot.value || !values.contains(slot.value.value()) ||
+                        !frameValues.insert(slot.value.value()).second || !type ||
+                        type->ownership != slot.ownership || type->cleanup != slot.cleanup)
+                    {
+                        report("LIR1451", "Coroutine frame slots require unique dense ids, values, and matching ownership metadata.", function.source, function.id);
+                    }
+                }
+                for (std::size_t stateIndex = 0; stateIndex < function.coroutine->states.size(); ++stateIndex)
+                {
+                    const CoroutineState& state = function.coroutine->states[stateIndex];
+                    if (state.index != stateIndex || !blocks.contains(state.suspendBlock.value()) ||
+                        !blocks.contains(state.resumeBlock.value()) ||
+                        (state.awaitedTask && !values.contains(state.awaitedTask.value())) ||
+                        (state.resumedValue && !values.contains(state.resumedValue.value())) ||
+                        (state.resultType && !module.types.tryGet(state.resultType)))
+                    {
+                        report("LIR1452", "Coroutine states require dense ids and valid suspend/resume/value references.", function.source, function.id);
+                    }
+                }
+            }
+
             auto valueType = [&](const ValueId value) -> TypeId
             {
                 if (!value)
@@ -466,6 +513,16 @@ namespace wio::wir::lowered
                         report("LIR1401", "Value-producing Lowered WIR instruction requires a typed result.", instruction.source, function.id, block.id);
                     if (!shouldHaveResult && !isCallInstruction && instruction.result)
                         report("LIR1402", "Lowered WIR terminator cannot produce a value.", instruction.source, function.id, block.id);
+                    const bool asyncMetadataCarrier = isCallInstruction ||
+                        instruction.opcode == Opcode::CancellationCheck ||
+                        instruction.opcode == Opcode::CoroutineSuspend ||
+                        instruction.opcode == Opcode::CoroutineResume;
+                    if (!asyncMetadataCarrier && instruction.opcode != Opcode::CoroutineComplete &&
+                        (instruction.asyncOperation != AsyncOperation::None ||
+                         instruction.asyncExecutor != AsyncExecutorKind::Inherit))
+                    {
+                        report("LIR1453", "Lowered WIR async metadata is attached to an unsupported instruction.", instruction.source, function.id, block.id);
+                    }
 
                     if (instruction.opcode == Opcode::Unary)
                     {
@@ -1074,8 +1131,65 @@ namespace wio::wir::lowered
                                 report("LIR1410", "Lowered WIR call result does not match its callee.", instruction.source, function.id, block.id);
                         }
                     }
+                    else if (instruction.opcode == Opcode::CancellationCheck)
+                    {
+                        const bool followedBySuspend = index + 1 < block.instructions.size() &&
+                            block.instructions[index + 1].opcode == Opcode::CoroutineSuspend &&
+                            block.instructions[index + 1].projectionIndex == instruction.projectionIndex;
+                        if (!function.isAsync || !instruction.operands.empty() || instruction.result || !followedBySuspend)
+                            report("LIR1454", "Cancellation check must immediately precede its coroutine suspension point.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::CoroutineSuspend)
+                    {
+                        const CoroutineState* state = function.coroutine && instruction.projectionIndex < function.coroutine->states.size()
+                            ? &function.coroutine->states[instruction.projectionIndex]
+                            : nullptr;
+                        const bool operationShape = instruction.asyncOperation == AsyncOperation::AwaitTask
+                            ? instruction.operands.size() == 1 && [&]
+                                {
+                                    const Type* task = module.types.tryGet(valueType(instruction.operands.front()));
+                                    return task && task->kind == TypeKind::AsyncTask && task->arguments.size() == 1;
+                                }()
+                            : instruction.asyncOperation == AsyncOperation::SwitchExecutor &&
+                                instruction.operands.empty() && instruction.asyncExecutor != AsyncExecutorKind::Inherit;
+                        const bool precededByCancellationCheck = index > 0 &&
+                            block.instructions[index - 1].opcode == Opcode::CancellationCheck &&
+                            block.instructions[index - 1].projectionIndex == instruction.projectionIndex;
+                        if (!function.isAsync || !state || block.id != state->suspendBlock ||
+                            instruction.targets.size() != 1 || instruction.targets.front().block != state->resumeBlock ||
+                            !operationShape || !precededByCancellationCheck)
+                        {
+                            report("LIR1455", "Coroutine suspension must match one canonical state and resume target.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::CoroutineResume)
+                    {
+                        const CoroutineState* state = function.coroutine && instruction.projectionIndex < function.coroutine->states.size()
+                            ? &function.coroutine->states[instruction.projectionIndex]
+                            : nullptr;
+                        if (!function.isAsync || !state || block.id != state->resumeBlock ||
+                            !instruction.operands.empty() || instruction.result != state->resumedValue ||
+                            instruction.resultType != state->resultType)
+                        {
+                            report("LIR1456", "Coroutine resume must materialize the payload declared by its canonical state.", instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::CoroutineComplete)
+                    {
+                        const TypeId resultType = coroutineResultType(module.types, function);
+                        const Type* type = module.types.tryGet(resultType);
+                        const bool returnsVoid = type && type->kind == TypeKind::Void;
+                        if (!function.isAsync || !type ||
+                            (returnsVoid ? !instruction.operands.empty()
+                                         : instruction.operands.size() != 1 || valueType(instruction.operands.front()) != resultType))
+                        {
+                            report("LIR1457", "Coroutine completion value must match the async payload type.", instruction.source, function.id, block.id);
+                        }
+                    }
                     else if (instruction.opcode == Opcode::Return)
                     {
+                        if (function.isAsync)
+                            report("LIR1458", "Async Lowered WIR must use coroutine-complete instead of return.", instruction.source, function.id, block.id);
                         const Type* returnType = module.types.tryGet(function.returnType);
                         const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
                         if (!returnType ||

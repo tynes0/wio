@@ -434,6 +434,54 @@ namespace wio::wir::typed
             return declaration && hasBuiltinAttribute(declaration->attributes, Attribute::Native);
         }
 
+        TypeId asyncResultType(const Function& function) const
+        {
+            if (!function.isAsync)
+                return function.returnType;
+            const Type* task = result_.module_.types.tryGet(function.returnType);
+            return task && task->kind == TypeKind::AsyncTask && task->arguments.size() == 1
+                ? task->arguments.front()
+                : TypeId{};
+        }
+
+        AsyncOperation asyncOperationFor(const FunctionId id) const
+        {
+            if (!id || id.value() >= declarations_.size() || !declarations_[id.value()].declaration)
+                return AsyncOperation::None;
+            const FunctionDeclaration& declaration = *declarations_[id.value()].declaration;
+            std::string name = attributeValue(declaration.attributes, Attribute::CppName);
+            if (name.empty() && declaration.name)
+                name = declaration.name->token.value;
+
+            const auto endsWith = [&](const std::string_view suffix)
+                { return name == suffix || name.ends_with(std::string{"::"} + std::string{suffix}); };
+            if (endsWith("AsyncYield") || endsWith("Yield")) return AsyncOperation::Yield;
+            if (endsWith("AsyncSleep") || endsWith("Sleep")) return AsyncOperation::Sleep;
+            if (endsWith("StartAsync") || endsWith("Start")) return AsyncOperation::Start;
+            if (endsWith("CancelAfterAsync") || endsWith("CancelAfter")) return AsyncOperation::CancelAfter;
+            if (endsWith("CancelAsync") || endsWith("Cancel")) return AsyncOperation::Cancel;
+            if (endsWith("DetachAsync") || endsWith("Detach")) return AsyncOperation::Detach;
+            if (endsWith("RunBlockingAsync") || endsWith("SpawnBlocking")) return AsyncOperation::SpawnBlocking;
+            if (endsWith("RunIoAsync") || endsWith("SpawnIo")) return AsyncOperation::SpawnIo;
+            if (endsWith("RunAsync") || endsWith("SpawnWorker")) return AsyncOperation::SpawnWorker;
+            if (endsWith("AsyncScopeSpawn") || endsWith("Spawn")) return AsyncOperation::Spawn;
+            if (endsWith("AsyncScopeJoin") || endsWith("Join")) return AsyncOperation::Join;
+            if (endsWith("AsyncWaitFor") || endsWith("BlockOn") || endsWith("Wait")) return AsyncOperation::Wait;
+            return AsyncOperation::None;
+        }
+
+        void decorateAsyncOperation(Instruction& instruction) const
+        {
+            instruction.asyncOperation = asyncOperationFor(instruction.callee);
+            switch (instruction.asyncOperation)
+            {
+            case AsyncOperation::SpawnWorker: instruction.asyncExecutor = AsyncExecutorKind::Worker; break;
+            case AsyncOperation::SpawnBlocking: instruction.asyncExecutor = AsyncExecutorKind::Blocking; break;
+            case AsyncOperation::SpawnIo: instruction.asyncExecutor = AsyncExecutorKind::Io; break;
+            default: break;
+            }
+        }
+
         void rememberOwnership(FunctionState& state, const ValueId value, const ValueOwnership ownership)
         {
             if (value)
@@ -1563,6 +1611,14 @@ namespace wio::wir::typed
             function.isExternal = declaration.body == nullptr;
             function.isMethod = static_cast<bool>(function.ownerType);
             function.isExtension = declarationInfo.isExtension;
+            if (function.isAsync)
+            {
+                const Type* task = result_.module_.types.tryGet(function.returnType);
+                if (!task || task->kind != TypeKind::AsyncTask || task->arguments.size() != 1)
+                    report("WIR2103", "Async function must have a resolved coroutine<T> return type.", &declaration);
+                else
+                    function.coroutine = CoroutineLayout{.resultType = task->arguments.front()};
+            }
             for (const Ref<sema::Type>& genericParameter : symbol->genericParameterTypes)
                 function.genericParameters.push_back(mapType(genericParameter, &declaration));
             const Type* ownerType = function.isMethod
@@ -1664,7 +1720,7 @@ namespace wio::wir::typed
                 buildStatement(declaration.body, state);
                 if (!blockIsTerminated(state))
                 {
-                    const Type* returnType = result_.module_.types.tryGet(function.returnType);
+                    const Type* returnType = result_.module_.types.tryGet(asyncResultType(function));
                     if (returnType && returnType->kind == TypeKind::Void)
                     {
                         emitDropsFrom(0, state, &declaration);
@@ -1787,12 +1843,13 @@ namespace wio::wir::typed
                 if (returnStatement->value)
                 {
                     ValueId value;
+                    const TypeId expectedReturnType = asyncResultType(*state.function);
                     if (const auto* identifier = returnStatement->value->as<Identifier>())
                     {
                         const Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
                         const auto place = symbol ? state.places.find(symbol.Get()) : state.places.end();
                         const TypeId valueType = symbol ? mapType(symbol->type, returnStatement) : TypeId{};
-                        if (place != state.places.end() && valueType == state.function->returnType &&
+                        if (place != state.places.end() && valueType == expectedReturnType &&
                             typeRequiresCleanup(valueType))
                         {
                             value = ValueId{state.nextValue++};
@@ -1809,7 +1866,7 @@ namespace wio::wir::typed
                         }
                     }
                     if (!value)
-                        value = buildExpressionAs(returnStatement->value, state.function->returnType, state);
+                        value = buildExpressionAs(returnStatement->value, expectedReturnType, state);
                     if (value)
                         instruction.operands.push_back(value);
                 }
@@ -2332,6 +2389,44 @@ namespace wio::wir::typed
             }
             if (const auto* unary = expression->as<UnaryExpression>())
             {
+                if (unary->op.type == TokenType::kwAwait)
+                {
+                    if (unary->isMainExecutorAwait)
+                    {
+                        currentBlock(state).instructions.push_back(Instruction{
+                            .opcode = Opcode::ExecutorSwitch,
+                            .asyncOperation = AsyncOperation::SwitchExecutor,
+                            .asyncExecutor = AsyncExecutorKind::Main,
+                            .source = SourceSpan::at(expression->location())
+                        });
+                        return {};
+                    }
+                    const ValueId taskValue = buildExpression(unary->operand, state);
+                    const TypeId taskTypeId = mapType(unary->operand->refType.Lock(), unary->operand.Get());
+                    const Type* taskType = result_.module_.types.tryGet(taskTypeId);
+                    if (!taskValue || !taskType || taskType->kind != TypeKind::AsyncTask || taskType->arguments.size() != 1)
+                    {
+                        report("WIR2306", "Await requires a resolved coroutine<T> operand.", expression.Get());
+                        return {};
+                    }
+                    Instruction instruction{
+                        .opcode = Opcode::Await,
+                        .operands = {taskValue},
+                        .asyncOperation = AsyncOperation::AwaitTask,
+                        .asyncExecutor = AsyncExecutorKind::Inherit,
+                        .source = SourceSpan::at(expression->location())
+                    };
+                    const Type* resultType = result_.module_.types.tryGet(taskType->arguments.front());
+                    if (resultType && resultType->kind == TypeKind::Void)
+                    {
+                        currentBlock(state).instructions.push_back(std::move(instruction));
+                        releaseOwnedTemporary(taskValue, expression.Get(), state);
+                        return {};
+                    }
+                    const ValueId result = appendValue(std::move(instruction));
+                    releaseOwnedTemporary(taskValue, expression.Get(), state);
+                    return result;
+                }
                 if (unary->op.type == TokenType::kwDeref)
                 {
                     const ValueId place = buildExpression(unary->operand, state);
@@ -2610,6 +2705,7 @@ namespace wio::wir::typed
                             instruction.genericArguments,
                             instruction.signatureTypes,
                             callResultType);
+                        decorateAsyncOperation(instruction);
                         const bool nativeCall = instruction.opcode == Opcode::NativeCall;
                         const std::vector<ValueId> nativeArguments = nativeCall
                             ? instruction.operands : std::vector<ValueId>{};
@@ -2685,6 +2781,7 @@ namespace wio::wir::typed
                             instruction.genericArguments,
                             instruction.signatureTypes,
                             resultType);
+                        decorateAsyncOperation(instruction);
                         const Type* type = result_.module_.types.tryGet(resultType);
                         if (type && type->kind == TypeKind::Void)
                         {
@@ -2784,6 +2881,7 @@ namespace wio::wir::typed
                     instruction.genericArguments,
                     instruction.signatureTypes,
                     callResultType);
+                decorateAsyncOperation(instruction);
                 const bool nativeCall = instruction.opcode == Opcode::NativeCall;
                 const std::vector<ValueId> nativeArguments = nativeCall
                     ? instruction.operands : std::vector<ValueId>{};
