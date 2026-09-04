@@ -950,6 +950,15 @@ namespace wio
         ~TypeAliasDeclaration() override;
     };
     
+    struct ApplicationStageRunMetadata
+    {
+        std::string target;
+        std::string method = "Update";
+        std::vector<std::string> resourceNames;
+        bool inlineApplicationUpdate = false;
+        bool acceptsDelta = true;
+    };
+
     struct ApplicationStageMetadata
     {
         std::string name;
@@ -961,6 +970,7 @@ namespace wio
         bool containsSystem = false;
         bool containsApplication = false;
         bool legacyExplicit = false;
+        std::vector<ApplicationStageRunMetadata> runs;
     };
 
     struct FunctionDeclaration : Statement

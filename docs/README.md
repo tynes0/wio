@@ -92,6 +92,7 @@ Use these when the question is about:
 - [Self-hosted CLI architecture](./WIO_SELF_HOSTED_CLI.md)
 - [WIR compiler pipeline](./WIO_WIR_PIPELINE.md)
 - [Async WIR and coroutine lowering contract](./WIO_ASYNC_WIR.md)
+- [Application, system, attribute, and reflection WIR contract](./WIO_APPLICATION_ATTRIBUTE_WIR.md)
 - [Editor ecosystem plan](./WIO_EDITOR_ECOSYSTEM_PLAN.md)
 
 Use these when the question is about:

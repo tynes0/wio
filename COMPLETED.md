@@ -905,3 +905,12 @@ here as historical evidence rather than active work:
       misuse, missing cancellation checks, malformed state/resume edges, and
       ordinary returns inside lowered async functions. Deterministic printers
       expose state ids, affinity, frame size, and thread-switch behavior.
+- [x] The Application and System WIR Model freezes stack-resident system types,
+      application entry/lifecycle identities, deterministic stage order and
+      dependencies, fixed/main affinity, resolved run callables, and typed
+      read/write resource injection in the backend-neutral module contract.
+- [x] Effective attributes now retain canonical target/origin/argument/
+      retention data and ordered processor phases in WIR. Reflection records
+      expose fields, methods, visibility, mutability, dispatch slots, async
+      state, and shared attribute identities; Typed and Lowered verifiers and
+      printers cover the complete contract.

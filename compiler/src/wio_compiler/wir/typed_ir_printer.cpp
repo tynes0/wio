@@ -501,9 +501,64 @@ namespace wio::wir::typed
             stream << '\n';
         }
         for (const ReflectionDescriptor& descriptor : module.contract.reflection)
+        {
             stream << "  reflect " << typeRef(descriptor.type) << " " << std::quoted(descriptor.logicalName)
                    << " stable-type-id=" << descriptor.stableTypeId
-                   << " exported=" << (descriptor.isExported ? "true" : "false") << '\n';
+                   << " exported=" << (descriptor.isExported ? "true" : "false")
+                   << " fields=" << descriptor.fields.size() << " methods=" << descriptor.methods.size() << '\n';
+            for (const ReflectedFieldDescriptor& field : descriptor.fields)
+                stream << "    field " << std::quoted(field.name) << " " << typeRef(field.type)
+                       << " visibility=" << fieldVisibilityName(field.visibility)
+                       << " mutable=" << (field.isMutable ? "true" : "false") << '\n';
+            for (const ReflectedMethodDescriptor& method : descriptor.methods)
+                stream << "    method " << std::quoted(method.name) << " " << functionRef(method.function)
+                       << " slot=" << method.slot << " async=" << (method.isAsync ? "true" : "false") << '\n';
+            for (const ReflectedCaseDescriptor& enumCase : descriptor.cases)
+                stream << "    case " << std::quoted(enumCase.name)
+                       << " stable-id=" << enumCase.stableId << '\n';
+        }
+        for (const AttributeApplicationDescriptor& attribute : module.contract.attributes)
+        {
+            stream << "  attribute " << std::quoted(attribute.canonicalName)
+                   << " target=" << metadataTargetKindName(attribute.targetKind)
+                   << " target-id=" << attribute.targetStableId
+                   << " origin=" << attributeOriginKindName(attribute.origin)
+                   << " retained=" << (attribute.runtimeRetained ? "true" : "false") << '\n';
+            for (const AttributeProcessorDescriptor& processor : attribute.processors)
+                stream << "    processor " << std::quoted(processor.canonicalTypeName)
+                       << " phase=" << attributeProcessorPhaseName(processor.phase)
+                       << " hook=" << std::quoted(processor.hookName) << '\n';
+        }
+        for (const SystemDescriptor& system : module.contract.systems)
+            stream << "  system " << std::quoted(system.logicalName) << " type=" << typeRef(system.type)
+                   << " start=" << functionRef(system.start) << " update=" << functionRef(system.update)
+                   << " close=" << functionRef(system.close) << '\n';
+        if (module.contract.application)
+        {
+            const ApplicationDescriptor& application = *module.contract.application;
+            stream << "  application " << std::quoted(application.logicalName)
+                   << " type=" << typeRef(application.type) << " entry=" << functionRef(application.entry)
+                   << " start=" << functionRef(application.start) << " update=" << functionRef(application.update)
+                   << " close=" << functionRef(application.close) << " exit=" << functionRef(application.exit) << '\n';
+            for (const ApplicationStageDescriptor& stage : application.stages)
+            {
+                stream << "    stage[" << stage.order << "] " << std::quoted(stage.name)
+                       << " kind=" << applicationStageKindName(stage.kind)
+                       << " affinity=" << applicationAffinityName(stage.affinity);
+                if (!stage.after.empty()) stream << " after=" << std::quoted(stage.after);
+                if (stage.kind == ApplicationStageKind::Fixed) stream << " hz=" << stage.fixedHz;
+                stream << '\n';
+                for (const ApplicationStageRun& run : stage.runs)
+                {
+                    stream << "      run " << std::quoted(run.targetName + "." + run.methodName)
+                           << " function=" << functionRef(run.function)
+                           << " target=" << typeRef(run.targetType) << '\n';
+                    for (const ApplicationResourceBinding& resource : run.resources)
+                        stream << "        resource " << std::quoted(resource.name) << " " << typeRef(resource.type)
+                               << " access=" << resourceAccessName(resource.access) << '\n';
+                }
+            }
+        }
         const ModuleLifecycle& lifecycle = module.contract.lifecycle;
         if (lifecycle.apiVersion || lifecycle.load || lifecycle.update || lifecycle.unload ||
             lifecycle.saveState || lifecycle.restoreState)

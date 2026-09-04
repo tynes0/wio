@@ -271,6 +271,22 @@ C++ and VM loaders resolve an export by stable ID and slot rather than by
 guessing a generated C++ symbol. See
 [`WIO_MODULE_SDK_MODEL.md`](WIO_MODULE_SDK_MODEL.md) for the frozen rules.
 
+## Application, System, Attribute, and Reflection Metadata
+
+The module contract now carries the language's application model without
+requiring a backend to inspect parser-generated components or extensions.
+Application entry/lifecycle functions, stack-resident system types, ordered
+stages, dependencies, fixed frequency, executor affinity, resolved stage runs,
+and read/write resource borrows all use the same stable WIR type and function
+identities as executable code.
+
+Effective attributes retain canonical names, semantic origin, target identity,
+normalized arguments, retention, and ordered compile-time processor phases.
+Reflection descriptors expose type attributes plus ordered field/method layout,
+visibility, mutability, dispatch slots, async state, and member attribute IDs.
+Typed-to-Lowered conversion preserves this complete contract exactly. See
+[`WIO_APPLICATION_ATTRIBUTE_WIR.md`](WIO_APPLICATION_ATTRIBUTE_WIR.md).
+
 ## Lowered WIR
 
 Lowered WIR is the shared backend contract. Its first canonicalization pass

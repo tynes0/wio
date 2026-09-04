@@ -1,6 +1,7 @@
 #include "wio/wir/typed_ir_builder.h"
 
 #include "wio/ast/attribute_queries.h"
+#include "wio/ast/attribute_contract.h"
 #include "wio/common/utility.h"
 #include "wio/sema/intrinsic_member_resolver.h"
 #include "wio/sema/scope.h"
@@ -56,6 +57,7 @@ namespace wio::wir::typed
             for (const DeclarationInfo& declaration : declarations_)
                 buildFunction(declaration);
             buildTypeExportsAndReflection();
+            buildApplicationSystemAttributeReflection();
             const ModuleLifecycle& lifecycle = result_.module_.contract.lifecycle;
             if (!options_.moduleKind && (!result_.module_.contract.exports.empty() || lifecycle.apiVersion || lifecycle.load ||
                 lifecycle.update || lifecycle.unload || lifecycle.saveState || lifecycle.restoreState))
@@ -92,6 +94,8 @@ namespace wio::wir::typed
             const std::vector<NodePtr<AttributeStatement>>* attributes = nullptr;
             Ref<sema::Type> type;
             ModuleExportKind exportKind = ModuleExportKind::ComponentType;
+            std::string role;
+            bool exportable = true;
         };
 
         struct LoopContext
@@ -723,7 +727,8 @@ namespace wio::wir::typed
                         .declaration = component,
                         .attributes = &component->attributes,
                         .type = declaredOwnerType(component->name),
-                        .exportKind = ModuleExportKind::ComponentType
+                        .exportKind = ModuleExportKind::ComponentType,
+                        .role = component->attributeTargetOverride
                     });
                     continue;
                 }
@@ -733,7 +738,41 @@ namespace wio::wir::typed
                         .declaration = object,
                         .attributes = &object->attributes,
                         .type = declaredOwnerType(object->name),
-                        .exportKind = ModuleExportKind::ObjectType
+                        .exportKind = ModuleExportKind::ObjectType,
+                        .role = "type"
+                    });
+                    continue;
+                }
+                if (const auto* interfaceDeclaration = statement->as<InterfaceDeclaration>())
+                {
+                    typeDeclarations_.push_back(TypeDeclarationInfo{
+                        .declaration = interfaceDeclaration,
+                        .attributes = &interfaceDeclaration->attributes,
+                        .type = declaredOwnerType(interfaceDeclaration->name),
+                        .role = "type",
+                        .exportable = false
+                    });
+                    continue;
+                }
+                if (const auto* enumeration = statement->as<EnumDeclaration>())
+                {
+                    typeDeclarations_.push_back(TypeDeclarationInfo{
+                        .declaration = enumeration,
+                        .attributes = &enumeration->attributes,
+                        .type = declaredOwnerType(enumeration->name),
+                        .role = "type",
+                        .exportable = false
+                    });
+                    continue;
+                }
+                if (const auto* flagset = statement->as<FlagsetDeclaration>())
+                {
+                    typeDeclarations_.push_back(TypeDeclarationInfo{
+                        .declaration = flagset,
+                        .attributes = &flagset->attributes,
+                        .type = declaredOwnerType(flagset->name),
+                        .role = "type",
+                        .exportable = false
                     });
                     continue;
                 }
@@ -755,7 +794,7 @@ namespace wio::wir::typed
                 const Type* descriptor = result_.module_.types.tryGet(type);
                 if (!descriptor || descriptor->kind != TypeKind::Named)
                     continue;
-                const bool exported = declaration.attributes &&
+                const bool exported = declaration.exportable && declaration.attributes &&
                     hasBuiltinAttribute(*declaration.attributes, Attribute::Export);
                 if (!exported)
                     continue;
@@ -787,6 +826,378 @@ namespace wio::wir::typed
                     .nominalKind = type.nominalKind,
                     .isExported = exportedTypes.contains(typeId.value())
                 });
+            }
+        }
+
+        static AttributeOriginKind attributeOrigin(const AttributeOrigin origin)
+        {
+            switch (origin)
+            {
+            case AttributeOrigin::Direct: return AttributeOriginKind::Direct;
+            case AttributeOrigin::Inherited: return AttributeOriginKind::Inherited;
+            case AttributeOrigin::Scoped: return AttributeOriginKind::Scoped;
+            case AttributeOrigin::Composed: return AttributeOriginKind::Composed;
+            case AttributeOrigin::Generated: return AttributeOriginKind::Generated;
+            case AttributeOrigin::Compiler: return AttributeOriginKind::Compiler;
+            }
+            return AttributeOriginKind::Direct;
+        }
+
+        static AttributeProcessorPhase processorPhase(const std::string_view phase)
+        {
+            if (phase == "validation") return AttributeProcessorPhase::Validation;
+            if (phase == "derive") return AttributeProcessorPhase::Derive;
+            if (phase == "pre") return AttributeProcessorPhase::Pre;
+            if (phase == "post") return AttributeProcessorPhase::Post;
+            if (phase == "finally") return AttributeProcessorPhase::Finally;
+            if (phase == "around") return AttributeProcessorPhase::Around;
+            return AttributeProcessorPhase::Unknown;
+        }
+
+        std::uint64_t typeMetadataId(const TypeId type) const
+        {
+            return stableHash(result_.module_.contract.stableKey + ":type:" + typeStableKey(type));
+        }
+
+        const Function* findFunction(const FunctionId id) const
+        {
+            const auto found = std::ranges::find_if(result_.module_.functions,
+                [&](const Function& function) { return function.id == id; });
+            return found == result_.module_.functions.end() ? nullptr : &*found;
+        }
+
+        std::uint64_t functionMetadataId(const FunctionId id) const
+        {
+            const Function* function = findFunction(id);
+            return stableHash(result_.module_.contract.stableKey + ":function:" +
+                std::to_string(id.value()) + ":" + (function ? function->name : std::string{}));
+        }
+
+        static MetadataTargetKind declarationTargetKind(
+            const FunctionDeclaration& declaration,
+            const bool isMethod)
+        {
+            if (declaration.attributeTargetOverride == "handler") return MetadataTargetKind::Handler;
+            if (declaration.attributeTargetOverride == "method" || isMethod || declaration.isExtensionMethod)
+                return MetadataTargetKind::Method;
+            return MetadataTargetKind::Function;
+        }
+
+        std::vector<std::uint64_t> appendAttributeApplications(
+            const std::vector<NodePtr<AttributeStatement>>& attributes,
+            const MetadataTargetKind targetKind,
+            const std::uint64_t targetStableId,
+            const TypeId targetType = {},
+            const FunctionId targetFunction = {},
+            const std::string_view selector = {},
+            const std::uint32_t parameterIndex = 0)
+        {
+            std::vector<std::uint64_t> ids;
+            std::uint32_t occurrence = 0;
+            for (const auto& attribute : attributes)
+            {
+                if (!attribute)
+                    continue;
+                std::string canonicalName = attribute->canonicalName;
+                if (canonicalName.empty()) canonicalName = attribute->qualifiedName;
+                if (canonicalName.empty()) canonicalName = canonicalBuiltinAttributeName(attribute->attribute);
+                if (canonicalName.empty()) canonicalName = "std::attribute::Unknown";
+
+                AttributeApplicationDescriptor descriptor;
+                descriptor.canonicalName = std::move(canonicalName);
+                descriptor.originParent = attribute->originParent;
+                descriptor.selector = std::string{selector};
+                descriptor.targetKind = targetKind;
+                descriptor.origin = attributeOrigin(attribute->origin);
+                descriptor.targetStableId = targetStableId;
+                descriptor.targetType = targetType;
+                descriptor.targetFunction = targetFunction;
+                descriptor.parameterIndex = parameterIndex;
+                descriptor.sourceOrder = static_cast<std::uint32_t>(attribute->processorOrder);
+                descriptor.runtimeRetained = attribute->runtimeRetained;
+                descriptor.stableId = stableHash(result_.module_.contract.stableKey + ":attribute:" +
+                    std::to_string(targetStableId) + ":" + descriptor.canonicalName + ":" +
+                    std::to_string(occurrence++));
+
+                for (std::size_t index = 0; index < attribute->args.size(); ++index)
+                {
+                    AttributeArgumentDescriptor argument;
+                    argument.sourceText = attribute->args[index].value;
+                    if (index < attribute->argumentNames.size()) argument.name = attribute->argumentNames[index];
+                    if (index < attribute->argumentUsedDefaults.size())
+                        argument.usedDefault = attribute->argumentUsedDefaults[index];
+                    if (index < attribute->typeArgs.size() && attribute->typeArgs[index])
+                        if (const Ref<sema::Type> argumentType = attribute->typeArgs[index]->refType.Lock())
+                            argument.type = mapType(argumentType, attribute->typeArgs[index].Get());
+                    descriptor.arguments.push_back(std::move(argument));
+                }
+                for (std::size_t index = 0; index < attribute->processorBindings.size(); ++index)
+                {
+                    const auto& binding = attribute->processorBindings[index];
+                    AttributeProcessorDescriptor processor;
+                    processor.canonicalTypeName = binding.canonicalTypeName;
+                    processor.hookName = binding.hookCppName;
+                    processor.hookMode = binding.hookMode;
+                    processor.phase = processorPhase(binding.phase);
+                    if (const Ref<sema::Type> valueType = binding.hookValueType.Lock())
+                        processor.valueType = mapType(valueType, attribute.Get());
+                    processor.stableId = stableHash(std::to_string(descriptor.stableId) + ":processor:" +
+                        std::to_string(index) + ":" + processor.canonicalTypeName + ":" + binding.phase);
+                    descriptor.processors.push_back(std::move(processor));
+                }
+                ids.push_back(descriptor.stableId);
+                result_.module_.contract.attributes.push_back(std::move(descriptor));
+            }
+            return ids;
+        }
+
+        FunctionId findExtensionFunction(const TypeId targetType, const std::string_view methodName)
+        {
+            for (std::size_t index = 0; index < declarations_.size(); ++index)
+            {
+                const DeclarationInfo& info = declarations_[index];
+                if (!info.isExtension || !info.declaration)
+                    continue;
+                const Ref<sema::Type> semanticTarget = info.declaration->extensionTargetType.Lock();
+                if (!semanticTarget || mapType(semanticTarget, info.declaration) != targetType)
+                    continue;
+                const std::string_view name = info.declaration->extensionMemberName.empty()
+                    ? (info.declaration->name ? std::string_view{info.declaration->name->token.value} : std::string_view{})
+                    : std::string_view{info.declaration->extensionMemberName};
+                if (name == methodName)
+                    return FunctionId{static_cast<FunctionId::ValueType>(index)};
+            }
+            return {};
+        }
+
+        void buildApplicationSystemAttributeReflection()
+        {
+            for (const TypeDeclarationInfo& declaration : typeDeclarations_)
+            {
+                if (!declaration.type)
+                    continue;
+                const TypeId typeId = mapType(declaration.type, declaration.declaration);
+                const std::uint64_t stableTypeId = typeMetadataId(typeId);
+                const MetadataTargetKind targetKind = declaration.role == "application"
+                    ? MetadataTargetKind::Application
+                    : (declaration.role == "system" ? MetadataTargetKind::System : MetadataTargetKind::Type);
+                const std::vector<std::uint64_t> typeAttributes = declaration.attributes
+                    ? appendAttributeApplications(*declaration.attributes, targetKind, stableTypeId, typeId)
+                    : std::vector<std::uint64_t>{};
+                auto reflected = std::ranges::find_if(result_.module_.contract.reflection,
+                    [&](const ReflectionDescriptor& descriptor) { return descriptor.type == typeId; });
+                if (reflected == result_.module_.contract.reflection.end())
+                    continue;
+                reflected->attributes = typeAttributes;
+
+                const Type& type = result_.module_.types.get(typeId);
+                for (const FieldLayout& field : type.fields)
+                {
+                    const std::uint64_t fieldId = stableHash(std::to_string(stableTypeId) + ":field:" + field.name);
+                    std::vector<std::uint64_t> fieldAttributes;
+                    const auto appendFieldAttributes = [&](const auto& members)
+                    {
+                        for (const auto& member : members)
+                        {
+                            const auto* variable = member.declaration
+                                ? member.declaration->template as<VariableDeclaration>()
+                                : nullptr;
+                            if (!variable || !variable->name || variable->name->token.value != field.name)
+                                continue;
+                            const auto& attributes = member.attributes.empty() ? variable->attributes : member.attributes;
+                            fieldAttributes = appendAttributeApplications(attributes,
+                                MetadataTargetKind::Field, fieldId, typeId, {}, field.name);
+                            break;
+                        }
+                    };
+                    if (const auto* component = declaration.declaration->as<ComponentDeclaration>())
+                        appendFieldAttributes(component->members);
+                    else if (const auto* object = declaration.declaration->as<ObjectDeclaration>())
+                        appendFieldAttributes(object->members);
+                    reflected->fields.push_back(ReflectedFieldDescriptor{
+                        .stableId = fieldId,
+                        .name = field.name,
+                        .type = field.type,
+                        .visibility = field.visibility,
+                        .isMutable = field.isMutable,
+                        .attributes = std::move(fieldAttributes)
+                    });
+                }
+                for (const MethodLayout& method : type.methods)
+                {
+                    const Function* function = findFunction(method.function);
+                    reflected->methods.push_back(ReflectedMethodDescriptor{
+                        .stableId = functionMetadataId(method.function),
+                        .name = method.name,
+                        .function = method.function,
+                        .returnType = method.returnType,
+                        .parameterTypes = method.parameterTypes,
+                        .slot = method.slot,
+                        .isAsync = function && function->isAsync
+                    });
+                }
+                const auto appendCases = [&](const auto& members)
+                {
+                    for (const auto& member : members)
+                    {
+                        if (!member.name) continue;
+                        const std::string& name = member.name->token.value;
+                        const std::uint64_t caseId = stableHash(std::to_string(stableTypeId) + ":case:" + name);
+                        reflected->cases.push_back(ReflectedCaseDescriptor{
+                            .stableId = caseId,
+                            .name = name,
+                            .attributes = appendAttributeApplications(member.attributes,
+                                MetadataTargetKind::EnumCase, caseId, typeId, {}, name)
+                        });
+                    }
+                };
+                if (const auto* enumeration = declaration.declaration->as<EnumDeclaration>())
+                    appendCases(enumeration->members);
+                else if (const auto* flagset = declaration.declaration->as<FlagsetDeclaration>())
+                    appendCases(flagset->members);
+            }
+
+            for (std::size_t index = 0; index < declarations_.size(); ++index)
+            {
+                const DeclarationInfo& info = declarations_[index];
+                if (!info.declaration)
+                    continue;
+                const FunctionId functionId{static_cast<FunctionId::ValueType>(index)};
+                const Function* function = findFunction(functionId);
+                if (!function)
+                    continue;
+                const TypeId targetType = info.ownerType
+                    ? mapType(info.ownerType, info.declaration)
+                    : (info.isExtension && info.declaration->extensionTargetType.Lock()
+                        ? mapType(info.declaration->extensionTargetType.Lock(), info.declaration)
+                        : TypeId{});
+                const auto ids = appendAttributeApplications(info.declaration->attributes,
+                    declarationTargetKind(*info.declaration, function->isMethod),
+                    functionMetadataId(functionId), targetType, functionId,
+                    info.declaration->extensionMemberName);
+                for (std::size_t parameterIndex = 0;
+                     parameterIndex < info.declaration->parameters.size(); ++parameterIndex)
+                {
+                    const wio::Parameter& parameter = info.declaration->parameters[parameterIndex];
+                    if (parameter.attributes.empty()) continue;
+                    const std::string parameterName = parameter.name
+                        ? parameter.name->token.value
+                        : std::string{"parameter." + std::to_string(parameterIndex)};
+                    const std::uint64_t parameterId = stableHash(std::to_string(functionMetadataId(functionId)) +
+                        ":parameter:" + std::to_string(parameterIndex) + ":" + parameterName);
+                    appendAttributeApplications(parameter.attributes, MetadataTargetKind::Parameter,
+                        parameterId, targetType, functionId, parameterName,
+                        static_cast<std::uint32_t>(parameterIndex));
+                }
+                if (!ids.empty() && targetType)
+                {
+                    auto reflected = std::ranges::find_if(result_.module_.contract.reflection,
+                        [&](const ReflectionDescriptor& descriptor) { return descriptor.type == targetType; });
+                    if (reflected != result_.module_.contract.reflection.end())
+                    {
+                        auto method = std::ranges::find_if(reflected->methods,
+                            [&](const ReflectedMethodDescriptor& descriptor) { return descriptor.function == functionId; });
+                        if (method != reflected->methods.end()) method->attributes = ids;
+                    }
+                }
+            }
+
+            for (const TypeDeclarationInfo& declaration : typeDeclarations_)
+            {
+                if (declaration.role != "system" || !declaration.type)
+                    continue;
+                const TypeId type = mapType(declaration.type, declaration.declaration);
+                const Type* descriptor = result_.module_.types.tryGet(type);
+                if (!descriptor)
+                    continue;
+                result_.module_.contract.systems.push_back(SystemDescriptor{
+                    .stableId = stableHash(result_.module_.contract.stableKey + ":system:" + descriptor->name),
+                    .logicalName = descriptor->name,
+                    .type = type,
+                    .start = findExtensionFunction(type, "Start"),
+                    .update = findExtensionFunction(type, "Update"),
+                    .close = findExtensionFunction(type, "Close")
+                });
+            }
+
+            for (std::size_t index = 0; index < declarations_.size(); ++index)
+            {
+                const FunctionDeclaration* entry = declarations_[index].declaration;
+                if (!entry || !entry->isApplicationEntry)
+                    continue;
+                const auto applicationType = std::ranges::find_if(typeDeclarations_, [&](const TypeDeclarationInfo& type)
+                {
+                    const auto* component = type.declaration ? type.declaration->as<ComponentDeclaration>() : nullptr;
+                    return type.role == "application" && component && component->name &&
+                        component->name->token.value == entry->applicationName;
+                });
+                if (applicationType == typeDeclarations_.end() || !applicationType->type)
+                    continue;
+                ApplicationDescriptor application;
+                application.logicalName = entry->applicationName;
+                application.type = mapType(applicationType->type, applicationType->declaration);
+                application.stableId = stableHash(result_.module_.contract.stableKey + ":application:" + application.logicalName);
+                application.entry = FunctionId{static_cast<FunctionId::ValueType>(index)};
+                application.start = findExtensionFunction(application.type, "Start");
+                application.update = findExtensionFunction(application.type, "Update");
+                application.close = findExtensionFunction(application.type, "Close");
+                application.exit = findExtensionFunction(application.type, "Exit");
+                const Type& appType = result_.module_.types.get(application.type);
+                for (const FieldLayout& field : appType.fields)
+                    if (std::ranges::any_of(result_.module_.contract.systems,
+                        [&](const SystemDescriptor& system) { return system.type == field.type; }))
+                        application.systems.push_back(field.type);
+
+                for (const ApplicationStageMetadata& sourceStage : entry->applicationStages)
+                {
+                    ApplicationStageDescriptor stage;
+                    stage.name = sourceStage.name;
+                    stage.after = sourceStage.after;
+                    stage.fixedHz = sourceStage.fixedHz;
+                    stage.order = sourceStage.order;
+                    stage.kind = sourceStage.fixed ? ApplicationStageKind::Fixed : ApplicationStageKind::Variable;
+                    stage.affinity = sourceStage.mainThread ? ApplicationAffinity::Main : ApplicationAffinity::Inherit;
+                    stage.legacyExplicit = sourceStage.legacyExplicit;
+                    stage.stableId = stableHash(std::to_string(application.stableId) + ":stage:" + stage.name);
+                    for (const ApplicationStageRunMetadata& sourceRun : sourceStage.runs)
+                    {
+                        ApplicationStageRun run;
+                        run.targetName = sourceRun.target;
+                        run.methodName = sourceRun.method;
+                        run.applicationTarget = sourceRun.target == "self";
+                        run.acceptsDelta = sourceRun.acceptsDelta;
+                        if (run.applicationTarget)
+                            run.targetType = application.type;
+                        else
+                        {
+                            const auto field = std::ranges::find_if(appType.fields,
+                                [&](const FieldLayout& candidate) { return candidate.name == sourceRun.target; });
+                            if (field != appType.fields.end()) run.targetType = field->type;
+                        }
+                        run.function = findExtensionFunction(run.targetType, run.methodName);
+                        const Function* function = findFunction(run.function);
+                        std::size_t parameterIndex = 1u + (run.acceptsDelta ? 1u : 0u);
+                        for (const std::string& resourceName : sourceRun.resourceNames)
+                        {
+                            ApplicationResourceBinding resource{.name = resourceName};
+                            const auto field = std::ranges::find_if(appType.fields,
+                                [&](const FieldLayout& candidate) { return candidate.name == resourceName; });
+                            if (field != appType.fields.end()) resource.type = field->type;
+                            if (function && parameterIndex < function->parameters.size())
+                            {
+                                const Type* parameter = result_.module_.types.tryGet(function->parameters[parameterIndex].type);
+                                resource.access = parameter && parameter->kind == TypeKind::Reference && parameter->isMutable
+                                    ? ResourceAccess::Write : ResourceAccess::Read;
+                            }
+                            ++parameterIndex;
+                            run.resources.push_back(std::move(resource));
+                        }
+                        stage.runs.push_back(std::move(run));
+                    }
+                    application.stages.push_back(std::move(stage));
+                }
+                result_.module_.contract.application = std::move(application);
+                break;
             }
         }
 

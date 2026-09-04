@@ -345,6 +345,95 @@ namespace wio::wir::lowered
                 type->kind != TypeKind::Named || descriptor.nominalKind != type->nominalKind ||
                 !reflectedTypes.insert(descriptor.stableTypeId).second)
                 report("LIR1505", "Lowered WIR reflection descriptors require unique identities and matching nominal types.");
+            std::unordered_set<std::uint64_t> memberIds;
+            for (const ReflectedFieldDescriptor& field : descriptor.fields)
+                if (field.stableId == 0 || field.name.empty() || !module.types.tryGet(field.type) ||
+                    !memberIds.insert(field.stableId).second)
+                    report("LIR1506", "Lowered WIR reflected fields require unique identities, names, and valid types.");
+            for (const ReflectedMethodDescriptor& method : descriptor.methods)
+                if (method.stableId == 0 || method.name.empty() || !module.types.tryGet(method.returnType) ||
+                    !functions.contains(method.function.value()) || !memberIds.insert(method.stableId).second)
+                    report("LIR1507", "Lowered WIR reflected methods require unique identities and valid callable signatures.");
+            for (const ReflectedCaseDescriptor& enumCase : descriptor.cases)
+                if (enumCase.stableId == 0 || enumCase.name.empty() || !memberIds.insert(enumCase.stableId).second)
+                    report("LIR1517", "Lowered WIR reflected enum/flagset cases require unique identities and names.");
+        }
+        std::unordered_set<std::uint64_t> attributeIds;
+        for (const AttributeApplicationDescriptor& attribute : module.contract.attributes)
+        {
+            bool targetValid = attribute.targetStableId != 0;
+            if (attribute.targetType) targetValid = targetValid && module.types.tryGet(attribute.targetType);
+            if (attribute.targetFunction) targetValid = targetValid && functions.contains(attribute.targetFunction.value());
+            if (attribute.stableId == 0 || attribute.canonicalName.empty() || !targetValid ||
+                !attributeIds.insert(attribute.stableId).second)
+                report("LIR1508", "Lowered WIR attribute applications require unique identities and valid targets.");
+            std::unordered_set<std::uint64_t> processorIds;
+            for (const AttributeProcessorDescriptor& processor : attribute.processors)
+                if (processor.stableId == 0 || processor.canonicalTypeName.empty() ||
+                    processor.phase == AttributeProcessorPhase::Unknown ||
+                    (processor.valueType && !module.types.tryGet(processor.valueType)) ||
+                    !processorIds.insert(processor.stableId).second)
+                    report("LIR1509", "Lowered WIR attribute processors require a stable phase, identity, and value type.");
+        }
+        const auto attributesKnown = [&](const std::vector<std::uint64_t>& ids)
+        {
+            return std::ranges::all_of(ids, [&](const std::uint64_t id) { return attributeIds.contains(id); });
+        };
+        for (const ReflectionDescriptor& descriptor : module.contract.reflection)
+        {
+            if (!attributesKnown(descriptor.attributes))
+                report("LIR1510", "Lowered WIR reflected type references an unknown attribute application.");
+            for (const ReflectedFieldDescriptor& field : descriptor.fields)
+                if (!attributesKnown(field.attributes))
+                    report("LIR1511", "Lowered WIR reflected field references an unknown attribute application.");
+            for (const ReflectedMethodDescriptor& method : descriptor.methods)
+                if (!attributesKnown(method.attributes))
+                    report("LIR1512", "Lowered WIR reflected method references an unknown attribute application.");
+            for (const ReflectedCaseDescriptor& enumCase : descriptor.cases)
+                if (!attributesKnown(enumCase.attributes))
+                    report("LIR1518", "Lowered WIR reflected enum/flagset case references an unknown attribute application.");
+        }
+        std::unordered_set<TypeId::ValueType> systemTypes;
+        for (const SystemDescriptor& system : module.contract.systems)
+        {
+            const Type* type = module.types.tryGet(system.type);
+            const auto knownFunction = [&](const FunctionId id) { return !id || functions.contains(id.value()); };
+            if (system.stableId == 0 || system.logicalName.empty() || !type ||
+                type->nominalKind != NominalKind::Component || !systemTypes.insert(system.type.value()).second ||
+                !knownFunction(system.start) || !knownFunction(system.update) || !knownFunction(system.close))
+                report("LIR1513", "Lowered WIR systems require unique component types and valid lifecycle functions.");
+        }
+        if (module.contract.application)
+        {
+            const ApplicationDescriptor& application = *module.contract.application;
+            const Type* type = module.types.tryGet(application.type);
+            const auto requiredFunction = [&](const FunctionId id) { return id && functions.contains(id.value()); };
+            if (application.stableId == 0 || application.logicalName.empty() || !type ||
+                type->nominalKind != NominalKind::Component || !requiredFunction(application.entry) ||
+                !requiredFunction(application.start) || !requiredFunction(application.update) ||
+                !requiredFunction(application.close) || !requiredFunction(application.exit) ||
+                !std::ranges::all_of(application.systems, [&](const TypeId system) { return systemTypes.contains(system.value()); }))
+                report("LIR1514", "Lowered WIR application requires a component type, entry/lifecycle functions, and declared systems.");
+            std::unordered_map<std::string, std::uint32_t> stageOrders;
+            for (const ApplicationStageDescriptor& stage : application.stages)
+            {
+                const bool dependencyValid = stage.after.empty() ||
+                    (stageOrders.contains(stage.after) && stageOrders.at(stage.after) < stage.order);
+                const bool frequencyValid = stage.kind == ApplicationStageKind::Fixed
+                    ? stage.fixedHz > 0.0 : stage.fixedHz == 0.0;
+                if (stage.stableId == 0 || stage.name.empty() || stage.order != stageOrders.size() ||
+                    !dependencyValid || !frequencyValid || !stageOrders.emplace(stage.name, stage.order).second)
+                    report("LIR1515", "Lowered WIR application stages require canonical order, dependencies, and frequency.");
+                for (const ApplicationStageRun& run : stage.runs)
+                {
+                    const bool targetValid = run.targetType && module.types.tryGet(run.targetType) &&
+                        (run.applicationTarget ? run.targetType == application.type : systemTypes.contains(run.targetType.value()));
+                    if (run.targetName.empty() || run.methodName.empty() || !targetValid || !requiredFunction(run.function) ||
+                        !std::ranges::all_of(run.resources, [&](const ApplicationResourceBinding& resource)
+                            { return !resource.name.empty() && module.types.tryGet(resource.type); }))
+                        report("LIR1516", "Lowered WIR application runs require resolved targets, functions, and resources.");
+                }
+            }
         }
 
         for (const Type& type : module.types.types())

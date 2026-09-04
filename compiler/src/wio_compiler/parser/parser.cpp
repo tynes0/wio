@@ -3026,6 +3026,13 @@ namespace wio
             {
                 metadata.containsApplication = metadata.containsApplication || run.target == "self";
                 metadata.containsSystem = metadata.containsSystem || run.target != "self";
+                metadata.runs.push_back(ApplicationStageRunMetadata{
+                    .target = run.target,
+                    .method = run.method,
+                    .resourceNames = run.resourceNames,
+                    .inlineApplicationUpdate = run.inlineApplicationUpdate,
+                    .acceptsDelta = run.acceptsDelta
+                });
             }
             entry->applicationStages.push_back(std::move(metadata));
         };
@@ -3042,12 +3049,23 @@ namespace wio
                 metadata.name = ownedSystems[order];
                 metadata.order = order;
                 metadata.containsSystem = true;
+                metadata.runs.push_back(ApplicationStageRunMetadata{
+                    .target = ownedSystems[order],
+                    .method = "Update",
+                    .acceptsDelta = true
+                });
                 entry->applicationStages.push_back(std::move(metadata));
             }
             ApplicationStageMetadata updateMetadata;
             updateMetadata.name = "Update";
             updateMetadata.order = static_cast<std::uint32_t>(entry->applicationStages.size());
             updateMetadata.containsApplication = true;
+            updateMetadata.runs.push_back(ApplicationStageRunMetadata{
+                .target = "self",
+                .method = "Update",
+                .inlineApplicationUpdate = true,
+                .acceptsDelta = true
+            });
             entry->applicationStages.push_back(std::move(updateMetadata));
         }
 

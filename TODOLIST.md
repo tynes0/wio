@@ -511,7 +511,9 @@ Rider, and CLion are defined in
    contract survive verified Typed-to-Lowered WIR. Concrete thunk bodies remain
    work for the new C++ backend and VM native bridge rather than the frontend.
    Module/import/export identity, concrete generic export signatures,
-   reflection descriptors, lifecycle/state-transfer hooks, and deterministic
+   detailed field/method/attribute reflection descriptors,
+   application/system schedule and resource-access metadata,
+   lifecycle/state-transfer hooks, and deterministic
    SDK call-table slots also survive through one verified canonical contract.
    The compatible SDK sidecar is frozen; generated sidecar emission and loader
    preference switching remain backend-integration work.
@@ -520,9 +522,11 @@ Rider, and CLion are defined in
    language coverage, then consume Lowered WIR from a new C++ backend and a
    bytecode VM. Async functions now carry payload/frame/state contracts;
    awaits and executor handoffs lower to cancellation-safe suspend/resume state
-   machines, and async exits lower to coroutine completion. Add executor
-   runtime emission, exceptional/panic cleanup edges, globals/constants, remaining tuple/span
-   operations, attribute reflection payloads, backend parity tests, and compile-time/
+   machines, and async exits lower to coroutine completion. Application,
+   system, effective attribute processor, and detailed reflection metadata now
+   use the same verified contract. Add executor runtime emission,
+   exceptional/panic cleanup edges, globals/constants, remaining tuple/span
+   operations, backend parity tests, and compile-time/
    runtime benchmarks before changing the default backend.
 
 ## P3 - Product Direction
