@@ -12,6 +12,7 @@ namespace wio::wir::typed
     {
         using ValueTypeMap = std::unordered_map<ValueId::ValueType, TypeId>;
         using FunctionMap = std::unordered_map<FunctionId::ValueType, const Function*>;
+        using GlobalMap = std::unordered_map<GlobalId::ValueType, const Global*>;
         using BlockMap = std::unordered_map<BlockId::ValueType, const BasicBlock*>;
 
         struct ValueDefinition
@@ -58,7 +59,9 @@ namespace wio::wir::typed
         {
             if (type.ownership == OwnershipModel::Borrowed)
                 return ValueOwnership::Borrowed;
-            return requiresCleanup(type) ? ValueOwnership::Owned : ValueOwnership::Trivial;
+            return type.ownership == OwnershipModel::Trivial
+                ? ValueOwnership::Trivial
+                : ValueOwnership::Owned;
         }
 
         bool literalMatches(const Literal& literal, const TypeKind kind)
@@ -126,6 +129,19 @@ namespace wio::wir::typed
             return type;
         }
 
+        const Type* underlyingNamedType(const TypeTable& types, TypeId typeId, TypeId* nominalId = nullptr)
+        {
+            const Type* type = types.tryGet(typeId);
+            if (type && type->kind == TypeKind::Reference && type->arguments.size() == 1)
+            {
+                typeId = type->arguments.front();
+                type = types.tryGet(typeId);
+            }
+            if (!type || type->kind != TypeKind::Named) return nullptr;
+            if (nominalId) *nominalId = typeId;
+            return type;
+        }
+
         bool nominalDerivesFrom(
             const TypeTable& types,
             const TypeId source,
@@ -173,7 +189,12 @@ namespace wio::wir::typed
                 return base->kind == TypeKind::Named &&
                     (base->nominalKind == NominalKind::Object || base->nominalKind == NominalKind::Interface);
             case NativeMarshallingKind::Callback: return base->kind == TypeKind::Function;
-            case NativeMarshallingKind::Generic: return base->kind == TypeKind::GenericParameter;
+            case NativeMarshallingKind::Generic:
+                return base->kind == TypeKind::GenericParameter ||
+                    base->kind == TypeKind::ConstGenericParameter ||
+                    base->kind == TypeKind::GenericParameterPack ||
+                    base->kind == TypeKind::ValuePack || base->kind == TypeKind::TypePack ||
+                    base->kind == TypeKind::PackStorage;
             case NativeMarshallingKind::Scalar:
                 if (base->kind == TypeKind::Named)
                     return base->nominalKind == NominalKind::Enum || base->nominalKind == NominalKind::Flagset;
@@ -225,10 +246,13 @@ namespace wio::wir::typed
             }
             if (type.kind == TypeKind::Named && type.name.empty())
                 report("WIR1003", "Named Typed WIR types require a stable logical name.");
-            if (type.kind == TypeKind::GenericParameter && type.name.empty())
+            if ((type.kind == TypeKind::GenericParameter ||
+                 type.kind == TypeKind::ConstGenericParameter ||
+                 type.kind == TypeKind::GenericParameterPack) && type.name.empty())
                 report("WIR1014", "Generic parameter Typed WIR types require a stable source name.");
             if ((type.kind == TypeKind::Reference || type.kind == TypeKind::Nullable ||
-                 type.kind == TypeKind::Array || type.kind == TypeKind::AsyncTask) &&
+                 type.kind == TypeKind::Array || type.kind == TypeKind::AsyncTask ||
+                 type.kind == TypeKind::Iterator) &&
                 type.arguments.size() != 1)
             {
                 report("WIR1004", "Unary constructed Typed WIR type requires exactly one type argument.");
@@ -292,6 +316,15 @@ namespace wio::wir::typed
             }
         }
 
+        GlobalMap globals;
+        for (const Global& global : module.globals)
+        {
+            if (!global.id || !globals.emplace(global.id.value(), &global).second)
+                report("WIR1020", "Typed WIR global id must be valid and unique.", global.source);
+            if (global.name.empty() || !module.types.tryGet(global.type) || (global.isConst && global.isMutable))
+                report("WIR1021", "Typed WIR global requires a name, type, and consistent mutability.", global.source);
+        }
+
         FunctionMap functions;
         for (const Function& function : module.functions)
         {
@@ -339,7 +372,9 @@ namespace wio::wir::typed
             if (!std::ranges::all_of(function.genericParameters, [&](const TypeId parameter)
                 {
                     const Type* type = module.types.tryGet(parameter);
-                    return type && type->kind == TypeKind::GenericParameter;
+                    return type && (type->kind == TypeKind::GenericParameter ||
+                        type->kind == TypeKind::ConstGenericParameter ||
+                        type->kind == TypeKind::GenericParameterPack);
                 }))
             {
                 report("WIR1109", "Typed WIR generic parameter metadata must reference generic parameter types.", function.source, function.id);
@@ -574,6 +609,14 @@ namespace wio::wir::typed
             }
         }
 
+        for (const Global& global : module.globals)
+        {
+            const auto initializer = global.initializer ? functions.find(global.initializer.value()) : functions.end();
+            if (initializer == functions.end() || !initializer->second->parameters.empty() ||
+                initializer->second->returnType != global.type)
+                report("WIR1022", "Typed WIR global initializer must be a known zero-argument function returning the global type.", global.source);
+        }
+
         for (const Function& function : module.functions)
         {
             if (function.isExternal)
@@ -786,6 +829,21 @@ namespace wio::wir::typed
                         }
                     }
 
+                    if (!instruction.expandedOperands.empty())
+                    {
+                        bool validExpansion = instruction.expandedOperands.size() == instruction.operands.size();
+                        for (std::size_t argumentIndex = 0;
+                             validExpansion && argumentIndex < instruction.expandedOperands.size(); ++argumentIndex)
+                        {
+                            if (!instruction.expandedOperands[argumentIndex]) continue;
+                            const Type* pack = module.types.tryGet(valueType(instruction.operands[argumentIndex]));
+                            validExpansion = pack && (pack->kind == TypeKind::GenericParameterPack ||
+                                pack->kind == TypeKind::ValuePack || pack->kind == TypeKind::PackStorage);
+                        }
+                        if (!validExpansion)
+                            report("WIR1481", "Typed WIR pack expansion metadata must align with symbolic pack operands.", instruction.source, function.id, block.id);
+                    }
+
                     bool callReturnsVoid = false;
                     const bool isCallInstruction = instruction.opcode == Opcode::Call ||
                         instruction.opcode == Opcode::NativeCall ||
@@ -867,6 +925,15 @@ namespace wio::wir::typed
                         {
                             report("WIR1407", "Typed WIR binary result must match its operand type.", instruction.source, function.id, block.id);
                         }
+                    }
+                    else if (instruction.opcode == Opcode::RangeContains)
+                    {
+                        if (instruction.operands.size() != 3 ||
+                            valueType(instruction.operands[0]) != valueType(instruction.operands[1]) ||
+                            valueType(instruction.operands[0]) != valueType(instruction.operands[2]) ||
+                            instruction.resultType != module.types.boolType() ||
+                            (instruction.selector != "inclusive" && instruction.selector != "exclusive"))
+                            report("WIR1482", "Typed WIR range containment requires three equal numeric operands and a bool result.", instruction.source, function.id, block.id);
                     }
                     else if (instruction.opcode == Opcode::Convert)
                     {
@@ -1074,6 +1141,65 @@ namespace wio::wir::typed
                             report("WIR1463", "Typed WIR nullable wrap requires one value matching the nullable payload type.", instruction.source, function.id, block.id);
                         }
                     }
+                    else if (instruction.opcode == Opcode::IteratorCreate)
+                    {
+                        const Type* iterator = module.types.tryGet(instruction.resultType);
+                        const bool range = instruction.selector == "range.inclusive" ||
+                            instruction.selector == "range.exclusive";
+                        const bool container = instruction.selector == "array" ||
+                            instruction.selector == "dictionary";
+                        bool valid = iterator && iterator->kind == TypeKind::Iterator &&
+                            iterator->arguments.size() == 1 && (range || container) &&
+                            instruction.signatureTypes.size() == instruction.operands.size() &&
+                            (range ? instruction.operands.size() == 3
+                                   : instruction.operands.size() >= 1 && instruction.operands.size() <= 2);
+                        for (std::size_t index = 0; valid && index < instruction.operands.size(); ++index)
+                            valid = instruction.signatureTypes[index] == valueType(instruction.operands[index]);
+                        if (!valid)
+                            report("WIR1477", "Typed WIR iterator creation requires a canonical range/array/dictionary source.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::IteratorHasNext ||
+                             instruction.opcode == Opcode::IteratorAdvance ||
+                             instruction.opcode == Opcode::IteratorValue)
+                    {
+                        const Type* iterator = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const bool validResult = instruction.opcode == Opcode::IteratorAdvance
+                            ? !instruction.result
+                            : instruction.opcode == Opcode::IteratorHasNext
+                                ? instruction.resultType == module.types.boolType()
+                                : instruction.result && module.types.tryGet(instruction.resultType) &&
+                                  !instruction.selector.empty();
+                        if (!iterator || iterator->kind != TypeKind::Iterator || !validResult)
+                            report("WIR1478", "Typed WIR iterator operation requires one iterator and a canonical result shape.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::ResultIsError ||
+                             instruction.opcode == Opcode::ResultValue ||
+                             instruction.opcode == Opcode::ResultUnwrap ||
+                             instruction.opcode == Opcode::ResultPropagate)
+                    {
+                        const Type* resultType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        bool valid = resultType && resultType->kind == TypeKind::Named &&
+                            resultType->nominalValueModel == NominalValueModel::Result &&
+                            !resultType->arguments.empty();
+                        if (valid && instruction.opcode == Opcode::ResultIsError)
+                            valid = instruction.resultType == module.types.boolType();
+                        else if (valid && (instruction.opcode == Opcode::ResultValue ||
+                                           instruction.opcode == Opcode::ResultUnwrap))
+                            valid = instruction.resultType == resultType->arguments.front();
+                        else if (valid)
+                        {
+                            const Type* target = module.types.tryGet(instruction.targetType);
+                            valid = !instruction.result && instruction.targetType == coroutineResultType(module.types, function) &&
+                                target && target->kind == TypeKind::Named &&
+                                target->nominalValueModel == NominalValueModel::Result;
+                        }
+                        if (!valid)
+                            report("WIR1479", "Typed WIR Result operation requires canonical Result<T> source and payload/propagation types.", instruction.source, function.id, block.id);
+                    }
                     else if (instruction.opcode == Opcode::LocalPlace)
                     {
                         const Type* placeType = module.types.tryGet(instruction.resultType);
@@ -1082,6 +1208,15 @@ namespace wio::wir::typed
                         {
                             report("WIR1429", "Typed WIR local place requires a named reference result and no operands.", instruction.source, function.id, block.id);
                         }
+                    }
+                    else if (instruction.opcode == Opcode::GlobalPlace)
+                    {
+                        const auto global = instruction.global ? globals.find(instruction.global.value()) : globals.end();
+                        const Type* placeType = module.types.tryGet(instruction.resultType);
+                        if (global == globals.end() || !placeType || placeType->kind != TypeKind::Reference ||
+                            placeType->arguments.size() != 1 || placeType->arguments.front() != global->second->type ||
+                            placeType->isMutable != global->second->isMutable || !instruction.operands.empty())
+                            report("WIR1480", "Typed WIR global-place must match a declared global and its mutability.", instruction.source, function.id, block.id);
                     }
                     else if (instruction.opcode == Opcode::PlaceInit || instruction.opcode == Opcode::Store ||
                              instruction.opcode == Opcode::Replace)
@@ -1408,7 +1543,7 @@ namespace wio::wir::typed
                             }
                             TypeId receiverNominal;
                             std::unordered_set<TypeId::ValueType> visited;
-                            valid = valid && underlyingObjectType(module.types, valueType(instruction.operands.front()), &receiverNominal) &&
+                            valid = valid && underlyingNamedType(module.types, valueType(instruction.operands.front()), &receiverNominal) &&
                                 nominalDerivesFrom(module.types, receiverNominal, instruction.targetType, visited);
                             const Function& callee = *calleeIt->second;
                             const Type* returnType = module.types.tryGet(callee.returnType);

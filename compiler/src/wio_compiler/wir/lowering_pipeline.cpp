@@ -35,6 +35,7 @@ namespace wio::wir
             case typed::Opcode::Constant: opcode = lowered::Opcode::Constant; break;
             case typed::Opcode::Unary: opcode = lowered::Opcode::Unary; break;
             case typed::Opcode::Binary: opcode = lowered::Opcode::Binary; break;
+            case typed::Opcode::RangeContains: opcode = lowered::Opcode::RangeContains; break;
             case typed::Opcode::Convert: opcode = lowered::Opcode::Convert; break;
             case typed::Opcode::Call: opcode = lowered::Opcode::Call; break;
             case typed::Opcode::NativeCall: opcode = lowered::Opcode::NativeInvoke; break;
@@ -65,6 +66,15 @@ namespace wio::wir
             case typed::Opcode::AnyCheckedCast: opcode = lowered::Opcode::AnyCheckedCast; break;
             case typed::Opcode::AnyTypeTest: opcode = lowered::Opcode::AnyTypeTest; break;
             case typed::Opcode::NullableWrap: opcode = lowered::Opcode::NullableWrap; break;
+            case typed::Opcode::IteratorCreate: opcode = lowered::Opcode::IteratorCreate; break;
+            case typed::Opcode::IteratorHasNext: opcode = lowered::Opcode::IteratorHasNext; break;
+            case typed::Opcode::IteratorValue: opcode = lowered::Opcode::IteratorValue; break;
+            case typed::Opcode::IteratorAdvance: opcode = lowered::Opcode::IteratorAdvance; break;
+            case typed::Opcode::ResultIsError: opcode = lowered::Opcode::ResultIsError; break;
+            case typed::Opcode::ResultValue: opcode = lowered::Opcode::ResultValue; break;
+            case typed::Opcode::ResultUnwrap: opcode = lowered::Opcode::ResultUnwrap; break;
+            case typed::Opcode::ResultPropagate: opcode = lowered::Opcode::ResultPropagate; break;
+            case typed::Opcode::GlobalPlace: opcode = lowered::Opcode::GlobalPlace; break;
             case typed::Opcode::LocalPlace: opcode = lowered::Opcode::LocalPlace; break;
             case typed::Opcode::PlaceInit: opcode = lowered::Opcode::PlaceInit; break;
             case typed::Opcode::Load: opcode = lowered::Opcode::Load; break;
@@ -124,6 +134,7 @@ namespace wio::wir
                 .resultType = instruction.resultType,
                 .operands = instruction.operands,
                 .callee = instruction.callee,
+                .global = instruction.global,
                 .literal = instruction.literal,
                 .unaryOperator = instruction.unaryOperator,
                 .binaryOperator = instruction.binaryOperator,
@@ -133,6 +144,7 @@ namespace wio::wir
                 .signatureTypes = instruction.signatureTypes,
                 .genericArguments = instruction.genericArguments,
                 .captureKinds = instruction.captureKinds,
+                .expandedOperands = instruction.expandedOperands,
                 .stringSegments = instruction.stringSegments,
                 .specializationKey = instruction.specializationKey,
                 .intrinsicFamily = instruction.intrinsicFamily,
@@ -160,6 +172,19 @@ namespace wio::wir
             result_.module_.name = source_.name;
             result_.module_.contract = source_.contract;
             result_.module_.types = source_.types;
+            result_.module_.globals.reserve(source_.globals.size());
+            for (const typed::Global& global : source_.globals)
+            {
+                result_.module_.globals.push_back(lowered::Global{
+                    .id = global.id,
+                    .name = global.name,
+                    .type = global.type,
+                    .initializer = global.initializer,
+                    .source = global.source,
+                    .isMutable = global.isMutable,
+                    .isConst = global.isConst
+                });
+            }
             result_.module_.functions.reserve(source_.functions.size());
             for (const typed::Function& sourceFunction : source_.functions)
                 lowerFunction(sourceFunction);

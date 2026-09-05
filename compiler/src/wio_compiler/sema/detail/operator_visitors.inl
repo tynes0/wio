@@ -37,6 +37,25 @@
 
         const Ref<Type> initialLeftType = node.left->refType.Lock();
         const Ref<Type> initialRightType = node.right->refType.Lock();
+        if (node.op.type == TokenType::kwIn && node.right->is<RangeExpression>())
+        {
+            const auto* range = node.right->as<RangeExpression>();
+            const Ref<Type> leftType = getAutoReadableType(initialLeftType);
+            const Ref<Type> startType = getAutoReadableType(range->start->refType.Lock());
+            const Ref<Type> endType = getAutoReadableType(range->end->refType.Lock());
+            if (!leftType || !startType || !endType ||
+                !allowsNumericSemantics(leftType) || !allowsNumericSemantics(startType) ||
+                !allowsNumericSemantics(endType))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Range containment requires numeric value and bound types.");
+            }
+            else if (!leftType->isCompatibleWith(startType) || !leftType->isCompatibleWith(endType))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "Range containment value and bounds must have compatible numeric types.");
+            }
+            node.refType = Compiler::get().getTypeContext().getBool();
+            return;
+        }
         if (!initialLeftType || !initialRightType ||
             initialLeftType->isPoisoned() || initialRightType->isPoisoned())
         {
@@ -44,16 +63,6 @@
             return;
         }
 
-        if (node.op.type == TokenType::kwIn && node.right->is<RangeExpression>())
-        {
-            auto leftType = node.left->refType.Lock();
-            if (leftType && !allowsNumericSemantics(leftType))
-            {
-                WIO_LOG_ADD_ERROR(node.location(), "The left operand of 'in' operator must be numeric when used with a range.");
-            }
-            node.refType = Compiler::get().getTypeContext().getBool();
-            return;
-        }
         if (node.op.type == TokenType::kwIs)
         {
             Ref<Type> lhsType = getAutoReadableType(node.left->refType.Lock());

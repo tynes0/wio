@@ -98,6 +98,12 @@ namespace wio::wir
         case TypeKind::Any: return "any";
         case TypeKind::Opaque: return "opaque";
         case TypeKind::GenericParameter: return "generic-parameter";
+        case TypeKind::ConstGenericParameter: return "const-generic-parameter";
+        case TypeKind::ConstValue: return "const-value";
+        case TypeKind::GenericParameterPack: return "generic-parameter-pack";
+        case TypeKind::ValuePack: return "value-pack";
+        case TypeKind::TypePack: return "type-pack";
+        case TypeKind::PackStorage: return "pack-storage";
         case TypeKind::Named: return "named";
         case TypeKind::Reference: return "reference";
         case TypeKind::Nullable: return "nullable";
@@ -105,6 +111,7 @@ namespace wio::wir
         case TypeKind::Dictionary: return "dictionary";
         case TypeKind::Function: return "function";
         case TypeKind::AsyncTask: return "async-task";
+        case TypeKind::Iterator: return "iterator";
         }
         return "invalid";
     }

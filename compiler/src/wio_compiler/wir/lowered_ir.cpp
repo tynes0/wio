@@ -6,13 +6,14 @@ namespace wio::wir::lowered
     {
         return opcode == Opcode::Return || opcode == Opcode::Jump ||
                opcode == Opcode::CondJump || opcode == Opcode::CoroutineSuspend ||
-               opcode == Opcode::CoroutineComplete || opcode == Opcode::Unreachable;
+               opcode == Opcode::CoroutineComplete || opcode == Opcode::ResultPropagate ||
+               opcode == Opcode::Unreachable;
     }
 
     bool producesValue(const Opcode opcode)
     {
         return opcode == Opcode::Constant || opcode == Opcode::Unary ||
-               opcode == Opcode::Binary || opcode == Opcode::Convert || opcode == Opcode::Call ||
+               opcode == Opcode::Binary || opcode == Opcode::RangeContains || opcode == Opcode::Convert || opcode == Opcode::Call ||
                opcode == Opcode::NativeInvoke ||
                opcode == Opcode::FunctionReference || opcode == Opcode::ClosureCreate ||
                opcode == Opcode::IndirectCall || opcode == Opcode::ExtensionCall ||
@@ -28,8 +29,12 @@ namespace wio::wir::lowered
                opcode == Opcode::EnumConstant || opcode == Opcode::IntrinsicCall ||
                opcode == Opcode::AnyBox || opcode == Opcode::AnyCheckedCast ||
                opcode == Opcode::AnyTypeTest || opcode == Opcode::NullableWrap ||
+               opcode == Opcode::IteratorCreate || opcode == Opcode::IteratorHasNext ||
+               opcode == Opcode::IteratorValue ||
+               opcode == Opcode::ResultIsError || opcode == Opcode::ResultValue ||
+               opcode == Opcode::ResultUnwrap ||
                opcode == Opcode::CoroutineResume ||
-               opcode == Opcode::LocalPlace || opcode == Opcode::Load ||
+               opcode == Opcode::GlobalPlace || opcode == Opcode::LocalPlace || opcode == Opcode::Load ||
                opcode == Opcode::FieldPlace || opcode == Opcode::ArrayPlace ||
                opcode == Opcode::Borrow || opcode == Opcode::ConstructComponent ||
                opcode == Opcode::ConstructObject || opcode == Opcode::Retain ||
@@ -43,6 +48,7 @@ namespace wio::wir::lowered
         case Opcode::Constant: return "const";
         case Opcode::Unary: return "unary";
         case Opcode::Binary: return "binary";
+        case Opcode::RangeContains: return "range-contains";
         case Opcode::Convert: return "convert";
         case Opcode::Call: return "call";
         case Opcode::NativeInvoke: return "native-invoke";
@@ -73,10 +79,19 @@ namespace wio::wir::lowered
         case Opcode::AnyCheckedCast: return "any-checked-cast";
         case Opcode::AnyTypeTest: return "any-type-test";
         case Opcode::NullableWrap: return "nullable-wrap";
+        case Opcode::IteratorCreate: return "iterator-create";
+        case Opcode::IteratorHasNext: return "iterator-has-next";
+        case Opcode::IteratorValue: return "iterator-value";
+        case Opcode::IteratorAdvance: return "iterator-advance";
+        case Opcode::ResultIsError: return "result-is-error";
+        case Opcode::ResultValue: return "result-value";
+        case Opcode::ResultUnwrap: return "result-unwrap";
+        case Opcode::ResultPropagate: return "result-propagate";
         case Opcode::CancellationCheck: return "cancellation-check";
         case Opcode::CoroutineSuspend: return "coroutine-suspend";
         case Opcode::CoroutineResume: return "coroutine-resume";
         case Opcode::CoroutineComplete: return "coroutine-complete";
+        case Opcode::GlobalPlace: return "global-place";
         case Opcode::LocalPlace: return "local-place";
         case Opcode::PlaceInit: return "place-init";
         case Opcode::Load: return "load";

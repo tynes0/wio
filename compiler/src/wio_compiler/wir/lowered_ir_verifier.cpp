@@ -10,6 +10,7 @@ namespace wio::wir::lowered
     namespace
     {
         using FunctionMap = std::unordered_map<FunctionId::ValueType, const Function*>;
+        using GlobalMap = std::unordered_map<GlobalId::ValueType, const Global*>;
         using BlockMap = std::unordered_map<BlockId::ValueType, const BasicBlock*>;
         using ValueTypeMap = std::unordered_map<ValueId::ValueType, TypeId>;
 
@@ -85,6 +86,19 @@ namespace wio::wir::lowered
             return type;
         }
 
+        const Type* underlyingNamedType(const TypeTable& types, TypeId typeId, TypeId* nominalId = nullptr)
+        {
+            const Type* type = types.tryGet(typeId);
+            if (type && type->kind == TypeKind::Reference && type->arguments.size() == 1)
+            {
+                typeId = type->arguments.front();
+                type = types.tryGet(typeId);
+            }
+            if (!type || type->kind != TypeKind::Named) return nullptr;
+            if (nominalId) *nominalId = typeId;
+            return type;
+        }
+
         bool nominalDerivesFrom(
             const TypeTable& types,
             const TypeId source,
@@ -129,7 +143,12 @@ namespace wio::wir::lowered
                 return base->kind == TypeKind::Named &&
                     (base->nominalKind == NominalKind::Object || base->nominalKind == NominalKind::Interface);
             case NativeMarshallingKind::Callback: return base->kind == TypeKind::Function;
-            case NativeMarshallingKind::Generic: return base->kind == TypeKind::GenericParameter;
+            case NativeMarshallingKind::Generic:
+                return base->kind == TypeKind::GenericParameter ||
+                    base->kind == TypeKind::ConstGenericParameter ||
+                    base->kind == TypeKind::GenericParameterPack ||
+                    base->kind == TypeKind::ValuePack || base->kind == TypeKind::TypePack ||
+                    base->kind == TypeKind::PackStorage;
             case NativeMarshallingKind::Scalar:
                 if (base->kind == TypeKind::Named)
                     return base->nominalKind == NominalKind::Enum || base->nominalKind == NominalKind::Flagset;
@@ -218,6 +237,15 @@ namespace wio::wir::lowered
                     !methodSlots.insert(method.slot).second)
                     report("LIR1008", "Lowered WIR method layouts require valid signatures and unique slots.");
             }
+        }
+
+        GlobalMap globals;
+        for (const Global& global : module.globals)
+        {
+            if (!global.id || !globals.emplace(global.id.value(), &global).second)
+                report("LIR1020", "Lowered WIR global id must be valid and unique.", global.source);
+            if (global.name.empty() || !module.types.tryGet(global.type) || (global.isConst && global.isMutable))
+                report("LIR1021", "Lowered WIR global requires a name, type, and consistent mutability.", global.source);
         }
 
         FunctionMap functions;
@@ -446,6 +474,14 @@ namespace wio::wir::lowered
             }
         }
 
+        for (const Global& global : module.globals)
+        {
+            const auto initializer = global.initializer ? functions.find(global.initializer.value()) : functions.end();
+            if (initializer == functions.end() || !initializer->second->parameters.empty() ||
+                initializer->second->returnType != global.type)
+                report("LIR1022", "Lowered WIR global initializer must be a known zero-argument function returning the global type.", global.source);
+        }
+
         for (const Function& function : module.functions)
         {
             ValueTypeMap values;
@@ -569,6 +605,21 @@ namespace wio::wir::lowered
                             report("LIR1400", "Lowered WIR instruction references an unknown value.", instruction.source, function.id, block.id);
                     }
 
+                    if (!instruction.expandedOperands.empty())
+                    {
+                        bool validExpansion = instruction.expandedOperands.size() == instruction.operands.size();
+                        for (std::size_t argumentIndex = 0;
+                             validExpansion && argumentIndex < instruction.expandedOperands.size(); ++argumentIndex)
+                        {
+                            if (!instruction.expandedOperands[argumentIndex]) continue;
+                            const Type* pack = module.types.tryGet(valueType(instruction.operands[argumentIndex]));
+                            validExpansion = pack && (pack->kind == TypeKind::GenericParameterPack ||
+                                pack->kind == TypeKind::ValuePack || pack->kind == TypeKind::PackStorage);
+                        }
+                        if (!validExpansion)
+                            report("LIR1481", "Lowered WIR pack expansion metadata must align with symbolic pack operands.", instruction.source, function.id, block.id);
+                    }
+
                     bool callReturnsVoid = false;
                     const bool isCallInstruction = instruction.opcode == Opcode::Call ||
                         instruction.opcode == Opcode::NativeInvoke ||
@@ -626,6 +677,15 @@ namespace wio::wir::lowered
                             report("LIR1405", "Lowered WIR comparison result must be bool.", instruction.source, function.id, block.id);
                         else if (!isComparison(instruction.binaryOperator) && instruction.resultType != valueType(instruction.operands[0]))
                             report("LIR1406", "Lowered WIR binary result must match its operand type.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::RangeContains)
+                    {
+                        if (instruction.operands.size() != 3 ||
+                            valueType(instruction.operands[0]) != valueType(instruction.operands[1]) ||
+                            valueType(instruction.operands[0]) != valueType(instruction.operands[2]) ||
+                            instruction.resultType != module.types.boolType() ||
+                            (instruction.selector != "inclusive" && instruction.selector != "exclusive"))
+                            report("LIR1482", "Lowered WIR range containment requires three equal numeric operands and a bool result.", instruction.source, function.id, block.id);
                     }
                     else if (instruction.opcode == Opcode::Convert)
                     {
@@ -826,6 +886,67 @@ namespace wio::wir::lowered
                             report("LIR1444", "Lowered WIR nullable wrap requires one matching payload value.", instruction.source, function.id, block.id);
                         }
                     }
+                    else if (instruction.opcode == Opcode::IteratorCreate)
+                    {
+                        const Type* iterator = module.types.tryGet(instruction.resultType);
+                        const bool range = instruction.selector == "range.inclusive" ||
+                            instruction.selector == "range.exclusive";
+                        const bool container = instruction.selector == "array" || instruction.selector == "dictionary";
+                        bool valid = iterator && iterator->kind == TypeKind::Iterator &&
+                            iterator->arguments.size() == 1 && (range || container) &&
+                            instruction.signatureTypes.size() == instruction.operands.size();
+                        for (std::size_t argumentIndex = 0;
+                             valid && argumentIndex < instruction.operands.size();
+                             ++argumentIndex)
+                        {
+                            valid = instruction.signatureTypes[argumentIndex] ==
+                                valueType(instruction.operands[argumentIndex]);
+                        }
+                        if (!valid)
+                            report("LIR1445", "Lowered WIR iterator creation requires canonical source metadata.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::IteratorHasNext ||
+                             instruction.opcode == Opcode::IteratorAdvance ||
+                             instruction.opcode == Opcode::IteratorValue)
+                    {
+                        const Type* iterator = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        const bool validResult = instruction.opcode == Opcode::IteratorAdvance
+                            ? !instruction.result
+                            : instruction.opcode == Opcode::IteratorHasNext
+                                ? instruction.resultType == module.types.boolType()
+                                : instruction.result && module.types.tryGet(instruction.resultType) &&
+                                  !instruction.selector.empty();
+                        if (!iterator || iterator->kind != TypeKind::Iterator || !validResult)
+                            report("LIR1446", "Lowered WIR iterator operation requires one iterator and a canonical result.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::ResultIsError ||
+                             instruction.opcode == Opcode::ResultValue ||
+                             instruction.opcode == Opcode::ResultUnwrap ||
+                             instruction.opcode == Opcode::ResultPropagate)
+                    {
+                        const Type* resultType = instruction.operands.size() == 1
+                            ? module.types.tryGet(valueType(instruction.operands.front()))
+                            : nullptr;
+                        bool valid = resultType && resultType->kind == TypeKind::Named &&
+                            resultType->nominalValueModel == NominalValueModel::Result &&
+                            !resultType->arguments.empty();
+                        if (valid && instruction.opcode == Opcode::ResultIsError)
+                            valid = instruction.resultType == module.types.boolType();
+                        else if (valid && (instruction.opcode == Opcode::ResultValue ||
+                                           instruction.opcode == Opcode::ResultUnwrap))
+                            valid = instruction.resultType == resultType->arguments.front();
+                        else if (valid)
+                        {
+                            const Type* target = module.types.tryGet(instruction.targetType);
+                            valid = !instruction.result && instruction.targetType == coroutineResultType(module.types, function) &&
+                                target && target->kind == TypeKind::Named &&
+                                target->nominalValueModel == NominalValueModel::Result;
+                        }
+                        if (!valid)
+                            report("LIR1479", "Lowered WIR Result operation requires canonical Result<T> source and payload/propagation types.", instruction.source, function.id, block.id);
+                    }
                     else if (instruction.opcode == Opcode::LocalPlace)
                     {
                         const Type* placeType = module.types.tryGet(instruction.resultType);
@@ -834,6 +955,15 @@ namespace wio::wir::lowered
                         {
                             report("LIR1424", "Lowered WIR local place requires a named reference result and no operands.", instruction.source, function.id, block.id);
                         }
+                    }
+                    else if (instruction.opcode == Opcode::GlobalPlace)
+                    {
+                        const auto global = instruction.global ? globals.find(instruction.global.value()) : globals.end();
+                        const Type* placeType = module.types.tryGet(instruction.resultType);
+                        if (global == globals.end() || !placeType || placeType->kind != TypeKind::Reference ||
+                            placeType->arguments.size() != 1 || placeType->arguments.front() != global->second->type ||
+                            placeType->isMutable != global->second->isMutable || !instruction.operands.empty())
+                            report("LIR1480", "Lowered WIR global-place must match a declared global and its mutability.", instruction.source, function.id, block.id);
                     }
                     else if (instruction.opcode == Opcode::PlaceInit || instruction.opcode == Opcode::Store ||
                              instruction.opcode == Opcode::Replace)
@@ -1131,7 +1261,7 @@ namespace wio::wir::lowered
                             }
                             TypeId receiverNominal;
                             std::unordered_set<TypeId::ValueType> visited;
-                            valid = valid && underlyingObjectType(module.types, valueType(instruction.operands.front()), &receiverNominal) &&
+                            valid = valid && underlyingNamedType(module.types, valueType(instruction.operands.front()), &receiverNominal) &&
                                 nominalDerivesFrom(module.types, receiverNominal, instruction.targetType, visited);
                             const Function& callee = *calleeIt->second;
                             const Type* returnType = module.types.tryGet(callee.returnType);

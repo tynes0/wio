@@ -524,10 +524,14 @@ Rider, and CLion are defined in
    awaits and executor handoffs lower to cancellation-safe suspend/resume state
    machines, and async exits lower to coroutine completion. Application,
    system, effective attribute processor, and detailed reflection metadata now
-   use the same verified contract. Add executor runtime emission,
-   exceptional/panic cleanup edges, globals/constants, remaining tuple/span
-   operations, backend parity tests, and compile-time/
-   runtime benchmarks before changing the default backend.
+   use the same verified contract. The language-surface freeze adds stable
+   globals and initializer functions, canonical range/array/dictionary
+   iterators with structured loop exits, explicit Result unwrap/propagation,
+   duration and range-containment operations, generic pack/constant types with
+   per-operand expansion metadata, and pinned overloaded-operator dispatch.
+   Add executor runtime emission, exceptional/panic cleanup edges, canonical
+   optimization, new-backend parity tests, and compile-time/runtime benchmarks
+   before changing the default backend.
 
 ## P3 - Product Direction
 

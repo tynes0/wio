@@ -18,6 +18,7 @@ namespace wio::wir::lowered
         Constant,
         Unary,
         Binary,
+        RangeContains,
         Convert,
         Call,
         NativeInvoke,
@@ -48,10 +49,19 @@ namespace wio::wir::lowered
         AnyCheckedCast,
         AnyTypeTest,
         NullableWrap,
+        IteratorCreate,
+        IteratorHasNext,
+        IteratorValue,
+        IteratorAdvance,
+        ResultIsError,
+        ResultValue,
+        ResultUnwrap,
+        ResultPropagate,
         CancellationCheck,
         CoroutineSuspend,
         CoroutineResume,
         CoroutineComplete,
+        GlobalPlace,
         LocalPlace,
         PlaceInit,
         Load,
@@ -99,6 +109,7 @@ namespace wio::wir::lowered
         std::vector<ValueId> operands;
         std::vector<BranchTarget> targets;
         FunctionId callee;
+        GlobalId global;
         typed::Literal literal;
         typed::UnaryOperator unaryOperator = typed::UnaryOperator::Negate;
         typed::BinaryOperator binaryOperator = typed::BinaryOperator::Add;
@@ -108,6 +119,7 @@ namespace wio::wir::lowered
         std::vector<TypeId> signatureTypes;
         std::vector<TypeId> genericArguments;
         std::vector<CaptureKind> captureKinds;
+        std::vector<bool> expandedOperands;
         std::vector<std::string> stringSegments;
         std::string specializationKey;
         IntrinsicFamily intrinsicFamily = IntrinsicFamily::None;
@@ -153,11 +165,23 @@ namespace wio::wir::lowered
         std::optional<CoroutineLayout> coroutine;
     };
 
+    struct Global
+    {
+        GlobalId id;
+        std::string name;
+        TypeId type;
+        FunctionId initializer;
+        SourceSpan source;
+        bool isMutable = false;
+        bool isConst = false;
+    };
+
     struct Module
     {
         std::string name;
         ModuleContract contract;
         TypeTable types;
+        std::vector<Global> globals;
         std::vector<Function> functions;
     };
 

@@ -36,13 +36,22 @@ namespace wio::wir
         Any,
         Opaque,
         GenericParameter,
+        ConstGenericParameter,
+        ConstValue,
+        GenericParameterPack,
+        ValuePack,
+        TypePack,
+        PackStorage,
         Named,
         Reference,
         Nullable,
         Array,
         Dictionary,
         Function,
-        AsyncTask
+        AsyncTask,
+        // Compiler-internal cursor used by backend-neutral for-in lowering.
+        // It never appears in source signatures or native ABI metadata.
+        Iterator
     };
 
     enum class NominalKind : std::uint8_t

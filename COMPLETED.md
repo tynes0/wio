@@ -914,3 +914,11 @@ here as historical evidence rather than active work:
       expose fields, methods, visibility, mutability, dispatch slots, async
       state, and shared attribute identities; Typed and Lowered verifiers and
       printers cover the complete contract.
+- [x] The Language Surface Model gives globals stable declarations and
+      initializer functions, and lowers their reads and writes through explicit
+      global places. Range, array, and dictionary `for-in` share canonical
+      iterator operations with index/key bindings and structured loop cleanup.
+- [x] Result unwrap/propagation, duration literals, range containment, generic
+      constant/pack types, per-operand pack expansion, and resolved overloaded
+      operators now retain backend-neutral operations and identities through
+      verified Typed-to-Lowered WIR.

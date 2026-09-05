@@ -29,11 +29,13 @@ namespace wio::wir
 
     struct TypeIdTag;
     struct FunctionIdTag;
+    struct GlobalIdTag;
     struct BlockIdTag;
     struct ValueIdTag;
 
     using TypeId = Id<TypeIdTag>;
     using FunctionId = Id<FunctionIdTag>;
+    using GlobalId = Id<GlobalIdTag>;
     using BlockId = Id<BlockIdTag>;
     using ValueId = Id<ValueIdTag>;
 }

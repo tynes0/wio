@@ -12,6 +12,7 @@ namespace wio::wir::lowered
         std::string valueRef(const ValueId id) { return id ? "%v" + std::to_string(id.value()) : "%invalid"; }
         std::string blockRef(const BlockId id) { return id ? "^b" + std::to_string(id.value()) : "^invalid"; }
         std::string functionRef(const FunctionId id) { return id ? "@f" + std::to_string(id.value()) : "@invalid"; }
+        std::string globalRef(const GlobalId id) { return id ? "@g" + std::to_string(id.value()) : "@invalid"; }
 
         std::string printLiteral(const typed::Literal& literal)
         {
@@ -213,6 +214,12 @@ namespace wio::wir::lowered
                 stream << typed::binaryOperatorName(instruction.binaryOperator) << " "
                        << valueRef(instruction.operands.at(0)) << ", " << valueRef(instruction.operands.at(1));
                 break;
+            case Opcode::RangeContains:
+                stream << "range-contains " << std::quoted(instruction.selector) << " "
+                       << valueRef(instruction.operands.at(0)) << ", "
+                       << valueRef(instruction.operands.at(1)) << ", "
+                       << valueRef(instruction.operands.at(2));
+                break;
             case Opcode::Convert:
                 stream << typed::conversionKindName(instruction.conversionKind) << " "
                        << valueRef(instruction.operands.at(0));
@@ -370,6 +377,32 @@ namespace wio::wir::lowered
                 stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0))
                        << " to " << typeRef(instruction.targetType);
                 break;
+            case Opcode::IteratorCreate:
+                stream << "iterator-create " << std::quoted(instruction.selector) << "(";
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 0) stream << ", ";
+                    stream << valueRef(instruction.operands[index]);
+                }
+                stream << ")";
+                break;
+            case Opcode::IteratorHasNext:
+            case Opcode::IteratorAdvance:
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0));
+                break;
+            case Opcode::IteratorValue:
+                stream << "iterator-value " << valueRef(instruction.operands.at(0)) << ", "
+                       << std::quoted(instruction.selector) << " #" << instruction.projectionIndex;
+                break;
+            case Opcode::ResultIsError:
+            case Opcode::ResultValue:
+            case Opcode::ResultUnwrap:
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0));
+                break;
+            case Opcode::ResultPropagate:
+                stream << "result-propagate " << valueRef(instruction.operands.at(0))
+                       << " to " << typeRef(instruction.targetType);
+                break;
             case Opcode::CancellationCheck:
                 stream << "cancellation-check state=" << instruction.projectionIndex;
                 break;
@@ -387,6 +420,9 @@ namespace wio::wir::lowered
                 stream << "coroutine-complete";
                 if (!instruction.operands.empty())
                     stream << " " << valueRef(instruction.operands.front());
+                break;
+            case Opcode::GlobalPlace:
+                stream << "global-place " << globalRef(instruction.global);
                 break;
             case Opcode::LocalPlace:
                 stream << "local-place " << std::quoted(instruction.selector);
@@ -471,6 +507,19 @@ namespace wio::wir::lowered
             }
             if (!instruction.specializationKey.empty())
                 stream << " specialization=" << std::quoted(instruction.specializationKey);
+            if (!instruction.expandedOperands.empty())
+            {
+                stream << " expand={";
+                bool first = true;
+                for (std::size_t index = 0; index < instruction.expandedOperands.size(); ++index)
+                    if (instruction.expandedOperands[index])
+                    {
+                        if (!first) stream << ",";
+                        stream << index;
+                        first = false;
+                    }
+                stream << "}";
+            }
             if (instruction.asyncOperation != AsyncOperation::None)
                 stream << " async=" << asyncOperationName(instruction.asyncOperation)
                        << " executor=" << asyncExecutorKindName(instruction.asyncExecutor);
@@ -574,6 +623,11 @@ namespace wio::wir::lowered
             const TypeId id{static_cast<TypeId::ValueType>(index)};
             stream << "  " << typeRef(id) << " = " << printType(module.types.get(id)) << '\n';
         }
+
+        for (const Global& global : module.globals)
+            stream << "  global " << globalRef(global.id) << " " << std::quoted(global.name)
+                   << ": " << typeRef(global.type) << " init=" << functionRef(global.initializer)
+                   << (global.isConst ? " const" : global.isMutable ? " mutable" : " immutable") << '\n';
 
         for (const Function& function : module.functions)
         {

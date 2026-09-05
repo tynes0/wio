@@ -287,6 +287,34 @@ visibility, mutability, dispatch slots, async state, and member attribute IDs.
 Typed-to-Lowered conversion preserves this complete contract exactly. See
 [`WIO_APPLICATION_ATTRIBUTE_WIR.md`](WIO_APPLICATION_ATTRIBUTE_WIR.md).
 
+## Language Surface Freeze
+
+The remaining executable language surface now has backend-neutral identities
+instead of depending on AST-shaped C++ emission:
+
+- module globals retain stable IDs, declared type, mutability, constant state,
+  and a zero-argument initializer function; reads and writes use explicit
+  `global-place`, load, store, and replace operations
+- range, array, and dictionary `for-in` loops use the shared
+  `iterator-create`, `iterator-has-next`, `iterator-value`, and
+  `iterator-advance` contract, including index/key bindings, step values, and
+  structured `break`/`continue` cleanup
+- Result unwrap and propagation are distinct operations; propagation owns an
+  explicit error edge and enclosing Result type instead of being reconstructed
+  by a backend
+- duration suffixes lower to canonical seconds, while range containment is an
+  explicit three-operand comparison with inclusive/exclusive metadata
+- constant generic parameters, constant values, parameter/value/type packs,
+  and pack storage have stable type kinds; each call operand records whether it
+  is a pack expansion
+- resolved unary, binary, assignment, index, and `fit` overloads use their
+  already-selected callable and dispatch kind, so backends never repeat
+  overload resolution
+
+Typed and Lowered verifiers check the iterator, Result, global, pack-expansion,
+and overloaded-call invariants. Their deterministic printers expose the same
+metadata for parity tests and future backend diagnostics.
+
 ## Lowered WIR
 
 Lowered WIR is the shared backend contract. Its first canonicalization pass

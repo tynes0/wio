@@ -28,6 +28,11 @@ namespace wio::wir::typed
             return id ? "@f" + std::to_string(id.value()) : "@invalid";
         }
 
+        std::string globalRef(const GlobalId id)
+        {
+            return id ? "@g" + std::to_string(id.value()) : "@invalid";
+        }
+
         std::string printLiteral(const Literal& literal)
         {
             return std::visit([](const auto& value) -> std::string
@@ -212,6 +217,12 @@ namespace wio::wir::typed
                 stream << binaryOperatorName(instruction.binaryOperator) << " "
                        << valueRef(instruction.operands.at(0)) << ", " << valueRef(instruction.operands.at(1));
                 break;
+            case Opcode::RangeContains:
+                stream << "range-contains " << std::quoted(instruction.selector) << " "
+                       << valueRef(instruction.operands.at(0)) << ", "
+                       << valueRef(instruction.operands.at(1)) << ", "
+                       << valueRef(instruction.operands.at(2));
+                break;
             case Opcode::Convert:
                 stream << conversionKindName(instruction.conversionKind) << " "
                        << valueRef(instruction.operands.at(0));
@@ -369,11 +380,40 @@ namespace wio::wir::typed
                 stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0))
                        << " to " << typeRef(instruction.targetType);
                 break;
+            case Opcode::IteratorCreate:
+                stream << "iterator-create " << std::quoted(instruction.selector) << "(";
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index > 0) stream << ", ";
+                    stream << valueRef(instruction.operands[index]);
+                }
+                stream << ")";
+                break;
+            case Opcode::IteratorHasNext:
+            case Opcode::IteratorAdvance:
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0));
+                break;
+            case Opcode::IteratorValue:
+                stream << "iterator-value " << valueRef(instruction.operands.at(0)) << ", "
+                       << std::quoted(instruction.selector) << " #" << instruction.projectionIndex;
+                break;
+            case Opcode::ResultIsError:
+            case Opcode::ResultValue:
+            case Opcode::ResultUnwrap:
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0));
+                break;
+            case Opcode::ResultPropagate:
+                stream << "result-propagate " << valueRef(instruction.operands.at(0))
+                       << " to " << typeRef(instruction.targetType);
+                break;
             case Opcode::Await:
                 stream << "await " << valueRef(instruction.operands.at(0));
                 break;
             case Opcode::ExecutorSwitch:
                 stream << "executor-switch " << asyncExecutorKindName(instruction.asyncExecutor);
+                break;
+            case Opcode::GlobalPlace:
+                stream << "global-place " << globalRef(instruction.global);
                 break;
             case Opcode::LocalPlace:
                 stream << "local-place " << std::quoted(instruction.selector);
@@ -469,6 +509,19 @@ namespace wio::wir::typed
             }
             if (!instruction.specializationKey.empty())
                 stream << " specialization=" << std::quoted(instruction.specializationKey);
+            if (!instruction.expandedOperands.empty())
+            {
+                stream << " expand={";
+                bool first = true;
+                for (std::size_t index = 0; index < instruction.expandedOperands.size(); ++index)
+                    if (instruction.expandedOperands[index])
+                    {
+                        if (!first) stream << ",";
+                        stream << index;
+                        first = false;
+                    }
+                stream << "}";
+            }
             if (instruction.asyncOperation != AsyncOperation::None)
                 stream << " async=" << asyncOperationName(instruction.asyncOperation)
                        << " executor=" << asyncExecutorKindName(instruction.asyncExecutor);
@@ -574,6 +627,11 @@ namespace wio::wir::typed
             const TypeId id{static_cast<TypeId::ValueType>(index)};
             stream << "  " << typeRef(id) << " = " << printType(module.types.get(id)) << '\n';
         }
+
+        for (const Global& global : module.globals)
+            stream << "  global " << globalRef(global.id) << " " << std::quoted(global.name)
+                   << ": " << typeRef(global.type) << " init=" << functionRef(global.initializer)
+                   << (global.isConst ? " const" : global.isMutable ? " mutable" : " immutable") << '\n';
 
         for (const Function& function : module.functions)
         {
