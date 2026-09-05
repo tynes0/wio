@@ -528,10 +528,13 @@ Rider, and CLion are defined in
    globals and initializer functions, canonical range/array/dictionary
    iterators with structured loop exits, explicit Result unwrap/propagation,
    duration and range-containment operations, generic pack/constant types with
-   per-operand expansion metadata, and pinned overloaded-operator dispatch.
-   Add executor runtime emission, exceptional/panic cleanup edges, canonical
-   optimization, new-backend parity tests, and compile-time/runtime benchmarks
-   before changing the default backend.
+   per-operand expansion metadata, and pinned overloaded-operator dispatch. The
+   canonical optimizer now performs checked constant folding, CFG simplification,
+   trivial SSA propagation, conservative DCE, escape/storage classification,
+   and proven fixed-array bounds-check elimination while preserving stable IDs,
+   source maps, ownership, and observable failure behavior. Add executor runtime
+   emission, exceptional/panic cleanup edges, new-backend parity tests, and
+   compile-time/runtime benchmarks before changing the default backend.
 
 ## P3 - Product Direction
 

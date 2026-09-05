@@ -523,6 +523,11 @@ namespace wio::wir::lowered
             if (instruction.asyncOperation != AsyncOperation::None)
                 stream << " async=" << asyncOperationName(instruction.asyncOperation)
                        << " executor=" << asyncExecutorKindName(instruction.asyncExecutor);
+            if (instruction.storageClass != StorageClass::Unspecified)
+                stream << " storage=" << storageClassName(instruction.storageClass)
+                       << " escape=" << escapeClassName(instruction.escapeClass);
+            if (instruction.boundsCheck != BoundsCheckMode::NotApplicable)
+                stream << " bounds=" << boundsCheckModeName(instruction.boundsCheck);
             stream << '\n';
         }
     }

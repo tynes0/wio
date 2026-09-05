@@ -323,21 +323,43 @@ with block arguments, and a merge-block parameter. The verifier checks target
 existence, argument arity and types, terminators, value definitions, and use
 sites before any backend consumes the module.
 
+The canonical optimizer then folds safe constants, resolves constant branches,
+threads forwarding jumps, removes unreachable blocks, propagates identical
+trivial block arguments, and eliminates unused pure values. It deliberately
+keeps calls, allocation, cleanup, checked indexing, and other potentially
+observable operations. Stable IDs and source spans are never compacted.
+
+Escape analysis annotates allocation-producing instructions with stack, heap,
+or coroutine-frame storage plus a conservative escape class. This metadata does
+not alter value ownership: intrusive object handles still retain and release in
+exactly the same places. Array access carries an explicit bounds-check mode;
+only constant accesses proven inside a fixed or freshly constructed array may
+remove the runtime check. See
+[`WIO_CANONICAL_OPTIMIZATION.md`](WIO_CANONICAL_OPTIMIZATION.md).
+
 Async functions are also canonicalized here. Typed `await` and executor
 handoffs become explicit cancellation-check, suspend, resume, and completion
 operations backed by a stable coroutine frame/state layout. See
 [`WIO_ASYNC_WIR.md`](WIO_ASYNC_WIR.md).
 
-The deterministic pass order for an async module is currently:
+The deterministic pass order is currently:
 
 1. `verify-typed-wir`
 2. `lower-canonical-control-flow`
-3. `lower-async-state-machines`
-4. `verify-lowered-wir`
+3. `lower-async-state-machines` for async modules
+4. `fold-canonical-constants`
+5. `simplify-control-flow`
+6. `propagate-trivial-values`
+7. `eliminate-dead-values`
+8. `classify-storage-and-escapes`
+9. `eliminate-proven-bounds-checks`
+10. `verify-lowered-wir`
 
-Non-async modules omit step 3. Future lowering stages will own exceptional
-cleanup edges and other semantics that
-must be identical for C++ and bytecode.
+Non-async modules omit step 3. `LoweringResult::optimizationStatistics()`
+reports every transformation and storage decision without making printer output
+or backend behavior depend on diagnostics. Future lowering stages will own
+exceptional cleanup edges and other semantics that must be identical for C++
+and bytecode.
 
 ## Inspecting WIR
 

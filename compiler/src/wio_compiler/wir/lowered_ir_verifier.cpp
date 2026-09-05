@@ -1,6 +1,7 @@
 #include "wio/wir/lowered_ir_verifier.h"
 
 #include <algorithm>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -486,6 +487,7 @@ namespace wio::wir::lowered
         {
             ValueTypeMap values;
             std::unordered_map<ValueId::ValueType, Opcode> producerOpcodes;
+            std::unordered_map<ValueId::ValueType, const Instruction*> producers;
             auto defineValue = [&](const Parameter& parameter, const BlockId block)
             {
                 if (!parameter.id)
@@ -534,6 +536,7 @@ namespace wio::wir::lowered
                             .source = instruction.source
                         }, block.id);
                         producerOpcodes.emplace(instruction.result.value(), instruction.opcode);
+                        producers.emplace(instruction.result.value(), &instruction);
                     }
                 }
             }
@@ -662,6 +665,86 @@ namespace wio::wir::lowered
                          instruction.asyncExecutor != AsyncExecutorKind::Inherit))
                     {
                         report("LIR1453", "Lowered WIR async metadata is attached to an unsupported instruction.", instruction.source, function.id, block.id);
+                    }
+
+                    const bool storageCarrier = instruction.opcode == Opcode::LocalPlace ||
+                        instruction.opcode == Opcode::ConstructComponent ||
+                        instruction.opcode == Opcode::ConstructObject ||
+                        instruction.opcode == Opcode::ClosureCreate ||
+                        instruction.opcode == Opcode::ArrayCreate ||
+                        instruction.opcode == Opcode::DictionaryCreate ||
+                        instruction.opcode == Opcode::Interpolate ||
+                        instruction.opcode == Opcode::AnyBox ||
+                        instruction.opcode == Opcode::NullableWrap ||
+                        instruction.opcode == Opcode::IteratorCreate;
+                    const Type* storageType = instruction.result
+                        ? module.types.tryGet(instruction.resultType) : nullptr;
+                    const bool requiresHeapStorage = instruction.opcode == Opcode::ConstructObject ||
+                        instruction.opcode == Opcode::ArrayCreate ||
+                        instruction.opcode == Opcode::DictionaryCreate ||
+                        instruction.opcode == Opcode::Interpolate ||
+                        instruction.opcode == Opcode::AnyBox ||
+                        instruction.opcode == Opcode::IteratorCreate ||
+                        (storageType && storageType->ownership == OwnershipModel::ReferenceCounted) ||
+                        (instruction.opcode == Opcode::ClosureCreate &&
+                         instruction.escapeClass != EscapeClass::Local);
+                    if ((storageCarrier && (instruction.storageClass == StorageClass::Unspecified ||
+                                            instruction.escapeClass == EscapeClass::None)) ||
+                        (!storageCarrier && (instruction.storageClass != StorageClass::Unspecified ||
+                                             instruction.escapeClass != EscapeClass::None)) ||
+                        (instruction.storageClass == StorageClass::CoroutineFrame && !function.coroutine) ||
+                        (requiresHeapStorage && instruction.storageClass != StorageClass::Heap))
+                    {
+                        report("LIR1483", "Lowered WIR storage and escape metadata is incompatible with its instruction or function.", instruction.source, function.id, block.id);
+                    }
+
+                    const bool checkedArrayAccess = instruction.opcode == Opcode::ArrayGet ||
+                        instruction.opcode == Opcode::ArrayPlace;
+                    if ((checkedArrayAccess && instruction.boundsCheck == BoundsCheckMode::NotApplicable) ||
+                        (!checkedArrayAccess && instruction.boundsCheck != BoundsCheckMode::NotApplicable))
+                    {
+                        report("LIR1484", "Lowered WIR bounds-check metadata must appear on every array access and nowhere else.", instruction.source, function.id, block.id);
+                    }
+                    if (checkedArrayAccess &&
+                        instruction.boundsCheck != BoundsCheckMode::Required &&
+                        instruction.boundsCheck != BoundsCheckMode::NotApplicable)
+                    {
+                        bool proofValid = instruction.operands.size() == 2;
+                        std::optional<std::uint64_t> constantIndex;
+                        if (proofValid)
+                        {
+                            const auto indexProducer = producers.find(instruction.operands[1].value());
+                            if (indexProducer != producers.end() &&
+                                indexProducer->second->opcode == Opcode::Constant)
+                            {
+                                if (const auto* unsignedIndex = std::get_if<std::uint64_t>(&indexProducer->second->literal))
+                                    constantIndex = *unsignedIndex;
+                                else if (const auto* signedIndex = std::get_if<std::int64_t>(&indexProducer->second->literal);
+                                         signedIndex && *signedIndex >= 0)
+                                    constantIndex = static_cast<std::uint64_t>(*signedIndex);
+                            }
+                            proofValid = constantIndex.has_value();
+                        }
+                        const Type* baseType = proofValid
+                            ? module.types.tryGet(valueType(instruction.operands[0])) : nullptr;
+                        const Type* arrayType = baseType;
+                        if (baseType && baseType->kind == TypeKind::Reference && baseType->arguments.size() == 1)
+                            arrayType = module.types.tryGet(baseType->arguments.front());
+                        if (instruction.boundsCheck == BoundsCheckMode::EliminatedStatic)
+                        {
+                            proofValid = proofValid && arrayType && arrayType->kind == TypeKind::Array &&
+                                arrayType->staticExtent && *constantIndex < *arrayType->staticExtent;
+                        }
+                        else
+                        {
+                            const auto baseProducer = proofValid
+                                ? producers.find(instruction.operands[0].value()) : producers.end();
+                            proofValid = proofValid && baseProducer != producers.end() &&
+                                baseProducer->second->opcode == Opcode::ArrayCreate &&
+                                *constantIndex < baseProducer->second->operands.size();
+                        }
+                        if (!proofValid)
+                            report("LIR1485", "Lowered WIR eliminated bounds check requires a reproducible static or construction proof.", instruction.source, function.id, block.id);
                     }
 
                     if (instruction.opcode == Opcode::Unary)

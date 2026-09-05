@@ -922,3 +922,11 @@ here as historical evidence rather than active work:
       constant/pack types, per-operand pack expansion, and resolved overloaded
       operators now retain backend-neutral operations and identities through
       verified Typed-to-Lowered WIR.
+- [x] Canonical Lowered WIR optimization performs overflow-safe constant
+      folding, constant-branch and forwarding-block simplification, unreachable
+      block removal, trivial block-argument propagation, and conservative pure
+      dead-value elimination without compacting stable IDs or source spans.
+- [x] Escape analysis records local/call/store/return/coroutine behavior and
+      stack/heap/coroutine-frame storage decisions while preserving intrusive
+      ownership. Fixed and freshly constructed arrays expose verified required,
+      statically eliminated, or proven-eliminated bounds-check contracts.

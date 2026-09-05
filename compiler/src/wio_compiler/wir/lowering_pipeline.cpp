@@ -128,7 +128,7 @@ namespace wio::wir
             case typed::Opcode::CondBranch:
                 break;
             }
-            return lowered::Instruction{
+            lowered::Instruction loweredInstruction{
                 .opcode = opcode,
                 .result = instruction.result,
                 .resultType = instruction.resultType,
@@ -156,6 +156,9 @@ namespace wio::wir
                 .borrowOrigin = instruction.borrowOrigin,
                 .source = instruction.source
             };
+            if (opcode == lowered::Opcode::ArrayGet || opcode == lowered::Opcode::ArrayPlace)
+                loweredInstruction.boundsCheck = lowered::BoundsCheckMode::Required;
+            return loweredInstruction;
         }
     }
 
@@ -553,6 +556,14 @@ namespace wio::wir
         result.completedPasses_.push_back("lower-canonical-control-flow");
         if (std::ranges::any_of(module.functions, [](const typed::Function& function) { return function.isAsync; }))
             result.completedPasses_.push_back("lower-async-state-machines");
+
+        result.optimizationStatistics_ = CanonicalOptimizer{}.optimize(result.module_);
+        result.completedPasses_.push_back("fold-canonical-constants");
+        result.completedPasses_.push_back("simplify-control-flow");
+        result.completedPasses_.push_back("propagate-trivial-values");
+        result.completedPasses_.push_back("eliminate-dead-values");
+        result.completedPasses_.push_back("classify-storage-and-escapes");
+        result.completedPasses_.push_back("eliminate-proven-bounds-checks");
 
         const lowered::VerificationResult loweredVerification = lowered::Verifier{}.verify(result.module_);
         if (!loweredVerification.succeeded())

@@ -13,6 +13,35 @@
 
 namespace wio::wir::lowered
 {
+    // Backend storage decision produced by canonical escape analysis. This is
+    // an implementation contract, not a change to the language ownership
+    // model: heap values still use their declared retain/release protocol.
+    enum class StorageClass : std::uint8_t
+    {
+        Unspecified,
+        Stack,
+        Heap,
+        CoroutineFrame
+    };
+
+    enum class EscapeClass : std::uint8_t
+    {
+        None,
+        Local,
+        Call,
+        Store,
+        Return,
+        Coroutine
+    };
+
+    enum class BoundsCheckMode : std::uint8_t
+    {
+        NotApplicable,
+        Required,
+        EliminatedStatic,
+        EliminatedProven
+    };
+
     enum class Opcode : std::uint8_t
     {
         Constant,
@@ -129,6 +158,9 @@ namespace wio::wir::lowered
         typed::ValueOwnership resultOwnership = typed::ValueOwnership::Trivial;
         typed::BorrowLifetime borrowLifetime = typed::BorrowLifetime::None;
         ValueId borrowOrigin;
+        StorageClass storageClass = StorageClass::Unspecified;
+        EscapeClass escapeClass = EscapeClass::None;
+        BoundsCheckMode boundsCheck = BoundsCheckMode::NotApplicable;
         SourceSpan source;
     };
 
@@ -188,4 +220,7 @@ namespace wio::wir::lowered
     [[nodiscard]] bool isTerminator(Opcode opcode);
     [[nodiscard]] bool producesValue(Opcode opcode);
     [[nodiscard]] std::string_view opcodeName(Opcode opcode);
+    [[nodiscard]] std::string_view storageClassName(StorageClass storageClass);
+    [[nodiscard]] std::string_view escapeClassName(EscapeClass escapeClass);
+    [[nodiscard]] std::string_view boundsCheckModeName(BoundsCheckMode mode);
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wio/wir/canonical_optimizer.h"
 #include "wio/wir/lowered_ir.h"
 #include "wio/wir/typed_ir.h"
 
@@ -25,6 +26,7 @@ namespace wio::wir
         [[nodiscard]] lowered::Module&& takeModule() { return std::move(module_); }
         [[nodiscard]] const std::vector<LoweringDiagnostic>& diagnostics() const { return diagnostics_; }
         [[nodiscard]] const std::vector<std::string>& completedPasses() const { return completedPasses_; }
+        [[nodiscard]] const OptimizationStatistics& optimizationStatistics() const { return optimizationStatistics_; }
 
     private:
         friend class LoweringPipeline;
@@ -32,6 +34,7 @@ namespace wio::wir
         lowered::Module module_;
         std::vector<LoweringDiagnostic> diagnostics_;
         std::vector<std::string> completedPasses_;
+        OptimizationStatistics optimizationStatistics_;
     };
 
     class LoweringPipeline final

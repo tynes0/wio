@@ -116,4 +116,42 @@ namespace wio::wir::lowered
         }
         return "unknown";
     }
+
+    std::string_view storageClassName(const StorageClass storageClass)
+    {
+        switch (storageClass)
+        {
+        case StorageClass::Unspecified: return "unspecified";
+        case StorageClass::Stack: return "stack";
+        case StorageClass::Heap: return "heap";
+        case StorageClass::CoroutineFrame: return "coroutine-frame";
+        }
+        return "unknown";
+    }
+
+    std::string_view escapeClassName(const EscapeClass escapeClass)
+    {
+        switch (escapeClass)
+        {
+        case EscapeClass::None: return "none";
+        case EscapeClass::Local: return "local";
+        case EscapeClass::Call: return "call";
+        case EscapeClass::Store: return "store";
+        case EscapeClass::Return: return "return";
+        case EscapeClass::Coroutine: return "coroutine";
+        }
+        return "unknown";
+    }
+
+    std::string_view boundsCheckModeName(const BoundsCheckMode mode)
+    {
+        switch (mode)
+        {
+        case BoundsCheckMode::NotApplicable: return "n/a";
+        case BoundsCheckMode::Required: return "required";
+        case BoundsCheckMode::EliminatedStatic: return "eliminated-static";
+        case BoundsCheckMode::EliminatedProven: return "eliminated-proven";
+        }
+        return "unknown";
+    }
 }

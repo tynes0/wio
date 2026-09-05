@@ -87,6 +87,12 @@ int main()
         lowering.completedPasses() == std::vector<std::string>{
             "verify-typed-wir",
             "lower-canonical-control-flow",
+            "fold-canonical-constants",
+            "simplify-control-flow",
+            "propagate-trivial-values",
+            "eliminate-dead-values",
+            "classify-storage-and-escapes",
+            "eliminate-proven-bounds-checks",
             "verify-lowered-wir"
         },
         "Lowering pipeline must expose deterministic completed-pass order");
