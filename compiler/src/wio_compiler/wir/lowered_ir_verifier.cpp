@@ -201,9 +201,11 @@ namespace wio::wir::lowered
             if (type.kind != TypeKind::Named && type.nominalValueModel != NominalValueModel::Regular)
                 report("LIR1009", "Only named Lowered WIR types may carry a nominal value model.");
             if (type.nominalRepresentation == NominalRepresentation::NativePod &&
-                (type.kind != TypeKind::Named || type.nominalKind != NominalKind::Component))
+                (type.kind != TypeKind::Named ||
+                 (type.nominalKind != NominalKind::Component && type.nominalKind != NominalKind::Enum &&
+                  type.nominalKind != NominalKind::Flagset)))
             {
-                report("LIR1004", "Native POD representation requires a named component type.");
+                report("LIR1004", "Native POD representation requires a named component, enum, or flagset type.");
             }
             if (type.nominalRepresentation == NominalRepresentation::NativePod &&
                 (!type.nativeBinding || type.nativeBinding->cppName.empty()))
@@ -212,10 +214,21 @@ namespace wio::wir::lowered
                 report("LIR1011", "Only Native POD types may carry native type binding metadata.");
             if (type.kind != TypeKind::Named &&
                 (!type.baseTypes.empty() || !type.fields.empty() || !type.methods.empty() ||
-                 type.hasConstructor || type.hasDestructor))
+                 type.enumUnderlyingType || !type.enumCases.empty() || type.hasConstructor || type.hasDestructor))
             {
                 report("LIR1005", "Only named Lowered WIR types may carry layout or lifecycle metadata.");
             }
+            const bool enumLike = type.kind == TypeKind::Named &&
+                (type.nominalKind == NominalKind::Enum || type.nominalKind == NominalKind::Flagset);
+            const Type* enumUnderlying = module.types.tryGet(type.enumUnderlyingType);
+            if (enumLike && (!enumUnderlying || !isInteger(enumUnderlying->kind)))
+                report("LIR1012", "Lowered WIR enum/flagset layout requires an integer underlying type.");
+            if (!enumLike && (type.enumUnderlyingType || !type.enumCases.empty()))
+                report("LIR1012", "Only enum/flagset Lowered WIR types may carry case layout metadata.");
+            std::unordered_set<std::string> enumCaseNames;
+            for (const EnumCaseLayout& enumCase : type.enumCases)
+                if (enumCase.name.empty() || !enumCaseNames.insert(enumCase.name).second)
+                    report("LIR1012", "Lowered WIR enum/flagset cases require unique non-empty names.");
             std::unordered_set<std::string> fieldNames;
             for (const FieldLayout& field : type.fields)
             {
@@ -679,15 +692,16 @@ namespace wio::wir::lowered
                         instruction.opcode == Opcode::IteratorCreate;
                     const Type* storageType = instruction.result
                         ? module.types.tryGet(instruction.resultType) : nullptr;
-                    const bool requiresHeapStorage = instruction.opcode == Opcode::ConstructObject ||
-                        instruction.opcode == Opcode::ArrayCreate ||
-                        instruction.opcode == Opcode::DictionaryCreate ||
-                        instruction.opcode == Opcode::Interpolate ||
-                        instruction.opcode == Opcode::AnyBox ||
-                        instruction.opcode == Opcode::IteratorCreate ||
-                        (storageType && storageType->ownership == OwnershipModel::ReferenceCounted) ||
-                        (instruction.opcode == Opcode::ClosureCreate &&
-                         instruction.escapeClass != EscapeClass::Local);
+                    const bool requiresHeapStorage = storageCarrier &&
+                        (instruction.opcode == Opcode::ConstructObject ||
+                         instruction.opcode == Opcode::ArrayCreate ||
+                         instruction.opcode == Opcode::DictionaryCreate ||
+                         instruction.opcode == Opcode::Interpolate ||
+                         instruction.opcode == Opcode::AnyBox ||
+                         instruction.opcode == Opcode::IteratorCreate ||
+                         (storageType && storageType->ownership == OwnershipModel::ReferenceCounted) ||
+                         (instruction.opcode == Opcode::ClosureCreate &&
+                          instruction.escapeClass != EscapeClass::Local));
                     if ((storageCarrier && (instruction.storageClass == StorageClass::Unspecified ||
                                             instruction.escapeClass == EscapeClass::None)) ||
                         (!storageCarrier && (instruction.storageClass != StorageClass::Unspecified ||
@@ -695,7 +709,13 @@ namespace wio::wir::lowered
                         (instruction.storageClass == StorageClass::CoroutineFrame && !function.coroutine) ||
                         (requiresHeapStorage && instruction.storageClass != StorageClass::Heap))
                     {
-                        report("LIR1483", "Lowered WIR storage and escape metadata is incompatible with its instruction or function.", instruction.source, function.id, block.id);
+                        report(
+                            "LIR1483",
+                            "Lowered WIR storage and escape metadata is incompatible with " +
+                                std::string(opcodeName(instruction.opcode)) + " (storage=" +
+                                std::string(storageClassName(instruction.storageClass)) + ", escape=" +
+                                std::string(escapeClassName(instruction.escapeClass)) + ").",
+                            instruction.source, function.id, block.id);
                     }
 
                     const bool checkedArrayAccess = instruction.opcode == Opcode::ArrayGet ||

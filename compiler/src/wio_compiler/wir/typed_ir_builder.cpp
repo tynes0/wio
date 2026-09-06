@@ -4,6 +4,7 @@
 #include "wio/ast/attribute_contract.h"
 #include "wio/common/utility.h"
 #include "wio/sema/intrinsic_member_resolver.h"
+#include "wio/sema/constant_evaluator.h"
 #include "wio/sema/scope.h"
 #include "wio/sema/symbol.h"
 #include "wio/sema/type.h"
@@ -570,25 +571,24 @@ namespace wio::wir::typed
             const ASTNode* source,
             FunctionState& state)
         {
+            const bool cleanupBearing = typeRequiresCleanup(valueType);
+            const ValueOwnership loadedOwnership = cleanupBearing
+                ? ValueOwnership::Borrowed
+                : ownershipForType(valueType);
             const ValueId result{state.nextValue++};
             currentBlock(state).instructions.push_back(Instruction{
                 .opcode = Opcode::Load,
                 .result = result,
                 .resultType = valueType,
                 .operands = {place},
-                .resultOwnership = typeRequiresCleanup(valueType)
-                    ? ValueOwnership::Borrowed
-                    : ValueOwnership::Trivial,
-                .borrowLifetime = typeRequiresCleanup(valueType)
+                .resultOwnership = loadedOwnership,
+                .borrowLifetime = cleanupBearing
                     ? BorrowLifetime::Lexical
                     : BorrowLifetime::None,
-                .borrowOrigin = typeRequiresCleanup(valueType) ? place : ValueId{},
+                .borrowOrigin = cleanupBearing ? place : ValueId{},
                 .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
             });
-            rememberOwnership(
-                state,
-                result,
-                typeRequiresCleanup(valueType) ? ValueOwnership::Borrowed : ValueOwnership::Trivial);
+            rememberOwnership(state, result, loadedOwnership);
             return result;
         }
 
@@ -860,6 +860,80 @@ namespace wio::wir::typed
                 if (!declaration.type)
                     continue;
                 const TypeId type = mapType(declaration.type, declaration.declaration);
+                const auto semanticType = declaration.type->kind() == sema::TypeKind::Struct
+                    ? declaration.type.AsFast<sema::StructType>()
+                    : nullptr;
+                const TypeId enumUnderlyingType = semanticType && semanticType->enumUnderlyingType
+                    ? mapType(semanticType->enumUnderlyingType, declaration.declaration)
+                    : TypeId{};
+                Type* mutableDescriptor = type ? &result_.module_.types.getMutable(type) : nullptr;
+                if (mutableDescriptor &&
+                    (mutableDescriptor->nominalKind == NominalKind::Enum ||
+                     mutableDescriptor->nominalKind == NominalKind::Flagset))
+                {
+                    mutableDescriptor->enumUnderlyingType = enumUnderlyingType;
+                    mutableDescriptor->enumCases.clear();
+
+                    const auto appendCases = [&](const auto& members)
+                    {
+                        std::uint64_t nextValue = 0;
+                        for (const auto& member : members)
+                        {
+                            std::optional<std::uint64_t> rawValue;
+                            if (member.value)
+                            {
+                                if (const auto* literal = member.value->template as<IntegerLiteral>())
+                                {
+                                    const IntegerResult parsed = common::getInteger(literal->token.value);
+                                    if (parsed.isValid)
+                                    {
+                                        switch (parsed.type)
+                                        {
+                                        case IntegerType::i8: rawValue = static_cast<std::uint64_t>(parsed.value.v_i8); break;
+                                        case IntegerType::i16: rawValue = static_cast<std::uint64_t>(parsed.value.v_i16); break;
+                                        case IntegerType::i32: rawValue = static_cast<std::uint64_t>(parsed.value.v_i32); break;
+                                        case IntegerType::i64: rawValue = static_cast<std::uint64_t>(parsed.value.v_i64); break;
+                                        case IntegerType::u8: rawValue = parsed.value.v_u8; break;
+                                        case IntegerType::u16: rawValue = parsed.value.v_u16; break;
+                                        case IntegerType::u32: rawValue = parsed.value.v_u32; break;
+                                        case IntegerType::u64: rawValue = parsed.value.v_u64; break;
+                                        case IntegerType::isize: rawValue = static_cast<std::uint64_t>(parsed.value.v_isize); break;
+                                        case IntegerType::usize: rawValue = static_cast<std::uint64_t>(parsed.value.v_usize); break;
+                                        case IntegerType::Unknown: break;
+                                        }
+                                    }
+                                }
+                                if (!rawValue)
+                                {
+                                    const sema::ConstVariableDeclarationMap noDeclarations;
+                                    if (const auto evaluated = sema::ConstExpressionEvaluator(noDeclarations)
+                                        .evaluateInteger(member.value))
+                                        rawValue = static_cast<std::uint64_t>(*evaluated);
+                                }
+                            }
+                            else
+                            {
+                                rawValue = nextValue;
+                            }
+
+                            if (!rawValue)
+                            {
+                                report("WIR2370", "Enum/flagset member requires a canonical integer constant value.",
+                                    member.name.Get());
+                                continue;
+                            }
+                            mutableDescriptor->enumCases.push_back(EnumCaseLayout{
+                                .name = member.name ? member.name->token.value : std::string{},
+                                .rawValue = *rawValue
+                            });
+                            nextValue = *rawValue + 1;
+                        }
+                    };
+                    if (const auto* enumeration = declaration.declaration->as<EnumDeclaration>())
+                        appendCases(enumeration->members);
+                    else if (const auto* flagset = declaration.declaration->as<FlagsetDeclaration>())
+                        appendCases(flagset->members);
+                }
                 const Type* descriptor = result_.module_.types.tryGet(type);
                 if (!descriptor || descriptor->kind != TypeKind::Named)
                     continue;

@@ -1,10 +1,19 @@
 #include "wio/codegen/wir_cpp_backend.h"
+#include "wio/lexer/lexer.h"
+#include "wio/parser/parser.h"
+#include "wio/sema/analyzer.h"
+#include "wio/wir/lowered_ir_printer.h"
+#include "wio/wir/lowering_pipeline.h"
+#include "wio/wir/typed_ir_builder.h"
+#include "wio/wir/typed_ir_printer.h"
 
 #include <chrono>
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <string>
 
 #ifndef WIO_TEST_CXX_COMPILER
@@ -44,6 +53,21 @@ namespace
 
         lowered::Module module;
         initializeContract(module, "wir-cpp-backend-test");
+        const TypeId u32Type = module.types.intern(Type{.kind = TypeKind::U32});
+        const TypeId enumType = module.types.internNominal(Type{
+            .kind = TypeKind::Named,
+            .name = "State",
+            .nominalKind = NominalKind::Enum,
+            .enumUnderlyingType = module.types.i32Type(),
+            .enumCases = {{"Idle", 0}, {"Ready", 7}}
+        });
+        const TypeId flagsetType = module.types.internNominal(Type{
+            .kind = TypeKind::Named,
+            .name = "Permission",
+            .nominalKind = NominalKind::Flagset,
+            .enumUnderlyingType = u32Type,
+            .enumCases = {{"None", 0}, {"Read", 1}, {"Write", 2}}
+        });
         lowered::Function entry;
         entry.id = FunctionId{0};
         entry.name = "Entry";
@@ -78,6 +102,57 @@ namespace
                 .binaryOperator = typed::BinaryOperator::Add
             },
             lowered::Instruction{
+                .opcode = lowered::Opcode::EnumConstant,
+                .result = ValueId{3},
+                .resultType = enumType,
+                .selector = "Ready",
+                .intrinsicFamily = IntrinsicFamily::Enum,
+                .targetType = enumType
+            },
+            lowered::Instruction{
+                .opcode = lowered::Opcode::IntrinsicCall,
+                .result = ValueId{4},
+                .resultType = module.types.stringType(),
+                .operands = {ValueId{3}},
+                .selector = "Name",
+                .signatureTypes = {enumType},
+                .intrinsicFamily = IntrinsicFamily::Enum,
+                .targetType = enumType
+            },
+            lowered::Instruction{
+                .opcode = lowered::Opcode::EnumConstant,
+                .result = ValueId{5},
+                .resultType = flagsetType,
+                .selector = "Read",
+                .intrinsicFamily = IntrinsicFamily::Flagset,
+                .targetType = flagsetType
+            },
+            lowered::Instruction{
+                .opcode = lowered::Opcode::EnumConstant,
+                .result = ValueId{6},
+                .resultType = flagsetType,
+                .selector = "Write",
+                .intrinsicFamily = IntrinsicFamily::Flagset,
+                .targetType = flagsetType
+            },
+            lowered::Instruction{
+                .opcode = lowered::Opcode::Binary,
+                .result = ValueId{7},
+                .resultType = flagsetType,
+                .operands = {ValueId{5}, ValueId{6}},
+                .binaryOperator = typed::BinaryOperator::BitwiseOr
+            },
+            lowered::Instruction{
+                .opcode = lowered::Opcode::IntrinsicCall,
+                .result = ValueId{8},
+                .resultType = module.types.boolType(),
+                .operands = {ValueId{7}, ValueId{5}},
+                .selector = "Has",
+                .signatureTypes = {flagsetType, flagsetType},
+                .intrinsicFamily = IntrinsicFamily::Flagset,
+                .targetType = flagsetType
+            },
+            lowered::Instruction{
                 .opcode = lowered::Opcode::Return,
                 .operands = {ValueId{2}}
             }
@@ -94,18 +169,23 @@ namespace
 
         lowered::Module module;
         initializeContract(module, "wir-cpp-unsupported-test");
-        const TypeId enumType = module.types.internNominal(Type{
-            .kind = TypeKind::Named,
-            .name = "State",
-            .nominalKind = NominalKind::Enum
+        const TypeId arrayType = module.types.intern(Type{
+            .kind = TypeKind::Array,
+            .arguments = {module.types.i32Type()},
+            .ownership = OwnershipModel::OwnedValue,
+            .cleanup = CleanupKind::DestroyValue
+        });
+        const TypeId iteratorType = module.types.intern(Type{
+            .kind = TypeKind::Iterator,
+            .arguments = {module.types.i32Type()}
         });
         lowered::Function entry;
         entry.id = FunctionId{0};
         entry.name = "Entry";
-        entry.returnType = enumType;
+        entry.returnType = module.types.i32Type();
         entry.callableType = module.types.intern(Type{
             .kind = TypeKind::Function,
-            .arguments = {enumType},
+            .arguments = {module.types.i32Type()},
             .ownership = OwnershipModel::ReferenceCounted,
             .cleanup = CleanupKind::ReleaseReference
         });
@@ -114,21 +194,100 @@ namespace
         block.name = "entry";
         block.instructions = {
             lowered::Instruction{
-                .opcode = lowered::Opcode::EnumConstant,
+                .opcode = lowered::Opcode::ArrayCreate,
                 .result = ValueId{0},
-                .resultType = enumType,
-                .selector = "Ready",
-                .intrinsicFamily = IntrinsicFamily::Enum,
-                .targetType = enumType
+                .resultType = arrayType,
+                .storageClass = lowered::StorageClass::Heap,
+                .escapeClass = lowered::EscapeClass::Local
+            },
+            lowered::Instruction{
+                .opcode = lowered::Opcode::IteratorCreate,
+                .result = ValueId{1},
+                .resultType = iteratorType,
+                .operands = {ValueId{0}},
+                .selector = "array",
+                .signatureTypes = {arrayType},
+                .storageClass = lowered::StorageClass::Heap,
+                .escapeClass = lowered::EscapeClass::Local
+            },
+            lowered::Instruction{
+                .opcode = lowered::Opcode::Constant,
+                .result = ValueId{2},
+                .resultType = module.types.i32Type(),
+                .literal = std::int64_t{0}
             },
             lowered::Instruction{
                 .opcode = lowered::Opcode::Return,
-                .operands = {ValueId{0}}
+                .operands = {ValueId{2}}
             }
         };
         entry.blocks.push_back(std::move(block));
         module.functions.push_back(std::move(entry));
         return module;
+    }
+
+    std::optional<wio::wir::lowered::Module> makeLanguageSurfaceModule()
+    {
+        using namespace wio;
+        Lexer lexer(
+            R"WIO(
+realm std {
+    object Option<T> {
+        private present: bool;
+        private value: T;
+        OnConstruct(value: T) { self.present = true; self.value = value; }
+        OnConstruct() { self.present = false; }
+    }
+    component ResultError { public code: i32; }
+    object Result<T> {
+        private ok: bool;
+        private value: T;
+        private error: ResultError;
+        OnConstruct(value: T) { self.ok = true; self.value = value; }
+        OnConstruct(error: ResultError) { self.ok = false; self.error = error; }
+    }
+}
+enum State { Idle = 0, Ready = 7 };
+flagset Permission { None = 0u32, Read = 1u32, Write = 1u32 << 1u32 };
+fn TryValue() -> std::Result<i32> { return std::Result<i32>(7); }
+fn Forward() -> std::Result<i32> {
+    let value = TryValue?();
+    return std::Result<i32>(value + 2);
+}
+fn Entry() -> i32 {
+    let option = std::Option<i32>(4);
+    let fromOption = match (option) { Some(value): value; None(): 0; };
+    let state = State::Ready;
+    let permissions = Permission::Read | Permission::Write;
+    if (state.Name() == "Ready" and permissions.Has(Permission::Read)) {
+        return fromOption + Forward!();
+    }
+    return 1;
+}
+)WIO",
+            "wir_cpp_backend_values.wio");
+        Parser parser(lexer.lex());
+        const Ref<Program> program = parser.parseProgram();
+        sema::SemanticAnalyzer analyzer;
+        analyzer.analyze(program);
+        auto typed = wir::typed::Builder{}.build(program);
+        if (!typed.succeeded())
+        {
+            for (const auto& diagnostic : typed.diagnostics())
+                std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+            std::cerr << wir::typed::Printer{}.print(typed.module());
+            return std::nullopt;
+        }
+        auto lowered = wir::LoweringPipeline{}.lower(typed.module());
+        if (!lowered.succeeded())
+        {
+            for (const auto& diagnostic : lowered.diagnostics())
+                std::cerr << diagnostic.code << " [" << diagnostic.source.begin.toDiagnosticString()
+                          << "]: " << diagnostic.message << '\n';
+            std::cerr << wir::lowered::Printer{}.print(lowered.module());
+            return std::nullopt;
+        }
+        return lowered.takeModule();
     }
 
     bool compileGeneratedCode(const std::string& code)
@@ -185,9 +344,33 @@ int main()
     ok &= expect(compileGeneratedCode(generated.code()),
         "generated WIR C++ should compile with the configured host compiler");
 
+    const auto languageModule = makeLanguageSurfaceModule();
+    ok &= expect(languageModule.has_value(),
+        "enum/flagset and Option/Result source should lower to canonical WIR");
+    if (languageModule)
+    {
+        const auto languageGenerated = WirCppBackend{}.generate(*languageModule);
+        if (!languageGenerated.succeeded())
+            for (const auto& diagnostic : languageGenerated.diagnostics())
+                std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+        ok &= expect(languageGenerated.succeeded(),
+            "enum/flagset and Option/Result WIR should generate C++");
+        ok &= expect(languageGenerated.code().find("_wio_enum_name") != std::string::npos,
+            "enum reflection helpers should be emitted from canonical layout metadata");
+        ok &= expect(languageGenerated.code().find("Result does not contain a success value") != std::string::npos,
+            "Result unwrap should preserve its checked failure boundary");
+        ok &= expect(compileGeneratedCode(languageGenerated.code()),
+            "generated enum/variant/Result C++ should compile with the configured host compiler");
+    }
+
     const auto unsupported = WirCppBackend{}.generate(makeUnsupportedModule());
+    if (unsupported.succeeded() || !std::ranges::any_of(unsupported.diagnostics(), [](const auto& diagnostic)
+        { return diagnostic.code == "WCPP1201"; }))
+        for (const auto& diagnostic : unsupported.diagnostics())
+            std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
     ok &= expect(!unsupported.succeeded(), "unsupported WIR operations should fail before C++ emission");
-    ok &= expect(!unsupported.diagnostics().empty() && unsupported.diagnostics().front().code == "WCPP1201",
+    ok &= expect(std::ranges::any_of(unsupported.diagnostics(), [](const auto& diagnostic)
+        { return diagnostic.code == "WCPP1201"; }),
         "unsupported operation should have a stable backend diagnostic code");
     ok &= expect(unsupported.code().empty(), "failed generation should not expose partial C++ output");
     return ok ? 0 : 1;

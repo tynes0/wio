@@ -112,6 +112,18 @@ namespace wio::wir::lowered
                 stream << " representation=" << nominalRepresentationName(type.nominalRepresentation);
             if (type.nominalValueModel != NominalValueModel::Regular)
                 stream << " value-model=" << nominalValueModelName(type.nominalValueModel);
+            if (type.enumUnderlyingType)
+                stream << " underlying=" << typeRef(type.enumUnderlyingType);
+            if (!type.enumCases.empty())
+            {
+                stream << " cases={";
+                for (std::size_t index = 0; index < type.enumCases.size(); ++index)
+                {
+                    if (index > 0) stream << ", ";
+                    stream << std::quoted(type.enumCases[index].name) << "=" << type.enumCases[index].rawValue;
+                }
+                stream << "}";
+            }
             if (!type.baseTypes.empty())
             {
                 stream << " bases=[";

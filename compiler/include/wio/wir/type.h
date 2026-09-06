@@ -345,6 +345,17 @@ namespace wio::wir
         auto operator<=>(const MethodLayout&) const = default;
     };
 
+    // Canonical enum/flagset storage. rawValue is the exact underlying bit
+    // pattern, so signed and unsigned 64-bit declarations share one portable
+    // representation without leaking a backend expression into WIR.
+    struct EnumCaseLayout
+    {
+        std::string name;
+        std::uint64_t rawValue = 0;
+
+        auto operator<=>(const EnumCaseLayout&) const = default;
+    };
+
     struct Type
     {
         TypeKind kind = TypeKind::Invalid;
@@ -358,6 +369,8 @@ namespace wio::wir
         std::vector<TypeId> baseTypes;
         std::vector<FieldLayout> fields;
         std::vector<MethodLayout> methods;
+        TypeId enumUnderlyingType;
+        std::vector<EnumCaseLayout> enumCases;
         bool hasConstructor = false;
         bool hasDestructor = false;
         OwnershipModel ownership = OwnershipModel::Trivial;

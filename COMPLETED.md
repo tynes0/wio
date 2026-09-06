@@ -940,3 +940,16 @@ here as historical evidence rather than active work:
       A host-compiler syntax gate and an end-to-end CLI gate compile and execute
       the mutable-local control-flow slice; legacy AST generation remains the
       default compatibility oracle during differential parity work.
+- [x] Enum and flagset types now carry exact underlying-type/case-bit metadata
+      from semantic analysis through both WIR levels. The independent C++
+      backend emits strong declarations, constants, bit operations, name/
+      validity reflection, and the complete enum/flagset intrinsic family
+      without re-reading AST expressions.
+- [x] The independent backend emits concrete `Option<T>`/`Result<T>` layouts,
+      construction, pattern tests/payloads, checked unwrap, and early error
+      propagation. Open generic templates remain canonical metadata and are not
+      emitted as invalid C++; unresolved generic calls fail with a stable
+      backend diagnostic.
+- [x] Cleanup-free value components loaded from places retain owned-value
+      identity, and Lowered WIR heap-storage validation no longer mistakes an
+      ordinary call/load returning a reference-counted value for an allocation.

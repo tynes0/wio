@@ -205,7 +205,10 @@ ordered literal segments and typed value holes, so nested calls and Unicode
 text remain structured until backend emission.
 
 Enum and flagset members use `enum-constant`; enum/flagset operations remain
-typed intrinsics. Dynamic values use distinct `any-box`, `any-type-test`, and
+typed intrinsics. Their named WIR types also retain the exact integer
+underlying type and canonical unsigned bit pattern of every case, including
+negative signed members. A backend therefore never re-evaluates enum source
+expressions or guesses flag widths. Dynamic values use distinct `any-box`, `any-type-test`, and
 `any-checked-cast` operations, while implicit non-null-to-nullable conversion is
 `nullable-wrap`. Null remains a valid `any` payload. `Option<T>` and `Result<T>`
 retain nominal value-model markers and continue to use verified

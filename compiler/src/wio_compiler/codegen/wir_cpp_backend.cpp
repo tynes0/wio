@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
+#include <limits>
 #include <map>
 #include <optional>
 #include <set>
@@ -133,11 +134,67 @@ namespace wio::codegen
                 });
             }
 
+            bool typeIsOpenImpl(const TypeId id, std::set<TypeId::ValueType>& visiting) const
+            {
+                const Type* type = module_.types.tryGet(id);
+                if (!type) return true;
+                if (type->kind == TypeKind::GenericParameter ||
+                    type->kind == TypeKind::ConstGenericParameter ||
+                    type->kind == TypeKind::GenericParameterPack ||
+                    type->kind == TypeKind::ValuePack ||
+                    type->kind == TypeKind::TypePack)
+                    return true;
+                if (!visiting.insert(id.value()).second)
+                    return false;
+                const auto open = [&](const TypeId nested)
+                {
+                    return nested && typeIsOpenImpl(nested, visiting);
+                };
+                const bool result = std::ranges::any_of(type->arguments, open) ||
+                    std::ranges::any_of(type->baseTypes, open) ||
+                    std::ranges::any_of(type->fields, [&](const FieldLayout& field) { return open(field.type); }) ||
+                    std::ranges::any_of(type->methods, [&](const MethodLayout& method)
+                    {
+                        return open(method.returnType) || std::ranges::any_of(method.parameterTypes, open);
+                    });
+                visiting.erase(id.value());
+                return result;
+            }
+
+            bool typeIsOpen(const TypeId id) const
+            {
+                std::set<TypeId::ValueType> visiting;
+                return typeIsOpenImpl(id, visiting);
+            }
+
+            bool functionIsOpen(const lowered::Function& function) const
+            {
+                if (!function.genericParameters.empty() || typeIsOpen(function.returnType) ||
+                    (function.ownerType && typeIsOpen(function.ownerType)))
+                    return true;
+                return std::ranges::any_of(function.parameters,
+                    [&](const lowered::Parameter& parameter) { return typeIsOpen(parameter.type); });
+            }
+
+            bool isSyntheticRootObject(const TypeId id) const
+            {
+                const Type* type = module_.types.tryGet(id);
+                return type && type->kind == TypeKind::Named &&
+                    type->nominalRepresentation == NominalRepresentation::Wio &&
+                    type->nominalKind == NominalKind::Object && type->name == "object" &&
+                    type->baseTypes.empty() && type->fields.empty();
+            }
+
             void validateTypes()
             {
                 for (std::size_t index = 0; index < module_.types.size(); ++index)
                 {
+                    const TypeId id{static_cast<TypeId::ValueType>(index)};
                     const Type& type = module_.types.types()[index];
+                    // Open declarations remain useful canonical metadata, but this
+                    // backend emits only already-specialized concrete layouts.
+                    if (typeIsOpen(id))
+                        continue;
                     switch (type.kind)
                     {
                     case TypeKind::Invalid:
@@ -175,30 +232,32 @@ namespace wio::codegen
                             diagnose("WCPP1105", "native POD type requires a C++ type binding");
                         if (type.nominalRepresentation == NominalRepresentation::Wio &&
                             (type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface) &&
-                            !type.baseTypes.empty())
+                            std::ranges::any_of(type.baseTypes,
+                                [&](const TypeId base) { return !isSyntheticRootObject(base); }))
                             diagnose("WCPP1106", "object/interface inheritance layout is not implemented by this backend");
+                        if (type.nominalKind == NominalKind::Enum || type.nominalKind == NominalKind::Flagset)
+                        {
+                            const Type* underlying = module_.types.tryGet(type.enumUnderlyingType);
+                            if (!underlying || !integerKind(underlying->kind) || type.enumCases.empty())
+                                diagnose("WCPP1107", "enum/flagset requires canonical underlying-type and case layout metadata");
+                        }
                         break;
                     default: break;
                     }
                 }
+                for (const lowered::Global& global : module_.globals)
+                    if (typeIsOpen(global.type))
+                        diagnose("WCPP1108", "global value requires a concrete specialized type", global.source);
             }
 
             bool supportedOpcode(const lowered::Opcode opcode) const
             {
                 switch (opcode)
                 {
-                case lowered::Opcode::VariantTest:
-                case lowered::Opcode::VariantPayload:
-                case lowered::Opcode::EnumConstant:
-                case lowered::Opcode::IntrinsicCall:
                 case lowered::Opcode::IteratorCreate:
                 case lowered::Opcode::IteratorHasNext:
                 case lowered::Opcode::IteratorValue:
                 case lowered::Opcode::IteratorAdvance:
-                case lowered::Opcode::ResultIsError:
-                case lowered::Opcode::ResultValue:
-                case lowered::Opcode::ResultUnwrap:
-                case lowered::Opcode::ResultPropagate:
                 case lowered::Opcode::CancellationCheck:
                 case lowered::Opcode::CoroutineSuspend:
                 case lowered::Opcode::CoroutineResume:
@@ -218,6 +277,8 @@ namespace wio::codegen
             {
                 for (const lowered::Function& function : module_.functions)
                 {
+                    if (functionIsOpen(function))
+                        continue;
                     const auto functionValueTypes = valueTypesFor(function);
                     if (function.isAsync || function.coroutine)
                         diagnose("WCPP1200", "coroutine state-machine emission is not enabled yet", function.source,
@@ -230,6 +291,49 @@ namespace wio::codegen
                                 diagnose("WCPP1201", "opcode is not implemented by the WIR C++ backend: " +
                                     std::string(lowered::opcodeName(instruction.opcode)), instruction.source,
                                     function.id, block.id);
+                            if (instruction.callee)
+                            {
+                                const auto callee = functions_.find(instruction.callee.value());
+                                if (callee != functions_.end() && functionIsOpen(*callee->second))
+                                    diagnose("WCPP1209", "generic call requires a concrete specialized function body",
+                                        instruction.source, function.id, block.id);
+                            }
+                            if (instruction.opcode == lowered::Opcode::IntrinsicCall &&
+                                instruction.intrinsicFamily != IntrinsicFamily::Enum &&
+                                instruction.intrinsicFamily != IntrinsicFamily::Flagset)
+                            {
+                                diagnose("WCPP1205", "intrinsic family is not implemented by this C++ backend slice: " +
+                                    std::string(intrinsicFamilyName(instruction.intrinsicFamily)), instruction.source,
+                                    function.id, block.id);
+                            }
+                            if (instruction.opcode == lowered::Opcode::IntrinsicCall &&
+                                !supportedEnumIntrinsic(instruction))
+                            {
+                                diagnose("WCPP1206", "enum/flagset intrinsic is not recognized: " +
+                                    instruction.selector, instruction.source, function.id, block.id);
+                            }
+                            if (instruction.opcode == lowered::Opcode::EnumConstant &&
+                                !findEnumCase(instruction.targetType, instruction.selector))
+                            {
+                                diagnose("WCPP1207", "enum/flagset constant does not exist in canonical layout: " +
+                                    instruction.selector, instruction.source, function.id, block.id);
+                            }
+                            if (instruction.opcode == lowered::Opcode::VariantTest ||
+                                instruction.opcode == lowered::Opcode::VariantPayload)
+                            {
+                                const auto source = instruction.operands.empty()
+                                    ? functionValueTypes.end()
+                                    : functionValueTypes.find(instruction.operands.front().value());
+                                const Type* variant = source == functionValueTypes.end()
+                                    ? nullptr
+                                    : module_.types.tryGet(source->second);
+                                if (!variant || (variant->nominalValueModel != NominalValueModel::Option &&
+                                    variant->nominalValueModel != NominalValueModel::Result))
+                                {
+                                    diagnose("WCPP1208", "payload variants currently require canonical Option/Result layout",
+                                        instruction.source, function.id, block.id);
+                                }
+                            }
                             if (instruction.opcode == lowered::Opcode::NativeInvoke)
                             {
                                 const auto callee = functions_.find(instruction.callee.value());
@@ -245,9 +349,14 @@ namespace wio::codegen
                                 instruction.opcode == lowered::Opcode::ConstructObject)
                             {
                                 const Type* target = module_.types.tryGet(instruction.resultType);
-                                bool aggregateCompatible = target && target->fields.size() == instruction.operands.size();
+                                bool aggregateCompatible = valueModelConstructorCompatible(
+                                    target, instruction, functionValueTypes);
+                                if (target && target->nominalValueModel == NominalValueModel::Regular)
+                                    aggregateCompatible = target->fields.size() == instruction.operands.size();
                                 for (std::size_t index = 0; aggregateCompatible && index < instruction.operands.size(); ++index)
                                 {
+                                    if (target->nominalValueModel != NominalValueModel::Regular)
+                                        break;
                                     const auto value = functionValueTypes.find(instruction.operands[index].value());
                                     aggregateCompatible = value != functionValueTypes.end() &&
                                         value->second == target->fields[index].type;
@@ -268,6 +377,52 @@ namespace wio::codegen
                         }
                     }
                 }
+            }
+
+            static bool integerKind(const TypeKind kind)
+            {
+                return kind == TypeKind::I8 || kind == TypeKind::I16 || kind == TypeKind::I32 ||
+                    kind == TypeKind::I64 || kind == TypeKind::ISize || kind == TypeKind::U8 ||
+                    kind == TypeKind::U16 || kind == TypeKind::U32 || kind == TypeKind::U64 ||
+                    kind == TypeKind::USize || kind == TypeKind::Byte;
+            }
+
+            bool supportedEnumIntrinsic(const lowered::Instruction& instruction) const
+            {
+                if (instruction.intrinsicFamily == IntrinsicFamily::Enum)
+                    return instruction.selector == "Name" || instruction.selector == "Value" ||
+                        instruction.selector == "IsValid";
+                if (instruction.intrinsicFamily == IntrinsicFamily::Flagset)
+                    return instruction.selector == "Name" || instruction.selector == "Has" ||
+                        instruction.selector == "HasAny" || instruction.selector == "With" ||
+                        instruction.selector == "Without" || instruction.selector == "Toggle" ||
+                        instruction.selector == "Clear";
+                return true;
+            }
+
+            bool valueModelConstructorCompatible(
+                const Type* target,
+                const lowered::Instruction& instruction,
+                const std::unordered_map<std::uint32_t, TypeId>& valueTypes) const
+            {
+                if (!target) return false;
+                if (target->nominalValueModel == NominalValueModel::Option)
+                {
+                    if (target->fields.size() < 2 || target->arguments.empty()) return false;
+                    if (instruction.operands.empty()) return true;
+                    const auto operandType = valueTypes.find(instruction.operands.front().value());
+                    return instruction.operands.size() == 1 && operandType != valueTypes.end() &&
+                        operandType->second == target->arguments.front();
+                }
+                if (target->nominalValueModel == NominalValueModel::Result)
+                {
+                    if (target->fields.size() < 3 || target->arguments.empty() || instruction.operands.size() != 1)
+                        return false;
+                    const auto operandType = valueTypes.find(instruction.operands.front().value());
+                    return operandType != valueTypes.end() &&
+                        (operandType->second == target->arguments.front() || operandType->second == target->fields[2].type);
+                }
+                return true;
             }
 
             std::unordered_map<std::uint32_t, TypeId> valueTypesFor(const lowered::Function& function) const
@@ -327,7 +482,7 @@ namespace wio::codegen
                     if (type->nominalKind == NominalKind::Object || type->nominalKind == NominalKind::Interface)
                         return "wio::runtime::Ref<" + objectName(id) + ">";
                     if (type->nominalKind == NominalKind::Enum || type->nominalKind == NominalKind::Flagset)
-                        return "std::int64_t";
+                        return typeName(id);
                     return typeName(id);
                 case TypeKind::Reference:
                     return "wio::wir_backend::Place<" + cppType(type->arguments.front()) + ">";
@@ -367,10 +522,39 @@ namespace wio::codegen
                     : cppType(id);
             }
 
+            std::string enumRawLiteral(const Type& type, const std::uint64_t rawValue) const
+            {
+                const Type* underlying = module_.types.tryGet(type.enumUnderlyingType);
+                const bool signedValue = underlying &&
+                    (underlying->kind == TypeKind::I8 || underlying->kind == TypeKind::I16 ||
+                     underlying->kind == TypeKind::I32 || underlying->kind == TypeKind::I64 ||
+                     underlying->kind == TypeKind::ISize);
+                if (!signedValue) return std::to_string(rawValue) + "ULL";
+                const std::int64_t value = static_cast<std::int64_t>(rawValue);
+                if (value == std::numeric_limits<std::int64_t>::min())
+                    return "(-9223372036854775807LL - 1LL)";
+                return std::to_string(value) + "LL";
+            }
+
+            std::string enumCaseExpression(const TypeId id, const EnumCaseLayout& enumCase) const
+            {
+                const Type& type = module_.types.get(id);
+                return "static_cast<" + cppType(id) + ">(static_cast<" +
+                    cppType(type.enumUnderlyingType) + ">(" + enumRawLiteral(type, enumCase.rawValue) + "))";
+            }
+
+            const EnumCaseLayout* findEnumCase(const TypeId id, const std::string_view name) const
+            {
+                const Type* type = module_.types.tryGet(id);
+                if (!type) return nullptr;
+                const auto found = std::ranges::find(type->enumCases, name, &EnumCaseLayout::name);
+                return found == type->enumCases.end() ? nullptr : &*found;
+            }
+
             void emitPreamble()
             {
                 output_ << "// Generated by Wio's canonical Lowered WIR C++ backend.\n"
-                    "#include <array>\n#include <cstddef>\n#include <cstdint>\n#include <functional>\n"
+                    "#include <array>\n#include <cstddef>\n#include <cstdint>\n#include <functional>\n#include <limits>\n"
                     "#include <map>\n#include <memory>\n#include <optional>\n#include <sstream>\n"
                     "#include <stdexcept>\n#include <string>\n#include <tuple>\n#include <type_traits>\n"
                     "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
@@ -432,7 +616,41 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                 {
                     const TypeId id{static_cast<TypeId::ValueType>(index)};
                     const Type& type = module_.types.types()[index];
-                    if (type.kind == TypeKind::Named && type.nominalRepresentation == NominalRepresentation::Wio &&
+                    if (typeIsOpen(id) || type.kind != TypeKind::Named ||
+                        type.nominalRepresentation != NominalRepresentation::Wio ||
+                        (type.nominalKind != NominalKind::Enum && type.nominalKind != NominalKind::Flagset))
+                        continue;
+                    output_ << "enum class " << typeName(id) << " : " << cppType(type.enumUnderlyingType) << " {\n";
+                    for (std::size_t caseIndex = 0; caseIndex < type.enumCases.size(); ++caseIndex)
+                    {
+                        const EnumCaseLayout& enumCase = type.enumCases[caseIndex];
+                        output_ << "    " << safeIdentifier(enumCase.name) << " = static_cast<" <<
+                            cppType(type.enumUnderlyingType) << ">(" << enumRawLiteral(type, enumCase.rawValue) << ")" <<
+                            (caseIndex + 1 == type.enumCases.size() ? "\n" : ",\n");
+                    }
+                    output_ << "};\n";
+                    if (type.nominalKind == NominalKind::Flagset)
+                    {
+                        const std::string name = typeName(id);
+                        const std::string underlying = cppType(type.enumUnderlyingType);
+                        output_ << "inline " << name << " operator|(" << name << " lhs, " << name << " rhs) noexcept { return static_cast<" <<
+                            name << ">(static_cast<" << underlying << ">(lhs) | static_cast<" << underlying << ">(rhs)); }\n";
+                        output_ << "inline " << name << " operator&(" << name << " lhs, " << name << " rhs) noexcept { return static_cast<" <<
+                            name << ">(static_cast<" << underlying << ">(lhs) & static_cast<" << underlying << ">(rhs)); }\n";
+                        output_ << "inline " << name << " operator^(" << name << " lhs, " << name << " rhs) noexcept { return static_cast<" <<
+                            name << ">(static_cast<" << underlying << ">(lhs) ^ static_cast<" << underlying << ">(rhs)); }\n";
+                        output_ << "inline " << name << " operator~(" << name << " value) noexcept { return static_cast<" <<
+                            name << ">(~static_cast<" << underlying << ">(value)); }\n";
+                    }
+                }
+                output_ << '\n';
+
+                for (std::size_t index = 0; index < module_.types.size(); ++index)
+                {
+                    const TypeId id{static_cast<TypeId::ValueType>(index)};
+                    const Type& type = module_.types.types()[index];
+                    if (!typeIsOpen(id) && type.kind == TypeKind::Named &&
+                        type.nominalRepresentation == NominalRepresentation::Wio &&
                         (type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface))
                         output_ << "struct " << objectName(id) << ";\n";
                 }
@@ -442,7 +660,47 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                 {
                     const TypeId id{static_cast<TypeId::ValueType>(index)};
                     const Type& type = module_.types.types()[index];
-                    if (type.kind != TypeKind::Named || type.nominalRepresentation != NominalRepresentation::Wio ||
+                    if (typeIsOpen(id) || type.kind != TypeKind::Named ||
+                        (type.nominalKind != NominalKind::Enum && type.nominalKind != NominalKind::Flagset))
+                        continue;
+                    const std::string valueType = cppType(id);
+                    const std::string underlying = cppType(type.enumUnderlyingType);
+                    output_ << "static bool _wio_enum_valid" << id.value() << "(" << valueType << " value) noexcept {\n";
+                    for (const EnumCaseLayout& enumCase : type.enumCases)
+                        output_ << "    if (value == " << enumCaseExpression(id, enumCase) << ") return true;\n";
+                    output_ << "    return false;\n}\n";
+                    output_ << "static std::string _wio_enum_name" << id.value() << "(" << valueType << " value) {\n";
+                    for (const EnumCaseLayout& enumCase : type.enumCases)
+                        output_ << "    if (value == " << enumCaseExpression(id, enumCase) << ") return " <<
+                            cppString(enumCase.name) << ";\n";
+                    if (type.nominalKind == NominalKind::Flagset)
+                    {
+                        output_ << "    const " << underlying << " raw = static_cast<" << underlying << ">(value);\n"
+                            "    " << underlying << " remaining = raw;\n    std::string result;\n";
+                        for (const EnumCaseLayout& enumCase : type.enumCases)
+                        {
+                            if (enumCase.rawValue == 0) continue;
+                            output_ << "    { const " << underlying << " member = static_cast<" << underlying << ">(" <<
+                                enumRawLiteral(type, enumCase.rawValue) << "); if ((raw & member) == member) { if (!result.empty()) result += \"|\"; result += " <<
+                                cppString(enumCase.name) << "; remaining = static_cast<" << underlying << ">(remaining & ~member); } }\n";
+                        }
+                        output_ << "    if (remaining != 0) { if (!result.empty()) result += \"|\"; result += \"<unknown>\"; }\n"
+                            "    if (result.empty()) return raw == 0 ? \"0\" : \"<unknown>\";\n    return result;\n";
+                    }
+                    else
+                    {
+                        output_ << "    return \"<unknown>\";\n";
+                    }
+                    output_ << "}\n";
+                }
+                output_ << '\n';
+
+                for (std::size_t index = 0; index < module_.types.size(); ++index)
+                {
+                    const TypeId id{static_cast<TypeId::ValueType>(index)};
+                    const Type& type = module_.types.types()[index];
+                    if (typeIsOpen(id) || type.kind != TypeKind::Named ||
+                        type.nominalRepresentation != NominalRepresentation::Wio ||
                         type.nominalKind == NominalKind::Enum || type.nominalKind == NominalKind::Flagset)
                         continue;
                     const bool object = type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface;
@@ -452,21 +710,39 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                     for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
                         output_ << "    " << cppType(type.fields[fieldIndex].type) << " _f" << fieldIndex << "{}; // " <<
                             safeIdentifier(type.fields[fieldIndex].name) << "\n";
-                    if (object && !type.fields.empty())
+                    if (object)
                     {
-                        output_ << "    " << objectName(id) << '(';
-                        for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
+                        output_ << "    " << objectName(id) << "() = default;\n";
+                        if (type.nominalValueModel == NominalValueModel::Option && type.fields.size() >= 2 &&
+                            !type.arguments.empty())
                         {
-                            if (fieldIndex) output_ << ", ";
-                            output_ << cppType(type.fields[fieldIndex].type) << " v" << fieldIndex;
+                            output_ << "    explicit " << objectName(id) << '(' << cppType(type.arguments.front()) <<
+                                " value) : _f0(true), _f1(std::move(value)) {}\n";
                         }
-                        output_ << ") : ";
-                        for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
+                        else if (type.nominalValueModel == NominalValueModel::Result && type.fields.size() >= 3 &&
+                            !type.arguments.empty())
                         {
-                            if (fieldIndex) output_ << ", ";
-                            output_ << "_f" << fieldIndex << "(std::move(v" << fieldIndex << "))";
+                            output_ << "    explicit " << objectName(id) << '(' << cppType(type.arguments.front()) <<
+                                " value) : _f0(true), _f1(std::move(value)) {}\n";
+                            output_ << "    explicit " << objectName(id) << '(' << cppType(type.fields[2].type) <<
+                                " error) : _f0(false), _f2(std::move(error)) {}\n";
                         }
-                        output_ << " {}\n";
+                        else if (!type.fields.empty())
+                        {
+                            output_ << "    " << objectName(id) << '(';
+                            for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
+                            {
+                                if (fieldIndex) output_ << ", ";
+                                output_ << cppType(type.fields[fieldIndex].type) << " v" << fieldIndex;
+                            }
+                            output_ << ") : ";
+                            for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
+                            {
+                                if (fieldIndex) output_ << ", ";
+                                output_ << "_f" << fieldIndex << "(std::move(v" << fieldIndex << "))";
+                            }
+                            output_ << " {}\n";
+                        }
                     }
                     output_ << "};\n";
                 }
@@ -503,7 +779,8 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
             void emitFunctionDeclarations()
             {
                 for (const lowered::Function& function : module_.functions)
-                    output_ << functionSignature(function, true) << '\n';
+                    if (!functionIsOpen(function))
+                        output_ << functionSignature(function, true) << '\n';
                 output_ << '\n';
             }
 
@@ -628,6 +905,47 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                     arguments += operand(instruction.operands[index]);
                 }
                 return arguments;
+            }
+
+            TypeId valueType(const ValueId value) const
+            {
+                const auto found = valueTypes_.find(value.value());
+                return found == valueTypes_.end() ? TypeId{} : found->second;
+            }
+
+            std::string intrinsicExpression(const lowered::Instruction& instruction) const
+            {
+                const Type& target = module_.types.get(instruction.targetType);
+                const std::string receiver = operand(instruction.operands.front());
+                const std::string underlying = cppType(target.enumUnderlyingType);
+                if (instruction.selector == "Name")
+                    return "_wio_enum_name" + std::to_string(instruction.targetType.value()) + "(" + receiver + ")";
+                if (instruction.selector == "Value")
+                    return "static_cast<" + underlying + ">(" + receiver + ")";
+                if (instruction.selector == "IsValid")
+                    return "_wio_enum_valid" + std::to_string(instruction.targetType.value()) + "(" + receiver + ")";
+                if (instruction.selector == "Clear")
+                    return "static_cast<" + cppType(instruction.targetType) + ">(static_cast<" + underlying + ">(0))";
+
+                const std::string mask = operand(instruction.operands[1]);
+                const std::string rawReceiver = "static_cast<" + underlying + ">(" + receiver + ")";
+                const std::string rawMask = "static_cast<" + underlying + ">(" + mask + ")";
+                if (instruction.selector == "Has")
+                    return "((" + rawReceiver + " & " + rawMask + ") == " + rawMask + ")";
+                if (instruction.selector == "HasAny")
+                    return "((" + rawReceiver + " & " + rawMask + ") != 0)";
+                const std::string operation = instruction.selector == "With" ? " | " :
+                    instruction.selector == "Toggle" ? " ^ " : " & ~";
+                return "static_cast<" + cppType(instruction.targetType) + ">(" + rawReceiver + operation + rawMask + ")";
+            }
+
+            std::string resultPayload(const lowered::Instruction& instruction, const bool checked) const
+            {
+                const std::string source = operand(instruction.operands.front());
+                if (!checked) return source + "->_f1";
+                return "([&]() -> " + cppType(instruction.resultType) + " { if (!" + source +
+                    "->_f0) throw wio::runtime::RuntimeException(\"Result does not contain a success value.\"); return " +
+                    source + "->_f1; }())";
             }
 
             void assignResult(const lowered::Instruction& instruction, const std::string& expression)
@@ -756,6 +1074,21 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                     assignResult(instruction, "(" + operand(instruction.operands[0]) + ".Get() == " +
                         operand(instruction.operands[1]) + ".Get())");
                     break;
+                case lowered::Opcode::VariantTest:
+                {
+                    const std::string present = operand(instruction.operands.front()) + "->_f0";
+                    const bool positive = instruction.selector == "Some" || instruction.selector == "Ok";
+                    assignResult(instruction, positive ? present : "(!" + present + ")");
+                    break;
+                }
+                case lowered::Opcode::VariantPayload:
+                {
+                    const Type& variant = module_.types.get(valueType(instruction.operands.front()));
+                    const bool error = variant.nominalValueModel == NominalValueModel::Result &&
+                        instruction.selector == "Err";
+                    assignResult(instruction, operand(instruction.operands.front()) + (error ? "->_f2" : "->_f1"));
+                    break;
+                }
                 case lowered::Opcode::ArrayLength:
                     assignResult(instruction, "static_cast<" + cppType(instruction.resultType) + ">(" + operand(instruction.operands[0]) + ".size())");
                     break;
@@ -801,6 +1134,15 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                         : expression);
                     break;
                 }
+                case lowered::Opcode::EnumConstant:
+                {
+                    const EnumCaseLayout* enumCase = findEnumCase(instruction.targetType, instruction.selector);
+                    assignResult(instruction, enumCaseExpression(instruction.targetType, *enumCase));
+                    break;
+                }
+                case lowered::Opcode::IntrinsicCall:
+                    assignResult(instruction, intrinsicExpression(instruction));
+                    break;
                 case lowered::Opcode::AnyBox:
                 {
                     const Type& boxed = module_.types.get(instruction.targetType);
@@ -837,6 +1179,19 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                 case lowered::Opcode::NullableWrap:
                     assignResult(instruction, instruction.operands.empty() ? cppType(instruction.resultType) + "{}" :
                         cppType(instruction.resultType) + "{" + operand(instruction.operands[0]) + "}");
+                    break;
+                case lowered::Opcode::ResultIsError:
+                    assignResult(instruction, "(!" + operand(instruction.operands.front()) + "->_f0)");
+                    break;
+                case lowered::Opcode::ResultValue:
+                    assignResult(instruction, resultPayload(instruction, false));
+                    break;
+                case lowered::Opcode::ResultUnwrap:
+                    assignResult(instruction, resultPayload(instruction, true));
+                    break;
+                case lowered::Opcode::ResultPropagate:
+                    output_ << "                return " << cppType(instruction.targetType) << "::Create(" <<
+                        operand(instruction.operands.front()) << "->_f2);\n";
                     break;
                 case lowered::Opcode::GlobalPlace:
                     assignResult(instruction, "wio::wir_backend::Place<" + placeValueType(instruction.resultType) + ">::borrow(" + globalName(instruction.global) + ")");
@@ -912,6 +1267,8 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
             {
                 for (const lowered::Function& function : module_.functions)
                 {
+                    if (functionIsOpen(function))
+                        continue;
                     if (function.isExternal)
                     {
                         if (function.nativeBinding)

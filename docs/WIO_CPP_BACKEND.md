@@ -54,6 +54,12 @@ The opt-in backend currently emits:
 - primitive, string, text, any, opaque, nullable, fixed/dynamic array,
   ordered/unordered dictionary, function, async-task, reference, tuple/pack,
   native POD, component, object, interface, enum, and flagset C++ type shapes;
+- concrete enum/flagset declarations with their exact canonical underlying
+  type and bit pattern, strong constants, flag operators, validity/name
+  reflection, and all enum/flagset intrinsics;
+- canonical `Option<T>`/`Result<T>` construction, pattern tests and payloads,
+  checked `!()` unwrap, `?()` error propagation, and concrete generic value
+  layouts while open template declarations remain non-emitted metadata;
 - component field layouts and intrusive-reference-counted object storage;
 - constants, unary/binary/range operations, conversions, direct/extension/
   resolved non-virtual method calls, function references, closures, and
@@ -71,11 +77,11 @@ compiler. A second CLI gate compiles and executes a mutable-local loop through
 
 The following operations remain deliberately rejected before code emission:
 
-- enum case materialization and payload variants until canonical numeric/
-  payload layout metadata is added;
 - inherited object/interface layout, virtual/interface dispatch, and checked
   hierarchy conversion until the WIR layout has a backend-complete cast table;
-- the complete intrinsic, iterator, Option/Result propagation surface;
+- array/dictionary/string/text intrinsics and iterator execution;
+- generic function calls until a concrete specialized function body is
+  materialized in WIR;
 - coroutine suspend/resume/completion and cancellation runtime emission.
 
 Those are parity work inside the C++ backend milestone, not permissions for an

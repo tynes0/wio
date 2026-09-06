@@ -266,9 +266,11 @@ namespace wio::wir::typed
             if (type.kind != TypeKind::Named && type.nominalValueModel != NominalValueModel::Regular)
                 report("WIR1015", "Only named Typed WIR types may carry a nominal value model.");
             if (type.nominalRepresentation == NominalRepresentation::NativePod &&
-                (type.kind != TypeKind::Named || type.nominalKind != NominalKind::Component))
+                (type.kind != TypeKind::Named ||
+                 (type.nominalKind != NominalKind::Component && type.nominalKind != NominalKind::Enum &&
+                  type.nominalKind != NominalKind::Flagset)))
             {
-                report("WIR1008", "Native POD representation requires a named component type.");
+                report("WIR1008", "Native POD representation requires a named component, enum, or flagset type.");
             }
             if (type.nominalRepresentation == NominalRepresentation::NativePod &&
                 (!type.nativeBinding || type.nativeBinding->cppName.empty()))
@@ -277,10 +279,21 @@ namespace wio::wir::typed
                 report("WIR1018", "Only Native POD types may carry native type binding metadata.");
             if (type.kind != TypeKind::Named &&
                 (!type.baseTypes.empty() || !type.fields.empty() || !type.methods.empty() ||
-                 type.hasConstructor || type.hasDestructor))
+                 type.enumUnderlyingType || !type.enumCases.empty() || type.hasConstructor || type.hasDestructor))
             {
                 report("WIR1009", "Only named Typed WIR types may carry layout or lifecycle metadata.");
             }
+            const bool enumLike = type.kind == TypeKind::Named &&
+                (type.nominalKind == NominalKind::Enum || type.nominalKind == NominalKind::Flagset);
+            const Type* enumUnderlying = module.types.tryGet(type.enumUnderlyingType);
+            if (enumLike && (!enumUnderlying || !isInteger(enumUnderlying->kind)))
+                report("WIR1019", "Typed WIR enum/flagset layout requires an integer underlying type.");
+            if (!enumLike && (type.enumUnderlyingType || !type.enumCases.empty()))
+                report("WIR1019", "Only enum/flagset Typed WIR types may carry case layout metadata.");
+            std::unordered_set<std::string> enumCaseNames;
+            for (const EnumCaseLayout& enumCase : type.enumCases)
+                if (enumCase.name.empty() || !enumCaseNames.insert(enumCase.name).second)
+                    report("WIR1019", "Typed WIR enum/flagset cases require unique non-empty names.");
             if ((type.ownership == OwnershipModel::Trivial && type.cleanup != CleanupKind::None) ||
                 (type.ownership == OwnershipModel::Borrowed && type.cleanup != CleanupKind::None) ||
                 (type.ownership == OwnershipModel::ReferenceCounted &&
