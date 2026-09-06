@@ -3414,8 +3414,27 @@ namespace wio::wir::typed
                     return contains;
                 }
                 const auto op = mapBinaryOperator(binary->op.type);
-                const ValueId left = buildAutoReadableExpression(binary->left, state);
-                const ValueId right = buildAutoReadableExpression(binary->right, state);
+                // Comparison results are bool, so their contextual numeric
+                // literal type comes from the opposite operand, not the result.
+                const bool leftLiteral = binary->left->is<IntegerLiteral>();
+                const bool rightLiteral = binary->right->is<IntegerLiteral>();
+                const auto readableType = [&](const NodePtr<Expression>& operand)
+                {
+                    TypeId id = mapType(operand->refType.Lock(), operand.Get());
+                    const Type* type = result_.module_.types.tryGet(id);
+                    while (type && autoReadableReference(*type))
+                    {
+                        id = type->arguments.front();
+                        type = result_.module_.types.tryGet(id);
+                    }
+                    return id;
+                };
+                const ValueId left = leftLiteral && !rightLiteral
+                    ? buildExpressionAs(binary->left, readableType(binary->right), state)
+                    : buildAutoReadableExpression(binary->left, state);
+                const ValueId right = rightLiteral && !leftLiteral
+                    ? buildExpressionAs(binary->right, readableType(binary->left), state)
+                    : buildAutoReadableExpression(binary->right, state);
                 if (!op || !left || !right)
                 {
                     report("WIR2303", "Binary expression could not be lowered to Typed WIR.", expression.Get());
@@ -4030,6 +4049,29 @@ namespace wio::wir::typed
             const TypeId destinationType,
             FunctionState& state)
         {
+            if (const auto* integer = expression ? expression->as<IntegerLiteral>() : nullptr)
+            {
+                const Type* destination = result_.module_.types.tryGet(destinationType);
+                const auto integerType = destination ? mapIntegerType(destination->kind) : std::nullopt;
+                if (integerType)
+                {
+                    const IntegerResult parsed = common::getIntegerAsType(integer->token.value, *integerType);
+                    const auto literal = integerLiteral(parsed);
+                    if (parsed.isValid && literal)
+                    {
+                        const ValueId value{state.nextValue++};
+                        currentBlock(state).instructions.push_back(Instruction{
+                            .opcode = Opcode::Constant,
+                            .result = value,
+                            .resultType = destinationType,
+                            .literal = *literal,
+                            .source = SourceSpan::at(expression->location())
+                        });
+                        rememberOwnership(state, value, ValueOwnership::Trivial);
+                        return value;
+                    }
+                }
+            }
             // Ref expressions are contextual: semantic analysis intentionally
             // leaves their placeholder type unresolved and the selected
             // parameter supplies view/ref mutability. Do not leak that
@@ -5255,6 +5297,8 @@ namespace wio::wir::typed
                     iterableInfo = result_.module_.types.tryGet(iterableType);
                 }
                 const ValueId iterable = buildAutoReadableExpression(statement.iterable, state);
+                // Building the expression can intern types and invalidate table pointers.
+                iterableInfo = result_.module_.types.tryGet(iterableType);
                 if (!iterable || !iterableInfo ||
                     (iterableInfo->kind != TypeKind::Array && iterableInfo->kind != TypeKind::Dictionary))
                 {

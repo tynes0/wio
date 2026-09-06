@@ -1,0 +1,89 @@
+realm std {
+    object Option<T> {
+        private present: bool;
+        private value: T;
+        OnConstruct(value: T) { self.present = true; self.value = value; }
+        OnConstruct() { self.present = false; }
+    }
+}
+component Pair {
+    x: i32;
+    y: i32;
+    OnConstruct(x: i32, y: i32) { self.x = x; self.y = y; }
+}
+fn Entry() -> i32 {
+    mut values: i32[] = [3, 1, 2];
+    values.Push(4);
+    values.Sort();
+    if (values.Count() != 4 or values.First() != 1 or values.Last() != 4) { return 1; }
+    values.Insert(1, 9);
+    if (values.Pop() != 4 or values.Remove(9) == false) { return 2; }
+    let sliced = values.Slice(1, 2);
+    if (sliced.Count() != 2 or sliced[0] != 2) { return 3; }
+    mut sum: i32 = 0;
+    for index | value in values step 2 { sum += value + (index fit i32); }
+    if (sum != 6) { return 4; }
+    for ref value in values { value += 10; }
+    if (values[0] != 11 or values[2] != 13) { return 5; }
+    sum = 0;
+    for value in 5...1 step -2 { sum += value; }
+    if (sum != 9) { return 6; }
+    for value in 1...8 {
+        if (value == 2) { continue; }
+        if (value == 4) { break; }
+        sum += value;
+    }
+    if (sum != 13) { return 7; }
+    mut scores: Dict<string, i32> = { "hp": 5, "mp": 7 };
+    scores.Set("xp", 9);
+    mut found: i32 = 0;
+    if (not scores.TryGet("hp", ref found) or found != 5) { return 8; }
+    sum = 0;
+    for key | value in scores { sum += value; }
+    if (sum != 21 or scores.GetOr("absent", 12) != 12) { return 9; }
+    for key | ref value in scores { value += 1; }
+    if (scores["hp"] != 6) { return 10; }
+    mut message: string = "  Hello  ";
+    message.TrimInPlace();
+    message.Append(" Wio");
+    message.ToLowerInPlace();
+    if (message != "hello wio" or message.Slice(6) != "wio") { return 11; }
+    if ("ff".ToI32(16) != 255 or not "true".ToBool()) { return 12; }
+    let words = message.Split(" ");
+    if (words.Join("-") != "hello-wio" or message.Count() != 9) { return 13; }
+    let unicode = u"A😀é";
+    if (unicode.Count() != 3 or unicode.ByteCount() != 7) { return 14; }
+    if (unicode.Slice(1, 1).ToString() != "😀" or unicode.CodePoints()[1] != 128512u32) { return 15; }
+    if (u"Straße".CaseFold() != u"strasse") { return 16; }
+    mut ordered: Tree<i32, i32> = {<1: 10, 3: 30, 5: 50>};
+    if (ordered.FirstKey() != 1 or ordered.LastValue() != 50) { return 17; }
+    if (ordered.FloorKeyOr(4, -1) != 3 or ordered.CeilKeyOr(4, -1) != 5) { return 18; }
+    sum = 0;
+    for view key | ref value in ordered { value += key; sum += value; }
+    if (sum != 99) { return 19; }
+    mut empty: i32[] = [];
+    for value in empty { return 20; }
+    mut visits: i32 = 0;
+    for value in 2147483646...2147483647 { visits += 1; }
+    if (visits != 2) { return 21; }
+    visits = 0;
+    for value in 18446744073709551614u64...18446744073709551615u64 { visits += 1; }
+    if (visits != 2) { return 22; }
+    for value in 4...1 { return 23; }
+    let fixed: i32[3] = [2, 4, 6];
+    sum = 0;
+    for value in fixed { sum += value; }
+    if (sum != 12) { return 24; }
+    let hit = match (values.Get(0)) { Some(value): value; None(): -1; };
+    let miss = match (values.Get(99)) { Some(value): value; None(): -1; };
+    if (hit != 11 or miss != -1) { return 25; }
+    let dictHit = match (scores.Get("hp")) { Some(value): value; None(): -1; };
+    let dictMiss = match (scores.Get("absent")) { Some(value): value; None(): -1; };
+    if (dictHit != 6 or dictMiss != -1) { return 26; }
+    mut pairs: Pair[] = [Pair(1, 2), Pair(3, 4)];
+    for ref x | view y in pairs { x += y; }
+    sum = 0;
+    for x | y in pairs { sum += x + y; }
+    if (sum != 16) { return 27; }
+    return 0;
+}

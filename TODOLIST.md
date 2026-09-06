@@ -523,8 +523,10 @@ Rider, and CLion are defined in
    the current C++ generator as the production default. Exact enum/flagset
    layouts and intrinsics plus canonical Option/Result variants, checked unwrap,
    and propagation now emit from concrete Lowered WIR; open generic declaration
-   metadata is excluded from concrete output. Complete container/string/text
-   intrinsics, iterators, materialized generic function bodies, coroutine
+   metadata is excluded from concrete output. Container/string/text intrinsics
+   and range/array/dictionary iterators now execute through shared runtime
+   helpers, with borrowed storage identity and focused boundary tests. Complete
+   materialized generic function bodies, coroutine
    runtime emission, SDK sidecars/thunks, and full differential parity; then
    switch the default before removing the compatibility generator. The
    bytecode VM consumes the same contract. Async functions now carry

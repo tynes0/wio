@@ -201,14 +201,14 @@ namespace
                 .escapeClass = lowered::EscapeClass::Local
             },
             lowered::Instruction{
-                .opcode = lowered::Opcode::IteratorCreate,
+                .opcode = lowered::Opcode::IntrinsicCall,
                 .result = ValueId{1},
                 .resultType = iteratorType,
                 .operands = {ValueId{0}},
-                .selector = "array",
+                .selector = "UnsupportedOperation",
                 .signatureTypes = {arrayType},
-                .storageClass = lowered::StorageClass::Heap,
-                .escapeClass = lowered::EscapeClass::Local
+                .intrinsicFamily = IntrinsicFamily::Array,
+                .targetType = arrayType
             },
             lowered::Instruction{
                 .opcode = lowered::Opcode::Constant,
@@ -226,11 +226,11 @@ namespace
         return module;
     }
 
-    std::optional<wio::wir::lowered::Module> makeLanguageSurfaceModule()
+    std::optional<wio::wir::lowered::Module> makeLanguageSurfaceModule(const std::string& customSource = {})
     {
         using namespace wio;
         Lexer lexer(
-            R"WIO(
+            customSource.empty() ? R"WIO(
 realm std {
     object Option<T> {
         private present: bool;
@@ -264,7 +264,7 @@ fn Entry() -> i32 {
     }
     return 1;
 }
-)WIO",
+)WIO" : customSource,
             "wir_cpp_backend_values.wio");
         Parser parser(lexer.lex());
         const Ref<Program> program = parser.parseProgram();
@@ -290,7 +290,7 @@ fn Entry() -> i32 {
         return lowered.takeModule();
     }
 
-    bool compileGeneratedCode(const std::string& code)
+    bool compileGeneratedCode(const std::string& code, const bool run = false)
     {
         namespace fs = std::filesystem;
         const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -300,7 +300,7 @@ fn Entry() -> i32 {
         fs::create_directories(directory, error);
         if (error) return false;
         const fs::path source = directory / "generated.cpp";
-        const fs::path object = directory / "generated.obj";
+        const fs::path object = directory / (run ? "generated.exe" : "generated.obj");
         {
             std::ofstream stream(source, std::ios::binary);
             stream << code;
@@ -316,13 +316,22 @@ fn Entry() -> i32 {
         }
         else
         {
-            command += "-std=c++20 -c \"" + source.string() + "\" -I\"" +
+            command += std::string("-std=c++20 ") + (run ? "" : "-c ") + "\"" + source.string() + "\" -I\"" +
                 std::string(WIO_TEST_RUNTIME_INCLUDE) + "\" -o \"" + object.string() + "\"";
+            if (run) command += " \"" + std::string(WIO_TEST_RUNTIME_LIBRARY) + "\"";
         }
 #if defined(_WIN32)
         command = "\"" + command + "\"";
 #endif
-        const int result = std::system(command.c_str());
+        int result = std::system(command.c_str());
+        if (result == 0 && run)
+        {
+            std::string runCommand = "\"" + object.string() + "\"";
+#if defined(_WIN32)
+            runCommand = "\"" + runCommand + "\"";
+#endif
+            result = std::system(runCommand.c_str());
+        }
         fs::remove_all(directory, error);
         return result == 0;
     }
@@ -365,13 +374,64 @@ int main()
 
     const auto unsupported = WirCppBackend{}.generate(makeUnsupportedModule());
     if (unsupported.succeeded() || !std::ranges::any_of(unsupported.diagnostics(), [](const auto& diagnostic)
-        { return diagnostic.code == "WCPP1201"; }))
+        { return diagnostic.code == "WCPP1205"; }))
         for (const auto& diagnostic : unsupported.diagnostics())
             std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
     ok &= expect(!unsupported.succeeded(), "unsupported WIR operations should fail before C++ emission");
     ok &= expect(std::ranges::any_of(unsupported.diagnostics(), [](const auto& diagnostic)
-        { return diagnostic.code == "WCPP1201"; }),
+        { return diagnostic.code == "WCPP1205"; }),
         "unsupported operation should have a stable backend diagnostic code");
     ok &= expect(unsupported.code().empty(), "failed generation should not expose partial C++ output");
+    std::ifstream fixture(std::string(WIO_TEST_SOURCE_DIR) + "/tests/wir_cpp_containers_run.wio");
+    const std::string source{std::istreambuf_iterator<char>(fixture), std::istreambuf_iterator<char>()};
+    ok &= expect(!source.empty(), "container runtime fixture should be readable");
+    const auto containers = makeLanguageSurfaceModule(source);
+    ok &= expect(containers.has_value(), "container and iterator source should lower");
+    if (containers)
+    {
+        auto malformed = *containers;
+        bool changed = false;
+        for (auto& function : malformed.functions)
+            for (auto& block : function.blocks)
+                for (auto& instruction : block.instructions)
+                    if (!changed && instruction.opcode == wio::wir::lowered::Opcode::IteratorValue)
+                    {
+                        instruction.selector = "nonexistent_field";
+                        changed = true;
+                    }
+        const auto rejected = WirCppBackend{}.generate(malformed);
+        ok &= expect(changed && !rejected.succeeded() && rejected.code().empty() &&
+            std::ranges::any_of(rejected.diagnostics(), [](const auto& diagnostic)
+                { return diagnostic.code == "WCPP1210"; }),
+            "malformed iterator projection must fail with a backend diagnostic");
+        const auto code = WirCppBackend{}.generate(*containers);
+        for (const auto& diagnostic : code.diagnostics())
+            std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+        ok &= expect(code.succeeded(), "container and iterator module should emit C++");
+        if (code.succeeded())
+        {
+            const std::string harness = "#define main wio_fixture_main\n" + code.code() + R"CPP(
+#undef main
+int main() {
+    using wio::wir_backend::Iterator;
+    int rejected = 0;
+    std::vector<int> values{1, 2};
+    try { Iterator<int>::range(0, 2, 0, false); }
+    catch (const wio::runtime::RuntimeException&) { ++rejected; }
+    try { Iterator<std::vector<int>>::container(values, -1); }
+    catch (const wio::runtime::RuntimeException&) { ++rejected; }
+    try { Iterator<std::vector<int>>::container(values, 0); }
+    catch (const wio::runtime::RuntimeException&) { ++rejected; }
+    auto minimum = Iterator<int>::range(std::numeric_limits<int>::min() + 1,
+        std::numeric_limits<int>::min(), -1, true);
+    int count = 0;
+    while (minimum.hasNext()) { ++count; minimum.advance(); if (count > 2) return 91; }
+    if (rejected != 3 || count != 2) return 92;
+    return wio_fixture_main();
+}
+)CPP";
+            ok &= expect(compileGeneratedCode(harness, true), "container/Unicode/iterator program and boundary checks must execute successfully");
+        }
+    }
     return ok ? 0 : 1;
 }

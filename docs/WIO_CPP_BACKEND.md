@@ -67,6 +67,11 @@ The opt-in backend currently emits:
 - arrays, dictionaries, interpolation, `any`, nullable values, globals,
   locals, projections, borrows, construction, copy/move/retain/release/drop,
   return, branch, conditional branch, and unreachable traps;
+- pinned array/dictionary/string/text intrinsics through shared runtime helpers,
+  including mutators, numeric string conversions, Unicode operations, and
+  canonical `Option` lookup results;
+- range and fixed/dynamic array/ordered/unordered dictionary iteration with
+  steps, index/key/value projections, reference bindings, and structured exits;
 - native headers, native POD spellings, resolved native symbol invocation, and
   wrappers for addressable native functions;
 - executable `Entry` adapters and normal Wio backend compilation/linking.
@@ -74,12 +79,19 @@ The opt-in backend currently emits:
 The first parity gate compiles generated source with an independent C++
 compiler. A second CLI gate compiles and executes a mutable-local loop through
 `source -> Typed WIR -> Lowered WIR -> C++ -> executable`.
+The container gate also links and runs generated C++ with array/reference
+mutation, ordered/unordered dictionary traversal, successful/missing lookups,
+string parsing, emoji/code-point operations, empty iteration, and integer-limit
+ranges. Runtime checks reject zero range steps and non-positive container steps;
+range advancement terminates before integer overflow. Borrowed loads retain
+storage identity instead of copying containers. Iterators do not snapshot their
+source: structural changes that invalidate native container iterators are not
+supported during traversal.
 
 The following operations remain deliberately rejected before code emission:
 
 - inherited object/interface layout, virtual/interface dispatch, and checked
   hierarchy conversion until the WIR layout has a backend-complete cast table;
-- array/dictionary/string/text intrinsics and iterator execution;
 - generic function calls until a concrete specialized function body is
   materialized in WIR;
 - coroutine suspend/resume/completion and cancellation runtime emission.

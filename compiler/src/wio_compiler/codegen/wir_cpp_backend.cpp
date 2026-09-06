@@ -1,4 +1,5 @@
 #include "wio/codegen/wir_cpp_backend.h"
+#include "wio/codegen/wir_intrinsics.h"
 
 #include "wio/wir/lowered_ir_verifier.h"
 
@@ -124,6 +125,7 @@ namespace wio::codegen
             const lowered::Function* currentFunction_ = nullptr;
             const lowered::BasicBlock* currentBlock_ = nullptr;
             std::unordered_map<std::uint32_t, TypeId> valueTypes_;
+            std::set<std::uint32_t> borrowedLoads_;
 
             void diagnose(std::string code, std::string message, const SourceSpan& source = {},
                           const FunctionId function = {}, const BlockId block = {})
@@ -254,10 +256,6 @@ namespace wio::codegen
             {
                 switch (opcode)
                 {
-                case lowered::Opcode::IteratorCreate:
-                case lowered::Opcode::IteratorHasNext:
-                case lowered::Opcode::IteratorValue:
-                case lowered::Opcode::IteratorAdvance:
                 case lowered::Opcode::CancellationCheck:
                 case lowered::Opcode::CoroutineSuspend:
                 case lowered::Opcode::CoroutineResume:
@@ -291,6 +289,47 @@ namespace wio::codegen
                                 diagnose("WCPP1201", "opcode is not implemented by the WIR C++ backend: " +
                                     std::string(lowered::opcodeName(instruction.opcode)), instruction.source,
                                     function.id, block.id);
+                            if (instruction.opcode == lowered::Opcode::IteratorCreate)
+                            {
+                                const Type* iterator = module_.types.tryGet(instruction.resultType);
+                                const Type* source = iterator && iterator->arguments.size() == 1
+                                    ? module_.types.tryGet(iterator->arguments.front()) : nullptr;
+                                const bool range = instruction.selector == "range.inclusive" ||
+                                    instruction.selector == "range.exclusive";
+                                const bool valid = source && (range
+                                    ? integerKind(source->kind) && instruction.operands.size() == 3
+                                    : (instruction.selector == "array" && source->kind == TypeKind::Array &&
+                                        (instruction.operands.size() == 1 || instruction.operands.size() == 2)) ||
+                                      (instruction.selector == "dictionary" && source->kind == TypeKind::Dictionary &&
+                                        instruction.operands.size() == 1));
+                                if (!valid)
+                                    diagnose("WCPP1210", "iterator source or operand count is not supported",
+                                        instruction.source, function.id, block.id);
+                            }
+                            if (instruction.opcode == lowered::Opcode::IteratorValue)
+                            {
+                                const auto value = instruction.operands.empty() ? functionValueTypes.end() :
+                                    functionValueTypes.find(instruction.operands.front().value());
+                                const Type* iterator = value == functionValueTypes.end() ? nullptr :
+                                    module_.types.tryGet(value->second);
+                                const Type* source = iterator && iterator->arguments.size() == 1 ?
+                                    module_.types.tryGet(iterator->arguments.front()) : nullptr;
+                                bool valid = source && instruction.selector == "__value__" &&
+                                    (integerKind(source->kind) || source->kind == TypeKind::Array);
+                                if (source && source->kind == TypeKind::Dictionary)
+                                    valid = instruction.selector == "first" || instruction.selector == "second";
+                                if (source && source->kind == TypeKind::Array)
+                                {
+                                    valid |= instruction.selector == "__index__";
+                                    const Type* item = source->arguments.empty() ? nullptr :
+                                        module_.types.tryGet(source->arguments.front());
+                                    valid |= item && std::ranges::any_of(item->fields, [&](const FieldLayout& field)
+                                        { return field.name == instruction.selector; });
+                                }
+                                if (!valid)
+                                    diagnose("WCPP1210", "iterator projection is not supported: " + instruction.selector,
+                                        instruction.source, function.id, block.id);
+                            }
                             if (instruction.callee)
                             {
                                 const auto callee = functions_.find(instruction.callee.value());
@@ -300,7 +339,8 @@ namespace wio::codegen
                             }
                             if (instruction.opcode == lowered::Opcode::IntrinsicCall &&
                                 instruction.intrinsicFamily != IntrinsicFamily::Enum &&
-                                instruction.intrinsicFamily != IntrinsicFamily::Flagset)
+                                instruction.intrinsicFamily != IntrinsicFamily::Flagset &&
+                                !wirIntrinsicHelper(instruction.intrinsicFamily, instruction.selector))
                             {
                                 diagnose("WCPP1205", "intrinsic family is not implemented by this C++ backend slice: " +
                                     std::string(intrinsicFamilyName(instruction.intrinsicFamily)), instruction.source,
@@ -558,7 +598,7 @@ namespace wio::codegen
                     "#include <map>\n#include <memory>\n#include <optional>\n#include <sstream>\n"
                     "#include <stdexcept>\n#include <string>\n#include <tuple>\n#include <type_traits>\n"
                     "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
-                    "#include <any.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include <std_async.h>\n#include <text.h>\n";
+                    "#include <any.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include <std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n";
                 std::set<std::string> headers;
                 for (const Type& type : module_.types.types())
                     if (type.nativeBinding && !type.nativeBinding->header.empty()) headers.insert(type.nativeBinding->header);
@@ -579,6 +619,7 @@ public:
         return place;
     }
     static Place borrow(T& value) { Place place; place.pointer_ = &value; return place; }
+    static Place borrowView(const T& value) { Place place; place.pointer_ = const_cast<T*>(&value); place.readOnly_ = true; return place; }
     T& read() {
         if (pointer_) return *pointer_;
         if (!owner_ || !owner_->has_value()) throw std::runtime_error("read from uninitialized Wio place");
@@ -586,13 +627,15 @@ public:
     }
     const T& read() const { return const_cast<Place*>(this)->read(); }
     void write(T value) {
+        if (readOnly_) throw std::runtime_error("write through a Wio view");
         if (pointer_) *pointer_ = std::move(value);
         else { if (!owner_) owner_ = std::make_shared<std::optional<T>>(); *owner_ = std::move(value); }
     }
-    void clear() { if (pointer_) *pointer_ = T{}; else if (owner_) owner_->reset(); }
+    void clear() { if (readOnly_) throw std::runtime_error("clear through a Wio view"); if (pointer_) *pointer_ = T{}; else if (owner_) owner_->reset(); }
 private:
     std::shared_ptr<std::optional<T>> owner_;
     T* pointer_ = nullptr;
+    bool readOnly_ = false;
 };
 template<class T> T& value_base(T& value) { return value; }
 template<class T> T& value_base(wio::runtime::Ref<T>& value) { return *value; }
@@ -604,7 +647,6 @@ template<class T, class U> wio::runtime::Ref<T> checked_ref_cast(const wio::runt
 template<class T> std::string stringify(const T& value) { std::ostringstream stream; stream << value; return stream.str(); }
 inline std::string stringify(const bool value) { return value ? "true" : "false"; }
 inline std::string stringify(const std::string& value) { return value; }
-template<class T> struct Iterator { std::size_t index = 0; T* container = nullptr; };
 }
 
 )CPP";
@@ -787,6 +829,7 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
             void collectValueTypes(const lowered::Function& function)
             {
                 valueTypes_.clear();
+                borrowedLoads_.clear();
                 for (const lowered::Parameter& parameter : function.parameters)
                     valueTypes_[parameter.id.value()] = parameter.type;
                 for (const lowered::BasicBlock& block : function.blocks)
@@ -794,12 +837,20 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                     for (const lowered::Parameter& parameter : block.parameters)
                         valueTypes_[parameter.id.value()] = parameter.type;
                     for (const lowered::Instruction& instruction : block.instructions)
+                    {
                         if (instruction.result) valueTypes_[instruction.result.value()] = instruction.resultType;
+                        if (instruction.opcode == lowered::Opcode::Load &&
+                            instruction.resultOwnership == typed::ValueOwnership::Borrowed)
+                            borrowedLoads_.insert(instruction.result.value());
+                    }
                 }
             }
 
-            std::string operand(const ValueId id) const { return "(*" + valueName(id) + ")"; }
-            std::string movedOperand(const ValueId id) const { return "std::move(*" + valueName(id) + ")"; }
+            std::string operand(const ValueId id) const
+            {
+                return borrowedLoads_.contains(id.value()) ? "(" + valueName(id) + "->get())" : "(*" + valueName(id) + ")";
+            }
+            std::string movedOperand(const ValueId id) const { return "std::move(" + operand(id) + ")"; }
 
             void emitSource(const SourceSpan& source)
             {
@@ -915,6 +966,37 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
 
             std::string intrinsicExpression(const lowered::Instruction& instruction) const
             {
+                if (const auto helper = wirIntrinsicHelper(instruction.intrinsicFamily, instruction.selector))
+                {
+                    std::vector<std::string> arguments;
+                    for (const ValueId id : instruction.operands)
+                    {
+                        const Type& type = module_.types.get(valueType(id));
+                        arguments.push_back(operand(id) + (type.kind == TypeKind::Reference ? ".read()" : ""));
+                    }
+                    const Type* result = module_.types.tryGet(instruction.resultType);
+                    if (result && result->nominalValueModel == NominalValueModel::Option &&
+                        (instruction.selector == "Get" || instruction.selector == "At"))
+                    {
+                        const std::string option = cppType(instruction.resultType);
+                        const std::string& receiver = arguments[0];
+                        const std::string& key = arguments[1];
+                        if (instruction.intrinsicFamily == IntrinsicFamily::Dictionary)
+                            return "([&]() -> " + option + " { auto _it = " + receiver + ".find(" + key +
+                                "); if (_it == " + receiver + ".end()) return " + option + "::Create(); return " +
+                                option + "::Create(_it->second); }())";
+                        return "([&]() -> " + option + " { if (" + key + " >= " + receiver +
+                            ".size()) return " + option + "::Create(); return " + option +
+                            "::Create(wio::intrinsics::Index(" + receiver + ", " + key + ")); }())";
+                    }
+                    std::string call = "wio::intrinsics::" + *helper + "(";
+                    for (std::size_t index = 0; index < arguments.size(); ++index)
+                    {
+                        if (index) call += ", ";
+                        call += arguments[index];
+                    }
+                    return call + ")";
+                }
                 const Type& target = module_.types.get(instruction.targetType);
                 const std::string receiver = operand(instruction.operands.front());
                 const std::string underlying = cppType(target.enumUnderlyingType);
@@ -1141,8 +1223,52 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                     break;
                 }
                 case lowered::Opcode::IntrinsicCall:
-                    assignResult(instruction, intrinsicExpression(instruction));
+                    if (instruction.result) assignResult(instruction, intrinsicExpression(instruction));
+                    else output_ << "                " << intrinsicExpression(instruction) << ";\n";
                     break;
+                case lowered::Opcode::IteratorCreate:
+                {
+                    const bool range = instruction.selector.starts_with("range.");
+                    std::string args;
+                    for (const ValueId id : instruction.operands)
+                    {
+                        if (!args.empty()) args += ", ";
+                        args += operand(id);
+                    }
+                    if (range) args += instruction.selector == "range.inclusive" ? ", true" : ", false";
+                    assignResult(instruction, cppType(instruction.resultType) + (range ? "::range(" : "::container(") + args + ")");
+                    break;
+                }
+                case lowered::Opcode::IteratorHasNext:
+                    assignResult(instruction, operand(instruction.operands.front()) + ".hasNext()");
+                    break;
+                case lowered::Opcode::IteratorAdvance:
+                    output_ << "                " << operand(instruction.operands.front()) << ".advance();\n";
+                    break;
+                case lowered::Opcode::IteratorValue:
+                {
+                    const Type& iterator = module_.types.get(valueType(instruction.operands.front()));
+                    const Type& source = module_.types.get(iterator.arguments.front());
+                    std::string expression = operand(instruction.operands.front()) +
+                        (instruction.selector == "__index__" ? ".index()" : ".value()");
+                    if (instruction.selector != "__value__" && instruction.selector != "__index__")
+                    {
+                        if (source.kind == TypeKind::Dictionary)
+                            expression += "." + instruction.selector;
+                        else
+                        {
+                            const Type& item = module_.types.get(source.arguments.front());
+                            const auto field = std::ranges::find(item.fields, instruction.selector, &FieldLayout::name);
+                            expression = "wio::wir_backend::value_base(" + expression + ")._f" +
+                                std::to_string(std::distance(item.fields.begin(), field));
+                        }
+                    }
+                    const Type& result = module_.types.get(instruction.resultType);
+                    if (result.kind == TypeKind::Reference)
+                        expression = cppType(instruction.resultType) + (result.isMutable ? "::borrow(" : "::borrowView(") + expression + ")";
+                    assignResult(instruction, expression);
+                    break;
+                }
                 case lowered::Opcode::AnyBox:
                 {
                     const Type& boxed = module_.types.get(instruction.targetType);
@@ -1205,8 +1331,12 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                         movedOperand(instruction.operands[1]) << ");\n";
                     break;
                 case lowered::Opcode::Load:
+                    assignResult(instruction, borrowedLoads_.contains(instruction.result.value())
+                        ? "std::ref(" + operand(instruction.operands[0]) + ".read())"
+                        : operand(instruction.operands[0]) + ".read()");
+                    break;
                 case lowered::Opcode::Borrow:
-                    assignResult(instruction, operand(instruction.operands[0]) + ".read()");
+                    assignResult(instruction, operand(instruction.operands[0]));
                     break;
                 case lowered::Opcode::FieldPlace:
                     assignResult(instruction, "wio::wir_backend::Place<" + placeValueType(instruction.resultType) + ">::borrow(" +
@@ -1214,10 +1344,15 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                         std::to_string(instruction.projectionIndex) + ")");
                     break;
                 case lowered::Opcode::ArrayPlace:
+                {
+                    const std::string base = "wio::wir_backend::value_base(" + operand(instruction.operands[0]) + ")";
+                    const std::string index = operand(instruction.operands[1]);
                     assignResult(instruction, "wio::wir_backend::Place<" + placeValueType(instruction.resultType) + ">::borrow(" +
-                        "wio::wir_backend::value_base(" + operand(instruction.operands[0]) + ")[" +
-                        operand(instruction.operands[1]) + "])");
+                        (instruction.boundsCheck == lowered::BoundsCheckMode::Required
+                            ? "wio::intrinsics::Index(" + base + ", " + index + ")"
+                            : base + "[" + index + "]") + ")");
                     break;
+                }
                 case lowered::Opcode::ConstructComponent:
                     assignResult(instruction, cppType(instruction.resultType) + "{" + callArguments(instruction) + "}");
                     break;
@@ -1310,7 +1445,8 @@ template<class T> struct Iterator { std::size_t index = 0; T* container = nullpt
                     std::vector<std::pair<std::uint32_t, TypeId>> values(valueTypes_.begin(), valueTypes_.end());
                     std::ranges::sort(values, {}, &std::pair<std::uint32_t, TypeId>::first);
                     for (const auto& [id, type] : values)
-                        output_ << "    std::optional<" << cppType(type) << "> _v" << id << ";\n";
+                        output_ << "    std::optional<" << (borrowedLoads_.contains(id) ? "std::reference_wrapper<" : "") <<
+                            cppType(type) << (borrowedLoads_.contains(id) ? ">" : "") << "> _v" << id << ";\n";
                     for (std::size_t index = 0; index < function.parameters.size(); ++index)
                         output_ << "    " << valueName(function.parameters[index].id) << " = std::move(_p" << index << ");\n";
                     output_ << "    std::uint32_t _block = " << function.blocks.front().id.value() << ";\n"

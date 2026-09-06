@@ -953,3 +953,16 @@ here as historical evidence rather than active work:
 - [x] Cleanup-free value components loaded from places retain owned-value
       identity, and Lowered WIR heap-storage validation no longer mistakes an
       ordinary call/load returning a reference-counted value for an allocation.
+- [x] The independent C++ backend maps pinned array/dictionary/string/text
+      intrinsics to shared runtime helpers, including void mutators, numeric
+      parsing, Unicode operations, and canonical Option lookup construction.
+- [x] Range and array/dictionary iterators execute from Lowered WIR with
+      index/key/value projections, reference mutation, steps, break/continue,
+      empty-container handling, and overflow-safe numeric advancement. Invalid
+      iterator projections are rejected before C++ emission with `WCPP1210`.
+- [x] Borrowed loads preserve container identity; array place emission preserves
+      required bounds checks. Contextual integer literals match numeric operand
+      types, including unsuffixed comparisons against `Count()` results.
+      Focused generated-code tests compile, link, and execute the new surface,
+      including ordered dictionaries, emoji text, lookup misses, invalid steps,
+      and signed/unsigned range limits.
