@@ -1,4 +1,5 @@
 #include "wio/codegen/wir_cpp_backend.h"
+#include "wio/wir/generic_specializer.h"
 #include "wio/lexer/lexer.h"
 #include "wio/parser/parser.h"
 #include "wio/sema/analyzer.h"
@@ -226,7 +227,8 @@ namespace
         return module;
     }
 
-    std::optional<wio::wir::lowered::Module> makeLanguageSurfaceModule(const std::string& customSource = {})
+    std::optional<wio::wir::lowered::Module> makeLanguageSurfaceModule(const std::string& customSource = {},
+        wio::wir::typed::Module* sourceModule = nullptr)
     {
         using namespace wio;
         Lexer lexer(
@@ -278,9 +280,13 @@ fn Entry() -> i32 {
             std::cerr << wir::typed::Printer{}.print(typed.module());
             return std::nullopt;
         }
+        if (sourceModule) *sourceModule = typed.module();
         auto lowered = wir::LoweringPipeline{}.lower(typed.module());
         if (!lowered.succeeded())
         {
+            auto specialized = typed.module();
+            const auto specializationDiagnostics = wir::GenericSpecializer{}.specialize(specialized);
+            std::cerr << wir::typed::Printer{}.print(specialized);
             for (const auto& diagnostic : lowered.diagnostics())
                 std::cerr << diagnostic.code << " [" << diagnostic.source.begin.toDiagnosticString()
                           << "]: " << diagnostic.message << '\n';
@@ -331,15 +337,100 @@ fn Entry() -> i32 {
             runCommand = "\"" + runCommand + "\"";
 #endif
             result = std::system(runCommand.c_str());
+            if (result != 0) std::cerr << "Generated program returned status " << result << '\n';
         }
         fs::remove_all(directory, error);
         return result == 0;
     }
 }
 
-int main()
+int main(int argc, char** argv)
 {
     using wio::codegen::WirCppBackend;
+
+    if (argc == 2 && std::string(argv[1]) == "--generics-only")
+    {
+        std::ifstream fixture(std::string(WIO_TEST_SOURCE_DIR) + "/tests/wir_cpp_generics_run.wio");
+        const std::string source{std::istreambuf_iterator<char>(fixture), std::istreambuf_iterator<char>()};
+        if (!expect(!source.empty(), "generic fixture should be readable")) return 1;
+        wio::wir::typed::Module original;
+        const auto module = makeLanguageSurfaceModule(source, &original);
+        if (!expect(module.has_value(), "generic source must materialize and lower")) return 1;
+        bool ok = true;
+        auto specialized = original;
+        ok &= expect(wio::wir::GenericSpecializer{}.specialize(specialized).empty(), "materialization should succeed");
+        const auto snapshot = wio::wir::typed::Printer{}.print(specialized);
+        ok &= expect(wio::wir::GenericSpecializer{}.specialize(specialized).empty() &&
+            snapshot == wio::wir::typed::Printer{}.print(specialized), "materialization must be idempotent");
+        auto repeated = original;
+        ok &= expect(wio::wir::GenericSpecializer{}.specialize(repeated).empty() &&
+            snapshot == wio::wir::typed::Printer{}.print(repeated), "specialization identities must be deterministic");
+        const auto count = [&](const std::string& prefix)
+        {
+            return std::ranges::count_if(module->functions, [&](const auto& function)
+                { return function.name.starts_with(prefix + "$specialized."); });
+        };
+        ok &= expect(count("Identity") == 3 && count("Repeat") == 2 && count("FixedHead") == 1 &&
+            count("MutualA") == 1 && count("MutualB") == 1,
+            "duplicate calls, recursion, and inferred/explicit const arguments must share concrete bodies");
+        auto limited = original;
+        const auto limit = wio::wir::GenericSpecializer{1}.specialize(limited);
+        ok &= expect(std::ranges::any_of(limit, [](const auto& d) { return d.code == "WIR3101"; }),
+            "expansion limits must fail with a stable diagnostic");
+        auto invalid = original;
+        bool changed = false;
+        for (auto& function : invalid.functions)
+            if (function.name == "Entry")
+                for (auto& block : function.blocks)
+                    for (auto& instruction : block.instructions)
+                        if (!changed && !instruction.genericArguments.empty())
+                        { instruction.genericArguments.front() = invalid.types.stringType(); changed = true; }
+        const auto rejected = wio::wir::GenericSpecializer{}.specialize(invalid);
+        ok &= expect(changed && std::ranges::any_of(rejected, [](const auto& d) { return d.code == "WIR3100"; }),
+            "conflicting pinned generic arguments must not produce an incorrect specialization");
+        // A concrete function-reference signature is already a WIR contract;
+        // exercise it independently of contextual generic-reference source syntax.
+        auto references = original;
+        using namespace wio::wir;
+        const TypeId callable = references.types.intern(Type{.kind = TypeKind::Function,
+            .arguments = {references.types.i32Type(), references.types.i32Type()},
+            .ownership = OwnershipModel::ReferenceCounted, .cleanup = CleanupKind::ReleaseReference});
+        typed::Function probe;
+        probe.id = FunctionId{std::ranges::max(references.functions, {}, [](const auto& f) { return f.id.value(); }).id.value() + 1};
+        probe.name = "GenericReferenceProbe";
+        probe.returnType = references.types.i32Type();
+        probe.callableType = references.types.intern(Type{.kind = TypeKind::Function,
+            .arguments = {probe.returnType}, .ownership = OwnershipModel::ReferenceCounted, .cleanup = CleanupKind::ReleaseReference});
+        const auto identity = std::ranges::find(references.functions, std::string("Identity"), &typed::Function::name);
+        typed::BasicBlock body;
+        body.id = BlockId{0};
+        body.name = "entry";
+        body.instructions = {
+            typed::Instruction{.opcode = typed::Opcode::FunctionReference, .result = ValueId{0}, .resultType = callable,
+                .callee = identity->id, .specializationKey = "reference-probe", .resultOwnership = typed::ValueOwnership::Owned},
+            typed::Instruction{.opcode = typed::Opcode::Constant, .result = ValueId{1}, .resultType = probe.returnType,
+                .literal = std::int64_t{42}},
+            typed::Instruction{.opcode = typed::Opcode::IndirectCall, .result = ValueId{2}, .resultType = probe.returnType,
+                .operands = {ValueId{0}, ValueId{1}}, .signatureTypes = {callable, probe.returnType}},
+            typed::Instruction{.opcode = typed::Opcode::Release, .operands = {ValueId{0}}},
+            typed::Instruction{.opcode = typed::Opcode::Return, .operands = {ValueId{2}}}
+        };
+        probe.blocks.push_back(std::move(body));
+        const FunctionId probeId = probe.id;
+        references.functions.push_back(std::move(probe));
+        const auto referenceModule = LoweringPipeline{}.lower(references);
+        for (const auto& diagnostic : referenceModule.diagnostics()) std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+        if (!expect(referenceModule.succeeded(), "generic function-reference probe must lower")) return 1;
+        const auto code = WirCppBackend{}.generate(referenceModule.module());
+        for (const auto& diagnostic : code.diagnostics())
+            std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+        if (!expect(code.succeeded(), "specialized generic bodies must emit C++")) return 1;
+        const std::string harness = "#define main wio_fixture_main\n" + code.code() +
+            "\n#undef main\nint main() { int result = wio_fixture_main(); if (result) return result; return _wio_f" +
+            std::to_string(probeId.value()) + "() == 42 ? 0 : 91; }\n";
+        ok &= expect(compileGeneratedCode(harness, true), "generic program and function-reference probe must execute successfully");
+        return ok ? 0 : 1;
+    }
 
     const auto generated = WirCppBackend{}.generate(makeExecutableModule());
     bool ok = true;

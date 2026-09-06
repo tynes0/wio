@@ -68,6 +68,8 @@ namespace wio::wir::typed
     enum class Opcode : std::uint8_t
     {
         Constant,
+        GenericConstant,
+        DefaultValue,
         Unary,
         Binary,
         RangeContains,
@@ -208,6 +210,9 @@ namespace wio::wir::typed
         std::uint32_t captureParameterCount = 0;
         std::vector<CaptureLayout> captures;
         std::vector<TypeId> genericParameters;
+        FunctionId genericOrigin;
+        std::vector<TypeId> specializationArguments;
+        std::string specializationKey;
         std::vector<BasicBlock> blocks;
         SourceSpan source;
         bool isAsync = false;

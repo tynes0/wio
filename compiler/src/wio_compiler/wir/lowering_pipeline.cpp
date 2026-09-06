@@ -2,6 +2,7 @@
 
 #include "wio/wir/lowered_ir_verifier.h"
 #include "wio/wir/typed_ir_verifier.h"
+#include "wio/wir/generic_specializer.h"
 
 #include <algorithm>
 #include <unordered_map>
@@ -33,6 +34,8 @@ namespace wio::wir
             switch (instruction.opcode)
             {
             case typed::Opcode::Constant: opcode = lowered::Opcode::Constant; break;
+            case typed::Opcode::GenericConstant: opcode = lowered::Opcode::GenericConstant; break;
+            case typed::Opcode::DefaultValue: opcode = lowered::Opcode::DefaultValue; break;
             case typed::Opcode::Unary: opcode = lowered::Opcode::Unary; break;
             case typed::Opcode::Binary: opcode = lowered::Opcode::Binary; break;
             case typed::Opcode::RangeContains: opcode = lowered::Opcode::RangeContains; break;
@@ -219,6 +222,9 @@ namespace wio::wir
                 .captureParameterCount = sourceFunction.captureParameterCount,
                 .captures = sourceFunction.captures,
                 .genericParameters = sourceFunction.genericParameters,
+                .genericOrigin = sourceFunction.genericOrigin,
+                .specializationArguments = sourceFunction.specializationArguments,
+                .specializationKey = sourceFunction.specializationKey,
                 .source = sourceFunction.source,
                 .isAsync = sourceFunction.isAsync,
                 .isExternal = sourceFunction.isExternal,
@@ -550,7 +556,17 @@ namespace wio::wir
         }
         result.completedPasses_.push_back("verify-typed-wir");
 
-        CanonicalControlFlowLowerer{module, result}.run();
+        typed::Module specialized = module;
+        for (auto& diagnostic : GenericSpecializer{}.specialize(specialized))
+            result.diagnostics_.push_back({diagnostic.code, "materialize-generic-functions", diagnostic.message, diagnostic.source});
+        if (!result.diagnostics_.empty()) return result;
+        result.completedPasses_.push_back("materialize-generic-functions");
+        const auto specializedVerification = typed::Verifier{}.verify(specialized);
+        for (const auto& diagnostic : specializedVerification.diagnostics())
+            result.diagnostics_.push_back({diagnostic.code, "verify-specialized-wir", diagnostic.message, diagnostic.source});
+        if (!result.diagnostics_.empty()) return result;
+        result.completedPasses_.push_back("verify-specialized-wir");
+        CanonicalControlFlowLowerer{specialized, result}.run();
         if (!result.diagnostics_.empty())
             return result;
         result.completedPasses_.push_back("lower-canonical-control-flow");

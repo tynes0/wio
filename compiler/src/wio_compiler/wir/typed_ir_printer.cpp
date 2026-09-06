@@ -125,6 +125,7 @@ namespace wio::wir::typed
                 stream << " mutable";
             if (type.staticExtent.has_value())
                 stream << " extent=" << *type.staticExtent;
+            if (type.extentParameter) stream << " extent-param=" << typeRef(type.extentParameter);
             if (type.nominalKind != NominalKind::None)
                 stream << " nominal=" << nominalKindName(type.nominalKind);
             if (type.nominalRepresentation != NominalRepresentation::Wio)
@@ -221,6 +222,12 @@ namespace wio::wir::typed
             {
             case Opcode::Constant:
                 stream << "const " << printLiteral(instruction.literal);
+                break;
+            case Opcode::GenericConstant:
+                stream << "generic-const !t" << instruction.targetType.value();
+                break;
+            case Opcode::DefaultValue:
+                stream << "default-value";
                 break;
             case Opcode::Unary:
                 stream << unaryOperatorName(instruction.unaryOperator) << " " << valueRef(instruction.operands.at(0));
@@ -661,6 +668,9 @@ namespace wio::wir::typed
             stream << "func " << functionRef(function.id) << " " << std::quoted(function.name) << "(";
             printParameters(stream, function.parameters);
             stream << ") -> " << typeRef(function.returnType) << " callable=" << typeRef(function.callableType);
+            if (function.genericOrigin)
+                stream << " generic-origin=" << functionRef(function.genericOrigin) <<
+                    " specialization=" << std::quoted(function.specializationKey);
             if (function.isMethod)
                 stream << " owner=" << typeRef(function.ownerType) << " slot=" << function.methodSlot;
             if (function.nativeBinding)

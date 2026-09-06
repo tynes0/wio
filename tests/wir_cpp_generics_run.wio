@@ -1,0 +1,60 @@
+fn Identity<T>(value: T) -> T { return value; }
+fn Forward<T>(value: T) -> T { return Identity<T>(value); }
+fn Repeat<T>(value: T, remaining: i32) -> T {
+    if (remaining == 0) { return value; }
+    return Repeat<T>(value, remaining - 1);
+}
+fn Head<T>(values: T[]) -> T { return values[0]; }
+fn Capacity<const N: usize>() -> usize { return N; }
+fn ForwardCapacity<const N: usize>() -> usize { return Capacity<N>(); }
+fn FixedHead<T, const N: usize>(values: [T; N]) -> T { return values[0]; }
+fn Reader<T>(value: T) -> fn() -> T { return () => value; }
+fn Assign<T>(target: ref T, value: T) { target = value; }
+component Marker { public seed: i32; }
+extension MarkerGenerics for Marker {
+    public view fn Choose<T>(value: T) -> T { return value; }
+}
+fn StringValue<const Value: string>() -> string { return Value; }
+fn TextValue<const Value: text>() -> text { return Value; }
+component Holder<T> { public value: T; }
+fn Wrap<T>(value: T) -> Holder<T> { return Holder<T>(value); }
+fn Default<T = i32>() -> T { let value: T; return value; }
+fn Pick<T>(value: T) -> i32 { return 1; }
+fn Pick(value: i32) -> i32 { return 2; }
+fn MutualA<T>(value: T, depth: i32) -> T {
+    if (depth == 0) { return value; }
+    return MutualB<T>(value, depth - 1);
+}
+fn MutualB<T>(value: T, depth: i32) -> T { return MutualA<T>(value, depth); }
+fn SignedConstant<const N: i64>() -> i64 { return N; }
+object Token { public value: i32; OnConstruct(value: i32) { self.value = value; } }
+fn Entry() -> i32 {
+    if (Identity(42) != 42 or Identity(13) != 13) { return 1; }
+    if (Forward("wio") != "wio") { return 2; }
+    if (Repeat<string>("recursive", 4) != "recursive") { return 3; }
+    if (Repeat<i32>(17, 4) != 17) { return 4; }
+    let words: string[] = ["first", "second"];
+    if (Head(words) != "first") { return 5; }
+    if (Capacity<7>() != 7 or ForwardCapacity<11>() != 11) { return 6; }
+    let numbers: [i32; 3] = [9, 8, 7];
+    if (FixedHead(numbers) != 9) { return 7; }
+    if (FixedHead<i32, 3>(numbers) != 9) { return 12; }
+    let reader = Reader<string>("capture");
+    if (reader() != "capture") { return 8; }
+    mut value: i32 = 1;
+    Assign(ref value, 19);
+    if (value != 19) { return 9; }
+    let marker = Marker(1);
+    if (marker.Choose("extension") != "extension") { return 10; }
+    if (StringValue<"Wio">() != "Wio" or TextValue<u"🌍">() != u"🌍") { return 11; }
+    let wrapped = Wrap("component");
+    if (wrapped.value != "component" or Default() != 0) { return 13; }
+    if (Pick(1) != 2 or Pick("generic") != 1) { return 14; }
+    if (MutualA<string>("mutual", 3) != "mutual" or SignedConstant<7>() != 7i64) { return 15; }
+    if (Default<string>() != "" or Default<text>() != u"") { return 16; }
+    let token = Token(9);
+    let alias = Identity(token);
+    if (alias != token) { return 17; }
+    if (alias.value != 9) { return 18; }
+    return 0;
+}

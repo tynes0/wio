@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <optional>
 #include <sstream>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -77,12 +78,27 @@ namespace wio::wir::typed
             std::unordered_map<const sema::Symbol*, ValueId> values;
             std::vector<const sema::Symbol*> valueOrder;
             std::unordered_map<const sema::Symbol*, ValueId> places;
+            std::unordered_map<const sema::Symbol*, TypeId> captureTypes;
             std::vector<const sema::Symbol*> placeOrder;
             std::unordered_map<ValueId::ValueType, ValueOwnership> ownerships;
             std::unordered_set<const sema::Symbol*> movedPlaces;
             ValueId selfValue;
             TypeId selfType;
         };
+
+        static const sema::Symbol* lexicalSymbol(const sema::Symbol* symbol, const FunctionState& state)
+        {
+            if (!symbol || state.places.contains(symbol) || state.values.contains(symbol)) return symbol;
+            const auto sameDeclaration = [&](const sema::Symbol* candidate)
+            {
+                return candidate->name == symbol->name && candidate->definitionLoc.file == symbol->definitionLoc.file &&
+                    candidate->definitionLoc.line == symbol->definitionLoc.line &&
+                    candidate->definitionLoc.column == symbol->definitionLoc.column;
+            };
+            for (const auto& [candidate, place] : state.places) if (sameDeclaration(candidate)) return candidate;
+            for (const auto& [candidate, value] : state.values) if (sameDeclaration(candidate)) return candidate;
+            return symbol;
+        }
 
         struct DeclarationInfo
         {
@@ -1601,6 +1617,11 @@ namespace wio::wir::typed
                     array->arrayKind == sema::ArrayType::ArrayKind::Literal)
                 {
                     wirType.staticExtent = array->size;
+                    if (array->extentType && array->extentType->kind() == sema::TypeKind::ConstGenericParameter)
+                    {
+                        wirType.extentParameter = mapType(array->extentType, source);
+                        wirType.staticExtent.reset();
+                    }
                 }
                 wirType.ownership = OwnershipModel::OwnedValue;
                 wirType.cleanup = CleanupKind::DestroyValue;
@@ -1699,11 +1720,39 @@ namespace wio::wir::typed
                 std::vector<FieldLayout> fields;
                 fields.reserve(structure->fieldNames.size());
                 const Ref<sema::Scope> structScope = structure->structScope.Lock();
+                // Some instantiated signatures are created before the primary's
+                // field list is populated. Its selected declaration still owns
+                // the layout; fill this snapshot using the pinned arguments.
+                const Ref<sema::StructType> primary = structure->genericPrimaryType.Lock();
+                const bool usePrimaryFields = structure->fieldNames.empty() && primary &&
+                    !structure->isExplicitSpecialization && !structure->isPartialSpecialization;
+                auto fieldNames = usePrimaryFields ? primary->fieldNames : structure->fieldNames;
+                auto fieldTypes = usePrimaryFields ? primary->fieldTypes : structure->fieldTypes;
+                std::vector<TypeId> parameters, arguments;
+                if (!structure->genericArguments.empty())
+                {
+                    const auto& genericParameters = usePrimaryFields ? primary->genericParameterTypes : structure->genericParameterTypes;
+                    for (const auto& parameter : genericParameters) parameters.push_back(mapType(parameter, source));
+                    for (const auto& argument : structure->genericArguments) arguments.push_back(mapType(argument, source));
+                }
+                if (fieldNames.empty() && structScope)
+                {
+                    std::vector<Ref<sema::Symbol>> declaredFields;
+                    for (const auto& [name, member] : structScope->getSymbols())
+                        if (member && member->kind == sema::SymbolKind::Variable) declaredFields.push_back(member);
+                    std::ranges::sort(declaredFields, [](const auto& left, const auto& right)
+                    {
+                        return std::tie(left->definitionLoc.line, left->definitionLoc.column, left->name) <
+                            std::tie(right->definitionLoc.line, right->definitionLoc.column, right->name);
+                    });
+                    for (const auto& field : declaredFields)
+                    { fieldNames.push_back(field->name); fieldTypes.push_back(field->type); }
+                }
                 for (std::size_t index = 0;
-                     index < structure->fieldNames.size() && index < structure->fieldTypes.size();
+                     index < fieldNames.size() && index < fieldTypes.size();
                      ++index)
                 {
-                    const std::string& fieldName = structure->fieldNames[index];
+                    const std::string& fieldName = fieldNames[index];
                     const Ref<sema::Symbol> fieldSymbol = structScope
                         ? structScope->resolveLocally(fieldName)
                         : nullptr;
@@ -1714,7 +1763,7 @@ namespace wio::wir::typed
                         visibility = FieldVisibility::Protected;
                     fields.push_back(FieldLayout{
                         .name = fieldName,
-                        .type = mapType(structure->fieldTypes[index], source),
+                        .type = substituteGenericType(mapType(fieldTypes[index], source), parameters, arguments),
                         .isMutable = !fieldSymbol || !fieldSymbol->flags.get_isReadOnly(),
                         .visibility = visibility
                     });
@@ -1997,6 +2046,7 @@ namespace wio::wir::typed
                 });
                 rememberOwnership(state, parameter, ValueOwnership::Borrowed);
                 state.places[symbol.Get()] = parameter;
+                state.captureTypes[symbol.Get()] = capture.type;
             }
             if (lambda.capturesSelf)
             {
@@ -2994,11 +3044,12 @@ namespace wio::wir::typed
                     const Ref<sema::Symbol> symbol = weakSymbol.Lock();
                     if (!symbol)
                         continue;
-                    const TypeId captureType = mapType(symbol->type, expression.Get());
+                    const sema::Symbol* lexical = lexicalSymbol(symbol.Get(), state);
+                    const TypeId captureType = mapType(lexical->type, expression.Get());
                     ValueId value;
-                    if (const auto place = state.places.find(symbol.Get()); place != state.places.end())
+                    if (const auto place = state.places.find(lexical); place != state.places.end())
                         value = emitLoad(place->second, captureType, expression.Get(), state);
-                    else if (const auto available = state.values.find(symbol.Get()); available != state.values.end())
+                    else if (const auto available = state.values.find(lexical); available != state.values.end())
                         value = available->second;
                     if (!value)
                     {
@@ -3100,10 +3151,25 @@ namespace wio::wir::typed
             if (const auto* identifier = expression->as<Identifier>())
             {
                 const Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
-                const auto place = symbol ? state.places.find(symbol.Get()) : state.places.end();
+                if (!symbol)
+                {
+                    std::vector<TypeId> parameters = state.function->genericParameters;
+                    if (const Type* owner = result_.module_.types.tryGet(state.function->ownerType))
+                        parameters.insert(parameters.end(), owner->arguments.begin(), owner->arguments.end());
+                    for (TypeId parameter : parameters)
+                    {
+                        const Type& type = result_.module_.types.get(parameter);
+                        if (type.kind == TypeKind::ConstGenericParameter && type.name == identifier->token.value)
+                            return appendValue(Instruction{.opcode = Opcode::GenericConstant,
+                                .targetType = parameter, .source = SourceSpan::at(expression->location())});
+                    }
+                }
+                const sema::Symbol* lexical = lexicalSymbol(symbol.Get(), state);
+                const auto place = lexical ? state.places.find(lexical) : state.places.end();
                 if (place != state.places.end())
-                    return emitLoad(place->second, mapType(symbol->type, expression.Get()), expression.Get(), state);
-                const auto found = symbol ? state.values.find(symbol.Get()) : state.values.end();
+                    return emitLoad(place->second, state.captureTypes.contains(lexical)
+                        ? state.captureTypes.at(lexical) : mapType(lexical->type, expression.Get()), expression.Get(), state);
+                const auto found = lexical ? state.values.find(lexical) : state.values.end();
                 if (found != state.values.end())
                     return found->second;
                 const auto global = symbol ? globalsBySymbol_.find(symbol.Get()) : globalsBySymbol_.end();
@@ -3633,7 +3699,7 @@ namespace wio::wir::typed
                         const Type* receiverTypeInfo = result_.module_.types.tryGet(receiverType);
                         const bool borrowedReceiver = receiverTypeInfo && receiverTypeInfo->kind == TypeKind::Reference;
                         const ValueId receiver = borrowedReceiver
-                            ? buildExpression(memberCallee->object, state)
+                            ? buildPlace(memberCallee->object, receiverTypeInfo->isMutable, state)
                             : buildExpressionAs(memberCallee->object, receiverType, state);
                         if (!receiver)
                             return {};
@@ -4207,6 +4273,15 @@ namespace wio::wir::typed
                 return {};
 
             Literal literal;
+            if (type->kind == TypeKind::GenericParameter)
+            {
+                const ValueId value{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::DefaultValue,
+                    .result = value, .resultType = typeId, .resultOwnership = ownershipForType(typeId),
+                    .source = source ? SourceSpan::at(source->location()) : SourceSpan{}});
+                rememberOwnership(state, value, ownershipForType(typeId));
+                return value;
+            }
             switch (type->kind)
             {
             case TypeKind::Bool: literal = false; break;

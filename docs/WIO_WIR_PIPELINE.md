@@ -27,6 +27,14 @@ instruction has a stable strong ID, an interned type, and source provenance.
 It retains operations such as typed `select` that are useful to optimization
 and diagnostics before control flow is made backend-canonical.
 
+Before canonical lowering, the generic materialization pass creates concrete
+non-variadic function and closure bodies from pinned calls/exports. It substitutes
+type/const arguments, resolves symbolic array extents and `generic-const` values,
+and adapts ownership operations to the concrete types. The specialized Typed
+module is verified again before lowering. Original generic declarations remain
+metadata; concrete functions carry their origin and deduplicated specialization
+identity. See the Sprint 17.1 contract in `WIO_CPP_BACKEND.md`.
+
 Named types retain their semantic category instead of collapsing to a backend
 spelling: `component`, `object`, `interface`, `enum`, and `flagset` are distinct
 nominal kinds. Components use value semantics while object/interface types are

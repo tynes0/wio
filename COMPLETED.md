@@ -966,3 +966,19 @@ here as historical evidence rather than active work:
       Focused generated-code tests compile, link, and execute the new surface,
       including ordered dictionaries, emoji text, lookup misses, invalid steps,
       and signed/unsigned range limits.
+- [x] Sprint 17.1 adds backend-neutral non-variadic generic function
+      materialization before canonical lowering. Concrete bodies retain their
+      generic origin, normalized specialization key, and arguments. Worklist
+      caching supports nested/self/mutual recursion, deduplication, deterministic
+      output, and idempotent reruns; invalid bindings and expansion limits have
+      stable diagnostics.
+- [x] Generic substitution carries through captured closures, ref parameters,
+      extensions, nested component types, and const fixed-array extents. Explicit
+      generic-constant/default-value operations preserve the template contract;
+      concrete ownership removes trivial cleanup and preserves managed claims.
+- [x] The dedicated `wio_wir_cpp_generics` gate compiles, links, and runs the new
+      surface, with structural identity/failure checks and a pinned function
+      reference probe. Regression fixes cover symbolic array bounds, equivalent
+      explicit/inferred const extents, generic capture declaration identity,
+      borrowed extension receivers, place moves, closure environment parameters,
+      and object inequality/field access in the independent C++ backend.

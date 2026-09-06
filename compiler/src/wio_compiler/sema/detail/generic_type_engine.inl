@@ -1516,8 +1516,18 @@
 
                 auto genericParam = resolvedExpected.AsFast<ConstGenericParameterType>();
                 if (auto it = bindings.find(genericParam->name); it != bindings.end())
+                {
+                    if (it->second->kind() == TypeKind::ConstValue && resolvedActual->kind() == TypeKind::ConstValue)
+                    {
+                        const auto bound = it->second.AsFast<ConstValueType>();
+                        const auto incoming = resolvedActual.AsFast<ConstValueType>();
+                        return bound->value == incoming->value &&
+                            areConstGenericValueTypesCompatible(genericParam->valueType, bound->valueType) &&
+                            areConstGenericValueTypesCompatible(genericParam->valueType, incoming->valueType);
+                    }
                     return it->second->isCompatibleWith(resolvedActual) &&
                            resolvedActual->isCompatibleWith(it->second);
+                }
 
                 bindings.emplace(genericParam->name, resolvedActual);
                 return true;

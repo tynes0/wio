@@ -189,6 +189,13 @@ namespace wio::wir::lowered
             report("LIR1000", "Lowered WIR module name cannot be empty.");
         for (const Type& type : module.types.types())
         {
+            if (type.extentParameter)
+            {
+                const Type* extent = module.types.tryGet(type.extentParameter);
+                if (type.kind != TypeKind::Array || type.staticExtent || !extent ||
+                    extent->kind != TypeKind::ConstGenericParameter)
+                    report("LIR1018", "Symbolic array extent must identify a const generic parameter.");
+            }
             if (type.kind == TypeKind::Invalid)
                 report("LIR1001", "Lowered WIR type table contains an invalid type.");
             for (const TypeId argument : type.arguments)
@@ -767,7 +774,22 @@ namespace wio::wir::lowered
                             report("LIR1485", "Lowered WIR eliminated bounds check requires a reproducible static or construction proof.", instruction.source, function.id, block.id);
                     }
 
-                    if (instruction.opcode == Opcode::Unary)
+                    if (instruction.opcode == Opcode::GenericConstant)
+                    {
+                        const Type* parameter = module.types.tryGet(instruction.targetType);
+                        if (!parameter || parameter->kind != TypeKind::ConstGenericParameter ||
+                            parameter->arguments.size() != 1 || parameter->arguments.front() != instruction.resultType ||
+                            !instruction.operands.empty())
+                            report("LIR1490", "Generic constant must identify a typed const parameter.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::DefaultValue)
+                    {
+                        const Type* type = module.types.tryGet(instruction.resultType);
+                        if (!type || type->kind == TypeKind::Void || type->kind == TypeKind::Reference ||
+                            !instruction.operands.empty())
+                            report("LIR1491", "Default value requires a value type and no operands.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::Unary)
                     {
                         if (instruction.operands.size() != 1 || valueType(instruction.operands.front()) != instruction.resultType)
                             report("LIR1403", "Lowered WIR unary operand must match its result type.", instruction.source, function.id, block.id);

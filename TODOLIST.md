@@ -525,8 +525,11 @@ Rider, and CLion are defined in
    and propagation now emit from concrete Lowered WIR; open generic declaration
    metadata is excluded from concrete output. Container/string/text intrinsics
    and range/array/dictionary iterators now execute through shared runtime
-   helpers, with borrowed storage identity and focused boundary tests. Complete
-   materialized generic function bodies, coroutine
+   helpers, with borrowed storage identity and focused boundary tests. Sprint
+   17.1 now materializes non-variadic generic function/closure bodies from pinned
+   type/const arguments, including recursive worklists, identity deduplication,
+   const extents, and concrete cleanup decisions. Complete variadic pack
+   expansion, inherited/virtual/interface execution, coroutine
    runtime emission, SDK sidecars/thunks, and full differential parity; then
    switch the default before removing the compatibility generator. The
    bytecode VM consumes the same contract. Async functions now carry

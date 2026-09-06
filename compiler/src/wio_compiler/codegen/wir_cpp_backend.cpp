@@ -152,13 +152,9 @@ namespace wio::codegen
                 {
                     return nested && typeIsOpenImpl(nested, visiting);
                 };
-                const bool result = std::ranges::any_of(type->arguments, open) ||
+                const bool result = open(type->extentParameter) || std::ranges::any_of(type->arguments, open) ||
                     std::ranges::any_of(type->baseTypes, open) ||
-                    std::ranges::any_of(type->fields, [&](const FieldLayout& field) { return open(field.type); }) ||
-                    std::ranges::any_of(type->methods, [&](const MethodLayout& method)
-                    {
-                        return open(method.returnType) || std::ranges::any_of(method.parameterTypes, open);
-                    });
+                    std::ranges::any_of(type->fields, [&](const FieldLayout& field) { return open(field.type); });
                 visiting.erase(id.value());
                 return result;
             }
@@ -257,6 +253,7 @@ namespace wio::codegen
                 switch (opcode)
                 {
                 case lowered::Opcode::CancellationCheck:
+                case lowered::Opcode::GenericConstant:
                 case lowered::Opcode::CoroutineSuspend:
                 case lowered::Opcode::CoroutineResume:
                 case lowered::Opcode::CoroutineComplete:
@@ -626,6 +623,12 @@ public:
         return owner_->value();
     }
     const T& read() const { return const_cast<Place*>(this)->read(); }
+    T take() {
+        if (readOnly_) throw std::runtime_error("move through a Wio view");
+        T value = std::move(read());
+        clear();
+        return value;
+    }
     void write(T value) {
         if (readOnly_) throw std::runtime_error("write through a Wio view");
         if (pointer_) *pointer_ = std::move(value);
@@ -639,7 +642,7 @@ private:
 };
 template<class T> T& value_base(T& value) { return value; }
 template<class T> T& value_base(wio::runtime::Ref<T>& value) { return *value; }
-template<class T> T& value_base(Place<T>& value) { return value_base(value.read()); }
+template<class T> decltype(auto) value_base(Place<T>& value) { return value_base(value.read()); }
 template<class T, class U> wio::runtime::Ref<T> checked_ref_cast(const wio::runtime::Ref<U>& value) {
     if (auto* casted = dynamic_cast<T*>(value.Get())) return wio::runtime::Ref<T>(casted);
     return {};
@@ -1124,13 +1127,17 @@ inline std::string stringify(const std::string& value) { return value; }
                         arguments += "_a" + std::to_string(index);
                     }
                     std::string capturedArguments;
+                    const lowered::Function& body = *functions_.at(instruction.callee.value());
                     for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                     {
                         if (index) capturedArguments += ", ";
-                        capturedArguments += "_c" + std::to_string(index);
+                        const TypeId parameterType = body.parameters[index].type;
+                        const std::string capture = "_c" + std::to_string(index);
+                        capturedArguments += module_.types.get(parameterType).kind == TypeKind::Reference
+                            ? cppType(parameterType) + "::borrow(" + capture + ")" : capture;
                     }
                     if (!capturedArguments.empty() && !arguments.empty()) capturedArguments += ", ";
-                    assignResult(instruction, captures + "(" + parameters + ") { return " + functionName(instruction.callee) +
+                    assignResult(instruction, captures + "(" + parameters + ") mutable { return " + functionName(instruction.callee) +
                         "(" + capturedArguments + arguments + "); }");
                     break;
                 }
@@ -1153,7 +1160,8 @@ inline std::string stringify(const std::string& value) { return value; }
                         ">(" + operand(instruction.operands[0]) + "))");
                     break;
                 case lowered::Opcode::IdentityEqual:
-                    assignResult(instruction, "(" + operand(instruction.operands[0]) + ".Get() == " +
+                    assignResult(instruction, "(" + operand(instruction.operands[0]) +
+                        (instruction.binaryOperator == typed::BinaryOperator::NotEqual ? ".Get() != " : ".Get() == ") +
                         operand(instruction.operands[1]) + ".Get())");
                     break;
                 case lowered::Opcode::VariantTest:
@@ -1182,6 +1190,7 @@ inline std::string stringify(const std::string& value) { return value; }
                         (instruction.boundsCheck == lowered::BoundsCheckMode::Required ? ")" : "]"));
                     break;
                 case lowered::Opcode::ArrayCreate:
+                case lowered::Opcode::DefaultValue:
                     assignResult(instruction, cppType(instruction.resultType) + "{" + callArguments(instruction) + "}");
                     break;
                 case lowered::Opcode::DictionaryCreate:
@@ -1364,7 +1373,8 @@ inline std::string stringify(const std::string& value) { return value; }
                     assignResult(instruction, operand(instruction.operands[0]));
                     break;
                 case lowered::Opcode::MoveValue:
-                    assignResult(instruction, movedOperand(instruction.operands[0]));
+                    assignResult(instruction, module_.types.get(valueType(instruction.operands[0])).kind == TypeKind::Reference
+                        ? operand(instruction.operands[0]) + ".take()" : movedOperand(instruction.operands[0]));
                     break;
                 case lowered::Opcode::Replace:
                     output_ << "                " << operand(instruction.operands[0]) << ".write(" << movedOperand(instruction.operands[1]) << ");\n";

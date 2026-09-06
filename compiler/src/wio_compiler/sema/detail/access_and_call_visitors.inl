@@ -454,6 +454,7 @@
                 staticIndex.has_value() &&
                 (arrType->arrayKind == ArrayType::ArrayKind::Static || arrType->arrayKind == ArrayType::ArrayKind::Literal) &&
                 !arrType->hasInferredExtent &&
+                (!arrType->extentType || arrType->extentType->kind() != TypeKind::ConstGenericParameter) &&
                 *staticIndex >= arrType->size)
             {
                 WIO_LOG_ADD_ERROR(

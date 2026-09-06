@@ -363,6 +363,7 @@ namespace wio::wir
         std::vector<TypeId> arguments;
         bool isMutable = false;
         std::optional<std::size_t> staticExtent;
+        TypeId extentParameter;
         NominalKind nominalKind = NominalKind::None;
         NominalRepresentation nominalRepresentation = NominalRepresentation::Wio;
         NominalValueModel nominalValueModel = NominalValueModel::Regular;

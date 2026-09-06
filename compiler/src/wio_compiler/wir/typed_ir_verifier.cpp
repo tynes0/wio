@@ -239,6 +239,13 @@ namespace wio::wir::typed
             const Type& type = module.types.get(typeId);
             if (type.kind == TypeKind::Invalid)
                 report("WIR1001", "Typed WIR type table contains an invalid type.");
+            if (type.extentParameter)
+            {
+                const Type* extent = module.types.tryGet(type.extentParameter);
+                if (type.kind != TypeKind::Array || type.staticExtent || !extent ||
+                    extent->kind != TypeKind::ConstGenericParameter)
+                    report("WIR1023", "Symbolic array extent must identify a const generic parameter.");
+            }
             for (const TypeId argument : type.arguments)
             {
                 if (!module.types.tryGet(argument))
@@ -912,7 +919,22 @@ namespace wio::wir::typed
                         report("WIR1473", "Typed WIR async metadata is attached to an unsupported instruction.", instruction.source, function.id, block.id);
                     }
 
-                    if (instruction.opcode == Opcode::Constant && module.types.tryGet(instruction.resultType) &&
+                    if (instruction.opcode == Opcode::DefaultValue)
+                    {
+                        const Type* type = module.types.tryGet(instruction.resultType);
+                        if (!type || type->kind == TypeKind::Void || type->kind == TypeKind::Reference ||
+                            !instruction.operands.empty())
+                            report("WIR1491", "Default value requires a value type and no operands.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::GenericConstant)
+                    {
+                        const Type* parameter = module.types.tryGet(instruction.targetType);
+                        if (!parameter || parameter->kind != TypeKind::ConstGenericParameter ||
+                            parameter->arguments.size() != 1 || parameter->arguments.front() != instruction.resultType ||
+                            !instruction.operands.empty())
+                            report("WIR1490", "Generic constant must identify a typed const parameter.", instruction.source, function.id, block.id);
+                    }
+                    else if (instruction.opcode == Opcode::Constant && module.types.tryGet(instruction.resultType) &&
                         !literalMatches(instruction.literal, module.types.get(instruction.resultType).kind))
                     {
                         report("WIR1403", "Typed WIR constant literal does not match its result type.", instruction.source, function.id, block.id);

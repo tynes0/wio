@@ -60,6 +60,8 @@ The opt-in backend currently emits:
 - canonical `Option<T>`/`Result<T>` construction, pattern tests and payloads,
   checked `!()` unwrap, `?()` error propagation, and concrete generic value
   layouts while open template declarations remain non-emitted metadata;
+- concrete non-variadic generic function bodies, nested and recursive calls,
+  generic extensions, specialized closure bodies, and pinned function references;
 - component field layouts and intrusive-reference-counted object storage;
 - constants, unary/binary/range operations, conversions, direct/extension/
   resolved non-virtual method calls, function references, closures, and
@@ -92,13 +94,47 @@ The following operations remain deliberately rejected before code emission:
 
 - inherited object/interface layout, virtual/interface dispatch, and checked
   hierarchy conversion until the WIR layout has a backend-complete cast table;
-- generic function calls until a concrete specialized function body is
-  materialized in WIR;
+- unresolved generic calls and variadic parameter-pack expansion; generic native
+  adapters and generic virtual/interface dispatch remain in their respective
+  native/hierarchy milestones;
 - coroutine suspend/resume/completion and cancellation runtime emission.
 
 Those are parity work inside the C++ backend milestone, not permissions for an
 AST fallback. SDK call-table/sidecar bodies and generalized exception adapters
 also remain part of the same migration before `wir` can become the default.
+
+## Sprint 17.1: concrete generic bodies
+
+`GenericSpecializer` runs between initial Typed WIR verification and canonical
+control-flow/ownership lowering. It consumes pinned function/type identities,
+never AST overload lookup. Original declarations remain template metadata;
+concrete bodies carry `genericOrigin`, `specializationArguments`, and a canonical
+`specializationKey`. A worklist and cache close self/mutual recursion without
+duplicating bodies. Invalid bindings produce `WIR3100`; an expansion body limit
+produces `WIR3101` instead of unbounded materialization.
+
+Substitution covers signatures, nested value types, captures, local storage,
+instruction type metadata, and symbolic fixed-array extents. Const parameters
+use explicit `generic-const` instructions until materialization. Integer, bool,
+string, and Unicode text constants become ordinary constants; default generic
+locals use `default-value`. Cleanup is recomputed for the concrete value:
+trivial copies/releases disappear, moves become loads where appropriate, and
+managed values retain their copy/move/drop contracts.
+
+```wio
+fn Identity<T>(value: T) -> T { return value; }
+fn Capacity<const N: usize>() -> usize { return N; }
+fn Forward<T>(value: T) -> T { return Identity<T>(value); }
+```
+
+Calling `Identity(42)` twice emits one `i32` body; `Forward("wio")` requests a
+separate `string` body for both functions. `Capacity<7>()` materializes a body
+returning the constant `7`. The `wio_wir_cpp_generics` gate tests generated-code
+execution, shared identities, deterministic/idempotent materialization, bounded
+failure, recursion, ref mutation, closures, const arrays, generic component
+returns, and intrusive object identity. Contextual generic function-reference
+source syntax is not expanded by this sprint; the gate also constructs a pinned
+function-reference WIR probe directly.
 
 ## Cutover policy
 

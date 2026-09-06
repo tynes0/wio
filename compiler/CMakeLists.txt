@@ -324,6 +324,7 @@ if(BUILD_TESTING)
         WIO_TEST_RUNTIME_LIBRARY="${WIO_BACKEND_RUNTIME_LIBRARY_CPP}"
         WIO_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     )
+    add_test(NAME wio_wir_cpp_generics COMMAND wio_wir_cpp_backend_test --generics-only)
     add_test(
         NAME wio_wir_cpp_backend
         COMMAND wio_wir_cpp_backend_test

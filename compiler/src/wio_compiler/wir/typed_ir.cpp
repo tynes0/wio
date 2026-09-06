@@ -11,7 +11,7 @@ namespace wio::wir::typed
 
     bool producesValue(const Opcode opcode)
     {
-        return opcode == Opcode::Constant || opcode == Opcode::Unary ||
+        return opcode == Opcode::Constant || opcode == Opcode::GenericConstant || opcode == Opcode::DefaultValue || opcode == Opcode::Unary ||
                opcode == Opcode::Binary || opcode == Opcode::RangeContains || opcode == Opcode::Convert ||
                opcode == Opcode::Call || opcode == Opcode::NativeCall || opcode == Opcode::FunctionReference ||
                opcode == Opcode::ClosureCreate || opcode == Opcode::IndirectCall ||
@@ -45,6 +45,8 @@ namespace wio::wir::typed
         switch (opcode)
         {
         case Opcode::Constant: return "const";
+        case Opcode::GenericConstant: return "generic-const";
+        case Opcode::DefaultValue: return "default-value";
         case Opcode::Unary: return "unary";
         case Opcode::Binary: return "binary";
         case Opcode::RangeContains: return "range-contains";
