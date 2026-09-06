@@ -227,6 +227,7 @@ wio project build --project C:\Projects\MyGame
 cd C:\Projects\MyGame
 wio project build
 wio project build --emit-cpp
+wio project build --cpp-backend wir --emit-cpp
 wio project build --emit-typed-wir
 wio project build --emit-lowered-wir --ir-output .\.wio-build\main.lowered.wir
 ```
@@ -246,6 +247,12 @@ output directory is used by default; `--ir-output` selects an explicit path.
 Only one emission mode may be selected. Minimal transition fixtures that do
 not need the automatically merged standard-library contracts can additionally
 use `--no-builtin`. See [the WIR pipeline contract](./WIO_WIR_PIPELINE.md).
+
+`--cpp-backend legacy|wir` selects the input to C++ generation. `legacy`
+remains the default; `wir` consumes only verified, optimized Lowered WIR and
+fails with `WCPPxxxx` diagnostics instead of falling back. It currently covers
+the first executable parity slice. See
+[the Lowered WIR C++ backend contract](./WIO_CPP_BACKEND.md).
 
 ### 5.4 `project run`
 

@@ -930,3 +930,13 @@ here as historical evidence rather than active work:
       stack/heap/coroutine-frame storage decisions while preserving intrusive
       ownership. Fixed and freshly constructed arrays expose verified required,
       statically eliminated, or proven-eliminated bounds-check contracts.
+- [x] The first independent Lowered WIR C++ backend is executable behind
+      `--cpp-backend wir`. It emits stable WIR-derived identities, canonical CFG
+      state machines, explicit place storage/projections, component/object
+      layouts, intrusive object handles, native symbol calls, source maps, and
+      executable entry adapters without reading AST nodes or silently falling
+      back to the legacy generator.
+- [x] New C++ backend failures use stable source-located `WCPPxxxx` diagnostics.
+      A host-compiler syntax gate and an end-to-end CLI gate compile and execute
+      the mutable-local control-flow slice; legacy AST generation remains the
+      default compatibility oracle during differential parity work.

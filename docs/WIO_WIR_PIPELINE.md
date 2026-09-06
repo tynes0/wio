@@ -14,6 +14,12 @@ AST-to-C++ generator while WIR coverage grows. This keeps current native output
 stable and lets the new representation acquire executable parity in measured
 slices.
 
+The first independent C++ backend slice is now executable with
+`--cpp-backend wir`; it consumes verified Lowered WIR and never falls back to
+AST generation. Its supported surface, stable diagnostics, parity gates, and
+cutover rules are documented in
+[`WIO_CPP_BACKEND.md`](WIO_CPP_BACKEND.md).
+
 ## Typed WIR
 
 Typed WIR is the last language-shaped representation. Every value and
@@ -381,6 +387,13 @@ For a manifest project:
 ```powershell
 wio project build --emit-typed-wir
 wio project build --emit-lowered-wir --ir-output .\.wio-build\module.lowered.wir
+```
+
+To compile through the canonical C++ backend instead of only inspecting WIR:
+
+```powershell
+wio file run .\main.wio --cpp-backend wir
+wio project build --cpp-backend wir
 ```
 
 During the early coverage phase, a minimal project can explicitly pass

@@ -313,6 +313,20 @@ if(BUILD_TESTING)
         COMMAND wio_wir_canonical_optimizer_test
     )
 
+    add_executable(wio_wir_cpp_backend_test
+        "${CMAKE_SOURCE_DIR}/tests/wir_cpp_backend_test.cpp"
+    )
+    target_link_libraries(wio_wir_cpp_backend_test PRIVATE wio_compiler)
+    target_compile_definitions(wio_wir_cpp_backend_test PRIVATE
+        WIO_TEST_CXX_COMPILER="${WIO_BACKEND_CXX_COMPILER_CPP}"
+        WIO_TEST_CXX_COMPILER_ID="GNU"
+        WIO_TEST_RUNTIME_INCLUDE="${WIO_RUNTIME_INCLUDE_DIR}"
+    )
+    add_test(
+        NAME wio_wir_cpp_backend
+        COMMAND wio_wir_cpp_backend_test
+    )
+
     add_executable(wio_function_type_cpp_string_test
         "${CMAKE_SOURCE_DIR}/tests/function_type_cpp_string_test.cpp"
     )

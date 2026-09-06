@@ -115,7 +115,8 @@ realm SelfHostedProject {
         forceRebuild: bool,
         emitMode: string,
         irOutput: string,
-        noBuiltin: bool
+        noBuiltin: bool,
+        cppBackend: string
     ) -> std::Result<i32> {
         if (not fs::IsFile(info.wioEntry)) {
             return Failure<i32>($"Wio entry file was not found: ${info.wioEntry}");
@@ -128,6 +129,10 @@ realm SelfHostedProject {
         ];
         AppendCompilerArguments(ref compileArgs, info, "");
         if (noBuiltin) { compileArgs.Push("--no-builtin"); }
+        if (cppBackend != "") {
+            compileArgs.Push("--cpp-backend");
+            compileArgs.Push(cppBackend);
+        }
         if (emitMode != "") {
             compileArgs.Push("--intermediate-dir");
             compileArgs.Push(info.outputDirectory);
@@ -140,7 +145,7 @@ realm SelfHostedProject {
                 compileArgs.Push(path::AbsoluteFromRaw(info.projectRoot, irOutput));
             }
         }
-        if (emitMode != "" or forceRebuild or not OutputUpToDate(info.wioOutput, ProjectCompilerInputs(info, info.wioEntry))) {
+        if (emitMode != "" or cppBackend != "" or forceRebuild or not OutputUpToDate(info.wioOutput, ProjectCompilerInputs(info, info.wioEntry))) {
             let compileResult = RunProcess?(info.nativeCore, compileArgs, info.projectRoot);
             if (compileResult != 0) { return std::Ok<i32>(compileResult); }
         }
@@ -217,7 +222,8 @@ realm SelfHostedProject {
             HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
             emitMode,
             irOutput,
-            HasFlag(args, "--no-builtin") or HasFlag(args, "-B")
+            HasFlag(args, "--no-builtin") or HasFlag(args, "-B"),
+            OptionValue(args, "--cpp-backend", "")
         );
     }
 
@@ -246,7 +252,8 @@ realm SelfHostedProject {
                 HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
                 "",
                 "",
-                false
+                false,
+                OptionValue(args, "--cpp-backend", "")
             );
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }
         }
@@ -322,15 +329,20 @@ realm SelfHostedProject {
         }
         let noBuild = HasFlag(args, "--no-build");
         let forceRebuild = HasFlag(args, "--rebuild") or HasFlag(args, "--configure");
+        let cppBackend = OptionValue(args, "--cpp-backend", "");
         mut passed = 0usize;
         for file in selected {
             let display = ProjectRelative(info, file);
             let output = TestOutput(info, file);
             if (not noBuild and
-                (forceRebuild or not OutputUpToDate(output, ProjectCompilerInputs(info, file)))) {
+                (cppBackend != "" or forceRebuild or not OutputUpToDate(output, ProjectCompilerInputs(info, file)))) {
                 fs::TryEnsureParentDirectory(output);
                 mut compileArgs: string[] = [file, "--target", "exe", "--output", output];
                 AppendCompilerArguments(ref compileArgs, info, path::ParentPath(file));
+                if (cppBackend != "") {
+                    compileArgs.Push("--cpp-backend");
+                    compileArgs.Push(cppBackend);
+                }
                 console::PrintLine!($"[ BUILD ] ${display}");
                 let compileResult = RunProcess?(info.nativeCore, compileArgs, info.projectRoot);
                 if (compileResult != 0) {
@@ -377,7 +389,8 @@ realm SelfHostedProject {
                 HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
                 "",
                 "",
-                false
+                false,
+                OptionValue(args, "--cpp-backend", "")
             );
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }
         }

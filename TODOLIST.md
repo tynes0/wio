@@ -517,10 +517,15 @@ Rider, and CLion are defined in
    SDK call-table slots also survive through one verified canonical contract.
    The compatible SDK sidecar is frozen; generated sidecar emission and loader
    preference switching remain backend-integration work.
-   Keep
-   the current C++ generator as the production path while finishing remaining
-   language coverage, then consume Lowered WIR from a new C++ backend and a
-   bytecode VM. Async functions now carry payload/frame/state contracts;
+   The first independent C++ backend now consumes verified Lowered WIR behind
+   `--cpp-backend wir`, emits stable CFG/place/type/function identities, and
+   passes host-compiler plus executable CLI gates without AST fallback. Keep
+   the current C++ generator as the production default while completing enum/
+   variant layouts, intrinsics, iterators, Result propagation, coroutine
+   runtime emission, SDK sidecars/thunks, and full differential parity; then
+   switch the default before removing the compatibility generator. The
+   bytecode VM consumes the same contract. Async functions now carry
+   payload/frame/state contracts;
    awaits and executor handoffs lower to cancellation-safe suspend/resume state
    machines, and async exits lower to coroutine completion. Application,
    system, effective attribute processor, and detailed reflection metadata now

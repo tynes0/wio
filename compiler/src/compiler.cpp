@@ -35,6 +35,7 @@
 #endif
 
 #include "wio/codegen/cpp_generator.h"
+#include "wio/codegen/wir_cpp_backend.h"
 #include "wio/common/exception.h"
 #include "wio/common/filesystem/filesystem.h"
 #include "wio/common/logger.h"
@@ -69,6 +70,7 @@ namespace wio
         std::unordered_map<std::string, bool> moduleDeclaresTopLevelRealms;
         std::vector<RequiredCppHeader> requiredCppHeaders;
         BuildTarget buildTarget = BuildTarget::Executable;
+        std::string cppBackend = "legacy";
     };
 
     
@@ -665,6 +667,29 @@ namespace wio
             }
         }
 
+        void reportWirCppDiagnostics(const codegen::WirCppGenerationResult& result)
+        {
+            for (const codegen::WirCppDiagnostic& diagnostic : result.diagnostics())
+            {
+                if (diagnostic.severity == codegen::WirCppDiagnosticSeverity::Warning)
+                {
+                    WIO_LOG_ADD_WARN(
+                        diagnostic.source.begin,
+                        "WIR C++ backend {}: {}",
+                        diagnostic.code,
+                        diagnostic.message);
+                }
+                else
+                {
+                    WIO_LOG_ADD_ERROR(
+                        diagnostic.source.begin,
+                        "WIR C++ backend {}: {}",
+                        diagnostic.code,
+                        diagnostic.message);
+                }
+            }
+        }
+
         int emitWir(
             const Ref<Program>& program,
             const std::filesystem::path& sourcePath,
@@ -1026,6 +1051,7 @@ namespace wio
         {
             WIO_LOG_INFO("Resolved backend configuration:");
             WIO_LOG_INFO("  Target: {}", buildTargetToString(gAppData.buildTarget));
+            WIO_LOG_INFO("  C++ generator: {}", gAppData.cppBackend == "wir" ? "Lowered WIR" : "legacy AST");
             WIO_LOG_INFO("  Source: {}", pathToDisplayString(sourcePath));
             WIO_LOG_INFO("  Generated C++: {}", pathToDisplayString(cppPath));
             WIO_LOG_INFO("  Backend output: {}", pathToDisplayString(outputPath));
@@ -2737,6 +2763,11 @@ namespace wio
                     .SetDescription("Overrides the directory used for non-emitted generated backend intermediates.")
             )
             .Add(
+                Argonaut::Argument("CPP-BACKEND")
+                    .AddAlias("--cpp-backend")
+                    .SetDescription("Selects C++ generation input: legacy or wir (experimental).")
+            )
+            .Add(
                 Argonaut::Argument("IR-OUTPUT")
                     .AddAlias("--ir-output")
                     .SetDescription("Overrides the output path used by --emit-typed-wir or --emit-lowered-wir.")
@@ -2849,6 +2880,11 @@ namespace wio
             std::vector<std::string> buildTargetValues = gAppData.argParser.GetValuesOf<std::string>("TARGET");
             std::string buildTargetValue = buildTargetValues.empty() ? "exe" : buildTargetValues.front();
             gAppData.buildTarget = parseBuildTarget(buildTargetValue);
+            const std::vector<std::string> cppBackendValues =
+                gAppData.argParser.GetValuesOf<std::string>("CPP-BACKEND");
+            gAppData.cppBackend = cppBackendValues.empty() ? "legacy" : cppBackendValues.front();
+            if (gAppData.cppBackend != "legacy" && gAppData.cppBackend != "wir")
+                throw std::invalid_argument("--cpp-backend expects 'legacy' or 'wir'.");
         }
         catch (const std::exception& e)
         {
@@ -3135,8 +3171,38 @@ namespace wio
 
             // 4. Code Generation
             std::string cppCode;
-            codegen::CppGenerator generator;
-            cppCode = generator.generate(program);
+            if (gAppData.cppBackend == "wir")
+            {
+                wir::typed::BuildOptions buildOptions;
+                buildOptions.logicalModuleName = outputPath.stem().generic_string();
+                buildOptions.moduleKind = gAppData.buildTarget == BuildTarget::Executable
+                    ? wir::ModuleKind::Program
+                    : wir::ModuleKind::WioLibrary;
+                wir::typed::BuildResult typedResult = wir::typed::Builder{}.build(program, buildOptions);
+                reportTypedWirDiagnostics(typedResult);
+                WIO_LOG_PROCESS_ERRORS(CompilationError);
+                const wir::typed::VerificationResult typedVerification =
+                    wir::typed::Verifier{}.verify(typedResult.module());
+                reportTypedWirDiagnostics(typedVerification);
+                WIO_LOG_PROCESS_ERRORS(CompilationError);
+
+                wir::LoweringResult loweringResult = wir::LoweringPipeline{}.lower(typedResult.module());
+                reportLoweringDiagnostics(loweringResult);
+                WIO_LOG_PROCESS_ERRORS(CompilationError);
+
+                codegen::WirCppBackendOptions backendOptions;
+                backendOptions.emitMain = gAppData.buildTarget == BuildTarget::Executable;
+                codegen::WirCppGenerationResult generation =
+                    codegen::WirCppBackend{}.generate(loweringResult.module(), backendOptions);
+                reportWirCppDiagnostics(generation);
+                WIO_LOG_PROCESS_ERRORS(CompilationError);
+                cppCode = generation.code();
+            }
+            else
+            {
+                codegen::CppGenerator generator;
+                cppCode = generator.generate(program);
+            }
 
             std::error_code intermediateDirEc;
             if (cppPath.has_parent_path())

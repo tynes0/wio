@@ -127,6 +127,20 @@ if(BUILD_TESTING)
         LABELS "wir;cli"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
+
+    add_test(
+        NAME wio_wir_cpp_backend_cli
+        COMMAND
+            ${CMAKE_COMMAND}
+            "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+            "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/wir_emit_cli_input.wio"
+            "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/wir-cpp-backend-cli-test"
+            -P "${CMAKE_SOURCE_DIR}/tests/cmake/wir_cpp_backend_cli_test.cmake"
+    )
+    set_tests_properties(wio_wir_cpp_backend_cli PROPERTIES
+        LABELS "wir;cpp-backend;cli"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
 endif()
 
 function(add_wio_dev_target target_name source_file)
