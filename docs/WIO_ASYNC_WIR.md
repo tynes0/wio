@@ -2,7 +2,7 @@
 
 This document freezes the backend-neutral representation of Wio async
 functions. The existing C++ generator remains the production backend during
-migration, but neither the future Lowered-WIR C++ backend nor the bytecode VM
+migration, but neither the opt-in Lowered-WIR C++ backend nor the future bytecode VM
 may reinterpret these rules.
 
 ## Typed WIR
@@ -46,8 +46,16 @@ cleanup metadata. The first implementation deliberately uses a conservative
 frame: parameters and value definitions are retained so no backend can lose a
 value across suspension. Later escape/liveness optimization may remove slots,
 but it cannot change ownership behavior. Awaited task handles remain
-intrusive-reference-counted and are released exactly once by the normal
-lowered cleanup operations after resumption.
+reference-counted and are released by normal lowered cleanup operations and
+frame unwinding. The current C++ task state uses shared ownership; Wio object
+payloads continue using intrusive reference counts.
+
+`retainedReceiver` identifies an async object/interface method's self parameter.
+It is an additional frame-owned keepalive, not a conversion of every borrow
+into an owner. Lowering pins it and the verifier rejects a missing or mismatched
+receiver (`LIR1533`). Frame slot types must also match the actual SSA value
+types, and suspend instructions must agree with state executor/task/payload
+metadata.
 
 ## Cancellation and Threads
 
@@ -71,6 +79,12 @@ Both backends must implement the same observable contract:
 - Native async calls use the native ABI adapter contract and return the same
   task-handle ownership as Wio-created tasks.
 
-Exceptional/panic cleanup edges and executor runtime emission belong to later
-backend sprints. Their representation must extend this contract rather than
-recovering information from the AST.
+Sprint 17.3 executes these instructions in the opt-in C++ backend using C++20
+coroutines. A resume payload has separate optional storage; the physical C++
+coroutine frame preserves WIR values across suspension. RAII unwinds on normal
+exit, cancellation and failure. Current-promise cancellation checks cover both
+suspending and already-ready awaits. The executable async entry adapter pumps
+the main queue; ordinary awaits do not block a thread. Worker/blocking/IO/main
+handoffs are tested directly from canonical WIR. Full native/SDK adapter and
+whole-project parity remain later backend work. See
+[`WIO_CPP_BACKEND.md`](WIO_CPP_BACKEND.md#sprint-173-async-and-coroutine-execution).

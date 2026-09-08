@@ -592,6 +592,12 @@ namespace wio::wir::lowered
 
             if (function.coroutine)
             {
+                const Type* owner = module.types.tryGet(function.ownerType);
+                const ValueId receiver = function.isMethod && !function.parameters.empty() && owner &&
+                    (owner->nominalKind == NominalKind::Object || owner->nominalKind == NominalKind::Interface)
+                    ? function.parameters.front().id : ValueId{};
+                if (function.coroutine->retainedReceiver != receiver)
+                    report("LIR1533", "Coroutine object receiver must be retained by its canonical frame.", function.source, function.id);
                 std::unordered_set<std::uint32_t> frameSlots;
                 std::unordered_set<ValueId::ValueType> frameValues;
                 for (const CoroutineFrameSlot& slot : function.coroutine->frameSlots)
@@ -599,6 +605,7 @@ namespace wio::wir::lowered
                     const Type* type = module.types.tryGet(slot.type);
                     if (!frameSlots.insert(slot.slot).second || slot.slot >= function.coroutine->frameSlots.size() ||
                         !slot.value || !values.contains(slot.value.value()) ||
+                        (values.contains(slot.value.value()) && values.at(slot.value.value()) != slot.type) ||
                         !frameValues.insert(slot.value.value()).second || !type ||
                         type->ownership != slot.ownership || type->cleanup != slot.cleanup)
                     {
@@ -1528,15 +1535,23 @@ namespace wio::wir::lowered
                             ? instruction.operands.size() == 1 && [&]
                                 {
                                     const Type* task = module.types.tryGet(valueType(instruction.operands.front()));
-                                    return task && task->kind == TypeKind::AsyncTask && task->arguments.size() == 1;
+                                    return task && task->kind == TypeKind::AsyncTask && task->arguments.size() == 1 &&
+                                        state && state->resultType == task->arguments.front();
                                 }()
                             : instruction.asyncOperation == AsyncOperation::SwitchExecutor &&
-                                instruction.operands.empty() && instruction.asyncExecutor != AsyncExecutorKind::Inherit;
+                                instruction.operands.empty() &&
+                                (instruction.asyncExecutor == AsyncExecutorKind::Main || instruction.asyncExecutor == AsyncExecutorKind::Worker ||
+                                    instruction.asyncExecutor == AsyncExecutorKind::Blocking || instruction.asyncExecutor == AsyncExecutorKind::Io) &&
+                                state && module.types.tryGet(state->resultType) &&
+                                module.types.get(state->resultType).kind == TypeKind::Void;
                         const bool precededByCancellationCheck = index > 0 &&
                             block.instructions[index - 1].opcode == Opcode::CancellationCheck &&
                             block.instructions[index - 1].projectionIndex == instruction.projectionIndex;
                         if (!function.isAsync || !state || block.id != state->suspendBlock ||
                             instruction.targets.size() != 1 || instruction.targets.front().block != state->resumeBlock ||
+                            (state && (state->executor != instruction.asyncExecutor ||
+                                state->awaitedTask != (instruction.operands.empty() ? ValueId{} : instruction.operands.front()) ||
+                                !state->cancellationPoint)) ||
                             !operationShape || !precededByCancellationCheck)
                         {
                             report("LIR1455", "Coroutine suspension must match one canonical state and resume target.", instruction.source, function.id, block.id);

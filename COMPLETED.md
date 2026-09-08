@@ -997,3 +997,15 @@ here as historical evidence rather than active work:
       inherited/multiple fields, self ref/view/value returns, scope/boxing/call
       cleanup, failed casts, strong/weak lifetime and malformed dispatch/field
       metadata. Only this sprint's new gate was run for the implementation.
+- [x] Sprint 17.3 executes canonical coroutine suspend/resume/complete through
+      C++20 coroutines and the shared task runtime, without blocking ordinary
+      awaits or falling back to AST code generation. The async entry adapter
+      pumps the bound main executor. Worker/blocking/IO/main transitions and
+      current-promise cancellation checkpoints preserve explicit WIR states.
+- [x] Async object/interface receiver retention is now a verified frame contract;
+      generated RAII guards keep self alive across suspension. The new
+      `wio_wir_cpp_async` gate covers generic/void/ready tasks, closures and worker
+      jobs, interface dispatch, owning results, cancellation/fault cleanup,
+      executor identity, cancelled queued main continuations, shutdown failure,
+      and invalid frame/state/receiver metadata. Legacy remains the default;
+      generalized native/SDK async adapters are Sprint 17.4 work.

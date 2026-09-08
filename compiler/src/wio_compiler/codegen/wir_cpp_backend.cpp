@@ -273,15 +273,36 @@ namespace wio::codegen
                         diagnose("WCPP1108", "global value requires a concrete specialized type", global.source);
             }
 
+            bool runtimeAsyncType(const TypeId id) const
+            {
+                const Type& type = module_.types.get(id);
+                if (type.kind == TypeKind::AsyncTask || type.kind == TypeKind::Function)
+                    return std::ranges::all_of(type.arguments, [&](TypeId argument) { return runtimeAsyncType(argument); });
+                return type.kind == TypeKind::Void || type.kind == TypeKind::Bool ||
+                    integerKind(type.kind) || type.kind == TypeKind::F32 || type.kind == TypeKind::F64 ||
+                    type.kind == TypeKind::String || type.kind == TypeKind::Text;
+            }
+
+            bool runtimeAsyncBinding(const lowered::Function& function) const
+            {
+                // The in-process runtime uses exactly the same AsyncTask<T>
+                // representation. This is not a general foreign/SDK adapter.
+                if (!function.nativeBinding || function.nativeBinding->receiver != NativeReceiverKind::None ||
+                    !function.nativeBinding->symbol.starts_with("wio::runtime::") ||
+                    !runtimeAsyncType(function.returnType)) return false;
+                const bool taskSignature = module_.types.get(function.returnType).kind == TypeKind::AsyncTask ||
+                    std::ranges::any_of(function.parameters, [&](const lowered::Parameter& parameter)
+                        { return module_.types.get(parameter.type).kind == TypeKind::AsyncTask; });
+                if (!taskSignature) return false;
+                return std::ranges::all_of(function.parameters, [&](const lowered::Parameter& parameter)
+                    { return runtimeAsyncType(parameter.type); });
+            }
+
             bool supportedOpcode(const lowered::Opcode opcode) const
             {
                 switch (opcode)
                 {
-                case lowered::Opcode::CancellationCheck:
                 case lowered::Opcode::GenericConstant:
-                case lowered::Opcode::CoroutineSuspend:
-                case lowered::Opcode::CoroutineResume:
-                case lowered::Opcode::CoroutineComplete:
                     return false;
                 default:
                     return true;
@@ -295,9 +316,6 @@ namespace wio::codegen
                     if (functionIsOpen(function))
                         continue;
                     const auto functionValueTypes = valueTypesFor(function);
-                    if (function.isAsync || function.coroutine)
-                        diagnose("WCPP1200", "coroutine state-machine emission is not enabled yet", function.source,
-                            function.id);
                     for (const lowered::BasicBlock& block : function.blocks)
                     {
                         for (const lowered::Instruction& instruction : block.instructions)
@@ -396,7 +414,7 @@ namespace wio::codegen
                             {
                                 const auto callee = functions_.find(instruction.callee.value());
                                 if (callee == functions_.end() || !callee->second->nativeBinding ||
-                                    callee->second->nativeBinding->requiresAdapter)
+                                    (callee->second->nativeBinding->requiresAdapter && !runtimeAsyncBinding(*callee->second)))
                                 {
                                     diagnose("WCPP1202",
                                         "native invocation requires an adapter thunk not implemented by this backend",
@@ -620,7 +638,7 @@ namespace wio::codegen
                     "#include <map>\n#include <memory>\n#include <optional>\n#include <sstream>\n"
                     "#include <stdexcept>\n#include <string>\n#include <tuple>\n#include <type_traits>\n"
                     "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
-                    "#include <any.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include <std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n";
+                    "#include <any.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include <std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n";
                 std::set<std::string> headers;
                 for (const Type& type : module_.types.types())
                     if (type.nativeBinding && !type.nativeBinding->header.empty()) headers.insert(type.nativeBinding->header);
@@ -1603,6 +1621,42 @@ inline std::string stringify(const std::string& value) { return value; }
                     if (instruction.operands.empty()) output_ << "                return;\n";
                     else output_ << "                return " << movedOperand(instruction.operands[0]) << ";\n";
                     break;
+                case lowered::Opcode::CancellationCheck:
+                    output_ << "                co_await wio::wir_backend::CancellationCheckpoint{};\n";
+                    break;
+                case lowered::Opcode::CoroutineSuspend:
+                {
+                    const auto& state = currentFunction_->coroutine->states.at(instruction.projectionIndex);
+                    if (instruction.asyncOperation == AsyncOperation::SwitchExecutor)
+                    {
+                        const std::string awaiter = instruction.asyncExecutor == AsyncExecutorKind::Main
+                            ? "wio::runtime::AsyncMainAwaiter{}"
+                            : "wio::wir_backend::SwitchExecutor{wio::wir_backend::Executor::" +
+                                std::string(instruction.asyncExecutor == AsyncExecutorKind::Blocking ? "Blocking" :
+                                    instruction.asyncExecutor == AsyncExecutorKind::Io ? "Io" : "Worker") + "}";
+                        output_ << "                co_await " << awaiter << ";\n";
+                    }
+                    else
+                    {
+                        output_ << "                ";
+                        if (state.resumedValue) output_ << "_resume" << state.index << ".emplace(";
+                        output_ << "co_await " << operand(instruction.operands.front());
+                        if (state.resumedValue) output_ << ')';
+                        output_ << ";\n";
+                    }
+                    output_ << "                co_await wio::wir_backend::CancellationCheckpoint{};\n";
+                    emitBranchAssignments(instruction.targets.front());
+                    break;
+                }
+                case lowered::Opcode::CoroutineResume:
+                    assignResult(instruction, "std::move(*_resume" + std::to_string(instruction.projectionIndex) + ")");
+                    output_ << "                _resume" << instruction.projectionIndex << ".reset();\n";
+                    break;
+                case lowered::Opcode::CoroutineComplete:
+                    output_ << "                co_return";
+                    if (!instruction.operands.empty()) output_ << ' ' << movedOperand(instruction.operands.front());
+                    output_ << ";\n";
+                    break;
                 case lowered::Opcode::Jump:
                     emitBranchAssignments(instruction.targets.front());
                     break;
@@ -1664,6 +1718,15 @@ inline std::string stringify(const std::string& value) { return value; }
                     currentFunction_ = &function;
                     collectValueTypes(function);
                     output_ << functionSignature(function, false) << " {\n";
+                    if (function.coroutine && function.coroutine->retainedReceiver)
+                    {
+                        output_ << "    auto _selfGuard = " << cppType(function.ownerType) << "(_p0.Get());\n";
+                        output_ << "    _p0 = " << cppType(function.parameters.front().type) << "::raw(_selfGuard.Get());\n";
+                    }
+                    if (function.coroutine)
+                        for (const auto& state : function.coroutine->states)
+                            if (state.resumedValue)
+                                output_ << "    std::optional<" << cppType(state.resultType) << "> _resume" << state.index << ";\n";
                     std::vector<std::pair<std::uint32_t, TypeId>> values(valueTypes_.begin(), valueTypes_.end());
                     std::ranges::sort(values, {}, &std::pair<std::uint32_t, TypeId>::first);
                     for (const auto& [id, type] : values)
@@ -1712,7 +1775,14 @@ inline std::string stringify(const std::string& value) { return value; }
                 const Type* resultType = module_.types.tryGet(entry->returnType);
                 if (!resultType) return;
                 output_ << "int main() {\n";
-                if (resultType->kind == TypeKind::Void)
+                if (resultType->kind == TypeKind::AsyncTask)
+                {
+                    output_ << "    wio::runtime::BindAsyncMainExecutor();\n    ";
+                    if (module_.types.get(resultType->arguments.front()).kind == TypeKind::I32) output_ << "return ";
+                    output_ << "wio::wir_backend::RunEntry(" << functionName(entry->id) << "());\n";
+                    if (module_.types.get(resultType->arguments.front()).kind != TypeKind::I32) output_ << "    return 0;\n";
+                }
+                else if (resultType->kind == TypeKind::Void)
                     output_ << "    " << functionName(entry->id) << "();\n    return 0;\n";
                 else if (resultType->kind == TypeKind::I32)
                     output_ << "    return " << functionName(entry->id) << "();\n";

@@ -311,6 +311,11 @@ namespace wio::wir
             {
                 function.coroutine->frameSlots.clear();
                 function.coroutine->states.clear();
+                function.coroutine->retainedReceiver = {};
+                const Type* owner = source_.types.tryGet(function.ownerType);
+                if (function.isMethod && !function.parameters.empty() && owner &&
+                    (owner->nominalKind == NominalKind::Object || owner->nominalKind == NominalKind::Interface))
+                    function.coroutine->retainedReceiver = function.parameters.front().id;
                 std::unordered_set<ValueId::ValueType> framedValues;
                 const auto appendFrameSlot = [&](const ValueId value, const TypeId typeId,
                                                  const CoroutineFrameSlotKind kind)

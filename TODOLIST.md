@@ -532,9 +532,12 @@ Rider, and CLion are defined in
    hierarchy/interface dispatch, checked casts, generic owner methods, real
    constructor bodies, inherited field storage and intrusive object lifecycle.
    Its focused generated-code gate covers self/ref/view, any, scope cleanup,
-   weak lifetime and malformed hierarchy metadata. Complete variadic pack
-   expansion, open method-level generic contracts, coroutine
-   runtime emission, SDK sidecars/thunks, and full differential parity; then
+   weak lifetime and malformed hierarchy metadata. Sprint 17.3 executes async
+   state transitions, generic/void task payloads, executor handoffs, cancellation,
+   async interface methods and retained self/frame cleanup; the focused gate
+   covers generated code and malformed coroutine metadata. Complete variadic
+   pack expansion, open method-level generic contracts, full native/SDK
+   sidecars/thunks, and full differential parity; then
    switch the default before removing the compatibility generator. The
    bytecode VM consumes the same contract. Async functions now carry
    payload/frame/state contracts;

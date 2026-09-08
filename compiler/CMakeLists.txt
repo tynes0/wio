@@ -326,6 +326,8 @@ if(BUILD_TESTING)
     )
     add_test(NAME wio_wir_cpp_generics COMMAND wio_wir_cpp_backend_test --generics-only)
     add_test(NAME wio_wir_cpp_objects COMMAND wio_wir_cpp_backend_test --objects-only)
+    add_test(NAME wio_wir_cpp_async COMMAND wio_wir_cpp_backend_test --async-only)
+    set_tests_properties(wio_wir_cpp_async PROPERTIES TIMEOUT 90)
     add_test(
         NAME wio_wir_cpp_backend
         COMMAND wio_wir_cpp_backend_test

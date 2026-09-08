@@ -708,6 +708,7 @@ namespace wio::wir::lowered
                 stream << " coroutine[result=" << typeRef(function.coroutine->resultType)
                        << " states=" << function.coroutine->states.size()
                        << " frame-slots=" << function.coroutine->frameSlots.size()
+                       << " retained-receiver=" << valueRef(function.coroutine->retainedReceiver)
                        << " cancellation=" << (function.coroutine->cooperativeCancellation ? "cooperative" : "none")
                        << " thread-switch=" << (function.coroutine->maySwitchThreads ? "true" : "false")
                        << "]";

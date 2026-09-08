@@ -77,6 +77,8 @@ The opt-in backend currently emits:
   steps, index/key/value projections, reference bindings, and structured exits;
 - native headers, native POD spellings, resolved native symbol invocation, and
   wrappers for addressable native functions;
+- async bodies, task payloads, canonical suspension/resumption/completion,
+  cooperative cancellation checkpoints and executor transitions;
 - executable `Entry` adapters and normal Wio backend compilation/linking.
 
 The first parity gate compiles generated source with an independent C++
@@ -95,8 +97,7 @@ The following operations remain deliberately rejected before code emission:
 
 - unresolved generic calls and variadic parameter-pack expansion; generic native
   adapters remain in the native milestone; open method-level generic contracts
-  are not emitted as runtime virtual slots;
-- coroutine suspend/resume/completion and cancellation runtime emission.
+  are not emitted as runtime virtual slots.
 
 Those are parity work inside the C++ backend milestone, not permissions for an
 AST fallback. SDK call-table/sidecar bodies and generalized exception adapters
@@ -192,6 +193,65 @@ object/interface methods, generic destruction, owning/borrowed self returns,
 It also corrupts dispatch/field metadata and requires rejection before emission.
 The source-language restrictions on nullable `is` operands and interface
 inheritance declarations are unchanged; this is backend parity, not new syntax.
+
+## Sprint 17.3: async and coroutine execution
+
+The C++ backend consumes the existing canonical coroutine states, without
+consulting the AST. `coroutine-suspend` emits a C++20 `co_await`, then transfers
+to its declared resume block; `coroutine-resume` moves the payload from a
+state-specific optional and clears it. `coroutine-complete` emits `co_return`.
+The host C++ compiler supplies physical coroutine-frame storage for the WIR
+values and places. This is not a second AST lowering and not a VM implementation.
+
+```wio
+use std::async;
+async fn Produce(value: i32) -> i32 {
+    await std::async::Sleep(10);
+    return value + 1;
+}
+async fn Entry() -> i32 {
+    let pending = Produce(41);
+    // pending is a coroutine<i32>, not an uninitialized i32.
+    let answer = await pending;
+    await main;
+    return answer == 42 ? 0 : 1;
+}
+```
+
+Functions keep the runtime's eager-start behavior: they begin on the calling
+thread and can suspend at await. An already-ready task need not suspend. The
+awaited value is only read in the resume block; ordinary await never emits
+`BlockOn`. The synchronous executable entry adapter waits for completion while
+pumping the bound main executor, so `await main` does not deadlock async entry.
+Worker, blocking, IO and main destinations have explicit scheduling adapters.
+These execute existing WIR contracts; no new source executor syntax is added.
+
+Cancellation checkpoints inspect the current promise before suspension and
+after delivery, including ready-task fast paths. Child cancellation/fault
+propagation uses the shared `AsyncTask<T>` runtime. Cancellation is cooperative,
+not thread preemption. Queue exhaustion and runtime shutdown become task
+failures. Existing copyable task result semantics remain unchanged: repeated
+reads of an object result retain the same intrusive object identity.
+
+An async object/interface method's `CoroutineLayout.retainedReceiver` identifies
+the self parameter that must remain alive for the frame. Lowering pins this
+contract, the verifier checks it (`LIR1533`), and C++ emission creates one owning
+self guard with a stable raw receiver snapshot. Normal returns, cancellation
+and exceptions unwind frame storage with RAII; explicit scope cleanup opcodes
+remain authoritative. A caller dropping its last handle does not invalidate a
+suspended method. Arbitrary component/ref borrows do not acquire new ownership.
+As in the existing runtime, task completion notification can precede the final
+physical destruction of the frame; it is not a scheduler-join barrier.
+
+The new `wio_wir_cpp_async` gate compiles and executes generic/void/immediate
+tasks, loop awaits, closure calls, worker/blocking/IO jobs, async interface
+dispatch, owning results, self lifetime, parent-child cancellation, queued-main
+cancellation, fault delivery and shutdown rejection. Canonical probes exercise
+all four executor destinations and reject corrupt state, frame, executor and
+receiver metadata. The standalone fixture supplies a minimal runtime surface;
+full project/std/SDK adapter parity remains in 17.4 and the final cutover gate.
+Runtime-native forwarding here is limited to compatible in-process
+`wio::runtime` task/scalar/string/function signatures, not a foreign coroutine ABI.
 
 ## Cutover policy
 

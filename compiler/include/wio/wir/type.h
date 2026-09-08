@@ -195,6 +195,8 @@ namespace wio::wir
         TypeId resultType;
         std::vector<CoroutineFrameSlot> frameSlots;
         std::vector<CoroutineState> states;
+        // Object method receiver retained until the coroutine frame is destroyed.
+        ValueId retainedReceiver;
         bool cooperativeCancellation = true;
         bool maySwitchThreads = false;
 
