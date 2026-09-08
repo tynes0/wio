@@ -356,6 +356,16 @@ namespace wio::wir
         auto operator<=>(const EnumCaseLayout&) const = default;
     };
 
+    // A resolved virtual contract. Slot numbers are local to contractType;
+    // implementation is selected before backend emission, never by a backend.
+    struct DispatchEntry
+    {
+        TypeId contractType;
+        std::uint32_t slot = 0;
+        FunctionId implementation;
+        auto operator<=>(const DispatchEntry&) const = default;
+    };
+
     struct Type
     {
         TypeKind kind = TypeKind::Invalid;
@@ -370,6 +380,10 @@ namespace wio::wir
         std::vector<TypeId> baseTypes;
         std::vector<FieldLayout> fields;
         std::vector<MethodLayout> methods;
+        std::vector<TypeId> castTypes;
+        std::vector<DispatchEntry> dispatchEntries;
+        FunctionId destructor;
+        FunctionId defaultConstructor;
         TypeId enumUnderlyingType;
         std::vector<EnumCaseLayout> enumCases;
         bool hasConstructor = false;

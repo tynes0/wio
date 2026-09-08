@@ -528,8 +528,12 @@ Rider, and CLion are defined in
    helpers, with borrowed storage identity and focused boundary tests. Sprint
    17.1 now materializes non-variadic generic function/closure bodies from pinned
    type/const arguments, including recursive worklists, identity deduplication,
-   const extents, and concrete cleanup decisions. Complete variadic pack
-   expansion, inherited/virtual/interface execution, coroutine
+   const extents, and concrete cleanup decisions. Sprint 17.2 executes object
+   hierarchy/interface dispatch, checked casts, generic owner methods, real
+   constructor bodies, inherited field storage and intrusive object lifecycle.
+   Its focused generated-code gate covers self/ref/view, any, scope cleanup,
+   weak lifetime and malformed hierarchy metadata. Complete variadic pack
+   expansion, open method-level generic contracts, coroutine
    runtime emission, SDK sidecars/thunks, and full differential parity; then
    switch the default before removing the compatibility generator. The
    bytecode VM consumes the same contract. Async functions now carry

@@ -1,4 +1,5 @@
 #include "wio/wir/lowering_pipeline.h"
+#include "wio/wir/hierarchy_lowering.h"
 
 #include "wio/wir/lowered_ir_verifier.h"
 #include "wio/wir/typed_ir_verifier.h"
@@ -570,6 +571,10 @@ namespace wio::wir
         if (!result.diagnostics_.empty())
             return result;
         result.completedPasses_.push_back("lower-canonical-control-flow");
+        for (auto& message : lowerHierarchy(result.module_))
+            result.diagnostics_.push_back({"WIR3200", "lower-object-hierarchy", std::move(message), {}});
+        if (!result.diagnostics_.empty()) return result;
+        result.completedPasses_.push_back("lower-object-hierarchy");
         if (std::ranges::any_of(module.functions, [](const typed::Function& function) { return function.isAsync; }))
             result.completedPasses_.push_back("lower-async-state-machines");
 

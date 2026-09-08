@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <functional>
 #include <map>
 #include <set>
 #include <sstream>
@@ -27,6 +28,10 @@ namespace wio::wir
                 for (const Function& function : module.functions)
                 {
                     templates_.emplace(function.id, function);
+                    if (function.ownerType && function.parameters.size() == 1 && !function.isExternal &&
+                        (function.name == "OnDestruct" || function.name == "OnConstruct" ||
+                         function.name.ends_with("::OnDestruct") || function.name.ends_with("::OnConstruct")))
+                        lifecycleTemplates_[module.types.get(function.ownerType).name].push_back(function.id);
                     nextId_ = std::max(nextId_, function.id.value() + 1);
                     if (function.genericOrigin && !function.specializationKey.empty())
                     {
@@ -52,6 +57,7 @@ namespace wio::wir
                 }
                 // Appending a body grows this worklist. Cache entries are registered
                 // before visiting it, so self/mutual recursion closes on existing IDs.
+                materializeMethods();
                 for (std::size_t index = 0; index < module_.functions.size() && diagnostics_.empty(); ++index)
                 {
                     if (openFunction(module_.functions[index])) continue;
@@ -67,13 +73,75 @@ namespace wio::wir
                                 instruction.specializationKey = key->second;
                         }
                     module_.functions[index] = std::move(function);
+                    materializeMethods();
                 }
                 return std::move(diagnostics_);
             }
 
         private:
+            void materializeMethods()
+            {
+                for (std::size_t i = 0; i < module_.types.size() && diagnostics_.empty(); ++i)
+                {
+                    TypeId id{static_cast<TypeId::ValueType>(i)};
+                    if (openType(id)) continue;
+                    auto methods = module_.types.get(id).methods;
+                    if (const auto found = processedMethods_.find(id); found != processedMethods_.end() && found->second == methods)
+                        continue;
+                    for (auto& method : methods)
+                    {
+                        const auto source = templates_.find(method.function);
+                        if (method.isAbstract || source == templates_.end() || source->second.isExternal ||
+                            !openFunction(source->second) || openType(method.returnType) ||
+                            std::ranges::any_of(method.parameterTypes, [&](TypeId p) { return openType(p); })) continue;
+                        TypeId owner = id;
+                        const std::string ownerName = module_.types.get(source->second.ownerType).name;
+                        std::set<TypeId> visited;
+                        std::function<TypeId(TypeId)> findOwner = [&](TypeId candidate) -> TypeId
+                        {
+                            if (!visited.insert(candidate).second) return {};
+                            const auto type = module_.types.get(candidate);
+                            if (type.name == ownerName) return candidate;
+                            for (TypeId base : type.baseTypes) if (TypeId found = findOwner(base)) return found;
+                            return {};
+                        };
+                        owner = findOwner(id);
+                        if (!owner) continue;
+                        Type receiver = module_.types.get(source->second.parameters.front().type);
+                        receiver.arguments = {owner};
+                        Instruction request;
+                        request.callee = method.function;
+                        request.signatureTypes = {module_.types.intern(std::move(receiver))};
+                        request.signatureTypes.insert(request.signatureTypes.end(), method.parameterTypes.begin(), method.parameterTypes.end());
+                        request.resultType = method.returnType;
+                        method.function = instantiate(request);
+                    }
+                    module_.types.getMutable(id).methods = std::move(methods);
+                    processedMethods_[id] = module_.types.get(id).methods;
+                    const auto concrete = module_.types.get(id);
+                    if (concrete.nominalKind != NominalKind::Object) continue;
+                    for (const auto functionId : lifecycleTemplates_[concrete.name])
+                    {
+                        const auto& source = templates_.at(functionId);
+                        if (!source.ownerType || source.parameters.size() != 1 || source.isExternal || !openFunction(source) ||
+                            module_.types.get(source.ownerType).name != concrete.name ||
+                            (source.name != "OnDestruct" && source.name != "OnConstruct" &&
+                             !source.name.ends_with("::OnDestruct") && !source.name.ends_with("::OnConstruct"))) continue;
+                        Type receiver = module_.types.get(source.parameters.front().type);
+                        receiver.arguments = {id};
+                        Instruction request;
+                        request.callee = functionId;
+                        request.signatureTypes = {module_.types.intern(std::move(receiver))};
+                        request.resultType = module_.types.voidType();
+                        (void)instantiate(request);
+                    }
+                }
+            }
+
             Module& module_;
             std::map<FunctionId, Function> templates_;
+            std::map<std::string, std::vector<FunctionId>> lifecycleTemplates_;
+            std::map<TypeId, std::vector<MethodLayout>> processedMethods_;
             std::map<std::string, FunctionId> instances_;
             std::map<FunctionId, std::string> instanceKeys_;
             std::vector<SpecializationDiagnostic> diagnostics_;
@@ -259,7 +327,8 @@ namespace wio::wir
                         for (TypeId& type : instruction.genericArguments) type = replace(type);
                         if (instruction.result)
                         {
-                            if (instruction.opcode != Opcode::LocalPlace)
+                            if (!(module_.types.get(instruction.resultType).kind == TypeKind::Reference &&
+                                instruction.resultOwnership == ValueOwnership::Trivial))
                                 instruction.resultOwnership = ownership(instruction.resultType, instruction.resultOwnership);
                             if (instruction.resultOwnership != ValueOwnership::Borrowed)
                             {
@@ -314,6 +383,13 @@ namespace wio::wir
                         valid = bind(source.genericParameters[i], request.genericArguments[i], bindings);
                 std::vector<TypeId> signature = request.signatureTypes;
                 TypeId result = request.resultType ? request.resultType : module_.types.voidType();
+                if (request.opcode == Opcode::ConstructObject || request.opcode == Opcode::ConstructComponent)
+                {
+                    Type receiver = module_.types.get(source.parameters.front().type);
+                    receiver.arguments = {request.resultType};
+                    signature.insert(signature.begin(), module_.types.intern(std::move(receiver)));
+                    result = source.returnType;
+                }
                 if (request.opcode == Opcode::FunctionReference || request.opcode == Opcode::ClosureCreate)
                 {
                     const Type callable = module_.types.get(request.resultType);

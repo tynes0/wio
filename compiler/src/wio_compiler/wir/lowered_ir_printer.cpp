@@ -167,6 +167,17 @@ namespace wio::wir::lowered
             }
             if (type.hasConstructor)
                 stream << " has-constructor";
+            if (!type.castTypes.empty())
+            {
+                stream << " casts=[";
+                for (TypeId cast : type.castTypes) stream << typeRef(cast) << ";";
+                stream << "] dispatch={";
+                for (const DispatchEntry& entry : type.dispatchEntries)
+                    stream << typeRef(entry.contractType) << "#" << entry.slot << "=" << functionRef(entry.implementation) << ";";
+                stream << "}";
+            }
+            if (type.defaultConstructor) stream << " default-constructor=" << functionRef(type.defaultConstructor);
+            if (type.destructor) stream << " destructor=" << functionRef(type.destructor);
             if (type.hasDestructor)
                 stream << " has-destructor";
             if (type.ownership != OwnershipModel::Trivial)
@@ -460,6 +471,7 @@ namespace wio::wir::lowered
             case Opcode::FieldPlace:
                 stream << "field-place " << valueRef(instruction.operands.at(0)) << ", "
                        << std::quoted(instruction.selector);
+                if (instruction.targetType) stream << " storage=" << typeRef(instruction.targetType) << "#" << instruction.projectionIndex;
                 break;
             case Opcode::ArrayPlace:
                 stream << "array-place " << valueRef(instruction.operands.at(0)) << ", "
@@ -470,7 +482,9 @@ namespace wio::wir::lowered
                 break;
             case Opcode::ConstructComponent:
             case Opcode::ConstructObject:
-                stream << opcodeName(instruction.opcode) << " " << std::quoted(instruction.selector) << "(";
+                stream << opcodeName(instruction.opcode) << " " << std::quoted(instruction.selector);
+                if (instruction.callee) stream << " " << functionRef(instruction.callee);
+                stream << "(";
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {
                     if (index > 0)

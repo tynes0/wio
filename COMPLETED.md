@@ -982,3 +982,18 @@ here as historical evidence rather than active work:
       explicit/inferred const extents, generic capture declaration identity,
       borrowed extension receivers, place moves, closure environment parameters,
       and object inequality/field access in the independent C++ backend.
+- [x] Sprint 17.2 adds backend-neutral hierarchy/cast/dispatch tables and
+      declaring-subobject field projections, verified before C++ emission.
+      Object inheritance, interface dispatch, multi-level overrides, direct
+      super calls, checked fit/is, normalized identity and any hierarchy casts
+      execute without AST fallback.
+- [x] Constructor overload identities now survive semantic analysis and generic
+      validation snapshots into WIR. Actual constructor bodies, base default
+      initialization, generic object methods/lifecycle bodies and derived-to-base
+      destruction run through the new backend. Object borrows remain non-owning;
+      owning self returns and Ref/WeakRef retain the existing intrusive protocol.
+- [x] The new `wio_wir_cpp_objects` generated-code gate covers source execution,
+      component/object constructor bodies, generic/interface combinations,
+      inherited/multiple fields, self ref/view/value returns, scope/boxing/call
+      cleanup, failed casts, strong/weak lifetime and malformed dispatch/field
+      metadata. Only this sprint's new gate was run for the implementation.

@@ -1,9 +1,11 @@
 #include "wio/codegen/wir_cpp_backend.h"
 #include "wio/wir/generic_specializer.h"
+#include "wio/wir/hierarchy_lowering.h"
 #include "wio/lexer/lexer.h"
 #include "wio/parser/parser.h"
 #include "wio/sema/analyzer.h"
 #include "wio/wir/lowered_ir_printer.h"
+#include "wio/wir/lowered_ir_verifier.h"
 #include "wio/wir/lowering_pipeline.h"
 #include "wio/wir/typed_ir_builder.h"
 #include "wio/wir/typed_ir_printer.h"
@@ -347,6 +349,83 @@ fn Entry() -> i32 {
 int main(int argc, char** argv)
 {
     using wio::codegen::WirCppBackend;
+
+    if (argc == 2 && std::string(argv[1]) == "--objects-only")
+    {
+        std::ifstream fixture(std::string(WIO_TEST_SOURCE_DIR) + "/tests/wir_cpp_objects_run.wio");
+        const std::string source{std::istreambuf_iterator<char>(fixture), std::istreambuf_iterator<char>()};
+        if (!expect(!source.empty(), "object fixture should be readable")) return 1;
+        wio::wir::typed::Module original;
+        const auto module = makeLanguageSurfaceModule(source, &original);
+        if (!expect(module.has_value(), "object fixture must lower")) return 1;
+        const auto generated = WirCppBackend{}.generate(*module);
+        for (const auto& diagnostic : generated.diagnostics()) std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+        if (!generated.succeeded()) { std::cerr << wio::wir::lowered::Printer{}.print(*module); return 1; }
+        bool ok = true;
+        const auto repeated = wio::wir::LoweringPipeline{}.lower(original);
+        ok &= expect(repeated.succeeded() && wio::wir::lowered::Printer{}.print(repeated.module()) ==
+            wio::wir::lowered::Printer{}.print(*module), "generic hierarchy lowering must be deterministic");
+        auto broken = *module;
+        bool damaged = false;
+        for (std::size_t i = 0; i < broken.types.size(); ++i)
+        {
+            auto& type = broken.types.getMutable(wio::wir::TypeId{static_cast<std::uint32_t>(i)});
+            if (type.name == "Derived" && !type.dispatchEntries.empty())
+            { ++type.dispatchEntries.front().slot; damaged = true; break; }
+        }
+        ok &= expect(damaged && !wio::wir::lowered::Verifier{}.verify(broken).succeeded(), "invalid dispatch contracts must fail verification");
+        ok &= expect(!WirCppBackend{}.generate(broken).succeeded(), "invalid dispatch must fail closed before emission");
+        broken = *module;
+        for (auto& function : broken.functions)
+            for (auto& block : function.blocks)
+                for (auto& instruction : block.instructions)
+                    if (instruction.opcode == wio::wir::lowered::Opcode::FieldPlace) ++instruction.projectionIndex;
+        ok &= expect(!wio::wir::lowered::Verifier{}.verify(broken).succeeded(), "invalid declaring-subobject field indices must fail verification");
+        broken = *module;
+        for (auto& function : broken.functions)
+            for (auto& block : function.blocks)
+                for (auto& instruction : block.instructions)
+                    if (instruction.opcode == wio::wir::lowered::Opcode::ConstructObject)
+                        instruction.callee = wio::wir::FunctionId{999999};
+        ok &= expect(!WirCppBackend{}.generate(broken).succeeded(), "unknown constructor body must fail before emission");
+        broken = *module;
+        for (std::size_t i = 0; i < broken.types.size(); ++i)
+        {
+            const wio::wir::TypeId id{static_cast<std::uint32_t>(i)};
+            if (broken.types.get(id).name == "Base") { broken.types.getMutable(id).baseTypes.push_back(id); break; }
+        }
+        ok &= expect(!wio::wir::lowerHierarchy(broken).empty(), "cyclic hierarchy must fail bounded lowering");
+        const auto typeId = [&](const std::string& name)
+        {
+            for (std::size_t i = 0; i < module->types.size(); ++i) if (module->types.types()[i].name == name) return std::to_string(i);
+            throw std::runtime_error("missing test type " + name);
+        };
+        const auto functionId = [&](const std::string& name)
+        {
+            for (const auto& function : module->functions) if (function.name == name) return std::to_string(function.id.value());
+            throw std::runtime_error("missing test function " + name);
+        };
+        std::string orderGlobal;
+        for (const auto& global : module->globals) if (global.name == "destructionOrder") orderGlobal = "_wio_g" + std::to_string(global.id.value());
+        std::string harness = "#define main wio_object_entry\n" + generated.code() + "\n#undef main\nint main() {\n"
+            "  if (int result = wio_object_entry()) return result;\n"
+            "  bool rejected = false; try { (void)_wio_f" + functionId("InvalidFit") + "(); } catch (const std::runtime_error&) { rejected = true; }\n"
+            "  if (!rejected) return 91;\n"
+            "  using D = _wio_obj" + typeId("Derived") + "; using I = _wio_obj" + typeId("IRead") + ";\n"
+            "  if (wio::wir_backend::object_cast<I>(wio::runtime::Ref<D>{})) return 90;\n"
+            "  auto object = wio::runtime::Ref<D>::Create();\n"
+            "  auto borrow = wio::wir_backend::Place<wio::runtime::Ref<D>>::borrow(object);\n"
+            "  if (object->StrongCount() != 1) return 92;\n"
+            "  wio::runtime::Ref<I> alias(wio::wir_backend::object_cast<I>(borrow));\n"
+            "  if (object->StrongCount() != 2 || wio::wir_backend::object_identity(object) != wio::wir_backend::object_identity(alias)) return 93;\n"
+            "  using L = _wio_obj" + typeId("Life") + "; " + orderGlobal + " = 0;\n"
+            "  auto life = wio::runtime::Ref<L>::Create(); wio::runtime::WeakRef<L> weak(life); life.Reset();\n"
+            "  if (weak.Lock() || " + orderGlobal + " != 0) return 94;\n"
+            "  weak.Reset(); if (" + orderGlobal + " != 21) return 95;\n"
+            "  return 0;\n}\n";
+        ok &= expect(compileGeneratedCode(harness, true), "object/interface source and lifetime/cast boundary probes must execute");
+        return ok ? 0 : 1;
+    }
 
     if (argc == 2 && std::string(argv[1]) == "--generics-only")
     {

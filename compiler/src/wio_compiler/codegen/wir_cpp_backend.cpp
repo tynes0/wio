@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
+#include <functional>
 #include <limits>
 #include <map>
 #include <optional>
@@ -109,6 +110,7 @@ namespace wio::codegen
                 emitPreamble();
                 emitNominalDeclarations();
                 emitFunctionDeclarations();
+                emitHierarchyBodies();
                 emitGlobals();
                 emitFunctions();
                 emitMain();
@@ -126,6 +128,8 @@ namespace wio::codegen
             const lowered::BasicBlock* currentBlock_ = nullptr;
             std::unordered_map<std::uint32_t, TypeId> valueTypes_;
             std::set<std::uint32_t> borrowedLoads_;
+            std::set<std::uint32_t> objectBorrowedLoads_;
+            std::set<std::uint32_t> ownedValues_;
 
             void diagnose(std::string code, std::string message, const SourceSpan& source = {},
                           const FunctionId function = {}, const BlockId block = {})
@@ -225,14 +229,35 @@ namespace wio::codegen
                             diagnose("WCPP1104", "function type requires a return type");
                         break;
                     case TypeKind::Named:
+                        if (type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface)
+                        {
+                            if (type.castTypes.empty()) diagnose("WCPP1106", "object/interface requires canonical hierarchy lowering");
+                            for (const auto& entry : type.dispatchEntries)
+                            {
+                                if (!entry.implementation) continue;
+                                const auto function = functions_.find(entry.implementation.value());
+                                const auto& method = dispatchMethod(entry);
+                                bool valid = function != functions_.end() && !functionIsOpen(*function->second) &&
+                                    !function->second->isAbstract && function->second->isMethod &&
+                                    function->second->returnType == method.returnType &&
+                                    function->second->parameters.size() == method.parameterTypes.size() + 1 &&
+                                    std::ranges::find(type.castTypes, function->second->ownerType) != type.castTypes.end();
+                                for (std::size_t p = 0; valid && p < method.parameterTypes.size(); ++p)
+                                    valid = function->second->parameters[p + 1].type == method.parameterTypes[p];
+                                if (!valid) diagnose("WCPP1212", "dispatch requires a concrete canonical implementation with a matching signature");
+                            }
+                            for (FunctionId lifecycle : {type.defaultConstructor, type.destructor})
+                                if (lifecycle)
+                                {
+                                    const auto function = functions_.find(lifecycle.value());
+                                    if (function == functions_.end() || functionIsOpen(*function->second) ||
+                                        function->second->ownerType != id || function->second->parameters.size() != 1)
+                                        diagnose("WCPP1212", "object lifecycle requires a concrete receiver-only body");
+                                }
+                        }
                         if (type.nominalRepresentation == NominalRepresentation::NativePod &&
                             (!type.nativeBinding || type.nativeBinding->cppName.empty()))
                             diagnose("WCPP1105", "native POD type requires a C++ type binding");
-                        if (type.nominalRepresentation == NominalRepresentation::Wio &&
-                            (type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface) &&
-                            std::ranges::any_of(type.baseTypes,
-                                [&](const TypeId base) { return !isSyntheticRootObject(base); }))
-                            diagnose("WCPP1106", "object/interface inheritance layout is not implemented by this backend");
                         if (type.nominalKind == NominalKind::Enum || type.nominalKind == NominalKind::Flagset)
                         {
                             const Type* underlying = module_.types.tryGet(type.enumUnderlyingType);
@@ -257,11 +282,6 @@ namespace wio::codegen
                 case lowered::Opcode::CoroutineSuspend:
                 case lowered::Opcode::CoroutineResume:
                 case lowered::Opcode::CoroutineComplete:
-                case lowered::Opcode::VirtualCall:
-                case lowered::Opcode::InterfaceCall:
-                case lowered::Opcode::Upcast:
-                case lowered::Opcode::CheckedCast:
-                case lowered::Opcode::TypeTest:
                     return false;
                 default:
                     return true;
@@ -330,7 +350,8 @@ namespace wio::codegen
                             if (instruction.callee)
                             {
                                 const auto callee = functions_.find(instruction.callee.value());
-                                if (callee != functions_.end() && functionIsOpen(*callee->second))
+                                if (callee != functions_.end() && functionIsOpen(*callee->second) &&
+                                    !(callee->second->isAbstract && instruction.opcode == lowered::Opcode::InterfaceCall))
                                     diagnose("WCPP1209", "generic call requires a concrete specialized function body",
                                         instruction.source, function.id, block.id);
                             }
@@ -386,6 +407,19 @@ namespace wio::codegen
                                 instruction.opcode == lowered::Opcode::ConstructObject)
                             {
                                 const Type* target = module_.types.tryGet(instruction.resultType);
+                                if (target && instruction.opcode == lowered::Opcode::ConstructObject &&
+                                    std::ranges::any_of(target->dispatchEntries, [](const DispatchEntry& entry) { return !entry.implementation; }))
+                                    diagnose("WCPP1211", "cannot construct an object with abstract method contracts", instruction.source, function.id, block.id);
+                                if (instruction.callee)
+                                {
+                                    const auto body = functions_.find(instruction.callee.value());
+                                    bool valid = body != functions_.end() && body->second->ownerType == instruction.resultType &&
+                                        body->second->parameters.size() == instruction.signatureTypes.size() + 1 &&
+                                        module_.types.get(body->second->returnType).kind == TypeKind::Void;
+                                    for (std::size_t p = 0; valid && p < instruction.signatureTypes.size(); ++p)
+                                        valid = body->second->parameters[p + 1].type == instruction.signatureTypes[p];
+                                    if (!valid) diagnose("WCPP1203", "constructor identity does not match its canonical argument signature", instruction.source, function.id, block.id);
+                                }
                                 bool aggregateCompatible = valueModelConstructorCompatible(
                                     target, instruction, functionValueTypes);
                                 if (target && target->nominalValueModel == NominalValueModel::Regular)
@@ -398,17 +432,8 @@ namespace wio::codegen
                                     aggregateCompatible = value != functionValueTypes.end() &&
                                         value->second == target->fields[index].type;
                                 }
-                                if (!aggregateCompatible)
+                                if (!aggregateCompatible && !instruction.callee)
                                     diagnose("WCPP1203", "constructor requires a callable constructor adapter; only canonical field-wise construction is enabled",
-                                        instruction.source, function.id, block.id);
-                            }
-                            if ((instruction.opcode == lowered::Opcode::AnyBox ||
-                                 instruction.opcode == lowered::Opcode::AnyCheckedCast ||
-                                 instruction.opcode == lowered::Opcode::AnyTypeTest) && instruction.targetType)
-                            {
-                                const Type* target = module_.types.tryGet(instruction.targetType);
-                                if (target && target->kind == TypeKind::Named && target->nominalKind == NominalKind::Interface)
-                                    diagnose("WCPP1204", "interface values in any require completed interface adapter layout",
                                         instruction.source, function.id, block.id);
                             }
                         }
@@ -608,6 +633,7 @@ namespace wio::codegen
 
                 output_ << R"CPP(
 namespace wio::wir_backend {
+struct SkipConstructor {};
 template<class T> class Place {
 public:
     static Place local() {
@@ -647,12 +673,139 @@ template<class T, class U> wio::runtime::Ref<T> checked_ref_cast(const wio::runt
     if (auto* casted = dynamic_cast<T*>(value.Get())) return wio::runtime::Ref<T>(casted);
     return {};
 }
+// Object places borrow handles (or raw self), never manufacture an owning
+// self-reference. Local storage still owns exactly one ordinary Ref<T>.
+template<class T> class Place<wio::runtime::Ref<T>> {
+    using Handle = wio::runtime::Ref<T>;
+    std::shared_ptr<std::optional<Handle>> owner_;
+    Handle* handle_ = nullptr;
+    T* raw_ = nullptr;
+    bool readOnly_ = false;
+public:
+    static Place local() { Place p; p.owner_ = std::make_shared<std::optional<Handle>>(); return p; }
+    static Place borrow(Handle& h) { Place p; p.handle_ = &h; return p; }
+    static Place borrowView(const Handle& h) { auto p = borrow(const_cast<Handle&>(h)); p.readOnly_ = true; return p; }
+    static Place raw(T* value) { Place p; p.raw_ = value; return p; }
+    T* Get() const {
+        if (handle_) return handle_->Get();
+        if (owner_) { if (!*owner_) throw std::runtime_error("read from uninitialized Wio object place"); return owner_->value().Get(); }
+        return raw_;
+    }
+    Handle read() const { return Handle(Get()); }
+    void write(Handle value) {
+        if (readOnly_) throw std::runtime_error("write through a Wio view");
+        if (handle_) *handle_ = std::move(value);
+        else if (owner_) *owner_ = std::move(value);
+        else throw std::runtime_error("rebind of raw Wio self");
+    }
+    void clear() { if (readOnly_) throw std::runtime_error("clear through a Wio view"); if (handle_) handle_->Reset(); else if (owner_) owner_->reset(); }
+    Handle take() { auto value = read(); clear(); return value; }
+};
+template<class T> T& value_base(Place<wio::runtime::Ref<T>>& value) {
+    if (!value.Get()) throw std::runtime_error("null Wio object access");
+    return *value.Get();
+}
+template<class T> T* object_ptr(const wio::runtime::Ref<T>& value) { return value.Get(); }
+template<class T> T* object_ptr(const Place<wio::runtime::Ref<T>>& value) { return value.Get(); }
+template<class T> struct ObjectBorrow {
+    T* pointer;
+    T* Get() const { return pointer; }
+    T* operator->() const { return pointer; }
+    operator wio::runtime::Ref<T>() const { return wio::runtime::Ref<T>(pointer); }
+};
+template<class T> T* object_ptr(const ObjectBorrow<T>& value) { return value.Get(); }
+template<class T> T& value_base(ObjectBorrow<T>& value) { if (!value.Get()) throw std::runtime_error("null Wio object access"); return *value.Get(); }
+template<class T> auto object_ptr(const std::optional<T>& value) { return value ? object_ptr(*value) : nullptr; }
+template<class T, class U> T* object_cast(const U& value) { return dynamic_cast<T*>(object_ptr(value)); }
+template<class T, class U> T* require_object_cast(const U& value) {
+    auto* result = object_cast<T>(value);
+    if (!result) throw std::runtime_error("Wio object fit target mismatch");
+    return result;
+}
+template<class T> wio::runtime::RefCountedObject* object_identity(const T& value) { return object_ptr(value); }
 template<class T> std::string stringify(const T& value) { std::ostringstream stream; stream << value; return stream.str(); }
 inline std::string stringify(const bool value) { return value ? "true" : "false"; }
 inline std::string stringify(const std::string& value) { return value; }
 }
 
 )CPP";
+            }
+
+            std::vector<TypeId> nominalOrder() const
+            {
+                std::vector<TypeId> order;
+                std::set<TypeId> seen;
+                std::function<void(TypeId)> visit = [&](TypeId id)
+                {
+                    if (!seen.insert(id).second || typeIsOpen(id)) return;
+                    const auto& type = module_.types.get(id);
+                    if (type.kind != TypeKind::Named || type.nominalRepresentation != NominalRepresentation::Wio ||
+                        type.nominalKind == NominalKind::Enum || type.nominalKind == NominalKind::Flagset) return;
+                    for (TypeId base : type.baseTypes) visit(base);
+                    for (const auto& field : type.fields)
+                        if (module_.types.get(field.type).nominalKind == NominalKind::Component) visit(field.type);
+                    order.push_back(id);
+                };
+                for (std::size_t i = 0; i < module_.types.size(); ++i) visit(TypeId{static_cast<TypeId::ValueType>(i)});
+                return order;
+            }
+
+            static std::string dispatchName(TypeId contract, std::uint32_t slot)
+            { return "_dispatch_" + std::to_string(contract.value()) + "_" + std::to_string(slot); }
+
+            TypeId nominalType(TypeId id) const
+            {
+                while (module_.types.get(id).kind == TypeKind::Reference || module_.types.get(id).kind == TypeKind::Nullable)
+                    id = module_.types.get(id).arguments.front();
+                return id;
+            }
+
+            const MethodLayout& dispatchMethod(const DispatchEntry& entry) const
+            {
+                const auto& methods = module_.types.get(entry.contractType).methods;
+                return *std::ranges::find(methods, entry.slot, &MethodLayout::slot);
+            }
+
+            std::string dispatchSignature(const DispatchEntry& entry, const std::string& owner = {}) const
+            {
+                const auto& method = dispatchMethod(entry);
+                std::string result = cppType(method.returnType) + " " + owner + dispatchName(entry.contractType, entry.slot) + "(";
+                for (std::size_t i = 0; i < method.parameterTypes.size(); ++i)
+                {
+                    if (i) result += ", ";
+                    result += cppType(method.parameterTypes[i]) + " _a" + std::to_string(i);
+                }
+                return result + ")";
+            }
+
+            void emitHierarchyBodies()
+            {
+                for (TypeId id : nominalOrder())
+                {
+                    const auto& type = module_.types.get(id);
+                    for (const auto& entry : type.dispatchEntries)
+                    {
+                        if (!entry.implementation) continue;
+                        const auto& function = *functions_.at(entry.implementation.value());
+                        output_ << dispatchSignature(entry, objectName(id) + "::") << " { return " << functionName(function.id) << "("
+                            << cppType(function.parameters.front().type) << "::raw(static_cast<" << objectName(function.ownerType) << "*>(this))";
+                        for (std::size_t i = 0; i < dispatchMethod(entry).parameterTypes.size(); ++i)
+                            output_ << ", std::move(_a" << i << ")";
+                        output_ << "); }\n";
+                    }
+                    if (type.destructor)
+                    {
+                        const auto& function = *functions_.at(type.destructor.value());
+                        output_ << objectName(id) << "::~" << objectName(id) << "() { " << functionName(function.id) << "("
+                            << cppType(function.parameters.front().type) << "::raw(this)); }\n";
+                    }
+                    if (type.defaultConstructor)
+                    {
+                        const auto& function = *functions_.at(type.defaultConstructor.value());
+                        output_ << objectName(id) << "::" << objectName(id) << "() { " << functionName(function.id) << "("
+                            << cppType(function.parameters.front().type) << "::raw(this)); }\n";
+                    }
+                }
             }
 
             void emitNominalDeclarations()
@@ -740,24 +893,35 @@ inline std::string stringify(const std::string& value) { return value; }
                 }
                 output_ << '\n';
 
-                for (std::size_t index = 0; index < module_.types.size(); ++index)
+                for (const TypeId id : nominalOrder())
                 {
-                    const TypeId id{static_cast<TypeId::ValueType>(index)};
-                    const Type& type = module_.types.types()[index];
-                    if (typeIsOpen(id) || type.kind != TypeKind::Named ||
-                        type.nominalRepresentation != NominalRepresentation::Wio ||
-                        type.nominalKind == NominalKind::Enum || type.nominalKind == NominalKind::Flagset)
-                        continue;
+                    const Type& type = module_.types.get(id);
                     const bool object = type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface;
                     output_ << "struct " << (object ? objectName(id) : typeName(id));
-                    if (object) output_ << " : wio::runtime::RefCountedObject";
+                    if (object)
+                    {
+                        output_ << " : virtual wio::runtime::RefCountedObject";
+                        for (TypeId base : type.baseTypes)
+                            output_ << ", " << (module_.types.get(base).nominalKind == NominalKind::Interface ? "virtual " : "") << objectName(base);
+                    }
                     output_ << " {\n";
                     for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
                         output_ << "    " << cppType(type.fields[fieldIndex].type) << " _f" << fieldIndex << "{}; // " <<
                             safeIdentifier(type.fields[fieldIndex].name) << "\n";
                     if (object)
                     {
-                        output_ << "    " << objectName(id) << "() = default;\n";
+                        output_ << "    static constexpr std::uint64_t TYPE_ID = " << id.value() << ";\n";
+                        output_ << "    bool _WF_IsA(std::uint64_t id) const override { return ";
+                        for (TypeId cast : type.castTypes) output_ << "id == " << cast.value() << " || ";
+                        output_ << "false; }\n    void* _WF_CastTo(std::uint64_t id) override {\n";
+                        for (TypeId cast : type.castTypes)
+                            output_ << "        if (id == " << cast.value() << ") return static_cast<" << objectName(cast) << "*>(this);\n";
+                        output_ << "        return nullptr;\n    }\n";
+                        for (const DispatchEntry& entry : type.dispatchEntries)
+                            output_ << "    virtual " << dispatchSignature(entry) << (entry.implementation ? ";\n" : " = 0;\n");
+                        if (type.destructor) output_ << "    ~" << objectName(id) << "() override;\n";
+                        output_ << "    " << objectName(id) << (type.defaultConstructor ? "();\n" : "() = default;\n");
+                        output_ << "    explicit " << objectName(id) << "(wio::wir_backend::SkipConstructor) {}\n";
                         if (type.nominalValueModel == NominalValueModel::Option && type.fields.size() >= 2 &&
                             !type.arguments.empty())
                         {
@@ -833,17 +997,33 @@ inline std::string stringify(const std::string& value) { return value; }
             {
                 valueTypes_.clear();
                 borrowedLoads_.clear();
+                objectBorrowedLoads_.clear();
+                ownedValues_.clear();
                 for (const lowered::Parameter& parameter : function.parameters)
+                {
                     valueTypes_[parameter.id.value()] = parameter.type;
+                    if (parameter.ownership == typed::ValueOwnership::Owned) ownedValues_.insert(parameter.id.value());
+                }
                 for (const lowered::BasicBlock& block : function.blocks)
                 {
                     for (const lowered::Parameter& parameter : block.parameters)
+                    {
                         valueTypes_[parameter.id.value()] = parameter.type;
+                        if (parameter.ownership == typed::ValueOwnership::Owned) ownedValues_.insert(parameter.id.value());
+                    }
                     for (const lowered::Instruction& instruction : block.instructions)
                     {
                         if (instruction.result) valueTypes_[instruction.result.value()] = instruction.resultType;
+                        if (instruction.resultOwnership == typed::ValueOwnership::Owned) ownedValues_.insert(instruction.result.value());
                         if (instruction.opcode == lowered::Opcode::Load &&
-                            instruction.resultOwnership == typed::ValueOwnership::Borrowed)
+                            instruction.resultOwnership == typed::ValueOwnership::Borrowed &&
+                            (module_.types.get(instruction.resultType).nominalKind == NominalKind::Object ||
+                             module_.types.get(instruction.resultType).nominalKind == NominalKind::Interface))
+                            objectBorrowedLoads_.insert(instruction.result.value());
+                        if (instruction.opcode == lowered::Opcode::Load &&
+                            instruction.resultOwnership == typed::ValueOwnership::Borrowed &&
+                            module_.types.get(instruction.resultType).nominalKind != NominalKind::Object &&
+                            module_.types.get(instruction.resultType).nominalKind != NominalKind::Interface)
                             borrowedLoads_.insert(instruction.result.value());
                     }
                 }
@@ -950,13 +1130,14 @@ inline std::string stringify(const std::string& value) { return value; }
                     "); } }())";
             }
 
-            std::string callArguments(const lowered::Instruction& instruction, const std::size_t begin = 0) const
+            std::string callArguments(const lowered::Instruction& instruction, const std::size_t begin = 0, const bool consume = false) const
             {
                 std::string arguments;
                 for (std::size_t index = begin; index < instruction.operands.size(); ++index)
                 {
                     if (index != begin) arguments += ", ";
-                    arguments += operand(instruction.operands[index]);
+                    arguments += consume && ownedValues_.contains(instruction.operands[index].value())
+                        ? movedOperand(instruction.operands[index]) : operand(instruction.operands[index]);
                 }
                 return arguments;
             }
@@ -1097,7 +1278,7 @@ inline std::string stringify(const std::string& value) { return value; }
                 case lowered::Opcode::Call:
                 case lowered::Opcode::ExtensionCall:
                 case lowered::Opcode::MethodCall:
-                    assignResult(instruction, functionName(instruction.callee) + "(" + callArguments(instruction) + ")");
+                    assignResult(instruction, functionName(instruction.callee) + "(" + callArguments(instruction, 0, true) + ")");
                     break;
                 case lowered::Opcode::NativeInvoke:
                 {
@@ -1146,23 +1327,25 @@ inline std::string stringify(const std::string& value) { return value; }
                     break;
                 case lowered::Opcode::VirtualCall:
                 case lowered::Opcode::InterfaceCall:
-                    assignResult(instruction, functionName(instruction.callee) + "(" + callArguments(instruction) + ")");
+                    assignResult(instruction, "wio::wir_backend::value_base(" + operand(instruction.operands.front()) + ")." +
+                        dispatchName(instruction.targetType, instruction.projectionIndex) + "(" + callArguments(instruction, 1, true) + ")");
                     break;
                 case lowered::Opcode::Upcast:
-                    assignResult(instruction, operand(instruction.operands[0]));
-                    break;
                 case lowered::Opcode::CheckedCast:
-                    assignResult(instruction, "wio::wir_backend::checked_ref_cast<" + objectName(instruction.targetType) + ">(" +
-                        operand(instruction.operands[0]) + ")");
+                {
+                    const bool borrowed = module_.types.get(instruction.resultType).kind == TypeKind::Reference;
+                    const std::string pointer = "wio::wir_backend::require_object_cast<" + objectName(nominalType(instruction.targetType)) + ">(" + operand(instruction.operands[0]) + ")";
+                    assignResult(instruction, cppType(instruction.resultType) + (borrowed ? "::raw(" : "(") + pointer + ")");
                     break;
+                }
                 case lowered::Opcode::TypeTest:
-                    assignResult(instruction, "static_cast<bool>(wio::wir_backend::checked_ref_cast<" + objectName(instruction.targetType) +
-                        ">(" + operand(instruction.operands[0]) + "))");
+                    assignResult(instruction, "(wio::wir_backend::object_cast<" + objectName(nominalType(instruction.targetType)) +
+                        ">(" + operand(instruction.operands[0]) + ") != nullptr)");
                     break;
                 case lowered::Opcode::IdentityEqual:
-                    assignResult(instruction, "(" + operand(instruction.operands[0]) +
-                        (instruction.binaryOperator == typed::BinaryOperator::NotEqual ? ".Get() != " : ".Get() == ") +
-                        operand(instruction.operands[1]) + ".Get())");
+                    assignResult(instruction, "(wio::wir_backend::object_identity(" + operand(instruction.operands[0]) +
+                        (instruction.binaryOperator == typed::BinaryOperator::NotEqual ? ") != " : ") == ") +
+                        "wio::wir_backend::object_identity(" + operand(instruction.operands[1]) + "))");
                     break;
                 case lowered::Opcode::VariantTest:
                 {
@@ -1280,9 +1463,9 @@ inline std::string stringify(const std::string& value) { return value; }
                 }
                 case lowered::Opcode::AnyBox:
                 {
-                    const Type& boxed = module_.types.get(instruction.targetType);
-                    if (boxed.kind == TypeKind::Named && boxed.nominalKind == NominalKind::Object)
-                        assignResult(instruction, "wio::runtime::Any::FromObject(" + operand(instruction.operands[0]) + ")");
+                    const Type& boxed = module_.types.get(nominalType(instruction.targetType));
+                    if (boxed.nominalKind == NominalKind::Object || boxed.nominalKind == NominalKind::Interface)
+                        assignResult(instruction, "wio::runtime::Any::FromObject(" + cppType(nominalType(instruction.targetType)) + "(wio::wir_backend::object_ptr(" + operand(instruction.operands[0]) + ")))");
                     else if (boxed.kind == TypeKind::Opaque)
                         assignResult(instruction, "wio::runtime::Any::FromOpaque(" + operand(instruction.operands[0]) + ")");
                     else
@@ -1291,9 +1474,13 @@ inline std::string stringify(const std::string& value) { return value; }
                 }
                 case lowered::Opcode::AnyCheckedCast:
                 {
-                    const Type& target = module_.types.get(instruction.targetType);
-                    if (target.kind == TypeKind::Named && target.nominalKind == NominalKind::Object)
-                        assignResult(instruction, operand(instruction.operands[0]) + ".AsObject<" + objectName(instruction.targetType) + ">()");
+                    const Type& target = module_.types.get(nominalType(instruction.targetType));
+                    if (target.nominalKind == NominalKind::Object || target.nominalKind == NominalKind::Interface)
+                    {
+                        const std::string cast = operand(instruction.operands[0]) + ".CastObject<" + objectName(nominalType(instruction.targetType)) + ">()";
+                        assignResult(instruction, module_.types.get(instruction.resultType).kind == TypeKind::Reference
+                            ? cppType(instruction.resultType) + "::raw(" + cast + ".Get())" : cast);
+                    }
                     else if (target.kind == TypeKind::Opaque)
                         assignResult(instruction, operand(instruction.operands[0]) + ".AsOpaque()");
                     else
@@ -1302,9 +1489,9 @@ inline std::string stringify(const std::string& value) { return value; }
                 }
                 case lowered::Opcode::AnyTypeTest:
                 {
-                    const Type& target = module_.types.get(instruction.targetType);
-                    if (target.kind == TypeKind::Named && target.nominalKind == NominalKind::Object)
-                        assignResult(instruction, operand(instruction.operands[0]) + ".IsObject<" + objectName(instruction.targetType) + ">()");
+                    const Type& target = module_.types.get(nominalType(instruction.targetType));
+                    if (target.nominalKind == NominalKind::Object || target.nominalKind == NominalKind::Interface)
+                        assignResult(instruction, operand(instruction.operands[0]) + ".CanCastObject<" + objectName(nominalType(instruction.targetType)) + ">()");
                     else if (target.kind == TypeKind::Opaque)
                         assignResult(instruction, operand(instruction.operands[0]) + ".IsOpaque()");
                     else
@@ -1340,7 +1527,9 @@ inline std::string stringify(const std::string& value) { return value; }
                         movedOperand(instruction.operands[1]) << ");\n";
                     break;
                 case lowered::Opcode::Load:
-                    assignResult(instruction, borrowedLoads_.contains(instruction.result.value())
+                    assignResult(instruction, objectBorrowedLoads_.contains(instruction.result.value())
+                        ? "wio::wir_backend::ObjectBorrow<" + objectName(instruction.resultType) + ">{" + operand(instruction.operands[0]) + ".Get()}"
+                        : borrowedLoads_.contains(instruction.result.value())
                         ? "std::ref(" + operand(instruction.operands[0]) + ".read())"
                         : operand(instruction.operands[0]) + ".read()");
                     break;
@@ -1348,10 +1537,17 @@ inline std::string stringify(const std::string& value) { return value; }
                     assignResult(instruction, operand(instruction.operands[0]));
                     break;
                 case lowered::Opcode::FieldPlace:
+                {
+                    const TypeId owner = instruction.targetType ? instruction.targetType : nominalType(valueType(instruction.operands[0]));
+                    const Type& layout = module_.types.get(owner);
+                    const bool object = layout.nominalKind == NominalKind::Object || layout.nominalKind == NominalKind::Interface;
+                    const std::string base = "wio::wir_backend::value_base(" + operand(instruction.operands[0]) + ")";
+                    const std::string field = layout.nominalRepresentation == NominalRepresentation::NativePod
+                        ? instruction.selector : "_f" + std::to_string(instruction.projectionIndex);
                     assignResult(instruction, "wio::wir_backend::Place<" + placeValueType(instruction.resultType) + ">::borrow(" +
-                        "wio::wir_backend::value_base(" + operand(instruction.operands[0]) + ")._f" +
-                        std::to_string(instruction.projectionIndex) + ")");
+                        (object ? "static_cast<" + objectName(owner) + "&>(" + base + ")" : base) + "." + field + ")");
                     break;
+                }
                 case lowered::Opcode::ArrayPlace:
                 {
                     const std::string base = "wio::wir_backend::value_base(" + operand(instruction.operands[0]) + ")";
@@ -1363,10 +1559,26 @@ inline std::string stringify(const std::string& value) { return value; }
                     break;
                 }
                 case lowered::Opcode::ConstructComponent:
-                    assignResult(instruction, cppType(instruction.resultType) + "{" + callArguments(instruction) + "}");
+                    if (instruction.callee)
+                    {
+                        const auto& constructor = *functions_.at(instruction.callee.value());
+                        std::string expression = "([&]() { " + cppType(instruction.resultType) + " instance{}; " +
+                            functionName(instruction.callee) + "(" + cppType(constructor.parameters.front().type) + "::borrow(instance)";
+                        if (!instruction.operands.empty()) expression += ", " + callArguments(instruction, 0, true);
+                        assignResult(instruction, expression + "); return instance; }())");
+                    }
+                    else assignResult(instruction, cppType(instruction.resultType) + "{" + callArguments(instruction, 0, true) + "}");
                     break;
                 case lowered::Opcode::ConstructObject:
-                    assignResult(instruction, cppType(instruction.resultType) + "::Create(" + callArguments(instruction) + ")");
+                    if (instruction.callee)
+                    {
+                        const auto& constructor = *functions_.at(instruction.callee.value());
+                        std::string expression = "([&]() { auto instance = " + cppType(instruction.resultType) + "::Create(wio::wir_backend::SkipConstructor{}); " +
+                            functionName(instruction.callee) + "(" + cppType(constructor.parameters.front().type) + "::borrow(instance)";
+                        if (!instruction.operands.empty()) expression += ", " + callArguments(instruction, 0, true);
+                        assignResult(instruction, expression + "); return instance; }())");
+                    }
+                    else assignResult(instruction, cppType(instruction.resultType) + "::Create(" + callArguments(instruction, 0, true) + ")");
                     break;
                 case lowered::Opcode::Retain:
                 case lowered::Opcode::CopyValue:
@@ -1455,8 +1667,10 @@ inline std::string stringify(const std::string& value) { return value; }
                     std::vector<std::pair<std::uint32_t, TypeId>> values(valueTypes_.begin(), valueTypes_.end());
                     std::ranges::sort(values, {}, &std::pair<std::uint32_t, TypeId>::first);
                     for (const auto& [id, type] : values)
-                        output_ << "    std::optional<" << (borrowedLoads_.contains(id) ? "std::reference_wrapper<" : "") <<
-                            cppType(type) << (borrowedLoads_.contains(id) ? ">" : "") << "> _v" << id << ";\n";
+                        output_ << "    std::optional<" << (objectBorrowedLoads_.contains(id)
+                            ? "wio::wir_backend::ObjectBorrow<" + objectName(type) + ">"
+                            : (borrowedLoads_.contains(id) ? "std::reference_wrapper<" : "") + cppType(type) + (borrowedLoads_.contains(id) ? ">" : ""))
+                            << "> _v" << id << ";\n";
                     for (std::size_t index = 0; index < function.parameters.size(); ++index)
                         output_ << "    " << valueName(function.parameters[index].id) << " = std::move(_p" << index << ");\n";
                     output_ << "    std::uint32_t _block = " << function.blocks.front().id.value() << ";\n"

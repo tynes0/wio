@@ -461,7 +461,9 @@ namespace wio::wir::typed
                 break;
             case Opcode::ConstructComponent:
             case Opcode::ConstructObject:
-                stream << opcodeName(instruction.opcode) << " " << std::quoted(instruction.selector) << "(";
+                stream << opcodeName(instruction.opcode) << " " << std::quoted(instruction.selector);
+                if (instruction.callee) stream << " " << functionRef(instruction.callee);
+                stream << "(";
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {
                     if (index > 0)

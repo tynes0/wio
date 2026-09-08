@@ -1,0 +1,107 @@
+interface IRead { fn Read() -> i32; }
+component Pair {
+    public first: i32;
+    public second: i32;
+    OnConstruct(value: i32) { self.first = value; self.second = value + 2; }
+}
+interface GenericRead<T> { fn Get() -> T; }
+[From(GenericRead<T>)] object GenericBox<T> {
+    public value: T;
+    OnConstruct(value: T) { self.value = value; }
+    OnDestruct() { destructionOrder += 100; }
+    public fn Get() -> T { return self.value; }
+}
+mut destructionOrder: i32 = 0;
+interface IWrite { fn Set(value: i32); }
+interface ICombined { fn Twice() -> i32; }
+[From(IRead), Default(public)] object Base {
+    seed: i32;
+    OnConstruct() { self.seed = 3; }
+    OnConstruct(seed: i32) { self.seed = seed + 1; }
+    fn Read() -> i32 { return self.seed; }
+}
+[From(Base), From(IRead), From(ICombined), From(IWrite), Default(public)] object Derived {
+    value: i32;
+    extra: string;
+    OnConstruct() { self.value = 2; }
+    OnConstruct(value: i32) { self.value = value * 2; }
+    fn Read() -> i32 { return self.value; }
+    fn Set(value: i32) { self.value = value; }
+    fn Twice() -> i32 { return self.Read() * 2; }
+    fn BaseRead() -> i32 { return super.Read(); }
+    fn Same(other: view Derived) -> bool { return self == other; }
+    fn Own() -> Derived { return deref self; }
+    fn AsRef() -> ref Derived { return self; }
+    fn AsView() -> view Derived { return self; }
+    fn BumpSeed() -> i32 { self.seed += 1; self.extra = "field-two"; return self.seed; }
+    fn Extra() -> string { return self.extra; }
+}
+[From(Derived)] object Leaf {
+    OnConstruct() {}
+    public fn Read() -> i32 { return super.Read() + 100; }
+}
+object LifeBase {
+    OnConstruct() {}
+    OnDestruct() { destructionOrder = destructionOrder * 10 + 1; }
+}
+[From(LifeBase)] object Life {
+    OnConstruct() {}
+    OnDestruct() { destructionOrder = destructionOrder * 10 + 2; }
+    public fn Touch() -> i32 { return 1; }
+}
+object Other { public value: i32; OnConstruct(value: i32) { self.value = value; } }
+fn ReadBase(value: view Base) -> i32 { return value.Read(); }
+fn ReadInterface(value: view IRead) -> i32 { return value.Read(); }
+fn WriteInterface(value: ref IWrite, number: i32) { value.Set(number); }
+fn GenericConsume<T>(value: view GenericRead<T>) -> T { return value.Get(); }
+fn InvalidFit() -> Derived { let other = Other(1); return other fit Derived; }
+fn ConsumeLife(value: Life) { value.Touch(); }
+fn Entry() -> i32 {
+    let pair = Pair(5);
+    if (pair.first != 5 or pair.second != 7) { return 20; }
+    {
+        let life = Life();
+        if (life.Touch() != 1) { return 10; }
+    }
+    if (destructionOrder != 21) { return 11; }
+    destructionOrder = 0;
+    {
+        let life = Life();
+        let box: any = life;
+        ConsumeLife(life);
+    }
+    if (destructionOrder != 21) { return 18; }
+    destructionOrder = 0;
+    { let box = GenericBox<string>("cleanup"); box.Get(); }
+    if (destructionOrder != 100) { return 19; }
+    let base = Base(4);
+    if (base.Read() != 5) { return 1; }
+    mut derived = Derived(7);
+    if (derived.Read() != 14 or ReadBase(derived) != 14) { return 2; }
+    if (ReadInterface(derived) != 14 or derived.Twice() != 28) { return 3; }
+    WriteInterface(ref derived, 19);
+    if (derived.Read() != 19) { return 4; }
+    let reader = ref derived fit IRead;
+    if (reader.Read() != 19) { return 5; }
+    if (!(ref derived is IWrite) or (ref derived is Other)) { return 6; }
+    let writer = reader fit IWrite;
+    writer.Set(23);
+    if (derived.Read() != 23 or !derived.Same(derived)) { return 7; }
+    let alias = derived.Own();
+    if (alias != derived) { return 8; }
+    if (derived.BaseRead() != 3) { return 9; }
+    if (derived.BumpSeed() != 4 or derived.Extra() != "field-two") { return 16; }
+    let leaf = Leaf();
+    if (ReadBase(leaf) != 102 or ReadInterface(leaf) != 102 or leaf.Twice() != 204) { return 17; }
+    let borrow = derived.AsRef();
+    let observe = derived.AsView();
+    borrow.Set(31);
+    if (observe.Read() != 31) { return 12; }
+    let boxed: any = derived;
+    if (!(boxed is IRead) or (boxed is Other)) { return 13; }
+    let unboxed = boxed fit IRead;
+    if (unboxed.Read() != 31) { return 14; }
+    let generic = GenericBox<string>("specialized");
+    if (generic.Get() != "specialized" or GenericConsume(generic) != "specialized") { return 15; }
+    return 0;
+}

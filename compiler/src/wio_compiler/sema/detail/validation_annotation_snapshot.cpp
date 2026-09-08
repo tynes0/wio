@@ -61,6 +61,8 @@ namespace wio::sema::detail
                 OperatorDispatchKind operatorDispatchKind;
                 WeakRef<Type> overloadFunctionType;
                 std::vector<WeakRef<Type>> resolvedGenericArguments;
+                WeakRef<Symbol> resolvedConstructor;
+                WeakRef<Type> resolvedConstructorType;
             };
 
             struct MemberAccessState
@@ -129,6 +131,8 @@ namespace wio::sema::detail
                     state.node->operatorDispatchKind = state.operatorDispatchKind;
                     state.node->overloadFunctionType = state.overloadFunctionType;
                     state.node->resolvedGenericArguments = state.resolvedGenericArguments;
+                    state.node->resolvedConstructor = state.resolvedConstructor;
+                    state.node->resolvedConstructorType = state.resolvedConstructorType;
                 }
 
                 for (const auto& state : memberAccessStates)
@@ -204,7 +208,9 @@ namespace wio::sema::detail
                         functionCallExpression,
                         functionCallExpression->operatorDispatchKind,
                         functionCallExpression->overloadFunctionType,
-                        functionCallExpression->resolvedGenericArguments
+                        functionCallExpression->resolvedGenericArguments,
+                        functionCallExpression->resolvedConstructor,
+                        functionCallExpression->resolvedConstructorType
                     });
                 }
 

@@ -2944,6 +2944,11 @@
                 }
             }
 
+            if (isConstructorCall)
+            {
+                node.resolvedConstructor = bestMatch->symbol;
+                node.resolvedConstructorType = bestMatch->functionType;
+            }
             if (isCallOperatorInvocation)
             {
                 node.referencedSymbol = bestMatch->symbol;
@@ -3112,6 +3117,11 @@
         }
 
         auto funcType = calleeType.AsFast<FunctionType>();
+        if (isConstructorCall)
+        {
+            node.resolvedConstructor = calleeSym;
+            node.resolvedConstructorType = calleeType;
+        }
         std::vector<Ref<Type>> argTypes;
         const auto* directFunctionDeclaration = getFunctionDeclarationForSymbol(calleeSym);
         if (auto resolvedArgumentTypes = analyzeArgumentsForResolvedFunctionType(funcType, directFunctionDeclaration, false, false);

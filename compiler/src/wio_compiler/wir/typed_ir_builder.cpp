@@ -598,10 +598,10 @@ namespace wio::wir::typed
                 .resultType = valueType,
                 .operands = {place},
                 .resultOwnership = loadedOwnership,
-                .borrowLifetime = cleanupBearing
+                .borrowLifetime = loadedOwnership == ValueOwnership::Borrowed
                     ? BorrowLifetime::Lexical
                     : BorrowLifetime::None,
-                .borrowOrigin = cleanupBearing ? place : ValueId{},
+                .borrowOrigin = loadedOwnership == ValueOwnership::Borrowed ? place : ValueId{},
                 .source = source ? SourceSpan::at(source->location()) : SourceSpan{}
             });
             rememberOwnership(state, result, loadedOwnership);
@@ -1666,6 +1666,9 @@ namespace wio::wir::typed
                     : structure->scopePath + "::" + structure->name;
                 for (const auto& argument : structure->genericArguments)
                     wirType.arguments.push_back(mapType(argument, source));
+                if (structure->genericArguments.empty())
+                    for (const auto& parameter : structure->genericParameterTypes)
+                        wirType.arguments.push_back(mapType(parameter, source));
                 wirType.nominalKind = structure->isFlagset
                     ? NominalKind::Flagset
                     : structure->isEnum
@@ -1731,7 +1734,8 @@ namespace wio::wir::typed
                 std::vector<TypeId> parameters, arguments;
                 if (!structure->genericArguments.empty())
                 {
-                    const auto& genericParameters = usePrimaryFields ? primary->genericParameterTypes : structure->genericParameterTypes;
+                    const auto& genericParameters = primary && !structure->isExplicitSpecialization && !structure->isPartialSpecialization
+                        ? primary->genericParameterTypes : structure->genericParameterTypes;
                     for (const auto& parameter : genericParameters) parameters.push_back(mapType(parameter, source));
                     for (const auto& argument : structure->genericArguments) arguments.push_back(mapType(argument, source));
                 }
@@ -1795,6 +1799,12 @@ namespace wio::wir::typed
                     }
                 }
 
+                for (MethodLayout& method : methods)
+                {
+                    method.returnType = substituteGenericType(method.returnType, parameters, arguments);
+                    for (TypeId& parameter : method.parameterTypes)
+                        parameter = substituteGenericType(parameter, parameters, arguments);
+                }
                 Type& storedType = result_.module_.types.getMutable(id);
                 storedType.baseTypes = std::move(baseTypes);
                 storedType.fields = std::move(fields);
@@ -3577,7 +3587,11 @@ namespace wio::wir::typed
                         if (ownerScope)
                             constructorSymbol = ownerScope->resolveLocally("OnConstruct");
                     }
-                    const auto constructorType = constructorSymbol && constructorSymbol->type &&
+                    if (const auto resolved = call->resolvedConstructor.Lock()) constructorSymbol = resolved;
+                    const auto resolvedConstructorType = call->resolvedConstructorType.Lock();
+                    const auto constructorType = resolvedConstructorType && resolvedConstructorType->kind() == sema::TypeKind::Function
+                        ? resolvedConstructorType.AsFast<sema::FunctionType>()
+                        : constructorSymbol && constructorSymbol->type &&
                         constructorSymbol->type->kind() == sema::TypeKind::Function
                         ? constructorSymbol->type.AsFast<sema::FunctionType>()
                         : nullptr;
@@ -3588,6 +3602,12 @@ namespace wio::wir::typed
                         .selector = callResultTypeInfo->name + "::OnConstruct",
                         .source = SourceSpan::at(expression->location())
                     };
+                    constructorSymbol = resolveCallableSymbol(constructorSymbol, resolvedConstructorType);
+                    if (constructorSymbol)
+                    {
+                        const auto body = functionsBySymbol_.find(constructorSymbol.Get());
+                        if (body != functionsBySymbol_.end()) instruction.callee = body->second;
+                    }
                     for (std::size_t index = 0; index < call->arguments.size(); ++index)
                     {
                         const auto& argument = call->arguments[index];
@@ -4149,7 +4169,25 @@ namespace wio::wir::typed
                 if (destination && destination->kind == TypeKind::Reference &&
                     destination->arguments.size() == 1)
                 {
-                    return buildPlace(reference->operand, destination->isMutable, state);
+                    // Building the place may grow the interned type table.
+                    const Type destinationInfo = *destination;
+                    const ValueId place = buildPlace(reference->operand, destinationInfo.isMutable, state);
+                    const TypeId sourceNominal = mapType(reference->operand->refType.Lock(), expression.Get());
+                    TypeId underlyingSource;
+                    if (place && underlyingNominalType(sourceNominal, &underlyingSource) &&
+                        underlyingSource != destinationInfo.arguments.front() &&
+                        nominalDerivesFrom(underlyingSource, destinationInfo.arguments.front()))
+                    {
+                        const ValueId upcast{state.nextValue++};
+                        currentBlock(state).instructions.push_back(Instruction{
+                            .opcode = Opcode::Upcast, .result = upcast, .resultType = destinationType,
+                            .operands = {place}, .targetType = destinationType,
+                            .resultOwnership = ValueOwnership::Borrowed, .borrowLifetime = BorrowLifetime::Caller,
+                            .source = SourceSpan::at(expression->location())});
+                        rememberOwnership(state, upcast, ValueOwnership::Borrowed);
+                        return upcast;
+                    }
+                    return place;
                 }
             }
             ValueId value = buildExpression(expression, state);
@@ -4220,6 +4258,7 @@ namespace wio::wir::typed
                     .source = SourceSpan::at(expression->location())
                 });
                 rememberOwnership(state, boxed, ValueOwnership::Owned);
+                releaseOwnedTemporary(value, expression.Get(), state);
                 return boxed;
             }
 

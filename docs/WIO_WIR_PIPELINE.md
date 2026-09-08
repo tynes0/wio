@@ -35,6 +35,12 @@ module is verified again before lowering. Original generic declarations remain
 metadata; concrete functions carry their origin and deduplicated specialization
 identity. See the Sprint 17.1 contract in `WIO_CPP_BACKEND.md`.
 
+Sprint 17.2 adds canonical hierarchy lowering after generic materialization:
+transitive cast identities, contract-local dispatch slots, selected lifecycle
+bodies and declaring-subobject field indices. The C++ backend consumes these
+tables directly for object/interface execution; malformed tables are rejected
+by the Lowered verifier. See `WIO_CPP_BACKEND.md` for the executable parity gate.
+
 Named types retain their semantic category instead of collapsing to a backend
 spelling: `component`, `object`, `interface`, `enum`, and `flagset` are distinct
 nominal kinds. Components use value semantics while object/interface types are

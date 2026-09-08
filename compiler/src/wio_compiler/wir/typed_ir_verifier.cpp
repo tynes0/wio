@@ -1581,13 +1581,13 @@ namespace wio::wir::typed
                             valid = valid && underlyingNamedType(module.types, valueType(instruction.operands.front()), &receiverNominal) &&
                                 nominalDerivesFrom(module.types, receiverNominal, instruction.targetType, visited);
                             const Function& callee = *calleeIt->second;
-                            const Type* returnType = module.types.tryGet(callee.returnType);
+                            const Type* returnType = module.types.tryGet(method->returnType);
                             const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
                             valid = valid && returnType &&
                                 (returnsVoid
                                     ? !instruction.result
                                     : callee.genericParameters.empty()
-                                        ? instruction.resultType == callee.returnType
+                                        ? instruction.resultType == method->returnType
                                         : module.types.tryGet(instruction.resultType) && !instruction.specializationKey.empty());
                         }
                         if (!valid)

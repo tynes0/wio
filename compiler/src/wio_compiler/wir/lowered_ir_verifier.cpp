@@ -1,4 +1,5 @@
 #include "wio/wir/lowered_ir_verifier.h"
+#include "wio/wir/hierarchy_lowering.h"
 
 #include <algorithm>
 #include <optional>
@@ -339,6 +340,34 @@ namespace wio::wir::lowered
                 if (!valid)
                     report("LIR1113", "Native Lowered WIR function binding has an invalid identity, ABI signature, or thunk contract.", function.source, function.id);
             }
+        }
+
+        if (std::ranges::any_of(module.types.types(), [](const Type& type) { return !type.castTypes.empty(); }))
+        {
+            Module expected = module;
+            const auto hierarchyErrors = lowerHierarchy(expected);
+            for (const auto& error : hierarchyErrors) report("LIR1530", error);
+            for (std::size_t i = 0; i < module.types.size(); ++i)
+            {
+                const auto& actual = module.types.types()[i];
+                const auto& canonical = expected.types.types()[i];
+                if (actual.castTypes != canonical.castTypes || actual.dispatchEntries != canonical.dispatchEntries ||
+                    actual.destructor != canonical.destructor || actual.defaultConstructor != canonical.defaultConstructor)
+                    report("LIR1530", "Object hierarchy cast/dispatch/lifecycle table does not match canonical contracts.");
+                for (const auto& entry : actual.dispatchEntries)
+                    if (entry.implementation && !functions.contains(entry.implementation.value()))
+                        report("LIR1531", "Object dispatch references an unknown implementation.");
+            }
+            for (std::size_t f = 0; f < module.functions.size(); ++f)
+                for (std::size_t b = 0; b < module.functions[f].blocks.size(); ++b)
+                    for (std::size_t i = 0; i < module.functions[f].blocks[b].instructions.size(); ++i)
+                    {
+                        const auto& actual = module.functions[f].blocks[b].instructions[i];
+                        const auto& canonical = expected.functions[f].blocks[b].instructions[i];
+                        if (actual.opcode == Opcode::FieldPlace &&
+                            (actual.targetType != canonical.targetType || actual.projectionIndex != canonical.projectionIndex))
+                            report("LIR1532", "Field projection must identify its canonical declaring subobject and storage index.", actual.source);
+                    }
         }
 
         if (module.contract.logicalName.empty() || module.contract.stableKey.empty() || module.contract.stableId == 0 ||
@@ -1151,6 +1180,13 @@ namespace wio::wir::lowered
                         {
                             std::unordered_set<TypeId::ValueType> visited;
                             const FieldLayout* field = findFieldLayout(module.types, *baseValueType, instruction.selector, visited);
+                            if (instruction.targetType)
+                            {
+                                const Type* declaring = module.types.tryGet(instruction.targetType);
+                                if (!declaring || instruction.projectionIndex >= declaring->fields.size() ||
+                                    &declaring->fields[instruction.projectionIndex] != field)
+                                    report("LIR1532", "Field storage index does not identify the resolved declaring field.", instruction.source, function.id, block.id);
+                            }
                             if (!field || field->type != placeType->arguments.front() ||
                                 (placeType->isMutable && !field->isMutable))
                             {
@@ -1389,13 +1425,13 @@ namespace wio::wir::lowered
                             valid = valid && underlyingNamedType(module.types, valueType(instruction.operands.front()), &receiverNominal) &&
                                 nominalDerivesFrom(module.types, receiverNominal, instruction.targetType, visited);
                             const Function& callee = *calleeIt->second;
-                            const Type* returnType = module.types.tryGet(callee.returnType);
+                            const Type* returnType = module.types.tryGet(method->returnType);
                             const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
                             valid = valid && returnType &&
                                 (returnsVoid
                                     ? !instruction.result
                                     : callee.genericParameters.empty()
-                                        ? instruction.resultType == callee.returnType
+                                        ? instruction.resultType == method->returnType
                                         : module.types.tryGet(instruction.resultType) && !instruction.specializationKey.empty());
                         }
                         if (!valid)

@@ -62,9 +62,10 @@ The opt-in backend currently emits:
   layouts while open template declarations remain non-emitted metadata;
 - concrete non-variadic generic function bodies, nested and recursive calls,
   generic extensions, specialized closure bodies, and pinned function references;
-- component field layouts and intrusive-reference-counted object storage;
+- component field layouts, declaring-subobject field projections, and
+  intrusive-reference-counted object storage with a shared hierarchy root;
 - constants, unary/binary/range operations, conversions, direct/extension/
-  resolved non-virtual method calls, function references, closures, and
+  resolved non-virtual, virtual and interface method calls, function references, closures, and
   indirect calls;
 - arrays, dictionaries, interpolation, `any`, nullable values, globals,
   locals, projections, borrows, construction, copy/move/retain/release/drop,
@@ -92,11 +93,9 @@ supported during traversal.
 
 The following operations remain deliberately rejected before code emission:
 
-- inherited object/interface layout, virtual/interface dispatch, and checked
-  hierarchy conversion until the WIR layout has a backend-complete cast table;
 - unresolved generic calls and variadic parameter-pack expansion; generic native
-  adapters and generic virtual/interface dispatch remain in their respective
-  native/hierarchy milestones;
+  adapters remain in the native milestone; open method-level generic contracts
+  are not emitted as runtime virtual slots;
 - coroutine suspend/resume/completion and cancellation runtime emission.
 
 Those are parity work inside the C++ backend milestone, not permissions for an
@@ -135,6 +134,64 @@ failure, recursion, ref mutation, closures, const arrays, generic component
 returns, and intrusive object identity. Contextual generic function-reference
 source syntax is not expanded by this sprint; the gate also constructs a pinned
 function-reference WIR probe directly.
+
+## Sprint 17.2: object and interface execution
+
+`lower-object-hierarchy` pins each nominal type's transitive `castTypes`,
+per-contract `dispatchEntries`, default constructor and destructor. A dispatch
+key is `(contract TypeId, local slot)`; different interfaces may use the same
+slot number without colliding. Generic owner methods and lifecycle bodies are
+materialized before this pass. Field places carry their declaring type and
+local storage index, including fields inherited from a base object. The
+Lowered verifier rejects modified cast/dispatch/lifecycle tables (`LIR1530`),
+unknown implementations (`LIR1531`), and mismatched field projections
+(`LIR1532`). Invalid hierarchies fail lowering with `WIR3200`.
+
+The C++ backend emits base classes before derived classes and one virtual
+intrusive runtime root across object/interface views. Contract-specific virtual
+thunks call the already-selected WIR function; `super` remains a direct call.
+`is` inspects dynamic type, `fit` checks and rejects a mismatched target, and
+identity comparisons normalize interface pointers to the shared runtime object.
+Objects boxed in `any` retain dynamic hierarchy casts, not only the boxed static
+type. Generated type IDs here are module-local; stable cross-module SDK dispatch
+and adapters remain Sprint 17.4 work.
+
+```wio
+interface IRead { fn Read() -> i32; }
+[From(IRead)] object Counter {
+    public value: i32;
+    OnConstruct(value: i32) { self.value = value + 1; }
+    public fn Read() -> i32 { return self.value; }
+    public fn Own() -> Counter { return deref self; }
+}
+fn ReadCounter(counter: view IRead) -> i32 { return counter.Read(); }
+fn Entry() -> i32 {
+    let counter = Counter(6);
+    let reader = counter fit IRead;
+    if (ReadCounter(counter) == 7 and reader.Read() == 7) { return 0; }
+    return 1;
+}
+```
+
+Constructor calls now carry the semantic analyzer's selected callable identity,
+including overloads: bodies execute instead of being approximated by field-wise
+initialization. Base default constructors precede derived constructor bodies;
+destructors run derived-to-base. `self`, object borrows and borrowed object loads
+do not increment the strong count. Owning `deref self` results do. Ordinary
+same-type handle places preserve write-through storage; raw self borrows do not
+represent rebindable handle storage. Physical destruction follows the existing
+`Ref`/`WeakRef` runtime contract: a surviving weak reference delays physical
+destruction, while locking a zero-strong object already fails. This sprint does
+not change production lifetime semantics.
+
+`wio_wir_cpp_objects` compiles and runs the new source fixture plus C++ boundary
+probes: overload/default constructors, multi-field and inherited field access,
+three-level virtual dispatch, shared interface paths, `super`, generic
+object/interface methods, generic destruction, owning/borrowed self returns,
+`any`, scope cleanup, failed casts, shared strong counts and weak lifetime.
+It also corrupts dispatch/field metadata and requires rejection before emission.
+The source-language restrictions on nullable `is` operands and interface
+inheritance declarations are unchanged; this is backend parity, not new syntax.
 
 ## Cutover policy
 

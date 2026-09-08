@@ -671,6 +671,8 @@ namespace wio
         // Concrete type arguments selected by semantic deduction/defaulting.
         // Codegen uses this when the written argument list was only partial.
         std::vector<WeakRef<sema::Type>> resolvedGenericArguments;
+        WeakRef<sema::Symbol> resolvedConstructor;
+        WeakRef<sema::Type> resolvedConstructorType;
         std::vector<NodePtr<Expression>> arguments;
         OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
         WeakRef<sema::Type> overloadFunctionType = nullptr;
