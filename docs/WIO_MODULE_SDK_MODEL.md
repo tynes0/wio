@@ -65,6 +65,14 @@ contract and can fall back to the legacy table. After the Lowered-WIR C++ backen
 reaches parity, both descriptors will be emitted from the same `ModuleContract`,
 ending the current generator's independent export indexing.
 
+Sprint 17.4 now emits both descriptors from Lowered WIR behind `--cpp-backend
+wir`. Canonical entries advertise value ABI v2. `wio_native_sdk.h` opts into this
+table; the old SDK remains available for the v11 scalar/void compatibility
+subset. Exported type entries carry identity metadata, not callable constructors.
+Detailed reflection/application adapters remain Sprint 17.5 work. See
+[`WIO_CPP_BACKEND.md`](./WIO_CPP_BACKEND.md#sprint-174-native-adapters-and-executable-sdk-boundaries)
+for tested behavior and the remaining boundaries.
+
 ## Verification rules
 
 Typed and Lowered WIR reject:

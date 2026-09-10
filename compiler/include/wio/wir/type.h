@@ -310,6 +310,7 @@ namespace wio::wir
         NativeReceiverKind receiver = NativeReceiverKind::None;
         std::vector<NativeAbiValue> parameters;
         NativeAbiValue result;
+        std::vector<TypeId> templateArguments;
         bool requiresAdapter = false;
 
         auto operator<=>(const NativeBinding&) const = default;

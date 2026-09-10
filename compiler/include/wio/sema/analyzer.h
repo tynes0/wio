@@ -17,10 +17,12 @@ namespace wio::sema
         SemanticAnalyzer();
         ~SemanticAnalyzer() override;
         void analyze(const Ref<Program>& program);
+        void setCanonicalAbiExports(bool enabled) { canonicalAbiExports_ = enabled; }
 
 #include "../ast/visitor_overloads.def"
 
     private:
+        bool canonicalAbiExports_ = false;
         struct GenericConstraintCapabilities
         {
             bool isKnown = false;

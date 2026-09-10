@@ -1,5 +1,6 @@
 #include "wio/codegen/wir_cpp_backend.h"
 #include "wio/codegen/wir_intrinsics.h"
+#include "wio/codegen/wir_module_emitter.h"
 
 #include "wio/wir/lowered_ir_verifier.h"
 
@@ -104,6 +105,7 @@ namespace wio::codegen
 
                 validateTypes();
                 validateInstructions();
+                validateWireBoundaries();
                 if (!result_.succeeded())
                     return;
 
@@ -113,6 +115,7 @@ namespace wio::codegen
                 emitHierarchyBodies();
                 emitGlobals();
                 emitFunctions();
+                output_ << WirModuleEmitter::emit(module_, [this](TypeId id) { return cppType(id); });
                 emitMain();
                 WirCppResultSink::setCode(result_, output_.str());
             }
@@ -273,6 +276,27 @@ namespace wio::codegen
                         diagnose("WCPP1108", "global value requires a concrete specialized type", global.source);
             }
 
+            void validateWireBoundaries()
+            {
+                for (const auto& function : module_.functions)
+                {
+                    if (functionIsOpen(function)) continue;
+                    const bool exported = module_.contract.kind == ModuleKind::WioLibrary &&
+                        std::ranges::any_of(module_.contract.exports,
+                            [&](const auto& e) { return e.function == function.id; });
+                    if (!exported && !function.nativeBinding) continue;
+                    const auto& result = module_.types.get(function.returnType);
+                    const bool async = result.kind == TypeKind::AsyncTask;
+                    bool unsafe = result.kind == TypeKind::Reference ||
+                        (async && module_.types.get(result.arguments.front()).kind == TypeKind::Reference);
+                    for (const auto& parameter : function.parameters)
+                        unsafe |= async && module_.types.get(parameter.type).kind == TypeKind::Reference;
+                    if (unsafe)
+                        diagnose("WCPP1213", "wire ABI requires owned results and forbids ref/view parameters on asynchronous calls",
+                            {}, function.id);
+                }
+            }
+
             bool runtimeAsyncType(const TypeId id) const
             {
                 const Type& type = module_.types.get(id);
@@ -414,7 +438,7 @@ namespace wio::codegen
                             {
                                 const auto callee = functions_.find(instruction.callee.value());
                                 if (callee == functions_.end() || !callee->second->nativeBinding ||
-                                    (callee->second->nativeBinding->requiresAdapter && !runtimeAsyncBinding(*callee->second)))
+                                    functionIsOpen(*callee->second))
                                 {
                                     diagnose("WCPP1202",
                                         "native invocation requires an adapter thunk not implemented by this backend",
@@ -558,7 +582,20 @@ namespace wio::codegen
                 }
                 case TypeKind::Named:
                     if (type->nominalRepresentation == NominalRepresentation::NativePod)
-                        return type->nativeBinding->cppName;
+                    {
+                        std::string name = type->nativeBinding->cppName;
+                        if (!type->arguments.empty() && name.find('<') == std::string::npos) {
+                            name += '<';
+                            for (std::size_t i = 0; i < type->arguments.size(); ++i) {
+                                if (i) name += ", ";
+                                const auto argument = type->arguments[i];
+                                const auto& layout = module_.types.get(argument);
+                                name += layout.kind == TypeKind::ConstValue ? layout.name : cppType(argument);
+                            }
+                            name += '>';
+                        }
+                        return name;
+                    }
                     if (type->nominalKind == NominalKind::Object || type->nominalKind == NominalKind::Interface)
                         return "wio::runtime::Ref<" + objectName(id) + ">";
                     if (type->nominalKind == NominalKind::Enum || type->nominalKind == NominalKind::Flagset)
@@ -639,6 +676,7 @@ namespace wio::codegen
                     "#include <stdexcept>\n#include <string>\n#include <tuple>\n#include <type_traits>\n"
                     "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
                     "#include <any.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include <std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n";
+                output_ << "#include <wir_abi.h>\n#include <wir_native.h>\n#include <module_api.h>\n#include <wio_module_contract.h>\n";
                 std::set<std::string> headers;
                 for (const Type& type : module_.types.types())
                     if (type.nativeBinding && !type.nativeBinding->header.empty()) headers.insert(type.nativeBinding->header);
@@ -828,6 +866,20 @@ inline std::string stringify(const std::string& value) { return value; }
 
             void emitNominalDeclarations()
             {
+                for (std::size_t index = 0; index < module_.types.size(); ++index)
+                {
+                    const TypeId id{static_cast<TypeId::ValueType>(index)};
+                    const Type& type = module_.types.types()[index];
+                    if (typeIsOpen(id) || type.kind != TypeKind::Named ||
+                        type.nominalRepresentation != NominalRepresentation::NativePod ||
+                        type.nominalKind != NominalKind::Component) continue;
+                    const auto name = cppType(id);
+                    output_ << "static_assert(std::is_standard_layout_v<" << name << "> && std::is_trivially_copyable_v<" << name
+                        << ">, \"Wio native component requires a standard-layout trivially-copyable C++ type\");\n";
+                    for (const auto& field : type.fields)
+                        output_ << "static_assert(std::is_same_v<decltype(std::declval<" << name << ">()." << field.name << "), "
+                            << cppType(field.type) << ">, \"Wio native component field type mismatch\");\n";
+                }
                 for (std::size_t index = 0; index < module_.types.size(); ++index)
                 {
                     const TypeId id{static_cast<TypeId::ValueType>(index)};
@@ -1115,37 +1167,9 @@ inline std::string stringify(const std::string& value) { return value; }
                     type->kind == TypeKind::U64 || type->kind == TypeKind::USize || type->kind == TypeKind::Byte);
             }
 
-            std::string nativeArgument(const lowered::Function& callee, const std::size_t index,
-                                       const ValueId operandId) const
-            {
-                if (callee.nativeBinding && index < callee.nativeBinding->parameters.size())
-                {
-                    const NativePassingMode passing = callee.nativeBinding->parameters[index].passing;
-                    if (passing == NativePassingMode::Borrow || passing == NativePassingMode::BorrowMut)
-                        return operand(operandId) + ".read()";
-                    if (passing == NativePassingMode::Consume)
-                        return movedOperand(operandId);
-                }
-                return operand(operandId);
-            }
-
             std::string nativeCall(const lowered::Function& callee, const lowered::Instruction& instruction) const
             {
-                std::string arguments;
-                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
-                {
-                    if (index) arguments += ", ";
-                    arguments += nativeArgument(callee, index, instruction.operands[index]);
-                }
-                const std::string call = callee.nativeBinding->symbol + "(" + arguments + ")";
-                if (callee.nativeBinding->exceptionBoundary == NativeExceptionBoundary::None)
-                    return call;
-                return "([&]() -> " + cppType(callee.returnType) + " { try { return " + call +
-                    "; } catch (const std::exception& _error) { throw wio::runtime::RuntimeException(" +
-                    cppString("native call '" + callee.nativeBinding->symbol + "' failed: ") +
-                    " + std::string(_error.what())); } catch (...) { throw wio::runtime::RuntimeException(" +
-                    cppString("native call '" + callee.nativeBinding->symbol + "' failed with an unknown exception") +
-                    "); } }())";
+                return functionName(callee.id) + "(" + callArguments(instruction) + ")";
             }
 
             std::string callArguments(const lowered::Instruction& instruction, const std::size_t begin = 0, const bool consume = false) const
@@ -1685,6 +1709,9 @@ inline std::string stringify(const std::string& value) { return value; }
                         if (function.nativeBinding)
                         {
                             output_ << functionSignature(function, false) << " {\n    ";
+                            if (!runtimeAsyncBinding(function) && std::ranges::any_of(function.parameters,
+                                [&](const auto& p) { return module_.types.get(p.type).kind == TypeKind::Function; }))
+                                output_ << "wio::wir_backend::NativeCallScope _nativeScope;\n    ";
                             // Wrapper parameters are ordinary variables rather than SSA
                             // optionals, so emit the ABI adaptation directly here.
                             std::string arguments;
@@ -1693,13 +1720,36 @@ inline std::string stringify(const std::string& value) { return value; }
                                 if (index) arguments += ", ";
                                 const NativePassingMode passing = index < function.nativeBinding->parameters.size()
                                     ? function.nativeBinding->parameters[index].passing : NativePassingMode::Value;
-                                arguments += (passing == NativePassingMode::Borrow || passing == NativePassingMode::BorrowMut)
-                                    ? "_p" + std::to_string(index) + ".read()"
+                                std::string argument = (passing == NativePassingMode::Borrow || passing == NativePassingMode::BorrowMut)
+                                    ? std::string(passing == NativePassingMode::Borrow ? "std::as_const(" : "") + "_p" + std::to_string(index) + ".read()" + (passing == NativePassingMode::Borrow ? ")" : "")
                                     : passing == NativePassingMode::Consume
                                         ? "std::move(_p" + std::to_string(index) + ")"
                                         : "_p" + std::to_string(index);
+                                if (module_.types.get(function.parameters[index].type).kind == TypeKind::Function && !runtimeAsyncBinding(function)) {
+                                    const auto& binding = function.nativeBinding->parameters[index];
+                                    argument = "_nativeScope.callback(" + argument + ", " +
+                                        (binding.callbackLifetime == NativeCallbackLifetime::Retained ? "true" : "false") + ", " +
+                                        (binding.callbackThread == NativeCallbackThread::Any ? "true" : "false") + ")";
+                                }
+                                arguments += argument;
                             }
-                            const std::string call = function.nativeBinding->symbol + "(" + arguments + ")";
+                            std::string symbol = function.nativeBinding->symbol;
+                            if (!function.nativeBinding->templateArguments.empty())
+                            {
+                                symbol += '<';
+                                for (std::size_t i = 0; i < function.nativeBinding->templateArguments.size(); ++i)
+                                {
+                                    if (i) symbol += ", ";
+                                    const auto id = function.nativeBinding->templateArguments[i];
+                                    const auto& argument = module_.types.get(id);
+                                    symbol += argument.kind == TypeKind::ConstValue ? argument.name : cppType(id);
+                                }
+                                symbol += '>';
+                            }
+                            std::string call = symbol + "(" + arguments + ")";
+                            const auto& returnType = module_.types.get(function.returnType);
+                            if (returnType.kind == TypeKind::Reference)
+                                call = cppType(function.returnType) + (returnType.isMutable ? "::borrow(" : "::borrowView(") + call + ")";
                             if (function.nativeBinding->exceptionBoundary != NativeExceptionBoundary::None)
                                 output_ << "try { ";
                             output_ << "return " << call << ';';

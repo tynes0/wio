@@ -535,9 +535,14 @@ Rider, and CLion are defined in
    weak lifetime and malformed hierarchy metadata. Sprint 17.3 executes async
    state transitions, generic/void task payloads, executor handoffs, cancellation,
    async interface methods and retained self/frame cleanup; the focused gate
-   covers generated code and malformed coroutine metadata. Complete variadic
-   pack expansion, open method-level generic contracts, full native/SDK
-   sidecars/thunks, and full differential parity; then
+   covers generated code and malformed coroutine metadata. Sprint 17.4 now
+   executes native/POD/generic/extension adapters and checked wire-v2 thunks,
+   canonical SDK sidecars, v11 scalar compatibility and module-owned values.
+   Independent DLL/host gates cover Unicode, ref aliasing/copy-back, callback
+   lifetime/thread contracts, intrusive ownership and async shutdown. Sprint
+   17.5 remains application/detailed reflection integration; 17.6 remains full
+   project/std/platform differential parity and cutover gates. Complete variadic
+   pack expansion and open method-level generic contracts; then
    switch the default before removing the compatibility generator. The
    bytecode VM consumes the same contract. Async functions now carry
    payload/frame/state contracts;
@@ -552,8 +557,8 @@ Rider, and CLion are defined in
    canonical optimizer now performs checked constant folding, CFG simplification,
    trivial SSA propagation, conservative DCE, escape/storage classification,
    and proven fixed-array bounds-check elimination while preserving stable IDs,
-   source maps, ownership, and observable failure behavior. Add executor runtime
-   emission, exceptional/panic cleanup edges, new-backend parity tests, and
+   source maps, ownership, and observable failure behavior. Complete platform
+   executor/exceptional cleanup validation, new-backend parity tests, and
    compile-time/runtime benchmarks before changing the default backend.
 
 ## P3 - Product Direction

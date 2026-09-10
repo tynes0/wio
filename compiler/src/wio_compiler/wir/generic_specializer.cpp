@@ -1,4 +1,5 @@
 #include "wio/wir/generic_specializer.h"
+#include "wio/wir/native_abi_types.h"
 
 #include <algorithm>
 #include <charconv>
@@ -47,7 +48,8 @@ namespace wio::wir
                 {
                     if (entry.kind != ModuleExportKind::GenericFunctionSpecialization) continue;
                     const auto source = templates_.find(entry.function);
-                    if (source == templates_.end() || !openFunction(source->second) || source->second.isExternal) continue;
+                    if (source == templates_.end() || !openFunction(source->second) ||
+                        (source->second.isExternal && !source->second.nativeBinding)) continue;
                     Instruction request;
                     request.callee = entry.function;
                     request.genericArguments = entry.genericArguments;
@@ -67,7 +69,7 @@ namespace wio::wir
                         {
                             if (!instruction.callee) continue;
                             const auto source = templates_.find(instruction.callee);
-                            if (source == templates_.end() || source->second.isExternal || !openFunction(source->second)) continue;
+                            if (source == templates_.end() || (source->second.isExternal && !source->second.nativeBinding) || !openFunction(source->second)) continue;
                             instruction.callee = instantiate(instruction);
                             if (const auto key = instanceKeys_.find(instruction.callee); key != instanceKeys_.end())
                                 instruction.specializationKey = key->second;
@@ -274,6 +276,21 @@ namespace wio::wir
                     values[p.id] = p.type;
                 };
                 for (Parameter& p : function.parameters) parameter(p);
+                if (function.nativeBinding)
+                {
+                    for (auto& value : function.nativeBinding->parameters) {
+                        value.type = replace(value.type);
+                        refreshNativeAbiValue(module_.types, value, false);
+                    }
+                    function.nativeBinding->result.type = replace(function.nativeBinding->result.type);
+                    refreshNativeAbiValue(module_.types, function.nativeBinding->result, true);
+                    function.nativeBinding->stableKey += ":specialized:";
+                    for (const auto argument : function.nativeBinding->templateArguments)
+                        function.nativeBinding->stableKey += nativeAbiTypeKey(module_.types, argument) + ";";
+                    std::ostringstream symbol;
+                    symbol << "_wio_native_" << std::hex << stableModuleHash(function.nativeBinding->stableKey);
+                    function.nativeBinding->thunkSymbol = symbol.str();
+                }
                 for (CaptureLayout& capture : function.captures) capture.type = replace(capture.type);
                 if (function.coroutine) function.coroutine->resultType = replace(function.coroutine->resultType);
                 for (auto& block : function.blocks)
@@ -435,6 +452,9 @@ namespace wio::wir
                 instances_[key.str()] = id;
                 instanceKeys_[id] = key.str();
                 Function function = source;
+                if (function.nativeBinding)
+                    for (TypeId parameter : source.genericParameters)
+                        function.nativeBinding->templateArguments.push_back(bindings.at(parameter));
                 function.id = id;
                 function.genericOrigin = source.id;
                 function.specializationKey = key.str();

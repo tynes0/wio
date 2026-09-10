@@ -1,6 +1,6 @@
 # Wio Native ABI Contract
 
-This document freezes the boundary shared by generated C++, the future
+This document describes the boundary shared by generated C++, the future
 bytecode VM, native libraries, and the host SDK. It describes the canonical
 contract, not a particular platform's C++ object layout.
 
@@ -79,6 +79,42 @@ wrappers may be added around it, but the wire contract consists of:
 - `WioNativeAbiFailure` and status codes;
 - `WioNativeAbiFunctionDescriptor` and thunk pointer.
 
-The production AST-to-C++ generator remains active during WIR migration. The
-new C++ backend and VM bridge will consume this contract after their respective
-sprints; they must not create a second ABI model.
+The production AST-to-C++ generator remains the default during WIR migration.
+Sprint 17.4 implements checked thunks in the opt-in Lowered-WIR C++ backend;
+the VM bridge is still future work, consuming the same contract.
+
+## Experimental wire ABI v2 (Sprint 17.4)
+
+`WIO_NATIVE_ABI_VERSION` is 2. Rebuild experimental wire-v1 producers and hosts
+together: adding `WioNativeAbiValue.owner` changes its binary layout. This does
+not change the independent `WioModuleApi` v11 descriptor. Sidecar call entries
+use the explicit `WIO_SDK_CALL_NATIVE_ABI_V2` marker so the new SDK cannot mistake
+legacy payloads for canonical values.
+
+String output uses an owned byte slice; Unicode `text` uses a validated UTF-32
+slice with a **byte count**, not a `wchar_t` count. Surrogates and values above
+U+10FFFF are rejected. POD output has an exact stable type ID and byte size;
+platform padding/layout is not a cross-platform serialization format.
+`WioNativeAbiReleaseValue` releases the producing owner's storage and clears
+the value. Objects delegate retain/release to their existing intrusive runtime.
+Runtime containers/tasks are boxed module-owned values with owner-op checks.
+
+A `REFERENCE` argument points to another `WioNativeAbiValue`, with BORROWED and
+optionally MUTABLE flags. A call frame decodes repeated tokens to shared local
+storage and copies mutations back on success or caught failure. This preserves
+aliasing, but is not transactional rollback. Returned borrows and asynchronous
+borrow parameters are rejected because that frame is call-local. Raw tokens
+must remain valid/aligned; arbitrary host pointers cannot be validated safely.
+
+Native call-scoped callback wrappers reject use after the native call ends and
+reject wrong-thread entry. Copying the `std::function` alone does not grant an
+extended lifetime. Canonical callback invoke returns a status across the foreign
+boundary; the current SDK callback path is caller-thread-only. Foreign retained
+callbacks must keep their owner module loaded until their final release.
+
+`WioGetNativeAbiRegistry` publishes concrete thunk descriptors. Thunks validate
+argument count, required pointers, tags and integer narrowing before invocation;
+they translate C++ exceptions to statuses. Failure strings are thread-local and
+valid until the next failing boundary call on that thread. Output slots must be
+empty on entry; release previous owned contents before reusing a slot.
+The ABI trusts in-process handle pointers and is not a memory-safety sandbox.

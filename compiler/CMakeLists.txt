@@ -327,6 +327,10 @@ if(BUILD_TESTING)
     add_test(NAME wio_wir_cpp_generics COMMAND wio_wir_cpp_backend_test --generics-only)
     add_test(NAME wio_wir_cpp_objects COMMAND wio_wir_cpp_backend_test --objects-only)
     add_test(NAME wio_wir_cpp_async COMMAND wio_wir_cpp_backend_test --async-only)
+    add_test(NAME wio_wir_cpp_native COMMAND wio_wir_cpp_backend_test --native-only)
+    add_test(NAME wio_wir_cpp_sdk COMMAND wio_wir_cpp_backend_test --sdk-only)
+    set_tests_properties(wio_wir_cpp_sdk PROPERTIES TIMEOUT 120)
+    set_tests_properties(wio_wir_cpp_native PROPERTIES TIMEOUT 90)
     set_tests_properties(wio_wir_cpp_async PROPERTIES TIMEOUT 90)
     add_test(
         NAME wio_wir_cpp_backend

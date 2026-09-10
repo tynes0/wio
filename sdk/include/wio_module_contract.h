@@ -7,6 +7,8 @@
 // change WioModuleApi v11; generated modules may expose this descriptor while
 // older modules keep working through the legacy name-based API.
 inline constexpr std::uint32_t WIO_SDK_MODULE_CONTRACT_VERSION = 1u;
+// Export.reserved declares the value wire format; old sidecars leave it zero.
+inline constexpr std::uint32_t WIO_SDK_CALL_NATIVE_ABI_V2 = 2u;
 
 enum WioSdkModuleKind : std::uint32_t
 {

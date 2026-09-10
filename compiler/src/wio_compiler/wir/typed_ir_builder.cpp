@@ -1,4 +1,5 @@
 #include "wio/wir/typed_ir_builder.h"
+#include "wio/wir/native_abi_types.h"
 
 #include "wio/ast/attribute_queries.h"
 #include "wio/ast/attribute_contract.h"
@@ -374,44 +375,8 @@ namespace wio::wir::typed
 
         NativeMarshallingKind nativeMarshallingKind(TypeId typeId) const
         {
-            const Type* type = result_.module_.types.tryGet(typeId);
-            if (!type)
-                return NativeMarshallingKind::Generic;
-            if (type->kind == TypeKind::Reference && type->arguments.size() == 1)
-                return nativeMarshallingKind(type->arguments.front());
-            if (type->kind == TypeKind::Nullable && type->arguments.size() == 1)
-                return nativeMarshallingKind(type->arguments.front());
-            switch (type->kind)
-            {
-            case TypeKind::Void: return NativeMarshallingKind::Void;
-            case TypeKind::String: return NativeMarshallingKind::Utf8String;
-            case TypeKind::Text: return NativeMarshallingKind::UnicodeText;
-            case TypeKind::Opaque: return NativeMarshallingKind::OpaqueHandle;
-            case TypeKind::Function: return NativeMarshallingKind::Callback;
-            case TypeKind::GenericParameter:
-            case TypeKind::ConstGenericParameter:
-            case TypeKind::GenericParameterPack:
-            case TypeKind::ValuePack:
-            case TypeKind::TypePack:
-            case TypeKind::PackStorage:
-                return NativeMarshallingKind::Generic;
-            case TypeKind::Named:
-                if (type->nominalKind == NominalKind::Enum || type->nominalKind == NominalKind::Flagset)
-                    return NativeMarshallingKind::Scalar;
-                if (type->nominalRepresentation == NominalRepresentation::NativePod)
-                    return NativeMarshallingKind::NativePod;
-                if (type->nominalKind == NominalKind::Object ||
-                    type->nominalKind == NominalKind::Interface)
-                    return NativeMarshallingKind::ObjectHandle;
-                return NativeMarshallingKind::RuntimeValue;
-            case TypeKind::Any:
-            case TypeKind::Array:
-            case TypeKind::Dictionary:
-            case TypeKind::AsyncTask:
-                return NativeMarshallingKind::RuntimeValue;
-            default:
-                return NativeMarshallingKind::Scalar;
-            }
+            return result_.module_.types.tryGet(typeId)
+                ? nativeAbiMarshalling(result_.module_.types, typeId) : NativeMarshallingKind::Generic;
         }
 
         NativeAbiValue nativeAbiValue(const TypeId typeId, const bool isReturn) const

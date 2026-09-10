@@ -230,7 +230,7 @@ namespace
     }
 
     std::optional<wio::wir::lowered::Module> makeLanguageSurfaceModule(const std::string& customSource = {},
-        wio::wir::typed::Module* sourceModule = nullptr, const bool standaloneAsync = false)
+        wio::wir::typed::Module* sourceModule = nullptr, const bool standaloneAsync = false, const bool library = false)
     {
         using namespace wio;
         Lexer lexer(
@@ -283,8 +283,10 @@ fn Entry() -> i32 {
             });
         }
         sema::SemanticAnalyzer analyzer;
+        analyzer.setCanonicalAbiExports(library);
         analyzer.analyze(program);
-        auto typed = wir::typed::Builder{}.build(program);
+        auto typed = wir::typed::Builder{}.build(program, wir::typed::BuildOptions{
+            .moduleKind = library ? wir::ModuleKind::WioLibrary : wir::ModuleKind::Program });
         if (!typed.succeeded())
         {
             for (const auto& diagnostic : typed.diagnostics())
@@ -335,7 +337,8 @@ fn Entry() -> i32 {
         else
         {
             command += std::string("-std=c++20 ") + (run ? "" : "-c ") + "\"" + source.string() + "\" -I\"" +
-                std::string(WIO_TEST_RUNTIME_INCLUDE) + "\" -o \"" + object.string() + "\"";
+                std::string(WIO_TEST_RUNTIME_INCLUDE) + "\" -I\"" + std::string(WIO_TEST_SOURCE_DIR) + "/tests/native\" -I\"" +
+                std::string(WIO_TEST_SOURCE_DIR) + "/sdk/include\" -o \"" + object.string() + "\"";
             if (run) command += " -pthread \"" + std::string(WIO_TEST_RUNTIME_LIBRARY) + "\"";
         }
 #if defined(_WIN32)
@@ -359,6 +362,69 @@ fn Entry() -> i32 {
 int main(int argc, char** argv)
 {
     using wio::codegen::WirCppBackend;
+
+    if (argc == 2 && std::string(argv[1]) == "--native-only") {
+        try {
+            std::ifstream fixture(std::string(WIO_TEST_SOURCE_DIR) + "/tests/wir_cpp_native_run.wio");
+            const std::string source{std::istreambuf_iterator<char>(fixture), std::istreambuf_iterator<char>()};
+            auto module = makeLanguageSurfaceModule(source);
+            if (!module) return 1;
+            auto generated = WirCppBackend{}.generate(*module);
+            for (const auto& d : generated.diagnostics()) std::cerr << d.code << ": " << d.message << '\n';
+            if (!generated.succeeded()) return 1;
+            std::string fail;
+            for (const auto& f : module->functions) if (f.name == "InvokeFailure") fail = "_wio_f" + std::to_string(f.id.value());
+            std::string harness = "#define main native_entry\n" + generated.code() + "\n#undef main\nint main() {\n"
+                "if (int result = native_entry()) return result;\n"
+                "try { " + fail + "(); return 10; } catch (const std::exception& error) {\n"
+                " if (std::string(error.what()).find(\"native failure\") == std::string::npos) return 11; } return 0; }\n";
+            return expect(compileGeneratedCode(harness, true), "native adapters must compile and execute") ? 0 : 1;
+        } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
+    }
+
+    if (argc == 2 && std::string(argv[1]) == "--sdk-only") {
+        try {
+            namespace fs=std::filesystem;
+            std::ifstream fixture(std::string(WIO_TEST_SOURCE_DIR)+"/tests/wir_cpp_sdk_module.wio");
+            const std::string source{std::istreambuf_iterator<char>(fixture),std::istreambuf_iterator<char>()};
+            auto module=makeLanguageSurfaceModule(source,nullptr,true,true); if (!module) return 1;
+            auto unsafe=makeLanguageSurfaceModule(source + "\n[native, CppName(wir_native::AsyncBorrow)] fn AsyncBorrow(value: ref i32) -> coroutine<i32>;\n",nullptr,true,true);
+            if (!unsafe) return 1;
+            const auto rejected=WirCppBackend{}.generate(*unsafe);
+            bool foundBoundaryDiagnostic=false;
+            for (const auto& d:rejected.diagnostics()) foundBoundaryDiagnostic |= d.code=="WCPP1213";
+            if (!expect(!rejected.succeeded() && foundBoundaryDiagnostic,"async ABI borrows must fail before native emission")) return 1;
+            auto generated=WirCppBackend{}.generate(*module);
+            for (const auto& d:generated.diagnostics()) std::cerr<<d.code<<": "<<d.message<<'\n';
+            if (!generated.succeeded()) return 1;
+            auto directory=fs::temp_directory_path()/("wio-sdk-wir-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            fs::create_directories(directory);
+            struct Cleanup { fs::path path; ~Cleanup() { std::error_code e; fs::remove_all(path,e); } } cleanup{directory};
+            auto cpp=directory/"module.cpp"; { std::ofstream stream(cpp); stream<<generated.code(); }
+#if defined(_WIN32)
+            auto dll=directory/"module.dll";
+#else
+            auto dll=directory/"module.so";
+#endif
+            auto host=directory/"host.exe";
+            const auto quote=[](const auto& v) { return "\""+std::string(v)+"\""; };
+            const std::string includes=" -I"+quote(WIO_TEST_RUNTIME_INCLUDE)+" -I"+quote(std::string(WIO_TEST_SOURCE_DIR)+"/sdk/include")+" -I"+quote(std::string(WIO_TEST_SOURCE_DIR)+"/tests/native");
+            const auto run=[](std::string command) {
+#if defined(_WIN32)
+                command="\""+command+"\"";
+#endif
+                return std::system(command.c_str());
+            };
+            std::string compiler=quote(WIO_TEST_CXX_COMPILER)+" -std=c++20 -pthread ";
+            if (run(compiler+"-shared -fPIC "+quote(cpp.string())+includes+" "+quote(WIO_TEST_RUNTIME_LIBRARY)+" -o "+quote(dll.string()))!=0) return 1;
+            std::string hostCommand=compiler+quote(std::string(WIO_TEST_SOURCE_DIR)+"/tests/wir_cpp_sdk_host.cpp")+includes+" -o "+quote(host.string());
+#if !defined(_WIN32)
+            hostCommand+=" -ldl";
+#endif
+            if (run(hostCommand)!=0) return 1;
+            return expect(run(quote(host.string())+" "+quote(dll.string()))==0,"separate C++ SDK host must load and execute the WIR DLL") ? 0 : 1;
+        } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
+    }
 
     if (argc == 2 && std::string(argv[1]) == "--async-only")
     {

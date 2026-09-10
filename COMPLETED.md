@@ -1009,3 +1009,17 @@ here as historical evidence rather than active work:
       executor identity, cancelled queued main continuations, shutdown failure,
       and invalid frame/state/receiver metadata. Legacy remains the default;
       generalized native/SDK async adapters are Sprint 17.4 work.
+- [x] Sprint 17.4 emits concrete native generic/POD/free-extension adapters from
+      Lowered WIR, including template argument identity, const/ref overload
+      adaptation, native layout checks and checked exception/callback boundaries.
+- [x] The independent `WirModuleEmitter` emits canonical SDK wire-v2 call tables,
+      native registries, lifecycle/state hooks, stable export/type identities and
+      the existing v11 scalar/void compatibility subset. The opt-in native SDK
+      owns strings, Unicode text, POD and intrusive handles through producer ops;
+      synchronous ref tokens preserve aliasing and copy back mutations on failure.
+- [x] Canonical task ready/read/cancel/main-pump and final scheduler shutdown now
+      work across a real DLL/independent C++ host. Returned values pin their DLL.
+      Only the new `wio_wir_cpp_native` and `wio_wir_cpp_sdk` gates were run;
+      Windows/MinGW execution is verified, not full cross-platform cutover.
+      Rich application/reflection integration remains 17.5 and differential
+      project/std/platform parity remains 17.6. Legacy stays the default.

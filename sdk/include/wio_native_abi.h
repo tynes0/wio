@@ -7,7 +7,7 @@
 // libraries remain free to use classes, templates and overloads: the compiler
 // emits one concrete thunk per Wio-visible specialization and both the native
 // backend and VM call that thunk through this surface.
-inline constexpr std::uint32_t WIO_NATIVE_ABI_VERSION = 1u;
+inline constexpr std::uint32_t WIO_NATIVE_ABI_VERSION = 2u;
 
 enum WioNativeAbiStatus : std::int32_t
 {
@@ -17,7 +17,8 @@ enum WioNativeAbiStatus : std::int32_t
     WIO_NATIVE_ABI_EXCEPTION = 3,
     WIO_NATIVE_ABI_PANIC = 4,
     WIO_NATIVE_ABI_WRONG_THREAD = 5,
-    WIO_NATIVE_ABI_STALE_HANDLE = 6
+    WIO_NATIVE_ABI_STALE_HANDLE = 6,
+    WIO_NATIVE_ABI_NOT_READY = 7
 };
 
 enum WioNativeAbiValueKind : std::uint32_t
@@ -33,7 +34,8 @@ enum WioNativeAbiValueKind : std::uint32_t
     WIO_NATIVE_ABI_OPAQUE,
     WIO_NATIVE_ABI_OBJECT,
     WIO_NATIVE_ABI_CALLBACK,
-    WIO_NATIVE_ABI_RUNTIME_VALUE
+    WIO_NATIVE_ABI_RUNTIME_VALUE,
+    WIO_NATIVE_ABI_REFERENCE
 };
 
 enum WioNativeAbiValueFlag : std::uint32_t
@@ -116,6 +118,8 @@ struct WioNativeAbiValue
 
         constexpr Payload() : unsignedInteger(0) {}
     } payload{};
+    // v2: storage owner for slices/POD. Object/runtime handles own themselves.
+    WioNativeAbiHandle owner{};
 };
 
 struct WioNativeAbiFailure
@@ -143,6 +147,24 @@ struct WioNativeAbiFunctionDescriptor
     WioNativeAbiThunk thunk = nullptr;
 };
 
+struct WioNativeAbiRegistry {
+    std::uint32_t abiVersion;
+    std::uint32_t functionCount;
+    const WioNativeAbiFunctionDescriptor* functions;
+};
+using WioGetNativeAbiRegistryFn = const WioNativeAbiRegistry*(*)();
+
+struct WioNativeTaskApi {
+    std::uint32_t abiVersion;
+    WioNativeAbiStatus (*ready)(const WioNativeAbiValue*, bool*) noexcept;
+    WioNativeAbiStatus (*cancel)(const WioNativeAbiValue*) noexcept;
+    WioNativeAbiStatus (*read)(const WioNativeAbiValue*, WioNativeAbiValue*, WioNativeAbiFailure*) noexcept;
+    void (*bindMain)() noexcept;
+    std::uint64_t (*pumpMain)() noexcept;
+    void (*shutdown)() noexcept;
+};
+using WioGetNativeTaskApiFn = const WioNativeTaskApi*(*)();
+
 inline void WioNativeAbiRetain(WioNativeAbiHandle handle) noexcept
 {
     if (handle.state != nullptr && handle.ops != nullptr && handle.ops->retain != nullptr)
@@ -157,4 +179,17 @@ inline void WioNativeAbiRelease(WioNativeAbiHandle* handle) noexcept
     *handle = {};
     if (owned.state != nullptr && owned.ops != nullptr && owned.ops->release != nullptr)
         owned.ops->release(owned.state);
+}
+
+inline void WioNativeAbiReleaseValue(WioNativeAbiValue* value) noexcept
+{
+    if (!value) return;
+    if (value->flags & WIO_NATIVE_ABI_VALUE_OWNED) {
+        if (value->kind == WIO_NATIVE_ABI_OBJECT || value->kind == WIO_NATIVE_ABI_RUNTIME_VALUE)
+            WioNativeAbiRelease(&value->payload.handle);
+        if (value->kind == WIO_NATIVE_ABI_CALLBACK && value->payload.callback.ops && value->payload.callback.ops->release)
+            value->payload.callback.ops->release(value->payload.callback.userdata);
+        WioNativeAbiRelease(&value->owner);
+    }
+    *value = {};
 }

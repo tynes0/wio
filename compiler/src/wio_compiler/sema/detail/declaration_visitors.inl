@@ -1225,7 +1225,7 @@
 
             for (size_t i = 0; i < funcType->paramTypes.size(); ++i)
             {
-                if (!isCAbiSafeExportType(funcType->paramTypes[i]))
+                if (!canonicalAbiExports_ && !isCAbiSafeExportType(funcType->paramTypes[i]))
                 {
                     WIO_LOG_ADD_ERROR(
                         node.location(),
@@ -1238,7 +1238,7 @@
             }
 
             const Ref<Type> exportedResultType = node.isAsync ? declaredResultType : funcType->returnType;
-            if (!isCAbiSafeExportType(exportedResultType))
+            if (!canonicalAbiExports_ && !isCAbiSafeExportType(exportedResultType))
             {
                 WIO_LOG_ADD_ERROR(
                     node.location(),

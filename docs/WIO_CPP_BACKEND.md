@@ -253,6 +253,69 @@ full project/std/SDK adapter parity remains in 17.4 and the final cutover gate.
 Runtime-native forwarding here is limited to compatible in-process
 `wio::runtime` task/scalar/string/function signatures, not a foreign coroutine ABI.
 
+## Sprint 17.4: native adapters and executable SDK boundaries
+
+`--cpp-backend wir` now emits native C++ adapters and library sidecars from
+Lowered WIR. Closed native generic instances preserve ordered template arguments,
+concrete marshalling metadata and stable thunk identities. Native components
+and generic native components use their actual C++ types; generated assertions
+check standard layout, trivial copying and declared field types. Native extension
+receivers select mutable `T&` or immutable `const T&` overloads as declared.
+
+`WirModuleEmitter` emits `WioGetNativeAbiRegistry`, `WioGetSdkModuleContract`,
+`WioModuleGetApi` and the canonical task API. Ordinary generated Wio calls use
+typed adapters without serializing values; foreign hosts use checked C-shaped
+thunks. No AST generator fallback participates in either path.
+
+The experimental wire value ABI is now **v2**, with owner-backed output slices
+and tagged ref/view tokens. This is not layout-compatible with wire v1. Canonical
+call descriptors advertise `WIO_SDK_CALL_NATIVE_ABI_V2`; existing production
+`WioModuleApi` remains v11. The v11 compatibility table exposes only synchronous
+scalar/void exports, not rich exports disguised as primitive function pointers.
+
+Include `wio_native_sdk.h` for the opt-in `NativeModule`/`NativeValue` host API.
+It supports owned string/text/POD/object/runtime values, callbacks, mutable
+copy-back with alias preservation, stable-ID exports, lifecycle/save-state hooks,
+and nonblocking task ready/read/cancel/main-pump operations. Intrusive objects
+retain their actual producing-runtime strong-count operations. Returned values
+pin their producing DLL until owner-provided release finishes. Final module
+shutdown cancels tracked tasks and joins the shared scheduler before unloading.
+
+The new `wio_wir_cpp_native` and `wio_wir_cpp_sdk` gates compile and run real
+generated C++. The latter builds a shared library and an independent C++ SDK
+host, then dynamically loads it. Coverage includes native generic/POD extensions,
+const overload choice, strings and Unicode emoji/combining marks, ref aliasing,
+read-only rejection, mutation before failure, checked scalar narrowing, callback
+expiry/thread rejection, intrusive clone/final destruction, async cancellation,
+main-executor delivery, pending-task shutdown, and values outliving a module view.
+
+Boundaries remain deliberately explicit:
+
+- Wire results must be owned. Borrowed returns and async ref/view parameters
+  are rejected before emission (`WCPP1213`), not allowed to dangle after a frame.
+- Runtime containers and task handles are producing-module values, not portable
+  serialized C++ layouts. POD byte slices require the same platform/layout ABI.
+- Ref/view tokens are synchronous borrows: the original `NativeValue` must not
+  be moved/reset/destroyed while borrowed. Foreign pointers are trusted in-process
+  pointers; this ABI is not a security sandbox or a stale-pointer detector.
+- Canonical callback entry currently uses caller-thread affinity. Raw/retained
+  foreign callbacks require explicit host lifetime coordination, especially
+  across multiple independently loaded modules.
+- Detailed reflection constructors/method/attribute tables and application host
+  integration are **17.5**; full project/std differential parity and platform
+  release gates are **17.6**. Type export entries are metadata, not constructors.
+- This sprint's execution was verified on Windows/MinGW. Linux/macOS and
+  multi-module unload stress are not claimed by those results.
+
+When testing a development compiler alongside an installed release, select the
+matching repository runtime/SDK instead of mixing headers from the release:
+
+```powershell
+$env:WIO_ROOT = 'F:\Projects\wio'
+.\build\app\Debug\wio.exe tests/wir_cpp_native_run.wio --no-builtin --cpp-backend wir --include-dir tests/native --output build/wir-native-cli.exe
+.\build\wir-native-cli.exe
+```
+
 ## Cutover policy
 
 `wir` becomes the default only when all release-gate programs pass both

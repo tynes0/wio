@@ -3063,6 +3063,7 @@ namespace wio
 
             // 3. Semantic Analysis
             sema::SemanticAnalyzer analyzer;
+            analyzer.setCanonicalAbiExports(gAppData.cppBackend == "wir");
             analyzer.analyze(program);
 
             if (!validateWirEmitOptions())
