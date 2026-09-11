@@ -472,8 +472,7 @@ namespace wio::wir::lowered
                     report("LIR1518", "Lowered WIR reflected enum/flagset case references an unknown attribute application.");
         }
         std::unordered_set<TypeId::ValueType> systemTypes;
-        for (const SystemDescriptor& system : module.contract.systems)
-        {
+        for (const SystemDescriptor& system : module.contract.systems) {
             const Type* type = module.types.tryGet(system.type);
             const auto knownFunction = [&](const FunctionId id) { return !id || functions.contains(id.value()); };
             if (system.stableId == 0 || system.logicalName.empty() || !type ||
@@ -481,43 +480,46 @@ namespace wio::wir::lowered
                 !knownFunction(system.start) || !knownFunction(system.update) || !knownFunction(system.close))
                 report("LIR1513", "Lowered WIR systems require unique component types and valid lifecycle functions.");
         }
-        if (module.contract.application)
-        {
+        if (module.contract.application) {
             const ApplicationDescriptor& application = *module.contract.application;
             const Type* type = module.types.tryGet(application.type);
             const auto requiredFunction = [&](const FunctionId id) { return id && functions.contains(id.value()); };
             if (application.stableId == 0 || application.logicalName.empty() || !type ||
                 type->nominalKind != NominalKind::Component || !requiredFunction(application.entry) ||
-                !requiredFunction(application.start) || !requiredFunction(application.update) ||
-                !requiredFunction(application.close) || !requiredFunction(application.exit) ||
-                !std::ranges::all_of(application.systems, [&](const TypeId system) { return systemTypes.contains(system.value()); }))
-                report("LIR1514", "Lowered WIR application requires a component type, entry/lifecycle functions, and declared systems.");
+                !requiredFunction(application.construct) || !requiredFunction(application.start) ||
+                !requiredFunction(application.update) || !requiredFunction(application.close) ||
+                !requiredFunction(application.exit) ||
+                !std::ranges::all_of(application.systems,
+                                     [&](const TypeId system) { return systemTypes.contains(system.value()); }))
+                report("LIR1514", "Lowered WIR application requires a component type, entry/lifecycle functions, and "
+                                  "declared systems.");
             std::unordered_map<std::string, std::uint32_t> stageOrders;
-            for (const ApplicationStageDescriptor& stage : application.stages)
-            {
-                const bool dependencyValid = stage.after.empty() ||
-                    (stageOrders.contains(stage.after) && stageOrders.at(stage.after) < stage.order);
-                const bool frequencyValid = stage.kind == ApplicationStageKind::Fixed
-                    ? stage.fixedHz > 0.0 : stage.fixedHz == 0.0;
+            for (const ApplicationStageDescriptor& stage : application.stages) {
+                const bool dependencyValid = stage.after.empty() || (stageOrders.contains(stage.after) &&
+                                                                     stageOrders.at(stage.after) < stage.order);
+                const bool frequencyValid =
+                    stage.kind == ApplicationStageKind::Fixed ? stage.fixedHz > 0.0 : stage.fixedHz == 0.0;
                 if (stage.stableId == 0 || stage.name.empty() || stage.order != stageOrders.size() ||
                     !dependencyValid || !frequencyValid || !stageOrders.emplace(stage.name, stage.order).second)
-                    report("LIR1515", "Lowered WIR application stages require canonical order, dependencies, and frequency.");
-                for (const ApplicationStageRun& run : stage.runs)
-                {
+                    report("LIR1515",
+                           "Lowered WIR application stages require canonical order, dependencies, and frequency.");
+                for (const ApplicationStageRun& run : stage.runs) {
                     const bool targetValid = run.targetType && module.types.tryGet(run.targetType) &&
-                        (run.applicationTarget ? run.targetType == application.type : systemTypes.contains(run.targetType.value()));
-                    if (run.targetName.empty() || run.methodName.empty() || !targetValid || !requiredFunction(run.function) ||
-                        !std::ranges::all_of(run.resources, [&](const ApplicationResourceBinding& resource)
-                            { return !resource.name.empty() && module.types.tryGet(resource.type); }))
-                        report("LIR1516", "Lowered WIR application runs require resolved targets, functions, and resources.");
+                                             (run.applicationTarget ? run.targetType == application.type
+                                                                    : systemTypes.contains(run.targetType.value()));
+                    if (run.targetName.empty() || run.methodName.empty() || !targetValid ||
+                        !requiredFunction(run.function) ||
+                        !std::ranges::all_of(run.resources, [&](const ApplicationResourceBinding& resource) {
+                            return !resource.name.empty() && module.types.tryGet(resource.type);
+                        }))
+                        report("LIR1516",
+                               "Lowered WIR application runs require resolved targets, functions, and resources.");
                 }
             }
         }
 
-        for (const Type& type : module.types.types())
-        {
-            for (const MethodLayout& method : type.methods)
-            {
+        for (const Type& type : module.types.types()) {
+            for (const MethodLayout& method : type.methods) {
                 const auto function = functions.find(method.function.value());
                 if (function == functions.end() || !function->second->isMethod)
                     report("LIR1009", "Lowered WIR method layout references an unknown or non-method function.");

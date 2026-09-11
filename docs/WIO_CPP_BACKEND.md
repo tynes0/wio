@@ -301,9 +301,7 @@ Boundaries remain deliberately explicit:
 - Canonical callback entry currently uses caller-thread affinity. Raw/retained
   foreign callbacks require explicit host lifetime coordination, especially
   across multiple independently loaded modules.
-- Detailed reflection constructors/method/attribute tables and application host
-  integration are **17.5**; full project/std differential parity and platform
-  release gates are **17.6**. Type export entries are metadata, not constructors.
+- Full project/std differential parity and platform release gates are **17.6**.
 - This sprint's execution was verified on Windows/MinGW. Linux/macOS and
   multi-module unload stress are not claimed by those results.
 
@@ -315,6 +313,45 @@ $env:WIO_ROOT = 'F:\Projects\wio'
 .\build\app\Debug\wio.exe tests/wir_cpp_native_run.wio --no-builtin --cpp-backend wir --include-dir tests/native --output build/wir-native-cli.exe
 .\build\wir-native-cli.exe
 ```
+
+## Sprint 17.5: application hosting and detailed reflection
+
+The independent backend now consumes the canonical application contract all the
+way through executable and shared-library emission. Application construction is
+a distinct WIR function: declared field initializers run in source order before
+`Start`, including compiler-generated scheduling state. The generated host owns
+stack-resident application/system storage, enforces the constructing thread,
+rejects invalid frame deltas, drains the main executor without blocking, rolls
+back partially started systems, and runs `Close` at most once. Standalone WIR
+executables and SDK-hosted libraries use this same implementation.
+
+Generated libraries publish `WioApplicationDescriptor` through the compatible
+v11 module table. `wio::sdk::NativeModule::application()` returns the existing
+RAII `ApplicationHost`, and its lease keeps the library and descriptor alive.
+Worker-affine stages remain rejected as `WCPP1214` until the thread-transfer
+contract is executable; no backend silently runs them on the wrong thread.
+
+`WioGetNativeReflectionApi` is a new additive sidecar. It exposes stable type,
+field, method, enum/flagset case, constructor, attribute argument, retention,
+origin, and processor descriptors. The C++ SDK can enumerate this metadata,
+construct exported values, read/write public fields, and call public synchronous
+methods through checked wire-v2 thunks. Private members remain discoverable as
+metadata but are not callable. Runtime-retained attributes cross the boundary;
+compile-only attributes do not.
+
+The same WIR reflection records also generate `TypeReflection<T>` traits for
+native C++ template consumers. Metadata strings use control-safe quoting, so a
+source newline cannot corrupt generated C++. Behavioral pre/post/finally/around
+processors are preserved in WIR metadata but rejected as `WCPP1215` until their
+body-weaving contract is implemented.
+
+The focused `wio_wir_cpp_application` and `wio_wir_cpp_reflection` gates build
+real shared libraries and independent hosts. They cover initializer order,
+lifecycle rollback/close ordering, owner-thread and invalid-delta failures,
+module lease pinning, static traits, dynamic lookup, constructors, field and
+method calls, access control, enum cases, attribute retention, stable identities,
+and values that outlive the `NativeModule` view. The backend remains opt-in;
+17.6 owns project/std/platform differential parity and default cutover evidence.
 
 ## Cutover policy
 

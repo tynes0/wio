@@ -1023,3 +1023,21 @@ here as historical evidence rather than active work:
       Windows/MinGW execution is verified, not full cross-platform cutover.
       Rich application/reflection integration remains 17.5 and differential
       project/std/platform parity remains 17.6. Legacy stays the default.
+- [x] Sprint 17.5 gives every application contract a distinct WIR construction
+      function. Declared and compiler-generated field initializers execute in
+      declaration order before `Start`; standalone and shared-library hosts use
+      the same main-thread-affine, nonblocking runtime with partial-start
+      rollback, invalid-delta checks, deterministic close, and module leases.
+- [x] The additive `WioGetNativeReflectionApi` sidecar exposes stable type,
+      constructor, field, method, enum/flagset case, effective attribute,
+      normalized argument, origin, retention, and processor metadata. The
+      native SDK can enumerate types/attributes, construct exported values,
+      access public fields, and invoke public synchronous methods through
+      checked wire-v2 thunks while keeping private/async members non-callable.
+- [x] Lowered-WIR emission now generates static `TypeReflection<T>` tables for
+      native generic consumers and control-safe quoted metadata. The focused
+      `wio_wir_cpp_application` and `wio_wir_cpp_reflection` shared-library host
+      gates cover lifecycle ordering/failure/thread rules, initializer values,
+      reflection access control, runtime attribute retention, stable identities,
+      and values/hosts that outlive the module view. Worker stage transfer and
+      behavioral body weaving fail explicitly; 17.6 owns parity and cutover.

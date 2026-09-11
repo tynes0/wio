@@ -193,6 +193,7 @@ namespace wio::wir
         std::vector<TypeId> parameterTypes;
         std::uint32_t slot = 0;
         bool isAsync = false;
+        FieldVisibility visibility = FieldVisibility::Private;
         std::vector<std::uint64_t> attributes;
 
         auto operator<=>(const ReflectedMethodDescriptor&) const = default;
@@ -277,6 +278,7 @@ namespace wio::wir
         std::uint64_t stableId = 0;
         std::string logicalName;
         TypeId type;
+        FunctionId construct;
         FunctionId entry;
         FunctionId start;
         FunctionId update;

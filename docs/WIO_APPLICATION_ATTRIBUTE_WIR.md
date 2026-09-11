@@ -16,6 +16,8 @@ desugaring as an explicit `ApplicationDescriptor` and ordered
 An application descriptor fixes:
 
 - the application component type and stable identity;
+- a distinct construction function that applies declared field initializers in
+  source order before lifecycle start;
 - entry, `Start`, `Update`, `Close`, and `Exit` function identities;
 - the system component types stored by the application;
 - deterministic stage order, `after` dependencies, fixed frequency, and
@@ -69,6 +71,7 @@ non-component application/system types, unresolved lifecycle functions,
 non-canonical stage order, backward or missing dependencies, invalid fixed
 frequencies, unresolved runs, and invalid resource bindings.
 
-Canonical lowering copies the complete module contract exactly. This sprint
-does not yet emit a new application runtime: it freezes the common input that
-the new C++ backend and VM runtime will consume.
+Canonical lowering copies the complete module contract exactly. Sprint 17.5's
+independent C++ backend consumes it directly for standalone execution and the
+SDK application host. Worker-affine stage execution and behavioral attribute
+body weaving remain explicit rejections rather than silent semantic changes.

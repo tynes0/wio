@@ -1,6 +1,7 @@
 #include "wio/codegen/wir_cpp_backend.h"
 #include "wio/codegen/wir_intrinsics.h"
 #include "wio/codegen/wir_module_emitter.h"
+#include "wio/codegen/wir_reflection_emitter.h"
 
 #include "wio/wir/lowered_ir_verifier.h"
 
@@ -111,6 +112,7 @@ namespace wio::codegen
 
                 emitPreamble();
                 emitNominalDeclarations();
+                output_ << WirReflectionEmitter::traits(module_,[this](TypeId id){return cppType(id);});
                 emitFunctionDeclarations();
                 emitHierarchyBodies();
                 emitGlobals();
@@ -276,15 +278,37 @@ namespace wio::codegen
                         diagnose("WCPP1108", "global value requires a concrete specialized type", global.source);
             }
 
-            void validateWireBoundaries()
-            {
-                for (const auto& function : module_.functions)
-                {
-                    if (functionIsOpen(function)) continue;
+            void validateWireBoundaries() {
+                if (module_.contract.application) {
+                    const auto& app = *module_.contract.application;
+                    const auto& fields = module_.types.get(app.type).fields;
+                    if (std::ranges::none_of(fields, [](const auto& f) { return f.name == "__exitRequested"; }) ||
+                        std::ranges::none_of(fields, [](const auto& f) { return f.name == "__exitCode"; }))
+                        diagnose("WCPP1214", "application requires canonical exit-state fields");
+                    for (const auto& stage : app.stages)
+                        if (stage.affinity == ApplicationAffinity::Worker)
+                            diagnose("WCPP1214",
+                                     "worker application stages require a thread-transfer lowering contract");
+                }
+                for (const auto& attribute : module_.contract.attributes)
+                    if (attribute.targetFunction)
+                        for (const auto& processor : attribute.processors)
+                            if (processor.phase == AttributeProcessorPhase::Pre ||
+                                processor.phase == AttributeProcessorPhase::Post ||
+                                processor.phase == AttributeProcessorPhase::Finally ||
+                                processor.phase == AttributeProcessorPhase::Around)
+                                diagnose(
+                                    "WCPP1215",
+                                    "behavioral attribute weaving is not yet available in the Lowered-WIR C++ backend",
+                                    {}, attribute.targetFunction);
+                for (const auto& function : module_.functions) {
+                    if (functionIsOpen(function))
+                        continue;
                     const bool exported = module_.contract.kind == ModuleKind::WioLibrary &&
-                        std::ranges::any_of(module_.contract.exports,
-                            [&](const auto& e) { return e.function == function.id; });
-                    if (!exported && !function.nativeBinding) continue;
+                                          std::ranges::any_of(module_.contract.exports,
+                                                              [&](const auto& e) { return e.function == function.id; });
+                    if (!exported && !function.nativeBinding)
+                        continue;
                     const auto& result = module_.types.get(function.returnType);
                     const bool async = result.kind == TypeKind::AsyncTask;
                     bool unsafe = result.kind == TypeKind::Reference ||
@@ -455,28 +479,38 @@ namespace wio::codegen
                                 if (instruction.callee)
                                 {
                                     const auto body = functions_.find(instruction.callee.value());
-                                    bool valid = body != functions_.end() && body->second->ownerType == instruction.resultType &&
+                                    bool valid =
+                                        body != functions_.end() && body->second->ownerType == instruction.resultType &&
                                         body->second->parameters.size() == instruction.signatureTypes.size() + 1 &&
                                         module_.types.get(body->second->returnType).kind == TypeKind::Void;
                                     for (std::size_t p = 0; valid && p < instruction.signatureTypes.size(); ++p)
                                         valid = body->second->parameters[p + 1].type == instruction.signatureTypes[p];
-                                    if (!valid) diagnose("WCPP1203", "constructor identity does not match its canonical argument signature", instruction.source, function.id, block.id);
+                                    if (!valid)
+                                        diagnose("WCPP1203",
+                                                 "constructor identity does not match its canonical argument signature",
+                                                 instruction.source, function.id, block.id);
                                 }
-                                bool aggregateCompatible = valueModelConstructorCompatible(
-                                    target, instruction, functionValueTypes);
+                                bool aggregateCompatible =
+                                    valueModelConstructorCompatible(target, instruction, functionValueTypes);
                                 if (target && target->nominalValueModel == NominalValueModel::Regular)
-                                    aggregateCompatible = target->fields.size() == instruction.operands.size();
-                                for (std::size_t index = 0; aggregateCompatible && index < instruction.operands.size(); ++index)
-                                {
+                                    aggregateCompatible = target->fields.size() == instruction.operands.size() ||
+                                                          (instruction.operands.empty() && !target->hasConstructor);
+                                if (module_.contract.application && instruction.operands.empty() &&
+                                    instruction.resultType == module_.contract.application->type)
+                                    aggregateCompatible = true;
+                                for (std::size_t index = 0; aggregateCompatible && index < instruction.operands.size();
+                                     ++index) {
                                     if (target->nominalValueModel != NominalValueModel::Regular)
                                         break;
                                     const auto value = functionValueTypes.find(instruction.operands[index].value());
                                     aggregateCompatible = value != functionValueTypes.end() &&
-                                        value->second == target->fields[index].type;
+                                                          value->second == target->fields[index].type;
                                 }
                                 if (!aggregateCompatible && !instruction.callee)
-                                    diagnose("WCPP1203", "constructor requires a callable constructor adapter; only canonical field-wise construction is enabled",
-                                        instruction.source, function.id, block.id);
+                                    diagnose("WCPP1203",
+                                             "constructor requires a callable constructor adapter; only canonical "
+                                             "field-wise construction is enabled",
+                                             instruction.source, function.id, block.id);
                             }
                         }
                     }
@@ -670,6 +704,7 @@ namespace wio::codegen
 
             void emitPreamble()
             {
+                output_ << "#include <wir_application.h>\n#include <wio_native_reflection.h>\n#include <type_reflection.h>\n";
                 output_ << "// Generated by Wio's canonical Lowered WIR C++ backend.\n"
                     "#include <array>\n#include <cstddef>\n#include <cstdint>\n#include <functional>\n#include <limits>\n"
                     "#include <map>\n#include <memory>\n#include <optional>\n#include <sstream>\n"
@@ -1820,6 +1855,10 @@ inline std::string stringify(const std::string& value) { return value; }
             void emitMain()
             {
                 if (!options_.emitMain || module_.contract.kind != ModuleKind::Program) return;
+                if (module_.contract.application) {
+                    output_ << "int main() { return _wio_app_host::run(); }\n";
+                    return;
+                }
                 const lowered::Function* entry = entryFunction();
                 if (!entry || !entry->parameters.empty()) return;
                 const Type* resultType = module_.types.tryGet(entry->returnType);

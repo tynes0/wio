@@ -7274,6 +7274,7 @@ namespace wio::sdk
     private:
         friend class Module;
 
+        friend class NativeModule;
         ApplicationHost(const WioApplicationDescriptor* descriptor,
                         std::shared_ptr<detail::BindingState> bindingState,
                         const std::uint64_t bindingGeneration,

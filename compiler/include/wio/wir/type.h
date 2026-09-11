@@ -344,6 +344,7 @@ namespace wio::wir
         std::uint32_t slot = 0;
         bool receiverMutable = true;
         bool isAbstract = false;
+        FieldVisibility visibility = FieldVisibility::Private;
 
         auto operator<=>(const MethodLayout&) const = default;
     };

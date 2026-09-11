@@ -567,8 +567,7 @@ namespace wio::wir::typed
         }
 
         std::unordered_set<TypeId::ValueType> systemTypes;
-        for (const SystemDescriptor& system : module.contract.systems)
-        {
+        for (const SystemDescriptor& system : module.contract.systems) {
             const Type* type = module.types.tryGet(system.type);
             const auto knownFunction = [&](const FunctionId id) { return !id || functions.contains(id.value()); };
             if (system.stableId == 0 || system.logicalName.empty() || !type ||
@@ -576,48 +575,52 @@ namespace wio::wir::typed
                 !knownFunction(system.start) || !knownFunction(system.update) || !knownFunction(system.close))
                 report("WIR1513", "Typed WIR systems require unique component types and valid lifecycle functions.");
         }
-        if (module.contract.application)
-        {
+        if (module.contract.application) {
             const ApplicationDescriptor& application = *module.contract.application;
             const Type* type = module.types.tryGet(application.type);
             const auto requiredFunction = [&](const FunctionId id) { return id && functions.contains(id.value()); };
             if (application.stableId == 0 || application.logicalName.empty() || !type ||
                 type->nominalKind != NominalKind::Component || !requiredFunction(application.entry) ||
-                !requiredFunction(application.start) || !requiredFunction(application.update) ||
-                !requiredFunction(application.close) || !requiredFunction(application.exit) ||
-                !std::ranges::all_of(application.systems, [&](const TypeId system) { return systemTypes.contains(system.value()); }))
-                report("WIR1514", "Typed WIR application requires a component type, entry/lifecycle functions, and declared systems.");
+                !requiredFunction(application.construct) || !requiredFunction(application.start) ||
+                !requiredFunction(application.update) || !requiredFunction(application.close) ||
+                !requiredFunction(application.exit) ||
+                !std::ranges::all_of(application.systems,
+                                     [&](const TypeId system) { return systemTypes.contains(system.value()); }))
+                report("WIR1514", "Typed WIR application requires a component type, entry/lifecycle functions, and "
+                                  "declared systems.");
             std::unordered_map<std::string, std::uint32_t> stageOrders;
-            for (const ApplicationStageDescriptor& stage : application.stages)
-            {
-                const bool dependencyValid = stage.after.empty() ||
-                    (stageOrders.contains(stage.after) && stageOrders.at(stage.after) < stage.order);
-                const bool frequencyValid = stage.kind == ApplicationStageKind::Fixed
-                    ? stage.fixedHz > 0.0 : stage.fixedHz == 0.0;
+            for (const ApplicationStageDescriptor& stage : application.stages) {
+                const bool dependencyValid = stage.after.empty() || (stageOrders.contains(stage.after) &&
+                                                                     stageOrders.at(stage.after) < stage.order);
+                const bool frequencyValid =
+                    stage.kind == ApplicationStageKind::Fixed ? stage.fixedHz > 0.0 : stage.fixedHz == 0.0;
                 if (stage.stableId == 0 || stage.name.empty() || stage.order != stageOrders.size() ||
                     !dependencyValid || !frequencyValid || !stageOrders.emplace(stage.name, stage.order).second)
-                    report("WIR1515", "Typed WIR application stages require canonical order, dependencies, and frequency.");
-                for (const ApplicationStageRun& run : stage.runs)
-                {
+                    report("WIR1515",
+                           "Typed WIR application stages require canonical order, dependencies, and frequency.");
+                for (const ApplicationStageRun& run : stage.runs) {
                     const bool targetValid = run.targetType && module.types.tryGet(run.targetType) &&
-                        (run.applicationTarget ? run.targetType == application.type : systemTypes.contains(run.targetType.value()));
-                    if (run.targetName.empty() || run.methodName.empty() || !targetValid || !requiredFunction(run.function) ||
-                        !std::ranges::all_of(run.resources, [&](const ApplicationResourceBinding& resource)
-                            { return !resource.name.empty() && module.types.tryGet(resource.type); }))
-                        report("WIR1516", "Typed WIR application runs require resolved targets, functions, and resources.");
+                                             (run.applicationTarget ? run.targetType == application.type
+                                                                    : systemTypes.contains(run.targetType.value()));
+                    if (run.targetName.empty() || run.methodName.empty() || !targetValid ||
+                        !requiredFunction(run.function) ||
+                        !std::ranges::all_of(run.resources, [&](const ApplicationResourceBinding& resource) {
+                            return !resource.name.empty() && module.types.tryGet(resource.type);
+                        }))
+                        report("WIR1516",
+                               "Typed WIR application runs require resolved targets, functions, and resources.");
                 }
             }
         }
 
         const ModuleLifecycle& lifecycle = module.contract.lifecycle;
-        const auto lifecycleKnown = [&](const FunctionId id)
-            { return !id || functions.contains(id.value()); };
+        const auto lifecycleKnown = [&](const FunctionId id) { return !id || functions.contains(id.value()); };
         if (!lifecycleKnown(lifecycle.apiVersion) || !lifecycleKnown(lifecycle.load) ||
             !lifecycleKnown(lifecycle.update) || !lifecycleKnown(lifecycle.unload) ||
             !lifecycleKnown(lifecycle.saveState) || !lifecycleKnown(lifecycle.restoreState) ||
             static_cast<bool>(lifecycle.saveState) != static_cast<bool>(lifecycle.restoreState))
-            report("WIR1505", "Typed WIR module lifecycle must reference known functions and pair save/restore state hooks.");
-
+            report("WIR1505",
+                   "Typed WIR module lifecycle must reference known functions and pair save/restore state hooks.");
 
         for (const Type& type : module.types.types())
         {

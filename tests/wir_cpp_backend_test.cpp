@@ -1,9 +1,11 @@
 #include "wio/codegen/wir_cpp_backend.h"
+#include "wio/codegen/wir_cpp_text.h"
 #include "wio/wir/generic_specializer.h"
 #include "wio/wir/hierarchy_lowering.h"
 #include "wio/lexer/lexer.h"
 #include "wio/parser/parser.h"
 #include "wio/sema/analyzer.h"
+#include "wio/common/logger.h"
 #include "wio/wir/lowered_ir_printer.h"
 #include "wio/wir/lowered_ir_verifier.h"
 #include "wio/wir/lowering_pipeline.h"
@@ -285,6 +287,7 @@ fn Entry() -> i32 {
         sema::SemanticAnalyzer analyzer;
         analyzer.setCanonicalAbiExports(library);
         analyzer.analyze(program);
+        if (Logger::get().getErrorCount()!=0) return std::nullopt;
         auto typed = wir::typed::Builder{}.build(program, wir::typed::BuildOptions{
             .moduleKind = library ? wir::ModuleKind::WioLibrary : wir::ModuleKind::Program });
         if (!typed.succeeded())
@@ -370,202 +373,361 @@ int main(int argc, char** argv)
             auto module = makeLanguageSurfaceModule(source);
             if (!module) return 1;
             auto generated = WirCppBackend{}.generate(*module);
-            for (const auto& d : generated.diagnostics()) std::cerr << d.code << ": " << d.message << '\n';
-            if (!generated.succeeded()) return 1;
+            for (const auto& d : generated.diagnostics())
+                std::cerr << d.code << ": " << d.message << '\n';
+            if (!generated.succeeded())
+                return 1;
             std::string fail;
-            for (const auto& f : module->functions) if (f.name == "InvokeFailure") fail = "_wio_f" + std::to_string(f.id.value());
-            std::string harness = "#define main native_entry\n" + generated.code() + "\n#undef main\nint main() {\n"
-                "if (int result = native_entry()) return result;\n"
-                "try { " + fail + "(); return 10; } catch (const std::exception& error) {\n"
-                " if (std::string(error.what()).find(\"native failure\") == std::string::npos) return 11; } return 0; }\n";
+            for (const auto& f : module->functions)
+                if (f.name == "InvokeFailure")
+                    fail = "_wio_f" + std::to_string(f.id.value());
+            std::string harness = "#define main native_entry\n" + generated.code() +
+                                  "\n#undef main\nint main() {\n"
+                                  "if (int result = native_entry()) return result;\n"
+                                  "try { " +
+                                  fail +
+                                  "(); return 10; } catch (const std::exception& error) {\n"
+                                  " if (std::string(error.what()).find(\"native failure\") == std::string::npos) "
+                                  "return 11; } return 0; }\n";
             return expect(compileGeneratedCode(harness, true), "native adapters must compile and execute") ? 0 : 1;
-        } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
+        } catch (const std::exception& e) {
+            std::cerr << e.what() << '\n';
+            return 1;
+        }
     }
 
-    if (argc == 2 && std::string(argv[1]) == "--sdk-only") {
+    if (argc == 2 && (std::string(argv[1]) == "--sdk-only" || std::string(argv[1]) == "--application-only" ||
+                      std::string(argv[1]) == "--reflection-only")) {
         try {
-            namespace fs=std::filesystem;
-            std::ifstream fixture(std::string(WIO_TEST_SOURCE_DIR)+"/tests/wir_cpp_sdk_module.wio");
-            const std::string source{std::istreambuf_iterator<char>(fixture),std::istreambuf_iterator<char>()};
-            auto module=makeLanguageSurfaceModule(source,nullptr,true,true); if (!module) return 1;
-            auto unsafe=makeLanguageSurfaceModule(source + "\n[native, CppName(wir_native::AsyncBorrow)] fn AsyncBorrow(value: ref i32) -> coroutine<i32>;\n",nullptr,true,true);
-            if (!unsafe) return 1;
-            const auto rejected=WirCppBackend{}.generate(*unsafe);
-            bool foundBoundaryDiagnostic=false;
-            for (const auto& d:rejected.diagnostics()) foundBoundaryDiagnostic |= d.code=="WCPP1213";
-            if (!expect(!rejected.succeeded() && foundBoundaryDiagnostic,"async ABI borrows must fail before native emission")) return 1;
-            auto generated=WirCppBackend{}.generate(*module);
-            for (const auto& d:generated.diagnostics()) std::cerr<<d.code<<": "<<d.message<<'\n';
-            if (!generated.succeeded()) return 1;
-            auto directory=fs::temp_directory_path()/("wio-sdk-wir-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+            const bool applicationTest = std::string(argv[1]) == "--application-only";
+            const bool reflectionTest = std::string(argv[1]) == "--reflection-only";
+            if (!expect(wio::codegen::WirCppText::quote("counter\nmetadata") == "\"counter\\012metadata\"",
+                        "metadata quoting must preserve control characters"))
+                return 1;
+            namespace fs = std::filesystem;
+            std::ifstream fixture(std::string(WIO_TEST_SOURCE_DIR) +
+                                  (applicationTest  ? "/tests/wir_cpp_application_run.wio"
+                                   : reflectionTest ? "/tests/wir_cpp_reflection_run.wio"
+                                                    : "/tests/wir_cpp_sdk_module.wio"));
+            const std::string source{std::istreambuf_iterator<char>(fixture), std::istreambuf_iterator<char>()};
+            auto module = makeLanguageSurfaceModule(source, nullptr, true, true);
+            if (!module)
+                return 1;
+            auto unsafe = makeLanguageSurfaceModule(
+                source +
+                    "\n[native, CppName(wir_native::AsyncBorrow)] fn AsyncBorrow(value: ref i32) -> coroutine<i32>;\n",
+                nullptr, true, true);
+            if (!unsafe)
+                return 1;
+            const auto rejected = WirCppBackend{}.generate(*unsafe);
+            bool foundBoundaryDiagnostic = false;
+            for (const auto& d : rejected.diagnostics())
+                foundBoundaryDiagnostic |= d.code == "WCPP1213";
+            if (!expect(!rejected.succeeded() && foundBoundaryDiagnostic,
+                        "async ABI borrows must fail before native emission"))
+                return 1;
+            auto generated = WirCppBackend{}.generate(*module);
+            for (const auto& d : generated.diagnostics())
+                std::cerr << d.code << ": " << d.message << '\n';
+            if (applicationTest && !generated.succeeded())
+                std::cerr << wio::wir::lowered::Printer{}.print(*module);
+            if (!generated.succeeded())
+                return 1;
+            if (applicationTest) {
+                auto worker = *module;
+                worker.contract.application->stages.front().affinity = wio::wir::ApplicationAffinity::Worker;
+                auto invalid = WirCppBackend{}.generate(worker);
+                bool rejectedWorker = false;
+                for (const auto& d : invalid.diagnostics())
+                    rejectedWorker |= d.code == "WCPP1214";
+                if (!expect(!invalid.succeeded() && rejectedWorker,
+                            "worker application stage must require thread-transfer lowering"))
+                    return 1;
+                auto executable = *module;
+                executable.contract.kind = wio::wir::ModuleKind::Program;
+                auto code = WirCppBackend{}.generate(executable);
+                if (!expect(code.succeeded() && compileGeneratedCode(code.code(), true),
+                            "application standalone main must execute with real frame delta"))
+                    return 1;
+            }
+            if (reflectionTest) {
+                auto behavioral = *module;
+                auto found = std::ranges::find_if(behavioral.contract.attributes,
+                                                  [](const auto& a) { return bool(a.targetFunction); });
+                if (found == behavioral.contract.attributes.end())
+                    return 1;
+                found->processors.push_back({.stableId = 123,
+                                             .canonicalTypeName = "Probe",
+                                             .hookName = "Before",
+                                             .hookMode = "no_args",
+                                             .phase = wio::wir::AttributeProcessorPhase::Pre,
+                                             .valueType = behavioral.types.i32Type()});
+                auto invalid = WirCppBackend{}.generate(behavioral);
+                bool rejectedBehavior = false;
+                for (const auto& d : invalid.diagnostics())
+                    rejectedBehavior |= d.code == "WCPP1215";
+                if (!expect(!invalid.succeeded() && rejectedBehavior,
+                            "behavioral attribute must never be silently omitted"))
+                    return 1;
+            }
+            auto directory =
+                fs::temp_directory_path() /
+                ("wio-sdk-wir-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
             fs::create_directories(directory);
-            struct Cleanup { fs::path path; ~Cleanup() { std::error_code e; fs::remove_all(path,e); } } cleanup{directory};
-            auto cpp=directory/"module.cpp"; { std::ofstream stream(cpp); stream<<generated.code(); }
+            struct Cleanup {
+                fs::path path;
+                ~Cleanup() {
+                    std::error_code e;
+                    fs::remove_all(path, e);
+                }
+            } cleanup{directory};
+            auto cpp = directory / "module.cpp";
+            {
+                std::ofstream stream(cpp);
+                stream << generated.code();
+            }
 #if defined(_WIN32)
-            auto dll=directory/"module.dll";
+            auto dll = directory / "module.dll";
 #else
-            auto dll=directory/"module.so";
+            auto dll = directory / "module.so";
 #endif
-            auto host=directory/"host.exe";
-            const auto quote=[](const auto& v) { return "\""+std::string(v)+"\""; };
-            const std::string includes=" -I"+quote(WIO_TEST_RUNTIME_INCLUDE)+" -I"+quote(std::string(WIO_TEST_SOURCE_DIR)+"/sdk/include")+" -I"+quote(std::string(WIO_TEST_SOURCE_DIR)+"/tests/native");
-            const auto run=[](std::string command) {
+            auto host = directory / "host.exe";
+            const auto quote = [](const auto& v) { return "\"" + std::string(v) + "\""; };
+            const std::string includes = " -I" + quote(WIO_TEST_RUNTIME_INCLUDE) + " -I" +
+                                         quote(std::string(WIO_TEST_SOURCE_DIR) + "/sdk/include") + " -I" +
+                                         quote(std::string(WIO_TEST_SOURCE_DIR) + "/tests/native");
+            const auto run = [](std::string command) {
 #if defined(_WIN32)
-                command="\""+command+"\"";
+                command = "\"" + command + "\"";
 #endif
                 return std::system(command.c_str());
             };
-            std::string compiler=quote(WIO_TEST_CXX_COMPILER)+" -std=c++20 -pthread ";
-            if (run(compiler+"-shared -fPIC "+quote(cpp.string())+includes+" "+quote(WIO_TEST_RUNTIME_LIBRARY)+" -o "+quote(dll.string()))!=0) return 1;
-            std::string hostCommand=compiler+quote(std::string(WIO_TEST_SOURCE_DIR)+"/tests/wir_cpp_sdk_host.cpp")+includes+" -o "+quote(host.string());
-#if !defined(_WIN32)
-            hostCommand+=" -ldl";
-#endif
-            if (run(hostCommand)!=0) return 1;
-            return expect(run(quote(host.string())+" "+quote(dll.string()))==0,"separate C++ SDK host must load and execute the WIR DLL") ? 0 : 1;
-        } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
-    }
-
-    if (argc == 2 && std::string(argv[1]) == "--async-only")
-    {
-        try
-        {
-        using namespace wio::wir;
-        std::ifstream fixture(std::string(WIO_TEST_SOURCE_DIR) + "/tests/wir_cpp_async_run.wio");
-        const std::string source{std::istreambuf_iterator<char>(fixture), std::istreambuf_iterator<char>()};
-        if (!expect(!source.empty(), "async fixture should be readable")) return 1;
-        typed::Module original;
-        auto module = makeLanguageSurfaceModule(source, &original, true);
-        if (!module) return 1;
-        FunctionId recorder;
-        for (const auto& function : original.functions) if (function.name == "RecordExecutor") recorder = function.id;
-        std::size_t switches = 0;
-        for (auto& function : original.functions)
-        {
-            if (function.name != "ExecutorProbe") continue;
-            for (auto& block : function.blocks)
-            {
-                std::vector<typed::Instruction> instructions;
-                for (const auto& instruction : block.instructions)
-                {
-                    if (instruction.callee == recorder)
-                    {
-                        const AsyncExecutorKind executors[] = { AsyncExecutorKind::Worker, AsyncExecutorKind::Blocking,
-                            AsyncExecutorKind::Io, AsyncExecutorKind::Main };
-                        instructions.push_back(typed::Instruction{ .opcode = typed::Opcode::ExecutorSwitch,
-                            .asyncOperation = AsyncOperation::SwitchExecutor, .asyncExecutor = executors[switches++] });
-                    }
-                    instructions.push_back(instruction);
-                }
-                block.instructions = std::move(instructions);
+            std::string compiler = quote(WIO_TEST_CXX_COMPILER) + " -std=c++20 -pthread ";
+            if (run(compiler + "-shared -fPIC " + quote(cpp.string()) + includes + " " +
+                    quote(WIO_TEST_RUNTIME_LIBRARY) + " -o " + quote(dll.string())) != 0) {
+                std::cerr << generated.code();
+                return 1;
             }
-        }
-        if (!expect(switches == 4, "all four canonical executor destinations need probes")) return 1;
-        auto switched = LoweringPipeline{}.lower(original);
-        if (!switched.succeeded()) {
-            for (const auto& diagnostic : switched.diagnostics()) std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+            std::string hostCommand =
+                compiler +
+                quote(std::string(WIO_TEST_SOURCE_DIR) + (applicationTest  ? "/tests/wir_cpp_application_host.cpp"
+                                                          : reflectionTest ? "/tests/wir_cpp_reflection_host.cpp"
+                                                                           : "/tests/wir_cpp_sdk_host.cpp")) +
+                includes + " -o " + quote(host.string());
+#if !defined(_WIN32)
+            hostCommand += " -ldl";
+#endif
+            if (run(hostCommand) != 0)
+                return 1;
+            const int hostExit = run(quote(host.string()) + " " + quote(dll.string()));
+            if (hostExit != 0)
+                std::cerr << "SDK host exit: " << hostExit << '\n';
+            return expect(hostExit == 0, "separate C++ SDK host must load and execute the WIR DLL") ? 0 : 1;
+        } catch (const std::exception& e) {
+            std::cerr << e.what() << '\n';
             return 1;
         }
-        module = switched.takeModule();
-        const auto generated = WirCppBackend{}.generate(*module);
-        for (const auto& diagnostic : generated.diagnostics()) std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
-        if (!generated.succeeded()) return 1;
-        bool ok = true;
-        const auto repeated = LoweringPipeline{}.lower(original);
-        ok &= expect(repeated.succeeded() && lowered::Printer{}.print(repeated.module()) == lowered::Printer{}.print(*module),
-            "coroutine lowering must be deterministic");
-        ok &= expect(generated.code().find("co_await") != std::string::npos && generated.code().find("BlockOn(") == std::string::npos,
-            "await must suspend rather than block a worker");
-        auto broken = *module;
-        for (auto& function : broken.functions)
-            if (function.coroutine && !function.coroutine->states.empty()) { ++function.coroutine->states.front().index; break; }
-        ok &= expect(!WirCppBackend{}.generate(broken).succeeded(), "corrupt coroutine state must fail before emission");
-        broken = *module;
-        for (auto& function : broken.functions)
-            if (function.coroutine && function.coroutine->retainedReceiver) { function.coroutine->retainedReceiver = {}; break; }
-        ok &= expect(!WirCppBackend{}.generate(broken).succeeded(), "async receiver ownership must be verified");
-        broken = *module;
-        for (auto& function : broken.functions)
-            if (function.coroutine && !function.coroutine->frameSlots.empty()) {
-                function.coroutine->frameSlots.front().type = broken.types.voidType(); break;
+    }
+
+    if (argc == 2 && std::string(argv[1]) == "--async-only") {
+        try {
+            using namespace wio::wir;
+            std::ifstream fixture(std::string(WIO_TEST_SOURCE_DIR) + "/tests/wir_cpp_async_run.wio");
+            const std::string source{std::istreambuf_iterator<char>(fixture), std::istreambuf_iterator<char>()};
+            if (!expect(!source.empty(), "async fixture should be readable"))
+                return 1;
+            typed::Module original;
+            auto module = makeLanguageSurfaceModule(source, &original, true);
+            if (!module)
+                return 1;
+            FunctionId recorder;
+            for (const auto& function : original.functions)
+                if (function.name == "RecordExecutor")
+                    recorder = function.id;
+            std::size_t switches = 0;
+            for (auto& function : original.functions) {
+                if (function.name != "ExecutorProbe")
+                    continue;
+                for (auto& block : function.blocks) {
+                    std::vector<typed::Instruction> instructions;
+                    for (const auto& instruction : block.instructions) {
+                        if (instruction.callee == recorder) {
+                            const AsyncExecutorKind executors[] = {AsyncExecutorKind::Worker,
+                                                                   AsyncExecutorKind::Blocking, AsyncExecutorKind::Io,
+                                                                   AsyncExecutorKind::Main};
+                            instructions.push_back(typed::Instruction{.opcode = typed::Opcode::ExecutorSwitch,
+                                                                      .asyncOperation = AsyncOperation::SwitchExecutor,
+                                                                      .asyncExecutor = executors[switches++]});
+                        }
+                        instructions.push_back(instruction);
+                    }
+                    block.instructions = std::move(instructions);
+                }
             }
-        ok &= expect(!WirCppBackend{}.generate(broken).succeeded(), "frame value types must match their SSA definitions");
-        broken = *module;
-        for (auto& function : broken.functions)
-            if (function.coroutine && !function.coroutine->states.empty()) {
-                function.coroutine->states.front().executor = AsyncExecutorKind::Io; break;
+            if (!expect(switches == 4, "all four canonical executor destinations need probes"))
+                return 1;
+            auto switched = LoweringPipeline{}.lower(original);
+            if (!switched.succeeded()) {
+                for (const auto& diagnostic : switched.diagnostics())
+                    std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+                return 1;
             }
-        ok &= expect(!WirCppBackend{}.generate(broken).succeeded(), "executor state and suspend instruction must agree");
-        const auto functionId = [&](const std::string& name) {
-            for (const auto& function : module->functions) if (function.name == name && !function.isAbstract) return "_wio_f" + std::to_string(function.id.value());
-            throw std::runtime_error("missing async function " + name);
-        };
-        std::string counterType;
-        const std::string destroyed = "asyncDestroyed.load()";
-        for (std::size_t i = 0; i < module->types.size(); ++i)
-            if (module->types.types()[i].name == "Counter") counterType = "_wio_obj" + std::to_string(i);
-        std::string harness = "#include <atomic>\n#include <thread>\n#include <array>\nstatic std::atomic<int> asyncDestroyed{0};\n"
-            "static void RecordAsyncDestroy() { ++asyncDestroyed; }\n"
-            "static std::array<std::thread::id, 4> executorThreads;\n"
-            "static void RecordAsyncExecutor(int index) { executorThreads.at(index) = std::this_thread::get_id(); }\n"
-            "static std::atomic<int> afterCancel{0};\nstatic void RecordCancelledBody() { ++afterCancel; }\n"
-            "#define main wio_async_entry\n" + generated.code() + "\n#undef main\n"
-            "struct CancelCurrent { bool await_ready() { return false; }\n"
-            "  template<class P> bool await_suspend(std::coroutine_handle<P> h) { h.promise().state->Cancel(); return false; }\n"
-            "  void await_resume() {} };\n"
-            "wio::runtime::AsyncTask<void> CheckpointProbe() { co_await CancelCurrent{};\n"
-            "  co_await wio::wir_backend::CancellationCheckpoint{}; ++afterCancel; }\n"
-            "int main() {\n"
-            "  using namespace wio::runtime;\n"
-            "  if (int result = wio_async_entry()) return result;\n"
-            "  auto baseline = std::chrono::steady_clock::now() + std::chrono::seconds(2);\n"
-            "  while (asyncDestroyed != 1 && std::chrono::steady_clock::now() < baseline) std::this_thread::yield();\n"
-            "  if (asyncDestroyed != 1) return 25; asyncDestroyed = 0;\n"
-            "  auto checkpoint = CheckpointProbe(); if (!checkpoint.IsReady() || !checkpoint.IsCancelled() || afterCancel != 0) return 26;\n"
-            "  auto mainWait = " + functionId("MainWait") + "();\n"
-            "  auto mainDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);\n"
-            "  while (AsyncMainPendingCount() == 0 && std::chrono::steady_clock::now() < mainDeadline) mainWait.WaitFor(1);\n"
-            "  if (AsyncMainPendingCount() == 0) return 27; mainWait.Cancel();\n"
-            "  if (!mainWait.WaitFor(2000) || !mainWait.IsCancelled()) return 28;\n"
-            "  DrainAsyncMainExecutor(); if (afterCancel != 0) return 29;\n"
-            "  auto ready = " + functionId("Immediate") + "(37); ready.Cancel(); if (ready.Get() != 37) return 24;\n"
-            "  wio::wir_backend::RunEntry(" + functionId("ExecutorProbe") + "());\n"
-            "  if (executorThreads[3] != std::this_thread::get_id()) return 20;\n"
-            "  for (int i = 0; i < 3; ++i) for (int j = i + 1; j < 4; ++j) if (executorThreads[i] == executorThreads[j]) return 21;\n"
-            "  auto pending = " + functionId("Parent") + "();\n"
-            "  if (pending.IsReady()) return 10; pending.Cancel();\n"
-            "  if (!pending.WaitFor(2000)) return 11;\n"
-            "  bool cancelled = false; try { pending.Get(); } catch (const AsyncCancelled&) { cancelled = true; }\n"
-            "  if (!cancelled) return 12;\n"
-            "  auto failure = " + functionId("Fail") + "();\n"
-            "  if (!failure.WaitFor(2000) || !failure.IsFaulted()) return 13;\n"
-            "  bool failed = false; try { failure.Get(); } catch (const std::exception&) { failed = true; }\n"
-            "  if (!failed || asyncDestroyed != 1) return 14;\n"
-            "  using C = " + counterType + ";\n"
-            "  auto counter = Ref<C>::Create(wio::wir_backend::SkipConstructor{}); counter->_f0 = 42;\n"
-            "  auto read = " + functionId("Read") + "(wio::wir_backend::Place<Ref<C>>::borrow(counter));\n"
-            "  if (counter->StrongCount() != 2) return 15; counter.Reset();\n"
-            "  if (!read.WaitFor(2000) || read.Get() != 42) return 16;\n"
-            "  auto until = std::chrono::steady_clock::now() + std::chrono::seconds(2);\n"
-            "  while (" + destroyed + " != 2 && std::chrono::steady_clock::now() < until) std::this_thread::yield();\n"
-            "  if (" + destroyed + " != 2) return 17;\n"
-            "  { auto result = " + functionId("OwningResult") + "(); if (!result.WaitFor(2000)) return 22;\n"
-            "    auto first = result.Get(); auto second = result.Get(); if (first.Get() != second.Get() || first->_f0 != 73) return 23; }\n"
-            "  auto waitingObject = Ref<C>::Create(wio::wir_backend::SkipConstructor{});\n"
-            "  auto methodWait = " + functionId("Wait") + "(wio::wir_backend::Place<Ref<C>>::borrow(waitingObject));\n"
-            "  waitingObject.Reset(); methodWait.Cancel(); if (!methodWait.WaitFor(2000) || !methodWait.IsCancelled()) return 31;\n"
-            "  auto owned = " + functionId("OwnAcrossWait") + "(); owned.Cancel();\n"
-            "  if (!owned.WaitFor(2000)) return 18;\n"
-            "  ShutdownAsyncRuntime();\n"
-            "  if (" + destroyed + " != 5) return 19;\n"
-            "  auto stopped = " + functionId("ExecutorProbe") + "();\n"
-            "  if (!stopped.WaitFor(2000) || !stopped.IsFaulted()) return 30;\n"
-            "  return 0;\n}\n";
-        ok &= expect(compileGeneratedCode(harness, true), "async source, cancellation, fault and lifetime probes must execute");
-        return ok ? 0 : 1;
-        }
-        catch (const std::exception& error)
-        {
+            module = switched.takeModule();
+            const auto generated = WirCppBackend{}.generate(*module);
+            for (const auto& diagnostic : generated.diagnostics())
+                std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+            if (!generated.succeeded())
+                return 1;
+            bool ok = true;
+            const auto repeated = LoweringPipeline{}.lower(original);
+            ok &= expect(repeated.succeeded() &&
+                             lowered::Printer{}.print(repeated.module()) == lowered::Printer{}.print(*module),
+                         "coroutine lowering must be deterministic");
+            ok &= expect(generated.code().find("co_await") != std::string::npos &&
+                             generated.code().find("BlockOn(") == std::string::npos,
+                         "await must suspend rather than block a worker");
+            auto broken = *module;
+            for (auto& function : broken.functions)
+                if (function.coroutine && !function.coroutine->states.empty()) {
+                    ++function.coroutine->states.front().index;
+                    break;
+                }
+            ok &= expect(!WirCppBackend{}.generate(broken).succeeded(),
+                         "corrupt coroutine state must fail before emission");
+            broken = *module;
+            for (auto& function : broken.functions)
+                if (function.coroutine && function.coroutine->retainedReceiver) {
+                    function.coroutine->retainedReceiver = {};
+                    break;
+                }
+            ok &= expect(!WirCppBackend{}.generate(broken).succeeded(), "async receiver ownership must be verified");
+            broken = *module;
+            for (auto& function : broken.functions)
+                if (function.coroutine && !function.coroutine->frameSlots.empty()) {
+                    function.coroutine->frameSlots.front().type = broken.types.voidType();
+                    break;
+                }
+            ok &= expect(!WirCppBackend{}.generate(broken).succeeded(),
+                         "frame value types must match their SSA definitions");
+            broken = *module;
+            for (auto& function : broken.functions)
+                if (function.coroutine && !function.coroutine->states.empty()) {
+                    function.coroutine->states.front().executor = AsyncExecutorKind::Io;
+                    break;
+                }
+            ok &= expect(!WirCppBackend{}.generate(broken).succeeded(),
+                         "executor state and suspend instruction must agree");
+            const auto functionId = [&](const std::string& name) {
+                for (const auto& function : module->functions)
+                    if (function.name == name && !function.isAbstract)
+                        return "_wio_f" + std::to_string(function.id.value());
+                throw std::runtime_error("missing async function " + name);
+            };
+            std::string counterType;
+            const std::string destroyed = "asyncDestroyed.load()";
+            for (std::size_t i = 0; i < module->types.size(); ++i)
+                if (module->types.types()[i].name == "Counter")
+                    counterType = "_wio_obj" + std::to_string(i);
+            std::string harness =
+                "#include <atomic>\n#include <thread>\n#include <array>\nstatic std::atomic<int> asyncDestroyed{0};\n"
+                "static void RecordAsyncDestroy() { ++asyncDestroyed; }\n"
+                "static std::array<std::thread::id, 4> executorThreads;\n"
+                "static void RecordAsyncExecutor(int index) { executorThreads.at(index) = std::this_thread::get_id(); "
+                "}\n"
+                "static std::atomic<int> afterCancel{0};\nstatic void RecordCancelledBody() { ++afterCancel; }\n"
+                "#define main wio_async_entry\n" +
+                generated.code() +
+                "\n#undef main\n"
+                "struct CancelCurrent { bool await_ready() { return false; }\n"
+                "  template<class P> bool await_suspend(std::coroutine_handle<P> h) { h.promise().state->Cancel(); "
+                "return false; }\n"
+                "  void await_resume() {} };\n"
+                "wio::runtime::AsyncTask<void> CheckpointProbe() { co_await CancelCurrent{};\n"
+                "  co_await wio::wir_backend::CancellationCheckpoint{}; ++afterCancel; }\n"
+                "int main() {\n"
+                "  using namespace wio::runtime;\n"
+                "  if (int result = wio_async_entry()) return result;\n"
+                "  auto baseline = std::chrono::steady_clock::now() + std::chrono::seconds(2);\n"
+                "  while (asyncDestroyed != 1 && std::chrono::steady_clock::now() < baseline) "
+                "std::this_thread::yield();\n"
+                "  if (asyncDestroyed != 1) return 25; asyncDestroyed = 0;\n"
+                "  auto checkpoint = CheckpointProbe(); if (!checkpoint.IsReady() || !checkpoint.IsCancelled() || "
+                "afterCancel != 0) return 26;\n"
+                "  auto mainWait = " +
+                functionId("MainWait") +
+                "();\n"
+                "  auto mainDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);\n"
+                "  while (AsyncMainPendingCount() == 0 && std::chrono::steady_clock::now() < mainDeadline) "
+                "mainWait.WaitFor(1);\n"
+                "  if (AsyncMainPendingCount() == 0) return 27; mainWait.Cancel();\n"
+                "  if (!mainWait.WaitFor(2000) || !mainWait.IsCancelled()) return 28;\n"
+                "  DrainAsyncMainExecutor(); if (afterCancel != 0) return 29;\n"
+                "  auto ready = " +
+                functionId("Immediate") +
+                "(37); ready.Cancel(); if (ready.Get() != 37) return 24;\n"
+                "  wio::wir_backend::RunEntry(" +
+                functionId("ExecutorProbe") +
+                "());\n"
+                "  if (executorThreads[3] != std::this_thread::get_id()) return 20;\n"
+                "  for (int i = 0; i < 3; ++i) for (int j = i + 1; j < 4; ++j) if (executorThreads[i] == "
+                "executorThreads[j]) return 21;\n"
+                "  auto pending = " +
+                functionId("Parent") +
+                "();\n"
+                "  if (pending.IsReady()) return 10; pending.Cancel();\n"
+                "  if (!pending.WaitFor(2000)) return 11;\n"
+                "  bool cancelled = false; try { pending.Get(); } catch (const AsyncCancelled&) { cancelled = true; }\n"
+                "  if (!cancelled) return 12;\n"
+                "  auto failure = " +
+                functionId("Fail") +
+                "();\n"
+                "  if (!failure.WaitFor(2000) || !failure.IsFaulted()) return 13;\n"
+                "  bool failed = false; try { failure.Get(); } catch (const std::exception&) { failed = true; }\n"
+                "  if (!failed || asyncDestroyed != 1) return 14;\n"
+                "  using C = " +
+                counterType +
+                ";\n"
+                "  auto counter = Ref<C>::Create(wio::wir_backend::SkipConstructor{}); counter->_f0 = 42;\n"
+                "  auto read = " +
+                functionId("Read") +
+                "(wio::wir_backend::Place<Ref<C>>::borrow(counter));\n"
+                "  if (counter->StrongCount() != 2) return 15; counter.Reset();\n"
+                "  if (!read.WaitFor(2000) || read.Get() != 42) return 16;\n"
+                "  auto until = std::chrono::steady_clock::now() + std::chrono::seconds(2);\n"
+                "  while (" +
+                destroyed +
+                " != 2 && std::chrono::steady_clock::now() < until) std::this_thread::yield();\n"
+                "  if (" +
+                destroyed +
+                " != 2) return 17;\n"
+                "  { auto result = " +
+                functionId("OwningResult") +
+                "(); if (!result.WaitFor(2000)) return 22;\n"
+                "    auto first = result.Get(); auto second = result.Get(); if (first.Get() != second.Get() || "
+                "first->_f0 != 73) return 23; }\n"
+                "  auto waitingObject = Ref<C>::Create(wio::wir_backend::SkipConstructor{});\n"
+                "  auto methodWait = " +
+                functionId("Wait") +
+                "(wio::wir_backend::Place<Ref<C>>::borrow(waitingObject));\n"
+                "  waitingObject.Reset(); methodWait.Cancel(); if (!methodWait.WaitFor(2000) || "
+                "!methodWait.IsCancelled()) return 31;\n"
+                "  auto owned = " +
+                functionId("OwnAcrossWait") +
+                "(); owned.Cancel();\n"
+                "  if (!owned.WaitFor(2000)) return 18;\n"
+                "  ShutdownAsyncRuntime();\n"
+                "  if (" +
+                destroyed +
+                " != 5) return 19;\n"
+                "  auto stopped = " +
+                functionId("ExecutorProbe") +
+                "();\n"
+                "  if (!stopped.WaitFor(2000) || !stopped.IsFaulted()) return 30;\n"
+                "  return 0;\n}\n";
+            ok &= expect(compileGeneratedCode(harness, true),
+                         "async source, cancellation, fault and lifetime probes must execute");
+            return ok ? 0 : 1;
+        } catch (const std::exception& error) {
             std::cerr << "Async fixture failed: " << error.what() << '\n';
             return 1;
         }

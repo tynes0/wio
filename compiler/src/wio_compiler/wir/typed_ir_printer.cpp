@@ -607,26 +607,25 @@ namespace wio::wir::typed
             stream << "  system " << std::quoted(system.logicalName) << " type=" << typeRef(system.type)
                    << " start=" << functionRef(system.start) << " update=" << functionRef(system.update)
                    << " close=" << functionRef(system.close) << '\n';
-        if (module.contract.application)
-        {
+        if (module.contract.application) {
             const ApplicationDescriptor& application = *module.contract.application;
-            stream << "  application " << std::quoted(application.logicalName)
-                   << " type=" << typeRef(application.type) << " entry=" << functionRef(application.entry)
+            stream << "  application " << std::quoted(application.logicalName) << " type=" << typeRef(application.type)
+                   << " construct=" << functionRef(application.construct) << " entry=" << functionRef(application.entry)
                    << " start=" << functionRef(application.start) << " update=" << functionRef(application.update)
                    << " close=" << functionRef(application.close) << " exit=" << functionRef(application.exit) << '\n';
-            for (const ApplicationStageDescriptor& stage : application.stages)
-            {
+            for (const ApplicationStageDescriptor& stage : application.stages) {
                 stream << "    stage[" << stage.order << "] " << std::quoted(stage.name)
                        << " kind=" << applicationStageKindName(stage.kind)
                        << " affinity=" << applicationAffinityName(stage.affinity);
-                if (!stage.after.empty()) stream << " after=" << std::quoted(stage.after);
-                if (stage.kind == ApplicationStageKind::Fixed) stream << " hz=" << stage.fixedHz;
+                if (!stage.after.empty())
+                    stream << " after=" << std::quoted(stage.after);
+                if (stage.kind == ApplicationStageKind::Fixed)
+                    stream << " hz=" << stage.fixedHz;
                 stream << '\n';
-                for (const ApplicationStageRun& run : stage.runs)
-                {
+                for (const ApplicationStageRun& run : stage.runs) {
                     stream << "      run " << std::quoted(run.targetName + "." + run.methodName)
-                           << " function=" << functionRef(run.function)
-                           << " target=" << typeRef(run.targetType) << '\n';
+                           << " function=" << functionRef(run.function) << " target=" << typeRef(run.targetType)
+                           << '\n';
                     for (const ApplicationResourceBinding& resource : run.resources)
                         stream << "        resource " << std::quoted(resource.name) << " " << typeRef(resource.type)
                                << " access=" << resourceAccessName(resource.access) << '\n';

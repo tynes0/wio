@@ -540,9 +540,11 @@ Rider, and CLion are defined in
    canonical SDK sidecars, v11 scalar compatibility and module-owned values.
    Independent DLL/host gates cover Unicode, ref aliasing/copy-back, callback
    lifetime/thread contracts, intrusive ownership and async shutdown. Sprint
-   17.5 remains application/detailed reflection integration; 17.6 remains full
-   project/std/platform differential parity and cutover gates. Complete variadic
-   pack expansion and open method-level generic contracts; then
+   17.5 now executes application construction/lifecycle through one standalone
+   and SDK-hosted runtime, and publishes callable constructor/field/method plus
+   enum/attribute reflection through an additive native sidecar. Sprint 17.6
+   remains full project/std/platform differential parity and cutover gates.
+   Complete variadic pack expansion and open method-level generic contracts; then
    switch the default before removing the compatibility generator. The
    bytecode VM consumes the same contract. Async functions now carry
    payload/frame/state contracts;
