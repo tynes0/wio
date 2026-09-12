@@ -311,6 +311,7 @@ namespace wio::wir
         std::vector<NativeAbiValue> parameters;
         NativeAbiValue result;
         std::vector<TypeId> templateArguments;
+        bool explicitTemplateArguments = false;
         bool requiresAdapter = false;
 
         auto operator<=>(const NativeBinding&) const = default;
@@ -409,13 +410,31 @@ namespace wio::wir
         [[nodiscard]] const Type* tryGet(TypeId id) const;
         [[nodiscard]] const Type& get(TypeId id) const;
         [[nodiscard]] Type& getMutable(TypeId id);
-        [[nodiscard]] std::size_t size() const { return types_.size(); }
-        [[nodiscard]] const std::vector<Type>& types() const { return types_; }
+        [[nodiscard]] std::size_t size() const
+        {
+            return types_.size();
+        }
+        [[nodiscard]] const std::vector<Type>& types() const
+        {
+            return types_;
+        }
 
-        [[nodiscard]] TypeId voidType() const { return voidType_; }
-        [[nodiscard]] TypeId boolType() const { return boolType_; }
-        [[nodiscard]] TypeId i32Type() const { return i32Type_; }
-        [[nodiscard]] TypeId stringType() const { return stringType_; }
+        [[nodiscard]] TypeId voidType() const
+        {
+            return voidType_;
+        }
+        [[nodiscard]] TypeId boolType() const
+        {
+            return boolType_;
+        }
+        [[nodiscard]] TypeId i32Type() const
+        {
+            return i32Type_;
+        }
+        [[nodiscard]] TypeId stringType() const
+        {
+            return stringType_;
+        }
 
     private:
         std::vector<Type> types_;
@@ -447,4 +466,4 @@ namespace wio::wir
     [[nodiscard]] std::string_view nativeThunkKindName(NativeThunkKind kind);
     [[nodiscard]] std::string_view nativeReceiverKindName(NativeReceiverKind receiver);
     [[nodiscard]] bool requiresCleanup(const Type& type);
-}
+} // namespace wio::wir

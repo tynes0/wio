@@ -353,6 +353,32 @@ method calls, access control, enum cases, attribute retention, stable identities
 and values that outlive the `NativeModule` view. The backend remains opt-in;
 17.6 owns project/std/platform differential parity and default cutover evidence.
 
+## Sprint 17.6: differential parity and cutover gate
+
+The release gate now compiles and executes the same source through both the
+legacy AST generator and the Lowered-WIR backend. It compares process exit code,
+standard output, and standard error rather than treating successful C++
+compilation as parity. A second project-level gate creates clean `wio-app` and
+`wio-native-app` projects, builds each backend into an isolated directory, runs
+them with identical console arguments, and records both build durations.
+
+This final parity pass also closes backend gaps found by the project gate:
+
+- variadic generic packs are expanded into concrete parameters and operands;
+- generic owner methods receive concrete dispatch signatures and bodies;
+- constructor overloads retain their source declaration identity through
+  semantic specialization;
+- default component construction is canonical zero-initialization;
+- native generic adapters distinguish deduced C++ templates from calls that
+  require explicit template arguments;
+- UTF-8 string values adapt at non-template native boundaries while mutable
+  `ref string` parameters preserve their storage identity; and
+- executable entry points accept the canonical optional `string[]` argument.
+
+The complete focused backend suite plus both differential gates runs on Windows
+and Ubuntu in release validation. The workflow uses verbose output so the
+legacy/WIR compile timings remain available as qualification evidence.
+
 ## Cutover policy
 
 `wir` becomes the default only when all release-gate programs pass both

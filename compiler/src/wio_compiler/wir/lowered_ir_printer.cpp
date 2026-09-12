@@ -8,32 +8,49 @@ namespace wio::wir::lowered
 {
     namespace
     {
-        std::string typeRef(const TypeId id) { return id ? "!t" + std::to_string(id.value()) : "!invalid"; }
-        std::string valueRef(const ValueId id) { return id ? "%v" + std::to_string(id.value()) : "%invalid"; }
-        std::string blockRef(const BlockId id) { return id ? "^b" + std::to_string(id.value()) : "^invalid"; }
-        std::string functionRef(const FunctionId id) { return id ? "@f" + std::to_string(id.value()) : "@invalid"; }
-        std::string globalRef(const GlobalId id) { return id ? "@g" + std::to_string(id.value()) : "@invalid"; }
+        std::string typeRef(const TypeId id)
+        {
+            return id ? "!t" + std::to_string(id.value()) : "!invalid";
+        }
+        std::string valueRef(const ValueId id)
+        {
+            return id ? "%v" + std::to_string(id.value()) : "%invalid";
+        }
+        std::string blockRef(const BlockId id)
+        {
+            return id ? "^b" + std::to_string(id.value()) : "^invalid";
+        }
+        std::string functionRef(const FunctionId id)
+        {
+            return id ? "@f" + std::to_string(id.value()) : "@invalid";
+        }
+        std::string globalRef(const GlobalId id)
+        {
+            return id ? "@g" + std::to_string(id.value()) : "@invalid";
+        }
 
         std::string printLiteral(const typed::Literal& literal)
         {
-            return std::visit([](const auto& value) -> std::string
-            {
-                using Value = std::decay_t<decltype(value)>;
-                if constexpr (std::is_same_v<Value, std::monostate>)
-                    return "<none>";
-                else if constexpr (std::is_same_v<Value, typed::NullLiteral>)
-                    return "null";
-                else if constexpr (std::is_same_v<Value, bool>)
-                    return value ? "true" : "false";
-                else if constexpr (std::is_same_v<Value, std::string>)
+            return std::visit(
+                [](const auto& value) -> std::string
                 {
-                    std::ostringstream stream;
-                    stream << std::quoted(value);
-                    return stream.str();
-                }
-                else
-                    return std::to_string(value);
-            }, literal);
+                    using Value = std::decay_t<decltype(value)>;
+                    if constexpr (std::is_same_v<Value, std::monostate>)
+                        return "<none>";
+                    else if constexpr (std::is_same_v<Value, typed::NullLiteral>)
+                        return "null";
+                    else if constexpr (std::is_same_v<Value, bool>)
+                        return value ? "true" : "false";
+                    else if constexpr (std::is_same_v<Value, std::string>)
+                    {
+                        std::ostringstream stream;
+                        stream << std::quoted(value);
+                        return stream.str();
+                    }
+                    else
+                        return std::to_string(value);
+                },
+                literal);
         }
 
         void printParameters(std::ostringstream& stream, const std::vector<Parameter>& parameters)
@@ -56,32 +73,34 @@ namespace wio::wir::lowered
 
         void printNativeBinding(std::ostringstream& stream, const NativeBinding& binding)
         {
-            stream << " native[symbol=" << std::quoted(binding.symbol)
-                   << " header=" << std::quoted(binding.header)
-                   << " key=" << std::quoted(binding.stableKey)
-                   << " thunk=" << std::quoted(binding.thunkSymbol)
+            stream << " native[symbol=" << std::quoted(binding.symbol) << " header=" << std::quoted(binding.header)
+                   << " key=" << std::quoted(binding.stableKey) << " thunk=" << std::quoted(binding.thunkSymbol)
                    << " language=" << nativeSymbolLanguageName(binding.language)
                    << " calling-convention=" << nativeCallingConventionName(binding.callingConvention)
                    << " exception=" << nativeExceptionBoundaryName(binding.exceptionBoundary)
                    << " thunk-kind=" << nativeThunkKindName(binding.thunkKind)
-                   << " receiver=" << nativeReceiverKindName(binding.receiver)
-                   << " params={";
+                   << " template-arguments=" << (binding.explicitTemplateArguments ? "explicit" : "deduced")
+                   << " receiver=" << nativeReceiverKindName(binding.receiver) << " params={";
             for (std::size_t index = 0; index < binding.parameters.size(); ++index)
             {
-                if (index > 0) stream << ", ";
+                if (index > 0)
+                    stream << ", ";
                 const NativeAbiValue& parameter = binding.parameters[index];
-                stream << typeRef(parameter.type) << ":" << nativePassingModeName(parameter.passing)
-                       << "/" << nativeMarshallingKindName(parameter.marshalling);
+                stream << typeRef(parameter.type) << ":" << nativePassingModeName(parameter.passing) << "/"
+                       << nativeMarshallingKindName(parameter.marshalling);
                 if (parameter.marshalling == NativeMarshallingKind::Callback)
-                    stream << "/" << nativeCallbackLifetimeName(parameter.callbackLifetime)
-                           << "/" << nativeCallbackThreadName(parameter.callbackThread);
-                if (parameter.nullable) stream << "?";
+                    stream << "/" << nativeCallbackLifetimeName(parameter.callbackLifetime) << "/"
+                           << nativeCallbackThreadName(parameter.callbackThread);
+                if (parameter.nullable)
+                    stream << "?";
             }
             stream << "} result=" << typeRef(binding.result.type) << ":"
                    << nativePassingModeName(binding.result.passing) << "/"
                    << nativeMarshallingKindName(binding.result.marshalling);
-            if (binding.result.nullable) stream << "?";
-            if (binding.requiresAdapter) stream << " adapter";
+            if (binding.result.nullable)
+                stream << "?";
+            if (binding.requiresAdapter)
+                stream << " adapter";
             stream << "]";
         }
 
@@ -106,7 +125,8 @@ namespace wio::wir::lowered
                 stream << " mutable";
             if (type.staticExtent.has_value())
                 stream << " extent=" << *type.staticExtent;
-            if (type.extentParameter) stream << " extent-param=" << typeRef(type.extentParameter);
+            if (type.extentParameter)
+                stream << " extent-param=" << typeRef(type.extentParameter);
             if (type.nominalKind != NominalKind::None)
                 stream << " nominal=" << nominalKindName(type.nominalKind);
             if (type.nominalRepresentation != NominalRepresentation::Wio)
@@ -120,7 +140,8 @@ namespace wio::wir::lowered
                 stream << " cases={";
                 for (std::size_t index = 0; index < type.enumCases.size(); ++index)
                 {
-                    if (index > 0) stream << ", ";
+                    if (index > 0)
+                        stream << ", ";
                     stream << std::quoted(type.enumCases[index].name) << "=" << type.enumCases[index].rawValue;
                 }
                 stream << "}";
@@ -170,14 +191,18 @@ namespace wio::wir::lowered
             if (!type.castTypes.empty())
             {
                 stream << " casts=[";
-                for (TypeId cast : type.castTypes) stream << typeRef(cast) << ";";
+                for (TypeId cast : type.castTypes)
+                    stream << typeRef(cast) << ";";
                 stream << "] dispatch={";
                 for (const DispatchEntry& entry : type.dispatchEntries)
-                    stream << typeRef(entry.contractType) << "#" << entry.slot << "=" << functionRef(entry.implementation) << ";";
+                    stream << typeRef(entry.contractType) << "#" << entry.slot << "="
+                           << functionRef(entry.implementation) << ";";
                 stream << "}";
             }
-            if (type.defaultConstructor) stream << " default-constructor=" << functionRef(type.defaultConstructor);
-            if (type.destructor) stream << " destructor=" << functionRef(type.destructor);
+            if (type.defaultConstructor)
+                stream << " default-constructor=" << functionRef(type.defaultConstructor);
+            if (type.destructor)
+                stream << " destructor=" << functionRef(type.destructor);
             if (type.hasDestructor)
                 stream << " has-destructor";
             if (type.ownership != OwnershipModel::Trivial)
@@ -188,8 +213,7 @@ namespace wio::wir::lowered
                 stream << " native-type[cpp=" << std::quoted(type.nativeBinding->cppName)
                        << " header=" << std::quoted(type.nativeBinding->header)
                        << " standard-layout=" << (type.nativeBinding->standardLayout ? "true" : "false")
-                       << " trivially-copyable=" << (type.nativeBinding->triviallyCopyable ? "true" : "false")
-                       << "]";
+                       << " trivially-copyable=" << (type.nativeBinding->triviallyCopyable ? "true" : "false") << "]";
             return stream.str();
         }
 
@@ -238,7 +262,8 @@ namespace wio::wir::lowered
                 stream << "generic-const " << typeRef(instruction.targetType);
                 break;
             case Opcode::Unary:
-                stream << typed::unaryOperatorName(instruction.unaryOperator) << " " << valueRef(instruction.operands.at(0));
+                stream << typed::unaryOperatorName(instruction.unaryOperator) << " "
+                       << valueRef(instruction.operands.at(0));
                 break;
             case Opcode::Binary:
                 stream << typed::binaryOperatorName(instruction.binaryOperator) << " "
@@ -246,8 +271,7 @@ namespace wio::wir::lowered
                 break;
             case Opcode::RangeContains:
                 stream << "range-contains " << std::quoted(instruction.selector) << " "
-                       << valueRef(instruction.operands.at(0)) << ", "
-                       << valueRef(instruction.operands.at(1)) << ", "
+                       << valueRef(instruction.operands.at(0)) << ", " << valueRef(instruction.operands.at(1)) << ", "
                        << valueRef(instruction.operands.at(2));
                 break;
             case Opcode::Convert:
@@ -268,7 +292,8 @@ namespace wio::wir::lowered
                 stream << "native-invoke " << functionRef(instruction.callee) << "(";
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {
-                    if (index > 0) stream << ", ";
+                    if (index > 0)
+                        stream << ", ";
                     stream << valueRef(instruction.operands[index]);
                 }
                 stream << ")";
@@ -298,8 +323,8 @@ namespace wio::wir::lowered
                 stream << ")";
                 break;
             case Opcode::ExtensionCall:
-                stream << "extension-call " << typeRef(instruction.targetType) << "::"
-                       << std::quoted(instruction.selector) << " " << functionRef(instruction.callee) << "(";
+                stream << "extension-call " << typeRef(instruction.targetType)
+                       << "::" << std::quoted(instruction.selector) << " " << functionRef(instruction.callee) << "(";
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {
                     if (index > 0)
@@ -312,8 +337,8 @@ namespace wio::wir::lowered
             case Opcode::VirtualCall:
             case Opcode::InterfaceCall:
                 stream << opcodeName(instruction.opcode) << " " << typeRef(instruction.targetType)
-                       << "::" << std::quoted(instruction.selector) << "#" << instruction.projectionIndex
-                       << " " << functionRef(instruction.callee) << "(";
+                       << "::" << std::quoted(instruction.selector) << "#" << instruction.projectionIndex << " "
+                       << functionRef(instruction.callee) << "(";
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {
                     if (index > 0)
@@ -325,8 +350,8 @@ namespace wio::wir::lowered
             case Opcode::Upcast:
             case Opcode::CheckedCast:
             case Opcode::TypeTest:
-                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0))
-                       << " to " << typeRef(instruction.targetType);
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0)) << " to "
+                       << typeRef(instruction.targetType);
                 break;
             case Opcode::IdentityEqual:
                 stream << "identity-" << typed::binaryOperatorName(instruction.binaryOperator) << " "
@@ -365,21 +390,23 @@ namespace wio::wir::lowered
                 stream << "dictionary-create " << std::quoted(instruction.selector) << " [";
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {
-                    if (index > 0) stream << ", ";
+                    if (index > 0)
+                        stream << ", ";
                     stream << valueRef(instruction.operands[index]);
                 }
                 stream << "]";
                 break;
             case Opcode::DictionaryGet:
             case Opcode::DictionaryPlace:
-                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0))
-                       << ", " << valueRef(instruction.operands.at(1));
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0)) << ", "
+                       << valueRef(instruction.operands.at(1));
                 break;
             case Opcode::Interpolate:
                 stream << "interpolate " << intrinsicFamilyName(instruction.intrinsicFamily) << " [";
                 for (std::size_t index = 0; index < instruction.stringSegments.size(); ++index)
                 {
-                    if (index > 0) stream << ", ";
+                    if (index > 0)
+                        stream << ", ";
                     stream << std::quoted(instruction.stringSegments[index]);
                     if (index < instruction.operands.size())
                         stream << ", " << valueRef(instruction.operands[index]);
@@ -387,15 +414,16 @@ namespace wio::wir::lowered
                 stream << "]";
                 break;
             case Opcode::EnumConstant:
-                stream << "enum-constant " << typeRef(instruction.targetType) << "::"
-                       << std::quoted(instruction.selector);
+                stream << "enum-constant " << typeRef(instruction.targetType)
+                       << "::" << std::quoted(instruction.selector);
                 break;
             case Opcode::IntrinsicCall:
-                stream << "intrinsic-call " << intrinsicFamilyName(instruction.intrinsicFamily) << "::"
-                       << std::quoted(instruction.selector) << "(";
+                stream << "intrinsic-call " << intrinsicFamilyName(instruction.intrinsicFamily)
+                       << "::" << std::quoted(instruction.selector) << "(";
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {
-                    if (index > 0) stream << ", ";
+                    if (index > 0)
+                        stream << ", ";
                     stream << valueRef(instruction.operands[index]);
                 }
                 stream << ")";
@@ -404,14 +432,15 @@ namespace wio::wir::lowered
             case Opcode::AnyCheckedCast:
             case Opcode::AnyTypeTest:
             case Opcode::NullableWrap:
-                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0))
-                       << " to " << typeRef(instruction.targetType);
+                stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0)) << " to "
+                       << typeRef(instruction.targetType);
                 break;
             case Opcode::IteratorCreate:
                 stream << "iterator-create " << std::quoted(instruction.selector) << "(";
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {
-                    if (index > 0) stream << ", ";
+                    if (index > 0)
+                        stream << ", ";
                     stream << valueRef(instruction.operands[index]);
                 }
                 stream << ")";
@@ -430,8 +459,8 @@ namespace wio::wir::lowered
                 stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0));
                 break;
             case Opcode::ResultPropagate:
-                stream << "result-propagate " << valueRef(instruction.operands.at(0))
-                       << " to " << typeRef(instruction.targetType);
+                stream << "result-propagate " << valueRef(instruction.operands.at(0)) << " to "
+                       << typeRef(instruction.targetType);
                 break;
             case Opcode::CancellationCheck:
                 stream << "cancellation-check state=" << instruction.projectionIndex;
@@ -471,7 +500,8 @@ namespace wio::wir::lowered
             case Opcode::FieldPlace:
                 stream << "field-place " << valueRef(instruction.operands.at(0)) << ", "
                        << std::quoted(instruction.selector);
-                if (instruction.targetType) stream << " storage=" << typeRef(instruction.targetType) << "#" << instruction.projectionIndex;
+                if (instruction.targetType)
+                    stream << " storage=" << typeRef(instruction.targetType) << "#" << instruction.projectionIndex;
                 break;
             case Opcode::ArrayPlace:
                 stream << "array-place " << valueRef(instruction.operands.at(0)) << ", "
@@ -483,7 +513,8 @@ namespace wio::wir::lowered
             case Opcode::ConstructComponent:
             case Opcode::ConstructObject:
                 stream << opcodeName(instruction.opcode) << " " << std::quoted(instruction.selector);
-                if (instruction.callee) stream << " " << functionRef(instruction.callee);
+                if (instruction.callee)
+                    stream << " " << functionRef(instruction.callee);
                 stream << "(";
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {
@@ -547,7 +578,8 @@ namespace wio::wir::lowered
                 for (std::size_t index = 0; index < instruction.expandedOperands.size(); ++index)
                     if (instruction.expandedOperands[index])
                     {
-                        if (!first) stream << ",";
+                        if (!first)
+                            stream << ",";
                         stream << index;
                         first = false;
                     }
@@ -563,7 +595,7 @@ namespace wio::wir::lowered
                 stream << " bounds=" << boundsCheckModeName(instruction.boundsCheck);
             stream << '\n';
         }
-    }
+    } // namespace
 
     std::string Printer::print(const Module& module) const
     {
@@ -571,21 +603,22 @@ namespace wio::wir::lowered
         stream << "lowered-wir module " << std::quoted(module.name) << " {\n";
         stream << "  contract kind=" << moduleKindName(module.contract.kind)
                << " logical-name=" << std::quoted(module.contract.logicalName)
-               << " stable-key=" << std::quoted(module.contract.stableKey)
-               << " stable-id=" << module.contract.stableId
+               << " stable-key=" << std::quoted(module.contract.stableKey) << " stable-id=" << module.contract.stableId
                << " abi-v" << module.contract.callTable.descriptorVersion << '\n';
         for (const ModuleImport& import : module.contract.imports)
-            stream << "  import " << moduleImportKindName(import.kind) << " "
-                   << std::quoted(import.logicalName) << " from " << std::quoted(import.sourcePath)
-                   << " stable-id=" << import.stableId << '\n';
+            stream << "  import " << moduleImportKindName(import.kind) << " " << std::quoted(import.logicalName)
+                   << " from " << std::quoted(import.sourcePath) << " stable-id=" << import.stableId << '\n';
         for (const ModuleExport& entry : module.contract.exports)
         {
-            stream << "  export[" << entry.callTableSlot << "] " << moduleExportKindName(entry.kind)
-                   << "/" << moduleExportRoleName(entry.role) << " " << std::quoted(entry.logicalName)
+            stream << "  export[" << entry.callTableSlot << "] " << moduleExportKindName(entry.kind) << "/"
+                   << moduleExportRoleName(entry.role) << " " << std::quoted(entry.logicalName)
                    << " symbol=" << std::quoted(entry.symbolName) << " stable-id=" << entry.stableId;
-            if (!entry.roleName.empty()) stream << " role-name=" << std::quoted(entry.roleName);
-            if (entry.function) stream << " function=" << functionRef(entry.function);
-            if (entry.type) stream << " type=" << typeRef(entry.type);
+            if (!entry.roleName.empty())
+                stream << " role-name=" << std::quoted(entry.roleName);
+            if (entry.function)
+                stream << " function=" << functionRef(entry.function);
+            if (entry.type)
+                stream << " type=" << typeRef(entry.type);
             stream << '\n';
         }
         for (const ReflectionDescriptor& descriptor : module.contract.reflection)
@@ -602,8 +635,7 @@ namespace wio::wir::lowered
                 stream << "    method " << std::quoted(method.name) << " " << functionRef(method.function)
                        << " slot=" << method.slot << " async=" << (method.isAsync ? "true" : "false") << '\n';
             for (const ReflectedCaseDescriptor& enumCase : descriptor.cases)
-                stream << "    case " << std::quoted(enumCase.name)
-                       << " stable-id=" << enumCase.stableId << '\n';
+                stream << "    case " << std::quoted(enumCase.name) << " stable-id=" << enumCase.stableId << '\n';
         }
         for (const AttributeApplicationDescriptor& attribute : module.contract.attributes)
         {
@@ -621,13 +653,15 @@ namespace wio::wir::lowered
             stream << "  system " << std::quoted(system.logicalName) << " type=" << typeRef(system.type)
                    << " start=" << functionRef(system.start) << " update=" << functionRef(system.update)
                    << " close=" << functionRef(system.close) << '\n';
-        if (module.contract.application) {
+        if (module.contract.application)
+        {
             const ApplicationDescriptor& application = *module.contract.application;
             stream << "  application " << std::quoted(application.logicalName) << " type=" << typeRef(application.type)
                    << " construct=" << functionRef(application.construct) << " entry=" << functionRef(application.entry)
                    << " start=" << functionRef(application.start) << " update=" << functionRef(application.update)
                    << " close=" << functionRef(application.close) << " exit=" << functionRef(application.exit) << '\n';
-            for (const ApplicationStageDescriptor& stage : application.stages) {
+            for (const ApplicationStageDescriptor& stage : application.stages)
+            {
                 stream << "    stage[" << stage.order << "] " << std::quoted(stage.name)
                        << " kind=" << applicationStageKindName(stage.kind)
                        << " affinity=" << applicationAffinityName(stage.affinity);
@@ -636,7 +670,8 @@ namespace wio::wir::lowered
                 if (stage.kind == ApplicationStageKind::Fixed)
                     stream << " hz=" << stage.fixedHz;
                 stream << '\n';
-                for (const ApplicationStageRun& run : stage.runs) {
+                for (const ApplicationStageRun& run : stage.runs)
+                {
                     stream << "      run " << std::quoted(run.targetName + "." + run.methodName)
                            << " function=" << functionRef(run.function) << " target=" << typeRef(run.targetType)
                            << '\n';
@@ -647,13 +682,11 @@ namespace wio::wir::lowered
             }
         }
         const ModuleLifecycle& lifecycle = module.contract.lifecycle;
-        if (lifecycle.apiVersion || lifecycle.load || lifecycle.update || lifecycle.unload ||
-            lifecycle.saveState || lifecycle.restoreState)
+        if (lifecycle.apiVersion || lifecycle.load || lifecycle.update || lifecycle.unload || lifecycle.saveState ||
+            lifecycle.restoreState)
             stream << "  lifecycle api-version=" << functionRef(lifecycle.apiVersion)
-                   << " load=" << functionRef(lifecycle.load)
-                   << " update=" << functionRef(lifecycle.update)
-                   << " save=" << functionRef(lifecycle.saveState)
-                   << " restore=" << functionRef(lifecycle.restoreState)
+                   << " load=" << functionRef(lifecycle.load) << " update=" << functionRef(lifecycle.update)
+                   << " save=" << functionRef(lifecycle.saveState) << " restore=" << functionRef(lifecycle.restoreState)
                    << " unload=" << functionRef(lifecycle.unload) << '\n';
         for (std::size_t index = 0; index < module.types.size(); ++index)
         {
@@ -662,9 +695,12 @@ namespace wio::wir::lowered
         }
 
         for (const Global& global : module.globals)
-            stream << "  global " << globalRef(global.id) << " " << std::quoted(global.name)
-                   << ": " << typeRef(global.type) << " init=" << functionRef(global.initializer)
-                   << (global.isConst ? " const" : global.isMutable ? " mutable" : " immutable") << '\n';
+            stream << "  global " << globalRef(global.id) << " " << std::quoted(global.name) << ": "
+                   << typeRef(global.type) << " init=" << functionRef(global.initializer)
+                   << (global.isConst     ? " const"
+                       : global.isMutable ? " mutable"
+                                          : " immutable")
+                   << '\n';
 
         for (const Function& function : module.functions)
         {
@@ -683,8 +719,8 @@ namespace wio::wir::lowered
             printParameters(stream, function.parameters);
             stream << ") -> " << typeRef(function.returnType) << " callable=" << typeRef(function.callableType);
             if (function.genericOrigin)
-                stream << " generic-origin=" << functionRef(function.genericOrigin) <<
-                    " specialization=" << std::quoted(function.specializationKey);
+                stream << " generic-origin=" << functionRef(function.genericOrigin)
+                       << " specialization=" << std::quoted(function.specializationKey);
             if (function.isMethod)
                 stream << " owner=" << typeRef(function.ownerType) << " slot=" << function.methodSlot;
             if (function.nativeBinding)
@@ -697,8 +733,8 @@ namespace wio::wir::lowered
                     if (index > 0)
                         stream << ", ";
                     const CaptureLayout& capture = function.captures[index];
-                    stream << std::quoted(capture.name) << ":" << typeRef(capture.type)
-                           << " " << captureKindName(capture.kind);
+                    stream << std::quoted(capture.name) << ":" << typeRef(capture.type) << " "
+                           << captureKindName(capture.kind);
                 }
                 stream << "}";
             }
@@ -709,8 +745,7 @@ namespace wio::wir::lowered
                        << " frame-slots=" << function.coroutine->frameSlots.size()
                        << " retained-receiver=" << valueRef(function.coroutine->retainedReceiver)
                        << " cancellation=" << (function.coroutine->cooperativeCancellation ? "cooperative" : "none")
-                       << " thread-switch=" << (function.coroutine->maySwitchThreads ? "true" : "false")
-                       << "]";
+                       << " thread-switch=" << (function.coroutine->maySwitchThreads ? "true" : "false") << "]";
             }
             if (function.isExternal)
             {
@@ -739,4 +774,4 @@ namespace wio::wir::lowered
         stream << "}\n";
         return stream.str();
     }
-}
+} // namespace wio::wir::lowered

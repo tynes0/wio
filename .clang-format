@@ -8,12 +8,12 @@ ContinuationIndentWidth: 4
 TabWidth: 4
 UseTab: Never
 AccessModifierOffset: -4
-NamespaceIndentation: None
+NamespaceIndentation: All
 
 ColumnLimit: 120
-BreakBeforeBraces: Attach
-AllowShortBlocksOnASingleLine: Empty
-AllowShortFunctionsOnASingleLine: Empty
+BreakBeforeBraces: Allman
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 

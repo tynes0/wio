@@ -141,6 +141,40 @@ if(BUILD_TESTING)
         LABELS "wir;cpp-backend;cli"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
+
+    add_test(
+        NAME wio_wir_cpp_packs_differential
+        COMMAND
+            ${CMAKE_COMMAND}
+            "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+            "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+            "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/wir_cpp_packs_run.wio"
+            "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/wir-cpp-packs-differential"
+            -DWIO_NO_BUILTIN=ON
+            -P "${CMAKE_SOURCE_DIR}/tests/cmake/wir_cpp_differential_test.cmake"
+    )
+    set_tests_properties(wio_wir_cpp_packs_differential PROPERTIES
+        LABELS "wir;cpp-backend;differential;release-gate"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        TIMEOUT 120
+    )
+
+    add_test(
+        NAME wio_wir_cpp_project_differential
+        COMMAND
+            ${CMAKE_COMMAND}
+            "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+            "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/wir-cpp-project-differential"
+            -P "${CMAKE_SOURCE_DIR}/tests/cmake/wir_cpp_project_differential_test.cmake"
+    )
+    set_tests_properties(wio_wir_cpp_project_differential PROPERTIES
+        LABELS "wir;cpp-backend;project;std;native;differential;release-gate"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        TIMEOUT 300
+        RESOURCE_LOCK wio_distribution_package
+    )
 endif()
 
 function(add_wio_dev_target target_name source_file)

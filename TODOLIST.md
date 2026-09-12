@@ -543,9 +543,11 @@ Rider, and CLion are defined in
    17.5 now executes application construction/lifecycle through one standalone
    and SDK-hosted runtime, and publishes callable constructor/field/method plus
    enum/attribute reflection through an additive native sidecar. Sprint 17.6
-   remains full project/std/platform differential parity and cutover gates.
-   Complete variadic pack expansion and open method-level generic contracts; then
-   switch the default before removing the compatibility generator. The
+   adds standalone and clean-project legacy/WIR differential gates, compile-time
+   measurements, Windows/Ubuntu release qualification, variadic pack expansion,
+   concrete generic-owner dispatch, constructor identity, native template/string
+   ABI adaptation, and `Entry(string[])`. The compatibility generator remains
+   the explicit rollback/oracle during the staged default transition. The
    bytecode VM consumes the same contract. Async functions now carry
    payload/frame/state contracts;
    awaits and executor handoffs lower to cancellation-safe suspend/resume state
@@ -559,9 +561,10 @@ Rider, and CLion are defined in
    canonical optimizer now performs checked constant folding, CFG simplification,
    trivial SSA propagation, conservative DCE, escape/storage classification,
    and proven fixed-array bounds-check elimination while preserving stable IDs,
-   source maps, ownership, and observable failure behavior. Complete platform
-   executor/exceptional cleanup validation, new-backend parity tests, and
-   compile-time/runtime benchmarks before changing the default backend.
+   source maps, ownership, and observable failure behavior. Continue broadening
+   long-running platform executor/exceptional cleanup and benchmark samples as
+   release-hardening evidence; these no longer block the canonical C++ backend
+   pipeline milestone.
 
 ## P3 - Product Direction
 

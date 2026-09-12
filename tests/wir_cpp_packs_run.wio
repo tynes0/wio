@@ -1,0 +1,29 @@
+fn CountValues<Args...>(args: Args...) -> i32 {
+    return 3;
+}
+
+fn ForwardCount<Args...>(args: Args...) -> i32 {
+    return CountValues(args...);
+}
+
+fn AddHead<Args...>(head: i32, tail: Args...) -> i32 {
+    return head + 2;
+}
+
+object Mapper {
+    public fn Identity<T>(value: T) -> T {
+        return value;
+    }
+}
+
+fn Entry() -> i32 {
+    let mapper = Mapper();
+    let count = ForwardCount(1i32, true, "wio");
+    let mixed = AddHead(7i32, false, 9u64);
+    let identity = mapper.Identity<i32>(11i32);
+
+    if (count != 3 or mixed != 9 or identity != 11) {
+        return 91;
+    }
+    return 0;
+}

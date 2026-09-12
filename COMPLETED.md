@@ -1041,3 +1041,19 @@ here as historical evidence rather than active work:
       reflection access control, runtime attribute retention, stable identities,
       and values/hosts that outlive the module view. Worker stage transfer and
       behavioral body weaving fail explicitly; 17.6 owns parity and cutover.
+- [x] Sprint 17.6 adds executable legacy/WIR differential gates for standalone
+      sources and clean `wio-app`/`wio-native-app` projects. The gates compare
+      exit status, stdout, and stderr, record isolated build durations, and run
+      with every focused Lowered-WIR C++ backend gate on Windows and Ubuntu.
+- [x] Variadic packs, concrete generic-owner dispatch, constructor identity,
+      zero-argument component construction, deduced-vs-explicit native template
+      calls, UTF-8 native arguments, and `Entry(string[])` now survive through
+      the independent backend without AST fallback.
+- [x] Sprint 17.6 adds executable legacy/WIR differential gates for standalone
+      sources and clean `wio-app`/`wio-native-app` projects. The gates compare
+      exit status, stdout, and stderr, record isolated build durations, and run
+      with every focused Lowered-WIR C++ backend gate on Windows and Ubuntu.
+- [x] Variadic packs, concrete generic-owner dispatch, constructor identity,
+      zero-argument component construction, deduced-vs-explicit native template
+      calls, UTF-8 native arguments, and `Entry(string[])` now survive through
+      the independent backend without AST fallback.
