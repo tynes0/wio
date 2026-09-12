@@ -70,7 +70,7 @@ fn Entry() -> i32 {
     for value in 18446744073709551614u64...18446744073709551615u64 { visits += 1; }
     if (visits != 2) { return 22; }
     for value in 4...1 { return 23; }
-    let fixed: i32[3] = [2, 4, 6];
+    let fixed: [i32; 3] = [2, 4, 6];
     sum = 0;
     for value in fixed { sum += value; }
     if (sum != 12) { return 24; }
