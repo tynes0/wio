@@ -161,6 +161,22 @@ if(BUILD_TESTING)
     )
 
     add_test(
+        NAME wio_wir_cpp_behavioral_differential
+        COMMAND
+            ${CMAKE_COMMAND}
+            "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+            "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+            "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/wir-cpp-behavioral-differential"
+            -P "${CMAKE_SOURCE_DIR}/tests/cmake/wir_cpp_behavioral_differential_test.cmake"
+    )
+    set_tests_properties(wio_wir_cpp_behavioral_differential PROPERTIES
+        LABELS "wir;cpp-backend;attributes;differential;release-gate"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        TIMEOUT 600
+    )
+
+    add_test(
         NAME wio_wir_cpp_project_differential
         COMMAND
             ${CMAKE_COMMAND}
@@ -3628,6 +3644,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_proceed_escaped.wio"
         "Attribute Proceed escaped its Around invocation"
     )
+    add_wio_runtime_failure_test(
+        wio_invalid_attribute_around_result_proceed_escaped
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_result_proceed_escaped.wio"
+        "Attribute Proceed escaped its Around invocation"
+    )
     add_wio_failure_test(
         wio_invalid_attribute_behavioral_missing_hook
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_missing_hook.wio"
@@ -3724,6 +3745,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_attribute_behavioral_reflection_run
         wio_invalid_attribute_around_proceed_twice
         wio_invalid_attribute_around_proceed_escaped
+        wio_invalid_attribute_around_result_proceed_escaped
         wio_invalid_attribute_behavioral_missing_hook
         wio_test_attribute_behavioral_async_result_run
         wio_invalid_attribute_post_result_type_mismatch

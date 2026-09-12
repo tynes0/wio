@@ -645,9 +645,16 @@ namespace wio::wir::lowered
                    << " origin=" << attributeOriginKindName(attribute.origin)
                    << " retained=" << (attribute.runtimeRetained ? "true" : "false") << '\n';
             for (const AttributeProcessorDescriptor& processor : attribute.processors)
+            {
                 stream << "    processor " << std::quoted(processor.canonicalTypeName)
                        << " phase=" << attributeProcessorPhaseName(processor.phase)
-                       << " hook=" << std::quoted(processor.hookName) << '\n';
+                       << " hook=" << std::quoted(processor.hookName);
+                if (processor.processorType)
+                    stream << " type=" << processor.processorType.value();
+                if (processor.hookFunction)
+                    stream << " function=" << processor.hookFunction.value();
+                stream << '\n';
+            }
         }
         for (const SystemDescriptor& system : module.contract.systems)
             stream << "  system " << std::quoted(system.logicalName) << " type=" << typeRef(system.type)

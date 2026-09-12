@@ -147,6 +147,8 @@ namespace wio::wir
         std::string hookName;
         std::string hookMode;
         AttributeProcessorPhase phase = AttributeProcessorPhase::Unknown;
+        TypeId processorType;
+        FunctionId hookFunction;
         TypeId valueType;
 
         auto operator<=>(const AttributeProcessorDescriptor&) const = default;
@@ -361,4 +363,4 @@ namespace wio::wir
     [[nodiscard]] std::string_view applicationStageKindName(ApplicationStageKind kind);
     [[nodiscard]] std::string_view applicationAffinityName(ApplicationAffinity affinity);
     [[nodiscard]] std::string_view resourceAccessName(ResourceAccess access);
-}
+} // namespace wio::wir

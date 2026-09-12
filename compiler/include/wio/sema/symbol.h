@@ -10,21 +10,39 @@
 
 namespace wio::sema
 {
-#define SYMBOL_FLAGS(X) X(isMutable) X(isConst) X(isShadowed) X(isStd) X(isGlobal) X(isPublic) X(isPrivate) X(isProtected) \
-    X(isReadOnly) X(isOverride) X(isInterface) X(isEnum) X(isFlagset) X(isFlag) X(isParameterPack) X(isExtension) X(isDerived)
+#define SYMBOL_FLAGS(X)                                                                                                \
+    X(isMutable)                                                                                                       \
+    X(isConst) X(isShadowed) X(isStd) X(isGlobal) X(isPublic) X(isPrivate) X(isProtected) X(isReadOnly) X(isOverride)  \
+        X(isInterface) X(isEnum) X(isFlagset) X(isFlag) X(isParameterPack) X(isExtension) X(isDerived)
     DEFINE_FLAGS(SymbolFlags, SYMBOL_FLAGS);
 #undef SYMBOL_FLAGS
-    
-    enum class SymbolKind : uint8_t { Variable, Function, Struct, TypeAlias, Parameter, Namespace, FunctionGroup, Attribute };
-    enum class ScopeKind : uint8_t { Global, Function, Block, Struct };
+
+    enum class SymbolKind : uint8_t
+    {
+        Variable,
+        Function,
+        Struct,
+        TypeAlias,
+        Parameter,
+        Namespace,
+        FunctionGroup,
+        Attribute
+    };
+    enum class ScopeKind : uint8_t
+    {
+        Global,
+        Function,
+        Block,
+        Struct
+    };
 
     class Scope;
 
     struct Symbol : RefCountedObject
     {
-        std::string name;       // x
+        std::string name; // x
         std::string scopePath;
-        Ref<Type> type = nullptr; // int (sema::Type pointer)
+        Ref<Type> type = nullptr;               // int (sema::Type pointer)
         SymbolKind kind = SymbolKind::Variable; // Variable
         SymbolFlags flags;
         common::Location definitionLoc;
@@ -67,10 +85,12 @@ namespace wio::sema
         // Aligned with processor phases. Validator/derive interfaces may bind
         // a target contract; null means the phase has no target type.
         std::vector<Ref<Type>> attributeProcessorTargetTypes;
+        std::vector<Ref<Type>> attributeProcessorResolvedTypes;
         std::vector<std::string> attributeProcessorCanonicalTypes;
         std::vector<std::string> attributeProcessorCppTypes;
         std::vector<std::string> attributeProcessorHookCppNames;
         std::vector<std::string> attributeProcessorHookModes;
+        std::vector<Ref<Symbol>> attributeProcessorHookSymbols;
         std::vector<Ref<Type>> attributeProcessorHookValueTypes;
         // Aligned with processor phases. -1 means non-validator, 0 rejects,
         // and 1 accepts. Validator bodies are evaluated by the compiler and
@@ -91,12 +111,15 @@ namespace wio::sema
         bool attributeScoped = false;
 
         Symbol() = default;
-        Symbol(std::string name, Ref<Type> type, SymbolKind kind, SymbolFlags flags, common::Location loc, Ref<Scope> innerScope = nullptr)
-            : name(std::move(name)), type(std::move(type)), kind(kind), flags(flags), definitionLoc(loc), innerScope(std::move(innerScope))
+        Symbol(std::string name, Ref<Type> type, SymbolKind kind, SymbolFlags flags, common::Location loc,
+               Ref<Scope> innerScope = nullptr)
+            : name(std::move(name)), type(std::move(type)), kind(kind), flags(flags), definitionLoc(loc),
+              innerScope(std::move(innerScope))
         {
         }
     };
-}
+} // namespace wio::sema
 
-MakeFrenumWithNamespace(wio::sema, SymbolKind, Variable, Function, Struct, TypeAlias, Parameter, Namespace, FunctionGroup, Attribute)
-MakeFrenumWithNamespace(wio::sema, ScopeKind, Global, Function, Block, Struct)
+MakeFrenumWithNamespace(wio::sema, SymbolKind, Variable, Function, Struct, TypeAlias, Parameter, Namespace,
+                        FunctionGroup, Attribute)
+    MakeFrenumWithNamespace(wio::sema, ScopeKind, Global, Function, Block, Struct)

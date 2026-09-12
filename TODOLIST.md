@@ -449,6 +449,17 @@ Rider, and CLion are defined in
    conformance fixtures with `wio-vscode`, and pass packaged install, upgrade,
    compatibility, and daily command-flow gates by `v0.18.0`.
 
+8. [ ] Unify compiler, tooling, and runtime diagnostics after the C++ backend,
+   Unicode, VM, and SDK milestones are complete. Introduce one structured
+   diagnostic model with stable domain codes, severity, primary/secondary
+   source spans, notes, help, and machine-applicable fix-its. Migrate every
+   user-facing legacy error and warning away from free-form logger calls while
+   keeping operational logging separate. Generate the complete explanatory
+   Markdown/web reference and editor-facing JSON catalog from the same source,
+   add `wio explain CODE` plus human/short/JSON/SARIF renderers, preserve native
+   compiler diagnostics through a Wio boundary record, and make CI reject
+   duplicate, undocumented, or unregistered codes.
+
 ## P2 - Performance, Portability, and Security
 
 1. [ ] Build a repeatable benchmark suite.

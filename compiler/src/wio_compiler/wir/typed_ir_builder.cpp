@@ -729,11 +729,16 @@ namespace wio::wir::typed
                                                    : (use->isStdLib ? ModuleImportKind::StandardModule
                                                                     : ModuleImportKind::WioModule);
                     import.importAll = use->importAllIntoScope;
-                    const std::string identity = result_.module_.contract.stableKey +
-                                                 ":import:" + std::string{moduleImportKindName(import.kind)} + ":" +
-                                                 import.sourcePath + ":" + import.logicalName;
+                    std::string identity = result_.module_.contract.stableKey +
+                                           ":import:" + std::string{moduleImportKindName(import.kind)} + ":" +
+                                           import.sourcePath + ":" + import.logicalName + ":" + import.alias + ":" +
+                                           (import.importAll ? "all" : "selected");
+                    for (const std::string& symbol : import.importedSymbols)
+                        identity += ":" + symbol;
                     import.stableId = stableHash(identity);
-                    result_.module_.contract.imports.push_back(std::move(import));
+                    if (std::ranges::none_of(result_.module_.contract.imports, [&](const ModuleImport& existing)
+                                             { return existing.stableId == import.stableId; }))
+                        result_.module_.contract.imports.push_back(std::move(import));
                     continue;
                 }
                 if (const auto* group = statement->as<DeclarationGroup>())
@@ -1102,6 +1107,14 @@ namespace wio::wir::typed
                     processor.hookName = binding.hookCppName;
                     processor.hookMode = binding.hookMode;
                     processor.phase = processorPhase(binding.phase);
+                    if (const Ref<sema::Type> processorType = binding.processorType.Lock())
+                        processor.processorType = mapType(processorType, attribute.Get());
+                    if (const Ref<sema::Symbol> hookSymbol = binding.hookSymbol.Lock())
+                    {
+                        const auto hook = functionsBySymbol_.find(hookSymbol.Get());
+                        if (hook != functionsBySymbol_.end())
+                            processor.hookFunction = hook->second;
+                    }
                     if (const Ref<sema::Type> valueType = binding.hookValueType.Lock())
                         processor.valueType = mapType(valueType, attribute.Get());
                     processor.stableId =
@@ -1364,6 +1377,26 @@ namespace wio::wir::typed
                             method->attributes = ids;
                     }
                 }
+            }
+
+            for (ReflectionDescriptor& descriptor : result_.module_.contract.reflection)
+            {
+                std::ranges::stable_sort(
+                    descriptor.methods,
+                    [&](const ReflectedMethodDescriptor& left, const ReflectedMethodDescriptor& right)
+                    {
+                        const Function* leftFunction = findFunction(left.function);
+                        const Function* rightFunction = findFunction(right.function);
+                        const auto leftLine = leftFunction ? leftFunction->source.begin.line : 0;
+                        const auto rightLine = rightFunction ? rightFunction->source.begin.line : 0;
+                        if (leftLine != rightLine)
+                            return leftLine < rightLine;
+                        const auto leftColumn = leftFunction ? leftFunction->source.begin.column : 0;
+                        const auto rightColumn = rightFunction ? rightFunction->source.begin.column : 0;
+                        if (leftColumn != rightColumn)
+                            return leftColumn < rightColumn;
+                        return left.function.value() < right.function.value();
+                    });
             }
 
             for (const TypeDeclarationInfo& declaration : typeDeclarations_)

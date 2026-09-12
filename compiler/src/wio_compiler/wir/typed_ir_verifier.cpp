@@ -570,12 +570,21 @@ namespace wio::wir::typed
                 report("WIR1508", "Typed WIR attribute applications require unique identities and valid targets.");
             std::unordered_set<std::uint64_t> processorIds;
             for (const AttributeProcessorDescriptor& processor : attribute.processors)
+            {
+                const bool behavioral = processor.phase == AttributeProcessorPhase::Pre ||
+                                        processor.phase == AttributeProcessorPhase::Post ||
+                                        processor.phase == AttributeProcessorPhase::Finally ||
+                                        processor.phase == AttributeProcessorPhase::Around;
                 if (processor.stableId == 0 || processor.canonicalTypeName.empty() ||
                     processor.phase == AttributeProcessorPhase::Unknown ||
+                    (behavioral && (!processor.processorType || !module.types.tryGet(processor.processorType) ||
+                                    !processor.hookFunction || !functions.contains(processor.hookFunction.value()))) ||
                     (processor.valueType && !module.types.tryGet(processor.valueType)) ||
                     !processorIds.insert(processor.stableId).second)
                     report("WIR1509",
-                           "Typed WIR attribute processors require a stable phase, identity, and value type.");
+                           "Typed WIR attribute processors require a stable phase, identity, executable hook, and "
+                           "value type.");
+            }
         }
         const auto attributesKnown = [&](const std::vector<std::uint64_t>& ids)
         { return std::ranges::all_of(ids, [&](const std::uint64_t id) { return attributeIds.contains(id); }); };
