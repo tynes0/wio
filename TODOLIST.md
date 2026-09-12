@@ -486,10 +486,85 @@ Rider, and CLion are defined in
    sanitizer builds on Ubuntu. Add macOS, x64/arm64 coverage, static/shared/PIC
    qualification, endian/alignment audits, and alternative-backend evidence.
 
-8. [ ] Evaluate an independent backend/IR only with evidence.
-   Keep C++ as the production backend while measuring whether a Wio IR,
-   LLVM-based path, or interpreter would materially improve diagnostics,
-   compile time, tooling, or portability.
+8. [~] Complete the backend-neutral WIR and independent fast backend.
+   Typed WIR, canonical Lowered WIR, stable IDs/source spans, control flow,
+   values, places/borrows, arrays, matching, component/object construction,
+   lexical cleanup, receiver-aware methods, deterministic object/interface
+   slots, direct/virtual/interface dispatch, object casts/type tests, and
+   identity equality are implemented with verifier and printer coverage.
+   Callable identity is also frozen: exact overload targets, concrete generic
+   specialization keys, named function values, ordered closure environments,
+   value/reference/retained-self captures, indirect calls, and extension calls
+   survive verified Typed-to-Lowered WIR unchanged. Dictionary literals and
+   keyed places, string/text interpolation and indexing, enum/flagset values,
+   backend-neutral intrinsics, `any`, nullable wrapping, and the nominal
+   Option/Result/Tuple/Span value models now survive the same verified path.
+   Ownership and cleanup are backend-neutral as well: every type records
+   trivial/owned-value/reference-counted/borrowed semantics, managed loads are
+   explicit borrows, copy/move/replace/release/drop are verified operations,
+   return moves and reverse lexical cleanup cover structured exits, and
+   Lowered WIR separates intrusive retain/release from value copy/drop glue.
+   Native interop is now backend-neutral too: native POD C++ identity,
+   `opaque`, ref/view mutability, callbacks, exception boundaries, stable
+   symbols, generic specialization keys, adapter strategy, `native-call` /
+   `native-invoke`, deterministic thunk planning, and the C-shaped SDK handle
+   contract survive verified Typed-to-Lowered WIR. Concrete thunk bodies remain
+   work for the new C++ backend and VM native bridge rather than the frontend.
+   Module/import/export identity, concrete generic export signatures,
+   detailed field/method/attribute reflection descriptors,
+   application/system schedule and resource-access metadata,
+   lifecycle/state-transfer hooks, and deterministic
+   SDK call-table slots also survive through one verified canonical contract.
+   The compatible SDK sidecar is frozen; generated sidecar emission and loader
+   preference switching remain backend-integration work.
+   The first independent C++ backend now consumes verified Lowered WIR behind
+   `--cpp-backend wir`, emits stable CFG/place/type/function identities, and
+   passes host-compiler plus executable CLI gates without AST fallback. Keep
+   the current C++ generator as the production default. Exact enum/flagset
+   layouts and intrinsics plus canonical Option/Result variants, checked unwrap,
+   and propagation now emit from concrete Lowered WIR; open generic declaration
+   metadata is excluded from concrete output. Container/string/text intrinsics
+   and range/array/dictionary iterators now execute through shared runtime
+   helpers, with borrowed storage identity and focused boundary tests. Sprint
+   17.1 now materializes non-variadic generic function/closure bodies from pinned
+   type/const arguments, including recursive worklists, identity deduplication,
+   const extents, and concrete cleanup decisions. Sprint 17.2 executes object
+   hierarchy/interface dispatch, checked casts, generic owner methods, real
+   constructor bodies, inherited field storage and intrusive object lifecycle.
+   Its focused generated-code gate covers self/ref/view, any, scope cleanup,
+   weak lifetime and malformed hierarchy metadata. Sprint 17.3 executes async
+   state transitions, generic/void task payloads, executor handoffs, cancellation,
+   async interface methods and retained self/frame cleanup; the focused gate
+   covers generated code and malformed coroutine metadata. Sprint 17.4 now
+   executes native/POD/generic/extension adapters and checked wire-v2 thunks,
+   canonical SDK sidecars, v11 scalar compatibility and module-owned values.
+   Independent DLL/host gates cover Unicode, ref aliasing/copy-back, callback
+   lifetime/thread contracts, intrusive ownership and async shutdown. Sprint
+   17.5 now executes application construction/lifecycle through one standalone
+   and SDK-hosted runtime, and publishes callable constructor/field/method plus
+   enum/attribute reflection through an additive native sidecar. Sprint 17.6
+   adds standalone and clean-project legacy/WIR differential gates, compile-time
+   measurements, Windows/Ubuntu release qualification, variadic pack expansion,
+   concrete generic-owner dispatch, constructor identity, native template/string
+   ABI adaptation, and `Entry(string[])`. The compatibility generator remains
+   the explicit rollback/oracle during the staged default transition. The
+   bytecode VM consumes the same contract. Async functions now carry
+   payload/frame/state contracts;
+   awaits and executor handoffs lower to cancellation-safe suspend/resume state
+   machines, and async exits lower to coroutine completion. Application,
+   system, effective attribute processor, and detailed reflection metadata now
+   use the same verified contract. The language-surface freeze adds stable
+   globals and initializer functions, canonical range/array/dictionary
+   iterators with structured loop exits, explicit Result unwrap/propagation,
+   duration and range-containment operations, generic pack/constant types with
+   per-operand expansion metadata, and pinned overloaded-operator dispatch. The
+   canonical optimizer now performs checked constant folding, CFG simplification,
+   trivial SSA propagation, conservative DCE, escape/storage classification,
+   and proven fixed-array bounds-check elimination while preserving stable IDs,
+   source maps, ownership, and observable failure behavior. Continue broadening
+   long-running platform executor/exceptional cleanup and benchmark samples as
+   release-hardening evidence; these no longer block the canonical C++ backend
+   pipeline milestone.
 
 ## P3 - Product Direction
 

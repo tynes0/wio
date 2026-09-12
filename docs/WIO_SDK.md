@@ -20,9 +20,83 @@ Official public headers:
 - `sdk/include/wio_features.h`
 - `sdk/include/wio_values.h`
 - `sdk/include/wio_sdk.h`
+- `sdk/include/wio_native_abi.h` (experimental Lowered-WIR boundary)
+- `sdk/include/wio_native_reflection.h` (experimental reflection sidecar)
+- `sdk/include/wio_native_sdk.h` (experimental C++ owner/host wrappers)
 
 Everything else should be treated as implementation detail unless it is
 explicitly re-exported through those headers.
+
+### Experimental Lowered-WIR host (Sprints 17.4-17.5)
+
+For libraries compiled with `--cpp-backend wir`, include the additional
+`wio_native_sdk.h` header. This opts into canonical value ABI v2 without changing
+the production `Module` API or descriptor v11:
+
+```cpp
+#include <wio_native_sdk.h>
+#include <array>
+
+auto module = wio::sdk::NativeModule::open("game.dll");
+module.start();
+std::array args{wio::sdk::NativeValue::integer(10),
+                wio::sdk::NativeValue::integer(20)};
+auto sum = module.invoke("Add", args).asInteger();
+auto message = module.invoke("Message");
+auto writable = message.borrow();
+module.invoke("Append", std::span(&writable, 1));
+auto updated = message.asString();
+module.close(); // message still owns and pins the producing module.
+```
+
+The corresponding exports can be ordinary Wio functions:
+
+```wio
+[export] fn Add(a: i32, b: i32) -> i32 { return a + b; }
+[export] fn Message() -> string { return "hello"; }
+[export] fn Append(value: ref string) { value += "!"; }
+```
+
+`NativeValue` is move-only; `clone()` explicitly retains an owned handle.
+`NativeValue::text(U"hello 🌍")` supplies Unicode scalar values; `asText()` reads
+UTF-32 output. For exported async functions, keep the returned task value and
+use `pumpMain()`, `taskReady()`, `readTask()` or `cancelTask()`. Reading an
+unfinished task reports NOT_READY, not a placeholder payload. Module startup,
+pumping and final shutdown belong on the owning host thread. Do not move/reset
+a value while a ref/view token borrows it. See the complete runnable fixture in
+`tests/wir_cpp_sdk_host.cpp` and the current boundaries in
+[`WIO_CPP_BACKEND.md`](./WIO_CPP_BACKEND.md#sprint-174-native-adapters-and-executable-sdk-boundaries).
+
+Sprint 17.5 adds application hosting and detailed reflection without changing
+the production v11 descriptor layout:
+
+```cpp
+auto module = wio::sdk::NativeModule::open("app.dll");
+module.start();
+
+auto application = module.application();
+application.start();
+while (application.update(1.0 / 60.0) ==
+       wio::sdk::ApplicationFrameStatus::Running) {
+    application.pumpMain();
+}
+application.close();
+
+const auto& counter = module.type("Counter");
+auto value = module.construct("Counter",
+                              std::array{wio::sdk::NativeValue::integer(10)});
+auto field = module.getField(value, "value").asInteger();
+auto result = module.callMethod(
+    value, "Add", std::array{wio::sdk::NativeValue::integer(5)});
+```
+
+`types()` and `attributes()` expose immutable descriptor spans from
+`WioGetNativeReflectionApi`. `attributesFor(stableId)` filters effective
+runtime-retained metadata. Only exported types receive callable construction or
+member thunks, and only public synchronous members are invokable. Metadata can
+still describe private or async members without making them callable. Values and
+application hosts retain a module lease, so descriptor and release callbacks do
+not dangle when the `NativeModule` view is closed.
 
 The SDK product version is available without loading a module:
 

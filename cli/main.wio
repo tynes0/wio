@@ -54,6 +54,7 @@ fn AddProjectBase(parser: ref Argonaut::Parser, rebuild: bool) -> std::UnitResul
     AddOption?(parser, "PROJECT", ["--project"], "Project directory or makewio manifest path.");
     AddOption?(parser, "CONFIG", ["--config"], "Optional project build configuration override.");
     AddOption?(parser, "BUILD-DIR", ["--build-dir"], "Optional project build directory override.");
+    AddOption?(parser, "CPP-BACKEND", ["--cpp-backend"], "Select C++ generation input: legacy or wir (experimental).");
     if (rebuild) {
         AddFlag?(parser, "REBUILD", ["--rebuild", "--configure"], "Force recompilation.");
     }
@@ -67,6 +68,10 @@ fn ProjectParser(command: string) -> std::Result<Argonaut::Parser> {
 
     if (command == "build") {
         AddFlag?(ref parser, "EMIT-CPP", ["--emit-cpp"], "Keep generated C++ and stop before backend compilation.");
+        AddFlag?(ref parser, "EMIT-TYPED-WIR", ["--emit-typed-wir"], "Emit analyzed Typed WIR and stop before lowering.");
+        AddFlag?(ref parser, "EMIT-LOWERED-WIR", ["--emit-lowered-wir"], "Emit canonical Lowered WIR and stop before backend code generation.");
+        AddOption?(ref parser, "IR-OUTPUT", ["--ir-output"], "Override the emitted WIR output path.");
+        AddFlag?(ref parser, "NO-BUILTIN", ["--no-builtin", "-B"], "Do not merge built-in Wio modules into the inspected program.");
     }
     else if (command == "describe") {
     }

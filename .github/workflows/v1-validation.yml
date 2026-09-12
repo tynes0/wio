@@ -68,6 +68,11 @@ jobs:
           ctest --test-dir build --output-on-failure
           -R "^(wio_test_(sdk_017_application_schedule_interop|application_(attribute_model_run|mixed_model_run|composed_attribute_run)|cli_migrate_application_rewrite_run)|wio_invalid_application_attribute_(worker_rejected|unknown_dependency|fixed_frequency|multiple_lifecycle|start_parameter|update_return)|wio_invalid_system_(application_schedule_attribute|attribute_update_type|async_helper)|wio_invalid_application_async_helper)$"
 
+      - name: Validate Lowered WIR C++ release gate
+        run: >
+          ctest --test-dir build --verbose
+          -R "^wio_wir_cpp_(backend|backend_cli|generics|objects|async|native|sdk|application|reflection|packs_differential|project_differential)$"
+
   sanitizers:
     runs-on: ubuntu-latest
 

@@ -1,0 +1,43 @@
+using cpp::header("wir_native_fixture.h");
+[native, CppName(wir_native::Vec)] component Vec { public x: f32; public y: f32; }
+[native, CppName(wir_native::Cell)] component Cell<T> { public value: T; }
+extension VecNative for Vec {
+    [native, CppName(wir_native::Scale)] public ref fn Scale(factor: f32);
+    [native, CppName(wir_native::Sum)] public view fn Sum() -> f32;
+}
+[native, CppName(wir_native::Append)] fn Append(value: ref string);
+[native, CppName(wir_native::Label)] fn Label() -> string;
+[native, CppName(wir_native::Write)] fn Write(value: ref i32);
+[native, CppName(wir_native::ReadSlot)] fn ReadSlot() -> i32;
+[native, CppName(wir_native::ReadSlot)] fn ReadAgain() -> i32;
+[native, CppName(wir_native::Call)] fn Call(value: i32, callback: fn(i32) -> i32, context: opaque) -> i32;
+[native, CppName(wir_native::Context)] fn Context() -> opaque;
+[native, CppName(wir_native::Store)] fn Store(callback: fn(i32) -> i32);
+[native, CppName(wir_native::Expired)] fn Expired() -> bool;
+[native, CppName(wir_native::WrongThread)] fn WrongThread(callback: fn(i32) -> i32) -> bool;
+[native, CppName(wir_native::Identity), instantiate(i32), instantiate(string)] fn Identity<T>(value: T) -> T;
+[native, CppName(wir_native::Zero), instantiate(i32)] fn Zero<T>() -> T;
+[native, CppName(wir_native::MakeCell), instantiate(i32)] fn MakeCell<T>(value: T) -> Cell<T>;
+[native, CppName(wir_native::Fail)] fn Fail() -> i32;
+fn InvokeFailure() -> i32 { return Fail(); }
+fn Entry() -> i32 {
+    mut v = Vec(2.0f32, 3.0f32);
+    v.Scale(4.0f32);
+    if (v.Sum() != 20.0f32) { return 1; }
+    mut label = "wio";
+    Append(ref label);
+    if (label != "wio-native" or Label() != "borrowed") { return 2; }
+    mut slot = 1;
+    Write(ref slot);
+    if (ReadSlot() != 7 or ReadAgain() != 7 or slot != 7) { return 3; }
+    if (Identity(13) != 13 or Identity("ok") != "ok") { return 4; }
+    if (Zero<i32>() != 0) { return 5; }
+    let cell = MakeCell<i32>(9);
+    if (cell.value != 9) { return 6; }
+    let captured = 3;
+    if (Call(4, (value) => value + captured, Context()) != 14) { return 7; }
+    Store((value) => value + captured);
+    if (not Expired()) { return 8; }
+    if (not WrongThread((value) => value + captured)) { return 9; }
+    return 0;
+}

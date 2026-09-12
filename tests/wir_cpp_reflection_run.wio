@@ -1,0 +1,59 @@
+[attribute::Targets(object, field, method, enum_case)]
+attribute Note(value: string) retain runtime;
+
+attribute InternalOnly() for object retain compile;
+
+using cpp::header("type_reflection.h");
+
+[Note("counter\nmetadata"), InternalOnly, export]
+object Counter {
+    [Note("editable")]
+    public value: i32;
+
+    private secret: i32;
+
+    public OnConstruct(initial: i32) {
+        self.value = initial;
+        self.secret = 99;
+    }
+
+    [Note("add")]
+    public fn Add(amount: i32) -> i32 {
+        self.value += amount;
+        return self.value;
+    }
+
+    private fn Secret() -> i32 {
+        return self.secret;
+    }
+}
+
+[native, CppName(wio::runtime::ReflectedTypeName), instantiate(Counter)]
+fn TypeName<T>() -> string;
+
+[native, CppName(wio::runtime::ReflectedFieldCount), instantiate(Counter)]
+fn FieldCount<T>() -> usize;
+
+[export]
+fn CheckTraits() -> bool {
+    return TypeName<Counter>() == "Counter" and FieldCount<Counter>() == 2;
+}
+
+[export]
+component Packet {
+    public count: i32;
+    private hidden: i32;
+}
+
+enum Mode {
+    [Note("ready")]
+    Ready = 7,
+    Offline = -1
+};
+
+[export]
+fn NewPacket() -> Packet {
+    return Packet(4, 8);
+}
+
+fn Entry() {}

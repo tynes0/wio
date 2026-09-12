@@ -90,6 +90,9 @@ Use these when the question is about:
 - [CLI reference](./WIO_CLI_REFERENCE.md)
 - [Project system](./WIO_PROJECT_SYSTEM.md)
 - [Self-hosted CLI architecture](./WIO_SELF_HOSTED_CLI.md)
+- [WIR compiler pipeline](./WIO_WIR_PIPELINE.md)
+- [Async WIR and coroutine lowering contract](./WIO_ASYNC_WIR.md)
+- [Application, system, attribute, and reflection WIR contract](./WIO_APPLICATION_ATTRIBUTE_WIR.md)
 - [Editor ecosystem plan](./WIO_EDITOR_ECOSYSTEM_PLAN.md)
 
 Use these when the question is about:
@@ -98,6 +101,7 @@ Use these when the question is about:
 - manifests
 - build/run/package/install behavior
 - CLI bootstrap and Wio/Argonaut-Wio migration
+- Typed WIR, Lowered WIR, and backend cutover rules
 - cache/output policy
 - packaged toolchain usage
 

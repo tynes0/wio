@@ -415,7 +415,10 @@ namespace wio::sema
             if (a1->hasInferredExtent || a2->hasInferredExtent)
                 return a1->elementType->isCompatibleWith(a2->elementType);
 
-            if (a1->extentType || a2->extentType)
+            const bool symbolicExtent =
+                (a1->extentType && a1->extentType->kind() != TypeKind::ConstValue) ||
+                (a2->extentType && a2->extentType->kind() != TypeKind::ConstValue);
+            if (symbolicExtent)
             {
                 if (!a1->extentType || !a2->extentType ||
                     !a1->extentType->isCompatibleWith(a2->extentType))

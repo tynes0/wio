@@ -29,6 +29,8 @@
 #include <vector>
 
 #include "module_api.h"
+#include "wio_module_contract.h"
+#include "wio_native_abi.h"
 #include "wio_features.h"
 #include "wio_values.h"
 
@@ -7272,6 +7274,7 @@ namespace wio::sdk
     private:
         friend class Module;
 
+        friend class NativeModule;
         ApplicationHost(const WioApplicationDescriptor* descriptor,
                         std::shared_ptr<detail::BindingState> bindingState,
                         const std::uint64_t bindingGeneration,

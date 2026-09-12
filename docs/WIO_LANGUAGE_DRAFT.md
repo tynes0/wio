@@ -315,6 +315,12 @@ let d = 0o755;
 
 #### Integer Suffixes
 
+Integer suffixes are optional. They are useful when an inferred declaration
+must select a type other than the default, such as `let id = 3u64;`. When a
+literal appears in a typed initializer, assignment, argument, return, array,
+dictionary, conditional, or match context, the compiler uses that expected
+numeric type and validates that the suffix-free value fits.
+
 Supported integer suffixes currently include:
 
 - `i8`
@@ -397,6 +403,10 @@ let d = 4.2E-1;
 ```
 
 #### Float Suffixes
+
+Float suffixes are optional. A suffix can force an inferred declaration to
+`f32` or `f64`; otherwise typed expression contexts provide the expected type
+and an uncontextualized floating-point literal defaults to `f64`.
 
 Supported float suffixes currently include:
 
@@ -1203,6 +1213,12 @@ This area is part of the intended `v1` reference/mutation contract:
 ### 8.1 Overview
 
 `fit` is Wio’s explicit conversion operator.
+
+The operand of an explicit `fit` is inferred independently from any expected
+type surrounding the whole expression. For example, `return 500 fit i8;`
+first forms the ordinary `i32` literal `500` and then applies the clamping
+conversion to `i8`; the return type cannot prematurely force the literal to
+`i8` and reject it before `fit` runs.
 
 It is used for:
 

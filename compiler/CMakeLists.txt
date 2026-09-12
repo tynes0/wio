@@ -1,5 +1,6 @@
 file(GLOB_RECURSE WIO_SOURCES CONFIGURE_DEPENDS
     "src/*.h"
+    "src/*.inl"
     "src/*.cpp"
 )
 
@@ -63,6 +64,283 @@ target_compile_options(wio_compiler PRIVATE
 )
 
 if(BUILD_TESTING)
+    add_executable(wio_compiler_helper_modules_test
+        "${CMAKE_SOURCE_DIR}/tests/compiler_helper_modules_test.cpp"
+    )
+    target_link_libraries(wio_compiler_helper_modules_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_compiler_helper_modules
+        COMMAND wio_compiler_helper_modules_test
+    )
+
+    add_executable(wio_const_evaluation_limiter_test
+        "${CMAKE_SOURCE_DIR}/tests/const_evaluation_limiter_test.cpp"
+    )
+    target_include_directories(wio_const_evaluation_limiter_test PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
+    target_link_libraries(wio_const_evaluation_limiter_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_const_evaluation_limiter
+        COMMAND wio_const_evaluation_limiter_test
+    )
+
+    add_executable(wio_typed_wir_core_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_core_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_core_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_core
+        COMMAND wio_typed_wir_core_test
+    )
+
+    add_executable(wio_lowered_wir_pipeline_test
+        "${CMAKE_SOURCE_DIR}/tests/lowered_wir_pipeline_test.cpp"
+    )
+    target_link_libraries(wio_lowered_wir_pipeline_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_lowered_wir_pipeline
+        COMMAND wio_lowered_wir_pipeline_test
+    )
+
+    add_executable(wio_typed_wir_control_flow_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_control_flow_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_control_flow_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_control_flow
+        COMMAND wio_typed_wir_control_flow_test
+    )
+
+    add_executable(wio_typed_wir_loop_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_loop_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_loop_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_loop
+        COMMAND wio_typed_wir_loop_test
+    )
+
+    add_executable(wio_typed_wir_cfor_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_cfor_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_cfor_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_cfor
+        COMMAND wio_typed_wir_cfor_test
+    )
+
+    add_executable(wio_typed_wir_short_circuit_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_short_circuit_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_short_circuit_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_short_circuit
+        COMMAND wio_typed_wir_short_circuit_test
+    )
+
+    add_executable(wio_typed_wir_literals_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_literals_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_literals_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_literals
+        COMMAND wio_typed_wir_literals_test
+    )
+
+    add_executable(wio_typed_wir_conversion_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_conversion_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_conversion_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_conversion
+        COMMAND wio_typed_wir_conversion_test
+    )
+
+    add_executable(wio_typed_wir_conditional_effects_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_conditional_effects_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_conditional_effects_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_conditional_effects
+        COMMAND wio_typed_wir_conditional_effects_test
+    )
+
+    add_executable(wio_typed_wir_match_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_match_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_match_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_match
+        COMMAND wio_typed_wir_match_test
+    )
+
+    add_executable(wio_typed_wir_data_match_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_data_match_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_data_match_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_data_match
+        COMMAND wio_typed_wir_data_match_test
+    )
+
+    add_executable(wio_typed_wir_nominal_types_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_nominal_types_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_nominal_types_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_nominal_types
+        COMMAND wio_typed_wir_nominal_types_test
+    )
+
+    add_executable(wio_typed_wir_arrays_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_arrays_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_arrays_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_arrays
+        COMMAND wio_typed_wir_arrays_test
+    )
+
+    add_executable(wio_typed_wir_places_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_places_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_places_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_places
+        COMMAND wio_typed_wir_places_test
+    )
+
+    add_executable(wio_typed_wir_lifecycle_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_lifecycle_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_lifecycle_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_lifecycle
+        COMMAND wio_typed_wir_lifecycle_test
+    )
+
+    add_executable(wio_typed_wir_object_interface_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_object_interface_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_object_interface_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_object_interface
+        COMMAND wio_typed_wir_object_interface_test
+    )
+
+    add_executable(wio_typed_wir_callable_model_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_callable_model_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_callable_model_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_callable_model
+        COMMAND wio_typed_wir_callable_model_test
+    )
+
+    add_executable(wio_typed_wir_value_container_surface_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_value_container_surface_test.cpp"
+    )
+    target_include_directories(wio_typed_wir_value_container_surface_test PRIVATE
+        "${CMAKE_SOURCE_DIR}/runtime/include"
+    )
+    target_link_libraries(wio_typed_wir_value_container_surface_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_value_container_surface
+        COMMAND wio_typed_wir_value_container_surface_test
+    )
+
+    add_executable(wio_typed_wir_ownership_cleanup_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_ownership_cleanup_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_ownership_cleanup_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_ownership_cleanup
+        COMMAND wio_typed_wir_ownership_cleanup_test
+    )
+
+    add_executable(wio_typed_wir_native_abi_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_native_abi_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_native_abi_test PRIVATE wio_compiler wio_sdk)
+    add_test(
+        NAME wio_typed_wir_native_abi
+        COMMAND wio_typed_wir_native_abi_test
+    )
+
+    add_executable(wio_typed_wir_module_sdk_model_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_module_sdk_model_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_module_sdk_model_test PRIVATE wio_compiler wio_sdk)
+    add_test(
+        NAME wio_typed_wir_module_sdk_model
+        COMMAND wio_typed_wir_module_sdk_model_test
+    )
+
+    add_executable(wio_typed_wir_async_lowering_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_async_lowering_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_async_lowering_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_async_lowering
+        COMMAND wio_typed_wir_async_lowering_test
+    )
+
+    add_executable(wio_typed_wir_application_metadata_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_application_metadata_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_application_metadata_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_application_metadata
+        COMMAND wio_typed_wir_application_metadata_test
+    )
+
+    add_executable(wio_typed_wir_language_surface_test
+        "${CMAKE_SOURCE_DIR}/tests/typed_wir_language_surface_test.cpp"
+    )
+    target_link_libraries(wio_typed_wir_language_surface_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_typed_wir_language_surface
+        COMMAND wio_typed_wir_language_surface_test
+    )
+
+    add_executable(wio_wir_canonical_optimizer_test
+        "${CMAKE_SOURCE_DIR}/tests/wir_canonical_optimizer_test.cpp"
+    )
+    target_link_libraries(wio_wir_canonical_optimizer_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_wir_canonical_optimizer
+        COMMAND wio_wir_canonical_optimizer_test
+    )
+
+    add_executable(wio_wir_cpp_backend_test
+        "${CMAKE_SOURCE_DIR}/tests/wir_cpp_backend_test.cpp"
+    )
+    target_link_libraries(wio_wir_cpp_backend_test PRIVATE wio_compiler)
+    target_compile_definitions(wio_wir_cpp_backend_test PRIVATE
+        WIO_TEST_CXX_COMPILER="${WIO_BACKEND_CXX_COMPILER_CPP}"
+        WIO_TEST_CXX_COMPILER_ID="GNU"
+        WIO_TEST_RUNTIME_INCLUDE="${WIO_RUNTIME_INCLUDE_DIR}"
+        WIO_TEST_RUNTIME_LIBRARY="${WIO_BACKEND_RUNTIME_LIBRARY_CPP}"
+        WIO_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    )
+    add_test(NAME wio_wir_cpp_generics COMMAND wio_wir_cpp_backend_test --generics-only)
+    add_test(NAME wio_wir_cpp_objects COMMAND wio_wir_cpp_backend_test --objects-only)
+    add_test(NAME wio_wir_cpp_async COMMAND wio_wir_cpp_backend_test --async-only)
+    add_test(NAME wio_wir_cpp_native COMMAND wio_wir_cpp_backend_test --native-only)
+    add_test(NAME wio_wir_cpp_sdk COMMAND wio_wir_cpp_backend_test --sdk-only)
+    add_test(NAME wio_wir_cpp_application COMMAND wio_wir_cpp_backend_test --application-only)
+    add_test(NAME wio_wir_cpp_reflection COMMAND wio_wir_cpp_backend_test --reflection-only)
+    set_tests_properties(wio_wir_cpp_reflection PROPERTIES TIMEOUT 120)
+    set_tests_properties(wio_wir_cpp_application PROPERTIES TIMEOUT 120)
+    set_tests_properties(wio_wir_cpp_sdk PROPERTIES TIMEOUT 120)
+    set_tests_properties(wio_wir_cpp_native PROPERTIES TIMEOUT 90)
+    set_tests_properties(wio_wir_cpp_async PROPERTIES TIMEOUT 90)
+    add_test(
+        NAME wio_wir_cpp_backend
+        COMMAND wio_wir_cpp_backend_test
+    )
+
     add_executable(wio_function_type_cpp_string_test
         "${CMAKE_SOURCE_DIR}/tests/function_type_cpp_string_test.cpp"
     )

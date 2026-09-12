@@ -1,0 +1,36 @@
+using cpp::header("wir_native_fixture.h");
+realm std { realm async {} }
+[native, CppName(wio::runtime::AsyncSleep)] fn Sleep(milliseconds: u64) -> coroutine<void>;
+[export] async fn Delayed() -> i32 { await Sleep(5); await main; return 77; }
+[export] async fn Pending() -> i32 { await Sleep(60000); return 1; }
+[export] fn MakeCallback(value: i32) -> fn(i32) -> i32 { return (other) => value + other; }
+[export] fn UseCallback(callback: fn(i32) -> i32) -> i32 { return callback(3); }
+[native, CppName(wir_native::Identity), instantiate(i32)] fn NativeIdentity<T>(value: T) -> T;
+[export] fn Add(a: i32, b: i32) -> i32 { return NativeIdentity(a + b); }
+[export, instantiate(i32)] fn Identity<T>(value: T) -> T { return value; }
+[export] fn Message() -> string { return "wio dll"; }
+[export] fn Unicode(value: text) -> text { return u"⟦" + value + u"⟧"; }
+[export] fn Append(value: ref string) { value += "!"; }
+[export] fn MutateThenFail(value: ref string) -> i32 { value += "?"; let values: i32[] = [1]; return values[3]; }
+[export] fn Aliases(a: ref i32, b: ref i32) -> i32 { a += 1; b += 2; return a; }
+[export] component Packet { public value: i32; }
+[export] fn MakePacket() -> Packet { return Packet(42); }
+[export] fn ReadPacket(value: Packet) -> i32 { return value.value; }
+mut destroyed: i32 = 0;
+[export] object Counter {
+    public value: i32;
+    public OnConstruct(value: i32) { self.value=value; }
+    OnDestruct() { destroyed += 1; }
+}
+[export] fn DropCount() -> i32 { return destroyed; }
+[export] fn MakeCounter() -> Counter { return Counter(17); }
+[export] fn ReadCounter(value: Counter) -> i32 { return value.value; }
+[export] fn Same(a: Counter, b: Counter) -> bool { return a == b; }
+[export] fn Fail() -> i32 { let values: i32[] = [1]; return values[3]; }
+mut state: i32 = 0;
+[module::api_version] fn ApiVersion() -> u32 { return 11u32; }
+[module::load] fn Load() -> i32 { state=3; return 0; }
+[module::save_state] fn Save() -> i32 { return state; }
+[module::restore_state] fn Restore(value: i32) -> i32 { state=value; return 0; }
+[module::unload] fn Unload() { state=0; }
+fn Entry() {}

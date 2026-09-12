@@ -1,0 +1,17 @@
+fn Choose(condition: bool) -> i32 {
+    mut value: i32;
+    while (value < 4) {
+        value += 1;
+        if (condition and value == 2) {
+            continue;
+        }
+        if (value == 3) {
+            break;
+        }
+    }
+    return value;
+}
+
+fn Entry() -> i32 {
+    return Choose(true);
+}

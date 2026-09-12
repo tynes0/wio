@@ -1,0 +1,81 @@
+// Standalone compiler fixture: provide the namespace normally merged by the
+// project module loader for `await main`; bind the exercised runtime slice below.
+realm std { realm async {} }
+[native, CppName("wio::runtime::AsyncSleep")] fn Sleep(milliseconds: u64) -> coroutine<void>;
+[native, CppName("wio::runtime::AsyncYield")] fn Yield() -> coroutine<void>;
+[native, CppName("wio::runtime::IsAsyncMainThread")] fn IsMain() -> bool;
+[native, CppName("wio::runtime::RunAsync")] fn SpawnWorker(action: fn() -> i32) -> coroutine<i32>;
+[native, CppName("wio::runtime::RunBlockingAsync")] fn SpawnBlocking(action: fn() -> i32) -> coroutine<i32>;
+[native, CppName("wio::runtime::RunIoAsync")] fn SpawnIo(action: fn() -> i32) -> coroutine<i32>;
+[native, CppName("RecordAsyncExecutor")] fn RecordExecutor(index: i32);
+[native, CppName("RecordCancelledBody")] fn AfterCancel();
+async fn MainWait() -> i32 {
+    await Yield();
+    await main;
+    AfterCancel();
+    return 42;
+}
+async fn ExecutorProbe() {
+    RecordExecutor(0);
+    RecordExecutor(1);
+    RecordExecutor(2);
+    RecordExecutor(3);
+}
+async fn Identity<T>(value: T) -> T { await Yield(); return value; }
+async fn Immediate(value: i32) -> i32 { return value; }
+async fn Sum() -> i32 {
+    mut sum: i32 = 0;
+    mut i: i32 = 0;
+    while (i < 4) { sum += await Identity(i); i += 1; }
+    return sum + await Immediate(3);
+}
+async fn Nothing() { await Yield(); }
+async fn LongWait() -> i32 { await Sleep(60000); return 99; }
+async fn Parent() -> i32 { return await LongWait(); }
+async fn Fail() -> i32 {
+    let counter = Counter(5);
+    await Yield();
+    let values: i32[] = [1, 2];
+    let index = await Immediate(10);
+    return values[index] + counter.value;
+}
+[native, CppName("RecordAsyncDestroy")] fn RecordDestroy();
+interface AsyncRead { async fn Read() -> i32; }
+[From(AsyncRead)] object Counter {
+    public value: i32;
+    OnConstruct(value: i32) { self.value = value; }
+    OnDestruct() { RecordDestroy(); }
+    public async fn Read() -> i32 { await Sleep(30); return self.value; }
+    public async fn Wait() -> i32 { await Sleep(60000); return self.value; }
+}
+async fn OwnAcrossWait() -> i32 {
+    let counter = Counter(27);
+    await Sleep(60000);
+    return counter.value;
+}
+fn MakeTask(value: i32) -> fn() -> coroutine<i32> { return () => Immediate(value); }
+async fn OwningResult() -> Counter {
+    let value = Counter(73);
+    await Yield();
+    return value;
+}
+async fn Entry() -> i32 {
+    if (await Sum() != 9) { return 1; }
+    await Nothing();
+    let message = await Identity("hello coroutine");
+    if (message != "hello coroutine") { return 2; }
+    let action = MakeTask(31);
+    if (await action() != 31) { return 3; }
+    let seed = 5;
+    if (await SpawnWorker(() => seed + 1) != 6) { return 5; }
+    if (await SpawnBlocking(() => seed + 2) != 7) { return 6; }
+    if (await SpawnIo(() => seed + 3) != 8) { return 7; }
+    {
+        let counter = Counter(9);
+        let reader = counter fit AsyncRead;
+        if (await reader.Read() != 9) { return 8; }
+    }
+    await main;
+    if (not IsMain()) { return 4; }
+    return 0;
+}

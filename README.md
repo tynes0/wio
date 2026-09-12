@@ -288,6 +288,8 @@ Current status:
 - `cpp::name(...)` maps the Wio declaration to an existing C++ symbol.
 - `--include-dir`, `--link-dir`, `--link-lib`, and `--backend-arg` forward
   backend build inputs to the generated C++ compile step.
+- `--cpp-backend wir` opts into the independent Lowered WIR C++ generator;
+  `legacy` remains the default until differential parity is complete.
 
 Legacy `@Native`, `@CppHeader`, and `@CppName` spellings remain compatibility
 input, but new code should use the typed `with`/`using` forms above.

@@ -1,0 +1,183 @@
+#include "wio/wir/typed_ir.h"
+
+namespace wio::wir::typed
+{
+    bool isTerminator(const Opcode opcode)
+    {
+        return opcode == Opcode::Return || opcode == Opcode::Branch ||
+               opcode == Opcode::CondBranch || opcode == Opcode::ResultPropagate ||
+               opcode == Opcode::Unreachable;
+    }
+
+    bool producesValue(const Opcode opcode)
+    {
+        return opcode == Opcode::Constant || opcode == Opcode::GenericConstant || opcode == Opcode::DefaultValue || opcode == Opcode::Unary ||
+               opcode == Opcode::Binary || opcode == Opcode::RangeContains || opcode == Opcode::Convert ||
+               opcode == Opcode::Call || opcode == Opcode::NativeCall || opcode == Opcode::FunctionReference ||
+               opcode == Opcode::ClosureCreate || opcode == Opcode::IndirectCall ||
+               opcode == Opcode::ExtensionCall || opcode == Opcode::MethodCall ||
+               opcode == Opcode::VirtualCall || opcode == Opcode::InterfaceCall ||
+               opcode == Opcode::Upcast || opcode == Opcode::CheckedCast ||
+               opcode == Opcode::TypeTest || opcode == Opcode::IdentityEqual ||
+               opcode == Opcode::VariantTest ||
+               opcode == Opcode::VariantPayload || opcode == Opcode::ArrayLength ||
+               opcode == Opcode::ArrayElement || opcode == Opcode::ArrayCreate ||
+               opcode == Opcode::ArrayGet || opcode == Opcode::DictionaryCreate ||
+               opcode == Opcode::DictionaryGet || opcode == Opcode::DictionaryPlace ||
+               opcode == Opcode::Interpolate || opcode == Opcode::EnumConstant ||
+               opcode == Opcode::IntrinsicCall || opcode == Opcode::AnyBox ||
+               opcode == Opcode::AnyCheckedCast || opcode == Opcode::AnyTypeTest ||
+               opcode == Opcode::NullableWrap || opcode == Opcode::IteratorCreate ||
+               opcode == Opcode::IteratorHasNext || opcode == Opcode::IteratorValue ||
+               opcode == Opcode::ResultIsError || opcode == Opcode::ResultValue ||
+               opcode == Opcode::ResultUnwrap ||
+               opcode == Opcode::Await ||
+               opcode == Opcode::GlobalPlace || opcode == Opcode::LocalPlace ||
+               opcode == Opcode::Load || opcode == Opcode::FieldPlace ||
+               opcode == Opcode::ArrayPlace || opcode == Opcode::Borrow ||
+               opcode == Opcode::ConstructComponent || opcode == Opcode::ConstructObject ||
+               opcode == Opcode::Copy || opcode == Opcode::Move ||
+               opcode == Opcode::Select;
+    }
+
+    std::string_view opcodeName(const Opcode opcode)
+    {
+        switch (opcode)
+        {
+        case Opcode::Constant: return "const";
+        case Opcode::GenericConstant: return "generic-const";
+        case Opcode::DefaultValue: return "default-value";
+        case Opcode::Unary: return "unary";
+        case Opcode::Binary: return "binary";
+        case Opcode::RangeContains: return "range-contains";
+        case Opcode::Convert: return "convert";
+        case Opcode::Call: return "call";
+        case Opcode::NativeCall: return "native-call";
+        case Opcode::FunctionReference: return "function-ref";
+        case Opcode::ClosureCreate: return "closure-create";
+        case Opcode::IndirectCall: return "indirect-call";
+        case Opcode::ExtensionCall: return "extension-call";
+        case Opcode::MethodCall: return "method-call";
+        case Opcode::VirtualCall: return "virtual-call";
+        case Opcode::InterfaceCall: return "interface-call";
+        case Opcode::Upcast: return "upcast";
+        case Opcode::CheckedCast: return "checked-cast";
+        case Opcode::TypeTest: return "type-test";
+        case Opcode::IdentityEqual: return "identity-equal";
+        case Opcode::VariantTest: return "variant-test";
+        case Opcode::VariantPayload: return "variant-payload";
+        case Opcode::ArrayLength: return "array-length";
+        case Opcode::ArrayElement: return "array-element";
+        case Opcode::ArrayCreate: return "array-create";
+        case Opcode::ArrayGet: return "array-get";
+        case Opcode::DictionaryCreate: return "dictionary-create";
+        case Opcode::DictionaryGet: return "dictionary-get";
+        case Opcode::DictionaryPlace: return "dictionary-place";
+        case Opcode::Interpolate: return "interpolate";
+        case Opcode::EnumConstant: return "enum-constant";
+        case Opcode::IntrinsicCall: return "intrinsic-call";
+        case Opcode::AnyBox: return "any-box";
+        case Opcode::AnyCheckedCast: return "any-checked-cast";
+        case Opcode::AnyTypeTest: return "any-type-test";
+        case Opcode::NullableWrap: return "nullable-wrap";
+        case Opcode::IteratorCreate: return "iterator-create";
+        case Opcode::IteratorHasNext: return "iterator-has-next";
+        case Opcode::IteratorValue: return "iterator-value";
+        case Opcode::IteratorAdvance: return "iterator-advance";
+        case Opcode::ResultIsError: return "result-is-error";
+        case Opcode::ResultValue: return "result-value";
+        case Opcode::ResultUnwrap: return "result-unwrap";
+        case Opcode::ResultPropagate: return "result-propagate";
+        case Opcode::Await: return "await";
+        case Opcode::ExecutorSwitch: return "executor-switch";
+        case Opcode::GlobalPlace: return "global-place";
+        case Opcode::LocalPlace: return "local-place";
+        case Opcode::PlaceInit: return "place-init";
+        case Opcode::Load: return "load";
+        case Opcode::Store: return "store";
+        case Opcode::FieldPlace: return "field-place";
+        case Opcode::ArrayPlace: return "array-place";
+        case Opcode::Borrow: return "borrow";
+        case Opcode::ConstructComponent: return "construct-component";
+        case Opcode::ConstructObject: return "construct-object";
+        case Opcode::Copy: return "copy";
+        case Opcode::Move: return "move";
+        case Opcode::Replace: return "replace";
+        case Opcode::Release: return "release";
+        case Opcode::Drop: return "drop";
+        case Opcode::Select: return "select";
+        case Opcode::Return: return "return";
+        case Opcode::Branch: return "branch";
+        case Opcode::CondBranch: return "cond-branch";
+        case Opcode::Unreachable: return "unreachable";
+        }
+        return "unknown";
+    }
+
+    std::string_view unaryOperatorName(const UnaryOperator op)
+    {
+        switch (op)
+        {
+        case UnaryOperator::Negate: return "neg";
+        case UnaryOperator::LogicalNot: return "logical-not";
+        case UnaryOperator::BitwiseNot: return "bitwise-not";
+        }
+        return "unknown";
+    }
+
+    std::string_view binaryOperatorName(const BinaryOperator op)
+    {
+        switch (op)
+        {
+        case BinaryOperator::Add: return "add";
+        case BinaryOperator::Subtract: return "sub";
+        case BinaryOperator::Multiply: return "mul";
+        case BinaryOperator::Divide: return "div";
+        case BinaryOperator::Remainder: return "rem";
+        case BinaryOperator::Equal: return "eq";
+        case BinaryOperator::NotEqual: return "ne";
+        case BinaryOperator::Less: return "lt";
+        case BinaryOperator::LessEqual: return "le";
+        case BinaryOperator::Greater: return "gt";
+        case BinaryOperator::GreaterEqual: return "ge";
+        case BinaryOperator::BitwiseAnd: return "bitwise-and";
+        case BinaryOperator::BitwiseOr: return "bitwise-or";
+        case BinaryOperator::BitwiseXor: return "bitwise-xor";
+        case BinaryOperator::ShiftLeft: return "shift-left";
+        case BinaryOperator::ShiftRight: return "shift-right";
+        }
+        return "unknown";
+    }
+
+    std::string_view conversionKindName(const ConversionKind kind)
+    {
+        switch (kind)
+        {
+        case ConversionKind::NumericWiden: return "numeric-widen";
+        case ConversionKind::NumericFit: return "numeric-fit";
+        }
+        return "unknown";
+    }
+
+    std::string_view valueOwnershipName(const ValueOwnership ownership)
+    {
+        switch (ownership)
+        {
+        case ValueOwnership::Trivial: return "trivial";
+        case ValueOwnership::Borrowed: return "borrowed";
+        case ValueOwnership::Owned: return "owned";
+        }
+        return "trivial";
+    }
+
+    std::string_view borrowLifetimeName(const BorrowLifetime lifetime)
+    {
+        switch (lifetime)
+        {
+        case BorrowLifetime::None: return "none";
+        case BorrowLifetime::Caller: return "caller";
+        case BorrowLifetime::Lexical: return "lexical";
+        }
+        return "none";
+    }
+}

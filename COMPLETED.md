@@ -838,3 +838,222 @@ here as historical evidence rather than active work:
 - [x] SDK ABI v11 and `ApplicationHost::stages()` expose the normalized stage
       graph, dependencies, fixed frequencies, order, affinity, and stage kind
       flags to native hosts.
+
+## Backend-neutral WIR Foundation
+
+- [x] Typed WIR and canonical Lowered WIR gained stable type/function/block/
+      value identities, source spans, deterministic printers, and independent
+      structural verifiers.
+- [x] Structured control flow, SSA block arguments, conditionals, loops,
+      short-circuiting, match projections, arrays, numeric conversion, and
+      literal typing lower without backend-specific recovery guesses.
+- [x] The place and memory model now makes locals, initialization, loads,
+      stores, fields, indices, borrows, construction, and reverse lexical
+      cleanup explicit for component values and owning object handles.
+- [x] Object/interface methods are receiver-aware WIR functions; nominal types
+      retain deterministic override slots and abstract entries, while direct,
+      virtual, and interface dispatch remain distinct verified operations.
+- [x] Safe object/interface upcasts, checked `fit`, runtime `is`, object
+      identity equality, and `self`/`deref self`/`ref`/`view` return semantics
+      survive unchanged into Lowered WIR.
+- [x] The Callable Model freezes overload results and generic specialization
+      identities in WIR; named function values, closures with ordered
+      value/reference/retained-self environments, indirect calls, and
+      extension implementation calls are distinct verified operations that
+      survive canonical lowering unchanged.
+- [x] The Value and Container Model preserves dictionary construction and
+      keyed read/write places, array/string/text indexing, structured string
+      and Unicode interpolation, enum/flagset constants and intrinsics, `any`
+      boxing/testing/casting, nullable wrapping, and nominal
+      Option/Result/Tuple/Span identities through verified canonical lowering.
+- [x] Direct `dictionary[key]` reads and writes are accepted by semantic
+      analysis and use the same checked native intrinsic as existing direct
+      array/string/text indexing.
+- [x] The Ownership and Cleanup Model classifies trivial, owned-value,
+      intrusive-reference-counted, borrowed, and generic types; records borrow
+      lifetimes; makes managed copy/move/replace/release/drop explicit; lowers
+      object copies and drops to retain/release while keeping component/value
+      glue distinct; and verifies exactly-once local cleanup across CFG exits.
+- [x] The Native Interop and ABI Model gives native declarations a canonical
+      C/C++ symbol, header, stable identity, failure boundary, receiver mode,
+      parameter/result ownership and marshalling contract. Native POD,
+      `opaque`, ref/view, callbacks, and generic template specializations now
+      lower through explicit `native-call`/`native-invoke` operations.
+- [x] Deterministic native thunk planning and the C-shaped
+      `wio_native_abi.h` SDK contract define concrete specialization adapters,
+      owner-provided intrusive handle operations, callback lifetimes/thread
+      policy, contained failures, and exactly-once foreign-resource release.
+- [x] Realm-qualified calls no longer probe namespace identifiers as method
+      receivers, and contextual `ref` arguments use the selected ABI parameter
+      instead of leaking semantic `<unknown>` placeholders into WIR.
+- [x] The Module, Export, and SDK Model gives each module a
+      checkout-independent identity and retains explicit Wio/standard/native
+      dependencies, stable exports, concrete generic SDK signatures,
+      reflection descriptors, lifecycle/state-transfer hooks, and deterministic
+      call-table slots through Typed and Lowered WIR.
+- [x] Module verifiers reject stable-ID drift, duplicate exports, call-table
+      mismatch, invalid targets, malformed reflection, and unpaired hot-reload
+      hooks. The versioned C-shaped `wio_module_contract.h` sidecar adds
+      stable-ID lookup without breaking the existing `WioModuleApi` v11 ABI.
+- [x] The Async, Coroutine, and Thread WIR Model distinguishes task await from
+      executor handoff, records known scheduler operations and affinity, and
+      lowers every suspension into a cancellation check plus canonical
+      suspend/resume state. Async returns become coroutine completion, while
+      conservative frame slots retain explicit ownership and cleanup metadata
+      for both the future C++ backend and VM.
+- [x] Typed and Lowered async verifiers reject payload drift, coroutine layout
+      misuse, missing cancellation checks, malformed state/resume edges, and
+      ordinary returns inside lowered async functions. Deterministic printers
+      expose state ids, affinity, frame size, and thread-switch behavior.
+- [x] The Application and System WIR Model freezes stack-resident system types,
+      application entry/lifecycle identities, deterministic stage order and
+      dependencies, fixed/main affinity, resolved run callables, and typed
+      read/write resource injection in the backend-neutral module contract.
+- [x] Effective attributes now retain canonical target/origin/argument/
+      retention data and ordered processor phases in WIR. Reflection records
+      expose fields, methods, visibility, mutability, dispatch slots, async
+      state, and shared attribute identities; Typed and Lowered verifiers and
+      printers cover the complete contract.
+- [x] The Language Surface Model gives globals stable declarations and
+      initializer functions, and lowers their reads and writes through explicit
+      global places. Range, array, and dictionary `for-in` share canonical
+      iterator operations with index/key bindings and structured loop cleanup.
+- [x] Result unwrap/propagation, duration literals, range containment, generic
+      constant/pack types, per-operand pack expansion, and resolved overloaded
+      operators now retain backend-neutral operations and identities through
+      verified Typed-to-Lowered WIR.
+- [x] Canonical Lowered WIR optimization performs overflow-safe constant
+      folding, constant-branch and forwarding-block simplification, unreachable
+      block removal, trivial block-argument propagation, and conservative pure
+      dead-value elimination without compacting stable IDs or source spans.
+- [x] Escape analysis records local/call/store/return/coroutine behavior and
+      stack/heap/coroutine-frame storage decisions while preserving intrusive
+      ownership. Fixed and freshly constructed arrays expose verified required,
+      statically eliminated, or proven-eliminated bounds-check contracts.
+- [x] The first independent Lowered WIR C++ backend is executable behind
+      `--cpp-backend wir`. It emits stable WIR-derived identities, canonical CFG
+      state machines, explicit place storage/projections, component/object
+      layouts, intrusive object handles, native symbol calls, source maps, and
+      executable entry adapters without reading AST nodes or silently falling
+      back to the legacy generator.
+- [x] New C++ backend failures use stable source-located `WCPPxxxx` diagnostics.
+      A host-compiler syntax gate and an end-to-end CLI gate compile and execute
+      the mutable-local control-flow slice; legacy AST generation remains the
+      default compatibility oracle during differential parity work.
+- [x] Enum and flagset types now carry exact underlying-type/case-bit metadata
+      from semantic analysis through both WIR levels. The independent C++
+      backend emits strong declarations, constants, bit operations, name/
+      validity reflection, and the complete enum/flagset intrinsic family
+      without re-reading AST expressions.
+- [x] The independent backend emits concrete `Option<T>`/`Result<T>` layouts,
+      construction, pattern tests/payloads, checked unwrap, and early error
+      propagation. Open generic templates remain canonical metadata and are not
+      emitted as invalid C++; unresolved generic calls fail with a stable
+      backend diagnostic.
+- [x] Cleanup-free value components loaded from places retain owned-value
+      identity, and Lowered WIR heap-storage validation no longer mistakes an
+      ordinary call/load returning a reference-counted value for an allocation.
+- [x] The independent C++ backend maps pinned array/dictionary/string/text
+      intrinsics to shared runtime helpers, including void mutators, numeric
+      parsing, Unicode operations, and canonical Option lookup construction.
+- [x] Range and array/dictionary iterators execute from Lowered WIR with
+      index/key/value projections, reference mutation, steps, break/continue,
+      empty-container handling, and overflow-safe numeric advancement. Invalid
+      iterator projections are rejected before C++ emission with `WCPP1210`.
+- [x] Borrowed loads preserve container identity; array place emission preserves
+      required bounds checks. Contextual integer literals match numeric operand
+      types, including unsuffixed comparisons against `Count()` results.
+      Focused generated-code tests compile, link, and execute the new surface,
+      including ordered dictionaries, emoji text, lookup misses, invalid steps,
+      and signed/unsigned range limits.
+- [x] Sprint 17.1 adds backend-neutral non-variadic generic function
+      materialization before canonical lowering. Concrete bodies retain their
+      generic origin, normalized specialization key, and arguments. Worklist
+      caching supports nested/self/mutual recursion, deduplication, deterministic
+      output, and idempotent reruns; invalid bindings and expansion limits have
+      stable diagnostics.
+- [x] Generic substitution carries through captured closures, ref parameters,
+      extensions, nested component types, and const fixed-array extents. Explicit
+      generic-constant/default-value operations preserve the template contract;
+      concrete ownership removes trivial cleanup and preserves managed claims.
+- [x] The dedicated `wio_wir_cpp_generics` gate compiles, links, and runs the new
+      surface, with structural identity/failure checks and a pinned function
+      reference probe. Regression fixes cover symbolic array bounds, equivalent
+      explicit/inferred const extents, generic capture declaration identity,
+      borrowed extension receivers, place moves, closure environment parameters,
+      and object inequality/field access in the independent C++ backend.
+- [x] Sprint 17.2 adds backend-neutral hierarchy/cast/dispatch tables and
+      declaring-subobject field projections, verified before C++ emission.
+      Object inheritance, interface dispatch, multi-level overrides, direct
+      super calls, checked fit/is, normalized identity and any hierarchy casts
+      execute without AST fallback.
+- [x] Constructor overload identities now survive semantic analysis and generic
+      validation snapshots into WIR. Actual constructor bodies, base default
+      initialization, generic object methods/lifecycle bodies and derived-to-base
+      destruction run through the new backend. Object borrows remain non-owning;
+      owning self returns and Ref/WeakRef retain the existing intrusive protocol.
+- [x] The new `wio_wir_cpp_objects` generated-code gate covers source execution,
+      component/object constructor bodies, generic/interface combinations,
+      inherited/multiple fields, self ref/view/value returns, scope/boxing/call
+      cleanup, failed casts, strong/weak lifetime and malformed dispatch/field
+      metadata. Only this sprint's new gate was run for the implementation.
+- [x] Sprint 17.3 executes canonical coroutine suspend/resume/complete through
+      C++20 coroutines and the shared task runtime, without blocking ordinary
+      awaits or falling back to AST code generation. The async entry adapter
+      pumps the bound main executor. Worker/blocking/IO/main transitions and
+      current-promise cancellation checkpoints preserve explicit WIR states.
+- [x] Async object/interface receiver retention is now a verified frame contract;
+      generated RAII guards keep self alive across suspension. The new
+      `wio_wir_cpp_async` gate covers generic/void/ready tasks, closures and worker
+      jobs, interface dispatch, owning results, cancellation/fault cleanup,
+      executor identity, cancelled queued main continuations, shutdown failure,
+      and invalid frame/state/receiver metadata. Legacy remains the default;
+      generalized native/SDK async adapters are Sprint 17.4 work.
+- [x] Sprint 17.4 emits concrete native generic/POD/free-extension adapters from
+      Lowered WIR, including template argument identity, const/ref overload
+      adaptation, native layout checks and checked exception/callback boundaries.
+- [x] The independent `WirModuleEmitter` emits canonical SDK wire-v2 call tables,
+      native registries, lifecycle/state hooks, stable export/type identities and
+      the existing v11 scalar/void compatibility subset. The opt-in native SDK
+      owns strings, Unicode text, POD and intrusive handles through producer ops;
+      synchronous ref tokens preserve aliasing and copy back mutations on failure.
+- [x] Canonical task ready/read/cancel/main-pump and final scheduler shutdown now
+      work across a real DLL/independent C++ host. Returned values pin their DLL.
+      Only the new `wio_wir_cpp_native` and `wio_wir_cpp_sdk` gates were run;
+      Windows/MinGW execution is verified, not full cross-platform cutover.
+      Rich application/reflection integration remains 17.5 and differential
+      project/std/platform parity remains 17.6. Legacy stays the default.
+- [x] Sprint 17.5 gives every application contract a distinct WIR construction
+      function. Declared and compiler-generated field initializers execute in
+      declaration order before `Start`; standalone and shared-library hosts use
+      the same main-thread-affine, nonblocking runtime with partial-start
+      rollback, invalid-delta checks, deterministic close, and module leases.
+- [x] The additive `WioGetNativeReflectionApi` sidecar exposes stable type,
+      constructor, field, method, enum/flagset case, effective attribute,
+      normalized argument, origin, retention, and processor metadata. The
+      native SDK can enumerate types/attributes, construct exported values,
+      access public fields, and invoke public synchronous methods through
+      checked wire-v2 thunks while keeping private/async members non-callable.
+- [x] Lowered-WIR emission now generates static `TypeReflection<T>` tables for
+      native generic consumers and control-safe quoted metadata. The focused
+      `wio_wir_cpp_application` and `wio_wir_cpp_reflection` shared-library host
+      gates cover lifecycle ordering/failure/thread rules, initializer values,
+      reflection access control, runtime attribute retention, stable identities,
+      and values/hosts that outlive the module view. Worker stage transfer and
+      behavioral body weaving fail explicitly; 17.6 owns parity and cutover.
+- [x] Sprint 17.6 adds executable legacy/WIR differential gates for standalone
+      sources and clean `wio-app`/`wio-native-app` projects. The gates compare
+      exit status, stdout, and stderr, record isolated build durations, and run
+      with every focused Lowered-WIR C++ backend gate on Windows and Ubuntu.
+- [x] Variadic packs, concrete generic-owner dispatch, constructor identity,
+      zero-argument component construction, deduced-vs-explicit native template
+      calls, UTF-8 native arguments, and `Entry(string[])` now survive through
+      the independent backend without AST fallback.
+- [x] Sprint 17.6 adds executable legacy/WIR differential gates for standalone
+      sources and clean `wio-app`/`wio-native-app` projects. The gates compare
+      exit status, stdout, and stderr, record isolated build durations, and run
+      with every focused Lowered-WIR C++ backend gate on Windows and Ubuntu.
+- [x] Variadic packs, concrete generic-owner dispatch, constructor identity,
+      zero-argument component construction, deduced-vs-explicit native template
+      calls, UTF-8 native arguments, and `Entry(string[])` now survive through
+      the independent backend without AST fallback.

@@ -15,7 +15,9 @@ realm SelfHostedFile {
             "  wio file run    [FILE] [compiler args...] [-- program args...]\n",
             "  wio file check  [FILE] [extra compiler args...]\n",
             "  wio file tokens [FILE] [extra compiler args...]\n",
-            "  wio file ast    [FILE] [extra compiler args...]\n\n",
+            "  wio file ast    [FILE] [extra compiler args...]\n",
+            "  wio file typed-wir   [FILE] [--ir-output FILE] [extra compiler args...]\n",
+            "  wio file lowered-wir [FILE] [--ir-output FILE] [extra compiler args...]\n\n",
             "When FILE is omitted, Wio looks for a conventional project entry file and\n",
             "then falls back to the repository playground entry when available.\n"
         ];
@@ -151,6 +153,12 @@ realm SelfHostedFile {
             finalArgs.Push("--show-ast");
             finalArgs.Push("--dry-run");
         }
+        else if (mode == "typed-wir") {
+            finalArgs.Push("--emit-typed-wir");
+        }
+        else if (mode == "lowered-wir") {
+            finalArgs.Push("--emit-lowered-wir");
+        }
 
         if (mode == "run" and not HasOutputOverride(compilerArgs)) {
             let outputRoot = RunOutputRoot(args[0usize], source);
@@ -194,10 +202,11 @@ realm SelfHostedFile {
             console::Print(Help());
             return std::Ok<i32>(0);
         }
-        if (mode == "run" or mode == "check" or mode == "tokens" or mode == "ast") {
+        if (mode == "run" or mode == "check" or mode == "tokens" or mode == "ast" or
+            mode == "typed-wir" or mode == "lowered-wir") {
             return ExecuteMode(mode, args);
         }
-        let suggestion = SelfHostedCli::Suggest(mode, ["run", "check", "tokens", "ast"]);
+        let suggestion = SelfHostedCli::Suggest(mode, ["run", "check", "tokens", "ast", "typed-wir", "lowered-wir"]);
         mut message = $"Unknown file subcommand: ${mode}";
         if (suggestion != "") {
             message.Append($"\nDid you mean 'wio file ${suggestion}'?");

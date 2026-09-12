@@ -16,35 +16,56 @@ namespace
             std::uint32_t value = 0;
             std::uint32_t minimum = 0;
 
-            if (first < 0x80u) { length = 1; value = first; }
-            else if ((first & 0xe0u) == 0xc0u) { length = 2; value = first & 0x1fu; minimum = 0x80u; }
-            else if ((first & 0xf0u) == 0xe0u) { length = 3; value = first & 0x0fu; minimum = 0x800u; }
-            else if ((first & 0xf8u) == 0xf0u) { length = 4; value = first & 0x07u; minimum = 0x10000u; }
-            else return false;
+            if (first < 0x80u)
+            {
+                length = 1;
+                value = first;
+            }
+            else if ((first & 0xe0u) == 0xc0u)
+            {
+                length = 2;
+                value = first & 0x1fu;
+                minimum = 0x80u;
+            }
+            else if ((first & 0xf0u) == 0xe0u)
+            {
+                length = 3;
+                value = first & 0x0fu;
+                minimum = 0x800u;
+            }
+            else if ((first & 0xf8u) == 0xf0u)
+            {
+                length = 4;
+                value = first & 0x07u;
+                minimum = 0x10000u;
+            }
+            else
+                return false;
 
-            if (offset + length > input.size()) return false;
+            if (offset + length > input.size())
+                return false;
             for (std::size_t index = 1; index < length; ++index)
             {
                 const auto next = static_cast<unsigned char>(input[offset + index]);
-                if ((next & 0xc0u) != 0x80u) return false;
+                if ((next & 0xc0u) != 0x80u)
+                    return false;
                 value = (value << 6u) | (next & 0x3fu);
             }
 
-            if (value < minimum || value > 0x10ffffu ||
-                (value >= 0xd800u && value <= 0xdfffu))
+            if (value < minimum || value > 0x10ffffu || (value >= 0xd800u && value <= 0xdfffu))
                 return false;
             offset += length;
         }
         return true;
     }
-}
+} // namespace
 
 namespace wio
 {
     using namespace common;
-    
+
     Lexer::Lexer(std::string source, std::string sourceName)
-        : source_(std::move(source)), position_(0), location_ { .file = std::move(sourceName), .line = 0, .column = 0 }
+        : source_(std::move(source)), position_(0), location_{.file = std::move(sourceName), .line = 0, .column = 0}
     {
     }
 
@@ -56,8 +77,7 @@ namespace wio
         flags_ = LexerFlags::createAllFalse();
         location_.line = 1;
         location_.column = 1;
-        
-        
+
         while (!isAtEnd())
         {
             if (!interpolationStack_.empty() && !interpolationStack_.back().inExpression)
@@ -66,7 +86,8 @@ namespace wio
                 continue;
             }
             bool res;
-            do {
+            do
+            {
                 res = (skipWhitespaces() || skipComments());
             } while (res);
 
@@ -135,15 +156,33 @@ namespace wio
             {
                 switch (c)
                 {
-                case '\n': out += "\\n"; break;
-                case '\t': out += "\\t"; break;
-                case '\r': out += "\\r"; break;
-                case '\v': out += "\\v"; break;
-                case '\f': out += "\\f"; break;
-                case '\\': out += "\\\\"; break;
-                case '\"': out += "\\\""; break;
-                case '\'': out += "\\\'"; break;
-                case '\0': out += "\\0"; break;
+                case '\n':
+                    out += "\\n";
+                    break;
+                case '\t':
+                    out += "\\t";
+                    break;
+                case '\r':
+                    out += "\\r";
+                    break;
+                case '\v':
+                    out += "\\v";
+                    break;
+                case '\f':
+                    out += "\\f";
+                    break;
+                case '\\':
+                    out += "\\\\";
+                    break;
+                case '\"':
+                    out += "\\\"";
+                    break;
+                case '\'':
+                    out += "\\\'";
+                    break;
+                case '\0':
+                    out += "\\0";
+                    break;
 
                 default:
                     if (std::isprint(c))
@@ -180,7 +219,6 @@ namespace wio
         return ss.str();
     }
 
-
     char Lexer::peek(int offset) const
     {
         return position_ + offset < source_.length() ? source_[position_ + offset] : static_cast<char>(0);
@@ -190,7 +228,7 @@ namespace wio
     {
         return static_cast<unsigned char>(peek(offset));
     }
-    
+
     bool Lexer::match(char c, int offset) const
     {
         return peek(offset) == c;
@@ -219,9 +257,10 @@ namespace wio
 
     void Lexer::advance(int count)
     {
-        while (count--) advance();
+        while (count--)
+            advance();
     }
-    
+
     bool Lexer::skipWhitespaces()
     {
         bool result = false;
@@ -235,7 +274,6 @@ namespace wio
 
         return result;
     }
-
 
     bool Lexer::skipComments()
     {
@@ -256,7 +294,7 @@ namespace wio
                 }
                 throw UnterminatedCommentError("Unterminated multi-line comment!", location_);
             }
-            
+
             while (!matchOneOf("\r\n") && !isAtEnd())
                 advance();
             return true;
@@ -268,7 +306,7 @@ namespace wio
                 advance();
             return true;
         }
-        
+
         return false;
     }
 
@@ -300,7 +338,6 @@ namespace wio
         return true;
     }
 
-
     Token Lexer::readIdentifier()
     {
         Location start = location_;
@@ -310,17 +347,13 @@ namespace wio
             result += advance();
 
         TokenType tType = TokenType::identifier;
-        
+
         if (auto it = keywordMap.find(result); it != keywordMap.end())
             tType = it->second;
-        
-        return Token{
-            .type = tType,
-            .value = std::move(result),
-            .loc = start
-        };
+
+        return Token{.type = tType, .value = std::move(result), .loc = start};
     }
-    
+
     Token Lexer::readNumber()
     {
         Location start = location_;
@@ -367,7 +400,7 @@ namespace wio
 
         if (peek() == '.')
         {
-            if (peek(1) != '.') 
+            if (peek(1) != '.')
             {
                 isFloat = true;
                 result += advance();
@@ -395,7 +428,7 @@ namespace wio
         {
             suffix += advance();
         }
-        
+
         result += suffix;
 
         TokenType type = isFloat ? TokenType::floatLiteral : TokenType::integerLiteral;
@@ -410,9 +443,8 @@ namespace wio
             {
                 type = TokenType::floatLiteral;
             }
-            else if (suffix == "i8" || suffix == "u8" || suffix == "i16" || suffix == "u16" || 
-                     suffix == "i32" || suffix == "u32" || suffix == "i64" || suffix == "u64" || 
-                     suffix == "isize" || suffix == "usize" ||
+            else if (suffix == "i8" || suffix == "u8" || suffix == "i16" || suffix == "u16" || suffix == "i32" ||
+                     suffix == "u32" || suffix == "i64" || suffix == "u64" || suffix == "isize" || suffix == "usize" ||
                      suffix == "isz" || suffix == "usz" || suffix == "i" || suffix == "u")
             {
                 if (isFloat)
@@ -427,11 +459,7 @@ namespace wio
             }
         }
 
-        return {
-            .type = type,
-            .value = result,
-            .loc = start
-        };
+        return {.type = type, .value = result, .loc = start};
     }
 
     Token Lexer::readChar()
@@ -454,18 +482,13 @@ namespace wio
         if (isAtEnd() || matchOneOf("\r\n"))
             throw UnterminatedCharError("Unterminated character literal", location_);
 
-
-        Token token_result{
-            .type = TokenType::charLiteral,
-            .value = result,
-            .loc = start
-        };
+        Token token_result{.type = TokenType::charLiteral, .value = result, .loc = start};
 
         if (match('\''))
             advance();
         else
             throw InvalidCharError("Invalid character literal!", location_);
-        
+
         return token_result;
     }
 
@@ -484,24 +507,16 @@ namespace wio
             op += advance();
         }
 
-        return {
-            .type = operatorMap.at(op),
-            .value = op,
-            .loc = start
-        };
+        return {.type = operatorMap.at(op), .value = op, .loc = start};
     }
 
     Token Lexer::readSymbol()
     {
         Location start = location_;
 
-        Token tok {
-            .type = symbolMap.at(peek()),
-            .value = std::string(1, peek()),
-            .loc = start
-        };
+        Token tok{.type = symbolMap.at(peek()), .value = std::string(1, peek()), .loc = start};
 
-        if(multiMatch("$\""))
+        if (multiMatch("$\""))
         {
             flags_.set_nextStringMultiLine(true);
             advance();
@@ -523,7 +538,7 @@ namespace wio
                     frame.inExpression = false;
             }
         }
-        
+
         advance();
         return tok;
     }
@@ -533,14 +548,9 @@ namespace wio
         Location start = location_;
         std::string buffer;
 
-        const bool isContinuation =
-            !interpolationStack_.empty() && !interpolationStack_.back().inExpression;
-        bool isMultiline = isContinuation
-            ? interpolationStack_.back().multiline
-            : false;
-        bool isUnicode = isContinuation
-            ? interpolationStack_.back().unicode
-            : false;
+        const bool isContinuation = !interpolationStack_.empty() && !interpolationStack_.back().inExpression;
+        bool isMultiline = isContinuation ? interpolationStack_.back().multiline : false;
+        bool isUnicode = isContinuation ? interpolationStack_.back().unicode : false;
 
         if (!isContinuation)
         {
@@ -562,19 +572,16 @@ namespace wio
             {
                 throw UnexpectedCharError("Invalid string start", location_);
             }
-
         }
 
         const auto emitStringSegment = [&](std::string value, const Location& segmentLocation)
         {
             if (isUnicode && !isValidUtf8(value))
                 throw InvalidStringError("Unicode text literal contains invalid UTF-8", segmentLocation);
-            tokens_.push_back(Token{
-                .type = TokenType::stringLiteral,
-                .value = std::move(value),
-                .loc = segmentLocation,
-                .isUnicodeString = isUnicode
-            });
+            tokens_.push_back(Token{.type = TokenType::stringLiteral,
+                                    .value = std::move(value),
+                                    .loc = segmentLocation,
+                                    .isUnicodeString = isUnicode});
         };
 
         while (true)
@@ -599,19 +606,11 @@ namespace wio
                 buffer.clear();
 
                 // $
-                tokens_.emplace_back(
-                    TokenType::dollar,
-                    "$",
-                    location_
-                );
+                tokens_.emplace_back(TokenType::dollar, "$", location_);
                 advance();
 
                 // {
-                tokens_.emplace_back(
-                    TokenType::leftBrace,
-                    "{",
-                    location_
-                );
+                tokens_.emplace_back(TokenType::leftBrace, "{", location_);
                 advance();
 
                 if (isContinuation)
@@ -623,11 +622,7 @@ namespace wio
                 else
                 {
                     interpolationStack_.push_back(InterpolationFrame{
-                        .multiline = isMultiline,
-                        .unicode = isUnicode,
-                        .inExpression = true,
-                        .braceDepth = 1
-                    });
+                        .multiline = isMultiline, .unicode = isUnicode, .inExpression = true, .braceDepth = 1});
                 }
 
                 return;
@@ -662,17 +657,12 @@ namespace wio
 
     bool Lexer::isOperator(char c)
     {
-        return std::ranges::any_of(
-            std::views::keys(operatorMap).begin(),
-            std::views::keys(operatorMap).end(),
-            [c](const auto& op)
-            {
-                return !op.empty() && op[0] == c;
-            });
+        return std::ranges::any_of(std::views::keys(operatorMap).begin(), std::views::keys(operatorMap).end(),
+                                   [c](const auto& op) { return !op.empty() && op[0] == c; });
     }
-    
+
     bool Lexer::isSymbol(char c)
     {
         return symbolMap.contains(c);
     }
-}
+} // namespace wio

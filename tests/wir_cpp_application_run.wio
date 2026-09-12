@@ -1,0 +1,92 @@
+realm std {
+    realm async {
+        [native, CppName(wio::runtime::BindAsyncMainExecutor)]
+        fn BindMain();
+
+        [native, CppName(wio::runtime::DrainAsyncMainExecutor)]
+        fn DrainMain() -> u64;
+    }
+}
+
+mut trace: string = "";
+mut ticks: i32 = 0;
+mut failStart: bool = false;
+mut initial: i32 = 0;
+
+[export]
+fn Trace() -> string {
+    return trace;
+}
+
+[export]
+fn Ticks() -> i32 {
+    return ticks;
+}
+
+[export]
+fn FailStart(value: bool) {
+    failStart = value;
+}
+
+[export]
+fn Initial() -> i32 {
+    return initial;
+}
+
+system Input {
+    fn Start() {
+        trace += "input>";
+    }
+
+    fn Update(delta: f64) {}
+
+    fn Close() {
+        trace += "input.close>";
+    }
+}
+
+system Simulation {
+    fn Start() {
+        if (failStart) {
+            let values: i32[] = [1];
+            ticks = values[4];
+        }
+        trace += "sim>";
+    }
+
+    fn Update(delta: f64) {}
+
+    fn Close() {
+        trace += "sim.close>";
+    }
+}
+
+application Demo {
+    input: Input;
+    simulation: Simulation;
+    seed: i32 = 41;
+
+    fn Start() {
+        trace = "app>";
+        ticks = 0;
+        initial = self.seed;
+    }
+
+    [Fixed(1000)]
+    fn Physics(delta: f64) {
+        ticks += 1;
+    }
+
+    [After(Physics), Main]
+    fn Render(delta: f64) {}
+
+    fn Update(delta: f64) {
+        if (ticks >= 3) {
+            self.Exit(0);
+        }
+    }
+
+    fn Close() {
+        trace += "app.close>";
+    }
+}

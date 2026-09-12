@@ -1,0 +1,443 @@
+# Wio Intermediate Representation Pipeline
+
+Wio is moving from a direct analyzed-AST-to-C++ path to a backend-neutral
+compiler pipeline:
+
+```text
+source -> AST -> semantic analysis -> Typed WIR -> Lowered WIR
+                                                |-> C++ backend
+                                                `-> bytecode backend
+```
+
+The WIR path is experimental and opt-in. Ordinary builds still use the proven
+AST-to-C++ generator while WIR coverage grows. This keeps current native output
+stable and lets the new representation acquire executable parity in measured
+slices.
+
+The first independent C++ backend slice is now executable with
+`--cpp-backend wir`; it consumes verified Lowered WIR and never falls back to
+AST generation. Its supported surface, stable diagnostics, parity gates, and
+cutover rules are documented in
+[`WIO_CPP_BACKEND.md`](WIO_CPP_BACKEND.md).
+
+## Typed WIR
+
+Typed WIR is the last language-shaped representation. Every value and
+instruction has a stable strong ID, an interned type, and source provenance.
+It retains operations such as typed `select` that are useful to optimization
+and diagnostics before control flow is made backend-canonical.
+
+Before canonical lowering, the generic materialization pass creates concrete
+non-variadic function and closure bodies from pinned calls/exports. It substitutes
+type/const arguments, resolves symbolic array extents and `generic-const` values,
+and adapts ownership operations to the concrete types. The specialized Typed
+module is verified again before lowering. Original generic declarations remain
+metadata; concrete functions carry their origin and deduplicated specialization
+identity. See the Sprint 17.1 contract in `WIO_CPP_BACKEND.md`.
+
+Sprint 17.2 adds canonical hierarchy lowering after generic materialization:
+transitive cast identities, contract-local dispatch slots, selected lifecycle
+bodies and declaring-subobject field indices. The C++ backend consumes these
+tables directly for object/interface execution; malformed tables are rejected
+by the Lowered verifier. See `WIO_CPP_BACKEND.md` for the executable parity gate.
+
+Named types retain their semantic category instead of collapsing to a backend
+spelling: `component`, `object`, `interface`, `enum`, and `flagset` are distinct
+nominal kinds. Components use value semantics while object/interface types are
+identity-bearing handles. Native POD components additionally carry the
+`native-pod` representation marker. Nominal records also retain ordered field
+layouts, field types, mutability, visibility, base types, and constructor/
+destructor capabilities. Object and interface records additionally retain
+method names, parameter/return signatures, abstractness, implementation IDs,
+and deterministic dispatch slots. These properties are copied unchanged into
+Lowered WIR so each backend receives the same ownership, layout, and dispatch
+contract.
+
+The initial builder supports top-level functions plus component/object/
+interface methods, explicit receiver parameters, parameters, primitive and
+reference-family types, contextually typed integer and floating-point constants,
+Unicode `text`, `string`, `char`, and nullable `null` constants, direct calls, unary/binary expressions,
+direct/virtual/interface method calls, object/interface `fit` and `is`, identity
+equality, explicit clamping numeric `fit` conversions, safe implicit numeric
+widening, pure conditional values, local declarations and default initialization,
+place-based local/field/index assignment, compound assignment, `ref`/`view`
+borrows, explicit `deref`, contextually typed and inferred array literals,
+dictionary literals and keyed reads/writes, array/string/text index reads,
+string/text interpolation, enum/flagset values, `any` boxing/testing/casting,
+nullable wrapping, backend-neutral container/string/text intrinsics, `if`/`else` control flow, returns,
+`while` loops, C-style `for` loops, `break`, `continue`, short-circuit `and`/`or`,
+and expression statements. Logical expressions use explicit right-hand, short,
+and merge blocks, so calls in the right operand are only evaluated on the
+required edge. Immutable temporary values crossing branches, logical expressions,
+and loop iterations use deterministic SSA block parameters. Addressable source
+variables instead keep a stable explicit place across those edges. Unsupported
+language constructs fail with stable `WIR2xxx` diagnostics; they never silently
+fall back or guess semantics.
+
+Conditional expressions retain `select` only when both alternatives are free
+of side effects. Calls and other effectful alternatives are placed in explicit
+`conditional.true`, `conditional.false`, and `conditional.merge` regions so an
+unselected alternative cannot execute.
+
+Value-producing primitive `match` expressions lower to ordered test and body
+blocks. Literal alternatives, multi-value alternatives, inclusive/exclusive
+ranges, guarded cases, and the final Wio `assumed` fallback are supported. The
+matched subject is evaluated once. Statement-form matches use the same control
+flow, merge mutated locals through block parameters, and preserve normal
+fallthrough when no `assumed` case is present. Option/Result, array, and
+payload-carrying patterns use explicit backend-neutral data-model operations:
+`variant-test`, `variant-payload`, `array-length`, and `array-element`. Pattern
+bindings are projected only on matching control-flow paths and dominate both
+their guards and bodies. This keeps C++ and future VM backends from recreating
+Option/Result or array pattern semantics independently.
+
+Ordinary array expressions use `array-create` and `array-get`. Array literal
+elements are converted against the semantic element type before construction,
+and inferred literal arrays retain their fixed extent in the WIR type table.
+
+## Place and Memory Model
+
+Addressability is explicit and backend-neutral. `local-place` creates storage;
+`place-init` performs its declaration-time initialization; `load` reads a value;
+and `store` mutates only a mutable reference. `field-place` and `array-place`
+project stable sub-places without copying their aggregate, while `borrow`
+weakens a mutable `ref T` to a read-only `view T`. The verifier rejects stores
+through views, reference-type mismatches, non-integer array indices, and any
+projection that attempts to strengthen mutability.
+
+Wio's source ergonomics remain unchanged: references to primitives, components,
+and arrays auto-read in value contexts, while object/interface references retain
+identity unless explicitly dereferenced. Typed WIR records every implicit read,
+so C++ and bytecode backends do not independently reconstruct that rule. Local,
+field, and indexed mutation—including compound assignment—now use the same place
+operations and remain valid across structured control-flow edges.
+
+## Construction and Lifecycle
+
+Construction distinguishes stack/value components from identity-bearing object
+allocations. `construct-component` creates an independent component value;
+`construct-object` creates an owning object handle. Each instruction records the
+selected constructor's stable name and typed argument signature, which both
+verifiers check before a backend consumes it.
+
+Every WIR type publishes an ownership model and cleanup kind. Objects,
+interfaces, function values, and async tasks are `reference-counted` with
+`release-reference`; components and managed values such as string, text, any,
+arrays, and dictionaries are `owned-value` with `destroy-value`; `ref` and
+`view` values are borrowed and never own their referent. Borrowed parameters
+and results also carry caller or lexical lifetime metadata.
+
+A managed `load` is a lexical borrow. When that value crosses an owning
+boundary, `copy` creates a new ownership claim. `move` transfers a local claim
+without retaining or copying it, and `replace` drops the previous destination
+before consuming its replacement. Discarded owned temporaries use `release`;
+`drop` closes an initialized local place. Lowered WIR specializes these
+operations into intrusive `retain`/`release`/`release-place` for shared objects
+and `copy-value`/`drop-value`/`drop-place` glue for owned values.
+
+The builder emits cleanup in reverse lexical order on ordinary scope exit,
+`return`, `break`, and `continue` edges. Direct local returns use `move`, while
+other returns create an independent owned claim before local cleanup. The
+Typed WIR verifier propagates live cleanup-bearing places over the CFG, rejects
+double cleanup, replacement of dead storage, inconsistent merge states, and
+any function exit that leaves a managed local live.
+
+Field projections are checked against the nominal layout rather than trusted as
+free-form strings. Missing fields, type mismatches, writes through read-only
+fields, incorrect construction kind, malformed constructor signatures,
+ownership/cleanup mismatches, and cleanup operations on trivial values are
+rejected in both Typed and Lowered WIR.
+
+## Object and Interface Model
+
+Every method is represented as an ordinary WIR function with a synthetic,
+leading `self` reference. Consequently `self`, `deref self`, mutable field
+access, and `ref`/`view` self returns follow the same place and borrow rules as
+other expressions; a backend does not need a special AST-only interpretation
+of the receiver.
+
+Nominal method tables are deterministic. An override keeps the inherited slot,
+while a new signature receives the next slot. Interface declarations retain
+abstract entries and object implementations replace matching entries without
+changing their identity. `method-call`, `virtual-call`, and `interface-call`
+remain distinct operations and carry the static owner, selector, slot,
+implementation function, receiver, and typed argument signature.
+
+Object conversion is explicit in the IR:
+
+- `upcast` is a statically proven object/interface base conversion;
+- `checked-cast` is the runtime-checked object/interface form of `fit`;
+- `type-test` is the runtime predicate behind `is`;
+- `identity-equal` compares object/interface identity rather than payload.
+
+Both verifiers reject missing method slots, selector/function mismatches,
+invalid receiver ancestry, malformed call signatures, wrong dispatch kinds,
+and invalid cast/test targets. This freezes one model for the C++ and bytecode
+backends instead of allowing each backend to rediscover object semantics.
+
+## Callable Model
+
+Callable identity is resolved before a backend sees the program. A direct
+`call` carries the exact declaration id selected by overload resolution, its
+concrete argument signature, ordered generic arguments, and a deterministic
+specialization key. Backends therefore never repeat overload selection or
+invent independent generic-instantiation names.
+
+Function values and closures are explicit:
+
+- `function-ref` materializes one exact named function as a typed value;
+- `closure-create` binds a synthetic closure-body function to an ordered
+  environment layout;
+- `indirect-call` invokes a function value using its verified visible
+  signature;
+- `extension-call` records the selected extension implementation, receiver
+  target, receiver/argument signature, and specialization identity.
+
+Closure layouts distinguish copied value captures, explicit reference
+captures, and retained object `self` captures. Hidden environment parameters
+are separate from the visible callable signature. Captured values are exposed
+to the closure body through stable environment places, while retained `self`
+keeps object identity alive for an escaping closure. Both IR levels verify
+capture order/kind/type, indirect-call arity and result shape, extension
+receiver compatibility, generic metadata, and exact callable targets.
+
+## Value and Container Model
+
+Container construction and access no longer depend on C++ spellings.
+`dictionary-create` preserves ordered versus unordered identity plus alternating
+concrete key/value types. `dictionary-get` and `dictionary-place` distinguish
+keyed reads from mutable storage projection, just as `array-get` and
+`array-place` do for positional containers. Wio source now accepts direct
+`dictionary[key]` reads and writes; the production native path and WIR path
+share the same missing-key failure rule.
+
+`intrinsic-call` freezes the semantic intrinsic family (`array`, `dictionary`,
+`string`, `text`, `enum`, or `flagset`), source selector, receiver target, and
+complete concrete operand signature. Backends implement that contract instead
+of rerunning member lookup. String/text interpolation uses `interpolate` with
+ordered literal segments and typed value holes, so nested calls and Unicode
+text remain structured until backend emission.
+
+Enum and flagset members use `enum-constant`; enum/flagset operations remain
+typed intrinsics. Their named WIR types also retain the exact integer
+underlying type and canonical unsigned bit pattern of every case, including
+negative signed members. A backend therefore never re-evaluates enum source
+expressions or guesses flag widths. Dynamic values use distinct `any-box`, `any-type-test`, and
+`any-checked-cast` operations, while implicit non-null-to-nullable conversion is
+`nullable-wrap`. Null remains a valid `any` payload. `Option<T>` and `Result<T>`
+retain nominal value-model markers and continue to use verified
+`variant-test`/`variant-payload` operations. Standard-library `Tuple` and `Span`
+types likewise retain `tuple` and `span` markers even though their ordinary
+construction and methods remain nominal component/object operations.
+
+Typed and Lowered verifiers check dictionary key/value pairing and places,
+interpolation segment/hole shape, intrinsic signatures, enum/flagset targets,
+dynamic source identities, nullable payload types, and nominal value-model
+placement. Canonical lowering copies every field unchanged.
+
+## Native Interop and ABI
+
+Native declarations are no longer indistinguishable from abstract/external
+functions. A native declaration carries one canonical `NativeBinding` with:
+
+- the C/C++ symbol and source header;
+- a deterministic signature-based stable key and thunk symbol;
+- source language and calling convention;
+- the mandatory exception-to-Wio-failure boundary;
+- direct, adapter, or template-specialization thunk strategy;
+- const/mutable free-extension receiver behavior;
+- one ABI record per parameter and result.
+
+Each ABI value fixes its Wio type, value/borrow/borrow-mut/consume/owned-return
+mode, nullability, and scalar/string/text/POD/opaque/object/callback/runtime
+marshalling class. Callback records additionally fix call-scoped versus retained
+lifetime and caller-thread versus any-thread entry. Current source defaults are
+call-scoped and caller-thread; future attributes may select broader contracts
+without changing the IR shape.
+
+Native POD components retain their exact C++ name, header, standard-layout, and
+trivially-copyable requirements in the type table. `opaque` has its own WIR
+type and crosses the boundary as pointer identity, never as an object handle.
+`ref T` and `view T` become mutable and immutable borrowed ABI parameters.
+
+A source call to a native-bound declaration is `native-call`, not `call` or an
+ordinary `extension-call`. Canonical lowering turns it into `native-invoke`
+without losing the concrete signature or generic specialization key. The
+`NativeAbiPlanner` then creates a deterministic thunk inventory. Ordinary
+native declarations receive one entry; C++ templates receive one entry per
+concrete specialization actually referenced by Lowered WIR. This is the common
+input for the new C++ backend and the future VM native registry.
+
+The public `sdk/include/wio_native_abi.h` defines the matching C-shaped ABI:
+tagged values, slices, failure records, callbacks, function descriptors, and
+owner-supplied handle operations. An object or runtime handle is never deleted
+by foreign code. Aliases call the owner's `retain`, and each transferred claim
+calls the owner's `release` exactly once. C++ exceptions cannot unwind through
+a thunk; they return a `WioNativeAbiStatus` plus `WioNativeAbiFailure`.
+
+Both verifiers reject native/ordinary opcode mismatches, incomplete symbols or
+thunk identities, malformed POD bindings, invalid ref mutability, callback or
+opaque marshalling on the wrong type, generic bindings without specialization
+thunks, and inconsistent adapter flags.
+
+## Module, Export, and SDK Model
+
+Module boundaries are explicit in WIR. `ModuleContract` records a
+checkout-independent logical identity, Wio/standard/native dependencies,
+stable function/type exports, concrete generic specializations, reflection
+descriptors, lifecycle and state-transfer hooks, and deterministic SDK
+call-table order. Canonical lowering preserves the complete contract exactly.
+
+The public `wio_module_contract.h` mirrors this as a fixed-width SDK sidecar.
+It coexists with `WioModuleApi` v11 during backend migration and lets future
+C++ and VM loaders resolve an export by stable ID and slot rather than by
+guessing a generated C++ symbol. See
+[`WIO_MODULE_SDK_MODEL.md`](WIO_MODULE_SDK_MODEL.md) for the frozen rules.
+
+## Application, System, Attribute, and Reflection Metadata
+
+The module contract now carries the language's application model without
+requiring a backend to inspect parser-generated components or extensions.
+Application entry/lifecycle functions, stack-resident system types, ordered
+stages, dependencies, fixed frequency, executor affinity, resolved stage runs,
+and read/write resource borrows all use the same stable WIR type and function
+identities as executable code.
+
+Effective attributes retain canonical names, semantic origin, target identity,
+normalized arguments, retention, and ordered compile-time processor phases.
+Reflection descriptors expose type attributes plus ordered field/method layout,
+visibility, mutability, dispatch slots, async state, and member attribute IDs.
+Typed-to-Lowered conversion preserves this complete contract exactly. See
+[`WIO_APPLICATION_ATTRIBUTE_WIR.md`](WIO_APPLICATION_ATTRIBUTE_WIR.md).
+
+## Language Surface Freeze
+
+The remaining executable language surface now has backend-neutral identities
+instead of depending on AST-shaped C++ emission:
+
+- module globals retain stable IDs, declared type, mutability, constant state,
+  and a zero-argument initializer function; reads and writes use explicit
+  `global-place`, load, store, and replace operations
+- range, array, and dictionary `for-in` loops use the shared
+  `iterator-create`, `iterator-has-next`, `iterator-value`, and
+  `iterator-advance` contract, including index/key bindings, step values, and
+  structured `break`/`continue` cleanup
+- Result unwrap and propagation are distinct operations; propagation owns an
+  explicit error edge and enclosing Result type instead of being reconstructed
+  by a backend
+- duration suffixes lower to canonical seconds, while range containment is an
+  explicit three-operand comparison with inclusive/exclusive metadata
+- constant generic parameters, constant values, parameter/value/type packs,
+  and pack storage have stable type kinds; each call operand records whether it
+  is a pack expansion
+- resolved unary, binary, assignment, index, and `fit` overloads use their
+  already-selected callable and dispatch kind, so backends never repeat
+  overload resolution
+
+Typed and Lowered verifiers check the iterator, Result, global, pack-expansion,
+and overloaded-call invariants. Their deterministic printers expose the same
+metadata for parity tests and future backend diagnostics.
+
+## Lowered WIR
+
+Lowered WIR is the shared backend contract. Its first canonicalization pass
+turns a typed conditional value into explicit blocks, conditional jumps, jumps
+with block arguments, and a merge-block parameter. The verifier checks target
+existence, argument arity and types, terminators, value definitions, and use
+sites before any backend consumes the module.
+
+The canonical optimizer then folds safe constants, resolves constant branches,
+threads forwarding jumps, removes unreachable blocks, propagates identical
+trivial block arguments, and eliminates unused pure values. It deliberately
+keeps calls, allocation, cleanup, checked indexing, and other potentially
+observable operations. Stable IDs and source spans are never compacted.
+
+Escape analysis annotates allocation-producing instructions with stack, heap,
+or coroutine-frame storage plus a conservative escape class. This metadata does
+not alter value ownership: intrusive object handles still retain and release in
+exactly the same places. Array access carries an explicit bounds-check mode;
+only constant accesses proven inside a fixed or freshly constructed array may
+remove the runtime check. See
+[`WIO_CANONICAL_OPTIMIZATION.md`](WIO_CANONICAL_OPTIMIZATION.md).
+
+Async functions are also canonicalized here. Typed `await` and executor
+handoffs become explicit cancellation-check, suspend, resume, and completion
+operations backed by a stable coroutine frame/state layout. Async object
+methods additionally pin a verified retained receiver. Sprint 17.3 executes
+these states in the opt-in C++ backend with non-blocking awaits, cancellation
+checkpoints, executor handoffs and frame cleanup. See
+[`WIO_ASYNC_WIR.md`](WIO_ASYNC_WIR.md).
+
+The deterministic pass order is currently:
+
+1. `verify-typed-wir`
+2. `materialize-generic-functions`
+3. `verify-specialized-wir`
+4. `lower-canonical-control-flow`
+5. `lower-object-hierarchy`
+6. `lower-async-state-machines` for async modules
+7. `fold-canonical-constants`
+8. `simplify-control-flow`
+9. `propagate-trivial-values`
+10. `eliminate-dead-values`
+11. `classify-storage-and-escapes`
+12. `eliminate-proven-bounds-checks`
+13. `verify-lowered-wir`
+
+Non-async modules omit step 6. `LoweringResult::optimizationStatistics()`
+reports every transformation and storage decision without making printer output
+or backend behavior depend on diagnostics. Future lowering stages will own
+exceptional cleanup edges and other semantics that must be identical for C++
+and bytecode.
+
+## Inspecting WIR
+
+For a source file:
+
+```powershell
+wio file typed-wir .\main.wio
+wio file lowered-wir .\main.wio
+wio file lowered-wir .\main.wio --ir-output .\artifacts\main.lowered.wir
+```
+
+The raw compiler accepts the equivalent `--emit-typed-wir` and
+`--emit-lowered-wir` flags. Without `--ir-output`, outputs are named
+`<source>.typed.wir` or `<source>.lowered.wir`; `--intermediate-dir` moves the
+default output into that directory.
+
+For a manifest project:
+
+```powershell
+wio project build --emit-typed-wir
+wio project build --emit-lowered-wir --ir-output .\.wio-build\module.lowered.wir
+```
+
+To compile through the canonical C++ backend instead of only inspecting WIR:
+
+```powershell
+wio file run .\main.wio --cpp-backend wir
+wio project build --cpp-backend wir
+```
+
+During the early coverage phase, a minimal project can explicitly pass
+`--no-builtin` to inspect only its own program. This is not an implicit compiler
+behavior: projects that depend on standard-library bodies should keep builtin
+merging enabled and will receive precise unsupported-WIR diagnostics until the
+needed constructs land.
+
+Only one emission mode may be active. WIR emission cannot be combined with
+`--emit-cpp`, `--dry-run`, or `--run`, and `--ir-output` requires a WIR mode.
+
+## Backend Cutover Rule
+
+The C++ backend will move from the AST to Lowered WIR only after the following
+are true for a language slice:
+
+- semantic information is preserved without recovery guesses
+- Typed and Lowered WIR verifiers cover its invariants
+- WIR printer output is deterministic
+- existing native behavior has parity tests
+- failures retain source locations and stable diagnostic codes
+
+Bytecode work starts from the same verified Lowered WIR contract. It does not
+introduce a second language semantic implementation.

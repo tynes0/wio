@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <functional>
 #include <unordered_set>
+#include <utility>
 
 namespace wio
 {
@@ -22,13 +23,9 @@ namespace wio
     {
         bool canStartAttributeTypeArgument(const Token& token)
         {
-            return token.isIdentifier() ||
-                   token.isType() ||
-                   token.type == TokenType::integerLiteral ||
-                   token.type == TokenType::stringLiteral ||
-                   token.type == TokenType::kwRef ||
-                   token.type == TokenType::kwView ||
-                   token.type == TokenType::kwFn ||
+            return token.isIdentifier() || token.isType() || token.type == TokenType::integerLiteral ||
+                   token.type == TokenType::stringLiteral || token.type == TokenType::kwRef ||
+                   token.type == TokenType::kwView || token.type == TokenType::kwFn ||
                    token.type == TokenType::leftBracket;
         }
 
@@ -37,13 +34,10 @@ namespace wio
             return token.type == TokenType::integerLiteral || token.type == TokenType::floatLiteral;
         }
 
-        NodePtr<Identifier> makeSyntheticIdentifier(std::string value, const Location location)
+        NodePtr<Identifier> makeSyntheticIdentifier(std::string value, const Location& location)
         {
-            return makeNodePtr<Identifier>(Token{
-                .type = TokenType::identifier,
-                .value = std::move(value),
-                .loc = location
-            });
+            return makeNodePtr<Identifier>(
+                Token{.type = TokenType::identifier, .value = std::move(value), .loc = location});
         }
 
         std::optional<Attribute> resolveAttributeName(std::string_view name)
@@ -51,67 +45,91 @@ namespace wio
             if (auto builtin = resolveBuiltinAttribute(name); builtin.has_value())
                 return builtin;
 
-            if (name == "readonly") return Attribute::ReadOnly;
-            if (name == "default") return Attribute::Default;
-            if (name == "no_default_ctor") return Attribute::NoDefaultCtor;
-            if (name == "generate_ctors") return Attribute::GenerateCtors;
-            if (name == "from" || name == "conversion::from") return Attribute::From;
-            if (name == "trust") return Attribute::Trust;
-            if (name == "final") return Attribute::Final;
-            if (name == "type" || name == "abi::type") return Attribute::Type;
-            if (name == "native") return Attribute::Native;
-            if (name == "cpp::header") return Attribute::CppHeader;
-            if (name == "cpp::name") return Attribute::CppName;
-            if (name == "instantiate") return Attribute::Instantiate;
-            if (name == "specialize") return Attribute::Specialize;
-            if (name == "apply") return Attribute::Apply;
-            if (name == "export" || name == "export::c") return Attribute::Export;
-            if (name == "command") return Attribute::Command;
-            if (name == "event") return Attribute::Event;
-            if (name == "module::api_version") return Attribute::ModuleApiVersion;
-            if (name == "module::load") return Attribute::ModuleLoad;
-            if (name == "module::update") return Attribute::ModuleUpdate;
-            if (name == "module::unload") return Attribute::ModuleUnload;
-            if (name == "module::save_state") return Attribute::ModuleSaveState;
-            if (name == "module::restore_state") return Attribute::ModuleRestoreState;
-            if (name == "application::start") return Attribute::ApplicationStart;
-            if (name == "application::update") return Attribute::ApplicationUpdate;
-            if (name == "application::close") return Attribute::ApplicationClose;
-            if (name == "application::fixed") return Attribute::Fixed;
-            if (name == "application::after") return Attribute::After;
-            if (name == "application::main") return Attribute::Main;
-            if (name == "application::worker") return Attribute::Worker;
+            if (name == "readonly")
+                return Attribute::ReadOnly;
+            if (name == "default")
+                return Attribute::Default;
+            if (name == "no_default_ctor")
+                return Attribute::NoDefaultCtor;
+            if (name == "generate_ctors")
+                return Attribute::GenerateCtors;
+            if (name == "from" || name == "conversion::from")
+                return Attribute::From;
+            if (name == "trust")
+                return Attribute::Trust;
+            if (name == "final")
+                return Attribute::Final;
+            if (name == "type" || name == "abi::type")
+                return Attribute::Type;
+            if (name == "native")
+                return Attribute::Native;
+            if (name == "cpp::header")
+                return Attribute::CppHeader;
+            if (name == "cpp::name")
+                return Attribute::CppName;
+            if (name == "instantiate")
+                return Attribute::Instantiate;
+            if (name == "specialize")
+                return Attribute::Specialize;
+            if (name == "apply")
+                return Attribute::Apply;
+            if (name == "export" || name == "export::c")
+                return Attribute::Export;
+            if (name == "command")
+                return Attribute::Command;
+            if (name == "event")
+                return Attribute::Event;
+            if (name == "module::api_version")
+                return Attribute::ModuleApiVersion;
+            if (name == "module::load")
+                return Attribute::ModuleLoad;
+            if (name == "module::update")
+                return Attribute::ModuleUpdate;
+            if (name == "module::unload")
+                return Attribute::ModuleUnload;
+            if (name == "module::save_state")
+                return Attribute::ModuleSaveState;
+            if (name == "module::restore_state")
+                return Attribute::ModuleRestoreState;
+            if (name == "application::start")
+                return Attribute::ApplicationStart;
+            if (name == "application::update")
+                return Attribute::ApplicationUpdate;
+            if (name == "application::close")
+                return Attribute::ApplicationClose;
+            if (name == "application::fixed")
+                return Attribute::Fixed;
+            if (name == "application::after")
+                return Attribute::After;
+            if (name == "application::main")
+                return Attribute::Main;
+            if (name == "application::worker")
+                return Attribute::Worker;
             return std::nullopt;
         }
 
-        const AttributeStatement* findBuiltinAttribute(
-            const std::vector<NodePtr<AttributeStatement>>& attributes,
-            const Attribute attribute)
+        const AttributeStatement* findBuiltinAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes,
+                                                       const Attribute attribute)
         {
-            const auto found = std::ranges::find_if(
-                attributes,
-                [attribute](const NodePtr<AttributeStatement>& candidate)
-                {
-                    return candidate && matchesBuiltinAttribute(*candidate, attribute);
-                });
+            const auto found =
+                std::ranges::find_if(attributes, [attribute](const NodePtr<AttributeStatement>& candidate)
+                                     { return candidate && matchesBuiltinAttribute(*candidate, attribute); });
             return found == attributes.end() ? nullptr : found->Get();
         }
 
-        bool hasBuiltinAttribute(
-            const std::vector<NodePtr<AttributeStatement>>& attributes,
-            const Attribute attribute)
+        bool hasBuiltinAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, const Attribute attribute)
         {
             return findBuiltinAttribute(attributes, attribute) != nullptr;
         }
-    }
-    
+    } // namespace
+
     NodePtr<Program> Parser::parseProgram()
     {
         std::vector<NodePtr<Statement>> statements;
 
         while (peek().isValid())
         {
-            try 
+            try
             {
                 if (NodePtr<Statement> statement = parseStatement(); statement)
                 {
@@ -126,19 +144,17 @@ namespace wio
 
         if (requiresAsyncModule_)
         {
-            const bool alreadyImported = std::ranges::any_of(
-                statements,
-                [](const NodePtr<Statement>& statement)
-                {
-                    const auto* use = statement ? statement->as<UseStatement>() : nullptr;
-                    return use && use->isStdLib && use->modulePath == "async";
-                });
+            const bool alreadyImported =
+                std::ranges::any_of(statements,
+                                    [](const NodePtr<Statement>& statement)
+                                    {
+                                        const auto* use = statement ? statement->as<UseStatement>() : nullptr;
+                                        return use && use->isStdLib && use->modulePath == "async";
+                                    });
             if (!alreadyImported)
             {
-                statements.insert(
-                    statements.begin(),
-                    makeNodePtr<UseStatement>(
-                        "async", "async", "", true, false, false, Location::invalid()));
+                statements.insert(statements.begin(), makeNodePtr<UseStatement>("async", "async", "", true, false,
+                                                                                false, Location::invalid()));
             }
         }
 
@@ -151,8 +167,7 @@ namespace wio
 
         const SignedIndex baseIndex = static_cast<SignedIndex>(currentTokenIndex_);
         const SignedIndex candidateIndex = baseIndex + static_cast<SignedIndex>(offset);
-        if (candidateIndex >= 0 &&
-            candidateIndex < static_cast<SignedIndex>(tokens_.size()))
+        if (candidateIndex >= 0 && std::cmp_less(candidateIndex, tokens_.size()))
         {
             return tokens_[static_cast<size_t>(candidateIndex)];
         }
@@ -175,26 +190,27 @@ namespace wio
 
     void Parser::multiAdvance(int count)
     {
-        while (count--) advance();
+        while (count--)
+            advance();
     }
 
     bool Parser::match(TokenType type, bool consume)
     {
         Token current = peek();
-        
+
         if (current.type != type)
             return false;
 
         if (consume)
             advance();
-        
+
         return true;
     }
 
     bool Parser::match(TokenType type, std::string_view value, bool consume)
     {
         Token current = peek();
-        
+
         if (current.type != type)
         {
             return false;
@@ -202,10 +218,11 @@ namespace wio
 
         if (value.empty() || current.value == value)
         {
-            if (consume) advance();
+            if (consume)
+                advance();
             return true;
         }
-        
+
         return false;
     }
 
@@ -225,10 +242,7 @@ namespace wio
 
     bool Parser::matchOneOf(const std::initializer_list<TokenType>& types, bool consume)
     {
-        return std::ranges::any_of(types, [&](TokenType type)
-        {
-            return (match(type, consume));
-        });
+        return std::ranges::any_of(types, [&](TokenType type) { return (match(type, consume)); });
     }
 
     Token Parser::consume(TokenType type, std::string_view value)
@@ -240,23 +254,16 @@ namespace wio
 
         if (value.empty())
         {
-            std::string formattedErrMsg = formatString(
-             "Unexpected token: expected {0}, but got {1}!",
-                 tokenTypeToString(type),
-                 tokenTypeToString(current.type)
-             );
-         
+            std::string formattedErrMsg = formatString("Unexpected token: expected {0}, but got {1}!",
+                                                       tokenTypeToString(type), tokenTypeToString(current.type));
+
             utError(formattedErrMsg, current.loc);
         }
 
-        std::string formattedErrMsg = formatString(
-            "Unexpected token: expected {} with value of {}, but got {} with value of {}.",
-                tokenTypeToString(type),
-                value,
-                tokenTypeToString(current.type),
-                current.value
-            );
-        
+        std::string formattedErrMsg =
+            formatString("Unexpected token: expected {} with value of {}, but got {} with value of {}.",
+                         tokenTypeToString(type), value, tokenTypeToString(current.type), current.value);
+
         utError(formattedErrMsg, current.loc);
     }
 
@@ -353,7 +360,8 @@ namespace wio
 
         while (peek().isValid())
         {
-            if (previous().type == TokenType::semicolon) return;
+            if (previous().type == TokenType::semicolon)
+                return;
 
             // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
             switch (peek().type)
@@ -385,19 +393,18 @@ namespace wio
     NodePtr<Expression> Parser::parseExpression(int minPrecedence, bool stopAtFit)
     {
         NodePtr<Expression> left;
-       
+
         if (peek().isUnary())
         {
-            Token op = advance(); 
-            
+            Token op = advance();
+
             if (op.type == TokenType::kwSpawn)
             {
                 if (asyncScopeNames_.empty())
                     utError("'spawn' requires an enclosing 'async scope'.", op.loc);
 
                 std::string executor;
-                if (peek().type == TokenType::identifier &&
-                    (peek().value == "worker" || peek().value == "blocking"))
+                if (peek().type == TokenType::identifier && (peek().value == "worker" || peek().value == "blocking"))
                 {
                     executor = advance().value;
                 }
@@ -408,41 +415,28 @@ namespace wio
                 if (!executor.empty())
                 {
                     auto lambdaBody = makeNodePtr<ExpressionStatement>(std::move(operand), op.loc);
-                    operand = makeNodePtr<LambdaExpression>(
-                        std::vector<Parameter>{}, nullptr, std::move(lambdaBody), op.loc);
+                    operand =
+                        makeNodePtr<LambdaExpression>(std::vector<Parameter>{}, nullptr, std::move(lambdaBody), op.loc);
                     spawnMethod = executor == "worker" ? "SpawnWorker" : "SpawnBlocking";
                 }
                 auto scopeAccess = makeNodePtr<MemberAccessExpression>(
                     makeSyntheticIdentifier(asyncScopeNames_.back(), op.loc),
-                    makeSyntheticIdentifier(std::move(spawnMethod), op.loc),
-                    TokenType::opDot,
-                    op.loc);
+                    makeSyntheticIdentifier(std::move(spawnMethod), op.loc), TokenType::opDot, op.loc);
                 std::vector<NodePtr<Expression>> arguments;
                 arguments.push_back(std::move(operand));
-                left = makeNodePtr<FunctionCallExpression>(
-                    std::move(scopeAccess),
-                    std::vector<NodePtr<TypeSpecifier>>{},
-                    std::move(arguments),
-                    false,
-                    false,
-                    op.loc);
+                left =
+                    makeNodePtr<FunctionCallExpression>(std::move(scopeAccess), std::vector<NodePtr<TypeSpecifier>>{},
+                                                        std::move(arguments), false, false, op.loc);
             }
             else if (op.type == TokenType::kwDetach)
             {
                 const int precedence = getPrecedence(op.type);
                 NodePtr<Expression> operand = parseExpression(precedence + 1, stopAtFit);
                 auto detachAccess = makeNodePtr<MemberAccessExpression>(
-                    std::move(operand),
-                    makeSyntheticIdentifier("Detach", op.loc),
-                    TokenType::opDot,
-                    op.loc);
-                left = makeNodePtr<FunctionCallExpression>(
-                    std::move(detachAccess),
-                    std::vector<NodePtr<TypeSpecifier>>{},
-                    std::vector<NodePtr<Expression>>{},
-                    false,
-                    false,
-                    op.loc);
+                    std::move(operand), makeSyntheticIdentifier("Detach", op.loc), TokenType::opDot, op.loc);
+                left =
+                    makeNodePtr<FunctionCallExpression>(std::move(detachAccess), std::vector<NodePtr<TypeSpecifier>>{},
+                                                        std::vector<NodePtr<Expression>>{}, false, false, op.loc);
             }
             else if (op.type == TokenType::kwRef)
             {
@@ -508,10 +502,8 @@ namespace wio
                 break;
 
             if (peek().type == TokenType::opRangeInclusive &&
-                (peek(1).type == TokenType::comma ||
-                 peek(1).type == TokenType::rightParen ||
-                 peek(1).type == TokenType::rightBracket ||
-                 peek(1).type == TokenType::semicolon ||
+                (peek(1).type == TokenType::comma || peek(1).type == TokenType::rightParen ||
+                 peek(1).type == TokenType::rightBracket || peek(1).type == TokenType::semicolon ||
                  peek(1).type == TokenType::rightBrace))
             {
                 const Token ellipsisToken = advance();
@@ -523,13 +515,8 @@ namespace wio
             {
                 advance();
                 auto args = parseCallArguments();
-                left = makeNodePtr<FunctionCallExpression>(
-                    std::move(left),
-                    std::vector<NodePtr<TypeSpecifier>>{},
-                    std::move(args),
-                    false,
-                    true
-                );
+                left = makeNodePtr<FunctionCallExpression>(std::move(left), std::vector<NodePtr<TypeSpecifier>>{},
+                                                           std::move(args), false, true);
                 continue;
             }
 
@@ -543,12 +530,8 @@ namespace wio
                 NodePtr<Expression> whenTrue = parseExpression();
                 consume(TokenType::opColon);
                 NodePtr<Expression> whenFalse = parseExpression(conditionalPrecedence);
-                left = makeNodePtr<ConditionalExpression>(
-                    std::move(left),
-                    std::move(whenTrue),
-                    std::move(whenFalse),
-                    question.loc
-                );
+                left = makeNodePtr<ConditionalExpression>(std::move(left), std::move(whenTrue), std::move(whenFalse),
+                                                          question.loc);
                 continue;
             }
 
@@ -556,21 +539,15 @@ namespace wio
             // with '<'. Resolve it before binary precedence so prefix forms
             // such as `await Load<T>()` and `spawn Load<T>()` keep the call
             // attached to their operand.
-            if (peek().type == TokenType::opLess &&
-                (left->is<Identifier>() || left->is<MemberAccessExpression>()) &&
+            if (peek().type == TokenType::opLess && (left->is<Identifier>() || left->is<MemberAccessExpression>()) &&
                 canParseExplicitTypeArgumentCall())
             {
                 std::vector<NodePtr<TypeSpecifier>> explicitTypeArguments = parseExplicitTypeArgumentList();
                 const bool unwrapResult = match(TokenType::opLogicalNot, true);
                 const bool propagateResult = !unwrapResult && match(TokenType::opQuestion, true);
                 auto args = parseCallArguments();
-                left = makeNodePtr<FunctionCallExpression>(
-                    std::move(left),
-                    std::move(explicitTypeArguments),
-                    std::move(args),
-                    unwrapResult,
-                    propagateResult
-                );
+                left = makeNodePtr<FunctionCallExpression>(std::move(left), std::move(explicitTypeArguments),
+                                                           std::move(args), unwrapResult, propagateResult);
                 continue;
             }
 
@@ -594,26 +571,16 @@ namespace wio
             {
                 advance();
                 auto args = parseCallArguments();
-                left = makeNodePtr<FunctionCallExpression>(
-                    std::move(left),
-                    std::vector<NodePtr<TypeSpecifier>>{},
-                    std::move(args),
-                    true,
-                    false
-                );
+                left = makeNodePtr<FunctionCallExpression>(std::move(left), std::vector<NodePtr<TypeSpecifier>>{},
+                                                           std::move(args), true, false);
                 continue;
             }
 
             if (match(TokenType::leftParen))
             {
                 auto args = parseCallArguments();
-                left = makeNodePtr<FunctionCallExpression>(
-                    std::move(left),
-                    std::vector<NodePtr<TypeSpecifier>>{},
-                    std::move(args),
-                    false,
-                    false
-                );
+                left = makeNodePtr<FunctionCallExpression>(std::move(left), std::vector<NodePtr<TypeSpecifier>>{},
+                                                           std::move(args), false, false);
                 continue;
             }
             if (match(TokenType::leftBracket))
@@ -624,7 +591,7 @@ namespace wio
                 left = makeNodePtr<ArrayAccessExpression>(std::move(left), std::move(index));
                 continue;
             }
-            if (matchOneOf({ TokenType::opDot, TokenType::opScope }))
+            if (matchOneOf({TokenType::opDot, TokenType::opScope}))
             {
                 Token op = advance();
                 NodePtr<Identifier> member = makeNodePtr<Identifier>(consumeIdentifier());
@@ -641,19 +608,17 @@ namespace wio
             if (match(TokenType::kwFit))
             {
                 const Token fitToken = advance();
-                auto targetType = parseType(); 
-            
+                auto targetType = parseType();
+
                 left = makeNodePtr<FitExpression>(std::move(left), std::move(targetType), fitToken.loc);
                 continue;
             }
-            
+
             Token op = advance();
             // Right-flow is left associative (`x |> f |> g`), while left-flow
             // follows ordinary functional application and is right
             // associative (`f <| g <| x` == `f(g(x))`).
-            const int rightMinPrecedence = op.type == TokenType::opFlowLeft
-                ? precedence
-                : precedence + 1;
+            const int rightMinPrecedence = op.type == TokenType::opFlowLeft ? precedence : precedence + 1;
             NodePtr<Expression> right = parseExpression(rightMinPrecedence, stopAtFit);
 
             if (op.type == TokenType::opRangeInclusive || op.type == TokenType::opRangeExclusive)
@@ -673,9 +638,8 @@ namespace wio
                 {
                     std::vector<NodePtr<Expression>> arguments;
                     arguments.push_back(std::move(left));
-                    left = makeNodePtr<FunctionCallExpression>(
-                        std::move(right), std::vector<NodePtr<TypeSpecifier>>{},
-                        std::move(arguments), false, false, op.loc);
+                    left = makeNodePtr<FunctionCallExpression>(std::move(right), std::vector<NodePtr<TypeSpecifier>>{},
+                                                               std::move(arguments), false, false, op.loc);
                     left.AsFast<FunctionCallExpression>()->isPipelineCall = true;
                 }
             }
@@ -690,9 +654,8 @@ namespace wio
                 {
                     std::vector<NodePtr<Expression>> arguments;
                     arguments.push_back(std::move(right));
-                    left = makeNodePtr<FunctionCallExpression>(
-                        std::move(left), std::vector<NodePtr<TypeSpecifier>>{},
-                        std::move(arguments), false, false, op.loc);
+                    left = makeNodePtr<FunctionCallExpression>(std::move(left), std::vector<NodePtr<TypeSpecifier>>{},
+                                                               std::move(arguments), false, false, op.loc);
                     left.AsFast<FunctionCallExpression>()->isPipelineCall = true;
                 }
             }
@@ -702,7 +665,7 @@ namespace wio
                 left = makeNodePtr<BinaryExpression>(std::move(left), std::move(op), std::move(right), loc);
             }
         }
-        
+
         return left;
     }
 
@@ -723,21 +686,21 @@ namespace wio
         if (match(TokenType::charLiteral))
             return makeNodePtr<CharLiteral>(advance());
 
-        if (matchOneOf({ TokenType::kwTrue , TokenType::kwFalse }))
+        if (matchOneOf({TokenType::kwTrue, TokenType::kwFalse}))
             return makeNodePtr<BoolLiteral>(advance());
-        
+
         if (match(TokenType::kwNull))
             return makeNodePtr<NullExpression>(advance().loc);
 
         if (match(TokenType::kwSelf))
             return makeNodePtr<SelfExpression>(advance().loc);
-            
+
         if (match(TokenType::kwSuper))
             return makeNodePtr<SuperExpression>(advance().loc);
 
         if (match(TokenType::durationLiteral))
             return makeNodePtr<DurationLiteral>(advance());
-        
+
         if (match(TokenType::byteLiteral))
             return makeNodePtr<ByteLiteral>(advance());
 
@@ -749,15 +712,15 @@ namespace wio
             bool isLambda = false;
             int offset = 1;
             int parenCount = 1;
-            
-            while (peek(offset).isValid()) 
+
+            while (peek(offset).isValid())
             {
                 if (peek(offset).type == TokenType::leftParen)
                     parenCount++;
                 else if (peek(offset).type == TokenType::rightParen)
                     parenCount--;
 
-                if (parenCount == 0) 
+                if (parenCount == 0)
                 {
                     TokenType nextType = peek(offset + 1).type;
                     if (nextType == TokenType::opFatArrow || nextType == TokenType::opArrow)
@@ -769,7 +732,7 @@ namespace wio
 
             if (isLambda)
                 return parseLambdaExpression();
-            
+
             advance();
             NodePtr<Expression> expr = parseExpression();
             consume(TokenType::rightParen);
@@ -780,9 +743,9 @@ namespace wio
             const Token refToken = advance();
 
             bool isMut = match(TokenType::kwMut, true);
-            
-            NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef) + 1, true); 
-            
+
+            NodePtr<Expression> operand = parseExpression(getPrecedence(TokenType::kwRef) + 1, true);
+
             return makeNodePtr<RefExpression>(isMut, std::move(operand), refToken.loc);
         }
         if (match(TokenType::leftBracket))
@@ -813,26 +776,25 @@ namespace wio
         {
             return makeNodePtr<StringLiteral>(std::move(startTok));
         }
-        
+
         std::vector<NodePtr<Expression>> parts;
-        
+
         parts.emplace_back(makeNodePtr<StringLiteral>(startTok));
 
         while (match(TokenType::dollar, true))
         {
             consume(TokenType::leftBrace);
-            
+
             parts.push_back(parseExpression());
-            
+
             consume(TokenType::rightBrace);
-            
+
             Token nextPart = consume(TokenType::stringLiteral);
-            
+
             parts.emplace_back(makeNodePtr<StringLiteral>(std::move(nextPart)));
         }
 
-        return makeNodePtr<InterpolatedStringLiteral>(
-            std::move(parts), startTok.isUnicodeString, startTok.loc);
+        return makeNodePtr<InterpolatedStringLiteral>(std::move(parts), startTok.isUnicodeString, startTok.loc);
     }
 
     std::vector<NodePtr<TypeSpecifier>> Parser::parseExplicitTypeArgumentList()
@@ -860,9 +822,8 @@ namespace wio
         {
             Token value = advance();
             const auto location = value.loc;
-            return makeNodePtr<TypeSpecifier>(
-                std::move(value), std::vector<NodePtr<TypeSpecifier>>{}, nullptr,
-                0, false, false, false, location);
+            return makeNodePtr<TypeSpecifier>(std::move(value), std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0,
+                                              false, false, false, location);
         }
 
         return parseType();
@@ -874,7 +835,7 @@ namespace wio
         consume(TokenType::leftBracket); // [
 
         std::vector<NodePtr<Expression>> elements;
-    
+
         if (!match(TokenType::rightBracket))
         {
             elements.push_back(parseExpression());
@@ -893,21 +854,23 @@ namespace wio
     {
         Location startLoc = peek().loc;
         consume(TokenType::leftBrace);
-        
-        bool isOrdered = match(TokenType::opLess, true); 
-        
+
+        bool isOrdered = match(TokenType::opLess, true);
+
         std::vector<std::pair<NodePtr<Expression>, NodePtr<Expression>>> pairs;
-        
-        bool isEmpty = isOrdered ? (peek().type == TokenType::opGreater && peek(1).type == TokenType::rightBrace) 
+
+        bool isEmpty = isOrdered ? (peek().type == TokenType::opGreater && peek(1).type == TokenType::rightBrace)
                                  : (peek().type == TokenType::rightBrace);
 
         if (!isEmpty)
         {
             while (true)
             {
-                if (isOrdered && peek().type == TokenType::opGreater) break;
-                if (!isOrdered && peek().type == TokenType::rightBrace) break;
-                
+                if (isOrdered && peek().type == TokenType::opGreater)
+                    break;
+                if (!isOrdered && peek().type == TokenType::rightBrace)
+                    break;
+
                 NodePtr<Expression> key = parseExpression();
                 consume(TokenType::opColon);
                 NodePtr<Expression> value = parseExpression();
@@ -921,7 +884,8 @@ namespace wio
             }
         }
 
-        if (isOrdered) consume(TokenType::opGreater); 
+        if (isOrdered)
+            consume(TokenType::opGreater);
         consume(TokenType::rightBrace);
 
         return makeNodePtr<DictionaryLiteral>(std::move(pairs), isOrdered, startLoc);
@@ -935,10 +899,7 @@ namespace wio
         std::vector<Parameter> parameters;
         if (!match(TokenType::rightParen))
         {
-            parameters.emplace_back(
-                makeNodePtr<Identifier>(consumeIdentifier()),
-                nullptr
-            );
+            parameters.emplace_back(makeNodePtr<Identifier>(consumeIdentifier()), nullptr);
             if (match(TokenType::opColon, true))
             {
                 parameters.back().type = parseType();
@@ -960,7 +921,7 @@ namespace wio
         consume(TokenType::rightParen);
 
         NodePtr<TypeSpecifier> returnType = nullptr;
-        if (match(TokenType::opArrow, true)) 
+        if (match(TokenType::opArrow, true))
         {
             returnType = parseType();
         }
@@ -1000,10 +961,9 @@ namespace wio
             if (match(TokenType::kwAssumed, true))
             {
             }
-            else if (peek().type == TokenType::identifier &&
-                     peek(1).type == TokenType::leftParen &&
-                     (peek().value == "Some" || peek().value == "None" ||
-                      peek().value == "Ok" || peek().value == "Err"))
+            else if (peek().type == TokenType::identifier && peek(1).type == TokenType::leftParen &&
+                     (peek().value == "Some" || peek().value == "None" || peek().value == "Ok" ||
+                      peek().value == "Err"))
             {
                 variantName = advance().value;
                 consume(TokenType::leftParen);
@@ -1031,8 +991,7 @@ namespace wio
                 do
                 {
                     matchValues.push_back(parseExpression(3));
-                }
-                while (match(TokenType::comma, true) || match(TokenType::kwOr, true));
+                } while (match(TokenType::comma, true) || match(TokenType::kwOr, true));
             }
 
             NodePtr<Expression> guard = nullptr;
@@ -1040,16 +999,14 @@ namespace wio
                 guard = parseExpression();
 
             consume(TokenType::opColon);
-            
-            NodePtr<Statement> body = parseStatement(); 
-            
-            cases.push_back(MatchCase{
-                .matchValues = std::move(matchValues),
-                .body = std::move(body),
-                .variantName = std::move(variantName),
-                .bindings = std::move(bindings),
-                .guard = std::move(guard)
-            });
+
+            NodePtr<Statement> body = parseStatement();
+
+            cases.push_back(MatchCase{.matchValues = std::move(matchValues),
+                                      .body = std::move(body),
+                                      .variantName = std::move(variantName),
+                                      .bindings = std::move(bindings),
+                                      .guard = std::move(guard)});
         }
         consume(TokenType::rightBrace);
 
@@ -1095,23 +1052,11 @@ namespace wio
                     const Token leftBracketToken = previous();
                     consume(TokenType::rightBracket);
 
-                    Token arrayToken {
-                        .type = TokenType::DynamicArray,
-                        .value = "",
-                        .loc = leftBracketToken.loc
-                    };
+                    Token arrayToken{.type = TokenType::DynamicArray, .value = "", .loc = leftBracketToken.loc};
                     std::vector<NodePtr<TypeSpecifier>> args;
                     args.push_back(std::move(type));
-                    type = makeNodePtr<TypeSpecifier>(
-                        std::move(arrayToken),
-                        std::move(args),
-                        nullptr,
-                        0,
-                        false,
-                        false,
-                        false,
-                        leftBracketToken.loc
-                    );
+                    type = makeNodePtr<TypeSpecifier>(std::move(arrayToken), std::move(args), nullptr, 0, false, false,
+                                                      false, leftBracketToken.loc);
                     continue;
                 }
 
@@ -1137,31 +1082,33 @@ namespace wio
         {
             const Token refToken = advance();
             auto innerType = parseType();
-            
-            Token token { .type = TokenType::kwRef, .value = "ref", .loc = refToken.loc };
+
+            Token token{.type = TokenType::kwRef, .value = "ref", .loc = refToken.loc};
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
-            
-            auto result = makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), nullptr, 0, true, true, false, refToken.loc);
+
+            auto result = makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), nullptr, 0, true, true,
+                                                     false, refToken.loc);
             return finishType(std::move(result));
         }
         if (match(TokenType::kwView))
         {
             const Token viewToken = advance();
             auto innerType = parseType();
-            
-            Token token { .type = TokenType::kwView, .value = "view", .loc = viewToken.loc };
+
+            Token token{.type = TokenType::kwView, .value = "view", .loc = viewToken.loc};
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
-            
-            auto result = makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), nullptr, 0, true, false, false, viewToken.loc);
+
+            auto result = makeNodePtr<TypeSpecifier>(std::move(token), std::move(generics), nullptr, 0, true, false,
+                                                     false, viewToken.loc);
             return finishType(std::move(result));
         }
 
         if (match(TokenType::leftBracket))
         {
             const Token leftBracketToken = advance();
-            
+
             auto innerType = parseType();
 
             size_t size = 0;
@@ -1192,21 +1139,19 @@ namespace wio
                 }
                 else
                 {
-                    utError("Static array extents must be a non-negative integer literal or const generic parameter.", currentOrPreviousLocation());
+                    utError("Static array extents must be a non-negative integer literal or const generic parameter.",
+                            currentOrPreviousLocation());
                 }
             }
-            
+
             consume(TokenType::rightBracket);
 
-            Token arrayToken {
-                .type = TokenType::StaticArray,
-                .value ="",
-                .loc = leftBracketToken.loc
-            };
+            Token arrayToken{.type = TokenType::StaticArray, .value = "", .loc = leftBracketToken.loc};
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(innerType));
 
-            auto arrayType = makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), nullptr, size, false, false, false, leftBracketToken.loc);
+            auto arrayType = makeNodePtr<TypeSpecifier>(arrayToken, std::move(generics), nullptr, size, false, false,
+                                                        false, leftBracketToken.loc);
             arrayType->arrayExtent = std::move(arrayExtent);
             arrayType->hasInferredArrayExtent = hasInferredArrayExtent;
             return finishType(std::move(arrayType));
@@ -1216,7 +1161,7 @@ namespace wio
         {
             const Token fnToken = advance();
             consume(TokenType::leftParen);
-            
+
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.emplace_back(nullptr);
 
@@ -1238,22 +1183,16 @@ namespace wio
             }
             else
             {
-                Token voidTok {
-                    .type = TokenType::identifier,
-                    .value = "void",
-                    .loc = rightParenToken.loc
-                };
-                retType = makeNodePtr<TypeSpecifier>(std::move(voidTok), std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0, false, false, false, rightParenToken.loc);
+                Token voidTok{.type = TokenType::identifier, .value = "void", .loc = rightParenToken.loc};
+                retType = makeNodePtr<TypeSpecifier>(std::move(voidTok), std::vector<NodePtr<TypeSpecifier>>{}, nullptr,
+                                                     0, false, false, false, rightParenToken.loc);
             }
-            
+
             generics[0] = std::move(retType);
 
-            Token fnTok {
-                .type = TokenType::kwFn,
-                .value = "fn",
-                .loc = fnToken.loc
-            };
-            return finishType(makeNodePtr<TypeSpecifier>(std::move(fnTok), std::move(generics), nullptr, 0, false, false, false, fnToken.loc));
+            Token fnTok{.type = TokenType::kwFn, .value = "fn", .loc = fnToken.loc};
+            return finishType(makeNodePtr<TypeSpecifier>(std::move(fnTok), std::move(generics), nullptr, 0, false,
+                                                         false, false, fnToken.loc));
         }
 
         match(TokenType::kwConst, true);
@@ -1270,7 +1209,7 @@ namespace wio
             Token nextSegment = consumeIdentifier();
             typeName.value += "::" + nextSegment.value;
         }
-        
+
         Location startLoc = typeName.loc;
         std::vector<NodePtr<TypeSpecifier>> generics;
 
@@ -1294,22 +1233,23 @@ namespace wio
             consume(TokenType::rightBracket);
         }
 
-        auto result = makeNodePtr<TypeSpecifier>(std::move(typeName), std::move(generics), std::move(packIndex), 0, false, false, false, startLoc);
+        auto result = makeNodePtr<TypeSpecifier>(std::move(typeName), std::move(generics), std::move(packIndex), 0,
+                                                 false, false, false, startLoc);
 
         return finishType(std::move(result));
     }
 
     NodePtr<Statement> Parser::parseStatement()
     {
-        if (matchOneOf({ TokenType::semicolon, TokenType::endOfFile }, true))
+        if (matchOneOf({TokenType::semicolon, TokenType::endOfFile}, true))
             return nullptr;
 
         std::vector<NodePtr<AttributeStatement>> attributes;
         parseLeadingAttributes(attributes, bracketAttributeListPrecedesDeclaration());
-        
+
         if (peek().isKeyword())
         {
-            if (matchOneOf({ TokenType::kwLet, TokenType::kwMut, TokenType::kwConst }))
+            if (matchOneOf({TokenType::kwLet, TokenType::kwMut, TokenType::kwConst}))
                 return parseVariableDeclaration(std::move(attributes));
             if (match(TokenType::kwType))
                 return parseTypeAliasDeclaration(std::move(attributes));
@@ -1353,7 +1293,7 @@ namespace wio
                 return parseIfStatement();
             if (match(TokenType::kwWhile))
                 return parseWhileStatement();
-            if (matchOneOf({ TokenType::kwFor, TokenType::kwForeach }))
+            if (matchOneOf({TokenType::kwFor, TokenType::kwForeach}))
                 return parseForInStatement();
             if (match(TokenType::kwBreak))
                 return parseBreakStatement();
@@ -1377,7 +1317,7 @@ namespace wio
             if (match(TokenType::leftBrace))
                 return parseBlockStatement();
         }
-        
+
         NodePtr<Expression> expr = parseExpression();
         if (expr->is<MatchExpression>())
             match(TokenType::semicolon, true);
@@ -1399,7 +1339,7 @@ namespace wio
                 statements.emplace_back(std::move(statement));
             }
         }
-        
+
         consume(TokenType::rightBrace);
 
         return makeNodePtr<BlockStatement>(std::move(statements));
@@ -1445,25 +1385,15 @@ namespace wio
 
         auto makeAwaitJoinStatement = [&](const Location location) -> NodePtr<Statement>
         {
-            auto joinAccess = makeNodePtr<MemberAccessExpression>(
-                makeSyntheticIdentifier(scopeName, location),
-                makeSyntheticIdentifier("Join", location),
-                TokenType::opDot,
-                location);
-            auto joinCall = makeNodePtr<FunctionCallExpression>(
-                std::move(joinAccess),
-                std::vector<NodePtr<TypeSpecifier>>{},
-                std::vector<NodePtr<Expression>>{},
-                false,
-                false,
-                location);
-            Token awaitToken{
-                .type = TokenType::kwAwait,
-                .value = "await",
-                .loc = location
-            };
-            auto awaitJoin = makeNodePtr<UnaryExpression>(
-                std::move(awaitToken), std::move(joinCall), UnaryExpression::UnaryOperatorType::Prefix, location);
+            auto joinAccess = makeNodePtr<MemberAccessExpression>(makeSyntheticIdentifier(scopeName, location),
+                                                                  makeSyntheticIdentifier("Join", location),
+                                                                  TokenType::opDot, location);
+            auto joinCall =
+                makeNodePtr<FunctionCallExpression>(std::move(joinAccess), std::vector<NodePtr<TypeSpecifier>>{},
+                                                    std::vector<NodePtr<Expression>>{}, false, false, location);
+            Token awaitToken{.type = TokenType::kwAwait, .value = "await", .loc = location};
+            auto awaitJoin = makeNodePtr<UnaryExpression>(std::move(awaitToken), std::move(joinCall),
+                                                          UnaryExpression::UnaryOperatorType::Prefix, location);
             return makeNodePtr<ExpressionStatement>(std::move(awaitJoin), location);
         };
 
@@ -1481,13 +1411,9 @@ namespace wio
                 {
                     const std::string returnName = scopeName + "_return_" + std::to_string(returnCounter++);
                     replacement.push_back(makeNodePtr<VariableDeclaration>(
-                        std::vector<NodePtr<AttributeStatement>>{},
-                        Mutability::Immutable,
-                        makeSyntheticIdentifier(returnName, returnLocation),
-                        nullptr,
-                        std::move(returnStatement->value),
-                        false,
-                        returnLocation));
+                        std::vector<NodePtr<AttributeStatement>>{}, Mutability::Immutable,
+                        makeSyntheticIdentifier(returnName, returnLocation), nullptr, std::move(returnStatement->value),
+                        false, returnLocation));
                     returnValue = makeSyntheticIdentifier(returnName, returnLocation);
                 }
                 replacement.push_back(makeAwaitJoinStatement(returnLocation));
@@ -1524,28 +1450,22 @@ namespace wio
             rewriteReturns(statement);
 
         auto stdNamespace = makeSyntheticIdentifier("std", asyncToken.loc);
-        auto asyncNamespace = makeNodePtr<MemberAccessExpression>(
-            std::move(stdNamespace), makeSyntheticIdentifier("async", asyncToken.loc), TokenType::opScope, asyncToken.loc);
-        auto scopeConstructor = makeNodePtr<MemberAccessExpression>(
-            std::move(asyncNamespace), makeSyntheticIdentifier("Scope", asyncToken.loc), TokenType::opScope, asyncToken.loc);
+        auto asyncNamespace = makeNodePtr<MemberAccessExpression>(std::move(stdNamespace),
+                                                                  makeSyntheticIdentifier("async", asyncToken.loc),
+                                                                  TokenType::opScope, asyncToken.loc);
+        auto scopeConstructor = makeNodePtr<MemberAccessExpression>(std::move(asyncNamespace),
+                                                                    makeSyntheticIdentifier("Scope", asyncToken.loc),
+                                                                    TokenType::opScope, asyncToken.loc);
         std::vector<NodePtr<Expression>> scopeArguments;
         if (deadline)
             scopeArguments.push_back(std::move(deadline));
-        auto constructScope = makeNodePtr<FunctionCallExpression>(
-            std::move(scopeConstructor),
-            std::vector<NodePtr<TypeSpecifier>>{},
-            std::move(scopeArguments),
-            false,
-            false,
-            asyncToken.loc);
-        auto scopeDeclaration = makeNodePtr<VariableDeclaration>(
-            std::vector<NodePtr<AttributeStatement>>{},
-            Mutability::Immutable,
-            makeSyntheticIdentifier(scopeName, asyncToken.loc),
-            nullptr,
-            std::move(constructScope),
-            false,
-            asyncToken.loc);
+        auto constructScope =
+            makeNodePtr<FunctionCallExpression>(std::move(scopeConstructor), std::vector<NodePtr<TypeSpecifier>>{},
+                                                std::move(scopeArguments), false, false, asyncToken.loc);
+        auto scopeDeclaration =
+            makeNodePtr<VariableDeclaration>(std::vector<NodePtr<AttributeStatement>>{}, Mutability::Immutable,
+                                             makeSyntheticIdentifier(scopeName, asyncToken.loc), nullptr,
+                                             std::move(constructScope), false, asyncToken.loc);
         body->statements.insert(body->statements.begin(), std::move(scopeDeclaration));
 
         body->statements.push_back(makeAwaitJoinStatement(asyncToken.loc));
@@ -1587,8 +1507,8 @@ namespace wio
                         utError("Positional attribute arguments cannot follow named arguments.", peek().loc);
                     }
 
-                    const bool standaloneTargetKeyword = peek().type == TokenType::kwFn &&
-                        peek(1).type != TokenType::leftParen;
+                    const bool standaloneTargetKeyword =
+                        peek().type == TokenType::kwFn && peek(1).type != TokenType::leftParen;
                     if (canStartAttributeTypeArgument(peek()) && !standaloneTargetKeyword)
                     {
                         const size_t typeStartIndex = currentTokenIndex_;
@@ -1629,9 +1549,11 @@ namespace wio
         {
             if (std::ranges::any_of(argumentNames, [](const std::string& name) { return !name.empty(); }))
                 utError("Named arguments are currently supported only for user-defined attributes.", startLoc);
-            return makeNodePtr<AttributeStatement>(attribute.value(), args, typeArgs, startLoc, qualifiedName, argumentNames);
+            return makeNodePtr<AttributeStatement>(attribute.value(), args, typeArgs, startLoc, qualifiedName,
+                                                   argumentNames);
         }
-        return makeNodePtr<AttributeStatement>(Attribute::Unknown, args, typeArgs, startLoc, qualifiedName, argumentNames);
+        return makeNodePtr<AttributeStatement>(Attribute::Unknown, args, typeArgs, startLoc, qualifiedName,
+                                               argumentNames);
     }
 
     void Parser::parseBracketAttributeList(std::vector<NodePtr<AttributeStatement>>& attributes)
@@ -1655,8 +1577,7 @@ namespace wio
         consume(TokenType::rightBracket);
     }
 
-    void Parser::parseLeadingAttributes(std::vector<NodePtr<AttributeStatement>>& attributes,
-                                        bool acceptBracketSyntax)
+    void Parser::parseLeadingAttributes(std::vector<NodePtr<AttributeStatement>>& attributes, bool acceptBracketSyntax)
     {
         while (true)
         {
@@ -1714,8 +1635,7 @@ namespace wio
             }
             if (!closed)
                 return false;
-        }
-        while (peek(static_cast<int>(offset)).type == TokenType::leftBracket);
+        } while (peek(static_cast<int>(offset)).type == TokenType::leftBracket);
 
         switch (peek(static_cast<int>(offset)).type)
         {
@@ -1762,8 +1682,8 @@ namespace wio
             utError("A declaration may contain only one postfix 'with' clause.", peek().loc);
     }
 
-    NodePtr<AttributeDeclaration> Parser::parseAttributeDeclaration(
-        std::vector<NodePtr<AttributeStatement>> metaAttributes)
+    NodePtr<AttributeDeclaration>
+    Parser::parseAttributeDeclaration(std::vector<NodePtr<AttributeStatement>> metaAttributes)
     {
         Token startTok = consume(TokenType::kwAttribute);
         auto name = makeNodePtr<Identifier>(consumeIdentifier());
@@ -1833,9 +1753,8 @@ namespace wio
                 NodePtr<Expression> defaultValue = nullptr;
                 if (match(TokenType::opAssign, true))
                     defaultValue = parseExpression();
-                parameters.emplace_back(
-                    std::move(parameterName), std::move(parameterType),
-                    std::move(defaultValue), false);
+                parameters.emplace_back(std::move(parameterName), std::move(parameterType), std::move(defaultValue),
+                                        false);
 
                 if (!match(TokenType::comma, true))
                     break;
@@ -1864,15 +1783,13 @@ namespace wio
         auto policyTail = [](const std::string& qualifiedName)
         {
             const size_t separator = qualifiedName.rfind("::");
-            return separator == std::string::npos
-                ? qualifiedName
-                : qualifiedName.substr(separator + 2);
+            return separator == std::string::npos ? qualifiedName : qualifiedName.substr(separator + 2);
         };
-        auto appendPolicyNames = [&](const NodePtr<AttributeStatement>& policy,
-                                     std::vector<std::string>& destination)
+        auto appendPolicyNames = [&](const NodePtr<AttributeStatement>& policy, std::vector<std::string>& destination)
         {
             if (policy->args.empty())
-                utError("Attribute policy '" + policy->qualifiedName + "' requires at least one argument.", policy->location());
+                utError("Attribute policy '" + policy->qualifiedName + "' requires at least one argument.",
+                        policy->location());
             for (const Token& argument : policy->args)
                 destination.push_back(argument.value);
         };
@@ -1880,21 +1797,36 @@ namespace wio
         for (const auto& policy : metaAttributes)
         {
             const std::string policyName = policyTail(policy->qualifiedName);
-            if (policyName == "Targets") appendPolicyNames(policy, targets);
-            else if (policyName == "Source") retention.push_back("source");
-            else if (policyName == "Compile") retention.push_back("compile");
-            else if (policyName == "Runtime") retention.push_back("runtime");
-            else if (policyName == "Repeatable") repeatable = true;
-            else if (policyName == "Inherited") inherited = true;
-            else if (policyName == "Scoped") scoped = true;
-            else if (policyName == "Requires") appendPolicyNames(policy, requiredAttributes);
-            else if (policyName == "RequiresAny") appendPolicyNames(policy, requiredAnyAttributes);
-            else if (policyName == "Conflicts") appendPolicyNames(policy, conflictingAttributes);
-            else if (policyName == "OnlyWith") appendPolicyNames(policy, onlyWithAttributes);
-            else if (policyName == "Before") appendPolicyNames(policy, beforeAttributes);
-            else if (policyName == "After") appendPolicyNames(policy, afterAttributes);
-            else if (policyName == "Implies") appendPolicyNames(policy, impliedAttributes);
-            else if (policyName == "Processor") appendPolicyNames(policy, processorTypes);
+            if (policyName == "Targets")
+                appendPolicyNames(policy, targets);
+            else if (policyName == "Source")
+                retention.push_back("source");
+            else if (policyName == "Compile")
+                retention.push_back("compile");
+            else if (policyName == "Runtime")
+                retention.push_back("runtime");
+            else if (policyName == "Repeatable")
+                repeatable = true;
+            else if (policyName == "Inherited")
+                inherited = true;
+            else if (policyName == "Scoped")
+                scoped = true;
+            else if (policyName == "Requires")
+                appendPolicyNames(policy, requiredAttributes);
+            else if (policyName == "RequiresAny")
+                appendPolicyNames(policy, requiredAnyAttributes);
+            else if (policyName == "Conflicts")
+                appendPolicyNames(policy, conflictingAttributes);
+            else if (policyName == "OnlyWith")
+                appendPolicyNames(policy, onlyWithAttributes);
+            else if (policyName == "Before")
+                appendPolicyNames(policy, beforeAttributes);
+            else if (policyName == "After")
+                appendPolicyNames(policy, afterAttributes);
+            else if (policyName == "Implies")
+                appendPolicyNames(policy, impliedAttributes);
+            else if (policyName == "Processor")
+                appendPolicyNames(policy, processorTypes);
             else if (policyName == "Exclusive")
             {
                 if (policy->args.size() != 1)
@@ -1908,10 +1840,12 @@ namespace wio
                 for (const Token& argument : policy->args)
                     if (argument.type != TokenType::integerLiteral)
                         utError("Attribute policy 'Cardinality' accepts only integer literals.", argument.loc);
-                cardinalityMin = traits::IntegerTraits<size_t>::IntegerResultCastedAs(getInteger(policy->args.front().value));
-                cardinalityMax = policy->args.size() == 1
-                    ? cardinalityMin
-                    : traits::IntegerTraits<size_t>::IntegerResultCastedAs(getInteger(policy->args[1].value));
+                cardinalityMin =
+                    traits::IntegerTraits<size_t>::IntegerResultCastedAs(getInteger(policy->args.front().value));
+                cardinalityMax =
+                    policy->args.size() == 1
+                        ? cardinalityMin
+                        : traits::IntegerTraits<size_t>::IntegerResultCastedAs(getInteger(policy->args[1].value));
                 if (cardinalityMin > cardinalityMax)
                     utError("Attribute cardinality minimum cannot exceed its maximum.", policy->location());
                 hasExplicitCardinality = true;
@@ -1952,11 +1886,11 @@ namespace wio
                     auto requireNoArguments = [&]()
                     {
                         if (!policy->args.empty())
-                            utError("Attribute declaration policy '" + policyName + "' does not accept arguments.", policy->location());
+                            utError("Attribute declaration policy '" + policyName + "' does not accept arguments.",
+                                    policy->location());
                     };
 
-                    if (policyName == "attribute::source" ||
-                        policyName == "attribute::compile" ||
+                    if (policyName == "attribute::source" || policyName == "attribute::compile" ||
                         policyName == "attribute::runtime")
                     {
                         requireNoArguments();
@@ -1979,11 +1913,13 @@ namespace wio
                     }
                     else if (policyName == "attribute::conflict")
                     {
-                        if (policy->args.size() != 1 ||
-                            (policy->args.front().type != TokenType::stringLiteral &&
-                             policy->args.front().type != TokenType::identifier))
+                        if (policy->args.size() != 1 || (policy->args.front().type != TokenType::stringLiteral &&
+                                                         policy->args.front().type != TokenType::identifier))
                         {
-                            utError("Attribute declaration policy 'attribute::conflict' expects one string or identifier argument.", policy->location());
+                            utError(
+                                "Attribute declaration policy 'attribute::conflict' expects one string or identifier "
+                                "argument.",
+                                policy->location());
                         }
                         conflictGroups.push_back(policy->args.front().value);
                     }
@@ -2031,10 +1967,9 @@ namespace wio
         if (retention.empty())
             retention.push_back("compile");
 
-        auto declaration = makeNodePtr<AttributeDeclaration>(
-            std::move(name), std::move(parameters), std::move(targets),
-            std::move(retention), std::move(conflictGroups),
-            repeatable, inherited, scoped, startTok.loc);
+        auto declaration = makeNodePtr<AttributeDeclaration>(std::move(name), std::move(parameters), std::move(targets),
+                                                             std::move(retention), std::move(conflictGroups),
+                                                             repeatable, inherited, scoped, startTok.loc);
         declaration->metaAttributes = std::move(metaAttributes);
         declaration->composedAttributes = std::move(composedAttributes);
         declaration->requiredAttributes = std::move(requiredAttributes);
@@ -2053,13 +1988,12 @@ namespace wio
         for (const auto& parameter : declaration->parameters)
             parserComposition.parameterNames.push_back(parameter.name->token.value);
         parserComposition.attributes = declaration->composedAttributes;
-        declaredAttributeCompositions_.insert_or_assign(
-            declaration->name->token.value, std::move(parserComposition));
+        declaredAttributeCompositions_.insert_or_assign(declaration->name->token.value, std::move(parserComposition));
         return declaration;
     }
 
-    std::vector<NodePtr<AttributeStatement>> Parser::expandAttributeCompositionsForLowering(
-        const std::vector<NodePtr<AttributeStatement>>& attributes) const
+    std::vector<NodePtr<AttributeStatement>>
+    Parser::expandAttributeCompositionsForLowering(const std::vector<NodePtr<AttributeStatement>>& attributes) const
     {
         std::vector<NodePtr<AttributeStatement>> expanded = attributes;
         std::unordered_set<std::string> active;
@@ -2107,12 +2041,8 @@ namespace wio
                 }
 
                 auto effective = makeNodePtr<AttributeStatement>(
-                    composition->attribute,
-                    std::move(composedArguments),
-                    composition->typeArgs,
-                    application->location(),
-                    composition->qualifiedName,
-                    composition->argumentNames);
+                    composition->attribute, std::move(composedArguments), composition->typeArgs,
+                    application->location(), composition->qualifiedName, composition->argumentNames);
                 expanded.push_back(effective);
                 appendComposition(effective);
             }
@@ -2124,8 +2054,8 @@ namespace wio
         return expanded;
     }
 
-    NodePtr<Statement> Parser::parseApplicationDeclaration(
-        std::vector<NodePtr<AttributeStatement>> applicationAttributes)
+    NodePtr<Statement>
+    Parser::parseApplicationDeclaration(std::vector<NodePtr<AttributeStatement>> applicationAttributes)
     {
         const Token startToken = consume(TokenType::kwApplication);
         requiresAsyncModule_ = true;
@@ -2137,42 +2067,36 @@ namespace wio
 
         auto makeType = [&](TokenType type, std::string value)
         {
-            Token token{ .type = type, .value = std::move(value), .loc = startToken.loc };
-            return makeNodePtr<TypeSpecifier>(std::move(token), std::vector<NodePtr<TypeSpecifier>>{},
-                nullptr, 0, false, false, false, startToken.loc);
+            Token token{.type = type, .value = std::move(value), .loc = startToken.loc};
+            return makeNodePtr<TypeSpecifier>(std::move(token), std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0,
+                                              false, false, false, startToken.loc);
         };
         auto makeIdentifier = [&](std::string value)
         {
-            return makeNodePtr<Identifier>(Token{
-                .type = TokenType::identifier, .value = std::move(value), .loc = startToken.loc });
+            return makeNodePtr<Identifier>(
+                Token{.type = TokenType::identifier, .value = std::move(value), .loc = startToken.loc});
         };
         auto makeMember = [&](NodePtr<Expression> object, std::string name)
         {
-            return makeNodePtr<MemberAccessExpression>(
-                std::move(object), makeIdentifier(std::move(name)), TokenType::opDot, startToken.loc);
+            return makeNodePtr<MemberAccessExpression>(std::move(object), makeIdentifier(std::move(name)),
+                                                       TokenType::opDot, startToken.loc);
         };
-        auto makeAppIdentifier = [&]() -> NodePtr<Expression>
-        {
-            return makeIdentifier("__application");
-        };
+        auto makeAppIdentifier = [&]() -> NodePtr<Expression> { return makeIdentifier("__application"); };
         auto makeAppCall = [&](std::string method, std::vector<NodePtr<Expression>> arguments = {})
         {
-            return makeNodePtr<FunctionCallExpression>(
-                makeMember(makeAppIdentifier(), std::move(method)),
-                std::vector<NodePtr<TypeSpecifier>>{}, std::move(arguments),
-                false, false, startToken.loc);
+            return makeNodePtr<FunctionCallExpression>(makeMember(makeAppIdentifier(), std::move(method)),
+                                                       std::vector<NodePtr<TypeSpecifier>>{}, std::move(arguments),
+                                                       false, false, startToken.loc);
         };
         auto makeAsyncRuntimeCall = [&](std::string method)
         {
-            auto stdNamespace = makeNodePtr<MemberAccessExpression>(
-                makeIdentifier("std"), makeIdentifier("async"), TokenType::opScope, startToken.loc);
+            auto stdNamespace = makeNodePtr<MemberAccessExpression>(makeIdentifier("std"), makeIdentifier("async"),
+                                                                    TokenType::opScope, startToken.loc);
             auto function = makeNodePtr<MemberAccessExpression>(
                 std::move(stdNamespace), makeIdentifier(std::move(method)), TokenType::opScope, startToken.loc);
-            return makeNodePtr<FunctionCallExpression>(
-                std::move(function),
-                std::vector<NodePtr<TypeSpecifier>>{},
-                std::vector<NodePtr<Expression>>{},
-                false, false, startToken.loc);
+            return makeNodePtr<FunctionCallExpression>(std::move(function), std::vector<NodePtr<TypeSpecifier>>{},
+                                                       std::vector<NodePtr<Expression>>{}, false, false,
+                                                       startToken.loc);
         };
 
         std::vector<ComponentMember> fields;
@@ -2215,29 +2139,36 @@ namespace wio
                 if (!method->body)
                     utError("Application functions require a body.", method->location());
                 if (method->isAsync)
-                    utError("Application functions are synchronous because their mutable stack receiver cannot cross suspension; start async work explicitly from the function body.", method->location());
+                    utError("Application functions are synchronous because their mutable stack receiver cannot cross "
+                            "suspension; start async work explicitly from the function body.",
+                            method->location());
 
                 const auto loweringAttributes = expandAttributeCompositionsForLowering(method->attributes);
 
                 const bool explicitStart = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationStart);
                 const bool explicitUpdate = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationUpdate);
                 const bool explicitClose = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationClose);
-                const size_t lifecycleCount = static_cast<size_t>(explicitStart) +
-                    static_cast<size_t>(explicitUpdate) + static_cast<size_t>(explicitClose);
+                const size_t lifecycleCount = static_cast<size_t>(explicitStart) + static_cast<size_t>(explicitUpdate) +
+                                              static_cast<size_t>(explicitClose);
                 if (lifecycleCount > 1u)
-                    utError("An application function may declare only one of [Start], [Update], or [Close].", method->location());
+                    utError("An application function may declare only one of [Start], [Update], or [Close].",
+                            method->location());
 
                 const std::string sourceName = method->name->token.value;
                 std::string lifecycle;
-                if (explicitStart || (lifecycleCount == 0u && sourceName == "Start")) lifecycle = "start";
-                else if (explicitUpdate || (lifecycleCount == 0u && sourceName == "Update")) lifecycle = "update";
-                else if (explicitClose || (lifecycleCount == 0u && sourceName == "Close")) lifecycle = "close";
+                if (explicitStart || (lifecycleCount == 0u && sourceName == "Start"))
+                    lifecycle = "start";
+                else if (explicitUpdate || (lifecycleCount == 0u && sourceName == "Update"))
+                    lifecycle = "update";
+                else if (explicitClose || (lifecycleCount == 0u && sourceName == "Close"))
+                    lifecycle = "close";
 
                 const auto* fixedAttribute = findBuiltinAttribute(loweringAttributes, Attribute::Fixed);
                 const auto* afterAttribute = findBuiltinAttribute(loweringAttributes, Attribute::After);
                 const bool mainThread = hasBuiltinAttribute(loweringAttributes, Attribute::Main);
                 const bool workerThread = hasBuiltinAttribute(loweringAttributes, Attribute::Worker);
-                const bool scheduled = fixedAttribute != nullptr || afterAttribute != nullptr || mainThread || workerThread;
+                const bool scheduled =
+                    fixedAttribute != nullptr || afterAttribute != nullptr || mainThread || workerThread;
 
                 if ((!lifecycle.empty() || scheduled) &&
                     (!method->genericParameters.empty() || method->hasGenericParameterPack))
@@ -2247,27 +2178,30 @@ namespace wio
 
                 if (workerThread)
                 {
-                    utError(
-                        "[Worker] application stages are reserved until ref/view conflict analysis can prove safe parallel execution; use [Main] or omit the affinity.",
-                        method->location());
+                    utError("[Worker] application stages are reserved until ref/view conflict analysis can prove safe "
+                            "parallel execution; use [Main] or omit the affinity.",
+                            method->location());
                 }
                 if (scheduled && (lifecycle == "start" || lifecycle == "close"))
-                    utError("[Fixed], [After], [Main], and [Worker] apply only to update-stage functions.", method->location());
+                    utError("[Fixed], [After], [Main], and [Worker] apply only to update-stage functions.",
+                            method->location());
                 if (method->parameters.size() > 1u)
-                    utError("Application lifecycle and scheduled functions accept at most one f64 delta parameter.", method->location());
+                    utError("Application lifecycle and scheduled functions accept at most one f64 delta parameter.",
+                            method->location());
                 if (!method->parameters.empty())
                 {
                     const auto& parameter = method->parameters.front();
                     if (!parameter.type || parameter.type->name.type != TokenType::kwF64)
-                        utError("Application lifecycle and scheduled function parameters must have type f64.", parameter.name->location());
+                        utError("Application lifecycle and scheduled function parameters must have type f64.",
+                                parameter.name->location());
                 }
                 if ((lifecycle == "start" || lifecycle == "close") && !method->parameters.empty())
                     utError("Application start and close functions do not accept parameters.", method->location());
 
                 if (lifecycle == "update" && sourceName == "Update" && method->parameters.empty())
                 {
-                    method->parameters.emplace_back(
-                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                    method->parameters.emplace_back(makeIdentifier("_wio_deltaSeconds"),
+                                                    makeType(TokenType::kwF64, "f64"), nullptr, false);
                 }
 
                 const bool acceptsDelta = !method->parameters.empty();
@@ -2275,12 +2209,12 @@ namespace wio
                 if (!lifecycle.empty())
                 {
                     if (handlers.contains(lifecycle) || lifecycleBindings.contains(lifecycle))
-                        utError("Application lifecycle '" + lifecycle + "' is declared more than once.", method->location());
+                        utError("Application lifecycle '" + lifecycle + "' is declared more than once.",
+                                method->location());
                     method->attributeTargetOverride = "handler";
-                    const bool conventionalName =
-                        (lifecycle == "start" && sourceName == "Start") ||
-                        (lifecycle == "update" && sourceName == "Update") ||
-                        (lifecycle == "close" && sourceName == "Close");
+                    const bool conventionalName = (lifecycle == "start" && sourceName == "Start") ||
+                                                  (lifecycle == "update" && sourceName == "Update") ||
+                                                  (lifecycle == "close" && sourceName == "Close");
                     if (conventionalName)
                         handlers.emplace(lifecycle, std::move(method));
                     else
@@ -2314,8 +2248,14 @@ namespace wio
                     {
                         if (fixedAttribute->args.size() != 1u)
                             utError("[Fixed] requires exactly one positive frequency.", fixedAttribute->location());
-                        try { stage.hz = std::stod(fixedAttribute->args.front().value); }
-                        catch (...) { utError("[Fixed] frequency must be a positive number.", fixedAttribute->location()); }
+                        try
+                        {
+                            stage.hz = std::stod(fixedAttribute->args.front().value);
+                        }
+                        catch (...)
+                        {
+                            utError("[Fixed] frequency must be a positive number.", fixedAttribute->location());
+                        }
                         if (stage.hz <= 0.0)
                             utError("[Fixed] frequency must be greater than zero.", fixedAttribute->location());
                         stage.fixed = true;
@@ -2378,10 +2318,18 @@ namespace wio
                         {
                             advance();
                             const Token frequency = advance();
-                            if (frequency.type != TokenType::integerLiteral && frequency.type != TokenType::floatLiteral)
-                                utError("Fixed stage frequency must be a positive number followed by hz.", frequency.loc);
-                            try { stage.hz = std::stod(frequency.value); }
-                            catch (...) { utError("Fixed stage frequency is invalid.", frequency.loc); }
+                            if (frequency.type != TokenType::integerLiteral &&
+                                frequency.type != TokenType::floatLiteral)
+                                utError("Fixed stage frequency must be a positive number followed by hz.",
+                                        frequency.loc);
+                            try
+                            {
+                                stage.hz = std::stod(frequency.value);
+                            }
+                            catch (...)
+                            {
+                                utError("Fixed stage frequency is invalid.", frequency.loc);
+                            }
                             const Token unit = consumeIdentifier();
                             if (unit.value != "hz" || stage.hz <= 0.0)
                                 utError("Fixed stage frequency must be a positive number followed by hz.", unit.loc);
@@ -2415,12 +2363,14 @@ namespace wio
                                     auto argument = parseExpression();
                                     auto* borrow = argument ? argument->as<RefExpression>() : nullptr;
                                     auto* member = borrow && borrow->operand
-                                        ? borrow->operand->as<MemberAccessExpression>()
-                                        : nullptr;
-                                    if (!member || !member->object || !member->object->is<SelfExpression>() || !member->member)
+                                                       ? borrow->operand->as<MemberAccessExpression>()
+                                                       : nullptr;
+                                    if (!member || !member->object || !member->object->is<SelfExpression>() ||
+                                        !member->member)
                                     {
                                         utError(
-                                            "Scheduled system arguments must explicitly borrow an application resource as 'ref self.name'.",
+                                            "Scheduled system arguments must explicitly borrow an application resource "
+                                            "as 'ref self.name'.",
                                             argument ? argument->location() : target.loc);
                                     }
                                     run.resourceNames.push_back(member->member->token.value);
@@ -2465,8 +2415,8 @@ namespace wio
                         if (peek().type != TokenType::kwF64)
                             utError("Application update delta parameter must have type f64.", peek().loc);
                         auto parameterType = parseType();
-                        handlerParameters.emplace_back(
-                            std::move(parameterName), std::move(parameterType), nullptr, false);
+                        handlerParameters.emplace_back(std::move(parameterName), std::move(parameterType), nullptr,
+                                                       false);
                         if (match(TokenType::comma, true))
                             utError("Application update accepts exactly one delta parameter.", peek().loc);
                     }
@@ -2474,16 +2424,15 @@ namespace wio
                 }
                 if (lifecycle.value == "update" && handlerParameters.empty())
                 {
-                    handlerParameters.emplace_back(
-                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                    handlerParameters.emplace_back(makeIdentifier("_wio_deltaSeconds"),
+                                                   makeType(TokenType::kwF64, "f64"), nullptr, false);
                 }
                 auto body = parseBlockStatement();
-                std::string methodName = lifecycle.value == "start" ? "Start" :
-                    (lifecycle.value == "update" ? "Update" : "Close");
+                std::string methodName =
+                    lifecycle.value == "start" ? "Start" : (lifecycle.value == "update" ? "Update" : "Close");
                 auto handler = makeNodePtr<FunctionDeclaration>(
-                    std::move(memberAttributes), makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::move(handlerParameters), nullptr,
-                    nullptr, nullptr, std::move(body), lifecycle.loc);
+                    std::move(memberAttributes), makeIdentifier(methodName), std::vector<NodePtr<Identifier>>{}, false,
+                    std::move(handlerParameters), nullptr, nullptr, nullptr, std::move(body), lifecycle.loc);
                 handler->attributeTargetOverride = "handler";
                 handlers.emplace(lifecycle.value, std::move(handler));
                 continue;
@@ -2497,71 +2446,74 @@ namespace wio
             {
                 advance();
             }
-            else if (matchOneOf({ TokenType::kwLet, TokenType::kwMut, TokenType::kwConst }))
+            else if (matchOneOf({TokenType::kwLet, TokenType::kwMut, TokenType::kwConst}))
             {
                 const Token qualifier = advance();
-                if (qualifier.type == TokenType::kwLet) mutability = Mutability::Immutable;
-                else if (qualifier.type == TokenType::kwConst) mutability = Mutability::Const;
+                if (qualifier.type == TokenType::kwLet)
+                    mutability = Mutability::Immutable;
+                else if (qualifier.type == TokenType::kwConst)
+                    mutability = Mutability::Const;
             }
             else if (peek().type != TokenType::identifier)
-                utError("Application fields require a name, optionally preceded by 'mut', 'let', 'const', 'resource', or 'system'.", peek().loc);
+                utError(
+                    "Application fields require a name, optionally preceded by 'mut', 'let', 'const', 'resource', or "
+                    "'system'.",
+                    peek().loc);
 
             auto name = makeNodePtr<Identifier>(consumeIdentifier());
             const std::string fieldName = name->token.value;
             consume(TokenType::opColon);
             auto type = parseType();
             const size_t typeSeparator = type->name.value.rfind("::");
-            const std::string typeTail = typeSeparator == std::string::npos
-                ? type->name.value
-                : type->name.value.substr(typeSeparator + 2u);
-            const bool inferredSystem = declaredSystemTypeNames_.contains(type->name.value) ||
-                declaredSystemTypeNames_.contains(typeTail);
-            if (systemOwned || inferredSystem) ownedSystems.push_back(fieldName);
-            else applicationResources.insert(fieldName);
-            if (resourceOwned) applicationResources.insert(fieldName);
+            const std::string typeTail =
+                typeSeparator == std::string::npos ? type->name.value : type->name.value.substr(typeSeparator + 2u);
+            const bool inferredSystem =
+                declaredSystemTypeNames_.contains(type->name.value) || declaredSystemTypeNames_.contains(typeTail);
+            if (systemOwned || inferredSystem)
+                ownedSystems.push_back(fieldName);
+            else
+                applicationResources.insert(fieldName);
+            if (resourceOwned)
+                applicationResources.insert(fieldName);
             NodePtr<Expression> initializer = nullptr;
-            if (match(TokenType::opAssign, true)) initializer = parseExpression();
+            if (match(TokenType::opAssign, true))
+                initializer = parseExpression();
             consume(TokenType::semicolon);
-            fields.push_back(ComponentMember{
-                .attributes = {}, .access = AccessModifier::Public,
-                .declaration = makeNodePtr<VariableDeclaration>(
-                    std::move(memberAttributes), mutability, std::move(name),
-                    std::move(type), std::move(initializer), false, startToken.loc)
-            });
+            fields.push_back(ComponentMember{.attributes = {},
+                                             .access = AccessModifier::Public,
+                                             .declaration = makeNodePtr<VariableDeclaration>(
+                                                 std::move(memberAttributes), mutability, std::move(name),
+                                                 std::move(type), std::move(initializer), false, startToken.loc)});
         }
         consume(TokenType::rightBrace);
 
         auto findApplicationMethod = [&](const std::string& name) -> FunctionDeclaration*
         {
-            const auto found = std::ranges::find_if(
-                applicationMethods,
-                [&](const NodePtr<FunctionDeclaration>& method)
-                {
-                    return method && method->name && method->name->token.value == name;
-                });
+            const auto found =
+                std::ranges::find_if(applicationMethods, [&](const NodePtr<FunctionDeclaration>& method)
+                                     { return method && method->name && method->name->token.value == name; });
             return found == applicationMethods.end() ? nullptr : found->Get();
         };
         auto makeSelfMethodCallStatement = [&](const std::string& methodName,
                                                std::vector<NodePtr<Expression>> arguments = {}) -> NodePtr<Statement>
         {
-            auto methodAccess = makeNodePtr<MemberAccessExpression>(
-                makeNodePtr<SelfExpression>(startToken.loc), makeIdentifier(methodName),
-                TokenType::opDot, startToken.loc);
-            auto call = makeNodePtr<FunctionCallExpression>(
-                std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
-                std::move(arguments), false, false, startToken.loc);
+            auto methodAccess =
+                makeNodePtr<MemberAccessExpression>(makeNodePtr<SelfExpression>(startToken.loc),
+                                                    makeIdentifier(methodName), TokenType::opDot, startToken.loc);
+            auto call =
+                makeNodePtr<FunctionCallExpression>(std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
+                                                    std::move(arguments), false, false, startToken.loc);
             return makeNodePtr<ExpressionStatement>(std::move(call), startToken.loc);
         };
-        auto makeLifecycleForwarder = [&](const std::string& lifecycle,
-                                          const std::string& targetName,
+        auto makeLifecycleForwarder = [&](const std::string& lifecycle, const std::string& targetName,
                                           const bool forwardCall) -> NodePtr<FunctionDeclaration>
         {
-            const std::string methodName = lifecycle == "start" ? "Start" :
-                (lifecycle == "update" ? "Update" : "Close");
+            const std::string methodName =
+                lifecycle == "start" ? "Start" : (lifecycle == "update" ? "Update" : "Close");
             std::vector<Parameter> parameters;
             if (lifecycle == "update")
-                parameters.emplace_back(
-                    makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                parameters.emplace_back(makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr,
+                                        false);
 
             std::vector<NodePtr<Statement>> statements;
             if (forwardCall)
@@ -2574,14 +2526,13 @@ namespace wio
             }
             auto forwarder = makeNodePtr<FunctionDeclaration>(
                 std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
-                std::vector<NodePtr<Identifier>>{}, false, std::move(parameters), nullptr,
-                nullptr, nullptr,
+                std::vector<NodePtr<Identifier>>{}, false, std::move(parameters), nullptr, nullptr, nullptr,
                 makeNodePtr<BlockStatement>(std::move(statements), startToken.loc), startToken.loc);
             forwarder->attributeTargetOverride = "handler";
             return forwarder;
         };
 
-        for (const std::string lifecycle : { "start", "update", "close" })
+        for (const std::string lifecycle : {"start", "update", "close"})
         {
             const auto binding = lifecycleBindings.find(lifecycle);
             if (binding == lifecycleBindings.end())
@@ -2613,12 +2564,8 @@ namespace wio
                 scheduleStages,
                 [](const ParsedApplicationStage& stage)
                 {
-                    return std::ranges::any_of(
-                        stage.runs,
-                        [](const ParsedApplicationStage::Run& run)
-                        {
-                            return run.inlineApplicationUpdate;
-                        });
+                    return std::ranges::any_of(stage.runs, [](const ParsedApplicationStage::Run& run)
+                                               { return run.inlineApplicationUpdate; });
                 });
             if (!updateAlreadyScheduled && !customUpdateScheduled)
             {
@@ -2642,29 +2589,38 @@ namespace wio
             for (size_t index = 0; index < scheduleStages.size(); ++index)
             {
                 if (!stageByName.emplace(scheduleStages[index].name, index).second)
-                    utError("Application stage '" + scheduleStages[index].name + "' is declared more than once.", startToken.loc);
+                    utError("Application stage '" + scheduleStages[index].name + "' is declared more than once.",
+                            startToken.loc);
             }
             for (const auto& stage : scheduleStages)
             {
                 if (stage.after.has_value() && !stageByName.contains(*stage.after))
-                    utError("Schedule stage '" + stage.name + "' depends on unknown stage '" + *stage.after + "'.", startToken.loc);
+                    utError("Schedule stage '" + stage.name + "' depends on unknown stage '" + *stage.after + "'.",
+                            startToken.loc);
                 for (const auto& run : stage.runs)
                 {
                     if (run.target == "self" && run.inlineApplicationUpdate)
                     {
                         ++selfRunCount;
                         if (!run.resourceArguments.empty())
-                            utError("A scheduled 'self.update' run does not accept resource arguments.", startToken.loc);
+                            utError("A scheduled 'self.update' run does not accept resource arguments.",
+                                    startToken.loc);
                     }
                     if (run.target != "self" && std::ranges::find(ownedSystems, run.target) == ownedSystems.end())
-                        utError("Schedule stage '" + stage.name + "' runs unknown application system '" + run.target + "'.", startToken.loc);
+                        utError("Schedule stage '" + stage.name + "' runs unknown application system '" + run.target +
+                                    "'.",
+                                startToken.loc);
                     std::unordered_set<std::string> seenResources;
                     for (const auto& resourceName : run.resourceNames)
                     {
                         if (!applicationResources.contains(resourceName))
-                            utError("Schedule stage '" + stage.name + "' borrows unknown application resource '" + resourceName + "'.", startToken.loc);
+                            utError("Schedule stage '" + stage.name + "' borrows unknown application resource '" +
+                                        resourceName + "'.",
+                                    startToken.loc);
                         if (!seenResources.insert(resourceName).second)
-                            utError("Schedule stage '" + stage.name + "' borrows application resource '" + resourceName + "' more than once for one run.", startToken.loc);
+                            utError("Schedule stage '" + stage.name + "' borrows application resource '" +
+                                        resourceName + "' more than once for one run.",
+                                    startToken.loc);
                     }
                 }
             }
@@ -2696,49 +2652,51 @@ namespace wio
 
         auto addControlField = [&](std::string name, NodePtr<TypeSpecifier> type, NodePtr<Expression> initializer)
         {
-            fields.push_back(ComponentMember{
-                .attributes = {}, .access = AccessModifier::Public,
-                .declaration = makeNodePtr<VariableDeclaration>(
-                    std::vector<NodePtr<AttributeStatement>>{}, Mutability::Mutable,
-                    makeIdentifier(std::move(name)), std::move(type), std::move(initializer), false, startToken.loc)
-            });
+            fields.push_back(ComponentMember{.attributes = {},
+                                             .access = AccessModifier::Public,
+                                             .declaration = makeNodePtr<VariableDeclaration>(
+                                                 std::vector<NodePtr<AttributeStatement>>{}, Mutability::Mutable,
+                                                 makeIdentifier(std::move(name)), std::move(type),
+                                                 std::move(initializer), false, startToken.loc)});
         };
-        addControlField("__exitRequested", makeType(TokenType::kwBool, "bool"),
-            makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwFalse, .value = "false", .loc = startToken.loc }));
-        addControlField("__exitCode", makeType(TokenType::kwI32, "i32"),
-            makeNodePtr<IntegerLiteral>(Token{ .type = TokenType::integerLiteral, .value = "0", .loc = startToken.loc }));
+        addControlField(
+            "__exitRequested", makeType(TokenType::kwBool, "bool"),
+            makeNodePtr<BoolLiteral>(Token{.type = TokenType::kwFalse, .value = "false", .loc = startToken.loc}));
+        addControlField(
+            "__exitCode", makeType(TokenType::kwI32, "i32"),
+            makeNodePtr<IntegerLiteral>(Token{.type = TokenType::integerLiteral, .value = "0", .loc = startToken.loc}));
         for (const auto& systemName : ownedSystems)
         {
-            addControlField("__started_" + systemName, makeType(TokenType::kwBool, "bool"),
-                makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwFalse, .value = "false", .loc = startToken.loc }));
+            addControlField(
+                "__started_" + systemName, makeType(TokenType::kwBool, "bool"),
+                makeNodePtr<BoolLiteral>(Token{.type = TokenType::kwFalse, .value = "false", .loc = startToken.loc}));
         }
         for (const size_t stageIndex : orderedStageIndices)
         {
             const auto& stage = scheduleStages[stageIndex];
             if (!stage.fixed)
                 continue;
-            addControlField("__fixed_" + stage.name,
-                makeType(TokenType::kwF64, "f64"),
-                makeNodePtr<FloatLiteral>(Token{
-                    .type = TokenType::floatLiteral, .value = "0.0", .loc = startToken.loc }));
+            addControlField("__fixed_" + stage.name, makeType(TokenType::kwF64, "f64"),
+                            makeNodePtr<FloatLiteral>(
+                                Token{.type = TokenType::floatLiteral, .value = "0.0", .loc = startToken.loc}));
         }
 
-        auto component = makeNodePtr<ComponentDeclaration>(
-            std::move(applicationAttributes), std::move(applicationName),
-            std::vector<NodePtr<Identifier>>{}, false, std::move(fields), startToken.loc);
+        auto component = makeNodePtr<ComponentDeclaration>(std::move(applicationAttributes), std::move(applicationName),
+                                                           std::vector<NodePtr<Identifier>>{}, false, std::move(fields),
+                                                           startToken.loc);
         component->attributeTargetOverride = "application";
 
         auto addReceiver = [&](NodePtr<FunctionDeclaration>& method)
         {
-            auto receiverInner = makeNodePtr<TypeSpecifier>(applicationNameToken,
-                std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0, false, false, false, startToken.loc);
-            Token refToken{ .type = TokenType::kwRef, .value = "ref", .loc = startToken.loc };
+            auto receiverInner = makeNodePtr<TypeSpecifier>(applicationNameToken, std::vector<NodePtr<TypeSpecifier>>{},
+                                                            nullptr, 0, false, false, false, startToken.loc);
+            Token refToken{.type = TokenType::kwRef, .value = "ref", .loc = startToken.loc};
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(receiverInner));
-            auto receiverType = makeNodePtr<TypeSpecifier>(std::move(refToken), std::move(generics),
-                nullptr, 0, true, true, false, startToken.loc);
+            auto receiverType = makeNodePtr<TypeSpecifier>(std::move(refToken), std::move(generics), nullptr, 0, true,
+                                                           true, false, startToken.loc);
             method->parameters.insert(method->parameters.begin(),
-                Parameter(makeIdentifier("_wio_self"), std::move(receiverType), nullptr, false));
+                                      Parameter(makeIdentifier("_wio_self"), std::move(receiverType), nullptr, false));
             method->isExtensionMethod = true;
             method->extensionMutableReceiver = true;
             method->extensionMemberName = method->name->token.value;
@@ -2750,43 +2708,40 @@ namespace wio
         {
             addReceiver(method);
             extensionMembers.push_back(ExtensionMember{
-                .access = AccessModifier::Public,
-                .mutableReceiver = true,
-                .method = std::move(method)
-            });
+                .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(method)});
         }
 
         std::vector<NodePtr<Statement>> firstExitStatements;
         firstExitStatements.push_back(makeNodePtr<ExpressionStatement>(
             makeNodePtr<AssignmentExpression>(
                 makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__exitRequested"),
-                Token{ .type = TokenType::opAssign, .value = "=", .loc = startToken.loc },
-                makeNodePtr<BoolLiteral>(Token{ .type = TokenType::kwTrue, .value = "true", .loc = startToken.loc })),
+                Token{.type = TokenType::opAssign, .value = "=", .loc = startToken.loc},
+                makeNodePtr<BoolLiteral>(Token{.type = TokenType::kwTrue, .value = "true", .loc = startToken.loc})),
             startToken.loc));
         firstExitStatements.push_back(makeNodePtr<ExpressionStatement>(
-            makeNodePtr<AssignmentExpression>(
-                makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__exitCode"),
-                Token{ .type = TokenType::opAssign, .value = "=", .loc = startToken.loc },
-                makeIdentifier("code")), startToken.loc));
+            makeNodePtr<AssignmentExpression>(makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__exitCode"),
+                                              Token{.type = TokenType::opAssign, .value = "=", .loc = startToken.loc},
+                                              makeIdentifier("code")),
+            startToken.loc));
         std::vector<Parameter> exitParameters;
         exitParameters.emplace_back(makeIdentifier("code"), makeType(TokenType::kwI32, "i32"), nullptr, false);
-        auto firstExitCondition = makeNodePtr<UnaryExpression>(
-            Token{ .type = TokenType::opLogicalNot, .value = "!", .loc = startToken.loc },
-            makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__exitRequested"),
-            UnaryExpression::UnaryOperatorType::Prefix, startToken.loc);
+        auto firstExitCondition =
+            makeNodePtr<UnaryExpression>(Token{.type = TokenType::opLogicalNot, .value = "!", .loc = startToken.loc},
+                                         makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__exitRequested"),
+                                         UnaryExpression::UnaryOperatorType::Prefix, startToken.loc);
         std::vector<NodePtr<Statement>> exitStatements;
         exitStatements.push_back(makeNodePtr<IfStatement>(
-            std::move(firstExitCondition),
-            makeNodePtr<BlockStatement>(std::move(firstExitStatements), startToken.loc),
+            std::move(firstExitCondition), makeNodePtr<BlockStatement>(std::move(firstExitStatements), startToken.loc),
             nullptr, Token::invalid(), startToken.loc));
         auto exitMethod = makeNodePtr<FunctionDeclaration>(
-            std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier("Exit"),
-            std::vector<NodePtr<Identifier>>{}, false, std::move(exitParameters), nullptr,
-            nullptr, nullptr, makeNodePtr<BlockStatement>(std::move(exitStatements), startToken.loc), startToken.loc);
+            std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier("Exit"), std::vector<NodePtr<Identifier>>{},
+            false, std::move(exitParameters), nullptr, nullptr, nullptr,
+            makeNodePtr<BlockStatement>(std::move(exitStatements), startToken.loc), startToken.loc);
         addReceiver(exitMethod);
-        extensionMembers.push_back(ExtensionMember{ .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(exitMethod) });
+        extensionMembers.push_back(ExtensionMember{
+            .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(exitMethod)});
 
-        for (const std::string lifecycle : { "start", "update", "close" })
+        for (const std::string lifecycle : {"start", "update", "close"})
         {
             NodePtr<FunctionDeclaration> method;
             if (auto iterator = handlers.find(lifecycle); iterator != handlers.end())
@@ -2796,35 +2751,35 @@ namespace wio
                 const std::string methodName = lifecycle == "start" ? "Start" : "Close";
                 std::vector<Parameter> defaultParameters;
                 if (lifecycle == "update")
-                    defaultParameters.emplace_back(
-                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                    defaultParameters.emplace_back(makeIdentifier("_wio_deltaSeconds"),
+                                                   makeType(TokenType::kwF64, "f64"), nullptr, false);
                 method = makeNodePtr<FunctionDeclaration>(
                     std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::move(defaultParameters), nullptr,
-                    nullptr, nullptr, makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
+                    std::vector<NodePtr<Identifier>>{}, false, std::move(defaultParameters), nullptr, nullptr, nullptr,
+                    makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
             }
 
             auto makeSystemCallStatement = [&](const std::string& systemName, const std::string& methodName,
                                                std::vector<NodePtr<Expression>> resourceArguments = {})
             {
-                auto systemAccess = makeNodePtr<MemberAccessExpression>(
-                    makeNodePtr<SelfExpression>(startToken.loc), makeIdentifier(systemName),
-                    TokenType::opDot, startToken.loc);
+                auto systemAccess =
+                    makeNodePtr<MemberAccessExpression>(makeNodePtr<SelfExpression>(startToken.loc),
+                                                        makeIdentifier(systemName), TokenType::opDot, startToken.loc);
                 auto methodAccess = makeNodePtr<MemberAccessExpression>(
                     std::move(systemAccess), makeIdentifier(methodName), TokenType::opDot, startToken.loc);
                 std::vector<NodePtr<Expression>> callArguments;
                 if (lifecycle == "update")
                 {
                     const std::string deltaName = method->parameters.empty() || !method->parameters.front().name
-                        ? "_wio_deltaSeconds"
-                        : method->parameters.front().name->token.value;
+                                                      ? "_wio_deltaSeconds"
+                                                      : method->parameters.front().name->token.value;
                     callArguments.push_back(makeIdentifier(deltaName));
                 }
                 for (auto& argument : resourceArguments)
                     callArguments.push_back(std::move(argument));
-                auto call = makeNodePtr<FunctionCallExpression>(
-                    std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
-                    std::move(callArguments), false, false, startToken.loc);
+                auto call =
+                    makeNodePtr<FunctionCallExpression>(std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
+                                                        std::move(callArguments), false, false, startToken.loc);
                 return makeNodePtr<ExpressionStatement>(std::move(call), startToken.loc);
             };
             auto makeSystemStartedAssignment = [&](const std::string& systemName, const bool started)
@@ -2832,11 +2787,10 @@ namespace wio
                 return makeNodePtr<ExpressionStatement>(
                     makeNodePtr<AssignmentExpression>(
                         makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__started_" + systemName),
-                        Token{ .type = TokenType::opAssign, .value = "=", .loc = startToken.loc },
-                        makeNodePtr<BoolLiteral>(Token{
-                            .type = started ? TokenType::kwTrue : TokenType::kwFalse,
-                            .value = started ? "true" : "false",
-                            .loc = startToken.loc })),
+                        Token{.type = TokenType::opAssign, .value = "=", .loc = startToken.loc},
+                        makeNodePtr<BoolLiteral>(Token{.type = started ? TokenType::kwTrue : TokenType::kwFalse,
+                                                       .value = started ? "true" : "false",
+                                                       .loc = startToken.loc})),
                     startToken.loc);
             };
             auto makeSystemCloseStatement = [&](const std::string& systemName)
@@ -2846,31 +2800,27 @@ namespace wio
                 closeStatements.push_back(makeSystemStartedAssignment(systemName, false));
                 return makeNodePtr<IfStatement>(
                     makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__started_" + systemName),
-                    makeNodePtr<BlockStatement>(std::move(closeStatements), startToken.loc),
-                    nullptr, Token::invalid(), startToken.loc);
+                    makeNodePtr<BlockStatement>(std::move(closeStatements), startToken.loc), nullptr, Token::invalid(),
+                    startToken.loc);
             };
             if (auto block = method->body.As<BlockStatement>(); block)
             {
-                const std::string methodName = lifecycle == "start" ? "Start" :
-                    (lifecycle == "update" ? "Update" : "Close");
+                const std::string methodName =
+                    lifecycle == "start" ? "Start" : (lifecycle == "update" ? "Update" : "Close");
                 if (lifecycle == "update" && hasExplicitSchedule)
                 {
                     std::vector<NodePtr<Statement>> userUpdateStatements = std::move(block->statements);
                     std::vector<NodePtr<Statement>> scheduledStatements;
                     const std::string deltaName = method->parameters.empty() || !method->parameters.front().name
-                        ? "_wio_deltaSeconds"
-                        : method->parameters.front().name->token.value;
+                                                      ? "_wio_deltaSeconds"
+                                                      : method->parameters.front().name->token.value;
 
                     auto makeAccumulator = [&](const std::string& stageName) -> NodePtr<Expression>
-                    {
-                        return makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__fixed_" + stageName);
-                    };
+                    { return makeMember(makeNodePtr<SelfExpression>(startToken.loc), "__fixed_" + stageName); };
                     auto makeStep = [&](const double hz) -> NodePtr<Expression>
                     {
                         return makeNodePtr<FloatLiteral>(Token{
-                            .type = TokenType::floatLiteral,
-                            .value = std::to_string(1.0 / hz),
-                            .loc = startToken.loc });
+                            .type = TokenType::floatLiteral, .value = std::to_string(1.0 / hz), .loc = startToken.loc});
                     };
 
                     for (const size_t stageIndex : orderedStageIndices)
@@ -2890,17 +2840,15 @@ namespace wio
                                 std::vector<NodePtr<Expression>> arguments;
                                 if (run.acceptsDelta)
                                 {
-                                    arguments.push_back(stage.fixed
-                                        ? makeStep(stage.hz)
-                                        : makeIdentifier(deltaName));
+                                    arguments.push_back(stage.fixed ? makeStep(stage.hz) : makeIdentifier(deltaName));
                                 }
                                 stageStatements.push_back(
                                     makeSelfMethodCallStatement(run.method, std::move(arguments)));
                             }
                             else
                             {
-                                stageStatements.push_back(makeSystemCallStatement(
-                                    run.target, "Update", std::move(run.resourceArguments)));
+                                stageStatements.push_back(
+                                    makeSystemCallStatement(run.target, "Update", std::move(run.resourceArguments)));
                             }
                         }
 
@@ -2914,23 +2862,22 @@ namespace wio
                         scheduledStatements.push_back(makeNodePtr<ExpressionStatement>(
                             makeNodePtr<AssignmentExpression>(
                                 makeAccumulator(stage.name),
-                                Token{ .type = TokenType::opPlusAssign, .value = "+=", .loc = startToken.loc },
+                                Token{.type = TokenType::opPlusAssign, .value = "+=", .loc = startToken.loc},
                                 makeIdentifier(deltaName), startToken.loc),
                             startToken.loc));
                         stageStatements.push_back(makeNodePtr<ExpressionStatement>(
                             makeNodePtr<AssignmentExpression>(
                                 makeAccumulator(stage.name),
-                                Token{ .type = TokenType::opMinusAssign, .value = "-=", .loc = startToken.loc },
+                                Token{.type = TokenType::opMinusAssign, .value = "-=", .loc = startToken.loc},
                                 makeStep(stage.hz), startToken.loc),
                             startToken.loc));
                         auto fixedCondition = makeNodePtr<BinaryExpression>(
                             makeAccumulator(stage.name),
-                            Token{ .type = TokenType::opGreaterEqual, .value = ">=", .loc = startToken.loc },
+                            Token{.type = TokenType::opGreaterEqual, .value = ">=", .loc = startToken.loc},
                             makeStep(stage.hz), startToken.loc);
                         scheduledStatements.push_back(makeNodePtr<WhileStatement>(
                             std::move(fixedCondition),
-                            makeNodePtr<BlockStatement>(std::move(stageStatements), startToken.loc),
-                            startToken.loc));
+                            makeNodePtr<BlockStatement>(std::move(stageStatements), startToken.loc), startToken.loc));
                     }
                     block->statements = std::move(scheduledStatements);
                 }
@@ -2960,55 +2907,50 @@ namespace wio
                 }
             }
             addReceiver(method);
-            extensionMembers.push_back(ExtensionMember{ .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(method) });
+            extensionMembers.push_back(ExtensionMember{
+                .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(method)});
         }
 
-        auto targetType = makeNodePtr<TypeSpecifier>(applicationNameToken,
-            std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0, false, false, false, startToken.loc);
+        auto targetType = makeNodePtr<TypeSpecifier>(applicationNameToken, std::vector<NodePtr<TypeSpecifier>>{},
+                                                     nullptr, 0, false, false, false, startToken.loc);
         auto extension = makeNodePtr<ExtensionDeclaration>(
-            std::vector<NodePtr<AttributeStatement>>{},
-            makeIdentifier(applicationNameToken.value + "Lifecycle"),
+            std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(applicationNameToken.value + "Lifecycle"),
             std::move(targetType), std::move(extensionMembers), startToken.loc);
 
         std::vector<NodePtr<Statement>> entryStatements;
-        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
-            makeAsyncRuntimeCall("BindMain"), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAsyncRuntimeCall("BindMain"), startToken.loc));
         std::vector<NodePtr<Expression>> noArguments;
         auto constructorCall = makeNodePtr<FunctionCallExpression>(
-            makeIdentifier(applicationNameToken.value), std::vector<NodePtr<TypeSpecifier>>{},
-            std::move(noArguments), false, false, startToken.loc);
+            makeIdentifier(applicationNameToken.value), std::vector<NodePtr<TypeSpecifier>>{}, std::move(noArguments),
+            false, false, startToken.loc);
         entryStatements.push_back(makeNodePtr<VariableDeclaration>(
-            std::vector<NodePtr<AttributeStatement>>{}, Mutability::Mutable,
-            makeIdentifier("__application"), nullptr, std::move(constructorCall), false, startToken.loc));
+            std::vector<NodePtr<AttributeStatement>>{}, Mutability::Mutable, makeIdentifier("__application"), nullptr,
+            std::move(constructorCall), false, startToken.loc));
         entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Start"), startToken.loc));
-        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
-            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
-        auto condition = makeNodePtr<UnaryExpression>(
-            Token{ .type = TokenType::opLogicalNot, .value = "!", .loc = startToken.loc },
-            makeMember(makeAppIdentifier(), "__exitRequested"), UnaryExpression::UnaryOperatorType::Prefix, startToken.loc);
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAsyncRuntimeCall("DrainMain"), startToken.loc));
+        auto condition =
+            makeNodePtr<UnaryExpression>(Token{.type = TokenType::opLogicalNot, .value = "!", .loc = startToken.loc},
+                                         makeMember(makeAppIdentifier(), "__exitRequested"),
+                                         UnaryExpression::UnaryOperatorType::Prefix, startToken.loc);
         std::vector<NodePtr<Statement>> updateStatements;
-        updateStatements.push_back(makeNodePtr<ExpressionStatement>(
-            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
+        updateStatements.push_back(makeNodePtr<ExpressionStatement>(makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         std::vector<NodePtr<Expression>> entryUpdateArguments;
-        entryUpdateArguments.push_back(makeNodePtr<FloatLiteral>(Token{
-            .type = TokenType::floatLiteral, .value = "0.0", .loc = startToken.loc }));
-        updateStatements.push_back(makeNodePtr<ExpressionStatement>(
-            makeAppCall("Update", std::move(entryUpdateArguments)), startToken.loc));
-        updateStatements.push_back(makeNodePtr<ExpressionStatement>(
-            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
+        entryUpdateArguments.push_back(
+            makeNodePtr<FloatLiteral>(Token{.type = TokenType::floatLiteral, .value = "0.0", .loc = startToken.loc}));
+        updateStatements.push_back(
+            makeNodePtr<ExpressionStatement>(makeAppCall("Update", std::move(entryUpdateArguments)), startToken.loc));
+        updateStatements.push_back(makeNodePtr<ExpressionStatement>(makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         auto updateBody = makeNodePtr<BlockStatement>(std::move(updateStatements), startToken.loc);
-        entryStatements.push_back(makeNodePtr<WhileStatement>(std::move(condition), std::move(updateBody), startToken.loc));
-        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
-            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
+        entryStatements.push_back(
+            makeNodePtr<WhileStatement>(std::move(condition), std::move(updateBody), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAsyncRuntimeCall("DrainMain"), startToken.loc));
         entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAppCall("Close"), startToken.loc));
-        entryStatements.push_back(makeNodePtr<ExpressionStatement>(
-            makeAsyncRuntimeCall("DrainMain"), startToken.loc));
-        entryStatements.push_back(makeNodePtr<ReturnStatement>(
-            makeMember(makeAppIdentifier(), "__exitCode"), startToken.loc));
+        entryStatements.push_back(makeNodePtr<ExpressionStatement>(makeAsyncRuntimeCall("DrainMain"), startToken.loc));
+        entryStatements.push_back(
+            makeNodePtr<ReturnStatement>(makeMember(makeAppIdentifier(), "__exitCode"), startToken.loc));
         auto entry = makeNodePtr<FunctionDeclaration>(
-            std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier("Entry"),
-            std::vector<NodePtr<Identifier>>{}, false, std::vector<Parameter>{},
-            makeType(TokenType::kwI32, "i32"), nullptr, nullptr,
+            std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier("Entry"), std::vector<NodePtr<Identifier>>{},
+            false, std::vector<Parameter>{}, makeType(TokenType::kwI32, "i32"), nullptr, nullptr,
             makeNodePtr<BlockStatement>(std::move(entryStatements), startToken.loc), startToken.loc);
         entry->isApplicationEntry = true;
         entry->applicationName = applicationNameToken.value;
@@ -3026,6 +2968,12 @@ namespace wio
             {
                 metadata.containsApplication = metadata.containsApplication || run.target == "self";
                 metadata.containsSystem = metadata.containsSystem || run.target != "self";
+                metadata.runs.push_back(
+                    ApplicationStageRunMetadata{.target = run.target,
+                                                .method = run.method,
+                                                .resourceNames = run.resourceNames,
+                                                .inlineApplicationUpdate = run.inlineApplicationUpdate,
+                                                .acceptsDelta = run.acceptsDelta});
             }
             entry->applicationStages.push_back(std::move(metadata));
         };
@@ -3042,12 +2990,16 @@ namespace wio
                 metadata.name = ownedSystems[order];
                 metadata.order = order;
                 metadata.containsSystem = true;
+                metadata.runs.push_back(ApplicationStageRunMetadata{
+                    .target = ownedSystems[order], .method = "Update", .acceptsDelta = true});
                 entry->applicationStages.push_back(std::move(metadata));
             }
             ApplicationStageMetadata updateMetadata;
             updateMetadata.name = "Update";
             updateMetadata.order = static_cast<std::uint32_t>(entry->applicationStages.size());
             updateMetadata.containsApplication = true;
+            updateMetadata.runs.push_back(ApplicationStageRunMetadata{
+                .target = "self", .method = "Update", .inlineApplicationUpdate = true, .acceptsDelta = true});
             entry->applicationStages.push_back(std::move(updateMetadata));
         }
 
@@ -3058,8 +3010,7 @@ namespace wio
         return makeNodePtr<DeclarationGroup>(std::move(declarations), startToken.loc);
     }
 
-    NodePtr<Statement> Parser::parseSystemDeclaration(
-        std::vector<NodePtr<AttributeStatement>> attributes)
+    NodePtr<Statement> Parser::parseSystemDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
     {
         const Token startToken = consume(TokenType::kwSystem);
         auto systemName = makeNodePtr<Identifier>(consumeIdentifier());
@@ -3070,14 +3021,14 @@ namespace wio
 
         auto makeIdentifier = [&](std::string value)
         {
-            return makeNodePtr<Identifier>(Token{
-                .type = TokenType::identifier, .value = std::move(value), .loc = startToken.loc });
+            return makeNodePtr<Identifier>(
+                Token{.type = TokenType::identifier, .value = std::move(value), .loc = startToken.loc});
         };
         auto makeType = [&](TokenType type, std::string value)
         {
-            Token token{ .type = type, .value = std::move(value), .loc = startToken.loc };
-            return makeNodePtr<TypeSpecifier>(std::move(token), std::vector<NodePtr<TypeSpecifier>>{},
-                nullptr, 0, false, false, false, startToken.loc);
+            Token token{.type = type, .value = std::move(value), .loc = startToken.loc};
+            return makeNodePtr<TypeSpecifier>(std::move(token), std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0,
+                                              false, false, false, startToken.loc);
         };
         std::vector<ComponentMember> fields;
         std::unordered_map<std::string, NodePtr<FunctionDeclaration>> handlers;
@@ -3094,31 +3045,38 @@ namespace wio
                 if (!method->body)
                     utError("System functions require a body.", method->location());
                 if (method->isAsync)
-                    utError("System functions are synchronous because their mutable stack receiver cannot cross suspension; start async work explicitly from the function body.", method->location());
+                    utError("System functions are synchronous because their mutable stack receiver cannot cross "
+                            "suspension; start async work explicitly from the function body.",
+                            method->location());
 
                 const auto loweringAttributes = expandAttributeCompositionsForLowering(method->attributes);
 
                 const bool explicitStart = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationStart);
                 const bool explicitUpdate = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationUpdate);
                 const bool explicitClose = hasBuiltinAttribute(loweringAttributes, Attribute::ApplicationClose);
-                const size_t lifecycleCount = static_cast<size_t>(explicitStart) +
-                    static_cast<size_t>(explicitUpdate) + static_cast<size_t>(explicitClose);
+                const size_t lifecycleCount = static_cast<size_t>(explicitStart) + static_cast<size_t>(explicitUpdate) +
+                                              static_cast<size_t>(explicitClose);
                 if (lifecycleCount > 1u)
-                    utError("A system function may declare only one of [Start], [Update], or [Close].", method->location());
+                    utError("A system function may declare only one of [Start], [Update], or [Close].",
+                            method->location());
 
                 const std::string sourceName = method->name->token.value;
                 std::string lifecycle;
-                if (explicitStart || (lifecycleCount == 0u && sourceName == "Start")) lifecycle = "start";
-                else if (explicitUpdate || (lifecycleCount == 0u && sourceName == "Update")) lifecycle = "update";
-                else if (explicitClose || (lifecycleCount == 0u && sourceName == "Close")) lifecycle = "close";
+                if (explicitStart || (lifecycleCount == 0u && sourceName == "Start"))
+                    lifecycle = "start";
+                else if (explicitUpdate || (lifecycleCount == 0u && sourceName == "Update"))
+                    lifecycle = "update";
+                else if (explicitClose || (lifecycleCount == 0u && sourceName == "Close"))
+                    lifecycle = "close";
 
-                const bool hasScheduleAttribute =
-                    hasBuiltinAttribute(loweringAttributes, Attribute::Fixed) ||
-                    hasBuiltinAttribute(loweringAttributes, Attribute::After) ||
-                    hasBuiltinAttribute(loweringAttributes, Attribute::Main) ||
-                    hasBuiltinAttribute(loweringAttributes, Attribute::Worker);
+                const bool hasScheduleAttribute = hasBuiltinAttribute(loweringAttributes, Attribute::Fixed) ||
+                                                  hasBuiltinAttribute(loweringAttributes, Attribute::After) ||
+                                                  hasBuiltinAttribute(loweringAttributes, Attribute::Main) ||
+                                                  hasBuiltinAttribute(loweringAttributes, Attribute::Worker);
                 if (hasScheduleAttribute)
-                    utError("[Fixed], [After], [Main], and [Worker] schedule application functions, not system functions.", method->location());
+                    utError(
+                        "[Fixed], [After], [Main], and [Worker] schedule application functions, not system functions.",
+                        method->location());
 
                 if (!lifecycle.empty())
                 {
@@ -3131,30 +3089,33 @@ namespace wio
                     if (lifecycle == "update")
                     {
                         if (explicitUpdate && sourceName != "Update" && method->parameters.size() > 1u)
-                            utError("A custom [Update] system function accepts at most one f64 delta parameter.", method->location());
+                            utError("A custom [Update] system function accepts at most one f64 delta parameter.",
+                                    method->location());
                         for (size_t parameterIndex = 0; parameterIndex < method->parameters.size(); ++parameterIndex)
                         {
                             const auto& parameter = method->parameters[parameterIndex];
-                            if (parameterIndex == 0 && (!parameter.type || parameter.type->name.type != TokenType::kwF64))
-                                utError("The first system update parameter must have type f64.", parameter.name->location());
-                            if (parameterIndex > 0 && parameter.type &&
-                                parameter.type->name.type != TokenType::kwRef && parameter.type->name.type != TokenType::kwView)
-                                utError("System update resource parameters must use ref or view.", parameter.name->location());
+                            if (parameterIndex == 0 &&
+                                (!parameter.type || parameter.type->name.type != TokenType::kwF64))
+                                utError("The first system update parameter must have type f64.",
+                                        parameter.name->location());
+                            if (parameterIndex > 0 && parameter.type && parameter.type->name.type != TokenType::kwRef &&
+                                parameter.type->name.type != TokenType::kwView)
+                                utError("System update resource parameters must use ref or view.",
+                                        parameter.name->location());
                         }
                         if (sourceName == "Update" && method->parameters.empty())
                         {
-                            method->parameters.emplace_back(
-                                makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                            method->parameters.emplace_back(makeIdentifier("_wio_deltaSeconds"),
+                                                            makeType(TokenType::kwF64, "f64"), nullptr, false);
                         }
                     }
 
                     if (handlers.contains(lifecycle) || lifecycleBindings.contains(lifecycle))
                         utError("System lifecycle '" + lifecycle + "' is declared more than once.", method->location());
                     method->attributeTargetOverride = "handler";
-                    const bool conventionalName =
-                        (lifecycle == "start" && sourceName == "Start") ||
-                        (lifecycle == "update" && sourceName == "Update") ||
-                        (lifecycle == "close" && sourceName == "Close");
+                    const bool conventionalName = (lifecycle == "start" && sourceName == "Start") ||
+                                                  (lifecycle == "update" && sourceName == "Update") ||
+                                                  (lifecycle == "close" && sourceName == "Close");
                     if (conventionalName)
                         handlers.emplace(lifecycle, std::move(method));
                     else
@@ -3193,11 +3154,12 @@ namespace wio
                             const TokenType writtenType = peek().type;
                             if (parameterIndex == 0 && writtenType != TokenType::kwF64)
                                 utError("The first system update parameter must have type f64.", peek().loc);
-                            if (parameterIndex > 0 && writtenType != TokenType::kwRef && writtenType != TokenType::kwView)
+                            if (parameterIndex > 0 && writtenType != TokenType::kwRef &&
+                                writtenType != TokenType::kwView)
                                 utError("System update resource parameters must use ref or view.", peek().loc);
                             auto parameterType = parseType();
-                            handlerParameters.emplace_back(
-                                std::move(parameterName), std::move(parameterType), nullptr, false);
+                            handlerParameters.emplace_back(std::move(parameterName), std::move(parameterType), nullptr,
+                                                           false);
                             ++parameterIndex;
                             if (!match(TokenType::comma, true))
                                 break;
@@ -3207,27 +3169,28 @@ namespace wio
                 }
                 if (lifecycle.value == "update" && handlerParameters.empty())
                 {
-                    handlerParameters.emplace_back(
-                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                    handlerParameters.emplace_back(makeIdentifier("_wio_deltaSeconds"),
+                                                   makeType(TokenType::kwF64, "f64"), nullptr, false);
                 }
                 auto body = parseBlockStatement();
-                const std::string methodName = lifecycle.value == "start" ? "Start" :
-                    (lifecycle.value == "update" ? "Update" : "Close");
+                const std::string methodName =
+                    lifecycle.value == "start" ? "Start" : (lifecycle.value == "update" ? "Update" : "Close");
                 auto handler = makeNodePtr<FunctionDeclaration>(
-                    std::move(memberAttributes), makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::move(handlerParameters), nullptr,
-                    nullptr, nullptr, std::move(body), lifecycle.loc);
+                    std::move(memberAttributes), makeIdentifier(methodName), std::vector<NodePtr<Identifier>>{}, false,
+                    std::move(handlerParameters), nullptr, nullptr, nullptr, std::move(body), lifecycle.loc);
                 handler->attributeTargetOverride = "handler";
                 handlers.emplace(lifecycle.value, std::move(handler));
                 continue;
             }
 
             Mutability mutability = Mutability::Mutable;
-            if (matchOneOf({ TokenType::kwLet, TokenType::kwMut, TokenType::kwConst }))
+            if (matchOneOf({TokenType::kwLet, TokenType::kwMut, TokenType::kwConst}))
             {
                 const Token qualifier = advance();
-                if (qualifier.type == TokenType::kwLet) mutability = Mutability::Immutable;
-                else if (qualifier.type == TokenType::kwConst) mutability = Mutability::Const;
+                if (qualifier.type == TokenType::kwLet)
+                    mutability = Mutability::Immutable;
+                else if (qualifier.type == TokenType::kwConst)
+                    mutability = Mutability::Const;
             }
             else if (peek().type != TokenType::identifier)
                 utError("System fields require a name, optionally preceded by 'mut', 'let', or 'const'.", peek().loc);
@@ -3235,33 +3198,33 @@ namespace wio
             consume(TokenType::opColon);
             auto type = parseType();
             NodePtr<Expression> initializer = nullptr;
-            if (match(TokenType::opAssign, true)) initializer = parseExpression();
+            if (match(TokenType::opAssign, true))
+                initializer = parseExpression();
             consume(TokenType::semicolon);
-            fields.push_back(ComponentMember{
-                .attributes = {}, .access = AccessModifier::Public,
-                .declaration = makeNodePtr<VariableDeclaration>(
-                    std::move(memberAttributes), mutability, std::move(name),
-                    std::move(type), std::move(initializer), false, startToken.loc)
-            });
+            fields.push_back(ComponentMember{.attributes = {},
+                                             .access = AccessModifier::Public,
+                                             .declaration = makeNodePtr<VariableDeclaration>(
+                                                 std::move(memberAttributes), mutability, std::move(name),
+                                                 std::move(type), std::move(initializer), false, startToken.loc)});
         }
         consume(TokenType::rightBrace);
 
-        auto component = makeNodePtr<ComponentDeclaration>(
-            std::move(attributes), std::move(systemName),
-            std::vector<NodePtr<Identifier>>{}, false, std::move(fields), startToken.loc);
+        auto component = makeNodePtr<ComponentDeclaration>(std::move(attributes), std::move(systemName),
+                                                           std::vector<NodePtr<Identifier>>{}, false, std::move(fields),
+                                                           startToken.loc);
         component->attributeTargetOverride = "system";
 
         auto addReceiver = [&](NodePtr<FunctionDeclaration>& method)
         {
-            auto receiverInner = makeNodePtr<TypeSpecifier>(systemNameToken,
-                std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0, false, false, false, startToken.loc);
-            Token refToken{ .type = TokenType::kwRef, .value = "ref", .loc = startToken.loc };
+            auto receiverInner = makeNodePtr<TypeSpecifier>(systemNameToken, std::vector<NodePtr<TypeSpecifier>>{},
+                                                            nullptr, 0, false, false, false, startToken.loc);
+            Token refToken{.type = TokenType::kwRef, .value = "ref", .loc = startToken.loc};
             std::vector<NodePtr<TypeSpecifier>> generics;
             generics.push_back(std::move(receiverInner));
-            auto receiverType = makeNodePtr<TypeSpecifier>(std::move(refToken), std::move(generics),
-                nullptr, 0, true, true, false, startToken.loc);
+            auto receiverType = makeNodePtr<TypeSpecifier>(std::move(refToken), std::move(generics), nullptr, 0, true,
+                                                           true, false, startToken.loc);
             method->parameters.insert(method->parameters.begin(),
-                Parameter(makeIdentifier("_wio_self"), std::move(receiverType), nullptr, false));
+                                      Parameter(makeIdentifier("_wio_self"), std::move(receiverType), nullptr, false));
             method->isExtensionMethod = true;
             method->extensionMutableReceiver = true;
             method->extensionMemberName = method->name->token.value;
@@ -3271,39 +3234,36 @@ namespace wio
 
         auto findSystemMethod = [&](const std::string& name) -> FunctionDeclaration*
         {
-            const auto found = std::ranges::find_if(
-                systemMethods,
-                [&](const NodePtr<FunctionDeclaration>& method)
-                {
-                    return method && method->name && method->name->token.value == name;
-                });
+            const auto found =
+                std::ranges::find_if(systemMethods, [&](const NodePtr<FunctionDeclaration>& method)
+                                     { return method && method->name && method->name->token.value == name; });
             return found == systemMethods.end() ? nullptr : found->Get();
         };
         auto makeSelfMethodCallStatement = [&](const std::string& methodName,
                                                std::vector<NodePtr<Expression>> arguments = {}) -> NodePtr<Statement>
         {
-            auto methodAccess = makeNodePtr<MemberAccessExpression>(
-                makeNodePtr<SelfExpression>(startToken.loc), makeIdentifier(methodName),
-                TokenType::opDot, startToken.loc);
-            auto call = makeNodePtr<FunctionCallExpression>(
-                std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
-                std::move(arguments), false, false, startToken.loc);
+            auto methodAccess =
+                makeNodePtr<MemberAccessExpression>(makeNodePtr<SelfExpression>(startToken.loc),
+                                                    makeIdentifier(methodName), TokenType::opDot, startToken.loc);
+            auto call =
+                makeNodePtr<FunctionCallExpression>(std::move(methodAccess), std::vector<NodePtr<TypeSpecifier>>{},
+                                                    std::move(arguments), false, false, startToken.loc);
             return makeNodePtr<ExpressionStatement>(std::move(call), startToken.loc);
         };
-        for (const std::string lifecycle : { "start", "update", "close" })
+        for (const std::string lifecycle : {"start", "update", "close"})
         {
             const auto binding = lifecycleBindings.find(lifecycle);
             if (binding == lifecycleBindings.end())
                 continue;
-            const std::string methodName = lifecycle == "start" ? "Start" :
-                (lifecycle == "update" ? "Update" : "Close");
+            const std::string methodName =
+                lifecycle == "start" ? "Start" : (lifecycle == "update" ? "Update" : "Close");
             std::vector<Parameter> parameters;
             std::vector<NodePtr<Expression>> arguments;
             const auto* target = findSystemMethod(binding->second);
             if (lifecycle == "update")
             {
-                parameters.emplace_back(
-                    makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                parameters.emplace_back(makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr,
+                                        false);
                 if (target && !target->parameters.empty())
                     arguments.push_back(makeIdentifier("_wio_deltaSeconds"));
             }
@@ -3311,8 +3271,7 @@ namespace wio
             statements.push_back(makeSelfMethodCallStatement(binding->second, std::move(arguments)));
             auto forwarder = makeNodePtr<FunctionDeclaration>(
                 std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
-                std::vector<NodePtr<Identifier>>{}, false, std::move(parameters), nullptr,
-                nullptr, nullptr,
+                std::vector<NodePtr<Identifier>>{}, false, std::move(parameters), nullptr, nullptr, nullptr,
                 makeNodePtr<BlockStatement>(std::move(statements), startToken.loc), startToken.loc);
             forwarder->attributeTargetOverride = "handler";
             handlers.emplace(lifecycle, std::move(forwarder));
@@ -3322,38 +3281,36 @@ namespace wio
         {
             addReceiver(method);
             members.push_back(ExtensionMember{
-                .access = AccessModifier::Public,
-                .mutableReceiver = true,
-                .method = std::move(method)
-            });
+                .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(method)});
         }
 
-        for (const std::string lifecycle : { "start", "update", "close" })
+        for (const std::string lifecycle : {"start", "update", "close"})
         {
             NodePtr<FunctionDeclaration> method;
             if (auto iterator = handlers.find(lifecycle); iterator != handlers.end())
                 method = std::move(iterator->second);
             else
             {
-                const std::string methodName = lifecycle == "start" ? "Start" :
-                    (lifecycle == "update" ? "Update" : "Close");
+                const std::string methodName =
+                    lifecycle == "start" ? "Start" : (lifecycle == "update" ? "Update" : "Close");
                 std::vector<Parameter> defaultParameters;
                 if (lifecycle == "update")
-                    defaultParameters.emplace_back(
-                        makeIdentifier("_wio_deltaSeconds"), makeType(TokenType::kwF64, "f64"), nullptr, false);
+                    defaultParameters.emplace_back(makeIdentifier("_wio_deltaSeconds"),
+                                                   makeType(TokenType::kwF64, "f64"), nullptr, false);
                 method = makeNodePtr<FunctionDeclaration>(
                     std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(methodName),
-                    std::vector<NodePtr<Identifier>>{}, false, std::move(defaultParameters), nullptr,
-                    nullptr, nullptr, makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
+                    std::vector<NodePtr<Identifier>>{}, false, std::move(defaultParameters), nullptr, nullptr, nullptr,
+                    makeNodePtr<BlockStatement>(std::vector<NodePtr<Statement>>{}, startToken.loc), startToken.loc);
             }
             addReceiver(method);
-            members.push_back(ExtensionMember{ .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(method) });
+            members.push_back(ExtensionMember{
+                .access = AccessModifier::Public, .mutableReceiver = true, .method = std::move(method)});
         }
-        auto targetType = makeNodePtr<TypeSpecifier>(systemNameToken,
-            std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0, false, false, false, startToken.loc);
-        auto extension = makeNodePtr<ExtensionDeclaration>(
-            std::vector<NodePtr<AttributeStatement>>{}, makeIdentifier(systemNameToken.value + "Lifecycle"),
-            std::move(targetType), std::move(members), startToken.loc);
+        auto targetType = makeNodePtr<TypeSpecifier>(systemNameToken, std::vector<NodePtr<TypeSpecifier>>{}, nullptr, 0,
+                                                     false, false, false, startToken.loc);
+        auto extension = makeNodePtr<ExtensionDeclaration>(std::vector<NodePtr<AttributeStatement>>{},
+                                                           makeIdentifier(systemNameToken.value + "Lifecycle"),
+                                                           std::move(targetType), std::move(members), startToken.loc);
         std::vector<NodePtr<Statement>> declarations;
         declarations.push_back(std::move(component));
         declarations.push_back(std::move(extension));
@@ -3365,13 +3322,19 @@ namespace wio
         Token startTok = advance();
         // NOLINTNEXTLINE
         Mutability mutability = Mutability::Immutable;
-        
+
         // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
         switch (startTok.type)
         {
-        case TokenType::kwLet:   mutability = Mutability::Immutable; break;
-        case TokenType::kwMut:   mutability = Mutability::Mutable; break;
-        case TokenType::kwConst: mutability = Mutability::Const; break;
+        case TokenType::kwLet:
+            mutability = Mutability::Immutable;
+            break;
+        case TokenType::kwMut:
+            mutability = Mutability::Mutable;
+            break;
+        case TokenType::kwConst:
+            mutability = Mutability::Const;
+            break;
         default:
             utError("Unexpected variable qualifier.", startTok.loc);
         }
@@ -3391,24 +3354,12 @@ namespace wio
             initializer = parseExpression();
         }
 
-        validateOrdinaryVariableDeclaration(
-            mutability,
-            specifier != nullptr,
-            initializer != nullptr,
-            startTok.loc
-        );
-        
+        validateOrdinaryVariableDeclaration(mutability, specifier != nullptr, initializer != nullptr, startTok.loc);
+
         consume(TokenType::semicolon);
 
-        return makeNodePtr<VariableDeclaration>(
-            std::move(attributes),
-            mutability,
-            std::move(name), 
-            std::move(specifier),
-            std::move(initializer),
-            false,
-            startTok.loc
-        );
+        return makeNodePtr<VariableDeclaration>(std::move(attributes), mutability, std::move(name),
+                                                std::move(specifier), std::move(initializer), false, startTok.loc);
     }
 
     Parser::GenericParameterList Parser::parseGenericParameterList()
@@ -3444,7 +3395,8 @@ namespace wio
             }
             else if (sawDefault)
             {
-                utError("Generic parameters without defaults cannot follow a defaulted parameter.", parameter->location());
+                utError("Generic parameters without defaults cannot follow a defaulted parameter.",
+                        parameter->location());
             }
 
             result.parameters.push_back(std::move(parameter));
@@ -3460,9 +3412,8 @@ namespace wio
         return result;
     }
 
-    NodePtr<AttributeStatement> Parser::parseWhereClause(
-        const std::vector<NodePtr<Identifier>>& genericParameters,
-        const bool hasGenericParameterPack)
+    NodePtr<AttributeStatement> Parser::parseWhereClause(const std::vector<NodePtr<Identifier>>& genericParameters,
+                                                         const bool hasGenericParameterPack)
     {
         if (!match(TokenType::kwWhere, true))
             return nullptr;
@@ -3485,12 +3436,12 @@ namespace wio
         while (true)
         {
             Token parameterToken = consume(TokenType::identifier);
-            auto parameterIt = std::ranges::find_if(genericParameters, [&](const NodePtr<Identifier>& parameter)
-            {
-                return parameter && parameter->token.value == parameterToken.value;
-            });
+            auto parameterIt =
+                std::ranges::find_if(genericParameters, [&](const NodePtr<Identifier>& parameter)
+                                     { return parameter && parameter->token.value == parameterToken.value; });
             if (parameterIt == genericParameters.end())
-                utError("Where clause references an unknown generic parameter '" + parameterToken.value + "'.", parameterToken.loc);
+                utError("Where clause references an unknown generic parameter '" + parameterToken.value + "'.",
+                        parameterToken.loc);
 
             const size_t parameterIndex = static_cast<size_t>(std::distance(genericParameters.begin(), parameterIt));
             if (constrainedParameters[parameterIndex])
@@ -3506,17 +3457,12 @@ namespace wio
             {
                 NodePtr<TypeSpecifier> constraint = parseType();
                 if (!constraint->generics.empty())
-                    utError("Where-clause constraint names must omit operands; write 'T: Trait' rather than 'T: Trait<T>'.", constraint->location());
+                    utError(
+                        "Where-clause constraint names must omit operands; write 'T: Trait' rather than 'T: Trait<T>'.",
+                        constraint->location());
 
-                auto operand = makeNodePtr<TypeSpecifier>(
-                    parameterToken,
-                    std::vector<NodePtr<TypeSpecifier>>{},
-                    nullptr,
-                    0,
-                    false,
-                    false,
-                    isPack,
-                    parameterToken.loc);
+                auto operand = makeNodePtr<TypeSpecifier>(parameterToken, std::vector<NodePtr<TypeSpecifier>>{},
+                                                          nullptr, 0, false, false, isPack, parameterToken.loc);
                 constraint->generics.push_back(std::move(operand));
 
                 Token rawConstraint = constraint->name;
@@ -3546,8 +3492,8 @@ namespace wio
         }
         groupOffsets.push_back(arguments.size());
 
-        auto result = makeNodePtr<AttributeStatement>(
-            Attribute::Apply, std::move(arguments), std::move(typeArguments), whereLocation);
+        auto result = makeNodePtr<AttributeStatement>(Attribute::Apply, std::move(arguments), std::move(typeArguments),
+                                                      whereLocation);
         result->constraintGroupOffsets = std::move(groupOffsets);
         result->conjunctiveConstraintGroups = true;
         return result;
@@ -3577,16 +3523,12 @@ namespace wio
         consume(TokenType::semicolon);
 
         return makeNodePtr<TypeAliasDeclaration>(
-            std::move(attributes),
-            std::move(name),
-            std::move(genericParameterList.parameters),
-            genericParameterList.hasParameterPack,
-            std::move(aliasedType),
-            startTok.loc
-        );
+            std::move(attributes), std::move(name), std::move(genericParameterList.parameters),
+            genericParameterList.hasParameterPack, std::move(aliasedType), startTok.loc);
     }
 
-    NodePtr<FunctionDeclaration> Parser::parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes, bool isLifecycle, bool isStructMethod, bool isAsync)
+    NodePtr<FunctionDeclaration> Parser::parseFunctionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes,
+                                                                  bool isLifecycle, bool isStructMethod, bool isAsync)
     {
         Token startTok = peek();
         if (!isLifecycle)
@@ -3648,7 +3590,7 @@ namespace wio
         auto genericParameterList = parseGenericParameterList();
 
         consume(TokenType::leftParen);
-        
+
         std::vector<Parameter> parameters;
         if (!match(TokenType::rightParen))
         {
@@ -3668,7 +3610,8 @@ namespace wio
             if (match(TokenType::opAssign, true))
                 defaultValue = parseExpression();
 
-            parameters.emplace_back(std::move(paramName), std::move(paramType), std::move(defaultValue), isParameterPack);
+            parameters.emplace_back(std::move(paramName), std::move(paramType), std::move(defaultValue),
+                                    isParameterPack);
             parameters.back().attributes = std::move(parameterAttributes);
 
             while (match(TokenType::comma, true))
@@ -3691,7 +3634,8 @@ namespace wio
                 if (match(TokenType::opAssign, true))
                     nextDefaultValue = parseExpression();
 
-                parameters.emplace_back(std::move(nextParamName), std::move(nextParamType), std::move(nextDefaultValue), nextIsParameterPack);
+                parameters.emplace_back(std::move(nextParamName), std::move(nextParamType), std::move(nextDefaultValue),
+                                        nextIsParameterPack);
                 parameters.back().attributes = std::move(nextParameterAttributes);
             }
         }
@@ -3700,16 +3644,13 @@ namespace wio
         if (operatorToken.has_value())
         {
             auto overloadName = isStructMethod
-                ? common::getMemberOperatorOverloadName(operatorToken->type, parameters.size())
-                : common::getFreeOperatorOverloadName(operatorToken->type, parameters.size());
+                                    ? common::getMemberOperatorOverloadName(operatorToken->type, parameters.size())
+                                    : common::getFreeOperatorOverloadName(operatorToken->type, parameters.size());
             if (!overloadName.has_value())
             {
-                utError(
-                    isStructMethod
-                        ? "Invalid member operator overload arity for the selected operator."
-                        : "Invalid free operator overload arity for the selected operator.",
-                    operatorToken->loc
-                );
+                utError(isStructMethod ? "Invalid member operator overload arity for the selected operator."
+                                       : "Invalid free operator overload arity for the selected operator.",
+                        operatorToken->loc);
             }
 
             name->token.value = std::string(*overloadName);
@@ -3725,14 +3666,14 @@ namespace wio
             attributes.push_back(std::move(whereClause));
 
         parseWithAttributeClause(attributes);
-        
+
         NodePtr<Expression> whenCond = nullptr;
         NodePtr<Expression> whenFallback = nullptr;
 
         if (match(TokenType::kwWhen, true))
         {
             whenCond = parseExpression();
-            
+
             if (match(TokenType::kwElse, true))
                 whenFallback = parseExpression();
         }
@@ -3740,17 +3681,9 @@ namespace wio
         NodePtr<Statement> body = match(TokenType::semicolon, true) ? nullptr : parseBlockStatement();
 
         auto declaration = makeNodePtr<FunctionDeclaration>(
-            std::move(attributes),
-            std::move(name),
-            std::move(genericParameterList.parameters),
-            genericParameterList.hasParameterPack,
-            std::move(parameters),
-            std::move(returnType),
-            std::move(whenCond),
-            std::move(whenFallback),
-            std::move(body),
-            startTok.loc
-        );
+            std::move(attributes), std::move(name), std::move(genericParameterList.parameters),
+            genericParameterList.hasParameterPack, std::move(parameters), std::move(returnType), std::move(whenCond),
+            std::move(whenFallback), std::move(body), startTok.loc);
         declaration->isAsync = isAsync;
         return declaration;
     }
@@ -3776,16 +3709,19 @@ namespace wio
 
             const bool isAsync = match(TokenType::kwAsync);
             auto method = parseFunctionDeclaration(std::move(methodAttrs), false, true, isAsync);
-            
-            if (method->body != nullptr) {
+
+            if (method->body != nullptr)
+            {
                 utError("Interface methods cannot have a body. Use ';' instead of '{...}'.", method->location());
             }
 
             methods.push_back(std::move(method));
         }
         consume(TokenType::rightBrace);
-        
-        return makeNodePtr<InterfaceDeclaration>(std::move(attributes), std::move(name), std::move(genericParameterList.parameters), genericParameterList.hasParameterPack, std::move(methods), startTok.loc);
+
+        return makeNodePtr<InterfaceDeclaration>(
+            std::move(attributes), std::move(name), std::move(genericParameterList.parameters),
+            genericParameterList.hasParameterPack, std::move(methods), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseComponentDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
@@ -3807,24 +3743,24 @@ namespace wio
             std::vector<NodePtr<AttributeStatement>> memberAttrs;
             parseLeadingAttributes(memberAttrs);
 
-            AccessModifier access = AccessModifier::None; 
-            if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;
-            else if (match(TokenType::kwPrivate, true)) access = AccessModifier::Private;
-            else if (match(TokenType::kwProtected, true)) access = AccessModifier::Protected;
+            AccessModifier access = AccessModifier::None;
+            if (match(TokenType::kwPublic, true))
+                access = AccessModifier::Public;
+            else if (match(TokenType::kwPrivate, true))
+                access = AccessModifier::Private;
+            else if (match(TokenType::kwProtected, true))
+                access = AccessModifier::Protected;
 
             if (match(TokenType::kwAsync) || match(TokenType::kwFn) ||
-                match(TokenType::identifier, "OnConstruct", false) ||
-                match(TokenType::identifier, "OnDestruct", false))
+                match(TokenType::identifier, "OnConstruct", false) || match(TokenType::identifier, "OnDestruct", false))
             {
                 const bool isAsync = match(TokenType::kwAsync);
                 bool isLifecycle = !isAsync && !match(TokenType::kwFn);
                 auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle, true, isAsync);
-                
-                members.push_back(ComponentMember{
-                    .attributes = std::vector<NodePtr<AttributeStatement>>{},
-                    .access = access,
-                    .declaration = std::move(method)
-                });
+
+                members.push_back(ComponentMember{.attributes = std::vector<NodePtr<AttributeStatement>>{},
+                                                  .access = access,
+                                                  .declaration = std::move(method)});
             }
             else
             {
@@ -3840,43 +3776,39 @@ namespace wio
                     memberMutability = Mutability::Const;
 
                 NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consumeIdentifier());
-                
+
                 NodePtr<TypeSpecifier> memberType = nullptr;
-                if (match(TokenType::opColon, true)) memberType = parseType();
+                if (match(TokenType::opColon, true))
+                    memberType = parseType();
 
                 parseWithAttributeClause(memberAttrs);
-                
-                NodePtr<Expression> init = nullptr;
-                if (match(TokenType::opAssign, true)) init = parseExpression();
 
-                if (!memberType && !init) {
+                NodePtr<Expression> init = nullptr;
+                if (match(TokenType::opAssign, true))
+                    init = parseExpression();
+
+                if (!memberType && !init)
+                {
                     utError("Component members must have an explicit type or an initializer.", memberName->location());
                 }
 
                 match(TokenType::comma, true);
-                match(TokenType::semicolon, true); 
+                match(TokenType::semicolon, true);
 
                 const common::Location memberLocation = memberName->location();
-                auto varDecl =
-                    makeNodePtr<VariableDeclaration>(
-                        std::move(memberAttrs),
-                        memberMutability,
-                        std::move(memberName),
-                        std::move(memberType),
-                        std::move(init),
-                        isPackField,
-                        memberLocation
-                    );
+                auto varDecl = makeNodePtr<VariableDeclaration>(std::move(memberAttrs), memberMutability,
+                                                                std::move(memberName), std::move(memberType),
+                                                                std::move(init), isPackField, memberLocation);
 
-                members.push_back(ComponentMember{
-                    .attributes = std::vector<NodePtr<AttributeStatement>>{},
-                    .access = access,
-                    .declaration = std::move(varDecl)
-                });
+                members.push_back(ComponentMember{.attributes = std::vector<NodePtr<AttributeStatement>>{},
+                                                  .access = access,
+                                                  .declaration = std::move(varDecl)});
             }
         }
         consume(TokenType::rightBrace);
-        return makeNodePtr<ComponentDeclaration>(std::move(attributes), std::move(name), std::move(genericParameterList.parameters), genericParameterList.hasParameterPack, std::move(members), startTok.loc);
+        return makeNodePtr<ComponentDeclaration>(
+            std::move(attributes), std::move(name), std::move(genericParameterList.parameters),
+            genericParameterList.hasParameterPack, std::move(members), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseExtensionDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
@@ -3896,9 +3828,12 @@ namespace wio
             parseLeadingAttributes(methodAttrs);
 
             AccessModifier access = AccessModifier::None;
-            if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;
-            else if (match(TokenType::kwPrivate, true)) access = AccessModifier::Private;
-            else if (match(TokenType::kwProtected, true)) access = AccessModifier::Protected;
+            if (match(TokenType::kwPublic, true))
+                access = AccessModifier::Public;
+            else if (match(TokenType::kwPrivate, true))
+                access = AccessModifier::Private;
+            else if (match(TokenType::kwProtected, true))
+                access = AccessModifier::Protected;
 
             bool mutableReceiver = false;
             if (match(TokenType::kwRef, true))
@@ -3912,39 +3847,30 @@ namespace wio
                 utError("Generic extension targets are not supported yet.", targetType->location());
 
             Token receiverInnerToken = targetType->name;
-            auto receiverInner = makeNodePtr<TypeSpecifier>(
-                std::move(receiverInnerToken), std::vector<NodePtr<TypeSpecifier>>{}, nullptr,
-                0, false, false, false, targetType->location());
-            Token receiverToken{
-                .type = mutableReceiver ? TokenType::kwRef : TokenType::kwView,
-                .value = mutableReceiver ? "ref" : "view",
-                .loc = method->location()
-            };
+            auto receiverInner =
+                makeNodePtr<TypeSpecifier>(std::move(receiverInnerToken), std::vector<NodePtr<TypeSpecifier>>{},
+                                           nullptr, 0, false, false, false, targetType->location());
+            Token receiverToken{.type = mutableReceiver ? TokenType::kwRef : TokenType::kwView,
+                                .value = mutableReceiver ? "ref" : "view",
+                                .loc = method->location()};
             std::vector<NodePtr<TypeSpecifier>> receiverGenerics;
             receiverGenerics.push_back(std::move(receiverInner));
-            auto receiverType = makeNodePtr<TypeSpecifier>(
-                std::move(receiverToken), std::move(receiverGenerics), nullptr,
-                0, true, mutableReceiver, false, method->location());
-            Token receiverNameToken{
-                .type = TokenType::identifier,
-                .value = "_wio_self",
-                .loc = method->location()
-            };
-            method->parameters.insert(
-                method->parameters.begin(),
-                Parameter(makeNodePtr<Identifier>(std::move(receiverNameToken)), std::move(receiverType), nullptr, false));
+            auto receiverType =
+                makeNodePtr<TypeSpecifier>(std::move(receiverToken), std::move(receiverGenerics), nullptr, 0, true,
+                                           mutableReceiver, false, method->location());
+            Token receiverNameToken{.type = TokenType::identifier, .value = "_wio_self", .loc = method->location()};
+            method->parameters.insert(method->parameters.begin(),
+                                      Parameter(makeNodePtr<Identifier>(std::move(receiverNameToken)),
+                                                std::move(receiverType), nullptr, false));
             method->isExtensionMethod = true;
             method->extensionMutableReceiver = mutableReceiver;
             method->extensionMemberName = method->name->token.value;
-            members.push_back(ExtensionMember{
-                .access = access,
-                .mutableReceiver = mutableReceiver,
-                .method = std::move(method)
-            });
+            members.push_back(
+                ExtensionMember{.access = access, .mutableReceiver = mutableReceiver, .method = std::move(method)});
         }
         consume(TokenType::rightBrace);
-        return makeNodePtr<ExtensionDeclaration>(
-            std::move(attributes), std::move(name), std::move(targetType), std::move(members), startTok.loc);
+        return makeNodePtr<ExtensionDeclaration>(std::move(attributes), std::move(name), std::move(targetType),
+                                                 std::move(members), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseObjectDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
@@ -3966,24 +3892,24 @@ namespace wio
             std::vector<NodePtr<AttributeStatement>> memberAttrs;
             parseLeadingAttributes(memberAttrs);
 
-            AccessModifier access = AccessModifier::None; 
-            if (match(TokenType::kwPublic, true)) access = AccessModifier::Public;
-            else if (match(TokenType::kwPrivate, true)) access = AccessModifier::Private;
-            else if (match(TokenType::kwProtected, true)) access = AccessModifier::Protected;
+            AccessModifier access = AccessModifier::None;
+            if (match(TokenType::kwPublic, true))
+                access = AccessModifier::Public;
+            else if (match(TokenType::kwPrivate, true))
+                access = AccessModifier::Private;
+            else if (match(TokenType::kwProtected, true))
+                access = AccessModifier::Protected;
 
             if (match(TokenType::kwAsync) || match(TokenType::kwFn) ||
-                match(TokenType::identifier, "OnConstruct", false) ||
-                match(TokenType::identifier, "OnDestruct", false))
+                match(TokenType::identifier, "OnConstruct", false) || match(TokenType::identifier, "OnDestruct", false))
             {
                 const bool isAsync = match(TokenType::kwAsync);
                 bool isLifecycle = !isAsync && !match(TokenType::kwFn);
                 auto method = parseFunctionDeclaration(std::move(memberAttrs), isLifecycle, true, isAsync);
-                
-                members.push_back(ObjectMember{
-                    .attributes = std::vector<NodePtr<AttributeStatement>>{},
-                    .access = access,
-                    .declaration = std::move(method)
-                });
+
+                members.push_back(ObjectMember{.attributes = std::vector<NodePtr<AttributeStatement>>{},
+                                               .access = access,
+                                               .declaration = std::move(method)});
             }
             else
             {
@@ -3999,16 +3925,19 @@ namespace wio
                     memberMutability = Mutability::Const;
 
                 NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consumeIdentifier());
-                
+
                 NodePtr<TypeSpecifier> memberType = nullptr;
-                if (match(TokenType::opColon, true)) memberType = parseType();
+                if (match(TokenType::opColon, true))
+                    memberType = parseType();
 
                 parseWithAttributeClause(memberAttrs);
-                
-                NodePtr<Expression> init = nullptr;
-                if (match(TokenType::opAssign, true)) init = parseExpression();
 
-                if (!memberType && !init) {
+                NodePtr<Expression> init = nullptr;
+                if (match(TokenType::opAssign, true))
+                    init = parseExpression();
+
+                if (!memberType && !init)
+                {
                     utError("Object members must have an explicit type or an initializer.", memberName->location());
                 }
 
@@ -4016,26 +3945,19 @@ namespace wio
                 match(TokenType::semicolon, true);
 
                 const common::Location memberLocation = memberName->location();
-                auto varDecl =
-                    makeNodePtr<VariableDeclaration>(
-                        std::move(memberAttrs),
-                        memberMutability,
-                        std::move(memberName),
-                        std::move(memberType),
-                        std::move(init),
-                        isPackField,
-                        memberLocation
-                    );
+                auto varDecl = makeNodePtr<VariableDeclaration>(std::move(memberAttrs), memberMutability,
+                                                                std::move(memberName), std::move(memberType),
+                                                                std::move(init), isPackField, memberLocation);
 
-                members.push_back(ObjectMember{
-                    .attributes = std::vector<NodePtr<AttributeStatement>>{},
-                    .access = access,
-                    .declaration = std::move(varDecl)
-                });
+                members.push_back(ObjectMember{.attributes = std::vector<NodePtr<AttributeStatement>>{},
+                                               .access = access,
+                                               .declaration = std::move(varDecl)});
             }
         }
         consume(TokenType::rightBrace);
-        return makeNodePtr<ObjectDeclaration>(std::move(attributes), std::move(name), std::move(genericParameterList.parameters), genericParameterList.hasParameterPack, std::move(members), startTok.loc);
+        return makeNodePtr<ObjectDeclaration>(std::move(attributes), std::move(name),
+                                              std::move(genericParameterList.parameters),
+                                              genericParameterList.hasParameterPack, std::move(members), startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseFlagDeclaration(std::vector<NodePtr<AttributeStatement>> attributes)
@@ -4044,7 +3966,7 @@ namespace wio
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         parseWithAttributeClause(attributes);
         consume(TokenType::semicolon); // flag IsDead;
-        
+
         return makeNodePtr<FlagDeclaration>(std::move(attributes), std::move(name), startTok.loc);
     }
 
@@ -4053,29 +3975,26 @@ namespace wio
         Token startTok = consume(TokenType::kwEnum);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         parseWithAttributeClause(attributes);
-        
+
         consume(TokenType::leftBrace);
         std::vector<EnumMember> members;
-        
+
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<AttributeStatement>> memberAttributes;
             parseLeadingAttributes(memberAttributes);
             NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consumeIdentifier());
             NodePtr<Expression> value = nullptr;
-            
+
             if (match(TokenType::opAssign, true))
                 value = parseExpression();
-            
+
             members.push_back(EnumMember{
-                .name = std::move(memberName),
-                .value = std::move(value),
-                .attributes = std::move(memberAttributes)
-            });
+                .name = std::move(memberName), .value = std::move(value), .attributes = std::move(memberAttributes)});
             match(TokenType::comma, true);
         }
         consume(TokenType::rightBrace);
-        
+
         return makeNodePtr<EnumDeclaration>(std::move(attributes), std::move(name), std::move(members), startTok.loc);
     }
 
@@ -4084,37 +4003,35 @@ namespace wio
         Token startTok = consume(TokenType::kwFlagset);
         NodePtr<Identifier> name = makeNodePtr<Identifier>(consumeIdentifier());
         parseWithAttributeClause(attributes);
-        
+
         consume(TokenType::leftBrace);
         std::vector<EnumMember> members;
-        
+
         while (peek().isValid() && !match(TokenType::rightBrace))
         {
             std::vector<NodePtr<AttributeStatement>> memberAttributes;
             parseLeadingAttributes(memberAttributes);
             NodePtr<Identifier> memberName = makeNodePtr<Identifier>(consumeIdentifier());
             NodePtr<Expression> value = nullptr;
-            
+
             if (match(TokenType::opAssign, true))
                 value = parseExpression();
-            
+
             members.push_back(EnumMember{
-                .name = std::move(memberName),
-                .value = std::move(value),
-                .attributes = std::move(memberAttributes)
-            });
+                .name = std::move(memberName), .value = std::move(value), .attributes = std::move(memberAttributes)});
             match(TokenType::comma, true);
         }
         consume(TokenType::rightBrace);
-        
-        return makeNodePtr<FlagsetDeclaration>(std::move(attributes), std::move(name), std::move(members), startTok.loc);
+
+        return makeNodePtr<FlagsetDeclaration>(std::move(attributes), std::move(name), std::move(members),
+                                               startTok.loc);
     }
 
     NodePtr<Statement> Parser::parseIfStatement()
     {
         Token startTok = consume(TokenType::kwIf);
         Location startLoc = startTok.loc;
-        
+
         bool hasParen = match(TokenType::leftParen, true);
 
         NodePtr<Expression> condition = parseExpression(0, true);
@@ -4141,7 +4058,8 @@ namespace wio
             }
         }
 
-        return makeNodePtr<IfStatement>(std::move(condition), std::move(thenBranch), std::move(elseBranch), std::move(matchVar), startLoc);
+        return makeNodePtr<IfStatement>(std::move(condition), std::move(thenBranch), std::move(elseBranch),
+                                        std::move(matchVar), startLoc);
     }
 
     NodePtr<Statement> Parser::parseWhileStatement()
@@ -4174,23 +4092,28 @@ namespace wio
             int braceDepth = 0;
             int bracketDepth = 0;
 
-            for (int offset = 0; ; ++offset)
+            for (int offset = 0;; ++offset)
             {
                 Token token = peek(offset);
                 if (!token.isValid())
                     break;
 
-                if (token.type == TokenType::leftParen) ++parenDepth;
+                if (token.type == TokenType::leftParen)
+                    ++parenDepth;
                 else if (token.type == TokenType::rightParen)
                 {
                     if (parenDepth == 0 && braceDepth == 0 && bracketDepth == 0)
                         break;
                     --parenDepth;
                 }
-                else if (token.type == TokenType::leftBrace) ++braceDepth;
-                else if (token.type == TokenType::rightBrace && braceDepth > 0) --braceDepth;
-                else if (token.type == TokenType::leftBracket) ++bracketDepth;
-                else if (token.type == TokenType::rightBracket && bracketDepth > 0) --bracketDepth;
+                else if (token.type == TokenType::leftBrace)
+                    ++braceDepth;
+                else if (token.type == TokenType::rightBrace && braceDepth > 0)
+                    --braceDepth;
+                else if (token.type == TokenType::leftBracket)
+                    ++bracketDepth;
+                else if (token.type == TokenType::rightBracket && bracketDepth > 0)
+                    --bracketDepth;
                 else if (token.type == TokenType::semicolon && parenDepth == 0 && braceDepth == 0 && bracketDepth == 0)
                     return true;
             }
@@ -4215,7 +4138,8 @@ namespace wio
             if (match(TokenType::kwView, true))
                 return ForBindingMode::ReferenceView;
             if (match(TokenType::kwConst))
-                utError("'const' is not supported in loop bindings. Use 'let', 'mut', 'ref', or 'view'.", advance().loc);
+                utError("'const' is not supported in loop bindings. Use 'let', 'mut', 'ref', or 'view'.",
+                        advance().loc);
 
             return ForBindingMode::ValueImmutable;
         };
@@ -4241,7 +4165,8 @@ namespace wio
 
         NodePtr<Statement> body = match(TokenType::leftBrace) ? parseBlockStatement() : parseStatement();
 
-        return makeNodePtr<ForInStatement>(std::move(bindings), std::move(bindingModes), std::move(iterable), std::move(step), std::move(body), startLoc);
+        return makeNodePtr<ForInStatement>(std::move(bindings), std::move(bindingModes), std::move(iterable),
+                                           std::move(step), std::move(body), startLoc);
     }
 
     NodePtr<Statement> Parser::parseCForStatement(common::Location startLoc)
@@ -4249,7 +4174,7 @@ namespace wio
         NodePtr<Statement> initializer = nullptr;
         if (!match(TokenType::semicolon, true))
         {
-            if (matchOneOf({ TokenType::kwLet, TokenType::kwMut, TokenType::kwConst }))
+            if (matchOneOf({TokenType::kwLet, TokenType::kwMut, TokenType::kwConst}))
             {
                 Token startTok = advance();
                 Mutability mutability;
@@ -4257,9 +4182,15 @@ namespace wio
                 // NOLINTNEXTLINE(clang-diagnostic-switch-enum)
                 switch (startTok.type)
                 {
-                case TokenType::kwLet:   mutability = Mutability::Immutable; break;
-                case TokenType::kwMut:   mutability = Mutability::Mutable; break;
-                case TokenType::kwConst: mutability = Mutability::Const; break;
+                case TokenType::kwLet:
+                    mutability = Mutability::Immutable;
+                    break;
+                case TokenType::kwMut:
+                    mutability = Mutability::Mutable;
+                    break;
+                case TokenType::kwConst:
+                    mutability = Mutability::Const;
+                    break;
                 default:
                     utError("Unexpected for-loop initializer qualifier.", startTok.loc);
                 }
@@ -4274,22 +4205,11 @@ namespace wio
                 if (match(TokenType::opAssign, true))
                     value = parseExpression();
 
-                validateOrdinaryVariableDeclaration(
-                    mutability,
-                    specifier != nullptr,
-                    value != nullptr,
-                    startTok.loc
-                );
+                validateOrdinaryVariableDeclaration(mutability, specifier != nullptr, value != nullptr, startTok.loc);
 
-                initializer = makeNodePtr<VariableDeclaration>(
-                    std::vector<NodePtr<AttributeStatement>>{},
-                    mutability,
-                    std::move(name),
-                    std::move(specifier),
-                    std::move(value),
-                    false,
-                    startTok.loc
-                );
+                initializer = makeNodePtr<VariableDeclaration>(std::vector<NodePtr<AttributeStatement>>{}, mutability,
+                                                               std::move(name), std::move(specifier), std::move(value),
+                                                               false, startTok.loc);
             }
             else
             {
@@ -4315,7 +4235,8 @@ namespace wio
         }
 
         NodePtr<Statement> body = match(TokenType::leftBrace) ? parseBlockStatement() : parseStatement();
-        return makeNodePtr<CForStatement>(std::move(initializer), std::move(condition), std::move(increment), std::move(body), startLoc);
+        return makeNodePtr<CForStatement>(std::move(initializer), std::move(condition), std::move(increment),
+                                          std::move(body), startLoc);
     }
 
     NodePtr<Statement> Parser::parseBreakStatement()
@@ -4368,7 +4289,7 @@ namespace wio
 
             return makeNodePtr<UseStatement>("", stmt->args.front().value, "", false, true, false, startLoc);
         }
-        
+
         std::vector<std::string> moduleParts;
         Location modulePathEndLoc = startLoc;
 
@@ -4383,7 +4304,8 @@ namespace wio
                     utError("Use statement must include a module path.", startLoc);
 
                 if (match(TokenType::semicolon))
-                    utError("Unfinished use statement. Use statements should finish with a module name.", modulePathEndLoc);
+                    utError("Unfinished use statement. Use statements should finish with a module name.",
+                            modulePathEndLoc);
 
                 utError("Expected a module name after '::'.", currentOrPreviousLocation());
             }
@@ -4453,8 +4375,9 @@ namespace wio
         }
 
         consume(TokenType::semicolon);
-        
-        return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), std::move(aliasName), isStdLib, false, importAllIntoScope, startLoc);
+
+        return makeNodePtr<UseStatement>(std::move(moduleName), std::move(modulePath), std::move(aliasName), isStdLib,
+                                         false, importAllIntoScope, startLoc);
     }
 
     NodePtr<Statement> Parser::parseUsingStatement()
@@ -4466,7 +4389,9 @@ namespace wio
             if (attribute->args.size() != 1 || attribute->args.front().type != TokenType::stringLiteral)
                 utError("cpp::header expects exactly one string literal path.", startTok.loc);
             if (match(TokenType::leftBrace))
-                utError("Bounded cpp::header scopes are not supported; place 'using cpp::header(...)' in the containing realm.", startTok.loc);
+                utError("Bounded cpp::header scopes are not supported; place 'using cpp::header(...)' in the "
+                        "containing realm.",
+                        startTok.loc);
             consume(TokenType::semicolon);
             return makeNodePtr<UseStatement>("", attribute->args.front().value, "", false, true, false, startTok.loc);
         }
@@ -4522,16 +4447,16 @@ namespace wio
         // ---------------------------------
         case TokenType::kwFit:
             return 15;
-            
+
         // ---------------------------------
         // Postfix / access / call
         // ---------------------------------
         case TokenType::opDot:
         case TokenType::opScope:
-        case TokenType::leftParen:    // call
-        case TokenType::leftBracket:  // index
+        case TokenType::leftParen:   // call
+        case TokenType::leftBracket: // index
             return 14;
-    
+
         // ---------------------------------
         // Prefix (unary)
         // ---------------------------------
@@ -4544,7 +4469,7 @@ namespace wio
         case TokenType::opLogicalNot: // !
         case TokenType::opBitNot:     // ~
             return 13;
-    
+
         // ---------------------------------
         // Multiplicative
         // ---------------------------------
@@ -4552,28 +4477,28 @@ namespace wio
         case TokenType::opSlash:
         case TokenType::opPercent:
             return 12;
-    
+
         // ---------------------------------
         // Additive
         // ---------------------------------
         case TokenType::opPlus:
         case TokenType::opMinus:
             return 11;
-    
+
         // ---------------------------------
         // Shift
         // ---------------------------------
         case TokenType::opShiftLeft:
         case TokenType::opShiftRight:
             return 10;
-            
+
         // ---------------------------------
         // Range
         // ---------------------------------
         case TokenType::opRangeInclusive:
         case TokenType::opRangeExclusive:
             return 9;
-    
+
         // ---------------------------------
         // Relational
         // ---------------------------------
@@ -4583,7 +4508,7 @@ namespace wio
         case TokenType::opGreaterEqual:
         case TokenType::kwIn:
             return 8;
-    
+
         // ---------------------------------
         // Equality
         // ---------------------------------
@@ -4591,7 +4516,7 @@ namespace wio
         case TokenType::opNotEqual:
         case TokenType::kwIs:
             return 7;
-    
+
         // ---------------------------------
         // Bitwise
         // ---------------------------------
@@ -4614,15 +4539,15 @@ namespace wio
         // ---------------------------------
         case TokenType::opLogicalOr:
         case TokenType::kwOr:
-            return 2;    
-    
+            return 2;
+
         // ---------------------------------
         // Flow / pipe
         // ---------------------------------
         case TokenType::opFlowRight: // |>
         case TokenType::opFlowLeft:  // <|
             return 1;
-    
+
         // ---------------------------------
         // Assignment (lowest, right-assoc)
         // ---------------------------------
@@ -4639,7 +4564,7 @@ namespace wio
         case TokenType::opBitXorAssign:
         case TokenType::opBitNotAssign:
             return 0;
-    
+
         // ---------------------------------
         // Expression boundaries
         // ---------------------------------
@@ -4657,9 +4582,7 @@ namespace wio
         throw UnexpectedTokenError(message.c_str(), location);
     }
 
-    void Parser::validateOrdinaryVariableDeclaration(Mutability mutability,
-                                                     bool hasExplicitType,
-                                                     bool hasInitializer,
+    void Parser::validateOrdinaryVariableDeclaration(Mutability mutability, bool hasExplicitType, bool hasInitializer,
                                                      Location location)
     {
         if (hasInitializer)
@@ -4696,8 +4619,7 @@ namespace wio
                 continue;
             }
 
-            const int closeCount = type == TokenType::opShiftRight ? 2 :
-                                   type == TokenType::opGreater ? 1 : 0;
+            const int closeCount = type == TokenType::opShiftRight ? 2 : type == TokenType::opGreater ? 1 : 0;
             if (closeCount != 0)
             {
                 if (angleDepth == 0)
@@ -4715,10 +4637,8 @@ namespace wio
                     if (nextType == TokenType::leftParen)
                         return true;
 
-                    return ((nextType == TokenType::opLogicalNot) ||
-                            (nextType == TokenType::opQuestion)) &&
-                           index + 2 < tokens_.size() &&
-                           tokens_[index + 2].type == TokenType::leftParen;
+                    return ((nextType == TokenType::opLogicalNot) || (nextType == TokenType::opQuestion)) &&
+                           index + 2 < tokens_.size() && tokens_[index + 2].type == TokenType::leftParen;
                 }
 
                 continue;
@@ -4729,9 +4649,7 @@ namespace wio
 
             sawInnerToken = true;
 
-            if (type == TokenType::semicolon ||
-                type == TokenType::leftBrace ||
-                type == TokenType::rightBrace)
+            if (type == TokenType::semicolon || type == TokenType::leftBrace || type == TokenType::rightBrace)
             {
                 return false;
             }
@@ -4739,4 +4657,4 @@ namespace wio
 
         return false;
     }
-}
+} // namespace wio

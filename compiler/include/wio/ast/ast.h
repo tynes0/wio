@@ -671,6 +671,8 @@ namespace wio
         // Concrete type arguments selected by semantic deduction/defaulting.
         // Codegen uses this when the written argument list was only partial.
         std::vector<WeakRef<sema::Type>> resolvedGenericArguments;
+        WeakRef<sema::Symbol> resolvedConstructor;
+        WeakRef<sema::Type> resolvedConstructorType;
         std::vector<NodePtr<Expression>> arguments;
         OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
         WeakRef<sema::Type> overloadFunctionType = nullptr;
@@ -950,6 +952,15 @@ namespace wio
         ~TypeAliasDeclaration() override;
     };
     
+    struct ApplicationStageRunMetadata
+    {
+        std::string target;
+        std::string method = "Update";
+        std::vector<std::string> resourceNames;
+        bool inlineApplicationUpdate = false;
+        bool acceptsDelta = true;
+    };
+
     struct ApplicationStageMetadata
     {
         std::string name;
@@ -961,6 +972,7 @@ namespace wio
         bool containsSystem = false;
         bool containsApplication = false;
         bool legacyExplicit = false;
+        std::vector<ApplicationStageRunMetadata> runs;
     };
 
     struct FunctionDeclaration : Statement
