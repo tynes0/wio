@@ -2815,6 +2815,30 @@ namespace wio::wir::typed
             return true;
         }
 
+        bool appendDefaultCallArguments(Instruction& instruction, const FunctionCallExpression& call,
+                                        const Ref<sema::FunctionType>& functionType,
+                                        const Ref<sema::Symbol>& implementationSymbol,
+                                        const std::size_t parameterOffset, FunctionState& state)
+        {
+            const auto declaration = implementationSymbol ? declarationsBySymbol_.find(implementationSymbol.Get())
+                                                          : declarationsBySymbol_.end();
+            if (!functionType || declaration == declarationsBySymbol_.end())
+                return true;
+            const FunctionDeclaration& function = *declaration->second;
+            for (std::size_t parameterIndex = call.arguments.size() + parameterOffset;
+                 parameterIndex < functionType->paramTypes.size(); ++parameterIndex)
+            {
+                if (parameterIndex >= function.parameters.size() || !function.parameters[parameterIndex].defaultValue)
+                    return false;
+                if (!appendCallArgument(instruction, function.parameters[parameterIndex].defaultValue,
+                                        mapType(functionType->paramTypes[parameterIndex],
+                                                function.parameters[parameterIndex].defaultValue.Get()),
+                                        state))
+                    return false;
+            }
+            return true;
+        }
+
         ValueId buildOverloadedOperator(const Expression& expression, const OperatorDispatchKind dispatch,
                                         const WeakRef<sema::Type>& weakFunctionType,
                                         const std::vector<NodePtr<Expression>>& operands, FunctionState& state)
@@ -3916,6 +3940,13 @@ namespace wio::wir::typed
                                                             : mapType(argument->refType.Lock(), argument.Get());
                             if (!appendCallArgument(instruction, argument, expectedType, state))
                                 return {};
+                        }
+                        if (!appendDefaultCallArguments(instruction, *call, implementationType, extensionImplementation,
+                                                        1, state))
+                        {
+                            report("WIR2358", "Extension call is missing a materializable default argument.",
+                                   expression.Get());
+                            return {};
                         }
                         instruction.genericArguments =
                             genericArguments(*call, extensionImplementation, implementationType);
