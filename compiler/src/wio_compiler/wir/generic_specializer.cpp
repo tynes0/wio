@@ -1,5 +1,6 @@
 #include "wio/wir/generic_specializer.h"
 #include "wio/wir/native_abi_types.h"
+#include "wio/sema/generic_support.h"
 
 #include <algorithm>
 #include <charconv>
@@ -140,7 +141,7 @@ namespace wio::wir
                     {
                         const auto source = templates_.find(method.function);
                         if (method.isAbstract || source == templates_.end() || source->second.isExternal ||
-                            !openFunction(source->second))
+                            !openFunction(source->second) || !source->second.genericParameters.empty())
                             continue;
                         TypeId owner = id;
                         const std::string ownerName = module_.types.get(source->second.ownerType).name;
@@ -263,6 +264,22 @@ namespace wio::wir
                     const auto [it, inserted] = bindings.emplace(pattern, actual);
                     return inserted || it->second == actual;
                 }
+                const bool hasTrailingPack = !p->arguments.empty() && module_.types.get(p->arguments.back()).kind ==
+                                                                          TypeKind::GenericParameterPack;
+                if (p->kind == a->kind && hasTrailingPack)
+                {
+                    if (p->kind == TypeKind::Named && p->name != a->name)
+                        return false;
+                    const std::size_t fixedCount = p->arguments.size() - 1;
+                    if (a->arguments.size() < fixedCount)
+                        return false;
+                    for (std::size_t i = 0; i < fixedCount; ++i)
+                        if (!bind(p->arguments[i], a->arguments[i], bindings))
+                            return false;
+                    Type pack{.kind = TypeKind::TypePack, .name = module_.types.get(p->arguments.back()).name};
+                    pack.arguments.insert(pack.arguments.end(), a->arguments.begin() + fixedCount, a->arguments.end());
+                    return bind(p->arguments.back(), module_.types.intern(std::move(pack)), bindings);
+                }
                 if (p->kind != a->kind || p->arguments.size() != a->arguments.size())
                     return false;
                 if (p->extentParameter)
@@ -296,10 +313,54 @@ namespace wio::wir
                 if (const auto it = cache.find(id); it != cache.end())
                     return it->second;
                 Type type = module_.types.get(id);
+                if (type.kind == TypeKind::GenericParameter)
+                {
+                    if (const auto element = sema::generic_support::tryParsePackElementBindingName(type.name))
+                    {
+                        for (const auto& [parameter, bound] : bindings)
+                        {
+                            const Type& parameterType = module_.types.get(parameter);
+                            const Type& pack = module_.types.get(bound);
+                            if (parameterType.kind != TypeKind::GenericParameterPack ||
+                                parameterType.name != element->packName)
+                                continue;
+                            if (const auto index = sema::generic_support::tryResolveConcretePackElementIndex(
+                                    *element, pack.arguments.size()))
+                                return pack.arguments[*index];
+                        }
+                    }
+                }
                 if (!openType(id))
                     return id;
-                for (TypeId& argument : type.arguments)
-                    argument = substitute(argument, bindings, cache);
+                if ((type.kind == TypeKind::ValuePack || type.kind == TypeKind::TypePack ||
+                     type.kind == TypeKind::PackStorage) &&
+                    type.arguments.empty() && !type.name.empty())
+                {
+                    for (const auto& [parameter, bound] : bindings)
+                    {
+                        const Type& parameterType = module_.types.get(parameter);
+                        const Type& pack = module_.types.get(bound);
+                        if (parameterType.kind == TypeKind::GenericParameterPack && parameterType.name == type.name)
+                        {
+                            type.arguments = pack.arguments;
+                            break;
+                        }
+                    }
+                }
+                std::vector<TypeId> arguments;
+                for (const TypeId argument : type.arguments)
+                {
+                    if (type.kind == TypeKind::Named)
+                    {
+                        if (const Type* pack = boundPack(argument, bindings))
+                        {
+                            arguments.insert(arguments.end(), pack->arguments.begin(), pack->arguments.end());
+                            continue;
+                        }
+                    }
+                    arguments.push_back(substitute(argument, bindings, cache));
+                }
+                type.arguments = std::move(arguments);
                 if (type.extentParameter)
                 {
                     const TypeId extent = substitute(type.extentParameter, bindings, cache);
@@ -450,6 +511,58 @@ namespace wio::wir
                         {
                             expansions[instruction.result] = expansions.at(instruction.operands.front());
                             continue;
+                        }
+                        if (instruction.opcode == Opcode::IntrinsicCall &&
+                            instruction.intrinsicFamily == IntrinsicFamily::Pack)
+                        {
+                            const ExpandedPackValue* expansion =
+                                instruction.operands.size() == 1 && expansions.contains(instruction.operands.front())
+                                    ? &expansions.at(instruction.operands.front())
+                                    : nullptr;
+                            const Type* bound = !expansion ? boundPack(instruction.targetType, bindings) : nullptr;
+                            const std::size_t packSize = expansion ? expansion->types.size()
+                                                         : bound   ? bound->arguments.size()
+                                                                   : 0;
+                            if (instruction.selector == "Size" && (expansion || bound))
+                            {
+                                instruction.opcode = Opcode::Constant;
+                                instruction.operands.clear();
+                                instruction.signatureTypes.clear();
+                                instruction.intrinsicFamily = IntrinsicFamily::None;
+                                instruction.targetType = {};
+                                instruction.literal = static_cast<std::uint64_t>(packSize);
+                                instructions.push_back(std::move(instruction));
+                                continue;
+                            }
+                            if (instruction.selector == "Array" && expansion)
+                            {
+                                instruction.operands = expansion->values;
+                                instruction.signatureTypes = expansion->types;
+                                instructions.push_back(std::move(instruction));
+                                continue;
+                            }
+                            if (expansion)
+                            {
+                                const auto element =
+                                    sema::generic_support::tryParsePackElementBindingName(instruction.selector);
+                                const auto index = element ? sema::generic_support::tryResolveConcretePackElementIndex(
+                                                                 *element, expansion->values.size())
+                                                           : std::nullopt;
+                                if (!index)
+                                {
+                                    fail("Concrete parameter-pack element index could not be resolved.",
+                                         instruction.source);
+                                    return false;
+                                }
+                                instruction.opcode = Opcode::Copy;
+                                instruction.operands = {expansion->values[*index]};
+                                instruction.signatureTypes.clear();
+                                instruction.intrinsicFamily = IntrinsicFamily::None;
+                                instruction.targetType = {};
+                                instruction.selector.clear();
+                                instructions.push_back(std::move(instruction));
+                                continue;
+                            }
                         }
                         if ((instruction.opcode == Opcode::Copy || instruction.opcode == Opcode::Move) &&
                             instruction.operands.size() == 1 && expansions.contains(instruction.operands.front()))
@@ -676,6 +789,21 @@ namespace wio::wir
                     {
                         instruction.resultType = replace(instruction.resultType);
                         instruction.targetType = replace(instruction.targetType);
+                        if (instruction.opcode == Opcode::IntrinsicCall &&
+                            instruction.intrinsicFamily == IntrinsicFamily::Pack && instruction.selector != "Size" &&
+                            instruction.selector != "Array")
+                        {
+                            const Type& pack = module_.types.get(instruction.targetType);
+                            const auto element =
+                                sema::generic_support::tryParsePackElementBindingName(instruction.selector);
+                            const auto index = element ? sema::generic_support::tryResolveConcretePackElementIndex(
+                                                             *element, pack.arguments.size())
+                                                       : std::nullopt;
+                            if (!index)
+                                fail("Concrete pack-storage element index could not be resolved.", instruction.source);
+                            else
+                                instruction.projectionIndex = static_cast<std::uint32_t>(*index);
+                        }
                         if (instruction.opcode == Opcode::GenericConstant)
                         {
                             const Type& constant = module_.types.get(instruction.targetType);
@@ -732,8 +860,18 @@ namespace wio::wir
                         }
                         for (TypeId& type : instruction.signatureTypes)
                             type = replace(type);
-                        for (TypeId& type : instruction.genericArguments)
-                            type = replace(type);
+                        std::vector<TypeId> genericArguments;
+                        for (const TypeId argument : instruction.genericArguments)
+                        {
+                            if (const Type* pack = boundPack(argument, bindings))
+                            {
+                                genericArguments.insert(genericArguments.end(), pack->arguments.begin(),
+                                                        pack->arguments.end());
+                                continue;
+                            }
+                            genericArguments.push_back(replace(argument));
+                        }
+                        instruction.genericArguments = std::move(genericArguments);
                         if (instruction.result)
                         {
                             if (!(module_.types.get(instruction.resultType).kind == TypeKind::Reference &&
@@ -795,10 +933,26 @@ namespace wio::wir
                     return request.callee;
                 const Function& source = found->second;
                 Bindings bindings;
-                bool valid = request.genericArguments.size() <= source.genericParameters.size();
-                for (std::size_t i = 0; valid && i < request.genericArguments.size(); ++i)
+                const bool hasGenericPack =
+                    !source.genericParameters.empty() &&
+                    module_.types.get(source.genericParameters.back()).kind == TypeKind::GenericParameterPack;
+                const std::size_t fixedGenericCount =
+                    source.genericParameters.size() - static_cast<std::size_t>(hasGenericPack);
+                bool valid = hasGenericPack ? request.genericArguments.size() >= fixedGenericCount
+                                            : request.genericArguments.size() <= source.genericParameters.size();
+                for (std::size_t i = 0; valid && i < fixedGenericCount && i < request.genericArguments.size(); ++i)
                     if (!openType(request.genericArguments[i]))
                         valid = bind(source.genericParameters[i], request.genericArguments[i], bindings);
+                if (valid && hasGenericPack && request.genericArguments.size() > fixedGenericCount)
+                {
+                    Type pack{.kind = TypeKind::TypePack,
+                              .name = module_.types.get(source.genericParameters.back()).name};
+                    pack.arguments.insert(pack.arguments.end(), request.genericArguments.begin() + fixedGenericCount,
+                                          request.genericArguments.end());
+                    valid = std::ranges::none_of(pack.arguments,
+                                                 [&](const TypeId argument) { return openType(argument); }) &&
+                            bind(source.genericParameters.back(), module_.types.intern(std::move(pack)), bindings);
+                }
                 std::vector<TypeId> signature = request.signatureTypes;
                 TypeId result = request.resultType ? request.resultType : module_.types.voidType();
                 if (request.opcode == Opcode::ConstructObject || request.opcode == Opcode::ConstructComponent)
@@ -851,20 +1005,31 @@ namespace wio::wir
                         valid = bind(source.parameters[i].type, signature[i], bindings);
                     if (valid)
                     {
-                        Type pack{.kind = TypeKind::TypePack};
+                        Type pack{.kind = TypeKind::TypePack, .name = module_.types.get(packParameter->type).name};
                         pack.arguments.insert(pack.arguments.end(), signature.begin() + packIndex, signature.end());
                         valid = bind(packParameter->type, module_.types.intern(std::move(pack)), bindings);
                     }
                 }
                 valid &= bind(source.returnType, result, bindings);
+                if (valid && hasGenericPack && !bindings.contains(source.genericParameters.back()))
+                {
+                    Type pack{.kind = TypeKind::TypePack,
+                              .name = module_.types.get(source.genericParameters.back()).name};
+                    valid = bind(source.genericParameters.back(), module_.types.intern(std::move(pack)), bindings);
+                }
                 for (TypeId p : source.genericParameters)
                     valid &= bindings.contains(p);
                 for (const auto& [p, actual] : bindings)
                     valid &= !openType(actual);
                 if (!valid)
                 {
-                    fail("Cannot materialize generic function '" + source.name + "' from its pinned signature.",
-                         request.source);
+                    std::ostringstream details;
+                    details << "Cannot materialize generic function '" << source.name
+                            << "' from its pinned signature (generic arguments=" << request.genericArguments.size()
+                            << ", generic parameters=" << source.genericParameters.size()
+                            << ", signature=" << signature.size() << ", parameters=" << source.parameters.size()
+                            << ", bindings=" << bindings.size() << ").";
+                    fail(details.str(), request.source);
                     return request.callee;
                 }
                 std::ostringstream key;
@@ -876,8 +1041,8 @@ namespace wio::wir
                 if (instances_.size() >= maximumBodies_)
                 {
                     diagnostics_.push_back({"WIR3101",
-                                            "Generic materialization exceeded its body limit (" +
-                                                std::to_string(maximumBodies_) +
+                                            "Generic materialization of '" + source.name +
+                                                "' exceeded its body limit (" + std::to_string(maximumBodies_) +
                                                 "); possible expanding polymorphic recursion.",
                                             request.source});
                     return request.callee;

@@ -93,7 +93,8 @@ namespace wio::wir
         Option,
         Result,
         Tuple,
-        Span
+        Span,
+        Pack
     };
 
     enum class FieldVisibility : std::uint8_t

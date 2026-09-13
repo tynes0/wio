@@ -1536,6 +1536,25 @@ inline std::string stringify(const std::string& value) { return value; }
 
             std::string intrinsicExpression(const lowered::Instruction& instruction) const
             {
+                if (instruction.intrinsicFamily == IntrinsicFamily::Pack)
+                {
+                    if (instruction.selector == "Size")
+                        return "std::tuple_size_v<" + cppType(instruction.targetType) + ">";
+                    if (instruction.selector == "Array")
+                        return "std::make_tuple(" + callArguments(instruction, 0, true) + ")";
+                    const std::string element =
+                        "std::get<" + std::to_string(instruction.projectionIndex) + ">(" +
+                        operand(instruction.operands.front()) +
+                        (module_.types.get(valueType(instruction.operands.front())).kind == TypeKind::Reference
+                             ? ".read()"
+                             : "") +
+                        ")";
+                    const Type& result = module_.types.get(instruction.resultType);
+                    return result.kind == TypeKind::Reference
+                               ? "wio::wir_backend::Place<" + placeValueType(instruction.resultType) + ">::borrow(" +
+                                     element + ")"
+                               : element;
+                }
                 if (const auto helper = wirIntrinsicHelper(instruction.intrinsicFamily, instruction.selector))
                 {
                     std::vector<std::string> arguments;

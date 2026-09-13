@@ -5,6 +5,7 @@
 #include "wio/ast/attribute_contract.h"
 #include "wio/common/utility.h"
 #include "wio/sema/intrinsic_member_resolver.h"
+#include "wio/sema/generic_support.h"
 #include "wio/sema/constant_evaluator.h"
 #include "wio/sema/scope.h"
 #include "wio/sema/symbol.h"
@@ -2197,25 +2198,27 @@ namespace wio::wir::typed
         std::vector<TypeId> genericArguments(const FunctionCallExpression& call, const Ref<sema::Symbol>& symbol,
                                              const Ref<sema::Type>& selectedCallableType)
         {
+            if (!call.resolvedGenericArguments.empty())
+            {
+                std::vector<TypeId> arguments;
+                arguments.reserve(call.resolvedGenericArguments.size());
+                for (const WeakRef<sema::Type>& argument : call.resolvedGenericArguments)
+                    if (const Ref<sema::Type> type = argument.Lock())
+                        arguments.push_back(mapType(type, &call));
+                return arguments;
+            }
+
+            if (!call.explicitTypeArguments.empty())
+            {
+                std::vector<TypeId> arguments;
+                arguments.reserve(call.explicitTypeArguments.size());
+                for (const NodePtr<TypeSpecifier>& argument : call.explicitTypeArguments)
+                    if (argument)
+                        arguments.push_back(mapType(argument->refType.Lock(), &call));
+                return arguments;
+            }
+
             std::unordered_map<std::string, Ref<sema::Type>> bindings;
-            for (std::size_t index = 0;
-                 index < call.explicitTypeArguments.size() && symbol && index < symbol->genericParameterNames.size();
-                 ++index)
-            {
-                if (const Ref<sema::Type> argument =
-                        call.explicitTypeArguments[index] ? call.explicitTypeArguments[index]->refType.Lock() : nullptr)
-                {
-                    bindings[symbol->genericParameterNames[index]] = argument;
-                }
-            }
-            for (std::size_t index = 0; index < call.resolvedGenericArguments.size(); ++index)
-            {
-                if (const Ref<sema::Type> argument = call.resolvedGenericArguments[index].Lock();
-                    symbol && index < symbol->genericParameterNames.size())
-                {
-                    bindings.try_emplace(symbol->genericParameterNames[index], argument);
-                }
-            }
             if (symbol)
                 bindGenericArguments(symbol->type, selectedCallableType, bindings);
 
@@ -3442,6 +3445,44 @@ namespace wio::wir::typed
                 const TypeId ownerType =
                     member->object ? mapType(member->object->refType.Lock(), member->object.Get()) : TypeId{};
                 const Type* ownerTypeInfo = result_.module_.types.tryGet(ownerType);
+                if (member->intrinsicMember == IntrinsicMember::PackSize ||
+                    member->intrinsicMember == IntrinsicMember::PackArray)
+                {
+                    Instruction instruction{.opcode = Opcode::IntrinsicCall,
+                                            .selector =
+                                                member->intrinsicMember == IntrinsicMember::PackSize ? "Size" : "Array",
+                                            .intrinsicFamily = IntrinsicFamily::Pack,
+                                            .targetType = ownerType,
+                                            .source = SourceSpan::at(expression->location())};
+                    ValueId receiver;
+                    if (const auto* identifier = member->object->as<Identifier>())
+                    {
+                        const Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
+                        const sema::Symbol* lexical = lexicalSymbol(symbol.Get(), state);
+                        if (const auto value = lexical ? state.values.find(lexical) : state.values.end();
+                            value != state.values.end())
+                            receiver = value->second;
+                        else if (const auto place = lexical ? state.places.find(lexical) : state.places.end();
+                                 place != state.places.end())
+                            receiver = emitLoad(place->second, ownerType, member->object.Get(), state);
+                    }
+                    else
+                    {
+                        receiver = buildAutoReadableExpression(member->object, state);
+                    }
+                    if (receiver)
+                    {
+                        instruction.operands.push_back(receiver);
+                        instruction.signatureTypes.push_back(ownerType);
+                    }
+                    else if (member->intrinsicMember == IntrinsicMember::PackArray)
+                    {
+                        report("WIR2361", "Pack array materialization requires a runtime value pack.",
+                               expression.Get());
+                        return {};
+                    }
+                    return appendValue(std::move(instruction));
+                }
                 const bool isStaticNominalAccess =
                     member->object && (member->object->is<TypeExpression>() ||
                                        (ownerSymbol && (ownerSymbol->kind == sema::SymbolKind::Struct ||
@@ -3490,6 +3531,23 @@ namespace wio::wir::typed
                 {
                     objectTypeId = objectType->arguments.front();
                     objectType = result_.module_.types.tryGet(objectTypeId);
+                }
+                if (objectType &&
+                    (objectType->kind == TypeKind::GenericParameterPack || objectType->kind == TypeKind::ValuePack ||
+                     objectType->kind == TypeKind::PackStorage))
+                {
+                    const ValueId object = buildAutoReadableExpression(access->object, state);
+                    if (!object)
+                        return {};
+                    const TypeId resultType = mapExpressionType(expression, expression.Get());
+                    const Type* resultTypeInfo = result_.module_.types.tryGet(resultType);
+                    return appendValue(Instruction{.opcode = Opcode::IntrinsicCall,
+                                                   .operands = {object},
+                                                   .selector = resultTypeInfo ? resultTypeInfo->name : std::string{},
+                                                   .signatureTypes = {objectTypeId},
+                                                   .intrinsicFamily = IntrinsicFamily::Pack,
+                                                   .targetType = objectTypeId,
+                                                   .source = SourceSpan::at(expression->location())});
                 }
                 if (!objectType || (objectType->kind != TypeKind::Array && objectType->kind != TypeKind::Dictionary &&
                                     objectType->kind != TypeKind::String && objectType->kind != TypeKind::Text))
@@ -4264,6 +4322,32 @@ namespace wio::wir::typed
                 }
                 if (!container || (container->kind != TypeKind::Array && container->kind != TypeKind::Dictionary))
                 {
+                    if (container &&
+                        (container->kind == TypeKind::GenericParameterPack || container->kind == TypeKind::ValuePack ||
+                         container->kind == TypeKind::PackStorage))
+                    {
+                        const ValueId base = buildPlace(access->object, needsMutable, state);
+                        if (!base)
+                            return {};
+                        const TypeId valueType = mapType(expression->refType.Lock(), expression.Get());
+                        const Type* valueTypeInfo = result_.module_.types.tryGet(valueType);
+                        const ValueId result{state.nextValue++};
+                        currentBlock(state).instructions.push_back(
+                            Instruction{.opcode = Opcode::IntrinsicCall,
+                                        .result = result,
+                                        .resultType = referenceType(valueType, needsMutable),
+                                        .operands = {base},
+                                        .selector = valueTypeInfo ? valueTypeInfo->name : std::string{},
+                                        .signatureTypes = {emittedValueType(base, state)},
+                                        .intrinsicFamily = IntrinsicFamily::Pack,
+                                        .targetType = containerType,
+                                        .resultOwnership = ValueOwnership::Borrowed,
+                                        .borrowLifetime = BorrowLifetime::Lexical,
+                                        .borrowOrigin = base,
+                                        .source = SourceSpan::at(expression->location())});
+                        rememberOwnership(state, result, ValueOwnership::Borrowed);
+                        return result;
+                    }
                     report("WIR2328", "Only array and dictionary index expressions are addressable WIR places.",
                            expression.Get());
                     return {};
@@ -4459,6 +4543,26 @@ namespace wio::wir::typed
 
             const Type* source = result_.module_.types.tryGet(sourceType);
             const Type* destination = result_.module_.types.tryGet(destinationType);
+            const auto packValue = [](const Type* type)
+            {
+                return type && (type->kind == TypeKind::GenericParameterPack || type->kind == TypeKind::ValuePack ||
+                                type->kind == TypeKind::PackStorage);
+            };
+            if (packValue(source) && packValue(destination) && !source->name.empty() &&
+                source->name == destination->name)
+            {
+                for (auto instruction = currentBlock(state).instructions.rbegin();
+                     instruction != currentBlock(state).instructions.rend(); ++instruction)
+                {
+                    if (instruction->result != value)
+                        continue;
+                    instruction->resultType = destinationType;
+                    instruction->targetType = destinationType;
+                    break;
+                }
+                rememberOwnership(state, value, ownershipForType(destinationType));
+                return ensureOwned(value, destinationType, expression.Get(), state);
+            }
             if (source && destination && source->kind == TypeKind::Reference &&
                 destination->kind == TypeKind::Reference && source->arguments == destination->arguments &&
                 source->isMutable && !destination->isMutable)

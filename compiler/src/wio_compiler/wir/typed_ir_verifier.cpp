@@ -1231,8 +1231,11 @@ namespace wio::wir::typed
                             signaturesMatch = instruction.signatureTypes[operandIndex] ==
                                               valueType(instruction.operands[operandIndex]);
                         }
+                        const bool packSizeWithoutValue = instruction.intrinsicFamily == IntrinsicFamily::Pack &&
+                                                          instruction.selector == "Size" &&
+                                                          instruction.operands.empty();
                         if (instruction.intrinsicFamily == IntrinsicFamily::None || instruction.selector.empty() ||
-                            instruction.operands.empty() ||
+                            (instruction.operands.empty() && !packSizeWithoutValue) ||
                             instruction.signatureTypes.size() != instruction.operands.size() ||
                             !module.types.tryGet(instruction.targetType) || !signaturesMatch)
                         {
