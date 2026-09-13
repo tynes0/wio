@@ -2079,8 +2079,12 @@ namespace wio::wir::typed
                     }
                 }
             }
-            if (symbol->flags.get_isExtension() && symbol->extensionImplementation)
+            std::unordered_set<const sema::Symbol*> visited;
+            while (symbol->flags.get_isExtension() && symbol->extensionImplementation &&
+                   visited.insert(symbol.Get()).second)
+            {
                 symbol = symbol->extensionImplementation;
+            }
             return symbol;
         }
 
@@ -3807,6 +3811,9 @@ namespace wio::wir::typed
                                                        : functionsBySymbol_.end();
                     if (extensionFunction != functionsBySymbol_.end())
                     {
+                        const auto implementation =
+                            std::ranges::find_if(result_.module_.functions, [&](const Function& function)
+                                                 { return function.id == extensionFunction->second; });
                         const auto implementationType =
                             extensionImplementation->type &&
                                     extensionImplementation->type->kind() == sema::TypeKind::Function
@@ -3816,6 +3823,69 @@ namespace wio::wir::typed
                                                                                      sema::TypeKind::Function
                                                      ? call->callee->refType.Lock().AsFast<sema::FunctionType>()
                                                      : nullptr;
+                        if (selectedMember->flags.get_isDerived() &&
+                            implementation != result_.module_.functions.end() && implementation->isMethod &&
+                            implementation->ownerType)
+                        {
+                            const MethodLayout* method =
+                                findMethodLayout(implementation->ownerType, extensionImplementation);
+                            if (!method || !implementationType || implementationType->paramTypes.empty())
+                            {
+                                report("WIR2357", "Derived extension is missing its processor method layout.",
+                                       expression.Get());
+                                return {};
+                            }
+
+                            const ValueId processor{state.nextValue++};
+                            currentBlock(state).instructions.push_back(
+                                Instruction{.opcode = Opcode::ConstructObject,
+                                            .result = processor,
+                                            .resultType = implementation->ownerType,
+                                            .selector = implementation->name + "::OnConstruct",
+                                            .resultOwnership = ValueOwnership::Owned,
+                                            .source = SourceSpan::at(expression->location())});
+                            rememberOwnership(state, processor, ValueOwnership::Owned);
+
+                            Instruction instruction{.opcode = Opcode::MethodCall,
+                                                    .operands = {processor},
+                                                    .callee = extensionFunction->second,
+                                                    .selector = method->name,
+                                                    .projectionIndex = method->slot,
+                                                    .targetType = implementation->ownerType,
+                                                    .source = SourceSpan::at(expression->location())};
+                            instruction.signatureTypes.push_back(
+                                referenceType(implementation->ownerType, method->receiverMutable));
+                            const TypeId receiverType =
+                                mapType(implementationType->paramTypes.front(), memberCallee->object.Get());
+                            const ValueId receiver = buildExpressionAs(memberCallee->object, receiverType, state);
+                            if (!receiver)
+                                return {};
+                            instruction.operands.push_back(receiver);
+                            instruction.signatureTypes.push_back(receiverType);
+                            for (std::size_t index = 0; index < call->arguments.size(); ++index)
+                            {
+                                const auto& argument = call->arguments[index];
+                                const TypeId expectedType =
+                                    index + 1 < implementationType->paramTypes.size()
+                                        ? mapType(implementationType->paramTypes[index + 1], argument.Get())
+                                        : mapType(argument->refType.Lock(), argument.Get());
+                                if (!appendCallArgument(instruction, argument, expectedType, state))
+                                    return {};
+                            }
+                            instruction.specializationKey =
+                                specializationKey(instruction.callee, {}, instruction.signatureTypes, callResultType);
+                            if (callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Void)
+                            {
+                                currentBlock(state).instructions.push_back(std::move(instruction));
+                                releaseOwnedTemporary(receiver, expression.Get(), state);
+                                releaseOwnedTemporary(processor, expression.Get(), state);
+                                return {};
+                            }
+                            const ValueId result = appendValue(std::move(instruction));
+                            releaseOwnedTemporary(receiver, expression.Get(), state);
+                            releaseOwnedTemporary(processor, expression.Get(), state);
+                            return result;
+                        }
                         Instruction instruction{
                             .opcode = isNativeFunction(extensionFunction->second) ? Opcode::NativeCall
                                                                                   : Opcode::ExtensionCall,
