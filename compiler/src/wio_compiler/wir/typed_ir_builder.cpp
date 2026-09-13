@@ -81,6 +81,7 @@ namespace wio::wir::typed
             std::vector<const sema::Symbol*> placeOrder;
             std::unordered_map<ValueId::ValueType, ValueOwnership> ownerships;
             std::unordered_set<const sema::Symbol*> movedPlaces;
+            std::vector<std::pair<ValueId, TypeId>> temporaryPlaces;
             ValueId selfValue;
             TypeId selfType;
         };
@@ -134,6 +135,7 @@ namespace wio::wir::typed
             BlockId breakTarget;
             std::vector<const sema::Symbol*> carriedSymbols;
             std::size_t placeDepth = 0;
+            std::size_t temporaryPlaceDepth = 0;
         };
 
         BuildResult& result_;
@@ -632,6 +634,20 @@ namespace wio::wir::typed
             }
         }
 
+        void emitTemporaryDropsFrom(const std::size_t firstPlace, FunctionState& state, const ASTNode* source)
+        {
+            for (std::size_t index = state.temporaryPlaces.size(); index > firstPlace; --index)
+            {
+                const auto& [place, valueType] = state.temporaryPlaces[index - 1];
+                if (!typeRequiresCleanup(valueType))
+                    continue;
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::Drop,
+                                .operands = {place},
+                                .source = source ? SourceSpan::at(source->location()) : SourceSpan{}});
+            }
+        }
+
         ValueId adaptPlaceMutability(const ValueId place, const TypeId placeTypeId, const bool needsMutable,
                                      const ASTNode* source, FunctionState& state)
         {
@@ -672,6 +688,26 @@ namespace wio::wir::typed
         {
             const BasicBlock& block = currentBlock(state);
             return !block.instructions.empty() && isTerminator(block.instructions.back().opcode);
+        }
+
+        static TypeId emittedValueType(const ValueId value, const FunctionState& state)
+        {
+            if (!value || !state.function)
+                return {};
+            for (const Parameter& parameter : state.function->parameters)
+                if (parameter.id == value)
+                    return parameter.type;
+            for (auto block = state.function->blocks.rbegin(); block != state.function->blocks.rend(); ++block)
+            {
+                for (const Parameter& parameter : block->parameters)
+                    if (parameter.id == value)
+                        return parameter.type;
+                for (auto instruction = block->instructions.rbegin(); instruction != block->instructions.rend();
+                     ++instruction)
+                    if (instruction->result == value)
+                        return instruction->resultType;
+            }
+            return {};
         }
 
         static std::size_t createBlock(FunctionState& state, std::string name, const SourceSpan& source)
@@ -2261,6 +2297,7 @@ namespace wio::wir::typed
                         resultInstruction.operands.push_back(value);
                 }
                 emitDropsFrom(0, state, &lambda);
+                emitTemporaryDropsFrom(0, state, &lambda);
                 currentBlock(state).instructions.push_back(std::move(resultInstruction));
             }
             else
@@ -2272,6 +2309,7 @@ namespace wio::wir::typed
                     if (returnType && returnType->kind == TypeKind::Void)
                     {
                         emitDropsFrom(0, state, &lambda);
+                        emitTemporaryDropsFrom(0, state, &lambda);
                         currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Return});
                     }
                     else
@@ -2502,6 +2540,7 @@ namespace wio::wir::typed
                     if (returnType && returnType->kind == TypeKind::Void)
                     {
                         emitDropsFrom(0, state, &declaration);
+                        emitTemporaryDropsFrom(0, state, &declaration);
                         currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Return});
                     }
                     else
@@ -2539,6 +2578,7 @@ namespace wio::wir::typed
                                           : buildDefaultValue(global.type, info.declaration, state);
                 if (value)
                 {
+                    emitTemporaryDropsFrom(0, state, info.declaration);
                     currentBlock(state).instructions.push_back(
                         Instruction{.opcode = Opcode::Return, .operands = {value}, .source = global.source});
                 }
@@ -2560,6 +2600,7 @@ namespace wio::wir::typed
             {
                 const std::size_t visibleValueCount = state.valueOrder.size();
                 const std::size_t visiblePlaceCount = state.placeOrder.size();
+                const std::size_t visibleTemporaryPlaceCount = state.temporaryPlaces.size();
                 for (const auto& child : block->statements)
                 {
                     if (blockIsTerminated(state))
@@ -2570,7 +2611,10 @@ namespace wio::wir::typed
                     buildStatement(child, state);
                 }
                 if (!blockIsTerminated(state))
+                {
                     emitDropsFrom(visiblePlaceCount, state, block);
+                    emitTemporaryDropsFrom(visibleTemporaryPlaceCount, state, block);
+                }
                 while (state.valueOrder.size() > visibleValueCount)
                 {
                     state.values.erase(state.valueOrder.back());
@@ -2581,6 +2625,7 @@ namespace wio::wir::typed
                     state.places.erase(state.placeOrder.back());
                     state.placeOrder.pop_back();
                 }
+                state.temporaryPlaces.resize(visibleTemporaryPlaceCount);
                 return;
             }
             if (const auto* declaration = statement->as<VariableDeclaration>())
@@ -2601,6 +2646,13 @@ namespace wio::wir::typed
                 if (!value)
                     return;
                 const TypeId valueType = mapType(symbol->type, declaration);
+                const Type* valueTypeInfo = result_.module_.types.tryGet(valueType);
+                if (valueTypeInfo && valueTypeInfo->kind == TypeKind::Reference)
+                {
+                    state.values[symbol.Get()] = value;
+                    state.valueOrder.push_back(symbol.Get());
+                    return;
+                }
                 const TypeId placeType = referenceType(valueType, symbol->flags.get_isMutable());
                 const ValueId place{state.nextValue++};
                 currentBlock(state).instructions.push_back(
@@ -2681,6 +2733,7 @@ namespace wio::wir::typed
                         instruction.operands.push_back(value);
                 }
                 emitDropsFrom(0, state, returnStatement);
+                emitTemporaryDropsFrom(0, state, returnStatement);
                 currentBlock(state).instructions.push_back(std::move(instruction));
                 return;
             }
@@ -2849,6 +2902,7 @@ namespace wio::wir::typed
             FunctionState errorState = state;
             errorState.blockIndex = errorBlockIndex;
             emitDropsFrom(0, errorState, &call);
+            emitTemporaryDropsFrom(0, errorState, &call);
             currentBlock(errorState)
                 .instructions.push_back(Instruction{.opcode = Opcode::ResultPropagate,
                                                     .operands = {resultValue},
@@ -3308,10 +3362,19 @@ namespace wio::wir::typed
                            expression.Get());
                     return {};
                 }
+                const std::size_t temporaryPlaceCount = state.temporaryPlaces.size();
                 const ValueId place = buildPlace(expression, false, state);
                 if (!place)
                     return {};
-                return emitLoad(place, mapType(expression->refType.Lock(), expression.Get()), expression.Get(), state);
+                const TypeId fieldType = mapType(expression->refType.Lock(), expression.Get());
+                ValueId result = emitLoad(place, fieldType, expression.Get(), state);
+                if (state.temporaryPlaces.size() > temporaryPlaceCount)
+                {
+                    result = ensureOwned(result, fieldType, expression.Get(), state);
+                    emitTemporaryDropsFrom(temporaryPlaceCount, state, expression.Get());
+                    state.temporaryPlaces.resize(temporaryPlaceCount);
+                }
+                return result;
             }
             if (const auto* access = expression->as<ArrayAccessExpression>())
             {
@@ -4048,7 +4111,39 @@ namespace wio::wir::typed
                     report("WIR2329", "Addressable member must resolve to a data field.", expression.Get());
                     return {};
                 }
-                const ValueId base = buildPlace(member->object, needsMutable, state);
+                const TypeId objectType = mapExpressionType(member->object, member->object.Get());
+                const Type* objectTypeInfo = result_.module_.types.tryGet(objectType);
+                ValueId base;
+                const bool hasStablePlace =
+                    objectTypeInfo &&
+                    (objectTypeInfo->kind == TypeKind::Reference || member->object->is<Identifier>() ||
+                     member->object->is<SelfExpression>() || member->object->is<SuperExpression>() ||
+                     member->object->is<MemberAccessExpression>() || member->object->is<ArrayAccessExpression>() ||
+                     (member->object->is<UnaryExpression>() &&
+                      member->object->as<UnaryExpression>()->op.type == TokenType::kwDeref));
+                if (hasStablePlace)
+                {
+                    base = buildPlace(member->object, needsMutable, state);
+                }
+                else
+                {
+                    const ValueId value = buildExpression(member->object, state);
+                    if (value && objectTypeInfo && objectTypeInfo->kind == TypeKind::Named)
+                    {
+                        base = ValueId{state.nextValue++};
+                        currentBlock(state).instructions.push_back(
+                            Instruction{.opcode = Opcode::LocalPlace,
+                                        .result = base,
+                                        .resultType = referenceType(objectType, true),
+                                        .selector = "$temporary." + std::to_string(base.value()),
+                                        .source = SourceSpan::at(member->object->location())});
+                        currentBlock(state).instructions.push_back(
+                            Instruction{.opcode = Opcode::PlaceInit,
+                                        .operands = {base, value},
+                                        .source = SourceSpan::at(member->object->location())});
+                        state.temporaryPlaces.emplace_back(base, objectType);
+                    }
+                }
                 if (!base)
                     return {};
                 const ValueId result{state.nextValue++};
@@ -4177,7 +4272,9 @@ namespace wio::wir::typed
             ValueId value = buildExpression(expression, state);
             if (!value)
                 return {};
-            TypeId sourceType = mapExpressionType(expression, expression.Get());
+            TypeId sourceType = emittedValueType(value, state);
+            if (!sourceType)
+                sourceType = mapExpressionType(expression, expression.Get());
             if (sourceType == destinationType)
                 return ensureOwned(value, destinationType, expression.Get(), state);
 
@@ -4258,6 +4355,22 @@ namespace wio::wir::typed
                                 .source = SourceSpan::at(expression->location())});
                 rememberOwnership(state, wrapped, ownershipForType(destinationType));
                 return wrapped;
+            }
+
+            if (source && source->kind == TypeKind::Nullable && source->arguments.size() == 1 &&
+                source->arguments.front() == destinationType)
+            {
+                const ValueId unwrapped{state.nextValue++};
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::NullableUnwrap,
+                                .result = unwrapped,
+                                .resultType = destinationType,
+                                .operands = {value},
+                                .targetType = destinationType,
+                                .resultOwnership = ownershipForType(destinationType),
+                                .source = SourceSpan::at(expression->location())});
+                rememberOwnership(state, unwrapped, ownershipForType(destinationType));
+                return unwrapped;
             }
 
             if (!source || !destination || !isSafeNumericWiden(source->kind, destination->kind))
@@ -5140,6 +5253,7 @@ namespace wio::wir::typed
 
             const LoopContext& loop = loopContexts_.back();
             emitDropsFrom(loop.placeDepth, state, statement);
+            emitTemporaryDropsFrom(loop.temporaryPlaceDepth, state, statement);
             currentBlock(state).instructions.push_back(
                 Instruction{.opcode = Opcode::Branch,
                             .operands = collectCarriedValues(state.values, loop.carriedSymbols, statement),
@@ -5198,7 +5312,8 @@ namespace wio::wir::typed
             loopContexts_.push_back(LoopContext{.continueTarget = currentBlockAt(state, headerBlockIndex).id,
                                                 .breakTarget = currentBlockAt(state, exitBlockIndex).id,
                                                 .carriedSymbols = carriedSymbols,
-                                                .placeDepth = state.placeOrder.size()});
+                                                .placeDepth = state.placeOrder.size(),
+                                                .temporaryPlaceDepth = state.temporaryPlaces.size()});
             buildStatement(statement.body, bodyState);
             loopContexts_.pop_back();
             state.nextValue = bodyState.nextValue;
@@ -5221,6 +5336,7 @@ namespace wio::wir::typed
         void buildForInStatement(const ForInStatement& statement, FunctionState& state)
         {
             const std::size_t outerPlaceCount = state.placeOrder.size();
+            const std::size_t outerTemporaryPlaceCount = state.temporaryPlaces.size();
             const auto carriedSymbols = state.valueOrder;
             const auto incomingValues = state.values;
             const std::size_t preheaderBlockIndex = state.blockIndex;
@@ -5406,7 +5522,8 @@ namespace wio::wir::typed
             loopContexts_.push_back(LoopContext{.continueTarget = currentBlockAt(state, advanceBlockIndex).id,
                                                 .breakTarget = currentBlockAt(state, exitBlockIndex).id,
                                                 .carriedSymbols = carriedSymbols,
-                                                .placeDepth = outerPlaceCount});
+                                                .placeDepth = outerPlaceCount,
+                                                .temporaryPlaceDepth = outerTemporaryPlaceCount});
             buildStatement(statement.body, bodyState);
             loopContexts_.pop_back();
             state.nextValue = bodyState.nextValue;
@@ -5414,6 +5531,7 @@ namespace wio::wir::typed
             if (!blockIsTerminated(bodyState))
             {
                 emitDropsFrom(outerPlaceCount, bodyState, &statement);
+                emitTemporaryDropsFrom(outerTemporaryPlaceCount, bodyState, &statement);
                 currentBlock(bodyState).instructions.push_back(
                     Instruction{.opcode = Opcode::Branch,
                                 .operands = collectCarriedValues(bodyState.values, carriedSymbols, &statement),
@@ -5447,6 +5565,7 @@ namespace wio::wir::typed
         {
             const std::size_t outerValueCount = state.valueOrder.size();
             const std::size_t outerPlaceCount = state.placeOrder.size();
+            const std::size_t outerTemporaryPlaceCount = state.temporaryPlaces.size();
             if (statement.initializer)
                 buildStatement(statement.initializer, state);
             if (blockIsTerminated(state))
@@ -5518,7 +5637,8 @@ namespace wio::wir::typed
             loopContexts_.push_back(LoopContext{.continueTarget = currentBlockAt(state, incrementBlockIndex).id,
                                                 .breakTarget = currentBlockAt(state, exitBlockIndex).id,
                                                 .carriedSymbols = carriedSymbols,
-                                                .placeDepth = state.placeOrder.size()});
+                                                .placeDepth = state.placeOrder.size(),
+                                                .temporaryPlaceDepth = state.temporaryPlaces.size()});
             buildStatement(statement.body, bodyState);
             loopContexts_.pop_back();
             state.nextValue = bodyState.nextValue;
@@ -5555,11 +5675,13 @@ namespace wio::wir::typed
             state.values = exitValues;
             state.valueOrder = carriedSymbols;
             emitDropsFrom(outerPlaceCount, state, &statement);
+            emitTemporaryDropsFrom(outerTemporaryPlaceCount, state, &statement);
             while (state.placeOrder.size() > outerPlaceCount)
             {
                 state.places.erase(state.placeOrder.back());
                 state.placeOrder.pop_back();
             }
+            state.temporaryPlaces.resize(outerTemporaryPlaceCount);
             while (state.valueOrder.size() > outerValueCount)
             {
                 state.values.erase(state.valueOrder.back());

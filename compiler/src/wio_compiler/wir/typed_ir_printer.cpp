@@ -403,6 +403,7 @@ namespace wio::wir::typed
             case Opcode::AnyCheckedCast:
             case Opcode::AnyTypeTest:
             case Opcode::NullableWrap:
+            case Opcode::NullableUnwrap:
                 stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0)) << " to "
                        << typeRef(instruction.targetType);
                 break;

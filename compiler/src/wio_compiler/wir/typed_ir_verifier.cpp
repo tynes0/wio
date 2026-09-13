@@ -1283,6 +1283,21 @@ namespace wio::wir::typed
                                    instruction.source, function.id, block.id);
                         }
                     }
+                    else if (instruction.opcode == Opcode::NullableUnwrap)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                                                     ? module.types.tryGet(valueType(instruction.operands.front()))
+                                                     : nullptr;
+                        if (!sourceType || sourceType->kind != TypeKind::Nullable ||
+                            sourceType->arguments.size() != 1 ||
+                            sourceType->arguments.front() != instruction.resultType ||
+                            instruction.targetType != instruction.resultType)
+                        {
+                            report("WIR1481",
+                                   "Typed WIR nullable unwrap requires one nullable value and its payload result.",
+                                   instruction.source, function.id, block.id);
+                        }
+                    }
                     else if (instruction.opcode == Opcode::IteratorCreate)
                     {
                         const Type* iterator = module.types.tryGet(instruction.resultType);
