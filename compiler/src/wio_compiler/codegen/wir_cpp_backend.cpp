@@ -876,6 +876,40 @@ namespace wio::codegen
                 output_ << R"CPP(
 namespace wio::wir_backend {
 struct SkipConstructor {};
+template<class To, class From> To numeric_fit(const From value) {
+    if constexpr (std::is_same_v<To, bool>) {
+        return value != From{};
+    } else if constexpr (std::is_same_v<From, bool>) {
+        return static_cast<To>(value);
+    } else if constexpr (std::is_integral_v<To> && std::is_integral_v<From>) {
+        if constexpr (std::is_signed_v<To> == std::is_signed_v<From>) {
+            if constexpr (sizeof(To) >= sizeof(From)) return static_cast<To>(value);
+            if (value < static_cast<From>(std::numeric_limits<To>::lowest()))
+                return std::numeric_limits<To>::lowest();
+            if (value > static_cast<From>(std::numeric_limits<To>::max()))
+                return std::numeric_limits<To>::max();
+        } else if constexpr (std::is_signed_v<From>) {
+            if (value < 0) return std::numeric_limits<To>::lowest();
+            using UnsignedFrom = std::make_unsigned_t<From>;
+            if constexpr (sizeof(To) < sizeof(UnsignedFrom)) {
+                if (static_cast<UnsignedFrom>(value) > std::numeric_limits<To>::max())
+                    return std::numeric_limits<To>::max();
+            }
+        } else {
+            using UnsignedTo = std::make_unsigned_t<To>;
+            if (value > static_cast<UnsignedTo>(std::numeric_limits<To>::max()))
+                return std::numeric_limits<To>::max();
+        }
+        return static_cast<To>(value);
+    } else {
+        const long double widened = static_cast<long double>(value);
+        if (widened < static_cast<long double>(std::numeric_limits<To>::lowest()))
+            return std::numeric_limits<To>::lowest();
+        if (widened > static_cast<long double>(std::numeric_limits<To>::max()))
+            return std::numeric_limits<To>::max();
+        return static_cast<To>(value);
+    }
+}
 template<class T> class Place {
 public:
     static Place local() {
@@ -967,6 +1001,8 @@ template<class T, class U> T* require_object_cast(const U& value) {
 template<class T> wio::runtime::RefCountedObject* object_identity(const T& value) { return object_ptr(value); }
 template<class T> std::string stringify(const T& value) { std::ostringstream stream; stream << value; return stream.str(); }
 inline std::string stringify(const bool value) { return value ? "true" : "false"; }
+inline std::string stringify(const std::int8_t value) { return std::to_string(static_cast<std::int32_t>(value)); }
+inline std::string stringify(const std::uint8_t value) { return std::to_string(static_cast<std::uint32_t>(value)); }
 inline std::string stringify(const std::string& value) { return value; }
 }
 
@@ -1646,8 +1682,11 @@ inline std::string stringify(const std::string& value) { return value; }
                                                   operand(instruction.operands[2]) + ")");
                     break;
                 case lowered::Opcode::Convert:
-                    assignResult(instruction, "static_cast<" + cppType(instruction.resultType) + ">(" +
-                                                  operand(instruction.operands[0]) + ")");
+                    assignResult(instruction, instruction.conversionKind == typed::ConversionKind::NumericFit
+                                                  ? "wio::wir_backend::numeric_fit<" + cppType(instruction.resultType) +
+                                                        ">(" + operand(instruction.operands[0]) + ")"
+                                                  : "static_cast<" + cppType(instruction.resultType) + ">(" +
+                                                        operand(instruction.operands[0]) + ")");
                     break;
                 case lowered::Opcode::Call:
                 case lowered::Opcode::ExtensionCall:
@@ -1939,9 +1978,13 @@ inline std::string stringify(const std::string& value) { return value; }
                             << operand(instruction.operands.front()) << "->_f2);\n";
                     break;
                 case lowered::Opcode::GlobalPlace:
+                {
+                    const auto& placeType = module_.types.get(instruction.resultType);
                     assignResult(instruction, "wio::wir_backend::Place<" + placeValueType(instruction.resultType) +
-                                                  ">::borrow(" + globalName(instruction.global) + ")");
+                                                  (placeType.isMutable ? ">::borrow(" : ">::borrowView(") +
+                                                  globalName(instruction.global) + ")");
                     break;
+                }
                 case lowered::Opcode::LocalPlace:
                     assignResult(instruction, cppType(instruction.resultType) + "::local()");
                     break;
@@ -2375,6 +2418,7 @@ inline std::string stringify(const std::string& value) { return value; }
                             // Wrapper parameters are ordinary variables rather than SSA
                             // optionals, so emit the ABI adaptation directly here.
                             std::string arguments;
+                            std::vector<std::string> nativeArguments;
                             for (std::size_t index = 0; index < function.parameters.size(); ++index)
                             {
                                 if (index)
@@ -2391,6 +2435,12 @@ inline std::string stringify(const std::string& value) { return value; }
                                     : passing == NativePassingMode::Consume
                                         ? "std::move(_p" + std::to_string(index) + ")"
                                         : "_p" + std::to_string(index);
+                                if (index == 0 && function.nativeBinding->receiver != NativeReceiverKind::None)
+                                {
+                                    argument = function.nativeBinding->receiver == NativeReceiverKind::ConstReference
+                                                   ? "std::addressof(std::as_const(_p0.read()))"
+                                                   : "std::addressof(_p0.read())";
+                                }
                                 if (index < function.nativeBinding->parameters.size() &&
                                     function.nativeBinding->parameters[index].marshalling ==
                                         NativeMarshallingKind::Utf8String &&
@@ -2408,6 +2458,7 @@ inline std::string stringify(const std::string& value) { return value; }
                                         ", " +
                                         (binding.callbackThread == NativeCallbackThread::Any ? "true" : "false") + ")";
                                 }
+                                nativeArguments.push_back(argument);
                                 arguments += argument;
                             }
                             std::string symbol = function.nativeBinding->symbol;
@@ -2426,6 +2477,37 @@ inline std::string stringify(const std::string& value) { return value; }
                                 symbol += '>';
                             }
                             std::string call = symbol + "(" + arguments + ")";
+                            if (function.nativeBinding->receiver != NativeReceiverKind::None &&
+                                !nativeArguments.empty())
+                            {
+                                std::string lambdaParameters;
+                                std::string referenceArguments;
+                                std::string pointerArguments;
+                                std::string invokeArguments;
+                                for (std::size_t index = 0; index < nativeArguments.size(); ++index)
+                                {
+                                    if (index)
+                                    {
+                                        lambdaParameters += ", ";
+                                        referenceArguments += ", ";
+                                        pointerArguments += ", ";
+                                        invokeArguments += ", ";
+                                    }
+                                    const std::string parameter = "_wio_native_arg" + std::to_string(index);
+                                    lambdaParameters += "auto&& " + parameter;
+                                    const std::string forwarded =
+                                        "std::forward<decltype(" + parameter + ")>(" + parameter + ")";
+                                    referenceArguments += index == 0 ? "*" + parameter : forwarded;
+                                    pointerArguments += forwarded;
+                                    invokeArguments += nativeArguments[index];
+                                }
+                                const std::string referenceCall = symbol + "(" + referenceArguments + ")";
+                                const std::string pointerCall = symbol + "(" + pointerArguments + ")";
+                                call = "([&](" + lambdaParameters + ") -> " + cppType(function.returnType) +
+                                       " { if constexpr (requires { " + referenceCall + "; }) { return " +
+                                       referenceCall + "; } else { return " + pointerCall + "; } })(" +
+                                       invokeArguments + ")";
+                            }
                             const auto& returnType = module_.types.get(function.returnType);
                             if (returnType.kind == TypeKind::Reference)
                                 call = cppType(function.returnType) +

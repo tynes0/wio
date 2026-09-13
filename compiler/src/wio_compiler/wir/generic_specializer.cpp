@@ -86,6 +86,34 @@ namespace wio::wir
                             instruction.callee = instantiate(instruction);
                             if (const auto key = instanceKeys_.find(instruction.callee); key != instanceKeys_.end())
                                 instruction.specializationKey = key->second;
+                            const auto concrete =
+                                std::ranges::find(module_.functions, instruction.callee, &Function::id);
+                            if (concrete == module_.functions.end() ||
+                                concrete->parameters.size() != instruction.operands.size() ||
+                                instruction.signatureTypes.size() != instruction.operands.size())
+                                continue;
+                            for (std::size_t argumentIndex = 0; argumentIndex < instruction.operands.size();
+                                 ++argumentIndex)
+                            {
+                                const TypeId oldType = instruction.signatureTypes[argumentIndex];
+                                const TypeId concreteType = concrete->parameters[argumentIndex].type;
+                                if (oldType == concreteType)
+                                    continue;
+                                instruction.signatureTypes[argumentIndex] = concreteType;
+                                for (auto& definingBlock : function.blocks)
+                                {
+                                    const auto definition =
+                                        std::ranges::find(definingBlock.instructions,
+                                                          instruction.operands[argumentIndex], &Instruction::result);
+                                    if (definition == definingBlock.instructions.end() ||
+                                        definition->resultType != oldType)
+                                        continue;
+                                    definition->resultType = concreteType;
+                                    if (definition->targetType == oldType)
+                                        definition->targetType = concreteType;
+                                    break;
+                                }
+                            }
                         }
                     module_.functions[index] = std::move(function);
                     materializeMethods();
@@ -232,13 +260,6 @@ namespace wio::wir
                 const Type* a = &actualType;
                 if (parameterKind(p->kind))
                 {
-                    if (p->kind == TypeKind::ConstGenericParameter && a->kind == TypeKind::ConstValue &&
-                        p->arguments.size() == 1)
-                    {
-                        Type normalized = *a;
-                        normalized.arguments = p->arguments;
-                        actual = module_.types.intern(std::move(normalized));
-                    }
                     const auto [it, inserted] = bindings.emplace(pattern, actual);
                     return inserted || it->second == actual;
                 }

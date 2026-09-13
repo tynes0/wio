@@ -137,7 +137,7 @@ namespace wio::codegen
                             for (std::size_t i = 0; i < a.arguments.size(); ++i)
                             {
                                 if (i)
-                                    s += ", ";
+                                    s += ',';
                                 s += a.arguments[i].sourceText;
                             }
                             s += ')';

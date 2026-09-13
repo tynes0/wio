@@ -781,6 +781,9 @@ namespace wio::wir::typed
                     collectImports(group->declarations);
                 else if (const auto* realm = statement->as<RealmDeclaration>())
                     collectImports(realm->statements);
+                else if (const auto* usingAttribute = statement->as<UsingAttributeStatement>();
+                         usingAttribute && usingAttribute->body)
+                    collectImports(usingAttribute->body->declarations);
             }
         }
 
@@ -840,6 +843,9 @@ namespace wio::wir::typed
                     collectTypeDeclarations(group->declarations);
                 else if (const auto* realm = statement->as<RealmDeclaration>())
                     collectTypeDeclarations(realm->statements);
+                else if (const auto* usingAttribute = statement->as<UsingAttributeStatement>();
+                         usingAttribute && usingAttribute->body)
+                    collectTypeDeclarations(usingAttribute->body->declarations);
             }
         }
 
@@ -873,6 +879,9 @@ namespace wio::wir::typed
                     collectGlobals(group->declarations);
                 else if (const auto* realm = statement->as<RealmDeclaration>())
                     collectGlobals(realm->statements);
+                else if (const auto* usingAttribute = statement->as<UsingAttributeStatement>();
+                         usingAttribute && usingAttribute->body)
+                    collectGlobals(usingAttribute->body->declarations);
             }
         }
 
@@ -1591,6 +1600,9 @@ namespace wio::wir::typed
                 }
                 if (const auto* realm = statement->as<RealmDeclaration>())
                     collectFunctions(realm->statements);
+                else if (const auto* usingAttribute = statement->as<UsingAttributeStatement>();
+                         usingAttribute && usingAttribute->body)
+                    collectFunctions(usingAttribute->body->declarations);
             }
         }
 
