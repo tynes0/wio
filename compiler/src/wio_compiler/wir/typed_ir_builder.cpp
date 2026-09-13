@@ -306,6 +306,26 @@ namespace wio::wir::typed
             return ValueOwnership::Owned;
         }
 
+        static TypeId builtValueType(const FunctionState& state, const ValueId value)
+        {
+            if (!value || !state.function)
+                return {};
+            for (const Parameter& parameter : state.function->parameters)
+                if (parameter.id == value)
+                    return parameter.type;
+            for (const BasicBlock& block : state.function->blocks)
+            {
+                for (const Parameter& parameter : block.parameters)
+                    if (parameter.id == value)
+                        return parameter.type;
+                for (auto instruction = block.instructions.rbegin(); instruction != block.instructions.rend();
+                     ++instruction)
+                    if (instruction->result == value)
+                        return instruction->resultType;
+            }
+            return {};
+        }
+
         bool typeRequiresCleanup(const TypeId typeId) const
         {
             const Type* type = result_.module_.types.tryGet(typeId);
@@ -586,7 +606,8 @@ namespace wio::wir::typed
 
         void releaseOwnedTemporary(const ValueId value, const ASTNode* source, FunctionState& state)
         {
-            if (!value || valueOwnership(state, value) != ValueOwnership::Owned)
+            if (!value || valueOwnership(state, value) != ValueOwnership::Owned ||
+                !typeRequiresCleanup(builtValueType(state, value)))
                 return;
             currentBlock(state).instructions.push_back(
                 Instruction{.opcode = Opcode::Release,
