@@ -1481,8 +1481,10 @@ namespace wio::wir::typed
                             std::unordered_set<TypeId::ValueType> visited;
                             const FieldLayout* field =
                                 findFieldLayout(module.types, *baseValueType, instruction.selector, visited);
+                            const bool constructorInitialization =
+                                function.name == "OnConstruct" || function.name.ends_with("::OnConstruct");
                             if (!field || field->type != placeType->arguments.front() ||
-                                (placeType->isMutable && !field->isMutable))
+                                (placeType->isMutable && !field->isMutable && !constructorInitialization))
                             {
                                 report(
                                     "WIR1437",

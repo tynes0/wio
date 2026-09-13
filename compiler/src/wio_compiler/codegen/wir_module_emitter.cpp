@@ -207,6 +207,8 @@ namespace wio::codegen
                 return legacyAbiKind(valueType.enumUnderlyingType);
             return legacyKind(valueType);
         };
+        const auto storageCppType = [&](TypeId id)
+        { return module.types.get(id).nominalKind == NominalKind::Object ? nominalCppType(id) : type(id); };
         out << "#if defined(_WIN32)\n#define WIO_WIR_EXPORT __declspec(dllexport)\n#else\n#define WIO_WIR_EXPORT "
                "__attribute__((visibility(\"default\")))\n#endif\n";
         const auto thunk = [&](const lowered::Function& f, const std::string& name)
@@ -527,7 +529,7 @@ namespace wio::codegen
             legacyType.descriptor = &reflected;
             const auto& reflectedType = module.types.get(reflected.type);
             const bool isObject = reflected.nominalKind == NominalKind::Object;
-            const auto cppType = nominalCppType(reflected.type);
+            const auto cppType = storageCppType(reflected.type);
 
             const auto appendExport = [&](LegacyExportInfo exportInfo)
             {
@@ -574,19 +576,25 @@ namespace wio::codegen
                         << legacyAbiKind(method.parameterTypes[parameterIndex]) << ")return WIO_INVOKE_TYPE_MISMATCH;";
                 out << "try{";
                 if (isObject)
-                    out << "auto* instance=wio::runtime::Ref<" << cppType << ">::Create(";
+                {
+                    out << "auto value=wio::runtime::Ref<" << cppType
+                        << ">::Create(wio::wir_backend::SkipConstructor{});";
+                    out << functionName(method.function) << "(wio::wir_backend::Place<wio::runtime::Ref<" << cppType
+                        << ">>::borrow(value)";
+                }
                 else
-                    out << "auto* instance=new " << cppType << '(';
+                {
+                    out << "auto* instance=new " << cppType << "{};" << functionName(method.function)
+                        << "(wio::wir_backend::Place<" << cppType << ">::borrow(*instance)";
+                }
                 for (std::size_t parameterIndex = 0; parameterIndex < method.parameterTypes.size(); ++parameterIndex)
                 {
-                    if (parameterIndex)
-                        out << ',';
-                    out << argumentExpression(method.parameterTypes[parameterIndex], parameterIndex);
+                    out << ',' << argumentExpression(method.parameterTypes[parameterIndex], parameterIndex);
                 }
-                out << ')';
+                out << ");";
                 if (isObject)
-                    out << ".Detach()";
-                out << ";result->type=WIO_ABI_USIZE;result->value.v_usize=reinterpret_cast<std::uintptr_t>(instance);"
+                    out << "auto* instance=value.Detach();";
+                out << "result->type=WIO_ABI_USIZE;result->value.v_usize=reinterpret_cast<std::uintptr_t>(instance);"
                        "return WIO_INVOKE_OK;}catch(...){return WIO_INVOKE_NOT_CALLABLE;}}\n";
 
                 LegacyExportInfo constructorExport;
@@ -647,7 +655,7 @@ namespace wio::codegen
                 const auto fieldKind = legacyAbiKind(field.type);
                 if (fieldKind == "UNKNOWN")
                     continue;
-                const auto ownerCppType = nominalCppType(fieldInfo.ownerType);
+                const auto ownerCppType = storageCppType(fieldInfo.ownerType);
                 const auto member =
                     "static_cast<" + ownerCppType + "&>(*instance)._f" + std::to_string(fieldInfo.ownerFieldIndex);
 
@@ -699,7 +707,7 @@ namespace wio::codegen
 
                 const auto& function = *functionIt->second;
                 const auto receiverType = module.types.get(function.parameters.front().type).arguments.front();
-                const auto receiverCppType = nominalCppType(receiverType);
+                const auto receiverCppType = storageCppType(receiverType);
                 const auto resultKind = legacyAbiKind(method.returnType);
                 const auto invokeName = "_legacy_type_call_" + std::to_string(legacy.size());
                 out << "static std::int32_t " << invokeName

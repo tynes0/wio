@@ -650,7 +650,9 @@ namespace wio::wir::typed
             const auto field = std::ranges::find(owner->fields, name, &FieldLayout::name);
             if (field == owner->fields.end())
                 return {};
-            if (needsMutable && (!selfReference->isMutable || !field->isMutable))
+            const bool constructorInitialization = state.function && (state.function->name == "OnConstruct" ||
+                                                                      state.function->name.ends_with("::OnConstruct"));
+            if (needsMutable && (!selfReference->isMutable || (!field->isMutable && !constructorInitialization)))
             {
                 report("WIR2360", "Implicit field '" + std::string{name} + "' is not mutable.", source);
                 return {};
@@ -4409,14 +4411,18 @@ namespace wio::wir::typed
                 }
                 if (!base)
                     return {};
+                const bool constructorInitialization =
+                    state.function &&
+                    (state.function->name == "OnConstruct" || state.function->name.ends_with("::OnConstruct"));
                 const ValueId result{state.nextValue++};
-                currentBlock(state).instructions.push_back(Instruction{
-                    .opcode = Opcode::FieldPlace,
-                    .result = result,
-                    .resultType = referenceType(mapType(expression->refType.Lock(), expression.Get()), needsMutable),
-                    .operands = {base},
-                    .selector = memberSymbol->name,
-                    .source = SourceSpan::at(expression->location())});
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::FieldPlace,
+                                .result = result,
+                                .resultType = referenceType(mapType(expression->refType.Lock(), expression.Get()),
+                                                            needsMutable || constructorInitialization),
+                                .operands = {base},
+                                .selector = memberSymbol->name,
+                                .source = SourceSpan::at(expression->location())});
                 return result;
             }
 

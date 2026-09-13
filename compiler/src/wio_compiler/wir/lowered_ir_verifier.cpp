@@ -1346,8 +1346,10 @@ namespace wio::wir::lowered
                                            "Field storage index does not identify the resolved declaring field.",
                                            instruction.source, function.id, block.id);
                             }
+                            const bool constructorInitialization =
+                                function.name == "OnConstruct" || function.name.ends_with("::OnConstruct");
                             if (!field || field->type != placeType->arguments.front() ||
-                                (placeType->isMutable && !field->isMutable))
+                                (placeType->isMutable && !field->isMutable && !constructorInitialization))
                             {
                                 report(
                                     "LIR1432",
