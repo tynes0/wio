@@ -635,6 +635,43 @@ namespace wio::wir::typed
             return result;
         }
 
+        ValueId buildImplicitFieldPlace(const std::string_view name, const bool needsMutable, const ASTNode* source,
+                                        FunctionState& state)
+        {
+            const Type* selfReference = result_.module_.types.tryGet(state.selfType);
+            if (!state.selfValue || !selfReference || selfReference->kind != TypeKind::Reference ||
+                selfReference->arguments.size() != 1)
+                return {};
+            const TypeId ownerType = selfReference->arguments.front();
+            const Type* owner = result_.module_.types.tryGet(ownerType);
+            if (!owner || owner->kind != TypeKind::Named)
+                return {};
+            const auto field = std::ranges::find(owner->fields, name, &FieldLayout::name);
+            if (field == owner->fields.end())
+                return {};
+            if (needsMutable && (!selfReference->isMutable || !field->isMutable))
+            {
+                report("WIR2360", "Implicit field '" + std::string{name} + "' is not mutable.", source);
+                return {};
+            }
+            const ValueId place{state.nextValue++};
+            const TypeId placeType = referenceType(field->type, needsMutable);
+            currentBlock(state).instructions.push_back(
+                Instruction{.opcode = Opcode::FieldPlace,
+                            .result = place,
+                            .resultType = placeType,
+                            .operands = {state.selfValue},
+                            .selector = field->name,
+                            .projectionIndex = static_cast<std::uint32_t>(std::distance(owner->fields.begin(), field)),
+                            .targetType = ownerType,
+                            .resultOwnership = ValueOwnership::Borrowed,
+                            .borrowLifetime = BorrowLifetime::Lexical,
+                            .borrowOrigin = state.selfValue,
+                            .source = source ? SourceSpan::at(source->location()) : SourceSpan{}});
+            rememberOwnership(state, place, ValueOwnership::Borrowed);
+            return place;
+        }
+
         void emitDropsFrom(const std::size_t firstPlace, FunctionState& state, const ASTNode* source)
         {
             for (std::size_t index = state.placeOrder.size(); index > firstPlace; --index)
@@ -3369,6 +3406,11 @@ namespace wio::wir::typed
                     rememberOwnership(state, globalPlace, ValueOwnership::Borrowed);
                     return emitLoad(globalPlace, descriptor.type, expression.Get(), state);
                 }
+                if (const ValueId fieldPlace =
+                        buildImplicitFieldPlace(identifier->token.value, false, expression.Get(), state))
+                {
+                    return emitLoad(fieldPlace, mapType(symbol->type, expression.Get()), expression.Get(), state);
+                }
                 const Ref<sema::Symbol> callable = resolveCallableSymbol(symbol, expression->refType.Lock());
                 const auto function = callable ? functionsBySymbol_.find(callable.Get()) : functionsBySymbol_.end();
                 if (function != functionsBySymbol_.end())
@@ -4186,6 +4228,9 @@ namespace wio::wir::typed
                     rememberOwnership(state, place, ValueOwnership::Borrowed);
                     return adaptPlaceMutability(place, placeType, needsMutable, expression.Get(), state);
                 }
+                if (const ValueId fieldPlace =
+                        buildImplicitFieldPlace(identifier->token.value, needsMutable, expression.Get(), state))
+                    return fieldPlace;
                 report("WIR2327", "Addressable identifier is not available in the current Typed WIR function.",
                        expression.Get());
                 return {};
