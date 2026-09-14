@@ -1039,8 +1039,8 @@ here as historical evidence rather than active work:
       `wio_wir_cpp_application` and `wio_wir_cpp_reflection` shared-library host
       gates cover lifecycle ordering/failure/thread rules, initializer values,
       reflection access control, runtime attribute retention, stable identities,
-      and values/hosts that outlive the module view. Worker stage transfer and
-      behavioral body weaving fail explicitly; 17.6 owns parity and cutover.
+      and values/hosts that outlive the module view. Worker stage transfer
+      remains deliberately reserved by the language contract.
 - [x] Sprint 17.6 adds executable legacy/WIR differential gates for standalone
       sources and clean `wio-app`/`wio-native-app` projects. The gates compare
       exit status, stdout, and stderr, record isolated build durations, and run
@@ -1049,11 +1049,12 @@ here as historical evidence rather than active work:
       zero-argument component construction, deduced-vs-explicit native template
       calls, UTF-8 native arguments, and `Entry(string[])` now survive through
       the independent backend without AST fallback.
-- [x] Sprint 17.6 adds executable legacy/WIR differential gates for standalone
-      sources and clean `wio-app`/`wio-native-app` projects. The gates compare
-      exit status, stdout, and stderr, record isolated build durations, and run
-      with every focused Lowered-WIR C++ backend gate on Windows and Ubuntu.
-- [x] Variadic packs, concrete generic-owner dispatch, constructor identity,
-      zero-argument component construction, deduced-vs-explicit native template
-      calls, UTF-8 native arguments, and `Entry(string[])` now survive through
-      the independent backend without AST fallback.
+- [x] Behavioral pre/post/finally/around attributes execute from canonical WIR
+      processor `TypeId` and hook `FunctionId` identities. Source/reverse hook
+      ordering, typed receiver/result modes, async results, reflection ordering,
+      exactly-once finalization, and guarded `proceed` lifetime/call count are
+      covered by executable legacy/WIR differential cases.
+- [x] Sprint 17 closes with Lowered WIR as the default C++ generation path for
+      file and project commands. `--cpp-backend legacy` remains available for
+      one release line as an explicit rollback and differential oracle; there is
+      no automatic AST fallback.

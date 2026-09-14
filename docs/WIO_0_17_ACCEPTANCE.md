@@ -15,6 +15,8 @@ workflow; ABI rows additionally exercise an independently compiled C++ host.
 | Lifecycle diagnostics | conflicting roles, invalid parameters, non-unit results, and invalid system delta types fail at compile time | `wio_invalid_application_attribute_multiple_lifecycle`, `wio_invalid_application_attribute_start_parameter`, `wio_invalid_application_attribute_update_return`, `wio_invalid_system_attribute_update_type` |
 | Schedule diagnostics | worker affinity, invalid fixed frequency, unknown dependency, and system-level schedule misuse fail at compile time | `wio_invalid_application_attribute_worker_rejected`, `wio_invalid_application_attribute_fixed_frequency`, `wio_invalid_application_attribute_unknown_dependency`, `wio_invalid_system_application_schedule_attribute` |
 | Suspension boundary | application and system stack receivers cannot cross async suspension | `wio_invalid_application_async_helper`, `wio_invalid_system_async_helper` |
+| Default backend | ordinary file/project commands select verified Lowered WIR without an explicit flag | `wio_wir_cpp_backend_cli`, `wio_wir_cpp_project_differential` |
+| Behavioral attributes | pre/post/finally/around order, async results, reflection, and guarded continuations match the compatibility generator | `wio_wir_cpp_behavioral_differential` |
 
 Release blockers:
 
@@ -25,7 +27,9 @@ Release blockers:
 - `[Worker]` dispatching before ref/view conflict analysis is implemented;
 - legacy and canonical lifecycle declarations producing different startup,
   update, rollback, or close ordering;
-- Windows and Ubuntu disagreement in the matrix above.
+- Windows and Ubuntu disagreement in the matrix above;
+- an ordinary build selecting the AST generator or silently falling back to it;
+- behavioral output differing between the WIR backend and compatibility oracle.
 
 Known 0.17 boundaries, not hidden release claims:
 

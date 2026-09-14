@@ -79,9 +79,9 @@ wrappers may be added around it, but the wire contract consists of:
 - `WioNativeAbiFailure` and status codes;
 - `WioNativeAbiFunctionDescriptor` and thunk pointer.
 
-The production AST-to-C++ generator remains the default during WIR migration.
-Sprint 17.4 implements checked thunks in the opt-in Lowered-WIR C++ backend;
-the VM bridge is still future work, consuming the same contract.
+The production Lowered-WIR C++ backend emits the Sprint 17.4 checked thunks.
+The AST generator remains a temporary compatibility oracle; the VM bridge is
+future work and consumes the same contract.
 
 ## Experimental wire ABI v2 (Sprint 17.4)
 
