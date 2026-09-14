@@ -132,6 +132,31 @@ namespace wio::wir
                 {
                     TypeId id{static_cast<TypeId::ValueType>(i)};
                     if (openType(id))
+                    {
+                        const Type candidate = module_.types.get(id);
+                        const bool concreteNominalArguments =
+                            candidate.kind == TypeKind::Named && !candidate.arguments.empty() &&
+                            std::ranges::none_of(candidate.arguments,
+                                                 [&](const TypeId argument) { return openType(argument); });
+                        if (concreteNominalArguments)
+                        {
+                            for (std::size_t primaryIndex = 0; primaryIndex < module_.types.size(); ++primaryIndex)
+                            {
+                                const TypeId primaryId{static_cast<TypeId::ValueType>(primaryIndex)};
+                                const Type& primary = module_.types.get(primaryId);
+                                if (primaryId == id || primary.kind != TypeKind::Named ||
+                                    primary.name != candidate.name || !openType(primaryId))
+                                    continue;
+                                Bindings bindings;
+                                if (!bind(primaryId, id, bindings))
+                                    continue;
+                                Bindings cache;
+                                (void)substitute(primaryId, bindings, cache);
+                                break;
+                            }
+                        }
+                    }
+                    if (openType(id))
                         continue;
                     auto methods = module_.types.get(id).methods;
                     if (const auto found = processedMethods_.find(id);
@@ -225,7 +250,9 @@ namespace wio::wir
                     return false;
                 if (parameterKind(type->kind))
                     return true;
-                if ((type->kind == TypeKind::ValuePack || type->kind == TypeKind::TypePack) && type->arguments.empty())
+                if ((type->kind == TypeKind::ValuePack || type->kind == TypeKind::TypePack ||
+                     type->kind == TypeKind::PackStorage) &&
+                    type->arguments.empty())
                     return !type->name.empty();
                 return openType(type->extentParameter, visiting) ||
                        std::ranges::any_of(type->arguments,
@@ -262,7 +289,15 @@ namespace wio::wir
                 if (parameterKind(p->kind))
                 {
                     const auto [it, inserted] = bindings.emplace(pattern, actual);
-                    return inserted || it->second == actual;
+                    if (inserted || it->second == actual)
+                        return true;
+                    const Type& previous = module_.types.get(it->second);
+                    const bool previousPack = previous.kind == TypeKind::TypePack ||
+                                              previous.kind == TypeKind::ValuePack ||
+                                              previous.kind == TypeKind::PackStorage;
+                    const bool actualPack = a->kind == TypeKind::TypePack || a->kind == TypeKind::ValuePack ||
+                                            a->kind == TypeKind::PackStorage;
+                    return previousPack && actualPack && previous.arguments == a->arguments;
                 }
                 const bool hasTrailingPack = !p->arguments.empty() && module_.types.get(p->arguments.back()).kind ==
                                                                           TypeKind::GenericParameterPack;
@@ -1005,9 +1040,20 @@ namespace wio::wir
                         valid = bind(source.parameters[i].type, signature[i], bindings);
                     if (valid)
                     {
-                        Type pack{.kind = TypeKind::TypePack, .name = module_.types.get(packParameter->type).name};
-                        pack.arguments.insert(pack.arguments.end(), signature.begin() + packIndex, signature.end());
-                        valid = bind(packParameter->type, module_.types.intern(std::move(pack)), bindings);
+                        const Type* existingPack =
+                            signature.size() == packIndex + 1 ? module_.types.tryGet(signature[packIndex]) : nullptr;
+                        if (existingPack &&
+                            (existingPack->kind == TypeKind::TypePack || existingPack->kind == TypeKind::ValuePack ||
+                             existingPack->kind == TypeKind::PackStorage))
+                        {
+                            valid = bind(packParameter->type, signature[packIndex], bindings);
+                        }
+                        else
+                        {
+                            Type pack{.kind = TypeKind::TypePack, .name = module_.types.get(packParameter->type).name};
+                            pack.arguments.insert(pack.arguments.end(), signature.begin() + packIndex, signature.end());
+                            valid = bind(packParameter->type, module_.types.intern(std::move(pack)), bindings);
+                        }
                     }
                 }
                 valid &= bind(source.returnType, result, bindings);
@@ -1028,7 +1074,15 @@ namespace wio::wir
                             << "' from its pinned signature (generic arguments=" << request.genericArguments.size()
                             << ", generic parameters=" << source.genericParameters.size()
                             << ", signature=" << signature.size() << ", parameters=" << source.parameters.size()
-                            << ", bindings=" << bindings.size() << ").";
+                            << ", bindings=" << bindings.size();
+                    for (std::size_t index = 0; index < std::min(signature.size(), source.parameters.size()); ++index)
+                        details << ", p" << index << "=!t" << source.parameters[index].type.value() << ':'
+                                << typeKindName(module_.types.get(source.parameters[index].type).kind) << "->!t"
+                                << signature[index].value() << ':'
+                                << typeKindName(module_.types.get(signature[index]).kind) << '['
+                                << nativeAbiTypeKey(module_.types, source.parameters[index].type) << "->"
+                                << nativeAbiTypeKey(module_.types, signature[index]) << ']';
+                    details << ").";
                     fail(details.str(), request.source);
                     return request.callee;
                 }

@@ -4411,18 +4411,14 @@ namespace wio::wir::typed
                 }
                 if (!base)
                     return {};
-                const bool constructorInitialization =
-                    state.function &&
-                    (state.function->name == "OnConstruct" || state.function->name.ends_with("::OnConstruct"));
                 const ValueId result{state.nextValue++};
-                currentBlock(state).instructions.push_back(
-                    Instruction{.opcode = Opcode::FieldPlace,
-                                .result = result,
-                                .resultType = referenceType(mapType(expression->refType.Lock(), expression.Get()),
-                                                            needsMutable || constructorInitialization),
-                                .operands = {base},
-                                .selector = memberSymbol->name,
-                                .source = SourceSpan::at(expression->location())});
+                currentBlock(state).instructions.push_back(Instruction{
+                    .opcode = Opcode::FieldPlace,
+                    .result = result,
+                    .resultType = referenceType(mapType(expression->refType.Lock(), expression.Get()), needsMutable),
+                    .operands = {base},
+                    .selector = memberSymbol->name,
+                    .source = SourceSpan::at(expression->location())});
                 return result;
             }
 

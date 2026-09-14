@@ -259,7 +259,9 @@ namespace wio::codegen
                                  "unresolved type reached the C++ backend: " + std::string(typeKindName(type.kind)));
                         break;
                     case TypeKind::ConstValue:
-                        if (type.name.empty())
+                        if (type.name.empty() && (type.arguments.size() != 1 ||
+                                                  (module_.types.get(type.arguments.front()).kind != TypeKind::String &&
+                                                   module_.types.get(type.arguments.front()).kind != TypeKind::Text)))
                             diagnose("WCPP1101", "const-value type has no canonical value");
                         break;
                     case TypeKind::Reference:
@@ -522,6 +524,7 @@ namespace wio::codegen
                             if (instruction.opcode == lowered::Opcode::IntrinsicCall &&
                                 instruction.intrinsicFamily != IntrinsicFamily::Enum &&
                                 instruction.intrinsicFamily != IntrinsicFamily::Flagset &&
+                                instruction.intrinsicFamily != IntrinsicFamily::Pack &&
                                 !wirIntrinsicHelper(instruction.intrinsicFamily, instruction.selector))
                             {
                                 diagnose("WCPP1205",
@@ -918,9 +921,16 @@ public:
         return place;
     }
     static Place borrow(T& value) { Place place; place.pointer_ = &value; return place; }
+    template<class U> static Place borrowProxy(U value) {
+        Place place;
+        place.reader_ = [value]() mutable { return static_cast<T>(value); };
+        place.writer_ = [value](T replacement) mutable { value = std::move(replacement); };
+        return place;
+    }
     static Place borrowView(const T& value) { Place place; place.pointer_ = const_cast<T*>(&value); place.readOnly_ = true; return place; }
     T& read() {
         if (pointer_) return *pointer_;
+        if (reader_) { cached_ = reader_(); return *cached_; }
         if (!owner_ || !owner_->has_value()) throw std::runtime_error("read from uninitialized Wio place");
         return owner_->value();
     }
@@ -934,12 +944,16 @@ public:
     void write(T value) {
         if (readOnly_) throw std::runtime_error("write through a Wio view");
         if (pointer_) *pointer_ = std::move(value);
+        else if (writer_) { writer_(value); cached_ = std::move(value); }
         else { if (!owner_) owner_ = std::make_shared<std::optional<T>>(); *owner_ = std::move(value); }
     }
-    void clear() { if (readOnly_) throw std::runtime_error("clear through a Wio view"); if (pointer_) *pointer_ = T{}; else if (owner_) owner_->reset(); }
+    void clear() { if (readOnly_) throw std::runtime_error("clear through a Wio view"); if (pointer_) *pointer_ = T{}; else if (writer_) { writer_(T{}); cached_.reset(); } else if (owner_) owner_->reset(); }
 private:
     std::shared_ptr<std::optional<T>> owner_;
     T* pointer_ = nullptr;
+    std::function<T()> reader_;
+    std::function<void(T)> writer_;
+    std::optional<T> cached_;
     bool readOnly_ = false;
 };
 template<class T> T& value_base(T& value) { return value; }
@@ -2045,12 +2059,15 @@ inline std::string stringify(const std::string& value) { return value; }
                 {
                     const std::string base = "wio::wir_backend::value_base(" + operand(instruction.operands[0]) + ")";
                     const std::string index = operand(instruction.operands[1]);
-                    assignResult(instruction, "wio::wir_backend::Place<" + placeValueType(instruction.resultType) +
-                                                  ">::borrow(" +
-                                                  (instruction.boundsCheck == lowered::BoundsCheckMode::Required
-                                                       ? "wio::intrinsics::Index(" + base + ", " + index + ")"
-                                                       : base + "[" + index + "]") +
-                                                  ")");
+                    const Type& elementType =
+                        module_.types.get(module_.types.get(instruction.resultType).arguments.front());
+                    assignResult(instruction,
+                                 "wio::wir_backend::Place<" + placeValueType(instruction.resultType) +
+                                     (elementType.kind == TypeKind::Bool ? ">::borrowProxy(" : ">::borrow(") +
+                                     (instruction.boundsCheck == lowered::BoundsCheckMode::Required
+                                          ? "wio::intrinsics::Index(" + base + ", " + index + ")"
+                                          : base + "[" + index + "]") +
+                                     ")");
                     break;
                 }
                 case lowered::Opcode::ConstructComponent:
