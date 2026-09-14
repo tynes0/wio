@@ -1,0 +1,25 @@
+use std::assert as assert;
+use std::console as console;
+
+object Box {
+    public value: i32;
+}
+
+fn MakeBox() -> Box {
+    mut value = Box();
+    value.value = 42;
+    return value;
+}
+
+fn AssignBox(result: ref Box) {
+    result = MakeBox();
+}
+
+fn Entry() -> i32 {
+    mut value = Box();
+    AssignBox(ref value);
+
+    assert::ExpectEqual(value.value, 42, "ref object assignment failed");
+    console::Print("WIR ref object assignment: ok");
+    return 0;
+}

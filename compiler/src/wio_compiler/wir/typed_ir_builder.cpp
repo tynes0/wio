@@ -2983,19 +2983,65 @@ namespace wio::wir::typed
                                         const Ref<sema::Symbol>& implementationSymbol,
                                         const std::size_t parameterOffset, FunctionState& state)
         {
-            const auto declaration = implementationSymbol ? declarationsBySymbol_.find(implementationSymbol.Get())
-                                                          : declarationsBySymbol_.end();
-            if (!functionType || declaration == declarationsBySymbol_.end())
-                return true;
-            const FunctionDeclaration& function = *declaration->second;
-            for (std::size_t parameterIndex = call.arguments.size() + parameterOffset;
-                 parameterIndex < functionType->paramTypes.size(); ++parameterIndex)
+            Ref<sema::FunctionType> declaredFunctionType = functionType;
+            if (implementationSymbol && implementationSymbol->type &&
+                implementationSymbol->type->kind() == sema::TypeKind::Function)
             {
-                if (parameterIndex >= function.parameters.size() || !function.parameters[parameterIndex].defaultValue)
+                const Ref<sema::FunctionType> implementationType =
+                    implementationSymbol->type.AsFast<sema::FunctionType>();
+                if (!declaredFunctionType ||
+                    implementationType->paramTypes.size() > declaredFunctionType->paramTypes.size())
+                {
+                    declaredFunctionType = implementationType;
+                }
+            }
+            if (!declaredFunctionType)
+                return true;
+
+            const std::size_t firstOmittedParameter = call.arguments.size() + parameterOffset;
+            if (firstOmittedParameter >= declaredFunctionType->paramTypes.size())
+                return true;
+
+            const FunctionDeclaration* function = nullptr;
+            if (implementationSymbol)
+            {
+                if (const auto direct = declarationsBySymbol_.find(implementationSymbol.Get());
+                    direct != declarationsBySymbol_.end())
+                {
+                    function = direct->second;
+                }
+                else
+                {
+                    // Generic/overload resolution can produce a concrete
+                    // semantic symbol while the declaration index owns the
+                    // source symbol. Recover the declaration through the same
+                    // stable source identity used for FunctionId lookup.
+                    for (const auto& [candidate, declaration] : declarationsBySymbol_)
+                    {
+                        if (!candidate || candidate->name != implementationSymbol->name ||
+                            candidate->scopePath != implementationSymbol->scopePath ||
+                            candidate->definitionLoc.file != implementationSymbol->definitionLoc.file ||
+                            candidate->definitionLoc.line != implementationSymbol->definitionLoc.line ||
+                            candidate->definitionLoc.column != implementationSymbol->definitionLoc.column)
+                        {
+                            continue;
+                        }
+                        function = declaration;
+                        break;
+                    }
+                }
+            }
+            if (!function)
+                return false;
+
+            for (std::size_t parameterIndex = firstOmittedParameter;
+                 parameterIndex < declaredFunctionType->paramTypes.size(); ++parameterIndex)
+            {
+                if (parameterIndex >= function->parameters.size() || !function->parameters[parameterIndex].defaultValue)
                     return false;
-                if (!appendCallArgument(instruction, function.parameters[parameterIndex].defaultValue,
-                                        mapType(functionType->paramTypes[parameterIndex],
-                                                function.parameters[parameterIndex].defaultValue.Get()),
+                if (!appendCallArgument(instruction, function->parameters[parameterIndex].defaultValue,
+                                        mapType(declaredFunctionType->paramTypes[parameterIndex],
+                                                function->parameters[parameterIndex].defaultValue.Get()),
                                         state))
                     return false;
             }
@@ -3152,9 +3198,10 @@ namespace wio::wir::typed
             auto appendValue = [&](Instruction instruction)
             {
                 instruction.result = ValueId{state.nextValue++};
-                TypeId actualResultType = mapExpressionType(expression, expression.Get());
+                TypeId actualResultType =
+                    instruction.resultType ? instruction.resultType : mapExpressionType(expression, expression.Get());
                 const auto* resultCall = expression->as<FunctionCallExpression>();
-                if (resultCall && (resultCall->unwrapResult || resultCall->propagateResult))
+                if (resultCall && !resultCall->resolvedConstructor.Lock())
                 {
                     const Ref<sema::Type> callableType =
                         resultCall->callee ? resultCall->callee->refType.Lock() : nullptr;
@@ -3706,15 +3753,15 @@ namespace wio::wir::typed
                                                    {assignment->left, assignment->right}, state);
                 TypeId targetType = mapType(assignment->left->refType.Lock(), assignment->left.Get());
                 const Type* targetTypeInfo = result_.module_.types.tryGet(targetType);
-                const bool assignsThroughReadableReference = targetTypeInfo &&
-                                                             targetTypeInfo->kind == TypeKind::Reference &&
-                                                             autoReadableReference(*targetTypeInfo);
-                const ValueId target = assignsThroughReadableReference ? buildExpression(assignment->left, state)
-                                                                       : buildPlace(assignment->left, true, state);
+                const bool assignsThroughReference = targetTypeInfo && targetTypeInfo->kind == TypeKind::Reference &&
+                                                     targetTypeInfo->arguments.size() == 1;
+                const TypeId assignedValueType =
+                    assignsThroughReference ? targetTypeInfo->arguments.front() : targetType;
+                const ValueId target = assignsThroughReference ? buildExpression(assignment->left, state)
+                                                               : buildPlace(assignment->left, true, state);
                 if (!target)
                     return {};
-                if (assignsThroughReadableReference)
-                    targetType = targetTypeInfo->arguments.front();
+                targetType = assignedValueType;
                 const ValueId right = buildExpressionAs(assignment->right, targetType, state);
                 if (!right)
                     return {};
@@ -3930,7 +3977,7 @@ namespace wio::wir::typed
                 if (!calleeSymbol && call->callee)
                     calleeSymbol = call->callee->referencedSymbol.Lock();
                 TypeId callResultType = mapExpressionType(expression, expression.Get());
-                if (call->unwrapResult || call->propagateResult)
+                if (!call->resolvedConstructor.Lock())
                 {
                     const Ref<sema::Type> callableType = call->callee ? call->callee->refType.Lock() : nullptr;
                     if (callableType && callableType->kind() == sema::TypeKind::Function)
@@ -3991,6 +4038,12 @@ namespace wio::wir::typed
                                                         : mapType(argument->refType.Lock(), argument.Get());
                         if (!appendCallArgument(instruction, argument, expectedType, state))
                             return {};
+                    }
+                    if (!appendDefaultCallArguments(instruction, *call, constructorType, constructorSymbol, 0, state))
+                    {
+                        report("WIR2359", "Constructor call is missing a materializable default argument.",
+                               expression.Get());
+                        return {};
                     }
                     return appendValue(std::move(instruction));
                 }
@@ -4119,6 +4172,14 @@ namespace wio::wir::typed
                                 if (!appendCallArgument(instruction, argument, expectedType, state))
                                     return {};
                             }
+                            if (!appendDefaultCallArguments(instruction, *call, implementationType,
+                                                            extensionImplementation, 1, state))
+                            {
+                                report("WIR2359",
+                                       "Derived extension call is missing a materializable default argument.",
+                                       expression.Get());
+                                return {};
+                            }
                             instruction.specializationKey =
                                 specializationKey(instruction.callee, {}, instruction.signatureTypes, callResultType);
                             if (callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Void)
@@ -4238,6 +4299,12 @@ namespace wio::wir::typed
                             if (!appendCallArgument(instruction, argument, expectedType, state))
                                 return {};
                         }
+                        if (!appendDefaultCallArguments(instruction, *call, functionType, calleeSymbol, 0, state))
+                        {
+                            report("WIR2359", "Method call is missing a materializable default argument.",
+                                   expression.Get());
+                            return {};
+                        }
                         const TypeId resultType = mapType(expression->refType.Lock(), expression.Get());
                         instruction.genericArguments =
                             genericArguments(*call, calleeSymbol, call->callee->refType.Lock());
@@ -4316,6 +4383,13 @@ namespace wio::wir::typed
                                             isNativeFunction(functionIt->second) ? Opcode::NativeCall : Opcode::Call,
                                         .callee = functionIt->second,
                                         .source = SourceSpan::at(expression->location())};
+                const auto implementationType =
+                    calleeSymbol->type && calleeSymbol->type->kind() == sema::TypeKind::Function
+                        ? calleeSymbol->type.AsFast<sema::FunctionType>()
+                        : nullptr;
+                if (implementationType)
+                    callResultType = mapType(implementationType->returnType, expression.Get());
+                instruction.resultType = callResultType;
                 for (std::size_t index = 0; index < call->arguments.size(); ++index)
                 {
                     const auto& argument = call->arguments[index];
@@ -4324,6 +4398,11 @@ namespace wio::wir::typed
                                                     : mapType(argument->refType.Lock(), argument.Get());
                     if (!appendCallArgument(instruction, argument, expectedType, state))
                         return {};
+                }
+                if (!appendDefaultCallArguments(instruction, *call, implementationType, calleeSymbol, 0, state))
+                {
+                    report("WIR2359", "Function call is missing a materializable default argument.", expression.Get());
+                    return {};
                 }
                 instruction.genericArguments = genericArguments(*call, calleeSymbol, selectedCallableType);
                 instruction.specializationKey = specializationKey(instruction.callee, instruction.genericArguments,
@@ -5743,9 +5822,6 @@ namespace wio::wir::typed
         {
             const std::size_t outerPlaceCount = state.placeOrder.size();
             const std::size_t outerTemporaryPlaceCount = state.temporaryPlaces.size();
-            const auto carriedSymbols = state.valueOrder;
-            const auto incomingValues = state.values;
-            const std::size_t preheaderBlockIndex = state.blockIndex;
 
             Instruction create{.opcode = Opcode::IteratorCreate, .source = SourceSpan::at(statement.location())};
             TypeId iterableType;
@@ -5820,6 +5896,15 @@ namespace wio::wir::typed
                     create.signatureTypes.push_back(stepType);
                 }
             }
+
+            // Building the iterable may introduce control flow. Result
+            // propagation, for example, terminates the incoming block and
+            // continues in a newly-created success block. Freeze the loop
+            // preheader and its carried SSA values only after the iterable is
+            // completely materialized.
+            const auto carriedSymbols = state.valueOrder;
+            const auto incomingValues = state.values;
+            const std::size_t preheaderBlockIndex = state.blockIndex;
 
             const TypeId iteratorType = result_.module_.types.intern(Type{.kind = TypeKind::Iterator,
                                                                           .arguments = {iterableType},

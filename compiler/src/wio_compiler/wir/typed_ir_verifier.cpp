@@ -24,6 +24,21 @@ namespace wio::wir::typed
         using ValueDefinitionMap = std::unordered_map<ValueId::ValueType, ValueDefinition>;
         using BlockSet = std::unordered_set<BlockId::ValueType>;
 
+        std::string describeType(const TypeTable& types, const TypeId typeId)
+        {
+            if (!typeId)
+                return "<invalid>";
+            const Type* type = types.tryGet(typeId);
+            if (!type)
+                return "#" + std::to_string(typeId.value()) + ":<missing>";
+
+            std::string description =
+                "#" + std::to_string(typeId.value()) + ":" + std::string(typeKindName(type->kind));
+            if (type->kind == TypeKind::Reference)
+                description += type->isMutable ? "(mut)" : "(view)";
+            return description;
+        }
+
         bool isComparison(const BinaryOperator op)
         {
             return op == BinaryOperator::Equal || op == BinaryOperator::NotEqual || op == BinaryOperator::Less ||
@@ -1408,12 +1423,23 @@ namespace wio::wir::typed
                             valueType(instruction.operands[1]) != placeType->arguments.front() || !mutabilityValid ||
                             !ownershipOperationValid)
                         {
+                            const TypeId placeTypeId =
+                                instruction.operands.size() == 2 ? valueType(instruction.operands[0]) : TypeId{};
+                            const TypeId storedTypeId =
+                                instruction.operands.size() == 2 ? valueType(instruction.operands[1]) : TypeId{};
+                            const TypeId expectedTypeId =
+                                placeType && placeType->kind == TypeKind::Reference && placeType->arguments.size() == 1
+                                    ? placeType->arguments.front()
+                                    : TypeId{};
                             report(
                                 instruction.opcode == Opcode::PlaceInit ? "WIR1430" : "WIR1431",
                                 instruction.opcode == Opcode::PlaceInit
                                     ? "Typed WIR place initialization requires a reference place and a matching value."
                                     : "Typed WIR store/replace requires a mutable reference place, matching value, and "
-                                      "correct cleanup semantics.",
+                                      "correct cleanup semantics. Place=" +
+                                          describeType(module.types, placeTypeId) +
+                                          ", expected=" + describeType(module.types, expectedTypeId) +
+                                          ", value=" + describeType(module.types, storedTypeId) + ".",
                                 instruction.source, function.id, block.id);
                         }
                         if (instruction.opcode == Opcode::PlaceInit && instruction.operands.size() == 2)

@@ -2326,6 +2326,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_wir_ref_object_assignment_run
+        "${CMAKE_SOURCE_DIR}/tests/wir_ref_object_assignment_run.wio"
+        "WIR ref object assignment: ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_function_parameter_pack_run
         "${CMAKE_SOURCE_DIR}/tests/function_parameter_pack_run.wio"
         "Function packs: ok"

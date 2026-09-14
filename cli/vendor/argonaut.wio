@@ -253,7 +253,7 @@ realm Argonaut {
                     mut inlineValue = "";
                     let hasEquals = token.StartsWith("--") and token.ContainsChar('=');
                     if (hasEquals) {
-                        let equalsIndex = token.IndexOfChar('=');
+                        let equalsIndex = token.IndexOfChar('=') fit usize;
                         key = token.Take(equalsIndex);
                         inlineValue = token.Skip(equalsIndex + 1usize);
                     }
