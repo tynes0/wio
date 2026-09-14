@@ -145,8 +145,11 @@ namespace wio::codegen
             const ReflectedFieldDescriptor* descriptor = nullptr;
             TypeId ownerType;
             std::size_t ownerFieldIndex = 0;
-            std::size_t getterExport = 0;
+            std::size_t typeDescriptor = 0;
+            std::optional<std::size_t> getterExport;
             std::optional<std::size_t> setterExport;
+            std::string dynamicGetter = "nullptr";
+            std::string dynamicSetter = "nullptr";
             std::string attributes = "nullptr";
             std::uint32_t attributeCount = 0;
         };
@@ -169,6 +172,30 @@ namespace wio::codegen
             std::vector<LegacyMethodInfo> methods;
             std::string attributes = "nullptr";
             std::uint32_t attributeCount = 0;
+        };
+
+        struct LegacyTypeDescriptorInfo
+        {
+            struct EnumMember
+            {
+                std::string name;
+                std::string value;
+            };
+
+            std::string displayName;
+            std::string logicalTypeName;
+            std::string kind = "WIO_MODULE_TYPE_DESC_UNKNOWN";
+            std::string abi = "WIO_ABI_UNKNOWN";
+            std::uint64_t staticExtent = 0;
+            std::optional<std::size_t> element;
+            std::optional<std::size_t> key;
+            std::optional<std::size_t> value;
+            std::optional<std::size_t> result;
+            std::vector<std::size_t> parameters;
+            std::vector<EnumMember> enumMembers;
+            std::vector<std::size_t> genericArguments;
+            std::optional<std::size_t> constValueType;
+            std::optional<std::string> constValue;
         };
     } // namespace
     std::string WirModuleEmitter::emit(const wir::lowered::Module& module, const TypeSpelling& type)
@@ -345,6 +372,138 @@ namespace wio::codegen
                "&_task_api; "
                "}\n";
         const auto& exports = module.contract.exports;
+        std::vector<std::size_t> legacyAsyncExports;
+        for (std::size_t exportIndex = 0; exportIndex < exports.size(); ++exportIndex)
+        {
+            const auto& entry = exports[exportIndex];
+            if (!entry.isAsync || !entry.function)
+                continue;
+            const auto& taskType = module.types.get(entry.returnType);
+            if (taskType.kind != TypeKind::AsyncTask || taskType.arguments.size() != 1)
+                continue;
+            const auto resultType = taskType.arguments.front();
+            const auto resultKind = legacyAbiKind(resultType);
+            bool compatible = resultKind != "UNKNOWN";
+            for (const auto parameter : entry.parameterTypes)
+                compatible &= legacyAbiKind(parameter) != "UNKNOWN";
+            if (!compatible)
+                continue;
+
+            legacyAsyncExports.push_back(exportIndex);
+            const auto suffix = std::to_string(exportIndex);
+            const auto stateType = "_legacy_async_state_" + suffix;
+            out << "struct " << stateType << "{std::atomic<std::uint64_t> references{1u};" << type(entry.returnType)
+                << " task;mutable std::mutex errorMutex{};mutable std::string lastError{};};\n";
+            out << "static void _legacy_async_retain_" << suffix << "(void* opaque)noexcept{if(auto* state=static_cast<"
+                << stateType << "*>(opaque))state->references.fetch_add(1u,std::memory_order_relaxed);}\n";
+            out << "static void _legacy_async_release_" << suffix << "(void* opaque)noexcept{auto* state=static_cast<"
+                << stateType
+                << "*>(opaque);if(state&&state->references.fetch_sub(1u,std::memory_order_acq_rel)==1u)delete "
+                   "state;}\n";
+            out << "static WioAsyncTaskStatus _legacy_async_status_" << suffix << "(const void* opaque)noexcept{"
+                << "const auto* state=static_cast<const " << stateType
+                << "*>(opaque);if(!state||!state->task.IsReady())return WIO_ASYNC_TASK_PENDING;"
+                   "if(state->task.IsCancelled())return WIO_ASYNC_TASK_CANCELLED;"
+                   "if(state->task.IsFaulted())return WIO_ASYNC_TASK_FAULTED;return WIO_ASYNC_TASK_READY;}\n";
+            out << "static void _legacy_async_cancel_" << suffix << "(void* opaque)noexcept{try{if(auto* state="
+                << "static_cast<" << stateType << "*>(opaque))state->task.Cancel();}catch(...){}}\n";
+            out << "static std::int32_t _legacy_async_wait_" << suffix
+                << "(void* opaque,std::uint64_t milliseconds)noexcept{auto* state=static_cast<" << stateType
+                << "*>(opaque);if(!state)return WIO_ASYNC_BAD_ARGUMENTS;try{auto initial=_legacy_async_status_"
+                << suffix
+                << "(state);if(initial==WIO_ASYNC_TASK_CANCELLED)return WIO_ASYNC_CANCELLED;"
+                   "if(initial==WIO_ASYNC_TASK_FAULTED)return WIO_ASYNC_FAULTED;"
+                   "if(!state->task.WaitFor(milliseconds))return WIO_ASYNC_TIMED_OUT;auto status="
+                << "_legacy_async_status_" << suffix
+                << "(state);return status==WIO_ASYNC_TASK_CANCELLED?WIO_ASYNC_CANCELLED:"
+                   "(status==WIO_ASYNC_TASK_FAULTED?WIO_ASYNC_FAULTED:WIO_ASYNC_OK);}catch(...){return "
+                   "WIO_ASYNC_FAULTED;}}\n";
+            out << "static std::int32_t _legacy_async_result_" << suffix
+                << "(void* opaque,WioValue* result)noexcept{auto* state=static_cast<" << stateType
+                << "*>(opaque);if(!state||!result)return WIO_ASYNC_BAD_ARGUMENTS;auto status=_legacy_async_status_"
+                << suffix
+                << "(state);if(status==WIO_ASYNC_TASK_PENDING)return WIO_ASYNC_NOT_READY;"
+                   "if(status==WIO_ASYNC_TASK_CANCELLED)return WIO_ASYNC_CANCELLED;"
+                   "if(status==WIO_ASYNC_TASK_FAULTED)return WIO_ASYNC_FAULTED;try{";
+            if (module.types.get(resultType).kind == TypeKind::Void)
+            {
+                out << "state->task.Get();result->type=WIO_ABI_VOID;";
+            }
+            else
+            {
+                out << "auto value=state->task.Get();result->type=WIO_ABI_" << resultKind << ";result->value."
+                    << legacyField(resultKind) << "=value;";
+            }
+            out << "return WIO_ASYNC_OK;}catch(const std::exception& error){std::lock_guard lock(state->errorMutex);"
+                   "state->lastError=error.what();return state->task.IsCancelled()?WIO_ASYNC_CANCELLED:"
+                   "WIO_ASYNC_FAULTED;}catch(...){return WIO_ASYNC_FAULTED;}}\n";
+            out << "static std::int32_t _legacy_async_complete_" << suffix
+                << "(void* opaque,WioAsyncCompletionFn callback,void* userData,WioAsyncCompletionTarget target)"
+                   "noexcept{auto* state=static_cast<"
+                << stateType
+                << "*>(opaque);if(!state||!callback)return WIO_ASYNC_BAD_ARGUMENTS;"
+                   "if(target!=WIO_ASYNC_COMPLETION_CURRENT_EXECUTOR&&target!=WIO_ASYNC_COMPLETION_MAIN_EXECUTOR)"
+                   "return WIO_ASYNC_BAD_ARGUMENTS;_legacy_async_retain_"
+                << suffix
+                << "(state);try{state->task.SharedState()->AddCompletionCallback([state,callback,userData,target]{"
+                   "auto deliver=[state,callback,userData]{try{callback(userData,_legacy_async_status_"
+                << suffix << "(state));}catch(...){}_legacy_async_release_" << suffix
+                << "(state);};if(target==WIO_ASYNC_COMPLETION_MAIN_EXECUTOR){if(!wio::runtime::"
+                   "DefaultAsyncMainExecutor().Post(std::move(deliver)))deliver();}else deliver();});return "
+                   "WIO_ASYNC_OK;}catch(...){_legacy_async_release_"
+                << suffix << "(state);return WIO_ASYNC_FAULTED;}}\n";
+            out << "static const char* _legacy_async_error_" << suffix
+                << "(const void* opaque)noexcept{const auto* state=static_cast<const " << stateType
+                << "*>(opaque);if(!state)return \"async task state is null\";std::lock_guard lock(state->errorMutex);"
+                   "auto message=state->task.SharedState()->FailureMessage();if(!message.empty())state->lastError="
+                   "std::move(message);return state->lastError.c_str();}\n";
+            out << "static const WioAsyncTaskOps _legacy_async_ops_" << suffix << "{&_legacy_async_retain_" << suffix
+                << ",&_legacy_async_release_" << suffix << ",&_legacy_async_status_" << suffix
+                << ",&_legacy_async_cancel_" << suffix << ",&_legacy_async_wait_" << suffix << ",&_legacy_async_result_"
+                << suffix << ",&_legacy_async_complete_" << suffix << ",&_legacy_async_error_" << suffix << "};\n";
+            out << "static std::int32_t _legacy_async_invoke_" << suffix
+                << "(const WioValue* args,std::uint32_t count,WioAsyncTaskHandle* result)noexcept{if(!result||count!="
+                << entry.parameterTypes.size() << "u||(count&&!args))return WIO_ASYNC_BAD_ARGUMENTS;";
+            for (std::size_t parameterIndex = 0; parameterIndex < entry.parameterTypes.size(); ++parameterIndex)
+                out << "if(args[" << parameterIndex << "].type!=WIO_ABI_"
+                    << legacyAbiKind(entry.parameterTypes[parameterIndex]) << ")return WIO_ASYNC_TYPE_MISMATCH;";
+            out << "try{auto* state=new " << stateType << "{1u," << functionName(entry.function) << '(';
+            for (std::size_t parameterIndex = 0; parameterIndex < entry.parameterTypes.size(); ++parameterIndex)
+            {
+                if (parameterIndex)
+                    out << ',';
+                out << "args[" << parameterIndex << "].value."
+                    << legacyField(legacyAbiKind(entry.parameterTypes[parameterIndex]));
+            }
+            out << ")};*result={state,&_legacy_async_ops_" << suffix << ",WIO_ABI_" << resultKind
+                << "};return WIO_ASYNC_OK;}catch(...){return WIO_ASYNC_FAULTED;}}\n";
+            if (!entry.parameterTypes.empty())
+            {
+                out << "static const WioAbiType _legacy_async_params_" << suffix << "[]={";
+                for (const auto parameter : entry.parameterTypes)
+                    out << "WIO_ABI_" << legacyAbiKind(parameter) << ',';
+                out << "};\n";
+            }
+        }
+        if (!legacyAsyncExports.empty())
+        {
+            out << "static const WioModuleAsyncExport _legacy_async_exports[]={";
+            for (const auto exportIndex : legacyAsyncExports)
+            {
+                const auto& entry = exports[exportIndex];
+                const auto resultType = module.types.get(entry.returnType).arguments.front();
+                out << '{' << quoted(entry.logicalName) << ",WIO_ABI_" << legacyAbiKind(resultType) << ','
+                    << entry.parameterTypes.size() << "u,"
+                    << (entry.parameterTypes.empty() ? "nullptr"
+                                                     : "_legacy_async_params_" + std::to_string(exportIndex))
+                    << ",&_legacy_async_invoke_" << exportIndex << "},";
+            }
+            out << "};\nstatic const WioAsyncHostDescriptor _legacy_async_host{0u,0u,"
+                   "+[]()noexcept{try{wio::runtime::BindAsyncMainExecutor();}catch(...){}},"
+                   "+[]()noexcept->std::uint64_t{try{return wio::runtime::DrainAsyncMainExecutor();}catch(...){return "
+                   "0u;}},+[]()noexcept->std::uint64_t{return wio::runtime::AsyncMainPendingCount();},"
+                   "+[]()noexcept{wio::runtime::ShutdownAsyncRuntime();}};\n";
+        }
         std::vector<LegacyExportInfo> legacy;
         std::map<std::uint64_t, std::size_t> legacySlots;
         for (std::size_t i = 0; i < exports.size(); ++i)
@@ -496,6 +655,272 @@ namespace wio::codegen
         for (const auto& reflected : module.contract.reflection)
             reflectionByType.emplace(reflected.type.value(), &reflected);
 
+        std::vector<LegacyTypeDescriptorInfo> typeDescriptors;
+        typeDescriptors.reserve(module.types.size());
+        std::unordered_map<std::uint64_t, std::size_t> typeDescriptorById;
+        const auto shortTypeName = [](const std::string& name)
+        {
+            const auto separator = name.rfind("::");
+            return separator == std::string::npos ? name : name.substr(separator + 2);
+        };
+        std::function<std::size_t(TypeId)> ensureTypeDescriptor = [&](TypeId id) -> std::size_t
+        {
+            if (const auto found = typeDescriptorById.find(id.value()); found != typeDescriptorById.end())
+                return found->second;
+
+            const auto descriptorIndex = typeDescriptors.size();
+            typeDescriptorById.emplace(id.value(), descriptorIndex);
+            typeDescriptors.emplace_back();
+            auto& descriptor = typeDescriptors[descriptorIndex];
+            const auto& valueType = module.types.get(id);
+            descriptor.displayName =
+                valueType.name.empty() ? std::string(typeKindName(valueType.kind)) : valueType.name;
+
+            const auto addGenericArguments = [&]
+            {
+                for (const auto argument : valueType.arguments)
+                    descriptor.genericArguments.push_back(ensureTypeDescriptor(argument));
+                if (!valueType.arguments.empty())
+                {
+                    descriptor.displayName = valueType.name + '<';
+                    for (std::size_t index = 0; index < descriptor.genericArguments.size(); ++index)
+                    {
+                        if (index)
+                            descriptor.displayName += ", ";
+                        descriptor.displayName += typeDescriptors[descriptor.genericArguments[index]].displayName;
+                    }
+                    descriptor.displayName += '>';
+                }
+            };
+
+            switch (valueType.kind)
+            {
+            case TypeKind::String:
+                descriptor.displayName = "string";
+                descriptor.kind = "WIO_MODULE_TYPE_DESC_STRING";
+                break;
+            case TypeKind::Text:
+                descriptor.displayName = "text";
+                descriptor.kind = "WIO_MODULE_TYPE_DESC_TEXT";
+                break;
+            case TypeKind::Any:
+                descriptor.displayName = "any";
+                descriptor.kind = "WIO_MODULE_TYPE_DESC_ANY";
+                break;
+            case TypeKind::Opaque:
+                descriptor.displayName = "opaque";
+                descriptor.kind = "WIO_MODULE_TYPE_DESC_OPAQUE";
+                break;
+            case TypeKind::Nullable:
+                descriptor.kind = "WIO_MODULE_TYPE_DESC_NULLABLE";
+                if (!valueType.arguments.empty())
+                {
+                    descriptor.element = ensureTypeDescriptor(valueType.arguments.front());
+                    descriptor.displayName = typeDescriptors[*descriptor.element].displayName + '?';
+                    descriptor.abi = "WIO_ABI_" + legacyAbiKind(valueType.arguments.front());
+                }
+                break;
+            case TypeKind::Array:
+                descriptor.kind =
+                    valueType.staticExtent ? "WIO_MODULE_TYPE_DESC_STATIC_ARRAY" : "WIO_MODULE_TYPE_DESC_DYNAMIC_ARRAY";
+                descriptor.staticExtent = valueType.staticExtent.value_or(0);
+                if (!valueType.arguments.empty())
+                {
+                    descriptor.element = ensureTypeDescriptor(valueType.arguments.front());
+                    const auto& elementName = typeDescriptors[*descriptor.element].displayName;
+                    descriptor.displayName = valueType.staticExtent ? '[' + elementName + "; " +
+                                                                          std::to_string(*valueType.staticExtent) + ']'
+                                                                    : elementName + "[]";
+                }
+                break;
+            case TypeKind::Dictionary:
+                descriptor.kind =
+                    valueType.name == "ordered" ? "WIO_MODULE_TYPE_DESC_TREE" : "WIO_MODULE_TYPE_DESC_DICT";
+                if (valueType.arguments.size() >= 2)
+                {
+                    descriptor.key = ensureTypeDescriptor(valueType.arguments[0]);
+                    descriptor.value = ensureTypeDescriptor(valueType.arguments[1]);
+                    descriptor.displayName = std::string(valueType.name == "ordered" ? "Tree<" : "Dict<") +
+                                             typeDescriptors[*descriptor.key].displayName + ", " +
+                                             typeDescriptors[*descriptor.value].displayName + '>';
+                }
+                break;
+            case TypeKind::Function:
+                descriptor.kind = "WIO_MODULE_TYPE_DESC_FUNCTION";
+                if (!valueType.arguments.empty())
+                {
+                    for (std::size_t index = 0; index + 1 < valueType.arguments.size(); ++index)
+                        descriptor.parameters.push_back(ensureTypeDescriptor(valueType.arguments[index]));
+                    descriptor.result = ensureTypeDescriptor(valueType.arguments.back());
+                    descriptor.displayName = "fn(";
+                    for (std::size_t index = 0; index < descriptor.parameters.size(); ++index)
+                    {
+                        if (index)
+                            descriptor.displayName += ", ";
+                        descriptor.displayName += typeDescriptors[descriptor.parameters[index]].displayName;
+                    }
+                    descriptor.displayName += ") -> " + typeDescriptors[*descriptor.result].displayName;
+                }
+                break;
+            case TypeKind::AsyncTask:
+                descriptor.kind = "WIO_MODULE_TYPE_DESC_ASYNC_TASK";
+                if (!valueType.arguments.empty())
+                {
+                    descriptor.element = ensureTypeDescriptor(valueType.arguments.front());
+                    descriptor.displayName = "coroutine<" + typeDescriptors[*descriptor.element].displayName + '>';
+                }
+                break;
+            case TypeKind::ConstValue:
+                descriptor.kind = "WIO_MODULE_TYPE_DESC_CONST_VALUE";
+                descriptor.constValue = valueType.name;
+                if (!valueType.arguments.empty())
+                {
+                    descriptor.constValueType = ensureTypeDescriptor(valueType.arguments.front());
+                    descriptor.displayName =
+                        "const " + typeDescriptors[*descriptor.constValueType].displayName + " = " + valueType.name;
+                }
+                break;
+            case TypeKind::Named:
+            {
+                descriptor.logicalTypeName = valueType.name;
+                addGenericArguments();
+                const auto shortName = shortTypeName(valueType.name);
+                if (valueType.nominalKind == NominalKind::Enum || valueType.nominalKind == NominalKind::Flagset)
+                {
+                    descriptor.kind = valueType.nominalKind == NominalKind::Enum ? "WIO_MODULE_TYPE_DESC_ENUM"
+                                                                                 : "WIO_MODULE_TYPE_DESC_FLAGSET";
+                    descriptor.abi = "WIO_ABI_" + legacyAbiKind(id);
+                    for (const auto& member : valueType.enumCases)
+                    {
+                        descriptor.enumMembers.push_back({member.name, "WioMakeAbiIntegerValue(" + descriptor.abi +
+                                                                           ", " + std::to_string(member.rawValue) +
+                                                                           "ULL)"});
+                    }
+                }
+                else if (valueType.nominalKind == NominalKind::Interface)
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_INTERFACE";
+                else if (valueType.nominalValueModel == NominalValueModel::Option)
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_OPTION";
+                else if (valueType.nominalValueModel == NominalValueModel::Result)
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_RESULT";
+                else if (valueType.nominalValueModel == NominalValueModel::Tuple)
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_TUPLE";
+                else if (valueType.nominalValueModel == NominalValueModel::Span)
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_SPAN";
+                else if (shortName == "ResultUnit")
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_UNIT";
+                else if (shortName == "Queue")
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_QUEUE";
+                else if (shortName == "UnorderedSet")
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_UNORDERED_SET";
+                else if (shortName == "OrderedSet")
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_ORDERED_SET";
+                else if (shortName == "ByteBuffer")
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_BYTE_BUFFER";
+                else if (shortName == "box")
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_BOX";
+                else if (valueType.nominalKind == NominalKind::Object)
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_OBJECT";
+                else if (valueType.nominalKind == NominalKind::Component)
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_COMPONENT";
+                else if (!valueType.arguments.empty())
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_GENERIC_INSTANCE";
+                else
+                    descriptor.kind = "WIO_MODULE_TYPE_DESC_OPAQUE";
+                break;
+            }
+            case TypeKind::Void:
+            case TypeKind::Bool:
+            case TypeKind::I8:
+            case TypeKind::I16:
+            case TypeKind::I32:
+            case TypeKind::I64:
+            case TypeKind::ISize:
+            case TypeKind::U8:
+            case TypeKind::U16:
+            case TypeKind::U32:
+            case TypeKind::U64:
+            case TypeKind::USize:
+            case TypeKind::F32:
+            case TypeKind::F64:
+            case TypeKind::Byte:
+            case TypeKind::Char:
+                descriptor.kind = "WIO_MODULE_TYPE_DESC_PRIMITIVE";
+                descriptor.abi = "WIO_ABI_" + legacyKind(valueType);
+                break;
+            default:
+                break;
+            }
+            return descriptorIndex;
+        };
+
+        for (const auto& reflected : module.contract.reflection)
+        {
+            if (!reflected.isExported)
+                continue;
+            for (const auto& field : reflected.fields)
+                if (field.visibility == FieldVisibility::Public)
+                    ensureTypeDescriptor(field.type);
+        }
+
+        if (!typeDescriptors.empty())
+        {
+            for (std::size_t index = 0; index < typeDescriptors.size(); ++index)
+                out << "extern const WioModuleTypeDescriptor _legacy_type_descriptor_" << index << ";\n";
+            for (std::size_t index = 0; index < typeDescriptors.size(); ++index)
+            {
+                const auto& descriptor = typeDescriptors[index];
+                if (!descriptor.parameters.empty())
+                {
+                    out << "static const WioModuleTypeDescriptor* _legacy_type_descriptor_params_" << index << "[]={";
+                    for (const auto parameter : descriptor.parameters)
+                        out << "&_legacy_type_descriptor_" << parameter << ',';
+                    out << "};\n";
+                }
+                if (!descriptor.genericArguments.empty())
+                {
+                    out << "static const WioModuleTypeDescriptor* _legacy_type_descriptor_args_" << index << "[]={";
+                    for (const auto argument : descriptor.genericArguments)
+                        out << "&_legacy_type_descriptor_" << argument << ',';
+                    out << "};\n";
+                }
+                if (!descriptor.enumMembers.empty())
+                {
+                    out << "static const WioModuleEnumMemberDescriptor _legacy_type_descriptor_members_" << index
+                        << "[]={";
+                    for (const auto& member : descriptor.enumMembers)
+                        out << '{' << quoted(member.name) << ',' << member.value << "},";
+                    out << "};\n";
+                }
+            }
+            for (std::size_t index = 0; index < typeDescriptors.size(); ++index)
+            {
+                const auto& descriptor = typeDescriptors[index];
+                const auto pointer = [](const char* prefix, const std::optional<std::size_t>& value)
+                { return value ? std::string(prefix) + std::to_string(*value) : std::string("nullptr"); };
+                out << "const WioModuleTypeDescriptor _legacy_type_descriptor_" << index << '{'
+                    << quoted(descriptor.displayName) << ','
+                    << (descriptor.logicalTypeName.empty() ? "nullptr" : quoted(descriptor.logicalTypeName)) << ','
+                    << descriptor.kind << ',' << descriptor.abi << ',' << descriptor.staticExtent << "ULL,"
+                    << pointer("&_legacy_type_descriptor_", descriptor.element) << ','
+                    << pointer("&_legacy_type_descriptor_", descriptor.key) << ','
+                    << pointer("&_legacy_type_descriptor_", descriptor.value) << ','
+                    << pointer("&_legacy_type_descriptor_", descriptor.result) << ',' << descriptor.parameters.size()
+                    << "u,"
+                    << (descriptor.parameters.empty() ? "nullptr"
+                                                      : "_legacy_type_descriptor_params_" + std::to_string(index))
+                    << ',' << descriptor.enumMembers.size() << "u,"
+                    << (descriptor.enumMembers.empty() ? "nullptr"
+                                                       : "_legacy_type_descriptor_members_" + std::to_string(index))
+                    << ",WioStableTypeId(" << quoted(descriptor.displayName) << "),"
+                    << descriptor.genericArguments.size() << "u,"
+                    << (descriptor.genericArguments.empty() ? "nullptr"
+                                                            : "_legacy_type_descriptor_args_" + std::to_string(index))
+                    << ',' << pointer("&_legacy_type_descriptor_", descriptor.constValueType) << ','
+                    << (descriptor.constValue ? quoted(*descriptor.constValue) : "nullptr") << "};\n";
+            }
+        }
+
         const auto argumentExpression = [&](TypeId parameterType, std::size_t argumentIndex)
         {
             const auto kind = legacyAbiKind(parameterType);
@@ -519,6 +944,430 @@ namespace wio::codegen
         };
 
         std::vector<LegacyTypeInfo> legacyTypes;
+        std::function<bool(TypeId)> hasDirectDynamicBridge = [&](TypeId id)
+        {
+            const auto& valueType = module.types.get(id);
+            switch (valueType.kind)
+            {
+            case TypeKind::String:
+            case TypeKind::Bool:
+            case TypeKind::I8:
+            case TypeKind::I16:
+            case TypeKind::I32:
+            case TypeKind::U16:
+            case TypeKind::U32:
+            case TypeKind::F32:
+            case TypeKind::F64:
+            case TypeKind::Char:
+                return true;
+            case TypeKind::Array:
+                return !valueType.arguments.empty() && hasDirectDynamicBridge(valueType.arguments.front());
+            case TypeKind::Dictionary:
+                return valueType.arguments.size() >= 2 && hasDirectDynamicBridge(valueType.arguments[0]) &&
+                       hasDirectDynamicBridge(valueType.arguments[1]);
+            case TypeKind::Function:
+                return std::ranges::all_of(valueType.arguments, hasDirectDynamicBridge);
+            default:
+                return false;
+            }
+        };
+        std::function<std::optional<std::string>(TypeId)> dynamicBridgeType;
+        dynamicBridgeType = [&](TypeId id) -> std::optional<std::string>
+        {
+            const auto& valueType = module.types.get(id);
+            switch (valueType.kind)
+            {
+            case TypeKind::Text:
+                return "std::string";
+            case TypeKind::Byte:
+                return "wio::sdk::WioByte";
+            case TypeKind::U8:
+                return "wio::sdk::WioU8";
+            case TypeKind::I64:
+                return "wio::sdk::WioI64";
+            case TypeKind::U64:
+                return "wio::sdk::WioU64";
+            case TypeKind::ISize:
+                return "wio::sdk::WioISize";
+            case TypeKind::USize:
+                return "wio::sdk::WioUSize";
+            case TypeKind::Array:
+            {
+                if (valueType.arguments.empty())
+                    return std::nullopt;
+                const auto element = dynamicBridgeType(valueType.arguments.front());
+                if (!element)
+                    return std::nullopt;
+                return valueType.staticExtent
+                           ? std::optional<std::string>("std::array<" + *element + ", " +
+                                                        std::to_string(*valueType.staticExtent) + ">")
+                           : std::optional<std::string>("std::vector<" + *element + ">");
+            }
+            case TypeKind::Dictionary:
+            {
+                if (valueType.arguments.size() < 2)
+                    return std::nullopt;
+                const auto key = dynamicBridgeType(valueType.arguments[0]);
+                const auto value = dynamicBridgeType(valueType.arguments[1]);
+                if (!key || !value)
+                    return std::nullopt;
+                return std::string(valueType.name == "ordered" ? "std::map<" : "std::unordered_map<") + *key + ", " +
+                       *value + ">";
+            }
+            case TypeKind::Function:
+                return hasDirectDynamicBridge(id) ? std::optional<std::string>(type(id)) : std::nullopt;
+            case TypeKind::Named:
+            {
+                const auto& descriptor = typeDescriptors[ensureTypeDescriptor(id)];
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_UNIT")
+                    return "wio::sdk::WioUnit";
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_SPAN")
+                    return "wio::sdk::WioSpanRange";
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_BYTE_BUFFER")
+                    return "wio::sdk::WioByteBuffer";
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_OPTION" ||
+                    descriptor.kind == "WIO_MODULE_TYPE_DESC_RESULT" ||
+                    descriptor.kind == "WIO_MODULE_TYPE_DESC_QUEUE" ||
+                    descriptor.kind == "WIO_MODULE_TYPE_DESC_UNORDERED_SET" ||
+                    descriptor.kind == "WIO_MODULE_TYPE_DESC_ORDERED_SET")
+                {
+                    if (valueType.arguments.size() != 1)
+                        return std::nullopt;
+                    const auto value = dynamicBridgeType(valueType.arguments.front());
+                    if (!value)
+                        return std::nullopt;
+                    const std::string wrapper = descriptor.kind == "WIO_MODULE_TYPE_DESC_OPTION"   ? "WioOption"
+                                                : descriptor.kind == "WIO_MODULE_TYPE_DESC_RESULT" ? "WioResult"
+                                                : descriptor.kind == "WIO_MODULE_TYPE_DESC_QUEUE"  ? "WioQueue"
+                                                : descriptor.kind == "WIO_MODULE_TYPE_DESC_UNORDERED_SET"
+                                                    ? "WioUnorderedSet"
+                                                    : "WioOrderedSet";
+                    return "wio::sdk::" + wrapper + '<' + *value + '>';
+                }
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_TUPLE")
+                {
+                    std::string result = "wio::sdk::WioTuple<";
+                    for (std::size_t index = 0; index < valueType.arguments.size(); ++index)
+                    {
+                        const auto argument = dynamicBridgeType(valueType.arguments[index]);
+                        if (!argument)
+                            return std::nullopt;
+                        if (index)
+                            result += ", ";
+                        result += *argument;
+                    }
+                    return result + '>';
+                }
+                return std::nullopt;
+            }
+            default:
+                return hasDirectDynamicBridge(id) ? std::optional<std::string>(type(id)) : std::nullopt;
+            }
+        };
+
+        std::function<std::optional<std::string>(const std::string&, TypeId, std::size_t)> dynamicToHost;
+        std::function<std::optional<std::string>(const std::string&, TypeId, std::size_t)> dynamicFromHost;
+        dynamicToHost = [&](const std::string& expression, TypeId id,
+                            const std::size_t depth) -> std::optional<std::string>
+        {
+            const auto& valueType = module.types.get(id);
+            const auto hostType = dynamicBridgeType(id);
+            if (!hostType)
+                return std::nullopt;
+            switch (valueType.kind)
+            {
+            case TypeKind::Text:
+                return '(' + expression + ").Utf8()";
+            case TypeKind::Byte:
+            case TypeKind::U8:
+            case TypeKind::I64:
+            case TypeKind::U64:
+            case TypeKind::ISize:
+            case TypeKind::USize:
+                return *hostType + '(' + expression + ')';
+            case TypeKind::Array:
+            {
+                if (hasDirectDynamicBridge(id))
+                    return expression;
+                const auto item =
+                    dynamicToHost("_item" + std::to_string(depth), valueType.arguments.front(), depth + 1);
+                if (!item)
+                    return std::nullopt;
+                if (valueType.staticExtent)
+                {
+                    std::string values;
+                    for (std::size_t index = 0; index < *valueType.staticExtent; ++index)
+                    {
+                        const auto converted =
+                            dynamicToHost("_source" + std::to_string(depth) + '[' + std::to_string(index) + ']',
+                                          valueType.arguments.front(), depth + 1);
+                        if (!converted)
+                            return std::nullopt;
+                        if (index)
+                            values += ',';
+                        values += *converted;
+                    }
+                    return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression + ";return " +
+                           *hostType + '{' + values + "};}())";
+                }
+                return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression + ';' + *hostType +
+                       " _output;_output.reserve(_source" + std::to_string(depth) + ".size());for(const auto& _item" +
+                       std::to_string(depth) + ":_source" + std::to_string(depth) + "){_output.push_back(" + *item +
+                       ");}return _output;}())";
+            }
+            case TypeKind::Dictionary:
+            {
+                if (hasDirectDynamicBridge(id))
+                    return expression;
+                const auto key = dynamicToHost("_key" + std::to_string(depth), valueType.arguments[0], depth + 1);
+                const auto value = dynamicToHost("_value" + std::to_string(depth), valueType.arguments[1], depth + 1);
+                if (!key || !value)
+                    return std::nullopt;
+                return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression + ';' + *hostType +
+                       " _output;for(const auto& [_key" + std::to_string(depth) + ",_value" + std::to_string(depth) +
+                       "]:_source" + std::to_string(depth) + "){_output.emplace(" + *key + ',' + *value +
+                       ");}return _output;}())";
+            }
+            case TypeKind::Named:
+            {
+                const auto& descriptor = typeDescriptors[ensureTypeDescriptor(id)];
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_UNIT")
+                    return "wio::sdk::WioUnit{}";
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_SPAN")
+                    return "wio::sdk::WioSpanRange{static_cast<std::size_t>((" + expression +
+                           ")._f0),"
+                           "static_cast<std::size_t>((" +
+                           expression + ")._f1)}";
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_BYTE_BUFFER")
+                {
+                    return "([&](){auto _source" + std::to_string(depth) + '=' + expression +
+                           ";wio::sdk::WioByteBuffer _output;if(!_source" + std::to_string(depth) +
+                           ")return _output;_output.reserve(_source" + std::to_string(depth) +
+                           "->_f0.capacity());for(auto _byte:_source" + std::to_string(depth) +
+                           "->_f0)_output.write(static_cast<std::byte>(_byte));(void)_output.seek(_source" +
+                           std::to_string(depth) + "->_f1);return _output;}())";
+                }
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_OPTION")
+                {
+                    const auto converted = dynamicToHost("_source" + std::to_string(depth) + "->_f1",
+                                                         valueType.arguments.front(), depth + 1);
+                    if (!converted)
+                        return std::nullopt;
+                    return "([&](){auto _source" + std::to_string(depth) + '=' + expression + ";if(!_source" +
+                           std::to_string(depth) + "||!_source" + std::to_string(depth) + "->_f0)return " + *hostType +
+                           "::none();return " + *hostType + "::some(" + *converted + ");}())";
+                }
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_RESULT")
+                {
+                    const auto converted = dynamicToHost("_source" + std::to_string(depth) + "->_f1",
+                                                         valueType.arguments.front(), depth + 1);
+                    if (!converted || valueType.fields.size() < 3)
+                        return std::nullopt;
+                    return "([&](){auto _source" + std::to_string(depth) + '=' + expression + ";if(_source" +
+                           std::to_string(depth) + "&&_source" + std::to_string(depth) + "->_f0)return " + *hostType +
+                           "::ok(" + *converted + ");const auto& _error=_source" + std::to_string(depth) +
+                           "->_f2;return " + *hostType +
+                           "::error(wio::sdk::WioResultError{static_cast<wio::sdk::WioResultDomain>(static_cast<"
+                           "std::int32_t>(_error._f0)),_error._f1,_error._f2,_error._f3});}())";
+                }
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_TUPLE")
+                {
+                    std::string values;
+                    for (std::size_t index = 0; index < valueType.arguments.size(); ++index)
+                    {
+                        const auto converted = dynamicToHost("std::get<" + std::to_string(index) + ">(_source" +
+                                                                 std::to_string(depth) + "->_f0)",
+                                                             valueType.arguments[index], depth + 1);
+                        if (!converted)
+                            return std::nullopt;
+                        if (index)
+                            values += ',';
+                        values += *converted;
+                    }
+                    return "([&](){auto _source" + std::to_string(depth) + '=' + expression + ";if(!_source" +
+                           std::to_string(depth) + ")throw std::runtime_error(\"Wio tuple is null\");return " +
+                           *hostType + '{' + values + "};}())";
+                }
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_QUEUE" ||
+                    descriptor.kind == "WIO_MODULE_TYPE_DESC_UNORDERED_SET" ||
+                    descriptor.kind == "WIO_MODULE_TYPE_DESC_ORDERED_SET")
+                {
+                    const auto item =
+                        dynamicToHost("_item" + std::to_string(depth), valueType.arguments.front(), depth + 1);
+                    if (!item)
+                        return std::nullopt;
+                    const bool queue = descriptor.kind == "WIO_MODULE_TYPE_DESC_QUEUE";
+                    const std::string append =
+                        queue ? "_output.push(" + *item + ");" : "(void)_output.add(" + *item + ");";
+                    const std::string collection = queue ? "_source" + std::to_string(depth) + "->_f0"
+                                                         : "_source" + std::to_string(depth) + "->_f0";
+                    const std::string itemExpression =
+                        queue ? "_item" + std::to_string(depth) : "_entry" + std::to_string(depth) + ".first";
+                    const auto convertedItem = dynamicToHost(itemExpression, valueType.arguments.front(), depth + 1);
+                    if (!convertedItem)
+                        return std::nullopt;
+                    const std::string appendConverted =
+                        queue ? "_output.push(" + *convertedItem + ");" : "(void)_output.add(" + *convertedItem + ");";
+                    return "([&](){auto _source" + std::to_string(depth) + '=' + expression + ';' + *hostType +
+                           " _output;if(!_source" + std::to_string(depth) + ")return _output;" +
+                           (queue ? "for(std::size_t _index=_source" + std::to_string(depth) + "->_f1;_index<_source" +
+                                        std::to_string(depth) + "->_f0.size();++_index){const auto& _item" +
+                                        std::to_string(depth) + "=_source" + std::to_string(depth) + "->_f0[_index];" +
+                                        appendConverted + '}'
+                                  : "for(const auto& _entry" + std::to_string(depth) + ':' + collection + "){" +
+                                        appendConverted + '}') +
+                           "return _output;}())";
+                }
+                break;
+            }
+            default:
+                if (hasDirectDynamicBridge(id))
+                    return expression;
+                break;
+            }
+            return std::nullopt;
+        };
+
+        dynamicFromHost = [&](const std::string& expression, TypeId id,
+                              const std::size_t depth) -> std::optional<std::string>
+        {
+            const auto& valueType = module.types.get(id);
+            switch (valueType.kind)
+            {
+            case TypeKind::Text:
+                return "wio::runtime::Text::FromUtf8(" + expression + ')';
+            case TypeKind::Byte:
+            case TypeKind::U8:
+            case TypeKind::I64:
+            case TypeKind::U64:
+            case TypeKind::ISize:
+            case TypeKind::USize:
+                return "static_cast<" + type(id) + ">((" + expression + ").value())";
+            case TypeKind::Array:
+            {
+                if (hasDirectDynamicBridge(id))
+                    return expression;
+                const auto item =
+                    dynamicFromHost("_item" + std::to_string(depth), valueType.arguments.front(), depth + 1);
+                if (!item)
+                    return std::nullopt;
+                if (valueType.staticExtent)
+                {
+                    return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression + ';' + type(id) +
+                           " _output{};for(std::size_t _index=0;_index<" + std::to_string(*valueType.staticExtent) +
+                           ";++_index){const auto& _item" + std::to_string(depth) + "=_source" + std::to_string(depth) +
+                           "[_index];_output[_index]=" + *item + ";}return _output;}())";
+                }
+                return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression + ';' + type(id) +
+                       " _output;_output.reserve(_source" + std::to_string(depth) + ".size());for(const auto& _item" +
+                       std::to_string(depth) + ":_source" + std::to_string(depth) + "){_output.push_back(" + *item +
+                       ");}return _output;}())";
+            }
+            case TypeKind::Dictionary:
+            {
+                if (hasDirectDynamicBridge(id))
+                    return expression;
+                const auto key = dynamicFromHost("_key" + std::to_string(depth), valueType.arguments[0], depth + 1);
+                const auto value = dynamicFromHost("_value" + std::to_string(depth), valueType.arguments[1], depth + 1);
+                if (!key || !value)
+                    return std::nullopt;
+                return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression + ';' + type(id) +
+                       " _output;for(const auto& [_key" + std::to_string(depth) + ",_value" + std::to_string(depth) +
+                       "]:_source" + std::to_string(depth) + "){_output.emplace(" + *key + ',' + *value +
+                       ");}return _output;}())";
+            }
+            case TypeKind::Named:
+            {
+                const auto& descriptor = typeDescriptors[ensureTypeDescriptor(id)];
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_UNIT")
+                    return type(id) + "{}";
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_SPAN")
+                    return type(id) + "{static_cast<std::size_t>((" + expression +
+                           ").start()),"
+                           "static_cast<std::size_t>((" +
+                           expression + ").count())}";
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_BYTE_BUFFER")
+                {
+                    return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression +
+                           ";auto _output=" + type(id) + "::Create();_output->_f0.reserve(_source" +
+                           std::to_string(depth) + ".capacity());for(auto _byte:_source" + std::to_string(depth) +
+                           ".data())_output->_f0.push_back(static_cast<std::uint8_t>(_byte));_output->_f1=_source" +
+                           std::to_string(depth) + ".position();return _output;}())";
+                }
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_OPTION")
+                {
+                    const auto converted = dynamicFromHost("_source" + std::to_string(depth) + ".value()",
+                                                           valueType.arguments.front(), depth + 1);
+                    if (!converted)
+                        return std::nullopt;
+                    return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression + ";if(_source" +
+                           std::to_string(depth) + ".is_none())return " + type(id) + "::Create();return " + type(id) +
+                           "::Create(" + *converted + ");}())";
+                }
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_RESULT")
+                {
+                    const auto converted = dynamicFromHost("_source" + std::to_string(depth) + ".value()",
+                                                           valueType.arguments.front(), depth + 1);
+                    if (!converted || valueType.fields.size() < 3)
+                        return std::nullopt;
+                    const auto errorType = valueType.fields[2].type;
+                    const auto& error = module.types.get(errorType);
+                    if (error.fields.size() < 4)
+                        return std::nullopt;
+                    return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression + ";if(_source" +
+                           std::to_string(depth) + ".is_ok())return " + type(id) + "::Create(" + *converted + ");" +
+                           type(errorType) + " _error{};_error._f0=static_cast<" + type(error.fields[0].type) +
+                           ">(static_cast<std::int32_t>(_source" + std::to_string(depth) +
+                           ".error_value().domain));_error._f1=_source" + std::to_string(depth) +
+                           ".error_value().code;_error._f2=_source" + std::to_string(depth) +
+                           ".error_value().native_code;_error._f3=_source" + std::to_string(depth) +
+                           ".error_value().message;return " + type(id) + "::Create(std::move(_error));}())";
+                }
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_TUPLE")
+                {
+                    std::string values;
+                    for (std::size_t index = 0; index < valueType.arguments.size(); ++index)
+                    {
+                        const auto converted = dynamicFromHost("std::get<" + std::to_string(index) + ">(_source" +
+                                                                   std::to_string(depth) + ')',
+                                                               valueType.arguments[index], depth + 1);
+                        if (!converted)
+                            return std::nullopt;
+                        if (index)
+                            values += ',';
+                        values += *converted;
+                    }
+                    return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression + ";return " +
+                           type(id) + "::Create(std::make_tuple(" + values + "));}())";
+                }
+                if (descriptor.kind == "WIO_MODULE_TYPE_DESC_QUEUE" ||
+                    descriptor.kind == "WIO_MODULE_TYPE_DESC_UNORDERED_SET" ||
+                    descriptor.kind == "WIO_MODULE_TYPE_DESC_ORDERED_SET")
+                {
+                    const bool queue = descriptor.kind == "WIO_MODULE_TYPE_DESC_QUEUE";
+                    const std::string sourceValues = queue ? ".to_array()" : ".values()";
+                    const auto converted =
+                        dynamicFromHost("_item" + std::to_string(depth), valueType.arguments.front(), depth + 1);
+                    if (!converted)
+                        return std::nullopt;
+                    return "([&](){const auto& _source" + std::to_string(depth) + '=' + expression +
+                           ";auto _output=" + type(id) + "::Create();for(const auto& _item" + std::to_string(depth) +
+                           ":_source" + std::to_string(depth) + sourceValues +
+                           "){"
+                           "if constexpr(true){" +
+                           (queue ? "_output->_f0.push_back(" + *converted + ");"
+                                  : "_output->_f0.emplace(" + *converted + ",true);") +
+                           "}}return _output;}())";
+                }
+                break;
+            }
+            default:
+                if (hasDirectDynamicBridge(id))
+                    return expression;
+                break;
+            }
+            return std::nullopt;
+        };
         for (const auto& reflected : module.contract.reflection)
         {
             if (!reflected.isExported ||
@@ -642,6 +1491,7 @@ namespace wio::codegen
                     fieldInfo.descriptor = &field;
                     fieldInfo.ownerType = ownerType;
                     fieldInfo.ownerFieldIndex = fieldIndex;
+                    fieldInfo.typeDescriptor = ensureTypeDescriptor(field.type);
                     legacyType.fields.push_back(std::move(fieldInfo));
                 }
                 for (const auto baseType : owner.baseTypes)
@@ -653,11 +1503,120 @@ namespace wio::codegen
             {
                 const auto& field = *fieldInfo.descriptor;
                 const auto fieldKind = legacyAbiKind(field.type);
-                if (fieldKind == "UNKNOWN")
-                    continue;
                 const auto ownerCppType = storageCppType(fieldInfo.ownerType);
                 const auto member =
                     "static_cast<" + ownerCppType + "&>(*instance)._f" + std::to_string(fieldInfo.ownerFieldIndex);
+
+                const bool objectHandle =
+                    typeDescriptors[fieldInfo.typeDescriptor].kind == "WIO_MODULE_TYPE_DESC_OBJECT";
+                const bool componentHandle =
+                    typeDescriptors[fieldInfo.typeDescriptor].kind == "WIO_MODULE_TYPE_DESC_COMPONENT";
+                if (objectHandle || componentHandle)
+                {
+                    const auto getterInvoke = "_legacy_type_call_" + std::to_string(legacy.size());
+                    out << "static std::int32_t " << getterInvoke
+                        << "(const WioValue* args,std::uint32_t count,WioValue* result) noexcept {"
+                           "if(count!=1u||!args||!result)return WIO_INVOKE_BAD_ARGUMENTS;"
+                           "if(args[0].type!=WIO_ABI_USIZE)return WIO_INVOKE_TYPE_MISMATCH;auto* instance="
+                           "reinterpret_cast<"
+                        << cppType
+                        << "*>(args[0].value.v_usize);if(!instance)return WIO_INVOKE_BAD_ARGUMENTS;"
+                           "result->type=WIO_ABI_USIZE;result->value.v_usize=reinterpret_cast<std::uintptr_t>(";
+                    if (objectHandle)
+                        out << member << ".Get()";
+                    else
+                        out << '&' << member;
+                    out << ");return WIO_INVOKE_OK;}\n";
+                    fieldInfo.getterExport = appendExport({reflected.logicalName + ".get." + field.name,
+                                                           reflected.logicalName + ".get." + field.name,
+                                                           "USIZE",
+                                                           {"USIZE"},
+                                                           getterInvoke});
+                    if (field.isMutable)
+                    {
+                        const auto setterInvoke = "_legacy_type_call_" + std::to_string(legacy.size());
+                        out << "static std::int32_t " << setterInvoke
+                            << "(const WioValue* args,std::uint32_t count,WioValue*) noexcept {"
+                               "if(count!=2u||!args)return WIO_INVOKE_BAD_ARGUMENTS;"
+                               "if(args[0].type!=WIO_ABI_USIZE||args[1].type!=WIO_ABI_USIZE)return "
+                               "WIO_INVOKE_TYPE_MISMATCH;auto* instance=reinterpret_cast<"
+                            << cppType
+                            << "*>(args[0].value.v_usize);if(!instance||!args[1].value.v_usize)return "
+                               "WIO_INVOKE_BAD_ARGUMENTS;";
+                        if (objectHandle)
+                        {
+                            out << member << "=wio::runtime::Ref<" << nominalCppType(field.type)
+                                << ">(reinterpret_cast<" << nominalCppType(field.type) << "*>(args[1].value.v_usize));";
+                        }
+                        else
+                        {
+                            out << member << "=*reinterpret_cast<" << type(field.type) << "*>(args[1].value.v_usize);";
+                        }
+                        out << "return WIO_INVOKE_OK;}\n";
+                        fieldInfo.setterExport = appendExport({reflected.logicalName + ".set." + field.name,
+                                                               reflected.logicalName + ".set." + field.name,
+                                                               "VOID",
+                                                               {"USIZE", "USIZE"},
+                                                               setterInvoke});
+                    }
+                    continue;
+                }
+
+                if (fieldKind == "UNKNOWN")
+                {
+                    const auto bridgeType = dynamicBridgeType(field.type);
+                    const auto getterExpression = dynamicToHost(member, field.type, 0);
+                    const auto setterExpression = dynamicFromHost("value", field.type, 0);
+                    if (!bridgeType || !getterExpression || !setterExpression)
+                        continue;
+
+                    const auto bridgeIndex = legacy.size();
+                    const auto rawGetter = "_legacy_raw_get_" + std::to_string(bridgeIndex);
+                    const auto dynamicGetter = "_legacy_dynamic_get_" + std::to_string(bridgeIndex);
+                    out << "static " << *bridgeType << ' ' << rawGetter << "(std::uintptr_t handle){auto* instance="
+                        << "reinterpret_cast<" << cppType
+                        << "*>(handle);if(!instance)throw std::invalid_argument(\"invalid Wio instance handle\");"
+                           "return "
+                        << *getterExpression << ";}\n";
+                    out << "static WioErasedValue* " << dynamicGetter
+                        << "(std::uintptr_t handle){try{return new WioErasedValueModel<" << *bridgeType
+                        << ">(&_legacy_type_descriptor_" << fieldInfo.typeDescriptor << ',' << rawGetter
+                        << "(handle));}catch(...){return nullptr;}}\n";
+                    LegacyExportInfo getterExport{reflected.logicalName + ".get." + field.name,
+                                                  reflected.logicalName + ".get." + field.name,
+                                                  "UNKNOWN",
+                                                  {"USIZE"},
+                                                  "nullptr"};
+                    getterExport.rawFunction = "reinterpret_cast<const void*>(&" + rawGetter + ')';
+                    fieldInfo.getterExport = appendExport(std::move(getterExport));
+                    fieldInfo.dynamicGetter = '&' + dynamicGetter;
+
+                    if (field.isMutable)
+                    {
+                        const auto rawSetter = "_legacy_raw_set_" + std::to_string(bridgeIndex);
+                        const auto dynamicSetter = "_legacy_dynamic_set_" + std::to_string(bridgeIndex);
+                        out << "static void " << rawSetter << "(std::uintptr_t handle," << *bridgeType
+                            << " value){auto* instance=reinterpret_cast<" << cppType
+                            << "*>(handle);if(!instance)throw std::invalid_argument(\"invalid Wio instance handle\");"
+                            << member << '=' << *setterExpression << ";}\n";
+                        out << "static std::int32_t " << dynamicSetter
+                            << "(std::uintptr_t handle,const WioErasedValue* value){if(!value)return "
+                               "WIO_INVOKE_BAD_ARGUMENTS;auto* typedValue=dynamic_cast<const WioErasedValueModel<"
+                            << *bridgeType << ">*>(value);if(!typedValue)return WIO_INVOKE_TYPE_MISMATCH;try{"
+                            << rawSetter
+                            << "(handle,typedValue->value);return WIO_INVOKE_OK;}catch(...){return "
+                               "WIO_INVOKE_NOT_CALLABLE;}}\n";
+                        LegacyExportInfo setterExport{reflected.logicalName + ".set." + field.name,
+                                                      reflected.logicalName + ".set." + field.name,
+                                                      "VOID",
+                                                      {"USIZE", "UNKNOWN"},
+                                                      "nullptr"};
+                        setterExport.rawFunction = "reinterpret_cast<const void*>(&" + rawSetter + ')';
+                        fieldInfo.setterExport = appendExport(std::move(setterExport));
+                        fieldInfo.dynamicSetter = '&' + dynamicSetter;
+                    }
+                    continue;
+                }
 
                 const auto getterInvoke = "_legacy_type_call_" + std::to_string(legacy.size());
                 out << "static std::int32_t " << getterInvoke
@@ -777,8 +1736,8 @@ namespace wio::codegen
                     << entry.returnKind << ',' << entry.parameterKinds.size() << "u,"
                     << (entry.parameterKinds.empty() ? "nullptr"
                                                      : "_legacy_export_params_" + std::to_string(exportIndex))
-                    << ",&" << entry.invokeName << ',' << entry.rawFunction << ',' << entry.attributeCount << "u,"
-                    << entry.attributes << "},\n";
+                    << ',' << (entry.invokeName == "nullptr" ? "nullptr" : '&' + entry.invokeName) << ','
+                    << entry.rawFunction << ',' << entry.attributeCount << "u," << entry.attributes << "},\n";
             }
             out << "};\n";
         }
@@ -786,23 +1745,6 @@ namespace wio::codegen
         for (std::size_t typeIndex = 0; typeIndex < legacyTypes.size(); ++typeIndex)
         {
             const auto& legacyType = legacyTypes[typeIndex];
-            for (std::size_t fieldIndex = 0; fieldIndex < legacyType.fields.size(); ++fieldIndex)
-            {
-                const auto& field = legacyType.fields[fieldIndex];
-                const auto& valueType = module.types.get(field.descriptor->type);
-                std::string descriptorKind = "WIO_MODULE_TYPE_DESC_UNKNOWN";
-                if (legacyAbiKind(field.descriptor->type) != "UNKNOWN")
-                    descriptorKind = valueType.nominalKind == NominalKind::Enum      ? "WIO_MODULE_TYPE_DESC_ENUM"
-                                     : valueType.nominalKind == NominalKind::Flagset ? "WIO_MODULE_TYPE_DESC_FLAGSET"
-                                                                                     : "WIO_MODULE_TYPE_DESC_PRIMITIVE";
-                out << "static const WioModuleTypeDescriptor _legacy_field_type_" << typeIndex << '_' << fieldIndex
-                    << '{'
-                    << quoted(valueType.name.empty() ? std::string(typeKindName(valueType.kind)) : valueType.name)
-                    << ",nullptr," << descriptorKind << ",WIO_ABI_" << legacyAbiKind(field.descriptor->type)
-                    << ",0,nullptr,nullptr,nullptr,nullptr,0,nullptr,0,nullptr,WioStableTypeId("
-                    << quoted(valueType.name.empty() ? std::string(typeKindName(valueType.kind)) : valueType.name)
-                    << "),0,nullptr,nullptr,nullptr};\n";
-            }
             if (!legacyType.constructors.empty())
             {
                 out << "static const WioModuleConstructor _legacy_type_constructors_" << typeIndex << "[]={";
@@ -816,16 +1758,17 @@ namespace wio::codegen
                 for (std::size_t fieldIndex = 0; fieldIndex < legacyType.fields.size(); ++fieldIndex)
                 {
                     const auto& field = legacyType.fields[fieldIndex];
-                    const auto supported = legacyAbiKind(field.descriptor->type) != "UNKNOWN";
+                    const auto supported = field.getterExport.has_value();
                     const auto flags = supported ? (1u | (field.descriptor->isMutable ? 2u : 4u)) : 0u;
                     out << '{' << quoted(field.descriptor->name) << ",WIO_ABI_" << legacyAbiKind(field.descriptor->type)
-                        << ",&_legacy_field_type_" << typeIndex << '_' << fieldIndex << ',' << flags << "u,"
+                        << ",&_legacy_type_descriptor_" << field.typeDescriptor << ',' << flags << "u,"
                         << legacyAccess(field.descriptor->visibility) << ','
-                        << (supported ? "&_legacy_exports[" + std::to_string(field.getterExport) + "]" : "nullptr")
+                        << (supported ? "&_legacy_exports[" + std::to_string(*field.getterExport) + "]" : "nullptr")
                         << ','
                         << (field.setterExport ? "&_legacy_exports[" + std::to_string(*field.setterExport) + "]"
                                                : "nullptr")
-                        << ",nullptr,nullptr," << field.attributeCount << "u," << field.attributes << "},\n";
+                        << ',' << field.dynamicGetter << ',' << field.dynamicSetter << ',' << field.attributeCount
+                        << "u," << field.attributes << "},\n";
                 }
                 out << "};\n";
             }
@@ -894,8 +1837,13 @@ namespace wio::codegen
                               (l.saveState ? 16 : 0) | (l.restoreState ? 32 : 0) | (1u << 6);
         if (!legacyTypes.empty())
             flags |= 1u << 7;
+        if (std::ranges::any_of(typeDescriptors, [](const LegacyTypeDescriptorInfo& descriptor)
+                                { return descriptor.kind == "WIO_MODULE_TYPE_DESC_TEXT"; }))
+            flags |= 1u << 8;
         if (attributeTableIndex != 0)
             flags |= 1u << 9;
+        if (!legacyAsyncExports.empty())
+            flags |= 1u << 11;
         const auto hook = [&](FunctionId id, const std::string& result, const std::string& parameter,
                               const std::string& arg, const std::string& fallback)
         {
@@ -927,6 +1875,9 @@ namespace wio::codegen
             << (module.contract.application && !module.contract.application->stages.empty()
                     ? "a.capabilities|=WIO_MODULE_CAP_APPLICATION_SCHEDULE_V1;"
                     : "")
+            << "a.asyncExportCount=" << legacyAsyncExports.size()
+            << "; a.asyncExports=" << (legacyAsyncExports.empty() ? "nullptr" : "_legacy_async_exports")
+            << "; a.asyncHost=" << (legacyAsyncExports.empty() ? "nullptr" : "&_legacy_async_host") << ';'
             << "a.exportCount=" << legacy.size() << "; a.exports=" << (legacy.empty() ? "nullptr" : "_legacy_exports")
             << "; a.commandCount=" << commands.size()
             << "; a.commands=" << (commands.empty() ? "nullptr" : "_legacy_commands")

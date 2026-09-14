@@ -12,6 +12,7 @@
 #include "wio/sema/type.h"
 
 #include <algorithm>
+#include <functional>
 #include <iomanip>
 #include <optional>
 #include <sstream>
@@ -971,9 +972,105 @@ namespace wio::wir::typed
                     const auto appendCases = [&](const auto& members)
                     {
                         std::uint64_t nextValue = 0;
+                        std::unordered_map<std::string, std::uint64_t> resolvedMembers;
+                        std::function<std::optional<std::uint64_t>(const NodePtr<Expression>&)> evaluateMemberValue;
+                        evaluateMemberValue = [&](const NodePtr<Expression>& expression) -> std::optional<std::uint64_t>
+                        {
+                            if (!expression)
+                                return std::nullopt;
+                            if (const auto* literal = expression->template as<IntegerLiteral>())
+                            {
+                                const IntegerResult parsed = common::getInteger(literal->token.value);
+                                if (!parsed.isValid)
+                                    return std::nullopt;
+                                switch (parsed.type)
+                                {
+                                case IntegerType::i8:
+                                    return static_cast<std::uint64_t>(parsed.value.v_i8);
+                                case IntegerType::i16:
+                                    return static_cast<std::uint64_t>(parsed.value.v_i16);
+                                case IntegerType::i32:
+                                    return static_cast<std::uint64_t>(parsed.value.v_i32);
+                                case IntegerType::i64:
+                                    return static_cast<std::uint64_t>(parsed.value.v_i64);
+                                case IntegerType::u8:
+                                    return parsed.value.v_u8;
+                                case IntegerType::u16:
+                                    return parsed.value.v_u16;
+                                case IntegerType::u32:
+                                    return parsed.value.v_u32;
+                                case IntegerType::u64:
+                                    return parsed.value.v_u64;
+                                case IntegerType::isize:
+                                    return static_cast<std::uint64_t>(parsed.value.v_isize);
+                                case IntegerType::usize:
+                                    return static_cast<std::uint64_t>(parsed.value.v_usize);
+                                case IntegerType::Unknown:
+                                    return std::nullopt;
+                                }
+                            }
+                            if (const auto* identifier = expression->template as<Identifier>())
+                            {
+                                const auto found = resolvedMembers.find(identifier->token.value);
+                                return found == resolvedMembers.end() ? std::nullopt
+                                                                      : std::optional<std::uint64_t>(found->second);
+                            }
+                            if (const auto* unary = expression->template as<UnaryExpression>())
+                            {
+                                const auto operand = evaluateMemberValue(unary->operand);
+                                if (!operand)
+                                    return std::nullopt;
+                                switch (unary->op.type)
+                                {
+                                case TokenType::opPlus:
+                                    return *operand;
+                                case TokenType::opMinus:
+                                    return 0u - *operand;
+                                case TokenType::opBitNot:
+                                    return ~*operand;
+                                default:
+                                    return std::nullopt;
+                                }
+                            }
+                            if (const auto* fit = expression->template as<FitExpression>())
+                                return evaluateMemberValue(fit->operand);
+                            if (const auto* binary = expression->template as<BinaryExpression>())
+                            {
+                                const auto lhs = evaluateMemberValue(binary->left);
+                                const auto rhs = evaluateMemberValue(binary->right);
+                                if (!lhs || !rhs)
+                                    return std::nullopt;
+                                switch (binary->op.type)
+                                {
+                                case TokenType::opPlus:
+                                    return *lhs + *rhs;
+                                case TokenType::opMinus:
+                                    return *lhs - *rhs;
+                                case TokenType::opStar:
+                                    return *lhs * *rhs;
+                                case TokenType::opSlash:
+                                    return *rhs == 0 ? std::nullopt : std::optional<std::uint64_t>(*lhs / *rhs);
+                                case TokenType::opPercent:
+                                    return *rhs == 0 ? std::nullopt : std::optional<std::uint64_t>(*lhs % *rhs);
+                                case TokenType::opBitAnd:
+                                    return *lhs & *rhs;
+                                case TokenType::opBitOr:
+                                    return *lhs | *rhs;
+                                case TokenType::opBitXor:
+                                    return *lhs ^ *rhs;
+                                case TokenType::opShiftLeft:
+                                    return *rhs >= 64 ? std::nullopt : std::optional<std::uint64_t>(*lhs << *rhs);
+                                case TokenType::opShiftRight:
+                                    return *rhs >= 64 ? std::nullopt : std::optional<std::uint64_t>(*lhs >> *rhs);
+                                default:
+                                    return std::nullopt;
+                                }
+                            }
+                            return std::nullopt;
+                        };
                         for (const auto& member : members)
                         {
-                            std::optional<std::uint64_t> rawValue;
+                            std::optional<std::uint64_t> rawValue = evaluateMemberValue(member.value);
                             if (member.value)
                             {
                                 if (const auto* literal = member.value->template as<IntegerLiteral>())
@@ -1039,6 +1136,8 @@ namespace wio::wir::typed
                             }
                             mutableDescriptor->enumCases.push_back(EnumCaseLayout{
                                 .name = member.name ? member.name->token.value : std::string{}, .rawValue = *rawValue});
+                            if (member.name)
+                                resolvedMembers.emplace(member.name->token.value, *rawValue);
                             nextValue = *rawValue + 1;
                         }
                     };
@@ -1916,11 +2015,34 @@ namespace wio::wir::typed
             case sema::TypeKind::Struct:
             {
                 const auto structure = type.AsFast<sema::StructType>();
+                const Ref<sema::StructType> primary = structure->genericPrimaryType.Lock();
+                const auto& genericParameters =
+                    !structure->genericParameterTypes.empty()
+                        ? structure->genericParameterTypes
+                        : (primary ? primary->genericParameterTypes : structure->genericParameterTypes);
+                const auto mapGenericArgument = [&](const Ref<sema::Type>& argument, const std::size_t index) -> TypeId
+                {
+                    Ref<sema::Type> parameter = index < genericParameters.size() ? genericParameters[index] : nullptr;
+                    while (parameter && parameter->kind() == sema::TypeKind::Alias)
+                        parameter = parameter.AsFast<sema::AliasType>()->aliasedType;
+                    if (argument && argument->kind() == sema::TypeKind::ConstValue && parameter &&
+                        parameter->kind() == sema::TypeKind::ConstGenericParameter)
+                    {
+                        const auto value = argument.AsFast<sema::ConstValueType>();
+                        const auto constParameter = parameter.AsFast<sema::ConstGenericParameterType>();
+                        Type constant;
+                        constant.kind = TypeKind::ConstValue;
+                        constant.name = value->value;
+                        constant.arguments.push_back(mapType(constParameter->valueType, source));
+                        return result_.module_.types.intern(std::move(constant));
+                    }
+                    return mapType(argument, source);
+                };
                 wirType.kind = TypeKind::Named;
                 wirType.name =
                     structure->scopePath.empty() ? structure->name : structure->scopePath + "::" + structure->name;
-                for (const auto& argument : structure->genericArguments)
-                    wirType.arguments.push_back(mapType(argument, source));
+                for (std::size_t index = 0; index < structure->genericArguments.size(); ++index)
+                    wirType.arguments.push_back(mapGenericArgument(structure->genericArguments[index], index));
                 if (structure->genericArguments.empty())
                     for (const auto& parameter : structure->genericParameterTypes)
                         wirType.arguments.push_back(mapType(parameter, source));
@@ -1974,7 +2096,6 @@ namespace wio::wir::typed
                 // Some instantiated signatures are created before the primary's
                 // field list is populated. Its selected declaration still owns
                 // the layout; fill this snapshot using the pinned arguments.
-                const Ref<sema::StructType> primary = structure->genericPrimaryType.Lock();
                 const bool usePrimaryFields = structure->fieldNames.empty() && primary &&
                                               !structure->isExplicitSpecialization &&
                                               !structure->isPartialSpecialization;
@@ -1983,14 +2104,14 @@ namespace wio::wir::typed
                 std::vector<TypeId> parameters, arguments;
                 if (!structure->genericArguments.empty())
                 {
-                    const auto& genericParameters =
+                    const auto& fieldGenericParameters =
                         primary && !structure->isExplicitSpecialization && !structure->isPartialSpecialization
                             ? primary->genericParameterTypes
                             : structure->genericParameterTypes;
-                    for (const auto& parameter : genericParameters)
+                    for (const auto& parameter : fieldGenericParameters)
                         parameters.push_back(mapType(parameter, source));
-                    for (const auto& argument : structure->genericArguments)
-                        arguments.push_back(mapType(argument, source));
+                    for (std::size_t index = 0; index < structure->genericArguments.size(); ++index)
+                        arguments.push_back(mapGenericArgument(structure->genericArguments[index], index));
                 }
                 if (fieldNames.empty() && structScope)
                 {
