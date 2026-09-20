@@ -201,6 +201,8 @@ namespace wio::wir::lowered
             }
             if (type.defaultConstructor)
                 stream << " default-constructor=" << functionRef(type.defaultConstructor);
+            if (type.fieldInitializer)
+                stream << " field-initializer=" << functionRef(type.fieldInitializer);
             if (type.destructor)
                 stream << " destructor=" << functionRef(type.destructor);
             if (type.hasDestructor)

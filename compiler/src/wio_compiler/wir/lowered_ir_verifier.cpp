@@ -374,7 +374,8 @@ namespace wio::wir::lowered
                 const auto& canonical = expected.types.types()[i];
                 if (actual.castTypes != canonical.castTypes || actual.dispatchEntries != canonical.dispatchEntries ||
                     actual.destructor != canonical.destructor ||
-                    actual.defaultConstructor != canonical.defaultConstructor)
+                    actual.defaultConstructor != canonical.defaultConstructor ||
+                    actual.fieldInitializer != canonical.fieldInitializer)
                     report("LIR1530",
                            "Object hierarchy cast/dispatch/lifecycle table does not match canonical contracts.");
                 for (const auto& entry : actual.dispatchEntries)

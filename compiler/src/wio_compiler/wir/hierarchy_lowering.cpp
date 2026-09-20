@@ -6,9 +6,39 @@
 
 namespace wio::wir
 {
+    namespace
+    {
+        void appendExpandedParameter(const TypeTable& types, const TypeId parameter, std::vector<TypeId>& parameters,
+                                     std::set<TypeId>& active)
+        {
+            const Type* type = types.tryGet(parameter);
+            if (!type || (type->kind != TypeKind::TypePack && type->kind != TypeKind::ValuePack) ||
+                type->arguments.empty() || !active.insert(parameter).second)
+            {
+                parameters.push_back(parameter);
+                return;
+            }
+            for (const TypeId argument : type->arguments)
+                appendExpandedParameter(types, argument, parameters, active);
+            active.erase(parameter);
+        }
+
+        void expandMethodParameters(const TypeTable& types, MethodLayout& method)
+        {
+            std::vector<TypeId> parameters;
+            std::set<TypeId> active;
+            for (const TypeId parameter : method.parameterTypes)
+                appendExpandedParameter(types, parameter, parameters, active);
+            method.parameterTypes = std::move(parameters);
+        }
+    } // namespace
+
     std::vector<std::string> lowerHierarchy(lowered::Module& module)
     {
         std::vector<std::string> errors;
+        for (std::size_t index = 0; index < module.types.size(); ++index)
+            for (MethodLayout& method : module.types.getMutable(TypeId{static_cast<TypeId::ValueType>(index)}).methods)
+                expandMethodParameters(module.types, method);
         for (std::size_t index = 0; index < module.types.size(); ++index)
         {
             const TypeId id{static_cast<TypeId::ValueType>(index)};
@@ -18,7 +48,7 @@ namespace wio::wir
             type.castTypes.clear();
             type.dispatchEntries.clear();
             type.destructor = {};
-            type.defaultConstructor = {};
+            type.defaultConstructor = type.fieldInitializer;
             std::set<TypeId> active, seen;
             std::function<void(TypeId)> visit = [&](TypeId current)
             {
@@ -58,7 +88,26 @@ namespace wio::wir
                                                         candidate.returnType == method.returnType;
                                              });
                     if (found == type.methods.end())
-                        errors.push_back("Missing canonical method contract: " + type.name + "::" + method.name);
+                    {
+                        const auto describeSignature = [](const MethodLayout& layout)
+                        {
+                            std::string signature = "(";
+                            for (std::size_t index = 0; index < layout.parameterTypes.size(); ++index)
+                            {
+                                if (index)
+                                    signature += ",";
+                                signature += "#" + std::to_string(layout.parameterTypes[index].value());
+                            }
+                            signature += ")->#" + std::to_string(layout.returnType.value());
+                            return signature;
+                        };
+                        std::string detail = "Missing canonical method contract: " + type.name + "::" + method.name +
+                                             describeSignature(method);
+                        for (const MethodLayout& candidate : type.methods)
+                            if (candidate.name == method.name)
+                                detail += " candidate=" + describeSignature(candidate);
+                        errors.push_back(std::move(detail));
+                    }
                     else
                         type.dispatchEntries.push_back(
                             {contract, method.slot, found->isAbstract ? FunctionId{} : found->function});
@@ -76,7 +125,8 @@ namespace wio::wir
                     }
                     if (name == "OnDestruct" || name.ends_with("::OnDestruct"))
                         type.destructor = function.id;
-                    if ((name == "OnConstruct" || name.ends_with("::OnConstruct")) && function.parameters.size() == 1)
+                    if (!type.fieldInitializer && (name == "OnConstruct" || name.ends_with("::OnConstruct")) &&
+                        function.parameters.size() == 1)
                         type.defaultConstructor = function.id;
                 }
         }

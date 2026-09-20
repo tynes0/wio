@@ -1117,7 +1117,8 @@ inline std::string stringify(const std::string& value) { return value; }
                         output_ << objectName(id) << "::~" << objectName(id) << "() { " << functionName(function.id)
                                 << "(" << cppType(function.parameters.front().type) << "::raw(this)); }\n";
                     }
-                    if (type.defaultConstructor)
+                    if ((type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface) &&
+                        type.defaultConstructor)
                     {
                         const auto& function = *functions_.at(type.defaultConstructor.value());
                         output_ << objectName(id) << "::" << objectName(id) << "() { " << functionName(function.id)
@@ -1557,7 +1558,26 @@ inline std::string stringify(const std::string& value) { return value; }
                     if (instruction.selector == "Size")
                         return "std::tuple_size_v<" + cppType(instruction.targetType) + ">";
                     if (instruction.selector == "Array")
-                        return "std::make_tuple(" + callArguments(instruction, 0, true) + ")";
+                    {
+                        const Type& receiverType = module_.types.get(valueType(instruction.operands.front()));
+                        const Type& receiverValueType = receiverType.kind == TypeKind::Reference
+                                                            ? module_.types.get(receiverType.arguments.front())
+                                                            : receiverType;
+                        if (instruction.operands.size() == 1 && receiverValueType.kind == TypeKind::PackStorage)
+                        {
+                            const std::string receiver = operand(instruction.operands.front()) +
+                                                         (receiverType.kind == TypeKind::Reference ? ".read()" : "");
+                            std::string elements;
+                            for (std::size_t index = 0; index < receiverValueType.arguments.size(); ++index)
+                            {
+                                if (index)
+                                    elements += ", ";
+                                elements += "std::get<" + std::to_string(index) + ">(" + receiver + ")";
+                            }
+                            return cppType(instruction.resultType) + "{" + elements + "}";
+                        }
+                        return cppType(instruction.resultType) + "{" + callArguments(instruction, 0, true) + "}";
+                    }
                     const std::string element =
                         "std::get<" + std::to_string(instruction.projectionIndex) + ">(" +
                         operand(instruction.operands.front()) +
@@ -2073,31 +2093,59 @@ inline std::string stringify(const std::string& value) { return value; }
                     break;
                 }
                 case lowered::Opcode::ConstructComponent:
-                    if (instruction.callee)
+                {
+                    const Type& constructedType = module_.types.get(instruction.resultType);
+                    const bool initializesFields = static_cast<bool>(constructedType.fieldInitializer);
+                    if (instruction.callee || (initializesFields && instruction.operands.empty()))
                     {
-                        const auto& constructor = *functions_.at(instruction.callee.value());
-                        std::string expression = "([&]() { " + cppType(instruction.resultType) + " instance{}; " +
-                                                 functionName(instruction.callee) + "(" +
-                                                 cppType(constructor.parameters.front().type) + "::borrow(instance)";
-                        if (!instruction.operands.empty())
-                            expression += ", " + callArguments(instruction, 0, true);
-                        assignResult(instruction, expression + "); return instance; }())");
+                        std::string expression = "([&]() { " + cppType(instruction.resultType) + " instance{}; ";
+                        if (initializesFields)
+                        {
+                            const auto& initializer = *functions_.at(constructedType.fieldInitializer.value());
+                            expression += functionName(constructedType.fieldInitializer) + "(" +
+                                          cppType(initializer.parameters.front().type) + "::borrow(instance)); ";
+                        }
+                        if (instruction.callee)
+                        {
+                            const auto& constructor = *functions_.at(instruction.callee.value());
+                            if (!initializesFields || constructor.parameters.size() > 1)
+                            {
+                                expression += functionName(instruction.callee) + "(" +
+                                              cppType(constructor.parameters.front().type) + "::borrow(instance)";
+                                if (!instruction.operands.empty())
+                                    expression += ", " + callArguments(instruction, 0, true);
+                                expression += "); ";
+                            }
+                        }
+                        assignResult(instruction, expression + "return instance; }())");
                     }
                     else
                         assignResult(instruction,
                                      cppType(instruction.resultType) + "{" + callArguments(instruction, 0, true) + "}");
                     break;
+                }
                 case lowered::Opcode::ConstructObject:
                     if (instruction.callee)
                     {
+                        const Type& constructedType = module_.types.get(instruction.resultType);
                         const auto& constructor = *functions_.at(instruction.callee.value());
                         std::string expression = "([&]() { auto instance = " + cppType(instruction.resultType) +
-                                                 "::Create(wio::wir_backend::SkipConstructor{}); " +
-                                                 functionName(instruction.callee) + "(" +
-                                                 cppType(constructor.parameters.front().type) + "::borrow(instance)";
-                        if (!instruction.operands.empty())
-                            expression += ", " + callArguments(instruction, 0, true);
-                        assignResult(instruction, expression + "); return instance; }())");
+                                                 "::Create(wio::wir_backend::SkipConstructor{}); ";
+                        if (constructedType.fieldInitializer)
+                        {
+                            const auto& initializer = *functions_.at(constructedType.fieldInitializer.value());
+                            expression += functionName(constructedType.fieldInitializer) + "(" +
+                                          cppType(initializer.parameters.front().type) + "::borrow(instance)); ";
+                        }
+                        if (!constructedType.fieldInitializer || constructor.parameters.size() > 1)
+                        {
+                            expression += functionName(instruction.callee) + "(" +
+                                          cppType(constructor.parameters.front().type) + "::borrow(instance)";
+                            if (!instruction.operands.empty())
+                                expression += ", " + callArguments(instruction, 0, true);
+                            expression += "); ";
+                        }
+                        assignResult(instruction, expression + "return instance; }())");
                     }
                     else
                         assignResult(instruction, cppType(instruction.resultType) + "::Create(" +

@@ -623,6 +623,8 @@ namespace wio
         NodePtr<Expression> index;
         OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
         WeakRef<sema::Type> overloadFunctionType = nullptr;
+        std::optional<std::size_t> resolvedPackIndex;
+        std::string packElementBindingName;
 
         ArrayAccessExpression(NodePtr<Expression> _object, NodePtr<Expression> _index,
                               common::Location _loc = common::Location::invalid());
@@ -1124,6 +1126,7 @@ namespace wio
         NodePtr<Statement> thenBranch;
         NodePtr<Statement> elseBranch;
         Token matchVar;
+        WeakRef<sema::Symbol> matchSymbol;
 
         IfStatement(NodePtr<Expression> _cond, NodePtr<Statement> _then, NodePtr<Statement> _else, Token _matchVar,
                     common::Location _loc);

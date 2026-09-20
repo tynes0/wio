@@ -390,6 +390,7 @@ namespace wio::wir
         std::vector<DispatchEntry> dispatchEntries;
         FunctionId destructor;
         FunctionId defaultConstructor;
+        FunctionId fieldInitializer;
         TypeId enumUnderlyingType;
         std::vector<EnumCaseLayout> enumCases;
         bool hasConstructor = false;

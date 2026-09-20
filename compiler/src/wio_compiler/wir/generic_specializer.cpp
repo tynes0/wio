@@ -131,7 +131,7 @@ namespace wio::wir
                 for (std::size_t i = 0; i < module_.types.size() && diagnostics_.empty(); ++i)
                 {
                     TypeId id{static_cast<TypeId::ValueType>(i)};
-                    if (openType(id))
+                    if (openType(id) || openMethodLayouts(id))
                     {
                         const Type candidate = module_.types.get(id);
                         const bool concreteNominalArguments =
@@ -192,8 +192,19 @@ namespace wio::wir
                             continue;
                         Bindings cache;
                         method.returnType = substitute(method.returnType, ownerBindings, cache);
-                        for (TypeId& parameter : method.parameterTypes)
-                            parameter = substitute(parameter, ownerBindings, cache);
+                        std::vector<TypeId> concreteParameters;
+                        for (const TypeId parameter : method.parameterTypes)
+                        {
+                            const TypeId concrete = substitute(parameter, ownerBindings, cache);
+                            const Type& concreteType = module_.types.get(concrete);
+                            if ((concreteType.kind == TypeKind::TypePack || concreteType.kind == TypeKind::ValuePack) &&
+                                !concreteType.arguments.empty())
+                                concreteParameters.insert(concreteParameters.end(), concreteType.arguments.begin(),
+                                                          concreteType.arguments.end());
+                            else
+                                concreteParameters.push_back(concrete);
+                        }
+                        method.parameterTypes = std::move(concreteParameters);
                         if (openType(method.returnType) ||
                             std::ranges::any_of(method.parameterTypes,
                                                 [&](const TypeId parameter) { return openType(parameter); }))
@@ -266,6 +277,18 @@ namespace wio::wir
             {
                 std::set<TypeId> visiting;
                 return openType(id, visiting);
+            }
+            bool openMethodLayouts(TypeId id) const
+            {
+                const Type* type = module_.types.tryGet(id);
+                return type &&
+                       std::ranges::any_of(type->methods,
+                                           [&](const MethodLayout& method)
+                                           {
+                                               return openType(method.returnType) ||
+                                                      std::ranges::any_of(method.parameterTypes, [&](TypeId parameter)
+                                                                          { return openType(parameter); });
+                                           });
             }
             bool openFunction(const Function& function) const
             {
@@ -385,7 +408,8 @@ namespace wio::wir
                 std::vector<TypeId> arguments;
                 for (const TypeId argument : type.arguments)
                 {
-                    if (type.kind == TypeKind::Named)
+                    if (type.kind == TypeKind::Named || type.kind == TypeKind::TypePack ||
+                        type.kind == TypeKind::ValuePack)
                     {
                         if (const Type* pack = boundPack(argument, bindings))
                         {
@@ -396,6 +420,13 @@ namespace wio::wir
                     arguments.push_back(substitute(argument, bindings, cache));
                 }
                 type.arguments = std::move(arguments);
+                if ((type.kind == TypeKind::ValuePack || type.kind == TypeKind::TypePack ||
+                     type.kind == TypeKind::PackStorage) &&
+                    !type.arguments.empty() &&
+                    std::ranges::none_of(type.arguments, [&](const TypeId argument) { return openType(argument); }))
+                {
+                    type.name.clear();
+                }
                 if (type.extentParameter)
                 {
                     const TypeId extent = substitute(type.extentParameter, bindings, cache);
@@ -423,14 +454,25 @@ namespace wio::wir
                 for (MethodLayout& method : type.methods)
                 {
                     method.returnType = substitute(method.returnType, bindings, cache);
-                    for (TypeId& p : method.parameterTypes)
-                        p = substitute(p, bindings, cache);
+                    std::vector<TypeId> concreteParameters;
+                    for (const TypeId parameter : method.parameterTypes)
+                    {
+                        const TypeId concrete = substitute(parameter, bindings, cache);
+                        const Type& concreteType = module_.types.get(concrete);
+                        if ((concreteType.kind == TypeKind::TypePack || concreteType.kind == TypeKind::ValuePack) &&
+                            !concreteType.arguments.empty())
+                            concreteParameters.insert(concreteParameters.end(), concreteType.arguments.begin(),
+                                                      concreteType.arguments.end());
+                        else
+                            concreteParameters.push_back(concrete);
+                    }
+                    method.parameterTypes = std::move(concreteParameters);
                 }
                 if (result)
                 {
                     // An existing concrete layout from semantic analysis is the
                     // canonical identity; never overwrite its resolved fields.
-                    if (openType(result))
+                    if (openType(result) || openMethodLayouts(result))
                         module_.types.getMutable(result) = std::move(type);
                 }
                 else
@@ -519,8 +561,61 @@ namespace wio::wir
                 for (BasicBlock& block : function.blocks)
                 {
                     std::vector<Instruction> instructions;
+                    std::map<ValueId, TypeId> specializedValues;
+                    std::map<ValueId, TypeId> specializedPlaces;
                     for (Instruction instruction : block.instructions)
                     {
+                        if (instruction.opcode == Opcode::PlaceInit && instruction.operands.size() == 2)
+                        {
+                            const auto sourceType = specializedValues.find(instruction.operands[1]);
+                            if (sourceType != specializedValues.end())
+                            {
+                                specializedPlaces[instruction.operands[0]] = sourceType->second;
+                                const auto place =
+                                    std::ranges::find(instructions, instruction.operands[0], &Instruction::result);
+                                if (place != instructions.end())
+                                {
+                                    Type reference = module_.types.get(place->resultType);
+                                    if (reference.kind == TypeKind::Reference && reference.arguments.size() == 1)
+                                    {
+                                        reference.arguments.front() = sourceType->second;
+                                        place->resultType = module_.types.intern(std::move(reference));
+                                    }
+                                }
+                            }
+                        }
+                        if (instruction.opcode == Opcode::Load && instruction.operands.size() == 1)
+                        {
+                            const auto placeType = specializedPlaces.find(instruction.operands.front());
+                            if (placeType != specializedPlaces.end())
+                            {
+                                instruction.resultType = placeType->second;
+                                specializedValues[instruction.result] = placeType->second;
+                            }
+                        }
+                        if (instruction.opcode == Opcode::IteratorCreate && instruction.operands.size() == 1)
+                        {
+                            const auto sourceType = specializedValues.find(instruction.operands.front());
+                            if (sourceType != specializedValues.end())
+                            {
+                                Type iterator = module_.types.get(instruction.resultType);
+                                if (iterator.kind == TypeKind::Iterator && iterator.arguments.size() == 1)
+                                {
+                                    iterator.arguments.front() = sourceType->second;
+                                    instruction.resultType = module_.types.intern(std::move(iterator));
+                                    specializedValues[instruction.result] = instruction.resultType;
+                                }
+                            }
+                        }
+                        for (std::size_t index = 0;
+                             index < instruction.operands.size() && index < instruction.signatureTypes.size(); ++index)
+                        {
+                            if (const auto type = specializedValues.find(instruction.operands[index]);
+                                type != specializedValues.end())
+                            {
+                                instruction.signatureTypes[index] = type->second;
+                            }
+                        }
                         if (instruction.opcode == Opcode::LocalPlace)
                         {
                             const Type* reference = module_.types.tryGet(instruction.resultType);
@@ -573,6 +668,14 @@ namespace wio::wir
                             {
                                 instruction.operands = expansion->values;
                                 instruction.signatureTypes = expansion->types;
+                                Type array = module_.types.get(instruction.resultType);
+                                if (array.kind == TypeKind::Array)
+                                {
+                                    array.staticExtent = expansion->types.size();
+                                    array.extentParameter = {};
+                                    instruction.resultType = module_.types.intern(std::move(array));
+                                }
+                                specializedValues[instruction.result] = instruction.resultType;
                                 instructions.push_back(std::move(instruction));
                                 continue;
                             }
@@ -980,8 +1083,7 @@ namespace wio::wir
                         valid = bind(source.genericParameters[i], request.genericArguments[i], bindings);
                 if (valid && hasGenericPack && request.genericArguments.size() > fixedGenericCount)
                 {
-                    Type pack{.kind = TypeKind::TypePack,
-                              .name = module_.types.get(source.genericParameters.back()).name};
+                    Type pack{.kind = TypeKind::TypePack};
                     pack.arguments.insert(pack.arguments.end(), request.genericArguments.begin() + fixedGenericCount,
                                           request.genericArguments.end());
                     valid = std::ranges::none_of(pack.arguments,
@@ -1038,7 +1140,7 @@ namespace wio::wir
                     valid &= std::next(packParameter) == source.parameters.end() && signature.size() >= packIndex;
                     for (std::size_t i = 0; valid && i < packIndex; ++i)
                         valid = bind(source.parameters[i].type, signature[i], bindings);
-                    if (valid)
+                    if (valid && !bindings.contains(packParameter->type))
                     {
                         const Type* existingPack =
                             signature.size() == packIndex + 1 ? module_.types.tryGet(signature[packIndex]) : nullptr;
@@ -1050,7 +1152,7 @@ namespace wio::wir
                         }
                         else
                         {
-                            Type pack{.kind = TypeKind::TypePack, .name = module_.types.get(packParameter->type).name};
+                            Type pack{.kind = TypeKind::TypePack};
                             pack.arguments.insert(pack.arguments.end(), signature.begin() + packIndex, signature.end());
                             valid = bind(packParameter->type, module_.types.intern(std::move(pack)), bindings);
                         }
@@ -1059,8 +1161,7 @@ namespace wio::wir
                 valid &= bind(source.returnType, result, bindings);
                 if (valid && hasGenericPack && !bindings.contains(source.genericParameters.back()))
                 {
-                    Type pack{.kind = TypeKind::TypePack,
-                              .name = module_.types.get(source.genericParameters.back()).name};
+                    Type pack{.kind = TypeKind::TypePack};
                     valid = bind(source.genericParameters.back(), module_.types.intern(std::move(pack)), bindings);
                 }
                 for (TypeId p : source.genericParameters)

@@ -194,6 +194,8 @@ namespace wio::wir::typed
                 stream << " has-constructor";
             if (type.hasDestructor)
                 stream << " has-destructor";
+            if (type.fieldInitializer)
+                stream << " field-initializer=" << functionRef(type.fieldInitializer);
             if (type.ownership != OwnershipModel::Trivial)
                 stream << " ownership=" << ownershipModelName(type.ownership);
             if (type.cleanup != CleanupKind::None)
