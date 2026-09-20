@@ -22,10 +22,45 @@ namespace wio::codegen
                 return false;
             return std::ranges::all_of(v.arguments, concrete);
         };
-        auto name = [&](TypeId id)
+        std::function<std::string(TypeId)> name = [&](TypeId id)
         {
             const auto& t = m.types.get(id);
-            return t.name.empty() ? std::string(typeKindName(t.kind)) : t.name;
+            if (t.kind == TypeKind::Array && t.arguments.size() == 1)
+            {
+                if (t.staticExtent)
+                    return "[" + name(t.arguments.front()) + "; " + std::to_string(*t.staticExtent) + "]";
+                return name(t.arguments.front()) + "[]";
+            }
+            if (t.kind == TypeKind::Dictionary && t.arguments.size() == 2)
+                return "Dict<" + name(t.arguments[0]) + ", " + name(t.arguments[1]) + ">";
+            if (t.kind == TypeKind::Nullable && t.arguments.size() == 1)
+                return name(t.arguments.front()) + "?";
+            if (t.kind == TypeKind::Reference && t.arguments.size() == 1)
+                return std::string(t.isMutable ? "ref " : "view ") + name(t.arguments.front());
+            if (t.kind == TypeKind::Function && !t.arguments.empty())
+            {
+                std::string result = "fn(";
+                for (std::size_t index = 0; index + 1 < t.arguments.size(); ++index)
+                {
+                    if (index)
+                        result += ", ";
+                    result += name(t.arguments[index]);
+                }
+                return result + ") -> " + name(t.arguments.back());
+            }
+            std::string result = t.name.empty() ? std::string(typeKindName(t.kind)) : t.name;
+            if (t.kind == TypeKind::Named && !t.arguments.empty())
+            {
+                result += '<';
+                for (std::size_t index = 0; index < t.arguments.size(); ++index)
+                {
+                    if (index)
+                        result += ", ";
+                    result += name(t.arguments[index]);
+                }
+                result += '>';
+            }
+            return result;
         };
         auto strings = [&](const char* field, const std::vector<std::string>& values)
         {
@@ -44,6 +79,68 @@ namespace wio::codegen
             if (!r.runtimeVisible || !concrete(r.type) || !seen.insert(cpp(r.type)).second)
                 continue;
             const auto& layout = m.types.get(r.type);
+            if (r.nominalKind == NominalKind::Enum || r.nominalKind == NominalKind::Flagset)
+            {
+                const std::string cppType = cpp(r.type);
+                const std::string underlying = cpp(layout.enumUnderlyingType);
+                const auto value = [&](const EnumCaseLayout& enumCase)
+                {
+                    return "static_cast<" + cppType + ">(static_cast<" + underlying + ">(" +
+                           std::to_string(enumCase.rawValue) + "ULL))";
+                };
+                out << "template <> struct wio::runtime::EnumReflection<" << cppType
+                    << "> {\n"
+                       "    static constexpr std::size_t Count = "
+                    << layout.enumCases.size()
+                    << "u;\n"
+                       "    static constexpr std::size_t Size = sizeof("
+                    << cppType
+                    << ");\n"
+                       "    static constexpr std::string_view UnderlyingTypeName = "
+                    << WirCppText::quote(name(layout.enumUnderlyingType))
+                    << ";\n"
+                       "    static std::string Name(const "
+                    << cppType << " value) {\n        switch (value) {\n";
+                for (const auto& enumCase : layout.enumCases)
+                    out << "        case " << value(enumCase) << ": return " << WirCppText::quote(enumCase.name)
+                        << ";\n";
+                out << "        default: break;\n        }\n";
+                if (r.nominalKind == NominalKind::Flagset)
+                {
+                    out << "        using Under = std::underlying_type_t<" << cppType
+                        << ">;\n"
+                           "        const Under raw = static_cast<Under>(value);\n"
+                           "        Under remaining = raw;\n"
+                           "        std::string result;\n";
+                    for (const auto& enumCase : layout.enumCases)
+                    {
+                        out << "        { const Under member = static_cast<Under>(" << value(enumCase)
+                            << "); if (member != 0 && (raw & member) == member) { if (!result.empty()) result += "
+                               "\"|\"; "
+                               "result += "
+                            << WirCppText::quote(enumCase.name)
+                            << "; remaining = static_cast<Under>(remaining & static_cast<Under>(~member)); } }\n";
+                    }
+                    out << "        if (remaining != 0) { if (!result.empty()) result += \"|\"; result += "
+                           "\"<unknown>\"; }\n"
+                           "        return result.empty() ? (raw == 0 ? \"0\" : \"<unknown>\") : result;\n";
+                }
+                else
+                    out << "        return \"<unknown>\";\n";
+                out << "    }\n"
+                       "    static "
+                    << cppType << " Value(const std::size_t index) {\n        switch (index) {\n";
+                for (std::size_t index = 0; index < layout.enumCases.size(); ++index)
+                    out << "        case " << index << "u: return " << value(layout.enumCases[index]) << ";\n";
+                out << "        default: return "
+                    << (layout.enumCases.empty() ? cppType + "{}" : value(layout.enumCases.front()))
+                    << ";\n        }\n    }\n"
+                       "    static std::ptrdiff_t Index(const "
+                    << cppType << " value) noexcept {\n        switch (value) {\n";
+                for (std::size_t index = 0; index < layout.enumCases.size(); ++index)
+                    out << "        case " << value(layout.enumCases[index]) << ": return " << index << ";\n";
+                out << "        default: return -1;\n        }\n    }\n};\n";
+            }
             const char* kind = r.nominalKind == NominalKind::Component   ? "component_type"
                                : r.nominalKind == NominalKind::Object    ? "object_type"
                                : r.nominalKind == NominalKind::Interface ? "interface_type"
