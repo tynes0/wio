@@ -810,6 +810,99 @@ namespace wio::codegen
                 }
             }
 
+            std::string legacyMangledType(const TypeId id) const
+            {
+                const Type* type = module_.types.tryGet(id);
+                if (!type)
+                    return "unknown";
+                std::string spelling;
+                if (!type->name.empty())
+                    spelling = type->name;
+                else if (type->kind == TypeKind::Reference && type->arguments.size() == 1)
+                    spelling =
+                        std::string(type->isMutable ? "ref " : "view ") + legacyMangledType(type->arguments.front());
+                else if (type->kind == TypeKind::Nullable && type->arguments.size() == 1)
+                    spelling = legacyMangledType(type->arguments.front()) + "?";
+                else if (type->kind == TypeKind::Array && type->arguments.size() == 1)
+                    spelling = type->staticExtent ? "[" + legacyMangledType(type->arguments.front()) + "; " +
+                                                        std::to_string(*type->staticExtent) + "]"
+                                                  : legacyMangledType(type->arguments.front()) + "[]";
+                else
+                    spelling = std::string(typeKindName(type->kind));
+
+                if (type->kind == TypeKind::Named && !type->arguments.empty())
+                {
+                    spelling += '<';
+                    for (std::size_t index = 0; index < type->arguments.size(); ++index)
+                    {
+                        if (index)
+                            spelling += ',';
+                        spelling += legacyMangledType(type->arguments[index]);
+                    }
+                    spelling += '>';
+                }
+                for (char& character : spelling)
+                    switch (character)
+                    {
+                    case ' ':
+                    case '(':
+                    case ')':
+                    case ',':
+                    case '<':
+                    case '>':
+                    case '-':
+                    case '.':
+                    case ':':
+                        character = '_';
+                        break;
+                    case '[':
+                        character = 'A';
+                        break;
+                    case ']':
+                        character = 'E';
+                        break;
+                    case ';':
+                        character = 'S';
+                        break;
+                    case '*':
+                        character = 'P';
+                        break;
+                    case '&':
+                        character = 'R';
+                        break;
+                    case '?':
+                        character = 'N';
+                        break;
+                    default:
+                        break;
+                    }
+                return spelling;
+            }
+
+            std::string legacyMethodName(const MethodLayout& method, const lowered::Function& implementation) const
+            {
+                const lowered::Function* declaration = &implementation;
+                if (implementation.genericOrigin)
+                {
+                    const auto origin = functions_.find(implementation.genericOrigin.value());
+                    if (origin != functions_.end())
+                        declaration = origin->second;
+                }
+                std::string name = "_WF_" + safeIdentifier(method.name);
+                for (std::size_t index = 1; index < declaration->parameters.size(); ++index)
+                    name += "_" + legacyMangledType(declaration->parameters[index].type);
+                return name;
+            }
+
+            const lowered::Function* concreteMethod(const MethodLayout& method) const
+            {
+                const auto found = functions_.find(method.function.value());
+                return found != functions_.end() && !functionIsOpen(*found->second) && found->second->isMethod &&
+                               !found->second->isAbstract && !found->second->parameters.empty()
+                           ? found->second
+                           : nullptr;
+            }
+
             std::string placeValueType(const TypeId id) const
             {
                 const Type* type = module_.types.tryGet(id);
@@ -973,6 +1066,7 @@ template<class T> class Place<wio::runtime::Ref<T>> {
     std::shared_ptr<std::optional<Handle>> owner_;
     Handle* handle_ = nullptr;
     T* raw_ = nullptr;
+    mutable std::optional<Handle> rawHandle_;
     bool readOnly_ = false;
 public:
     static Place local() { Place p; p.owner_ = std::make_shared<std::optional<Handle>>(); return p; }
@@ -984,7 +1078,13 @@ public:
         if (owner_) { if (!*owner_) throw std::runtime_error("read from uninitialized Wio object place"); return owner_->value().Get(); }
         return raw_;
     }
-    Handle read() const { return Handle(Get()); }
+    Handle& read() {
+        if (handle_) return *handle_;
+        if (owner_) { if (!*owner_) throw std::runtime_error("read from uninitialized Wio object place"); return owner_->value(); }
+        if (!rawHandle_) rawHandle_ = Handle(raw_);
+        return *rawHandle_;
+    }
+    const Handle& read() const { return const_cast<Place*>(this)->read(); }
     void write(Handle value) {
         if (readOnly_) throw std::runtime_error("write through a Wio view");
         if (handle_) *handle_ = std::move(value);
@@ -1110,6 +1210,31 @@ inline std::string stringify(const std::string& value) { return value; }
                                 << "::raw(static_cast<" << objectName(function.ownerType) << "*>(this))";
                         for (std::size_t i = 1; i < function.parameters.size(); ++i)
                             output_ << ", std::move(_a" << (i - 1) << ")";
+                        output_ << "); }\n";
+                    }
+                    std::set<std::string> emittedLegacyMethods;
+                    for (const MethodLayout& method : type.methods)
+                    {
+                        const lowered::Function* function = concreteMethod(method);
+                        if (!function || method.visibility != FieldVisibility::Public)
+                            continue;
+                        const std::string name = legacyMethodName(method, *function);
+                        if (!emittedLegacyMethods.insert(name).second)
+                            continue;
+                        output_ << cppType(function->returnType) << ' ' << objectName(id) << "::" << name << '(';
+                        for (std::size_t index = 1; index < function->parameters.size(); ++index)
+                        {
+                            if (index > 1)
+                                output_ << ", ";
+                            output_ << cppType(function->parameters[index].type) << " _a" << (index - 1);
+                        }
+                        output_ << ") { ";
+                        if (module_.types.get(function->returnType).kind != TypeKind::Void)
+                            output_ << "return ";
+                        output_ << functionName(function->id) << '(' << cppType(function->parameters.front().type)
+                                << "::raw(static_cast<" << objectName(function->ownerType) << "*>(this))";
+                        for (std::size_t index = 1; index < function->parameters.size(); ++index)
+                            output_ << ", std::move(_a" << (index - 1) << ')';
                         output_ << "); }\n";
                     }
                     if (type.destructor)
@@ -1279,6 +1404,26 @@ inline std::string stringify(const std::string& value) { return value; }
                         for (const DispatchEntry& entry : type.dispatchEntries)
                             output_ << "    virtual " << dispatchSignature(entry)
                                     << (entry.implementation ? ";\n" : " = 0;\n");
+                        std::set<std::string> emittedLegacyMethods;
+                        for (const MethodLayout& method : type.methods)
+                        {
+                            const lowered::Function* function = concreteMethod(method);
+                            if (!function || method.visibility != FieldVisibility::Public)
+                                continue;
+                            const std::string name = legacyMethodName(method, *function);
+                            if (!emittedLegacyMethods.insert(name).second)
+                                continue;
+                            output_ << "    " << cppType(function->returnType) << ' ' << name << '(';
+                            for (std::size_t parameterIndex = 1; parameterIndex < function->parameters.size();
+                                 ++parameterIndex)
+                            {
+                                if (parameterIndex > 1)
+                                    output_ << ", ";
+                                output_ << cppType(function->parameters[parameterIndex].type) << " _a"
+                                        << (parameterIndex - 1);
+                            }
+                            output_ << ");\n";
+                        }
                         if (type.destructor)
                             output_ << "    ~" << objectName(id) << "() override;\n";
                         output_ << "    " << objectName(id) << (type.defaultConstructor ? "();\n" : "() = default;\n");

@@ -52,6 +52,27 @@ namespace wio::wir::lowered
             return std::next(pack) == callee.parameters.end() && argumentCount >= packIndex;
         }
 
+        bool nativeReferenceArgumentMatches(const TypeTable& types, const TypeId operandId, const TypeId expectedId)
+        {
+            const Type* operand = types.tryGet(operandId);
+            const Type* expected = types.tryGet(expectedId);
+            if (!operand || !expected || operand->kind != TypeKind::Reference ||
+                expected->kind != TypeKind::Reference || operand->arguments.size() != 1 ||
+                expected->arguments.size() != 1 || (expected->isMutable && !operand->isMutable))
+                return false;
+            if (operand->arguments.front() == expected->arguments.front())
+                return true;
+
+            const Type* operandValue = types.tryGet(operand->arguments.front());
+            if (operandValue && operandValue->kind == TypeKind::Nullable && operandValue->arguments.size() == 1 &&
+                operandValue->arguments.front() == expected->arguments.front())
+            {
+                const Type* nullableValue = types.tryGet(operandValue->arguments.front());
+                return nullableValue && nullableValue->kind == TypeKind::Opaque;
+            }
+            return false;
+        }
+
         TypeId coroutineResultType(const TypeTable& types, const Function& function)
         {
             if (!function.isAsync)
@@ -1753,7 +1774,11 @@ namespace wio::wir::lowered
                                                                         signatureType->kind == TypeKind::Reference &&
                                                                         signatureType->arguments.size() == 1 &&
                                                                         signatureType->arguments.front() == operandType;
-                                    if ((!extensionReceiverMatch &&
+                                    const bool nativeReferenceMatch =
+                                        callee.nativeBinding &&
+                                        nativeReferenceArgumentMatches(module.types, operandType,
+                                                                       instruction.signatureTypes[argumentIndex]);
+                                    if ((!extensionReceiverMatch && !nativeReferenceMatch &&
                                          operandType != instruction.signatureTypes[argumentIndex]) ||
                                         (callee.genericParameters.empty() &&
                                          instruction.signatureTypes[argumentIndex] !=
