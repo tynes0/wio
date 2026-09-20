@@ -299,7 +299,8 @@ namespace wio::codegen
                                 {
                                     std::string detail = "dispatch requires a concrete canonical implementation with a "
                                                          "matching signature: " +
-                                                         type.name + " slot " + std::to_string(entry.slot);
+                                                         type.name + " type " + std::to_string(id.value()) + " slot " +
+                                                         std::to_string(entry.slot);
                                     if (function == functions_.end())
                                         detail += " has no implementation";
                                     else
@@ -1858,11 +1859,12 @@ inline std::string stringify(const std::string& value) { return value; }
                     break;
                 case lowered::Opcode::ArrayElement:
                 case lowered::Opcode::ArrayGet:
-                    assignResult(instruction,
-                                 operand(instruction.operands[0]) +
-                                     (instruction.boundsCheck == lowered::BoundsCheckMode::Required ? ".at(" : "[") +
-                                     operand(instruction.operands[1]) +
-                                     (instruction.boundsCheck == lowered::BoundsCheckMode::Required ? ")" : "]"));
+                    if (instruction.boundsCheck == lowered::BoundsCheckMode::Required)
+                        assignResult(instruction, "wio::intrinsics::Index(" + operand(instruction.operands[0]) + ", " +
+                                                      operand(instruction.operands[1]) + ")");
+                    else
+                        assignResult(instruction,
+                                     operand(instruction.operands[0]) + "[" + operand(instruction.operands[1]) + "]");
                     break;
                 case lowered::Opcode::ArrayCreate:
                 case lowered::Opcode::DefaultValue:

@@ -290,6 +290,43 @@ namespace wio::wir
                                                                           { return openType(parameter); });
                                            });
             }
+            bool typeReferencesBindings(TypeId id, const Bindings& bindings, std::set<TypeId>& visiting) const
+            {
+                if (!id)
+                    return false;
+                if (bindings.contains(id))
+                    return true;
+                const Type* type = module_.types.tryGet(id);
+                if (!type || !visiting.insert(id).second)
+                    return false;
+                const bool references =
+                    typeReferencesBindings(type->extentParameter, bindings, visiting) ||
+                    std::ranges::any_of(type->arguments, [&](const TypeId argument)
+                                        { return typeReferencesBindings(argument, bindings, visiting); });
+                visiting.erase(id);
+                return references;
+            }
+            bool methodLayoutsReferenceBindings(TypeId id, const Bindings& bindings) const
+            {
+                const Type* type = module_.types.tryGet(id);
+                if (!type)
+                    return false;
+                return std::ranges::any_of(type->methods,
+                                           [&](const MethodLayout& method)
+                                           {
+                                               std::set<TypeId> visiting;
+                                               if (typeReferencesBindings(method.returnType, bindings, visiting))
+                                                   return true;
+                                               return std::ranges::any_of(method.parameterTypes,
+                                                                          [&](const TypeId parameter)
+                                                                          {
+                                                                              std::set<TypeId> parameterVisiting;
+                                                                              return typeReferencesBindings(
+                                                                                  parameter, bindings,
+                                                                                  parameterVisiting);
+                                                                          });
+                                           });
+            }
             bool openFunction(const Function& function) const
             {
                 return !function.genericParameters.empty() || openType(function.returnType) ||
@@ -472,7 +509,7 @@ namespace wio::wir
                 {
                     // An existing concrete layout from semantic analysis is the
                     // canonical identity; never overwrite its resolved fields.
-                    if (openType(result) || openMethodLayouts(result))
+                    if (openType(result) || methodLayoutsReferenceBindings(result, bindings))
                         module_.types.getMutable(result) = std::move(type);
                 }
                 else

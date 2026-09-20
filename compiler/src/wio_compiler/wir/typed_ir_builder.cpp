@@ -6002,6 +6002,15 @@ namespace wio::wir::typed
             state.nextValue = elseState.nextValue;
             state.nextBlock = elseState.nextBlock;
 
+            if (const auto* literal = statement.condition->as<BoolLiteral>())
+            {
+                FunctionState& unreachableState = literal->token.type == TokenType::kwTrue ? elseState : thenState;
+                if (!blockIsTerminated(unreachableState))
+                    currentBlock(unreachableState)
+                        .instructions.push_back(Instruction{.opcode = Opcode::Unreachable,
+                                                            .source = SourceSpan::at(statement.condition->location())});
+            }
+
             const bool thenFallsThrough = !blockIsTerminated(thenState);
             const bool elseFallsThrough = !blockIsTerminated(elseState);
             if (!thenFallsThrough && !elseFallsThrough)
@@ -6174,12 +6183,19 @@ namespace wio::wir::typed
                             .targets = {currentBlockAt(state, bodyBlockIndex).id,
                                         currentBlockAt(state, conditionExitBlockIndex).id},
                             .source = SourceSpan::at(statement.condition->location())});
-            currentBlockAt(state, conditionExitBlockIndex)
-                .instructions.push_back(
-                    Instruction{.opcode = Opcode::Branch,
-                                .operands = collectCarriedValues(conditionValues, carriedSymbols, &statement),
-                                .targets = {currentBlockAt(state, exitBlockIndex).id},
-                                .source = SourceSpan::at(statement.condition->location())});
+            const auto* literalCondition = statement.condition->as<BoolLiteral>();
+            const bool conditionAlwaysTrue = literalCondition && literalCondition->token.type == TokenType::kwTrue;
+            if (conditionAlwaysTrue)
+                currentBlockAt(state, conditionExitBlockIndex)
+                    .instructions.push_back(Instruction{.opcode = Opcode::Unreachable,
+                                                        .source = SourceSpan::at(statement.condition->location())});
+            else
+                currentBlockAt(state, conditionExitBlockIndex)
+                    .instructions.push_back(
+                        Instruction{.opcode = Opcode::Branch,
+                                    .operands = collectCarriedValues(conditionValues, carriedSymbols, &statement),
+                                    .targets = {currentBlockAt(state, exitBlockIndex).id},
+                                    .source = SourceSpan::at(statement.condition->location())});
 
             FunctionState bodyState = state;
             bodyState.blockIndex = bodyBlockIndex;
@@ -6202,6 +6218,23 @@ namespace wio::wir::typed
                                 .operands = collectCarriedValues(bodyState.values, carriedSymbols, &statement),
                                 .targets = {currentBlockAt(state, headerBlockIndex).id},
                                 .source = SourceSpan::at(statement.body->location())});
+            }
+
+            if (conditionAlwaysTrue)
+            {
+                const BlockId exitId = currentBlockAt(state, exitBlockIndex).id;
+                const bool hasBreakEdge = std::ranges::any_of(
+                    state.function->blocks,
+                    [&](const BasicBlock& block)
+                    {
+                        return std::ranges::any_of(
+                            block.instructions, [&](const Instruction& instruction)
+                            { return std::ranges::find(instruction.targets, exitId) != instruction.targets.end(); });
+                    });
+                if (!hasBreakEdge)
+                    currentBlockAt(state, exitBlockIndex)
+                        .instructions.push_back(
+                            Instruction{.opcode = Opcode::Unreachable, .source = SourceSpan::at(statement.location())});
             }
 
             state.blockIndex = exitBlockIndex;

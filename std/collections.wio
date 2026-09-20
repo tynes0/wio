@@ -51,11 +51,11 @@ realm std {
         }
 
         fn IndexOf<T>(values: T[], target: T) -> usize {
-            return values.IndexOf(target);
+            return values.IndexOf(target) fit usize;
         }
 
         fn LastIndexOf<T>(values: T[], target: T) -> usize {
-            return values.LastIndexOf(target);
+            return values.LastIndexOf(target) fit usize;
         }
 
         fn FirstOr<T>(values: T[], fallback: T) -> T {
