@@ -2786,7 +2786,7 @@ namespace wio::wir::typed
                 for (std::size_t index = 0; index < genericArguments.size(); ++index)
                 {
                     if (index > 0)
-                        entry.logicalName += ",";
+                        entry.logicalName += ", ";
                     entry.logicalName += typeStableKey(genericArguments[index]);
                 }
                 entry.logicalName += ">";
@@ -3074,10 +3074,7 @@ namespace wio::wir::typed
                 for (const auto& child : block->statements)
                 {
                     if (blockIsTerminated(state))
-                    {
-                        report("WIR2200", "Statement appears after a terminator.", child.Get());
                         break;
-                    }
                     buildStatement(child, state);
                 }
                 if (!blockIsTerminated(state))
@@ -5800,111 +5797,131 @@ namespace wio::wir::typed
         ValueId buildShortCircuitExpression(const BinaryExpression& expression, const bool logicalAnd,
                                             FunctionState& state)
         {
-            const ValueId left = buildExpression(expression.left, state);
-            if (!left)
-                return {};
-
-            const auto incomingValues = state.values;
-            const auto incomingOrder = state.valueOrder;
-            const std::size_t conditionBlockIndex = state.blockIndex;
-            const std::string prefix = logicalAnd ? "logical.and" : "logical.or";
-            const std::size_t rightBlockIndex =
-                createBlock(state, prefix + ".rhs", SourceSpan::at(expression.right->location()));
-            const std::size_t shortBlockIndex =
-                createBlock(state, prefix + ".short", SourceSpan::at(expression.left->location()));
-            const std::size_t mergeBlockIndex =
-                createBlock(state, prefix + ".merge", SourceSpan::at(expression.location()));
-
-            const BlockId rightBlock = currentBlockAt(state, rightBlockIndex).id;
-            const BlockId shortBlock = currentBlockAt(state, shortBlockIndex).id;
-            const BlockId mergeBlock = currentBlockAt(state, mergeBlockIndex).id;
-            currentBlockAt(state, conditionBlockIndex)
-                .instructions.push_back(Instruction{.opcode = Opcode::CondBranch,
-                                                    .operands = {left},
-                                                    .targets = logicalAnd
-                                                                   ? std::vector<BlockId>{rightBlock, shortBlock}
-                                                                   : std::vector<BlockId>{shortBlock, rightBlock},
-                                                    .source = SourceSpan::at(expression.location())});
-
-            FunctionState rightState = state;
-            rightState.blockIndex = rightBlockIndex;
-            rightState.values = incomingValues;
-            rightState.valueOrder = incomingOrder;
-            const ValueId right = buildExpression(expression.right, rightState);
-            if (!right)
-                return {};
-            state.nextValue = rightState.nextValue;
-            state.nextBlock = rightState.nextBlock;
-
-            FunctionState shortState = state;
-            shortState.blockIndex = shortBlockIndex;
-            shortState.values = incomingValues;
-            shortState.valueOrder = incomingOrder;
-            const ValueId shortValue{shortState.nextValue++};
-            currentBlock(shortState)
-                .instructions.push_back(Instruction{.opcode = Opcode::Constant,
-                                                    .result = shortValue,
-                                                    .resultType = result_.module_.types.boolType(),
-                                                    .literal = !logicalAnd,
-                                                    .source = SourceSpan::at(expression.left->location())});
-            state.nextValue = shortState.nextValue;
-            state.nextBlock = shortState.nextBlock;
-
-            BasicBlock& merge = currentBlockAt(state, mergeBlockIndex);
-            const ValueId result{state.nextValue++};
-            merge.parameters.push_back(
-                Parameter{.id = result,
-                          .name = "logical.result",
-                          .type = mapType(expression.refType.Lock(), &expression),
-                          .ownership = ownershipForType(mapType(expression.refType.Lock(), &expression)),
-                          .borrowLifetime = ownershipForType(mapType(expression.refType.Lock(), &expression)) ==
-                                                    ValueOwnership::Borrowed
-                                                ? BorrowLifetime::Caller
-                                                : BorrowLifetime::None,
-                          .source = SourceSpan::at(expression.location())});
-            rememberOwnership(state, result, ownershipForType(mapType(expression.refType.Lock(), &expression)));
-
-            std::vector<ValueId> rightArguments{right};
-            std::vector<ValueId> shortArguments{shortValue};
-            auto mergedValues = incomingValues;
-            for (const sema::Symbol* symbol : incomingOrder)
+            std::vector<const BinaryExpression*> chain;
+            const BinaryExpression* current = &expression;
+            while (current && current->operatorDispatchKind == OperatorDispatchKind::None &&
+                   (logicalAnd ? isLogicalAnd(current->op.type) : isLogicalOr(current->op.type)))
             {
-                const ValueId incoming = incomingValues.at(symbol);
-                const ValueId rightValue = rightState.values.contains(symbol) ? rightState.values.at(symbol) : incoming;
-                if (rightValue == incoming)
-                    continue;
-
-                const ValueId merged{state.nextValue++};
-                merge.parameters.push_back(Parameter{
-                    .id = merged,
-                    .name = symbol->name + ".logical",
-                    .type = mapType(symbol->type, &expression),
-                    .ownership = ownershipForType(mapType(symbol->type, &expression)),
-                    .borrowLifetime = ownershipForType(mapType(symbol->type, &expression)) == ValueOwnership::Borrowed
-                                          ? BorrowLifetime::Caller
-                                          : BorrowLifetime::None,
-                    .source = SourceSpan::at(expression.location())});
-                rememberOwnership(state, merged, ownershipForType(mapType(symbol->type, &expression)));
-                rightArguments.push_back(rightValue);
-                shortArguments.push_back(incoming);
-                mergedValues[symbol] = merged;
+                chain.push_back(current);
+                const auto* nested = current->left ? current->left->as<BinaryExpression>() : nullptr;
+                if (!nested || nested->operatorDispatchKind != OperatorDispatchKind::None ||
+                    !(logicalAnd ? isLogicalAnd(nested->op.type) : isLogicalOr(nested->op.type)))
+                    break;
+                current = nested;
             }
 
-            currentBlock(rightState)
-                .instructions.push_back(Instruction{.opcode = Opcode::Branch,
-                                                    .operands = std::move(rightArguments),
-                                                    .targets = {mergeBlock},
-                                                    .source = SourceSpan::at(expression.right->location())});
-            currentBlock(shortState)
-                .instructions.push_back(Instruction{.opcode = Opcode::Branch,
-                                                    .operands = std::move(shortArguments),
-                                                    .targets = {mergeBlock},
-                                                    .source = SourceSpan::at(expression.left->location())});
+            ValueId accumulated = buildExpression(chain.back()->left, state);
+            if (!accumulated)
+                return {};
+            const std::string prefix = logicalAnd ? "logical.and" : "logical.or";
 
-            state.blockIndex = mergeBlockIndex;
-            state.values = std::move(mergedValues);
-            state.valueOrder = incomingOrder;
-            return result;
+            for (auto iterator = chain.rbegin(); iterator != chain.rend(); ++iterator)
+            {
+                const BinaryExpression& operation = **iterator;
+                const auto incomingValues = state.values;
+                const auto incomingOrder = state.valueOrder;
+                const std::size_t conditionBlockIndex = state.blockIndex;
+                const std::size_t rightBlockIndex =
+                    createBlock(state, prefix + ".rhs", SourceSpan::at(operation.right->location()));
+                const std::size_t shortBlockIndex =
+                    createBlock(state, prefix + ".short", SourceSpan::at(operation.left->location()));
+                const std::size_t mergeBlockIndex =
+                    createBlock(state, prefix + ".merge", SourceSpan::at(operation.location()));
+
+                const BlockId rightBlock = currentBlockAt(state, rightBlockIndex).id;
+                const BlockId shortBlock = currentBlockAt(state, shortBlockIndex).id;
+                const BlockId mergeBlock = currentBlockAt(state, mergeBlockIndex).id;
+                currentBlockAt(state, conditionBlockIndex)
+                    .instructions.push_back(Instruction{.opcode = Opcode::CondBranch,
+                                                        .operands = {accumulated},
+                                                        .targets = logicalAnd
+                                                                       ? std::vector<BlockId>{rightBlock, shortBlock}
+                                                                       : std::vector<BlockId>{shortBlock, rightBlock},
+                                                        .source = SourceSpan::at(operation.location())});
+
+                FunctionState rightState = state;
+                rightState.blockIndex = rightBlockIndex;
+                rightState.values = incomingValues;
+                rightState.valueOrder = incomingOrder;
+                const ValueId right = buildExpression(operation.right, rightState);
+                if (!right)
+                    return {};
+                state.nextValue = rightState.nextValue;
+                state.nextBlock = rightState.nextBlock;
+
+                FunctionState shortState = state;
+                shortState.blockIndex = shortBlockIndex;
+                shortState.values = incomingValues;
+                shortState.valueOrder = incomingOrder;
+                const ValueId shortValue{shortState.nextValue++};
+                currentBlock(shortState)
+                    .instructions.push_back(Instruction{.opcode = Opcode::Constant,
+                                                        .result = shortValue,
+                                                        .resultType = result_.module_.types.boolType(),
+                                                        .literal = !logicalAnd,
+                                                        .source = SourceSpan::at(operation.left->location())});
+                state.nextValue = shortState.nextValue;
+                state.nextBlock = shortState.nextBlock;
+
+                BasicBlock& merge = currentBlockAt(state, mergeBlockIndex);
+                const TypeId resultType = mapType(operation.refType.Lock(), &operation);
+                const ValueOwnership resultOwnership = ownershipForType(resultType);
+                const ValueId result{state.nextValue++};
+                merge.parameters.push_back(Parameter{.id = result,
+                                                     .name = "logical.result",
+                                                     .type = resultType,
+                                                     .ownership = resultOwnership,
+                                                     .borrowLifetime = resultOwnership == ValueOwnership::Borrowed
+                                                                           ? BorrowLifetime::Caller
+                                                                           : BorrowLifetime::None,
+                                                     .source = SourceSpan::at(operation.location())});
+                rememberOwnership(state, result, resultOwnership);
+
+                std::vector<ValueId> rightArguments{right};
+                std::vector<ValueId> shortArguments{shortValue};
+                auto mergedValues = incomingValues;
+                for (const sema::Symbol* symbol : incomingOrder)
+                {
+                    const ValueId incoming = incomingValues.at(symbol);
+                    const ValueId rightValue =
+                        rightState.values.contains(symbol) ? rightState.values.at(symbol) : incoming;
+                    if (rightValue == incoming)
+                        continue;
+
+                    const TypeId mergedType = mapType(symbol->type, &operation);
+                    const ValueOwnership mergedOwnership = ownershipForType(mergedType);
+                    const ValueId merged{state.nextValue++};
+                    merge.parameters.push_back(Parameter{.id = merged,
+                                                         .name = symbol->name + ".logical",
+                                                         .type = mergedType,
+                                                         .ownership = mergedOwnership,
+                                                         .borrowLifetime = mergedOwnership == ValueOwnership::Borrowed
+                                                                               ? BorrowLifetime::Caller
+                                                                               : BorrowLifetime::None,
+                                                         .source = SourceSpan::at(operation.location())});
+                    rememberOwnership(state, merged, mergedOwnership);
+                    rightArguments.push_back(rightValue);
+                    shortArguments.push_back(incoming);
+                    mergedValues[symbol] = merged;
+                }
+
+                currentBlock(rightState)
+                    .instructions.push_back(Instruction{.opcode = Opcode::Branch,
+                                                        .operands = std::move(rightArguments),
+                                                        .targets = {mergeBlock},
+                                                        .source = SourceSpan::at(operation.right->location())});
+                currentBlock(shortState)
+                    .instructions.push_back(Instruction{.opcode = Opcode::Branch,
+                                                        .operands = std::move(shortArguments),
+                                                        .targets = {mergeBlock},
+                                                        .source = SourceSpan::at(operation.left->location())});
+
+                state.blockIndex = mergeBlockIndex;
+                state.values = std::move(mergedValues);
+                state.valueOrder = incomingOrder;
+                accumulated = result;
+            }
+            return accumulated;
         }
 
         void buildIfStatement(const IfStatement& statement, FunctionState& state)

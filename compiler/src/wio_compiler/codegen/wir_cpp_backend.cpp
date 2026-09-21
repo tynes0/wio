@@ -1116,11 +1116,61 @@ template<class T, class U> T* require_object_cast(const U& value) {
     return result;
 }
 template<class T> wio::runtime::RefCountedObject* object_identity(const T& value) { return object_ptr(value); }
-template<class T> std::string stringify(const T& value) { std::ostringstream stream; stream << value; return stream.str(); }
 inline std::string stringify(const bool value) { return value ? "true" : "false"; }
 inline std::string stringify(const std::int8_t value) { return std::to_string(static_cast<std::int32_t>(value)); }
 inline std::string stringify(const std::uint8_t value) { return std::to_string(static_cast<std::uint32_t>(value)); }
 inline std::string stringify(const std::string& value) { return value; }
+template<class T> std::string stringify(const T& value) {
+    if constexpr (std::is_enum_v<T>) {
+        return stringify(static_cast<std::underlying_type_t<T>>(value));
+    } else if constexpr (requires(std::ostringstream& stream) { stream << value; }) {
+        std::ostringstream stream;
+        stream << value;
+        return stream.str();
+    } else {
+        static_assert(!sizeof(T), "Wio value has no string conversion");
+    }
+}
+template<class T> std::string stringify(const wio::runtime::Ref<T>& value)
+    requires requires(T* pointer) { pointer->_WF_ToString(); }
+{
+    if (!value.Get()) return "null";
+    return value.Get()->_WF_ToString();
+}
+template<class T> std::string stringify(const ObjectBorrow<T>& value)
+    requires requires(T* pointer) { pointer->_WF_ToString(); }
+{
+    if (!value.Get()) return "null";
+    return value.Get()->_WF_ToString();
+}
+template<class T> std::string stringify(const std::vector<T>& values) {
+    std::string result = "[";
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index != 0) result += ", ";
+        result += stringify(values[index]);
+    }
+    return result + "]";
+}
+template<class K, class V, class Compare, class Allocator>
+std::string stringify(const std::map<K, V, Compare, Allocator>& values) {
+    std::string result = "{";
+    std::size_t index = 0;
+    for (const auto& [key, value] : values) {
+        if (index++ != 0) result += ", ";
+        result += stringify(key) + ": " + stringify(value);
+    }
+    return result + "}";
+}
+template<class K, class V, class Hash, class Equal, class Allocator>
+std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& values) {
+    std::string result = "{";
+    std::size_t index = 0;
+    for (const auto& [key, value] : values) {
+        if (index++ != 0) result += ", ";
+        result += stringify(key) + ": " + stringify(value);
+    }
+    return result + "}";
+}
 }
 
 )CPP";

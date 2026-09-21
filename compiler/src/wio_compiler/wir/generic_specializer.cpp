@@ -65,6 +65,15 @@ namespace wio::wir
                     request.signatureTypes = entry.parameterTypes;
                     request.resultType = entry.returnType;
                     entry.function = instantiate(request);
+                    const auto concrete = std::ranges::find(module_.functions, entry.function, &Function::id);
+                    if (concrete != module_.functions.end())
+                    {
+                        entry.parameterTypes.clear();
+                        entry.parameterTypes.reserve(concrete->parameters.size());
+                        for (const Parameter& parameter : concrete->parameters)
+                            entry.parameterTypes.push_back(parameter.type);
+                        entry.returnType = concrete->returnType;
+                    }
                 }
                 // Appending a body grows this worklist. Cache entries are registered
                 // before visiting it, so self/mutual recursion closes on existing IDs.
