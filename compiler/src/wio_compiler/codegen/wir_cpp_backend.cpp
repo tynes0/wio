@@ -1120,6 +1120,7 @@ inline std::string stringify(const bool value) { return value ? "true" : "false"
 inline std::string stringify(const std::int8_t value) { return std::to_string(static_cast<std::int32_t>(value)); }
 inline std::string stringify(const std::uint8_t value) { return std::to_string(static_cast<std::uint32_t>(value)); }
 inline std::string stringify(const std::string& value) { return value; }
+inline std::string stringify(const wio::runtime::Text& value) { return value.Utf8(); }
 template<class T> std::string stringify(const T& value) {
     if constexpr (std::is_enum_v<T>) {
         return stringify(static_cast<std::underlying_type_t<T>>(value));
@@ -2117,11 +2118,16 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 {
                     const bool range = instruction.selector.starts_with("range.");
                     std::string args;
-                    for (const ValueId id : instruction.operands)
+                    for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                     {
                         if (!args.empty())
                             args += ", ";
-                        args += operand(id);
+                        const ValueId id = instruction.operands[index];
+                        const Type* operandType = module_.types.tryGet(valueType(id));
+                        if (!range && index == 0 && operandType && operandType->kind == TypeKind::Reference)
+                            args += "wio::wir_backend::value_base(" + operand(id) + ")";
+                        else
+                            args += operand(id);
                     }
                     if (range)
                         args += instruction.selector == "range.inclusive" ? ", true" : ", false";

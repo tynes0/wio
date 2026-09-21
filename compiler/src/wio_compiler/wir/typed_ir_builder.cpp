@@ -1003,28 +1003,49 @@ namespace wio::wir::typed
 
         void collectGlobals(const std::vector<NodePtr<Statement>>& statements)
         {
+            const auto collect = [&](const VariableDeclaration* declaration, const bool nominalMember)
+            {
+                if (!declaration)
+                    return;
+                const Ref<sema::Symbol> symbol =
+                    declaration->name ? declaration->name->referencedSymbol.Lock() : nullptr;
+                if (!symbol ||
+                    (!symbol->flags.get_isGlobal() &&
+                     !(nominalMember && declaration->mutability == Mutability::Const)) ||
+                    globalsBySymbol_.contains(symbol.Get()))
+                    return;
+                const GlobalId id{static_cast<GlobalId::ValueType>(result_.module_.globals.size())};
+                const std::string name =
+                    symbol->scopePath.empty() ? symbol->name : symbol->scopePath + "::" + symbol->name;
+                result_.module_.globals.push_back(Global{.id = id,
+                                                         .name = name,
+                                                         .type = mapType(symbol->type, declaration),
+                                                         .source = SourceSpan::at(declaration->location()),
+                                                         .isMutable = symbol->flags.get_isMutable(),
+                                                         .isConst = symbol->flags.get_isConst()});
+                globalsBySymbol_[symbol.Get()] = id;
+                globalDeclarations_.push_back(
+                    GlobalDeclarationInfo{.declaration = declaration, .symbol = symbol.Get(), .id = id});
+            };
             for (const auto& statement : statements)
             {
                 if (!statement)
                     continue;
                 if (const auto* declaration = statement->as<VariableDeclaration>())
                 {
-                    const Ref<sema::Symbol> symbol =
-                        declaration->name ? declaration->name->referencedSymbol.Lock() : nullptr;
-                    if (!symbol || !symbol->flags.get_isGlobal())
-                        continue;
-                    const GlobalId id{static_cast<GlobalId::ValueType>(result_.module_.globals.size())};
-                    const std::string name =
-                        symbol->scopePath.empty() ? symbol->name : symbol->scopePath + "::" + symbol->name;
-                    result_.module_.globals.push_back(Global{.id = id,
-                                                             .name = name,
-                                                             .type = mapType(symbol->type, declaration),
-                                                             .source = SourceSpan::at(declaration->location()),
-                                                             .isMutable = symbol->flags.get_isMutable(),
-                                                             .isConst = symbol->flags.get_isConst()});
-                    globalsBySymbol_[symbol.Get()] = id;
-                    globalDeclarations_.push_back(
-                        GlobalDeclarationInfo{.declaration = declaration, .symbol = symbol.Get(), .id = id});
+                    collect(declaration, false);
+                    continue;
+                }
+                if (const auto* component = statement->as<ComponentDeclaration>())
+                {
+                    for (const ComponentMember& member : component->members)
+                        collect(member.declaration ? member.declaration->as<VariableDeclaration>() : nullptr, true);
+                    continue;
+                }
+                if (const auto* object = statement->as<ObjectDeclaration>())
+                {
+                    for (const ObjectMember& member : object->members)
+                        collect(member.declaration ? member.declaration->as<VariableDeclaration>() : nullptr, true);
                     continue;
                 }
                 if (const auto* group = statement->as<DeclarationGroup>())
@@ -3462,6 +3483,48 @@ namespace wio::wir::typed
             return payload;
         }
 
+        ValueId buildLeftAssociativeAddition(const BinaryExpression& expression, FunctionState& state)
+        {
+            std::vector<const BinaryExpression*> chain;
+            const BinaryExpression* current = &expression;
+            while (current && current->operatorDispatchKind == OperatorDispatchKind::None &&
+                   current->op.type == TokenType::opPlus)
+            {
+                chain.push_back(current);
+                const auto* nested = current->left ? current->left->as<BinaryExpression>() : nullptr;
+                if (!nested || nested->operatorDispatchKind != OperatorDispatchKind::None ||
+                    nested->op.type != TokenType::opPlus)
+                    break;
+                current = nested;
+            }
+
+            ValueId accumulated = buildAutoReadableExpression(chain.back()->left, state);
+            if (!accumulated)
+                return {};
+            for (auto iterator = chain.rbegin(); iterator != chain.rend(); ++iterator)
+            {
+                const BinaryExpression& operation = **iterator;
+                const ValueId right = buildAutoReadableExpression(operation.right, state);
+                if (!right)
+                    return {};
+                const TypeId resultType = mapType(operation.refType.Lock(), &operation);
+                const ValueOwnership resultOwnership = ownershipForType(resultType);
+                const ValueId result{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Binary,
+                                                                       .result = result,
+                                                                       .resultType = resultType,
+                                                                       .operands = {accumulated, right},
+                                                                       .binaryOperator = BinaryOperator::Add,
+                                                                       .resultOwnership = resultOwnership,
+                                                                       .source = SourceSpan::at(operation.location())});
+                rememberOwnership(state, result, resultOwnership);
+                releaseOwnedTemporary(accumulated, &operation, state);
+                releaseOwnedTemporary(right, &operation, state);
+                accumulated = result;
+            }
+            return accumulated;
+        }
+
         ValueId buildExpression(const NodePtr<Expression>& expression, FunctionState& state)
         {
             if (!expression)
@@ -3931,6 +3994,25 @@ namespace wio::wir::typed
                     member->object && (member->object->is<TypeExpression>() ||
                                        (ownerSymbol && (ownerSymbol->kind == sema::SymbolKind::Struct ||
                                                         ownerSymbol->kind == sema::SymbolKind::TypeAlias)));
+                const Ref<sema::Symbol> memberSymbol = member->referencedSymbol.Lock();
+                const auto staticGlobal =
+                    memberSymbol ? globalsBySymbol_.find(memberSymbol.Get()) : globalsBySymbol_.end();
+                if (isStaticNominalAccess && staticGlobal != globalsBySymbol_.end())
+                {
+                    const Global& descriptor = result_.module_.globals.at(staticGlobal->second.value());
+                    const ValueId globalPlace{state.nextValue++};
+                    currentBlock(state).instructions.push_back(
+                        Instruction{.opcode = Opcode::GlobalPlace,
+                                    .result = globalPlace,
+                                    .resultType = referenceType(descriptor.type, descriptor.isMutable),
+                                    .global = descriptor.id,
+                                    .selector = descriptor.name,
+                                    .resultOwnership = ValueOwnership::Borrowed,
+                                    .borrowLifetime = BorrowLifetime::Caller,
+                                    .source = SourceSpan::at(expression->location())});
+                    rememberOwnership(state, globalPlace, ValueOwnership::Borrowed);
+                    return emitLoad(globalPlace, descriptor.type, expression.Get(), state);
+                }
                 if (isStaticNominalAccess && ownerTypeInfo && ownerTypeInfo->kind == TypeKind::Named &&
                     (ownerTypeInfo->nominalKind == NominalKind::Enum ||
                      ownerTypeInfo->nominalKind == NominalKind::Flagset))
@@ -4139,6 +4221,13 @@ namespace wio::wir::typed
                 if (isLogicalAnd(binary->op.type) || isLogicalOr(binary->op.type))
                 {
                     return buildShortCircuitExpression(*binary, isLogicalAnd(binary->op.type), state);
+                }
+                if (binary->op.type == TokenType::opPlus)
+                {
+                    const auto* nested = binary->left ? binary->left->as<BinaryExpression>() : nullptr;
+                    if (nested && nested->operatorDispatchKind == OperatorDispatchKind::None &&
+                        nested->op.type == TokenType::opPlus)
+                        return buildLeftAssociativeAddition(*binary, state);
                 }
                 if (binary->op.type == TokenType::kwIs)
                 {
@@ -5187,6 +5276,24 @@ namespace wio::wir::typed
                                 .source = SourceSpan::at(expression->location())});
                 rememberOwnership(state, unwrapped, ownershipForType(destinationType));
                 return unwrapped;
+            }
+
+            if (source && destination && source->kind == TypeKind::Text && destination->kind == TypeKind::String)
+            {
+                const ValueId converted{state.nextValue++};
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::IntrinsicCall,
+                                .result = converted,
+                                .resultType = destinationType,
+                                .operands = {value},
+                                .selector = "Utf8",
+                                .signatureTypes = {sourceType},
+                                .intrinsicFamily = IntrinsicFamily::Text,
+                                .targetType = sourceType,
+                                .resultOwnership = ValueOwnership::Owned,
+                                .source = SourceSpan::at(expression->location())});
+                rememberOwnership(state, converted, ValueOwnership::Owned);
+                return converted;
             }
 
             if (!source || !destination || !isSafeNumericWiden(source->kind, destination->kind))
@@ -6315,7 +6422,21 @@ namespace wio::wir::typed
                     iterableType = iterableInfo->arguments.front();
                     iterableInfo = result_.module_.types.tryGet(iterableType);
                 }
-                const ValueId iterable = buildAutoReadableExpression(statement.iterable, state);
+                bool referenceBinding = false;
+                bool mutableReferenceBinding = false;
+                for (const auto& binding : statement.bindings)
+                {
+                    const Ref<sema::Symbol> symbol = binding ? binding->referencedSymbol.Lock() : nullptr;
+                    const TypeId bindingType = symbol ? mapType(symbol->type, binding.Get()) : TypeId{};
+                    const Type* bindingInfo = result_.module_.types.tryGet(bindingType);
+                    if (!bindingInfo || bindingInfo->kind != TypeKind::Reference)
+                        continue;
+                    referenceBinding = true;
+                    mutableReferenceBinding |= bindingInfo->isMutable;
+                }
+                const ValueId iterable = referenceBinding
+                                             ? buildPlace(statement.iterable, mutableReferenceBinding, state)
+                                             : buildAutoReadableExpression(statement.iterable, state);
                 // Building the expression can intern types and invalidate table pointers.
                 iterableInfo = result_.module_.types.tryGet(iterableType);
                 if (!iterable || !iterableInfo ||
@@ -6325,7 +6446,7 @@ namespace wio::wir::typed
                     return;
                 }
                 create.operands.push_back(iterable);
-                create.signatureTypes.push_back(iterableType);
+                create.signatureTypes.push_back(referenceBinding ? emittedValueType(iterable, state) : iterableType);
                 create.selector = iterableInfo->kind == TypeKind::Array ? "array" : "dictionary";
                 if (statement.step)
                 {
@@ -6346,6 +6467,8 @@ namespace wio::wir::typed
             const auto carriedSymbols = state.valueOrder;
             const auto incomingValues = state.values;
             const std::size_t preheaderBlockIndex = state.blockIndex;
+            const std::size_t loopPlaceDepth = state.placeOrder.size();
+            const std::size_t loopTemporaryPlaceDepth = state.temporaryPlaces.size();
 
             const TypeId iteratorType = result_.module_.types.intern(Type{.kind = TypeKind::Iterator,
                                                                           .arguments = {iterableType},
@@ -6454,16 +6577,16 @@ namespace wio::wir::typed
             loopContexts_.push_back(LoopContext{.continueTarget = currentBlockAt(state, advanceBlockIndex).id,
                                                 .breakTarget = currentBlockAt(state, exitBlockIndex).id,
                                                 .carriedSymbols = carriedSymbols,
-                                                .placeDepth = outerPlaceCount,
-                                                .temporaryPlaceDepth = outerTemporaryPlaceCount});
+                                                .placeDepth = loopPlaceDepth,
+                                                .temporaryPlaceDepth = loopTemporaryPlaceDepth});
             buildStatement(statement.body, bodyState);
             loopContexts_.pop_back();
             state.nextValue = bodyState.nextValue;
             state.nextBlock = bodyState.nextBlock;
             if (!blockIsTerminated(bodyState))
             {
-                emitDropsFrom(outerPlaceCount, bodyState, &statement);
-                emitTemporaryDropsFrom(outerTemporaryPlaceCount, bodyState, &statement);
+                emitDropsFrom(loopPlaceDepth, bodyState, &statement);
+                emitTemporaryDropsFrom(loopTemporaryPlaceDepth, bodyState, &statement);
                 currentBlock(bodyState).instructions.push_back(
                     Instruction{.opcode = Opcode::Branch,
                                 .operands = collectCarriedValues(bodyState.values, carriedSymbols, &statement),
@@ -6491,6 +6614,14 @@ namespace wio::wir::typed
             state.valueOrder = carriedSymbols;
             currentBlock(state).instructions.push_back(Instruction{
                 .opcode = Opcode::Release, .operands = {iterator}, .source = SourceSpan::at(statement.location())});
+            emitDropsFrom(outerPlaceCount, state, &statement);
+            emitTemporaryDropsFrom(outerTemporaryPlaceCount, state, &statement);
+            while (state.placeOrder.size() > outerPlaceCount)
+            {
+                state.places.erase(state.placeOrder.back());
+                state.placeOrder.pop_back();
+            }
+            state.temporaryPlaces.resize(outerTemporaryPlaceCount);
         }
 
         void buildCForStatement(const CForStatement& statement, FunctionState& state)
