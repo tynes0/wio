@@ -258,7 +258,7 @@ namespace wio::codegen
             strings("BaseTypes", bases);
             strings("TypeAttributes", typeAttrs);
             strings("TypeAttributeNames", attrNames);
-            strings("FieldAttributes", fieldAttrs);
+            strings("FieldAttributeNames", fieldAttrs);
             strings("TypeAttributeRetentions", attrRetentions);
             strings("TypeAttributeOrigins", attrOrigins);
             strings("TypeAttributeArgumentNames", attrArgNames);

@@ -24,11 +24,10 @@ namespace wio::wir
         std::string thunkSymbol(const std::string_view stableKey)
         {
             std::ostringstream stream;
-            stream << "_wio_native_" << std::hex << std::setfill('0') << std::setw(16)
-                   << stableHash(stableKey);
+            stream << "_wio_native_" << std::hex << std::setfill('0') << std::setw(16) << stableHash(stableKey);
             return stream.str();
         }
-    }
+    } // namespace
 
     NativeAbiPlanResult NativeAbiPlanner::plan(const lowered::Module& module) const
     {
@@ -40,21 +39,19 @@ namespace wio::wir
         std::unordered_set<std::string> plannedKeys;
         auto report = [&](std::string code, std::string message, const lowered::Function* function)
         {
-            result.diagnostics_.push_back(NativeAbiPlanDiagnostic{
-                .code = std::move(code),
-                .message = std::move(message),
-                .function = function ? function->id : FunctionId{},
-                .source = function ? function->source : SourceSpan{}
-            });
+            result.diagnostics_.push_back(
+                NativeAbiPlanDiagnostic{.code = std::move(code),
+                                        .message = std::move(message),
+                                        .function = function ? function->id : FunctionId{},
+                                        .source = function ? function->source : SourceSpan{}});
         };
-        auto append = [&](const lowered::Function& function,
-                          std::string specialization,
-                          std::vector<TypeId> parameterTypes,
-                          const TypeId resultType)
+        auto append = [&](const lowered::Function& function, std::string specialization,
+                          std::vector<TypeId> parameterTypes, const TypeId resultType)
         {
             if (!function.nativeBinding)
             {
-                report("WIRN1001", "Native thunk plan references a function without native binding metadata.", &function);
+                report("WIRN1001", "Native thunk plan references a function without native binding metadata.",
+                       &function);
                 return;
             }
             const NativeBinding& binding = *function.nativeBinding;
@@ -63,29 +60,27 @@ namespace wio::wir
                 concreteKey += ":" + specialization;
             if (!plannedKeys.insert(concreteKey).second)
                 return;
-            result.thunks_.push_back(NativeThunkPlan{
-                .function = function.id,
-                .stableKey = std::move(concreteKey),
-                .specializationKey = std::move(specialization),
-                .thunkSymbol = function.genericParameters.empty()
-                    ? binding.thunkSymbol
-                    : std::string{},
-                .nativeSymbol = binding.symbol,
-                .header = binding.header,
-                .kind = binding.thunkKind,
-                .receiver = binding.receiver,
-                .parameterTypes = std::move(parameterTypes),
-                .resultType = resultType
-            });
+            const bool specialized = binding.thunkKind == NativeThunkKind::TemplateSpecialization;
+            result.thunks_.push_back(NativeThunkPlan{.function = function.id,
+                                                     .stableKey = std::move(concreteKey),
+                                                     .specializationKey = std::move(specialization),
+                                                     .thunkSymbol = specialized ? std::string{} : binding.thunkSymbol,
+                                                     .nativeSymbol = binding.symbol,
+                                                     .header = binding.header,
+                                                     .kind = binding.thunkKind,
+                                                     .receiver = binding.receiver,
+                                                     .parameterTypes = std::move(parameterTypes),
+                                                     .resultType = resultType});
             // The concrete generic symbol must hash the complete key. The
             // initializer above cannot refer to the element being built.
-            if (!function.genericParameters.empty())
+            if (specialized)
                 result.thunks_.back().thunkSymbol = thunkSymbol(result.thunks_.back().stableKey);
         };
 
         for (const lowered::Function& function : module.functions)
         {
-            if (!function.nativeBinding || !function.genericParameters.empty())
+            if (!function.nativeBinding || !function.genericParameters.empty() ||
+                function.nativeBinding->thunkKind == NativeThunkKind::TemplateSpecialization)
                 continue;
             std::vector<TypeId> parameters;
             parameters.reserve(function.nativeBinding->parameters.size());
@@ -102,23 +97,33 @@ namespace wio::wir
                 {
                     if (instruction.opcode != lowered::Opcode::NativeInvoke)
                         continue;
-                    const auto callee = instruction.callee
-                        ? functions.find(instruction.callee.value())
-                        : functions.end();
+                    const auto callee =
+                        instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
                     if (callee == functions.end() || !callee->second->nativeBinding)
                     {
                         report("WIRN1002", "NativeInvoke does not resolve to a native declaration.", &caller);
                         continue;
                     }
-                    if (!callee->second->genericParameters.empty())
+                    if (!callee->second->genericParameters.empty() ||
+                        callee->second->nativeBinding->thunkKind == NativeThunkKind::TemplateSpecialization)
                     {
                         if (instruction.specializationKey.empty())
                         {
-                            report("WIRN1003", "Generic native invocation requires a concrete specialization key.", callee->second);
+                            report("WIRN1003", "Generic native invocation requires a concrete specialization key.",
+                                   callee->second);
                             continue;
                         }
-                        append(*callee->second, instruction.specializationKey,
-                            instruction.signatureTypes, instruction.result ? instruction.resultType : callee->second->returnType);
+                        if (!callee->second->specializationKey.empty() &&
+                            callee->second->specializationKey != instruction.specializationKey)
+                        {
+                            report("WIRN1006",
+                                   "NativeInvoke specialization identity does not match its concrete "
+                                   "native callee.",
+                                   callee->second);
+                            continue;
+                        }
+                        append(*callee->second, instruction.specializationKey, instruction.signatureTypes,
+                               instruction.result ? instruction.resultType : callee->second->returnType);
                     }
                 }
             }
@@ -130,20 +135,20 @@ namespace wio::wir
         {
             if (thunk.stableKey.empty() || thunk.thunkSymbol.empty() || thunk.nativeSymbol.empty() ||
                 !module.types.tryGet(thunk.resultType) ||
-                !std::ranges::all_of(thunk.parameterTypes, [&](const TypeId type)
-                    { return module.types.tryGet(type) != nullptr; }))
+                !std::ranges::all_of(thunk.parameterTypes,
+                                     [&](const TypeId type) { return module.types.tryGet(type) != nullptr; }))
             {
-                const lowered::Function* function = functions.contains(thunk.function.value())
-                    ? functions.at(thunk.function.value()) : nullptr;
+                const lowered::Function* function =
+                    functions.contains(thunk.function.value()) ? functions.at(thunk.function.value()) : nullptr;
                 report("WIRN1004", "Concrete native thunk has an invalid identity or ABI signature.", function);
             }
             if (!symbols.insert(thunk.thunkSymbol).second)
             {
-                const lowered::Function* function = functions.contains(thunk.function.value())
-                    ? functions.at(thunk.function.value()) : nullptr;
+                const lowered::Function* function =
+                    functions.contains(thunk.function.value()) ? functions.at(thunk.function.value()) : nullptr;
                 report("WIRN1005", "Concrete native thunk symbol is not unique.", function);
             }
         }
         return result;
     }
-}
+} // namespace wio::wir

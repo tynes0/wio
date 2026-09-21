@@ -416,7 +416,7 @@ namespace wio::codegen
                                                [&](TypeId argument) { return runtimeAsyncType(argument); });
                 return type.kind == TypeKind::Void || type.kind == TypeKind::Bool || integerKind(type.kind) ||
                        type.kind == TypeKind::F32 || type.kind == TypeKind::F64 || type.kind == TypeKind::String ||
-                       type.kind == TypeKind::Text;
+                       type.kind == TypeKind::Text || type.kind == TypeKind::Opaque;
             }
 
             bool runtimeAsyncBinding(const lowered::Function& function) const
@@ -526,6 +526,8 @@ namespace wio::codegen
                                 instruction.intrinsicFamily != IntrinsicFamily::Enum &&
                                 instruction.intrinsicFamily != IntrinsicFamily::Flagset &&
                                 instruction.intrinsicFamily != IntrinsicFamily::Pack &&
+                                !(instruction.intrinsicFamily == IntrinsicFamily::AsyncTask &&
+                                  (instruction.selector == "Poll" || instruction.selector == "Within")) &&
                                 !wirIntrinsicHelper(instruction.intrinsicFamily, instruction.selector))
                             {
                                 diagnose("WCPP1205",
@@ -1788,6 +1790,59 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                      element + ")"
                                : element;
                 }
+                if (instruction.intrinsicFamily == IntrinsicFamily::AsyncTask && instruction.selector == "Poll")
+                {
+                    const Type& pollType = module_.types.get(instruction.resultType);
+                    const std::string poll = cppType(instruction.resultType);
+                    const std::string task = operand(instruction.operands.front());
+                    const TypeId statusType = pollType.fields.front().type;
+                    const auto status = [&](const std::string_view name)
+                    { return enumCaseExpression(statusType, *findEnumCase(statusType, name)); };
+                    const std::string cancelled = status("cancelled");
+                    const std::string pending = status("pending");
+                    const std::string failed = status("failed");
+                    const std::string ready = status("ready");
+                    if (pollType.fields.size() == 2)
+                    {
+                        return "([&]() -> " + poll + " { if (wio::intrinsics::TaskIsCancelled(" + task + ")) return " +
+                               poll + "::Create(" + cancelled + ", \"\"); if (!wio::intrinsics::TaskIsReady(" + task +
+                               ")) return " + poll + "::Create(" + pending +
+                               ", \"\"); if (wio::intrinsics::TaskIsFaulted(" + task + ")) return " + poll +
+                               "::Create(" + failed + ", wio::runtime::AsyncFailureMessage(" + task + ")); return " +
+                               poll + "::Create(" + ready + ", \"\"); }())";
+                    }
+
+                    const std::string option = cppType(pollType.fields[1].type);
+                    return "([&]() -> " + poll + " { if (wio::intrinsics::TaskIsCancelled(" + task + ")) return " +
+                           poll + "::Create(" + cancelled + ", " + option + "::Create(), \"\"); if " +
+                           "(!wio::intrinsics::TaskIsReady(" + task + ")) return " + poll + "::Create(" + pending +
+                           ", " + option + "::Create(), \"\"); if (wio::intrinsics::TaskIsFaulted(" + task +
+                           ")) return " + poll + "::Create(" + failed + ", " + option +
+                           "::Create(), wio::runtime::AsyncFailureMessage(" + task + ")); return " + poll +
+                           "::Create(" + ready + ", " + option + "::Create(wio::intrinsics::TaskBlock(" + task +
+                           ")), \"\"); }())";
+                }
+                if (instruction.intrinsicFamily == IntrinsicFamily::AsyncTask && instruction.selector == "Within")
+                {
+                    const Type& resultTask = module_.types.get(instruction.resultType);
+                    const TypeId payloadType = resultTask.arguments.front();
+                    const Type& payload = module_.types.get(payloadType);
+                    const std::string task = operand(instruction.operands.front());
+                    const std::string milliseconds = operand(instruction.operands[1]);
+                    std::string timeoutValue = "false";
+                    std::string completedValue = "true";
+                    if (payload.nominalValueModel == NominalValueModel::Option)
+                    {
+                        const std::string option = cppType(payloadType);
+                        timeoutValue = option + "::Create()";
+                        completedValue = option + "::Create(wio::intrinsics::TaskBlock(task))";
+                    }
+                    return "wio::runtime::RunAsync<" + cppType(payloadType) + ">([task = " + task +
+                           ", milliseconds = " + milliseconds + "]() mutable -> " + cppType(payloadType) +
+                           " { if (!wio::intrinsics::TaskWaitFor(task, milliseconds)) { " +
+                           "wio::intrinsics::TaskCancel(task); return " + timeoutValue + "; } return " +
+                           completedValue + "; })";
+                }
                 if (const auto helper = wirIntrinsicHelper(instruction.intrinsicFamily, instruction.selector))
                 {
                     std::vector<std::string> arguments;
@@ -1965,7 +2020,11 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     {
                         if (index)
                             captures += ", ";
-                        captures += "_c" + std::to_string(index) + " = " + operand(instruction.operands[index]);
+                        std::string capturedValue = operand(instruction.operands[index]);
+                        if (index < instruction.captureKinds.size() &&
+                            instruction.captureKinds[index] == CaptureKind::RetainedSelf)
+                            capturedValue += ".read()";
+                        captures += "_c" + std::to_string(index) + " = " + capturedValue;
                     }
                     captures += "]";
                     const Type& callable = module_.types.get(instruction.resultType);
@@ -2054,6 +2113,9 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                                   operand(instruction.operands[0]) + ".size())");
                     break;
                 case lowered::Opcode::ArrayElement:
+                    assignResult(instruction, operand(instruction.operands[0]) + "[" +
+                                                  std::to_string(instruction.projectionIndex) + "]");
+                    break;
                 case lowered::Opcode::ArrayGet:
                     if (instruction.boundsCheck == lowered::BoundsCheckMode::Required)
                         assignResult(instruction, "wio::intrinsics::Index(" + operand(instruction.operands[0]) + ", " +

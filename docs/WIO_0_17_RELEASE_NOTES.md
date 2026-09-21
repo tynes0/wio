@@ -101,6 +101,12 @@ project matrices.
 `--cpp-backend legacy` remains available for this release line as an explicit
 rollback and differential oracle. WIR never falls back to it automatically.
 
+The cutover also freezes native callback lifetime and thread affinity through
+the parameter-level `[attribute::NativeCallback]` contract. The standard async
+and concurrency modules mark callbacks that escape to worker threads as
+`("retained", "any")`; ordinary native callbacks remain call-scoped and
+caller-thread-only.
+
 Automatic owned-system and compiler-consumed composed-attribute discovery are
 currently source-order local. Import-aware and forward discovery require
 application lowering to move into semantic analysis and remain tracked before

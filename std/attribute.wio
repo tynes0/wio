@@ -137,6 +137,12 @@ realm std {
         [RequiresAny("Native", "Export")]
         attribute CppName(name: string);
 
+        // Freezes how a native function may retain and invoke a callback.
+        // Supported lifetimes are "call" and "retained"; supported thread
+        // affinities are "caller" and "any".
+        [Targets("parameter")]
+        attribute NativeCallback(lifetime: string = "call", thread: string = "caller");
+
         [Targets("object", "component", "fn", "method")]
         attribute Instantiate(typeArguments: string[]);
 

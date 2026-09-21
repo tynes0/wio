@@ -1058,3 +1058,8 @@ here as historical evidence rather than active work:
       file and project commands. `--cpp-backend legacy` remains available for
       one release line as an explicit rollback and differential oracle; there is
       no automatic AST fallback.
+- [x] The final Sprint 17 parity pass covers async task intrinsics, task polling
+      and bounded waits, retained lambda/self captures, expression-bodied unit
+      lambdas, match destructuring places, fixed-array projection, runtime field
+      attribute reflection, concrete native-generic thunk identities, and
+      explicit retained/any-thread native callback contracts.

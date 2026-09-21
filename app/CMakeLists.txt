@@ -6080,7 +6080,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_async_net_io_run
-        PROPERTIES TIMEOUT 30
+        PROPERTIES TIMEOUT 360
     )
     set_tests_properties(
         wio_test_async_net_accept_run

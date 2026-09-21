@@ -210,6 +210,8 @@ namespace wio::wir::typed
                 return IntrinsicFamily::String;
             case TypeKind::Text:
                 return IntrinsicFamily::Text;
+            case TypeKind::AsyncTask:
+                return IntrinsicFamily::AsyncTask;
             case TypeKind::GenericParameterPack:
             case TypeKind::ValuePack:
             case TypeKind::TypePack:
@@ -573,6 +575,32 @@ namespace wio::wir::typed
                  binding.symbol == "wio::runtime::EnumTryFromRaw" || binding.symbol == "wio::runtime::EnumFromRaw");
             for (const Ref<sema::Type>& parameter : functionType.paramTypes)
                 binding.parameters.push_back(nativeAbiValue(mapType(parameter, &declaration), false));
+            for (std::size_t index = 0; index < declaration.parameters.size() && index < binding.parameters.size();
+                 ++index)
+            {
+                for (const NodePtrUnchecked<AttributeStatement>& attribute : declaration.parameters[index].attributes)
+                {
+                    if (!attribute)
+                        continue;
+                    const std::string_view name = attribute->canonicalName.empty()
+                                                      ? std::string_view{attribute->qualifiedName}
+                                                      : std::string_view{attribute->canonicalName};
+                    if (name != "std::attribute::NativeCallback" && name != "attribute::NativeCallback" &&
+                        name != "NativeCallback")
+                        continue;
+
+                    const std::string lifetime = attribute->args.empty() ? "call" : attribute->args[0].value;
+                    const std::string thread = attribute->args.size() < 2 ? "caller" : attribute->args[1].value;
+                    if (lifetime == "retained")
+                        binding.parameters[index].callbackLifetime = NativeCallbackLifetime::Retained;
+                    else if (lifetime != "call")
+                        report("WIR2401", "NativeCallback lifetime must be 'call' or 'retained'.", attribute.Get());
+                    if (thread == "any")
+                        binding.parameters[index].callbackThread = NativeCallbackThread::Any;
+                    else if (thread != "caller")
+                        report("WIR2402", "NativeCallback thread must be 'caller' or 'any'.", attribute.Get());
+                }
+            }
             binding.result = nativeAbiValue(function.returnType, true);
             const bool needsMarshalling =
                 std::ranges::any_of(binding.parameters,
@@ -2747,6 +2775,21 @@ namespace wio::wir::typed
                     const ValueId value = buildExpressionAs(expressionBody->expression, function.returnType, state);
                     if (value)
                         resultInstruction.operands.push_back(value);
+                }
+                else
+                {
+                    const ValueId discarded = buildExpression(expressionBody->expression, state);
+                    const TypeId discardedType = expressionBody->expression
+                                                     ? mapExpressionType(expressionBody->expression, expressionBody)
+                                                     : TypeId{};
+                    if (discarded && typeRequiresCleanup(discardedType) &&
+                        valueOwnership(state, discarded) == ValueOwnership::Owned)
+                    {
+                        currentBlock(state).instructions.push_back(
+                            Instruction{.opcode = Opcode::Release,
+                                        .operands = {discarded},
+                                        .source = SourceSpan::at(expressionBody->location())});
+                    }
                 }
                 emitDropsFrom(0, state, &lambda);
                 emitTemporaryDropsFrom(0, state, &lambda);
@@ -4962,9 +5005,17 @@ namespace wio::wir::typed
                     // so an immutable `let` binding may still expose mutable object fields.
                     base = buildExpression(member->object, state);
                 }
+                bool identifierHasStablePlace = false;
+                if (const auto* identifier = member->object->as<Identifier>())
+                {
+                    const Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
+                    identifierHasStablePlace =
+                        symbol && (state.places.contains(symbol.Get()) || globalsBySymbol_.contains(symbol.Get()) ||
+                                   (objectTypeInfo && objectTypeInfo->kind == TypeKind::Reference));
+                }
                 const bool hasStablePlace =
                     !base && objectTypeInfo &&
-                    (member->object->is<Identifier>() || member->object->is<SelfExpression>() ||
+                    (identifierHasStablePlace || member->object->is<SelfExpression>() ||
                      member->object->is<SuperExpression>() || member->object->is<MemberAccessExpression>() ||
                      member->object->is<ArrayAccessExpression>() ||
                      (member->object->is<UnaryExpression>() &&

@@ -94,7 +94,8 @@ namespace wio::wir
         Result,
         Tuple,
         Span,
-        Pack
+        Pack,
+        AsyncTask
     };
 
     enum class FieldVisibility : std::uint8_t

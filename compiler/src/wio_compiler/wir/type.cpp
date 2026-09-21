@@ -231,6 +231,8 @@ namespace wio::wir
             return "span";
         case IntrinsicFamily::Pack:
             return "pack";
+        case IntrinsicFamily::AsyncTask:
+            return "async-task";
         }
         return "none";
     }

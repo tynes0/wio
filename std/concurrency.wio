@@ -1,5 +1,6 @@
 use std::option as option;
 use std::result as result;
+use std::attribute as attribute;
 
 realm std {
     realm concurrency {
@@ -69,7 +70,8 @@ realm std {
             }
         }
 
-        fn ThreadStart(action: fn()) -> opaque with native, cpp::name(wio::runtime::std_concurrency::ThreadStart);
+        fn ThreadStart([attribute::NativeCallback("retained", "any")] action: fn()) -> opaque
+            with native, cpp::name(wio::runtime::std_concurrency::ThreadStart);
         fn ThreadJoinable(handle: opaque) -> bool with native, cpp::name(wio::runtime::std_concurrency::ThreadJoinable);
         fn ThreadJoin(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::ThreadJoin);
         fn ThreadDetach(handle: opaque) with native, cpp::name(wio::runtime::std_concurrency::ThreadDetach);
