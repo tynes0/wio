@@ -1253,6 +1253,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 for (TypeId id : nominalOrder())
                 {
                     const auto& type = module_.types.get(id);
+                    if (type.nominalKind != NominalKind::Object && type.nominalKind != NominalKind::Interface)
+                        continue;
                     for (const auto& entry : type.dispatchEntries)
                     {
                         if (!entry.implementation)

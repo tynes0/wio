@@ -244,7 +244,10 @@ realm std {
         OnConstruct(value: T) { self.present = true; self.value = value; }
         OnConstruct() { self.present = false; }
     }
-    component ResultError { public code: i32; }
+    component ResultError {
+        public code: i32;
+        fn operator==(right: ResultError) -> bool { return self.code == right.code; }
+    }
     object Result<T> {
         private ok: bool;
         private value: T;

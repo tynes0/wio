@@ -12,6 +12,7 @@
 #include "wio/sema/type.h"
 
 #include <algorithm>
+#include <charconv>
 #include <functional>
 #include <iomanip>
 #include <optional>
@@ -480,10 +481,29 @@ namespace wio::wir::typed
                     return result_.module_.types.intern(std::move(rebound));
                 }
             }
-            if (sourceType->arguments.empty())
+            if (sourceType->arguments.empty() && !sourceType->extentParameter)
                 return source;
             Type instantiated = *sourceType;
             bool changed = false;
+            if (instantiated.extentParameter)
+            {
+                const TypeId extent = substituteGenericType(instantiated.extentParameter, parameters, arguments);
+                changed |= extent != instantiated.extentParameter;
+                instantiated.extentParameter = extent;
+                const Type* extentType = result_.module_.types.tryGet(extent);
+                std::size_t value = 0;
+                if (extentType && extentType->kind == TypeKind::ConstValue)
+                {
+                    const auto parsed = std::from_chars(extentType->name.data(),
+                                                        extentType->name.data() + extentType->name.size(), value);
+                    if (parsed.ec == std::errc{} && parsed.ptr == extentType->name.data() + extentType->name.size())
+                    {
+                        instantiated.staticExtent = value;
+                        instantiated.extentParameter = {};
+                        changed = true;
+                    }
+                }
+            }
             std::vector<TypeId> substitutedArguments;
             for (const TypeId argument : instantiated.arguments)
             {
@@ -2605,13 +2625,35 @@ namespace wio::wir::typed
         std::vector<TypeId> genericArguments(const FunctionCallExpression& call, const Ref<sema::Symbol>& symbol,
                                              const Ref<sema::Type>& selectedCallableType)
         {
+            const auto mapArgument = [&](Ref<sema::Type> argument, const std::size_t index) -> TypeId
+            {
+                Ref<sema::Type> parameter =
+                    symbol && index < symbol->genericParameterTypes.size() ? symbol->genericParameterTypes[index]
+                                                                         : nullptr;
+                while (parameter && parameter->kind() == sema::TypeKind::Alias)
+                    parameter = parameter.AsFast<sema::AliasType>()->aliasedType;
+                if (argument && argument->kind() == sema::TypeKind::ConstValue && parameter &&
+                    parameter->kind() == sema::TypeKind::ConstGenericParameter)
+                {
+                    const auto value = argument.AsFast<sema::ConstValueType>();
+                    const auto constParameter = parameter.AsFast<sema::ConstGenericParameterType>();
+                    return result_.module_.types.intern(
+                        Type{.kind = TypeKind::ConstValue,
+                             .name = value->value,
+                             .arguments = {mapType(constParameter->valueType, &call)}});
+                }
+                return mapType(argument, &call);
+            };
             if (!call.resolvedGenericArguments.empty())
             {
                 std::vector<TypeId> arguments;
                 arguments.reserve(call.resolvedGenericArguments.size());
-                for (const WeakRef<sema::Type>& argument : call.resolvedGenericArguments)
+                for (std::size_t index = 0; index < call.resolvedGenericArguments.size(); ++index)
+                {
+                    const WeakRef<sema::Type>& argument = call.resolvedGenericArguments[index];
                     if (const Ref<sema::Type> type = argument.Lock())
-                        arguments.push_back(mapType(type, &call));
+                        arguments.push_back(mapArgument(type, index));
+                }
                 return arguments;
             }
 
@@ -2619,9 +2661,12 @@ namespace wio::wir::typed
             {
                 std::vector<TypeId> arguments;
                 arguments.reserve(call.explicitTypeArguments.size());
-                for (const NodePtr<TypeSpecifier>& argument : call.explicitTypeArguments)
+                for (std::size_t index = 0; index < call.explicitTypeArguments.size(); ++index)
+                {
+                    const NodePtr<TypeSpecifier>& argument = call.explicitTypeArguments[index];
                     if (argument)
-                        arguments.push_back(mapType(argument->refType.Lock(), &call));
+                        arguments.push_back(mapArgument(argument->refType.Lock(), index));
+                }
                 return arguments;
             }
 
@@ -2632,11 +2677,12 @@ namespace wio::wir::typed
             std::vector<TypeId> arguments;
             if (symbol)
             {
-                for (const std::string& name : symbol->genericParameterNames)
+                for (std::size_t index = 0; index < symbol->genericParameterNames.size(); ++index)
                 {
+                    const std::string& name = symbol->genericParameterNames[index];
                     const auto found = bindings.find(name);
                     if (found != bindings.end())
-                        arguments.push_back(mapType(found->second, &call));
+                        arguments.push_back(mapArgument(found->second, index));
                 }
             }
             return arguments;

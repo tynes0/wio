@@ -44,6 +44,12 @@ namespace wio::wir::typed
             }
             if (type->kind == TypeKind::Reference)
                 description += type->isMutable ? "(mut)" : "(view)";
+            if (type->staticExtent)
+                description += "[extent=" + std::to_string(*type->staticExtent) + "]";
+            if (type->extentParameter)
+                description += "[extent-parameter=#" + std::to_string(type->extentParameter.value()) + "]";
+            description += "[ownership=" + std::string(ownershipModelName(type->ownership)) + ",cleanup=" +
+                           std::string(cleanupKindName(type->cleanup)) + "]";
             if (!type->arguments.empty())
             {
                 description += "<";

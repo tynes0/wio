@@ -45,6 +45,7 @@ namespace wio::wir
                     {
                         instances_.emplace(function.specializationKey, function.id);
                         instanceKeys_.emplace(function.id, function.specializationKey);
+                        ++instanceCounts_[function.genericOrigin];
                     }
                 }
             }
@@ -106,7 +107,14 @@ namespace wio::wir
                                  ++argumentIndex)
                             {
                                 const TypeId oldType = instruction.signatureTypes[argumentIndex];
-                                const TypeId concreteType = concrete->parameters[argumentIndex].type;
+                                // A closure body's hidden parameters are references to its capture storage,
+                                // while ClosureCreate consumes the captured values themselves.  Reconcile
+                                // those operands against the concrete capture layout, not the hidden ABI.
+                                const TypeId concreteType =
+                                    instruction.opcode == Opcode::ClosureCreate &&
+                                            argumentIndex < concrete->captures.size()
+                                        ? concrete->captures[argumentIndex].type
+                                        : concrete->parameters[argumentIndex].type;
                                 if (oldType == concreteType)
                                     continue;
                                 instruction.signatureTypes[argumentIndex] = concreteType;
@@ -259,7 +267,9 @@ namespace wio::wir
             std::map<TypeId, std::vector<MethodLayout>> processedMethods_;
             std::map<std::string, FunctionId> instances_;
             std::map<FunctionId, std::string> instanceKeys_;
+            std::map<FunctionId, std::size_t> instanceCounts_;
             std::vector<SpecializationDiagnostic> diagnostics_;
+            std::string lastBindMismatch_;
             FunctionId::ValueType nextId_ = 0;
             std::size_t maximumBodies_;
 
@@ -355,18 +365,29 @@ namespace wio::wir
                 const Type patternType = module_.types.get(pattern), actualType = module_.types.get(actual);
                 const Type* p = &patternType;
                 const Type* a = &actualType;
+                if (nativeAbiTypeKey(module_.types, pattern) == nativeAbiTypeKey(module_.types, actual))
+                    return true;
                 if (parameterKind(p->kind))
                 {
                     const auto [it, inserted] = bindings.emplace(pattern, actual);
                     if (inserted || it->second == actual)
                         return true;
                     const Type& previous = module_.types.get(it->second);
+                    if (nativeAbiTypeKey(module_.types, it->second) == nativeAbiTypeKey(module_.types, actual))
+                        return true;
                     const bool previousPack = previous.kind == TypeKind::TypePack ||
                                               previous.kind == TypeKind::ValuePack ||
                                               previous.kind == TypeKind::PackStorage;
                     const bool actualPack = a->kind == TypeKind::TypePack || a->kind == TypeKind::ValuePack ||
                                             a->kind == TypeKind::PackStorage;
-                    return previousPack && actualPack && previous.arguments == a->arguments;
+                    if (previousPack && actualPack && previous.arguments == a->arguments)
+                        return true;
+                    lastBindMismatch_ = "parameter #" + std::to_string(pattern.value()) + " was bound to #" +
+                                        std::to_string(it->second.value()) + " (" +
+                                        nativeAbiTypeKey(module_.types, it->second) + ") but inferred #" +
+                                        std::to_string(actual.value()) + " (" +
+                                        nativeAbiTypeKey(module_.types, actual) + ")";
+                    return false;
                 }
                 const bool hasTrailingPack = !p->arguments.empty() && module_.types.get(p->arguments.back()).kind ==
                                                                           TypeKind::GenericParameterPack;
@@ -1112,6 +1133,7 @@ namespace wio::wir
 
             FunctionId instantiate(const Instruction& request)
             {
+                lastBindMismatch_.clear();
                 const auto found = templates_.find(request.callee);
                 if (found == templates_.end())
                     return request.callee;
@@ -1124,9 +1146,14 @@ namespace wio::wir
                     source.genericParameters.size() - static_cast<std::size_t>(hasGenericPack);
                 bool valid = hasGenericPack ? request.genericArguments.size() >= fixedGenericCount
                                             : request.genericArguments.size() <= source.genericParameters.size();
+                std::string failureStage = valid ? std::string{} : "generic-argument-count";
                 for (std::size_t i = 0; valid && i < fixedGenericCount && i < request.genericArguments.size(); ++i)
                     if (!openType(request.genericArguments[i]))
+                    {
                         valid = bind(source.genericParameters[i], request.genericArguments[i], bindings);
+                        if (!valid)
+                            failureStage = "explicit-generic-argument";
+                    }
                 if (valid && hasGenericPack && request.genericArguments.size() > fixedGenericCount)
                 {
                     Type pack{.kind = TypeKind::TypePack};
@@ -1176,8 +1203,14 @@ namespace wio::wir
                 if (packParameter == source.parameters.end())
                 {
                     valid &= signature.size() == source.parameters.size();
+                    if (!valid && failureStage.empty())
+                        failureStage = "parameter-count";
                     for (std::size_t i = 0; valid && i < signature.size(); ++i)
+                    {
                         valid = bind(source.parameters[i].type, signature[i], bindings);
+                        if (!valid)
+                            failureStage = "parameter-" + std::to_string(i);
+                    }
                 }
                 else
                 {
@@ -1204,7 +1237,10 @@ namespace wio::wir
                         }
                     }
                 }
-                valid &= bind(source.returnType, result, bindings);
+                const bool resultBound = valid && bind(source.returnType, result, bindings);
+                if (valid && !resultBound)
+                    failureStage = "result";
+                valid = resultBound;
                 if (valid && hasGenericPack && !bindings.contains(source.genericParameters.back()))
                 {
                     Type pack{.kind = TypeKind::TypePack};
@@ -1221,7 +1257,7 @@ namespace wio::wir
                             << "' from its pinned signature (generic arguments=" << request.genericArguments.size()
                             << ", generic parameters=" << source.genericParameters.size()
                             << ", signature=" << signature.size() << ", parameters=" << source.parameters.size()
-                            << ", bindings=" << bindings.size();
+                            << ", bindings=" << bindings.size() << ", stage=" << failureStage;
                     for (std::size_t index = 0; index < std::min(signature.size(), source.parameters.size()); ++index)
                         details << ", p" << index << "=!t" << source.parameters[index].type.value() << ':'
                                 << typeKindName(module_.types.get(source.parameters[index].type).kind) << "->!t"
@@ -1229,6 +1265,8 @@ namespace wio::wir
                                 << typeKindName(module_.types.get(signature[index]).kind) << '['
                                 << nativeAbiTypeKey(module_.types, source.parameters[index].type) << "->"
                                 << nativeAbiTypeKey(module_.types, signature[index]) << ']';
+                    if (!lastBindMismatch_.empty())
+                        details << ", mismatch=" << lastBindMismatch_;
                     details << ").";
                     fail(details.str(), request.source);
                     return request.callee;
@@ -1236,10 +1274,10 @@ namespace wio::wir
                 std::ostringstream key;
                 key << source.id.value();
                 for (const auto& [p, actual] : bindings)
-                    key << ':' << p.value() << '=' << actual.value();
+                    key << ':' << p.value() << '=' << nativeAbiTypeKey(module_.types, actual);
                 if (const auto it = instances_.find(key.str()); it != instances_.end())
                     return it->second;
-                if (instances_.size() >= maximumBodies_)
+                if (instanceCounts_[source.id] >= maximumBodies_)
                 {
                     diagnostics_.push_back({"WIR3101",
                                             "Generic materialization of '" + source.name +
@@ -1251,6 +1289,7 @@ namespace wio::wir
                 const FunctionId id{nextId_++};
                 instances_[key.str()] = id;
                 instanceKeys_[id] = key.str();
+                ++instanceCounts_[source.id];
                 Function function = source;
                 if (function.nativeBinding)
                 {
