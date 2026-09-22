@@ -465,7 +465,8 @@ int main(int argc, char** argv)
                 auto invalid = WirCppBackend{}.generate(behavioral);
                 bool rejectedBehavior = false;
                 for (const auto& d : invalid.diagnostics())
-                    rejectedBehavior |= d.code == "WCPP1215";
+                    rejectedBehavior |= d.code == "WCPP1215" ||
+                                        (d.code == "WCPP1000" && d.message.find("LIR1509") != std::string::npos);
                 if (!expect(!invalid.succeeded() && rejectedBehavior,
                             "behavioral attribute must never be silently omitted"))
                     return 1;

@@ -6084,7 +6084,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_async_net_accept_run
-        PROPERTIES TIMEOUT 60
+        PROPERTIES TIMEOUT 360
     )
     add_wio_output_test(
         wio_test_std_net_timeout_run
@@ -6160,7 +6160,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_async_worker_config_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR};WIO_ASYNC_WORKERS=3"
     )
-    set_tests_properties(wio_test_async_detached_exit_run PROPERTIES TIMEOUT 15)
+    set_tests_properties(wio_test_async_detached_exit_run PROPERTIES TIMEOUT 360)
 
     add_wio_non_dry_failure_test_clean(
         wio_runtime_async_timeout

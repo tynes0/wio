@@ -218,6 +218,8 @@ namespace wio::wir
         NominalKind nominalKind = NominalKind::None;
         bool isExported = false;
         bool runtimeVisible = true;
+        std::vector<std::string> genericParameterNames;
+        std::vector<TypeId> genericArguments;
         std::vector<std::uint64_t> attributes;
         std::vector<ReflectedFieldDescriptor> fields;
         std::vector<ReflectedMethodDescriptor> methods;

@@ -1,5 +1,6 @@
 #include "wio/codegen/wir_module_emitter.h"
 #include "wio/codegen/wir_application_emitter.h"
+#include "wio/codegen/wir_cpp_text.h"
 #include "wio/codegen/wir_reflection_emitter.h"
 #include "wio/wir/native_abi_types.h"
 #include <algorithm>
@@ -18,9 +19,7 @@ namespace wio::codegen
         using namespace wir;
         std::string quoted(const std::string& value)
         {
-            std::ostringstream s;
-            s << std::quoted(value);
-            return s.str();
+            return WirCppText::quote(value);
         }
         std::string functionName(FunctionId id)
         {
@@ -372,6 +371,31 @@ namespace wio::codegen
                "&_task_api; "
                "}\n";
         const auto& exports = module.contract.exports;
+        std::set<std::uint64_t> directExports;
+        for (const auto& entry : exports)
+        {
+            if (!entry.function || entry.isAsync || entry.kind != ModuleExportKind::Function)
+                continue;
+            directExports.insert(entry.stableId);
+            out << "extern \"C\" WIO_WIR_EXPORT " << type(entry.returnType) << ' ' << entry.symbolName << '(';
+            for (std::size_t parameterIndex = 0; parameterIndex < entry.parameterTypes.size(); ++parameterIndex)
+            {
+                if (parameterIndex > 0)
+                    out << ',';
+                out << type(entry.parameterTypes[parameterIndex]) << " p" << parameterIndex;
+            }
+            out << "){";
+            if (module.types.get(entry.returnType).kind != TypeKind::Void)
+                out << "return ";
+            out << functionName(entry.function) << '(';
+            for (std::size_t parameterIndex = 0; parameterIndex < entry.parameterTypes.size(); ++parameterIndex)
+            {
+                if (parameterIndex > 0)
+                    out << ',';
+                out << "p" << parameterIndex;
+            }
+            out << ");}\n";
+        }
         std::vector<std::size_t> legacyAsyncExports;
         for (std::size_t exportIndex = 0; exportIndex < exports.size(); ++exportIndex)
         {
@@ -533,6 +557,8 @@ namespace wio::codegen
             legacyExport.symbolName = e.symbolName;
             legacyExport.returnKind = legacyAbiKind(e.returnType);
             legacyExport.invokeName = "_legacy" + std::to_string(i);
+            if (directExports.contains(e.stableId))
+                legacyExport.rawFunction = "reinterpret_cast<const void*>(&" + e.symbolName + ")";
             legacyExport.contractExport = &e;
             for (auto parameter : e.parameterTypes)
                 legacyExport.parameterKinds.push_back(legacyAbiKind(parameter));
@@ -639,7 +665,7 @@ namespace wio::codegen
                         value = value.substr(1, value.size() - 2);
                     argumentText += value;
                 }
-                out << '{' << quoted(attribute.canonicalName) << ',' << quoted(argumentText) << ','
+                out << '{' << WirCppText::quote(attribute.canonicalName) << ',' << WirCppText::quote(argumentText) << ','
                     << legacyAttributeOrigin(attribute.origin) << ',' << attribute.processors.size() << "u,"
                     << (attribute.processors.empty() ? "nullptr"
                                                      : "_legacy_attribute_processors_" + std::to_string(tableIndex) +

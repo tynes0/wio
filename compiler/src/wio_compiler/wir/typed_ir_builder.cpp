@@ -150,6 +150,7 @@ namespace wio::wir::typed
         std::unordered_map<const sema::Symbol*, const FunctionDeclaration*> declarationsBySymbol_;
         std::unordered_map<const sema::Symbol*, GlobalId> globalsBySymbol_;
         std::unordered_map<const sema::Type*, TypeId> typesBySemanticType_;
+        std::unordered_map<TypeId::ValueType, std::vector<std::string>> genericParameterNamesByType_;
         std::unordered_map<const LambdaExpression*, FunctionId> lambdaFunctions_;
         FunctionId::ValueType nextFunctionId_ = 0;
         std::vector<LoopContext> loopContexts_;
@@ -1325,7 +1326,9 @@ namespace wio::wir::typed
                                          .logicalName = type.name,
                                          .type = typeId,
                                          .nominalKind = type.nominalKind,
-                                         .isExported = exportedTypes.contains(typeId.value())});
+                                         .isExported = exportedTypes.contains(typeId.value()),
+                                         .genericParameterNames = genericParameterNamesByType_[typeId.value()],
+                                         .genericArguments = type.arguments});
             }
         }
 
@@ -2345,6 +2348,7 @@ namespace wio::wir::typed
 
                 const TypeId id = result_.module_.types.internNominal(std::move(wirType));
                 typesBySemanticType_[type.Get()] = id;
+                genericParameterNamesByType_[id.value()] = identity->genericParameterNames;
 
                 std::vector<TypeId> baseTypes;
                 baseTypes.reserve(structure->baseTypes.size());

@@ -256,6 +256,25 @@ namespace wio::codegen
             strings("MethodSignatures", signatures);
             strings("MethodAccess", methodAccess);
             strings("BaseTypes", bases);
+            if (!r.genericParameterNames.empty())
+            {
+                out << "    static std::vector<std::string> _WIOGenericParameterNames() { return {";
+                for (std::size_t index = 0; index < r.genericParameterNames.size(); ++index)
+                {
+                    if (index > 0)
+                        out << ", ";
+                    out << WirCppText::quote(r.genericParameterNames[index]);
+                }
+                out << "}; }\n";
+                out << "    static std::vector<std::string> _WIOGenericArguments() { return {";
+                for (std::size_t index = 0; index < r.genericArguments.size(); ++index)
+                {
+                    if (index > 0)
+                        out << ", ";
+                    out << WirCppText::quote(name(r.genericArguments[index]));
+                }
+                out << "}; }\n";
+            }
             strings("TypeAttributes", typeAttrs);
             strings("TypeAttributeNames", attrNames);
             strings("FieldAttributeNames", fieldAttrs);
