@@ -1,5 +1,6 @@
 use std::concurrency as concurrency;
 use std::option as option;
+use std::attribute as attribute;
 
 realm std {
     realm async {
@@ -147,16 +148,16 @@ realm std {
             return VoidTaskPoll(TaskStatus::ready, "");
         }
 
-        fn Run<T>(action: fn() -> T) -> coroutine<T>
+        fn Run<T>([attribute::NativeCallback("retained", "any")] action: fn() -> T) -> coroutine<T>
             with native, cpp::name(wio::runtime::RunAsync);
 
-        fn Run(action: fn()) -> coroutine<void>
+        fn Run([attribute::NativeCallback("retained", "any")] action: fn()) -> coroutine<void>
             with native, cpp::name(wio::runtime::RunAsync);
 
-        fn RunBlocking<T>(action: fn() -> T) -> coroutine<T>
+        fn RunBlocking<T>([attribute::NativeCallback("retained", "any")] action: fn() -> T) -> coroutine<T>
             with native, cpp::name(wio::runtime::RunBlockingAsync);
 
-        fn RunBlocking(action: fn()) -> coroutine<void>
+        fn RunBlocking([attribute::NativeCallback("retained", "any")] action: fn()) -> coroutine<void>
             with native, cpp::name(wio::runtime::RunBlockingAsync);
 
         fn All<T>(tasks: coroutine<T>[]) -> coroutine<T[]>
@@ -451,16 +452,25 @@ realm std {
         fn ScopeSpawn<T>(handle: opaque, task: coroutine<T>) -> coroutine<T>
             with native, cpp::name(wio::runtime::AsyncScopeSpawn);
 
-        fn ScopeRun<T>(handle: opaque, action: fn() -> T) -> coroutine<T>
+        fn ScopeRun<T>(
+            handle: opaque,
+            [attribute::NativeCallback("retained", "any")] action: fn() -> T
+        ) -> coroutine<T>
             with native, cpp::name(wio::runtime::AsyncScopeRun);
 
-        fn ScopeRun(handle: opaque, action: fn()) -> coroutine<void>
+        fn ScopeRun(handle: opaque, [attribute::NativeCallback("retained", "any")] action: fn()) -> coroutine<void>
             with native, cpp::name(wio::runtime::AsyncScopeRun);
 
-        fn ScopeRunBlocking<T>(handle: opaque, action: fn() -> T) -> coroutine<T>
+        fn ScopeRunBlocking<T>(
+            handle: opaque,
+            [attribute::NativeCallback("retained", "any")] action: fn() -> T
+        ) -> coroutine<T>
             with native, cpp::name(wio::runtime::AsyncScopeRunBlocking);
 
-        fn ScopeRunBlocking(handle: opaque, action: fn()) -> coroutine<void>
+        fn ScopeRunBlocking(
+            handle: opaque,
+            [attribute::NativeCallback("retained", "any")] action: fn()
+        ) -> coroutine<void>
             with native, cpp::name(wio::runtime::AsyncScopeRunBlocking);
 
         fn ScopeJoin(handle: opaque) -> coroutine<void>

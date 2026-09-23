@@ -449,6 +449,17 @@ Rider, and CLion are defined in
    conformance fixtures with `wio-vscode`, and pass packaged install, upgrade,
    compatibility, and daily command-flow gates by `v0.18.0`.
 
+8. [ ] Unify compiler, tooling, and runtime diagnostics after the C++ backend,
+   Unicode, VM, and SDK milestones are complete. Introduce one structured
+   diagnostic model with stable domain codes, severity, primary/secondary
+   source spans, notes, help, and machine-applicable fix-its. Migrate every
+   user-facing legacy error and warning away from free-form logger calls while
+   keeping operational logging separate. Generate the complete explanatory
+   Markdown/web reference and editor-facing JSON catalog from the same source,
+   add `wio explain CODE` plus human/short/JSON/SARIF renderers, preserve native
+   compiler diagnostics through a Wio boundary record, and make CI reject
+   duplicate, undocumented, or unregistered codes.
+
 ## P2 - Performance, Portability, and Security
 
 1. [ ] Build a repeatable benchmark suite.
@@ -508,19 +519,18 @@ Rider, and CLion are defined in
    `opaque`, ref/view mutability, callbacks, exception boundaries, stable
    symbols, generic specialization keys, adapter strategy, `native-call` /
    `native-invoke`, deterministic thunk planning, and the C-shaped SDK handle
-   contract survive verified Typed-to-Lowered WIR. Concrete thunk bodies remain
-   work for the new C++ backend and VM native bridge rather than the frontend.
+   contract survive verified Typed-to-Lowered WIR. Concrete C++ thunk bodies
+   are complete; the VM native bridge remains backend work.
    Module/import/export identity, concrete generic export signatures,
    detailed field/method/attribute reflection descriptors,
    application/system schedule and resource-access metadata,
    lifecycle/state-transfer hooks, and deterministic
    SDK call-table slots also survive through one verified canonical contract.
-   The compatible SDK sidecar is frozen; generated sidecar emission and loader
-   preference switching remain backend-integration work.
-   The first independent C++ backend now consumes verified Lowered WIR behind
-   `--cpp-backend wir`, emits stable CFG/place/type/function identities, and
-   passes host-compiler plus executable CLI gates without AST fallback. Keep
-   the current C++ generator as the production default. Exact enum/flagset
+   The compatible SDK sidecar and generated sidecar emission are frozen.
+   The independent C++ backend now consumes verified Lowered WIR by default,
+   emits stable CFG/place/type/function identities, and passes host-compiler
+   plus executable CLI gates without AST fallback. The former generator remains
+   available only as a one-release compatibility oracle. Exact enum/flagset
    layouts and intrinsics plus canonical Option/Result variants, checked unwrap,
    and propagation now emit from concrete Lowered WIR; open generic declaration
    metadata is excluded from concrete output. Container/string/text intrinsics
@@ -546,9 +556,10 @@ Rider, and CLion are defined in
    adds standalone and clean-project legacy/WIR differential gates, compile-time
    measurements, Windows/Ubuntu release qualification, variadic pack expansion,
    concrete generic-owner dispatch, constructor identity, native template/string
-   ABI adaptation, and `Entry(string[])`. The compatibility generator remains
-   the explicit rollback/oracle during the staged default transition. The
-   bytecode VM consumes the same contract. Async functions now carry
+   ABI adaptation, `Entry(string[])`, and executable behavioral-attribute
+   weaving with canonical processor/hook identities. The compatibility
+   generator remains the explicit rollback/oracle for the first default-WIR
+   release. The bytecode VM consumes the same contract. Async functions now carry
    payload/frame/state contracts;
    awaits and executor handoffs lower to cancellation-safe suspend/resume state
    machines, and async exits lower to coroutine completion. Application,

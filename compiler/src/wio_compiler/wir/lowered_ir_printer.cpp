@@ -201,6 +201,8 @@ namespace wio::wir::lowered
             }
             if (type.defaultConstructor)
                 stream << " default-constructor=" << functionRef(type.defaultConstructor);
+            if (type.fieldInitializer)
+                stream << " field-initializer=" << functionRef(type.fieldInitializer);
             if (type.destructor)
                 stream << " destructor=" << functionRef(type.destructor);
             if (type.hasDestructor)
@@ -432,6 +434,7 @@ namespace wio::wir::lowered
             case Opcode::AnyCheckedCast:
             case Opcode::AnyTypeTest:
             case Opcode::NullableWrap:
+            case Opcode::NullableUnwrap:
                 stream << opcodeName(instruction.opcode) << " " << valueRef(instruction.operands.at(0)) << " to "
                        << typeRef(instruction.targetType);
                 break;
@@ -645,9 +648,16 @@ namespace wio::wir::lowered
                    << " origin=" << attributeOriginKindName(attribute.origin)
                    << " retained=" << (attribute.runtimeRetained ? "true" : "false") << '\n';
             for (const AttributeProcessorDescriptor& processor : attribute.processors)
+            {
                 stream << "    processor " << std::quoted(processor.canonicalTypeName)
                        << " phase=" << attributeProcessorPhaseName(processor.phase)
-                       << " hook=" << std::quoted(processor.hookName) << '\n';
+                       << " hook=" << std::quoted(processor.hookName);
+                if (processor.processorType)
+                    stream << " type=" << processor.processorType.value();
+                if (processor.hookFunction)
+                    stream << " function=" << processor.hookFunction.value();
+                stream << '\n';
+            }
         }
         for (const SystemDescriptor& system : module.contract.systems)
             stream << "  system " << std::quoted(system.logicalName) << " type=" << typeRef(system.type)

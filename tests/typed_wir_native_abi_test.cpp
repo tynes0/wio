@@ -27,10 +27,19 @@ namespace
     int retains = 0;
     int releases = 0;
 
-    void retainHandle(void*) noexcept { ++retains; }
-    void releaseHandle(void*) noexcept { ++releases; }
-    std::uint64_t handleType(const void*) noexcept { return 0xC0FFEEu; }
-}
+    void retainHandle(void*) noexcept
+    {
+        ++retains;
+    }
+    void releaseHandle(void*) noexcept
+    {
+        ++releases;
+    }
+    std::uint64_t handleType(const void*) noexcept
+    {
+        return 0xC0FFEEu;
+    }
+} // namespace
 
 int main()
 {
@@ -40,37 +49,36 @@ int main()
     namespace lowered = wio::wir::lowered;
 
     bool ok = true;
-    Lexer lexer(
-        "[Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Vec2)] "
-        "component Vec2 { x: f32; y: f32; } "
-        "extension Vec2Native for Vec2 { "
-        "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Scale)] "
-        "  public ref fn Scale(amount: f32); "
-        "} "
-        "realm ffi { "
-        "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Compute)] "
-        "  fn Compute(value: i32, callback: fn(i32) -> i32, context: opaque) -> i32; "
-        "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Read)] "
-        "  fn Read(value: view string) -> i32; "
-        "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Write)] "
-        "  fn Write(value: ref i32); "
-        "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::MakeContext)] "
-        "  fn MakeContext() -> opaque; "
-        "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Echo), Instantiate(i32)] "
-        "  fn Echo<T>(value: T) -> T; "
-        "} "
-        "fn Entry() -> i32 { "
-        "  mut vector = Vec2(1.0f32, 2.0f32); "
-        "  vector.Scale(2.0f32); "
-        "  let label: string = \"native\"; "
-        "  let read = ffi::Read(ref label); "
-        "  mut output: i32 = read; "
-        "  ffi::Write(ref output); "
-        "  let echoed = ffi::Echo(output); "
-        "  let context = ffi::MakeContext(); "
-        "  return ffi::Compute(echoed, (value) => value + 1, context); "
-        "}",
-        "typed_wir_native_abi_test.wio");
+    Lexer lexer("[Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Vec2)] "
+                "component Vec2 { x: f32; y: f32; } "
+                "extension Vec2Native for Vec2 { "
+                "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Scale)] "
+                "  public ref fn Scale(amount: f32); "
+                "} "
+                "realm ffi { "
+                "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Compute)] "
+                "  fn Compute(value: i32, callback: fn(i32) -> i32, context: opaque) -> i32; "
+                "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Read)] "
+                "  fn Read(value: view string) -> i32; "
+                "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Write)] "
+                "  fn Write(value: ref i32); "
+                "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::MakeContext)] "
+                "  fn MakeContext() -> opaque; "
+                "  [Native, CppHeader(\"native_abi_fixture.h\"), CppName(native_abi::Echo), Instantiate(i32)] "
+                "  fn Echo<T>(value: T) -> T; "
+                "} "
+                "fn Entry() -> i32 { "
+                "  mut vector = Vec2(1.0f32, 2.0f32); "
+                "  vector.Scale(2.0f32); "
+                "  let label: string = \"native\"; "
+                "  let read = ffi::Read(ref label); "
+                "  mut output: i32 = read; "
+                "  ffi::Write(ref output); "
+                "  let echoed = ffi::Echo(output); "
+                "  let context = ffi::MakeContext(); "
+                "  return ffi::Compute(echoed, (value) => value + 1, context); "
+                "}",
+                "typed_wir_native_abi_test.wio");
     Parser parser(lexer.lex());
     const Ref<Program> program = parser.parseProgram();
     sema::SemanticAnalyzer analyzer;
@@ -79,8 +87,8 @@ int main()
     typed::BuildResult build = typed::Builder{}.build(program);
     if (!build.succeeded())
         for (const auto& diagnostic : build.diagnostics())
-            std::cerr << diagnostic.code << " at " << diagnostic.source.begin.toDiagnosticString()
-                      << ": " << diagnostic.message << '\n';
+            std::cerr << diagnostic.code << " at " << diagnostic.source.begin.toDiagnosticString() << ": "
+                      << diagnostic.message << '\n';
     ok &= expect(build.succeeded(), "Native ABI source must build into Typed WIR");
 
     const typed::VerificationResult typedVerification = typed::Verifier{}.verify(build.module());
@@ -105,9 +113,9 @@ int main()
     for (const Type& type : build.module().types.types())
     {
         if (type.name == "Vec2")
-            podContract = type.nominalRepresentation == NominalRepresentation::NativePod &&
-                type.nativeBinding && type.nativeBinding->cppName == "native_abi::Vec2" &&
-                type.nativeBinding->header == "native_abi_fixture.h";
+            podContract = type.nominalRepresentation == NominalRepresentation::NativePod && type.nativeBinding &&
+                          type.nativeBinding->cppName == "native_abi::Vec2" &&
+                          type.nativeBinding->header == "native_abi_fixture.h";
     }
     for (const typed::Function& function : build.module().functions)
     {
@@ -116,17 +124,16 @@ int main()
             ++nativeFunctions;
             const NativeBinding& binding = *function.nativeBinding;
             ok &= expect(function.isExternal && !binding.stableKey.empty() && !binding.thunkSymbol.empty(),
-                "Every native declaration must expose stable thunk identity");
+                         "Every native declaration must expose stable thunk identity");
             ok &= expect(binding.exceptionBoundary == NativeExceptionBoundary::TranslateToWioFailure,
-                "C++ exceptions must be contained at every native boundary");
+                         "C++ exceptions must be contained at every native boundary");
             extensionReceiver |= binding.receiver == NativeReceiverKind::MutableReference;
-            genericThunk |= binding.thunkKind == NativeThunkKind::TemplateSpecialization &&
-                binding.requiresAdapter;
+            genericThunk |= binding.thunkKind == NativeThunkKind::TemplateSpecialization && binding.requiresAdapter;
             for (const NativeAbiValue& parameter : binding.parameters)
             {
                 callbackContract |= parameter.marshalling == NativeMarshallingKind::Callback &&
-                    parameter.callbackLifetime == NativeCallbackLifetime::Call &&
-                    parameter.callbackThread == NativeCallbackThread::Caller;
+                                    parameter.callbackLifetime == NativeCallbackLifetime::Call &&
+                                    parameter.callbackThread == NativeCallbackThread::Caller;
                 immutableBorrow |= parameter.passing == NativePassingMode::Borrow;
                 mutableBorrow |= parameter.passing == NativePassingMode::BorrowMut;
                 opaqueContract |= parameter.marshalling == NativeMarshallingKind::OpaqueHandle;
@@ -140,8 +147,8 @@ int main()
                 nativeCalls += instruction.opcode == typed::Opcode::NativeCall;
                 if (instruction.opcode != typed::Opcode::NativeCall || instruction.operands.size() < 2)
                     continue;
-                const auto callee = std::ranges::find_if(build.module().functions,
-                    [&](const typed::Function& candidate) { return candidate.id == instruction.callee; });
+                const auto callee = std::ranges::find_if(build.module().functions, [&](const typed::Function& candidate)
+                                                         { return candidate.id == instruction.callee; });
                 if (callee == build.module().functions.end() || !callee->nativeBinding ||
                     callee->nativeBinding->parameters.size() < 2 ||
                     callee->nativeBinding->parameters[1].marshalling != NativeMarshallingKind::Callback)
@@ -149,8 +156,8 @@ int main()
                 for (std::size_t cleanup = index + 1; cleanup < block.instructions.size(); ++cleanup)
                 {
                     const typed::Instruction& candidate = block.instructions[cleanup];
-                    if (candidate.opcode == typed::Opcode::Release &&
-                        candidate.operands.size() == 1 && candidate.operands.front() == instruction.operands[1])
+                    if (candidate.opcode == typed::Opcode::Release && candidate.operands.size() == 1 &&
+                        candidate.operands.front() == instruction.operands[1])
                     {
                         callbackClaimReleased = true;
                         break;
@@ -162,17 +169,17 @@ int main()
         }
     }
     ok &= expect(nativeFunctions == 6 && nativeCalls == 6,
-        "Native declarations and calls must be explicit instead of generic external calls");
-    ok &= expect(podContract && callbackContract && immutableBorrow && mutableBorrow &&
-        opaqueContract && extensionReceiver && genericThunk && callbackClaimReleased,
-        "POD, callback, ref/view, opaque and extension receiver ABI contracts must be frozen in WIR");
+                 "Native declarations and calls must be explicit instead of generic external calls");
+    ok &= expect(podContract && callbackContract && immutableBorrow && mutableBorrow && opaqueContract &&
+                     extensionReceiver && genericThunk && callbackClaimReleased,
+                 "POD, callback, ref/view, opaque and extension receiver ABI contracts must be frozen in WIR");
 
     const std::string typedText = typed::Printer{}.print(build.module());
     ok &= expect(typedText.find("native-call") != std::string::npos &&
-        typedText.find("native-type[cpp=\"native_abi::Vec2\"") != std::string::npos &&
-        typedText.find("callback/call/caller") != std::string::npos &&
-        typedText.find("exception=translate-to-wio-failure") != std::string::npos,
-        "Typed WIR printer must expose the complete native ABI decision");
+                     typedText.find("native-type[cpp=\"native_abi::Vec2\"") != std::string::npos &&
+                     typedText.find("callback/call/caller") != std::string::npos &&
+                     typedText.find("exception=translate-to-wio-failure") != std::string::npos,
+                 "Typed WIR printer must expose the complete native ABI decision");
 
     LoweringResult lowering = LoweringPipeline{}.lower(build.module());
     if (!lowering.succeeded())
@@ -181,8 +188,8 @@ int main()
     ok &= expect(lowering.succeeded(), "Native ABI Typed WIR must lower successfully");
     const std::string loweredText = lowered::Printer{}.print(lowering.module());
     ok &= expect(loweredText.find("native-invoke") != std::string::npos &&
-        loweredText.find("thunk=\"_wio_native_") != std::string::npos,
-        "Lowered WIR must preserve native invocation and thunk metadata");
+                     loweredText.find("thunk=\"_wio_native_") != std::string::npos,
+                 "Lowered WIR must preserve native invocation and thunk metadata");
 
     const NativeAbiPlanResult abiPlan = NativeAbiPlanner{}.plan(lowering.module());
     if (!abiPlan.succeeded())
@@ -190,10 +197,10 @@ int main()
             std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
     bool concreteGenericThunk = false;
     for (const NativeThunkPlan& thunk : abiPlan.thunks())
-        concreteGenericThunk |= !thunk.specializationKey.empty() &&
-            thunk.kind == NativeThunkKind::TemplateSpecialization;
+        concreteGenericThunk |=
+            !thunk.specializationKey.empty() && thunk.kind == NativeThunkKind::TemplateSpecialization;
     ok &= expect(abiPlan.succeeded() && abiPlan.thunks().size() == 6 && concreteGenericThunk,
-        "Native ABI planner must emit one deterministic thunk per concrete generic specialization");
+                 "Native ABI planner must emit one deterministic thunk per concrete generic specialization");
 
     typed::Module invalidBinding = build.module();
     for (typed::Function& function : invalidBinding.functions)
@@ -205,7 +212,7 @@ int main()
         }
     }
     ok &= expect(!typed::Verifier{}.verify(invalidBinding).succeeded(),
-        "Typed verifier must reject native declarations without stable thunk identity");
+                 "Typed verifier must reject native declarations without stable thunk identity");
 
     lowered::Module invalidInvoke = lowering.module();
     bool damagedInvoke = false;
@@ -222,12 +229,14 @@ int main()
                     break;
                 }
             }
-            if (damagedInvoke) break;
+            if (damagedInvoke)
+                break;
         }
-        if (damagedInvoke) break;
+        if (damagedInvoke)
+            break;
     }
     ok &= expect(damagedInvoke && !lowered::Verifier{}.verify(invalidInvoke).succeeded(),
-        "Lowered verifier must reject an ordinary call to a native-bound declaration");
+                 "Lowered verifier must reject an ordinary call to a native-bound declaration");
 
     lowered::Module missingSpecialization = lowering.module();
     bool clearedSpecialization = false;
@@ -239,27 +248,28 @@ int main()
             {
                 if (instruction.opcode != lowered::Opcode::NativeInvoke)
                     continue;
-                const auto callee = std::ranges::find_if(missingSpecialization.functions,
-                    [&](const lowered::Function& candidate) { return candidate.id == instruction.callee; });
-                if (callee != missingSpecialization.functions.end() && !callee->genericParameters.empty())
+                const auto callee =
+                    std::ranges::find_if(missingSpecialization.functions, [&](const lowered::Function& candidate)
+                                         { return candidate.id == instruction.callee; });
+                if (callee != missingSpecialization.functions.end() && callee->nativeBinding &&
+                    (!callee->genericParameters.empty() ||
+                     callee->nativeBinding->thunkKind == NativeThunkKind::TemplateSpecialization))
                 {
                     instruction.specializationKey.clear();
                     clearedSpecialization = true;
                     break;
                 }
             }
-            if (clearedSpecialization) break;
+            if (clearedSpecialization)
+                break;
         }
-        if (clearedSpecialization) break;
+        if (clearedSpecialization)
+            break;
     }
     ok &= expect(clearedSpecialization && !NativeAbiPlanner{}.plan(missingSpecialization).succeeded(),
-        "Native ABI planner must reject a generic native invocation without concrete specialization identity");
+                 "Native ABI planner must reject a generic native invocation without concrete specialization identity");
 
-    const WioNativeAbiHandleOps ops{
-        .retain = retainHandle,
-        .release = releaseHandle,
-        .typeId = handleType
-    };
+    const WioNativeAbiHandleOps ops{.retain = retainHandle, .release = releaseHandle, .typeId = handleType};
     int state = 7;
     WioNativeAbiHandle handle{.state = &state, .ops = &ops, .generation = 2};
     WioNativeAbiHandle alias = handle;
@@ -268,7 +278,8 @@ int main()
     WioNativeAbiRelease(&handle);
     WioNativeAbiRelease(&alias);
     WioNativeAbiRelease(&alias);
-    ok &= expect(retains == 1 && releases == 2 && handle.state == nullptr && alias.state == nullptr,
+    ok &= expect(
+        retains == 1 && releases == 2 && handle.state == nullptr && alias.state == nullptr,
         "Canonical SDK handle contract must retain aliases explicitly and release every ownership claim exactly once");
 
     return ok ? 0 : 1;

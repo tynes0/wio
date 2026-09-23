@@ -1,17 +1,19 @@
 # Lowered WIR C++ Backend
 
-Wio has two C++ generation paths during the backend migration:
+Wio has two C++ generation paths during the cutover window:
 
-- `legacy` is the default production generator and consumes the analyzed AST;
-- `wir` is the canonical experimental generator and consumes only verified,
-  optimized Lowered WIR.
+- `wir` is the default production generator and consumes only verified,
+  optimized Lowered WIR;
+- `legacy` is the temporary compatibility oracle and consumes the analyzed AST.
 
-Select the new path explicitly:
+Ordinary commands use WIR. The selector remains available for qualification and
+rollback during the first default-WIR release line:
 
 ```powershell
-wio file run .\main.wio --cpp-backend wir
-wio project build --cpp-backend wir
-wio project build --cpp-backend wir --emit-cpp
+wio file run .\main.wio
+wio project build
+wio project build --emit-cpp
+wio project build --cpp-backend legacy
 ```
 
 An unknown backend name is rejected. Selecting `wir` never falls back to the
@@ -47,9 +49,9 @@ storage. `place-init`, `load`, `store`, `replace`, and cleanup opcodes therefore
 retain their explicit Lowered WIR meaning instead of collapsing back into AST
 assignment rules.
 
-## Current executable slice
+## Production executable surface
 
-The opt-in backend currently emits:
+The default backend emits:
 
 - primitive, string, text, any, opaque, nullable, fixed/dynamic array,
   ordered/unordered dictionary, function, async-task, reference, tuple/pack,
@@ -93,15 +95,9 @@ storage identity instead of copying containers. Iterators do not snapshot their
 source: structural changes that invalidate native container iterators are not
 supported during traversal.
 
-The following operations remain deliberately rejected before code emission:
-
-- unresolved generic calls and variadic parameter-pack expansion; generic native
-  adapters remain in the native milestone; open method-level generic contracts
-  are not emitted as runtime virtual slots.
-
-Those are parity work inside the C++ backend milestone, not permissions for an
-AST fallback. SDK call-table/sidecar bodies and generalized exception adapters
-also remain part of the same migration before `wir` can become the default.
+Open generic declarations remain compile-time metadata and are not emitted as
+runtime virtual slots. Any unresolved generic call is invalid before backend
+selection; it is not permission for an AST fallback.
 
 ## Sprint 17.1: concrete generic bodies
 
@@ -342,16 +338,18 @@ compile-only attributes do not.
 The same WIR reflection records also generate `TypeReflection<T>` traits for
 native C++ template consumers. Metadata strings use control-safe quoting, so a
 source newline cannot corrupt generated C++. Behavioral pre/post/finally/around
-processors are preserved in WIR metadata but rejected as `WCPP1215` until their
-body-weaving contract is implemented.
+processors retain pinned processor-type and hook-function identities in WIR.
+The backend emits one raw core body plus a public wrapper with source-ordered
+pre hooks, reverse post/finally hooks, exactly-once finalization, typed
+receiver/result arguments, guarded around continuations, and async result
+handling. Escaped or repeatedly invoked `proceed` values fail deterministically.
 
 The focused `wio_wir_cpp_application` and `wio_wir_cpp_reflection` gates build
 real shared libraries and independent hosts. They cover initializer order,
 lifecycle rollback/close ordering, owner-thread and invalid-delta failures,
 module lease pinning, static traits, dynamic lookup, constructors, field and
 method calls, access control, enum cases, attribute retention, stable identities,
-and values that outlive the `NativeModule` view. The backend remains opt-in;
-17.6 owns project/std/platform differential parity and default cutover evidence.
+and values that outlive the `NativeModule` view.
 
 ## Sprint 17.6: differential parity and cutover gate
 
@@ -375,14 +373,21 @@ This final parity pass also closes backend gaps found by the project gate:
   `ref string` parameters preserve their storage identity; and
 - executable entry points accept the canonical optional `string[]` argument.
 
+The final behavioral gate additionally executes pre/post/finally/around,
+typed-receiver guards, skip/result continuations, async result processing,
+reflection ordering, and escaped/repeated continuation failures through both
+generators. Behavioral hooks use canonical `TypeId`/`FunctionId` references;
+duplicate source imports are normalized and reflected methods preserve source
+declaration order.
+
 The complete focused backend suite plus both differential gates runs on Windows
 and Ubuntu in release validation. The workflow uses verbose output so the
 legacy/WIR compile timings remain available as qualification evidence.
 
 ## Cutover policy
 
-`wir` becomes the default only when all release-gate programs pass both
-generators, output behavior matches, native/SDK and async surfaces are complete,
-and compile-time/runtime benchmarks are recorded. The legacy generator is
-removed only after at least one release line with the WIR backend as default;
-until then it remains the compatibility oracle for differential tests.
+`wir` is the default after all release-gate programs passed both generators and
+their observable behavior matched across language, native/SDK, async,
+application, reflection, project, and behavioral surfaces. The legacy generator
+is removed only after at least one release line with WIR as the default; until
+then `--cpp-backend legacy` remains an explicit rollback and differential oracle.

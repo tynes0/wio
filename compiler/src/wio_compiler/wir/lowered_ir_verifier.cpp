@@ -52,6 +52,27 @@ namespace wio::wir::lowered
             return std::next(pack) == callee.parameters.end() && argumentCount >= packIndex;
         }
 
+        bool nativeReferenceArgumentMatches(const TypeTable& types, const TypeId operandId, const TypeId expectedId)
+        {
+            const Type* operand = types.tryGet(operandId);
+            const Type* expected = types.tryGet(expectedId);
+            if (!operand || !expected || operand->kind != TypeKind::Reference ||
+                expected->kind != TypeKind::Reference || operand->arguments.size() != 1 ||
+                expected->arguments.size() != 1 || (expected->isMutable && !operand->isMutable))
+                return false;
+            if (operand->arguments.front() == expected->arguments.front())
+                return true;
+
+            const Type* operandValue = types.tryGet(operand->arguments.front());
+            if (operandValue && operandValue->kind == TypeKind::Nullable && operandValue->arguments.size() == 1 &&
+                operandValue->arguments.front() == expected->arguments.front())
+            {
+                const Type* nullableValue = types.tryGet(operandValue->arguments.front());
+                return nullableValue && nullableValue->kind == TypeKind::Opaque;
+            }
+            return false;
+        }
+
         TypeId coroutineResultType(const TypeTable& types, const Function& function)
         {
             if (!function.isAsync)
@@ -374,7 +395,8 @@ namespace wio::wir::lowered
                 const auto& canonical = expected.types.types()[i];
                 if (actual.castTypes != canonical.castTypes || actual.dispatchEntries != canonical.dispatchEntries ||
                     actual.destructor != canonical.destructor ||
-                    actual.defaultConstructor != canonical.defaultConstructor)
+                    actual.defaultConstructor != canonical.defaultConstructor ||
+                    actual.fieldInitializer != canonical.fieldInitializer)
                     report("LIR1530",
                            "Object hierarchy cast/dispatch/lifecycle table does not match canonical contracts.");
                 for (const auto& entry : actual.dispatchEntries)
@@ -480,12 +502,21 @@ namespace wio::wir::lowered
                 report("LIR1508", "Lowered WIR attribute applications require unique identities and valid targets.");
             std::unordered_set<std::uint64_t> processorIds;
             for (const AttributeProcessorDescriptor& processor : attribute.processors)
+            {
+                const bool behavioral = processor.phase == AttributeProcessorPhase::Pre ||
+                                        processor.phase == AttributeProcessorPhase::Post ||
+                                        processor.phase == AttributeProcessorPhase::Finally ||
+                                        processor.phase == AttributeProcessorPhase::Around;
                 if (processor.stableId == 0 || processor.canonicalTypeName.empty() ||
                     processor.phase == AttributeProcessorPhase::Unknown ||
+                    (behavioral && (!processor.processorType || !module.types.tryGet(processor.processorType) ||
+                                    !processor.hookFunction || !functions.contains(processor.hookFunction.value()))) ||
                     (processor.valueType && !module.types.tryGet(processor.valueType)) ||
                     !processorIds.insert(processor.stableId).second)
                     report("LIR1509",
-                           "Lowered WIR attribute processors require a stable phase, identity, and value type.");
+                           "Lowered WIR attribute processors require a stable phase, identity, executable hook, and "
+                           "value type.");
+            }
         }
         const auto attributesKnown = [&](const std::vector<std::uint64_t>& ids)
         { return std::ranges::all_of(ids, [&](const std::uint64_t id) { return attributeIds.contains(id); }); };
@@ -1101,8 +1132,11 @@ namespace wio::wir::lowered
                             signaturesMatch = instruction.signatureTypes[operandIndex] ==
                                               valueType(instruction.operands[operandIndex]);
                         }
+                        const bool packSizeWithoutValue = instruction.intrinsicFamily == IntrinsicFamily::Pack &&
+                                                          instruction.selector == "Size" &&
+                                                          instruction.operands.empty();
                         if (instruction.intrinsicFamily == IntrinsicFamily::None || instruction.selector.empty() ||
-                            instruction.operands.empty() ||
+                            (instruction.operands.empty() && !packSizeWithoutValue) ||
                             instruction.signatureTypes.size() != instruction.operands.size() ||
                             !module.types.tryGet(instruction.targetType) || !signaturesMatch)
                         {
@@ -1148,6 +1182,21 @@ namespace wio::wir::lowered
                             instruction.targetType != instruction.resultType)
                         {
                             report("LIR1444", "Lowered WIR nullable wrap requires one matching payload value.",
+                                   instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::NullableUnwrap)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                                                     ? module.types.tryGet(valueType(instruction.operands.front()))
+                                                     : nullptr;
+                        if (!sourceType || sourceType->kind != TypeKind::Nullable ||
+                            sourceType->arguments.size() != 1 ||
+                            sourceType->arguments.front() != instruction.resultType ||
+                            instruction.targetType != instruction.resultType)
+                        {
+                            report("LIR1466",
+                                   "Lowered WIR nullable unwrap requires one nullable value and its payload result.",
                                    instruction.source, function.id, block.id);
                         }
                     }
@@ -1319,8 +1368,10 @@ namespace wio::wir::lowered
                                            "Field storage index does not identify the resolved declaring field.",
                                            instruction.source, function.id, block.id);
                             }
+                            const bool constructorInitialization =
+                                function.name == "OnConstruct" || function.name.ends_with("::OnConstruct");
                             if (!field || field->type != placeType->arguments.front() ||
-                                (placeType->isMutable && !field->isMutable))
+                                (placeType->isMutable && !field->isMutable && !constructorInitialization))
                             {
                                 report(
                                     "LIR1432",
@@ -1723,7 +1774,11 @@ namespace wio::wir::lowered
                                                                         signatureType->kind == TypeKind::Reference &&
                                                                         signatureType->arguments.size() == 1 &&
                                                                         signatureType->arguments.front() == operandType;
-                                    if ((!extensionReceiverMatch &&
+                                    const bool nativeReferenceMatch =
+                                        callee.nativeBinding &&
+                                        nativeReferenceArgumentMatches(module.types, operandType,
+                                                                       instruction.signatureTypes[argumentIndex]);
+                                    if ((!extensionReceiverMatch && !nativeReferenceMatch &&
                                          operandType != instruction.signatureTypes[argumentIndex]) ||
                                         (callee.genericParameters.empty() &&
                                          instruction.signatureTypes[argumentIndex] !=

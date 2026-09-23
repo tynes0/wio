@@ -75,7 +75,7 @@ realm SelfHostedProject {
             if (not line.ContainsChar('=')) {
                 return Failure<Dict<string, string> >($"Invalid makewio line: ${line}");
             }
-            let equals = line.IndexOfChar('=');
+            let equals = line.IndexOfChar('=') fit usize;
             let key = line.Take(equals).Trim();
             let value = line.Skip(equals + 1usize).Trim();
             let fullKey = section == "" ? key : section + "." + key;
@@ -434,24 +434,23 @@ realm SelfHostedProject {
     fn Describe(args: string[]) -> std::Result<i32> {
         let info = ResolveInfo?(args);
         let hostEnabled = info.hostEnabled ? "true" : "false";
-        let opening = "{\n";
-        console::PrintLine!(
-            opening +
-            "  \"manifest\": " + serialization::QuoteJson(info.manifestFile) + ",\n" +
-            "  \"projectRoot\": " + serialization::QuoteJson(info.projectRoot) + ",\n" +
-            "  \"name\": " + serialization::QuoteJson(info.name) + ",\n" +
-            "  \"template\": " + serialization::QuoteJson(info.templateName) + ",\n" +
-            "  \"config\": " + serialization::QuoteJson(info.config) + ",\n" +
-            "  \"buildDirectory\": " + serialization::QuoteJson(info.buildDirectory) + ",\n" +
-            "  \"outputDirectory\": " + serialization::QuoteJson(info.outputDirectory) + ",\n" +
-            "  \"wio\": {\"entry\": " + serialization::QuoteJson(info.wioEntry) +
-                ", \"target\": " + serialization::QuoteJson(info.wioTarget) +
-                ", \"output\": " + serialization::QuoteJson(info.wioOutput) + "},\n" +
-            "  \"host\": {\"enabled\": " + hostEnabled +
-                ", \"output\": " + serialization::QuoteJson(info.hostOutput) + "},\n" +
-            "  \"run\": {\"workingDirectory\": " + serialization::QuoteJson(info.runWorkingDirectory) + "}\n" +
-            "}"
-        );
+        mut description = "{\n";
+        description += "  \"manifest\": " + serialization::QuoteJson(info.manifestFile) + ",\n";
+        description += "  \"projectRoot\": " + serialization::QuoteJson(info.projectRoot) + ",\n";
+        description += "  \"name\": " + serialization::QuoteJson(info.name) + ",\n";
+        description += "  \"template\": " + serialization::QuoteJson(info.templateName) + ",\n";
+        description += "  \"config\": " + serialization::QuoteJson(info.config) + ",\n";
+        description += "  \"buildDirectory\": " + serialization::QuoteJson(info.buildDirectory) + ",\n";
+        description += "  \"outputDirectory\": " + serialization::QuoteJson(info.outputDirectory) + ",\n";
+        description += "  \"wio\": {\"entry\": " + serialization::QuoteJson(info.wioEntry);
+        description += ", \"target\": " + serialization::QuoteJson(info.wioTarget);
+        description += ", \"output\": " + serialization::QuoteJson(info.wioOutput) + "},\n";
+        description += "  \"host\": {\"enabled\": " + hostEnabled;
+        description += ", \"output\": " + serialization::QuoteJson(info.hostOutput) + "},\n";
+        description += "  \"run\": {\"workingDirectory\": ";
+        description += serialization::QuoteJson(info.runWorkingDirectory) + "}\n";
+        description += "}";
+        console::PrintLine!(description);
         return std::Ok<i32>(0);
     }
 }

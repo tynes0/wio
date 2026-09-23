@@ -55,10 +55,22 @@ or VM boundary.
 ## Callbacks and foreign threads
 
 The default callback is borrowed for the duration of one native call and may
-be entered only from the caller thread. Native code that stores it must retain
-its userdata and later release it. A future explicit any-thread contract will
-enter the runtime through the registered executor/foreign-thread gate; native
-code may not call VM frames directly from an arbitrary thread.
+be entered only from the caller thread. Native declarations opt into an
+escaping callback explicitly on the callback parameter:
+
+```wio
+fn ThreadStart(
+    [attribute::NativeCallback("retained", "any")] action: fn()
+) -> opaque with native, cpp::name(runtime::ThreadStart);
+```
+
+`retained` permits the native function to store the callback after the call
+returns; `any` permits entry from a foreign thread. The default spellings are
+`call` and `caller`. Typed and Lowered WIR freeze both decisions in
+`NativeAbiValue`, so the C++ backend, VM bridge, and SDK adapters consume the
+same lifetime/thread contract instead of recognizing particular native symbol
+names. Retaining a callback also retains the producing module until the final
+callback claim is released.
 
 ## Generic C++ APIs
 
@@ -79,9 +91,9 @@ wrappers may be added around it, but the wire contract consists of:
 - `WioNativeAbiFailure` and status codes;
 - `WioNativeAbiFunctionDescriptor` and thunk pointer.
 
-The production AST-to-C++ generator remains the default during WIR migration.
-Sprint 17.4 implements checked thunks in the opt-in Lowered-WIR C++ backend;
-the VM bridge is still future work, consuming the same contract.
+The production Lowered-WIR C++ backend emits the Sprint 17.4 checked thunks.
+The AST generator remains a temporary compatibility oracle; the VM bridge is
+future work and consumes the same contract.
 
 ## Experimental wire ABI v2 (Sprint 17.4)
 
@@ -108,8 +120,9 @@ must remain valid/aligned; arbitrary host pointers cannot be validated safely.
 
 Native call-scoped callback wrappers reject use after the native call ends and
 reject wrong-thread entry. Copying the `std::function` alone does not grant an
-extended lifetime. Canonical callback invoke returns a status across the foreign
-boundary; the current SDK callback path is caller-thread-only. Foreign retained
+extended lifetime. Retained/any-thread callbacks use their explicit WIR
+contract; unannotated SDK callbacks remain caller-thread-only. Canonical
+callback invoke returns a status across the foreign boundary. Foreign retained
 callbacks must keep their owner module loaded until their final release.
 
 `WioGetNativeAbiRegistry` publishes concrete thunk descriptors. Thunks validate

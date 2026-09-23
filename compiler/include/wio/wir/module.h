@@ -147,6 +147,8 @@ namespace wio::wir
         std::string hookName;
         std::string hookMode;
         AttributeProcessorPhase phase = AttributeProcessorPhase::Unknown;
+        TypeId processorType;
+        FunctionId hookFunction;
         TypeId valueType;
 
         auto operator<=>(const AttributeProcessorDescriptor&) const = default;
@@ -216,6 +218,8 @@ namespace wio::wir
         NominalKind nominalKind = NominalKind::None;
         bool isExported = false;
         bool runtimeVisible = true;
+        std::vector<std::string> genericParameterNames;
+        std::vector<TypeId> genericArguments;
         std::vector<std::uint64_t> attributes;
         std::vector<ReflectedFieldDescriptor> fields;
         std::vector<ReflectedMethodDescriptor> methods;
@@ -361,4 +365,4 @@ namespace wio::wir
     [[nodiscard]] std::string_view applicationStageKindName(ApplicationStageKind kind);
     [[nodiscard]] std::string_view applicationAffinityName(ApplicationAffinity affinity);
     [[nodiscard]] std::string_view resourceAccessName(ResourceAccess access);
-}
+} // namespace wio::wir

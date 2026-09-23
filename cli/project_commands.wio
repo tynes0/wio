@@ -466,10 +466,9 @@ realm SelfHostedProject {
                 }
             }
             else {
-                let launcherStart = "#!/usr/bin/env sh\n";
-                let launcher = launcherStart +
-                    "package_root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n" +
-                    "exec \"$package_root/" + entrypoint + "\" \"$@\"\n";
+                mut launcher = "#!/usr/bin/env sh\n";
+                launcher += "package_root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n";
+                launcher += "exec \"$package_root/" + entrypoint + "\" \"$@\"\n";
                 let launcherPath = path::Join(packageRoot, "run.sh");
                 if (not fs::TryWriteText(launcherPath, launcher) or not fs::TryMakeExecutable(launcherPath)) {
                     return Failure<i32>("Could not write the package launcher.");
@@ -478,15 +477,14 @@ realm SelfHostedProject {
         }
         let hostEnabled = info.hostEnabled ? "true" : "false";
         let entrypointJson = entrypoint == "" ? "null" : serialization::QuoteJson(entrypoint);
-        let metadataOpening = "{\n";
-        let metadata = metadataOpening +
-            "  \"schemaVersion\": 1,\n" +
-            "  \"name\": " + serialization::QuoteJson(info.name) + ",\n" +
-            "  \"configuration\": " + serialization::QuoteJson(info.config) + ",\n" +
-            "  \"target\": " + serialization::QuoteJson(info.wioTarget) + ",\n" +
-            "  \"hostEnabled\": " + hostEnabled + ",\n" +
-            "  \"entrypoint\": " + entrypointJson + "\n" +
-            "}\n";
+        mut metadata = "{\n";
+        metadata += "  \"schemaVersion\": 1,\n";
+        metadata += "  \"name\": " + serialization::QuoteJson(info.name) + ",\n";
+        metadata += "  \"configuration\": " + serialization::QuoteJson(info.config) + ",\n";
+        metadata += "  \"target\": " + serialization::QuoteJson(info.wioTarget) + ",\n";
+        metadata += "  \"hostEnabled\": " + hostEnabled + ",\n";
+        metadata += "  \"entrypoint\": " + entrypointJson + "\n";
+        metadata += "}\n";
         if (not fs::TryWriteText(path::Join(packageRoot, "wio-package.json"), metadata)) {
             return Failure<i32>("Could not write package metadata.");
         }

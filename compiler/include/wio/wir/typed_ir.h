@@ -103,6 +103,7 @@ namespace wio::wir::typed
         AnyCheckedCast,
         AnyTypeTest,
         NullableWrap,
+        NullableUnwrap,
         IteratorCreate,
         IteratorHasNext,
         IteratorValue,
@@ -137,14 +138,7 @@ namespace wio::wir::typed
         Unreachable
     };
 
-    using Literal = std::variant<
-        std::monostate,
-        NullLiteral,
-        bool,
-        std::int64_t,
-        std::uint64_t,
-        double,
-        std::string>;
+    using Literal = std::variant<std::monostate, NullLiteral, bool, std::int64_t, std::uint64_t, double, std::string>;
 
     struct Parameter
     {
@@ -253,4 +247,4 @@ namespace wio::wir::typed
     [[nodiscard]] std::string_view conversionKindName(ConversionKind kind);
     [[nodiscard]] std::string_view valueOwnershipName(ValueOwnership ownership);
     [[nodiscard]] std::string_view borrowLifetimeName(BorrowLifetime lifetime);
-}
+} // namespace wio::wir::typed

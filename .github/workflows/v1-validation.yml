@@ -71,7 +71,7 @@ jobs:
       - name: Validate Lowered WIR C++ release gate
         run: >
           ctest --test-dir build --verbose
-          -R "^wio_wir_cpp_(backend|backend_cli|generics|objects|async|native|sdk|application|reflection|packs_differential|project_differential)$"
+          -R "^wio_wir_cpp_(backend|backend_cli|generics|objects|async|native|sdk|application|reflection|packs_differential|behavioral_differential|project_differential)$"
 
   sanitizers:
     runs-on: ubuntu-latest

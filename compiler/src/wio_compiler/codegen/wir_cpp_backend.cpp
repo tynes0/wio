@@ -96,6 +96,10 @@ namespace wio::codegen
         {
             return "_wio_f" + std::to_string(id.value());
         }
+        std::string coreFunctionName(const FunctionId id)
+        {
+            return "_wio_core_f" + std::to_string(id.value());
+        }
         std::string globalName(const GlobalId id)
         {
             return "_wio_g" + std::to_string(id.value());
@@ -159,6 +163,25 @@ namespace wio::codegen
             std::set<std::uint32_t> borrowedLoads_;
             std::set<std::uint32_t> objectBorrowedLoads_;
             std::set<std::uint32_t> ownedValues_;
+
+            std::vector<const AttributeProcessorDescriptor*> behavioralPipeline(const FunctionId function) const
+            {
+                std::vector<const AttributeApplicationDescriptor*> attributes;
+                for (const auto& attribute : module_.contract.attributes)
+                    if (attribute.targetFunction == function)
+                        attributes.push_back(&attribute);
+                std::ranges::stable_sort(attributes, {}, &AttributeApplicationDescriptor::sourceOrder);
+
+                std::vector<const AttributeProcessorDescriptor*> processors;
+                for (const auto* attribute : attributes)
+                    for (const auto& processor : attribute->processors)
+                        if (processor.phase == AttributeProcessorPhase::Pre ||
+                            processor.phase == AttributeProcessorPhase::Post ||
+                            processor.phase == AttributeProcessorPhase::Finally ||
+                            processor.phase == AttributeProcessorPhase::Around)
+                            processors.push_back(&processor);
+                return processors;
+            }
 
             void diagnose(std::string code, std::string message, const SourceSpan& source = {},
                           const FunctionId function = {}, const BlockId block = {})
@@ -236,7 +259,9 @@ namespace wio::codegen
                                  "unresolved type reached the C++ backend: " + std::string(typeKindName(type.kind)));
                         break;
                     case TypeKind::ConstValue:
-                        if (type.name.empty())
+                        if (type.name.empty() && (type.arguments.size() != 1 ||
+                                                  (module_.types.get(type.arguments.front()).kind != TypeKind::String &&
+                                                   module_.types.get(type.arguments.front()).kind != TypeKind::Text)))
                             diagnose("WCPP1101", "const-value type has no canonical value");
                         break;
                     case TypeKind::Reference:
@@ -274,7 +299,8 @@ namespace wio::codegen
                                 {
                                     std::string detail = "dispatch requires a concrete canonical implementation with a "
                                                          "matching signature: " +
-                                                         type.name + " slot " + std::to_string(entry.slot);
+                                                         type.name + " type " + std::to_string(id.value()) + " slot " +
+                                                         std::to_string(entry.slot);
                                     if (function == functions_.end())
                                         detail += " has no implementation";
                                     else
@@ -338,10 +364,27 @@ namespace wio::codegen
                                 processor.phase == AttributeProcessorPhase::Post ||
                                 processor.phase == AttributeProcessorPhase::Finally ||
                                 processor.phase == AttributeProcessorPhase::Around)
-                                diagnose(
-                                    "WCPP1215",
-                                    "behavioral attribute weaving is not yet available in the Lowered-WIR C++ backend",
-                                    {}, attribute.targetFunction);
+                            {
+                                const Type* processorType = module_.types.tryGet(processor.processorType);
+                                const auto hook = functions_.find(processor.hookFunction.value());
+                                const auto target = functions_.find(attribute.targetFunction.value());
+                                const bool validObject =
+                                    processorType && processorType->nominalKind == NominalKind::Object;
+                                const bool validHook = hook != functions_.end() &&
+                                                       hook->second->ownerType == processor.processorType &&
+                                                       !hook->second->parameters.empty();
+                                if (!validObject || !validHook || target == functions_.end())
+                                {
+                                    diagnose("WCPP1215",
+                                             "behavioral attribute requires a concrete processor object and pinned "
+                                             "hook function",
+                                             {}, attribute.targetFunction);
+                                    continue;
+                                }
+                                if (processor.phase == AttributeProcessorPhase::Around && target->second->isAsync)
+                                    diagnose("WCPP1215", "around processors are not valid on asynchronous functions",
+                                             {}, attribute.targetFunction);
+                            }
                 for (const auto& function : module_.functions)
                 {
                     if (functionIsOpen(function))
@@ -373,7 +416,7 @@ namespace wio::codegen
                                                [&](TypeId argument) { return runtimeAsyncType(argument); });
                 return type.kind == TypeKind::Void || type.kind == TypeKind::Bool || integerKind(type.kind) ||
                        type.kind == TypeKind::F32 || type.kind == TypeKind::F64 || type.kind == TypeKind::String ||
-                       type.kind == TypeKind::Text;
+                       type.kind == TypeKind::Text || type.kind == TypeKind::Opaque;
             }
 
             bool runtimeAsyncBinding(const lowered::Function& function) const
@@ -482,6 +525,9 @@ namespace wio::codegen
                             if (instruction.opcode == lowered::Opcode::IntrinsicCall &&
                                 instruction.intrinsicFamily != IntrinsicFamily::Enum &&
                                 instruction.intrinsicFamily != IntrinsicFamily::Flagset &&
+                                instruction.intrinsicFamily != IntrinsicFamily::Pack &&
+                                !(instruction.intrinsicFamily == IntrinsicFamily::AsyncTask &&
+                                  (instruction.selector == "Poll" || instruction.selector == "Within")) &&
                                 !wirIntrinsicHelper(instruction.intrinsicFamily, instruction.selector))
                             {
                                 diagnose("WCPP1205",
@@ -735,6 +781,8 @@ namespace wio::codegen
                 case TypeKind::Reference:
                     return "wio::wir_backend::Place<" + cppType(type->arguments.front()) + ">";
                 case TypeKind::Nullable:
+                    if (module_.types.get(type->arguments.front()).kind == TypeKind::Opaque)
+                        return cppType(type->arguments.front());
                     return "std::optional<" + cppType(type->arguments.front()) + ">";
                 case TypeKind::Array:
                     if (type->staticExtent)
@@ -762,6 +810,99 @@ namespace wio::codegen
                 default:
                     return "void";
                 }
+            }
+
+            std::string legacyMangledType(const TypeId id) const
+            {
+                const Type* type = module_.types.tryGet(id);
+                if (!type)
+                    return "unknown";
+                std::string spelling;
+                if (!type->name.empty())
+                    spelling = type->name;
+                else if (type->kind == TypeKind::Reference && type->arguments.size() == 1)
+                    spelling =
+                        std::string(type->isMutable ? "ref " : "view ") + legacyMangledType(type->arguments.front());
+                else if (type->kind == TypeKind::Nullable && type->arguments.size() == 1)
+                    spelling = legacyMangledType(type->arguments.front()) + "?";
+                else if (type->kind == TypeKind::Array && type->arguments.size() == 1)
+                    spelling = type->staticExtent ? "[" + legacyMangledType(type->arguments.front()) + "; " +
+                                                        std::to_string(*type->staticExtent) + "]"
+                                                  : legacyMangledType(type->arguments.front()) + "[]";
+                else
+                    spelling = std::string(typeKindName(type->kind));
+
+                if (type->kind == TypeKind::Named && !type->arguments.empty())
+                {
+                    spelling += '<';
+                    for (std::size_t index = 0; index < type->arguments.size(); ++index)
+                    {
+                        if (index)
+                            spelling += ',';
+                        spelling += legacyMangledType(type->arguments[index]);
+                    }
+                    spelling += '>';
+                }
+                for (char& character : spelling)
+                    switch (character)
+                    {
+                    case ' ':
+                    case '(':
+                    case ')':
+                    case ',':
+                    case '<':
+                    case '>':
+                    case '-':
+                    case '.':
+                    case ':':
+                        character = '_';
+                        break;
+                    case '[':
+                        character = 'A';
+                        break;
+                    case ']':
+                        character = 'E';
+                        break;
+                    case ';':
+                        character = 'S';
+                        break;
+                    case '*':
+                        character = 'P';
+                        break;
+                    case '&':
+                        character = 'R';
+                        break;
+                    case '?':
+                        character = 'N';
+                        break;
+                    default:
+                        break;
+                    }
+                return spelling;
+            }
+
+            std::string legacyMethodName(const MethodLayout& method, const lowered::Function& implementation) const
+            {
+                const lowered::Function* declaration = &implementation;
+                if (implementation.genericOrigin)
+                {
+                    const auto origin = functions_.find(implementation.genericOrigin.value());
+                    if (origin != functions_.end())
+                        declaration = origin->second;
+                }
+                std::string name = "_WF_" + safeIdentifier(method.name);
+                for (std::size_t index = 1; index < declaration->parameters.size(); ++index)
+                    name += "_" + legacyMangledType(declaration->parameters[index].type);
+                return name;
+            }
+
+            const lowered::Function* concreteMethod(const MethodLayout& method) const
+            {
+                const auto found = functions_.find(method.function.value());
+                return found != functions_.end() && !functionIsOpen(*found->second) && found->second->isMethod &&
+                               !found->second->isAbstract && !found->second->parameters.empty()
+                           ? found->second
+                           : nullptr;
             }
 
             std::string placeValueType(const TypeId id) const
@@ -810,13 +951,15 @@ namespace wio::codegen
                 output_
                     << "// Generated by Wio's canonical Lowered WIR C++ backend.\n"
                        "#include <array>\n#include <cstddef>\n#include <cstdint>\n#include <functional>\n#include "
-                       "<limits>\n"
-                       "#include <map>\n#include <memory>\n#include <optional>\n#include <sstream>\n"
+                       "<iostream>\n#include <limits>\n"
+                       "#include <map>\n#include <memory>\n#include <mutex>\n#include <atomic>\n#include "
+                       "<optional>\n#include <sstream>\n"
                        "#include <stdexcept>\n#include <string>\n#include <tuple>\n#include <type_traits>\n"
                        "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
                        "#include <any.h>\n#include <entry_args.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include "
                        "<std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n";
                 output_ << "#include <wir_abi.h>\n#include <wir_native.h>\n#include <module_api.h>\n#include "
+                           "<wio_values.h>\n#include "
                            "<wio_module_contract.h>\n";
                 std::set<std::string> headers;
                 for (const Type& type : module_.types.types())
@@ -834,6 +977,40 @@ namespace wio::codegen
                 output_ << R"CPP(
 namespace wio::wir_backend {
 struct SkipConstructor {};
+template<class To, class From> To numeric_fit(const From value) {
+    if constexpr (std::is_same_v<To, bool>) {
+        return value != From{};
+    } else if constexpr (std::is_same_v<From, bool>) {
+        return static_cast<To>(value);
+    } else if constexpr (std::is_integral_v<To> && std::is_integral_v<From>) {
+        if constexpr (std::is_signed_v<To> == std::is_signed_v<From>) {
+            if constexpr (sizeof(To) >= sizeof(From)) return static_cast<To>(value);
+            if (value < static_cast<From>(std::numeric_limits<To>::lowest()))
+                return std::numeric_limits<To>::lowest();
+            if (value > static_cast<From>(std::numeric_limits<To>::max()))
+                return std::numeric_limits<To>::max();
+        } else if constexpr (std::is_signed_v<From>) {
+            if (value < 0) return std::numeric_limits<To>::lowest();
+            using UnsignedFrom = std::make_unsigned_t<From>;
+            if constexpr (sizeof(To) < sizeof(UnsignedFrom)) {
+                if (static_cast<UnsignedFrom>(value) > std::numeric_limits<To>::max())
+                    return std::numeric_limits<To>::max();
+            }
+        } else {
+            using UnsignedTo = std::make_unsigned_t<To>;
+            if (value > static_cast<UnsignedTo>(std::numeric_limits<To>::max()))
+                return std::numeric_limits<To>::max();
+        }
+        return static_cast<To>(value);
+    } else {
+        const long double widened = static_cast<long double>(value);
+        if (widened < static_cast<long double>(std::numeric_limits<To>::lowest()))
+            return std::numeric_limits<To>::lowest();
+        if (widened > static_cast<long double>(std::numeric_limits<To>::max()))
+            return std::numeric_limits<To>::max();
+        return static_cast<To>(value);
+    }
+}
 template<class T> class Place {
 public:
     static Place local() {
@@ -842,9 +1019,16 @@ public:
         return place;
     }
     static Place borrow(T& value) { Place place; place.pointer_ = &value; return place; }
+    template<class U> static Place borrowProxy(U value) {
+        Place place;
+        place.reader_ = [value]() mutable { return static_cast<T>(value); };
+        place.writer_ = [value](T replacement) mutable { value = std::move(replacement); };
+        return place;
+    }
     static Place borrowView(const T& value) { Place place; place.pointer_ = const_cast<T*>(&value); place.readOnly_ = true; return place; }
     T& read() {
         if (pointer_) return *pointer_;
+        if (reader_) { cached_ = reader_(); return *cached_; }
         if (!owner_ || !owner_->has_value()) throw std::runtime_error("read from uninitialized Wio place");
         return owner_->value();
     }
@@ -858,12 +1042,16 @@ public:
     void write(T value) {
         if (readOnly_) throw std::runtime_error("write through a Wio view");
         if (pointer_) *pointer_ = std::move(value);
+        else if (writer_) { writer_(value); cached_ = std::move(value); }
         else { if (!owner_) owner_ = std::make_shared<std::optional<T>>(); *owner_ = std::move(value); }
     }
-    void clear() { if (readOnly_) throw std::runtime_error("clear through a Wio view"); if (pointer_) *pointer_ = T{}; else if (owner_) owner_->reset(); }
+    void clear() { if (readOnly_) throw std::runtime_error("clear through a Wio view"); if (pointer_) *pointer_ = T{}; else if (writer_) { writer_(T{}); cached_.reset(); } else if (owner_) owner_->reset(); }
 private:
     std::shared_ptr<std::optional<T>> owner_;
     T* pointer_ = nullptr;
+    std::function<T()> reader_;
+    std::function<void(T)> writer_;
+    std::optional<T> cached_;
     bool readOnly_ = false;
 };
 template<class T> T& value_base(T& value) { return value; }
@@ -880,6 +1068,7 @@ template<class T> class Place<wio::runtime::Ref<T>> {
     std::shared_ptr<std::optional<Handle>> owner_;
     Handle* handle_ = nullptr;
     T* raw_ = nullptr;
+    mutable std::optional<Handle> rawHandle_;
     bool readOnly_ = false;
 public:
     static Place local() { Place p; p.owner_ = std::make_shared<std::optional<Handle>>(); return p; }
@@ -891,7 +1080,13 @@ public:
         if (owner_) { if (!*owner_) throw std::runtime_error("read from uninitialized Wio object place"); return owner_->value().Get(); }
         return raw_;
     }
-    Handle read() const { return Handle(Get()); }
+    Handle& read() {
+        if (handle_) return *handle_;
+        if (owner_) { if (!*owner_) throw std::runtime_error("read from uninitialized Wio object place"); return owner_->value(); }
+        if (!rawHandle_) rawHandle_ = Handle(raw_);
+        return *rawHandle_;
+    }
+    const Handle& read() const { return const_cast<Place*>(this)->read(); }
     void write(Handle value) {
         if (readOnly_) throw std::runtime_error("write through a Wio view");
         if (handle_) *handle_ = std::move(value);
@@ -923,9 +1118,62 @@ template<class T, class U> T* require_object_cast(const U& value) {
     return result;
 }
 template<class T> wio::runtime::RefCountedObject* object_identity(const T& value) { return object_ptr(value); }
-template<class T> std::string stringify(const T& value) { std::ostringstream stream; stream << value; return stream.str(); }
 inline std::string stringify(const bool value) { return value ? "true" : "false"; }
+inline std::string stringify(const std::int8_t value) { return std::to_string(static_cast<std::int32_t>(value)); }
+inline std::string stringify(const std::uint8_t value) { return std::to_string(static_cast<std::uint32_t>(value)); }
 inline std::string stringify(const std::string& value) { return value; }
+inline std::string stringify(const wio::runtime::Text& value) { return value.Utf8(); }
+template<class T> std::string stringify(const T& value) {
+    if constexpr (std::is_enum_v<T>) {
+        return stringify(static_cast<std::underlying_type_t<T>>(value));
+    } else if constexpr (requires(std::ostringstream& stream) { stream << value; }) {
+        std::ostringstream stream;
+        stream << value;
+        return stream.str();
+    } else {
+        static_assert(!sizeof(T), "Wio value has no string conversion");
+    }
+}
+template<class T> std::string stringify(const wio::runtime::Ref<T>& value)
+    requires requires(T* pointer) { pointer->_WF_ToString(); }
+{
+    if (!value.Get()) return "null";
+    return value.Get()->_WF_ToString();
+}
+template<class T> std::string stringify(const ObjectBorrow<T>& value)
+    requires requires(T* pointer) { pointer->_WF_ToString(); }
+{
+    if (!value.Get()) return "null";
+    return value.Get()->_WF_ToString();
+}
+template<class T> std::string stringify(const std::vector<T>& values) {
+    std::string result = "[";
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index != 0) result += ", ";
+        result += stringify(values[index]);
+    }
+    return result + "]";
+}
+template<class K, class V, class Compare, class Allocator>
+std::string stringify(const std::map<K, V, Compare, Allocator>& values) {
+    std::string result = "{";
+    std::size_t index = 0;
+    for (const auto& [key, value] : values) {
+        if (index++ != 0) result += ", ";
+        result += stringify(key) + ": " + stringify(value);
+    }
+    return result + "}";
+}
+template<class K, class V, class Hash, class Equal, class Allocator>
+std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& values) {
+    std::string result = "{";
+    std::size_t index = 0;
+    for (const auto& [key, value] : values) {
+        if (index++ != 0) result += ", ";
+        result += stringify(key) + ": " + stringify(value);
+    }
+    return result + "}";
+}
 }
 
 )CPP";
@@ -1005,6 +1253,8 @@ inline std::string stringify(const std::string& value) { return value; }
                 for (TypeId id : nominalOrder())
                 {
                     const auto& type = module_.types.get(id);
+                    if (type.nominalKind != NominalKind::Object && type.nominalKind != NominalKind::Interface)
+                        continue;
                     for (const auto& entry : type.dispatchEntries)
                     {
                         if (!entry.implementation)
@@ -1017,13 +1267,39 @@ inline std::string stringify(const std::string& value) { return value; }
                             output_ << ", std::move(_a" << (i - 1) << ")";
                         output_ << "); }\n";
                     }
+                    std::set<std::string> emittedLegacyMethods;
+                    for (const MethodLayout& method : type.methods)
+                    {
+                        const lowered::Function* function = concreteMethod(method);
+                        if (!function || method.visibility != FieldVisibility::Public)
+                            continue;
+                        const std::string name = legacyMethodName(method, *function);
+                        if (!emittedLegacyMethods.insert(name).second)
+                            continue;
+                        output_ << cppType(function->returnType) << ' ' << objectName(id) << "::" << name << '(';
+                        for (std::size_t index = 1; index < function->parameters.size(); ++index)
+                        {
+                            if (index > 1)
+                                output_ << ", ";
+                            output_ << cppType(function->parameters[index].type) << " _a" << (index - 1);
+                        }
+                        output_ << ") { ";
+                        if (module_.types.get(function->returnType).kind != TypeKind::Void)
+                            output_ << "return ";
+                        output_ << functionName(function->id) << '(' << cppType(function->parameters.front().type)
+                                << "::raw(static_cast<" << objectName(function->ownerType) << "*>(this))";
+                        for (std::size_t index = 1; index < function->parameters.size(); ++index)
+                            output_ << ", std::move(_a" << (index - 1) << ')';
+                        output_ << "); }\n";
+                    }
                     if (type.destructor)
                     {
                         const auto& function = *functions_.at(type.destructor.value());
                         output_ << objectName(id) << "::~" << objectName(id) << "() { " << functionName(function.id)
                                 << "(" << cppType(function.parameters.front().type) << "::raw(this)); }\n";
                     }
-                    if (type.defaultConstructor)
+                    if ((type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface) &&
+                        type.defaultConstructor)
                     {
                         const auto& function = *functions_.at(type.defaultConstructor.value());
                         output_ << objectName(id) << "::" << objectName(id) << "() { " << functionName(function.id)
@@ -1093,9 +1369,13 @@ inline std::string stringify(const std::string& value) { return value; }
                     const TypeId id{static_cast<TypeId::ValueType>(index)};
                     const Type& type = module_.types.types()[index];
                     if (!typeIsOpen(id) && type.kind == TypeKind::Named &&
-                        type.nominalRepresentation == NominalRepresentation::Wio &&
-                        (type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface))
-                        output_ << "struct " << objectName(id) << ";\n";
+                        type.nominalRepresentation == NominalRepresentation::Wio)
+                    {
+                        if (type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface)
+                            output_ << "struct " << objectName(id) << ";\n";
+                        else if (type.nominalKind == NominalKind::Component)
+                            output_ << "struct " << typeName(id) << ";\n";
+                    }
                 }
                 output_ << '\n';
 
@@ -1179,6 +1459,26 @@ inline std::string stringify(const std::string& value) { return value; }
                         for (const DispatchEntry& entry : type.dispatchEntries)
                             output_ << "    virtual " << dispatchSignature(entry)
                                     << (entry.implementation ? ";\n" : " = 0;\n");
+                        std::set<std::string> emittedLegacyMethods;
+                        for (const MethodLayout& method : type.methods)
+                        {
+                            const lowered::Function* function = concreteMethod(method);
+                            if (!function || method.visibility != FieldVisibility::Public)
+                                continue;
+                            const std::string name = legacyMethodName(method, *function);
+                            if (!emittedLegacyMethods.insert(name).second)
+                                continue;
+                            output_ << "    " << cppType(function->returnType) << ' ' << name << '(';
+                            for (std::size_t parameterIndex = 1; parameterIndex < function->parameters.size();
+                                 ++parameterIndex)
+                            {
+                                if (parameterIndex > 1)
+                                    output_ << ", ";
+                                output_ << cppType(function->parameters[parameterIndex].type) << " _a"
+                                        << (parameterIndex - 1);
+                            }
+                            output_ << ");\n";
+                        }
                         if (type.destructor)
                             output_ << "    ~" << objectName(id) << "() override;\n";
                         output_ << "    " << objectName(id) << (type.defaultConstructor ? "();\n" : "() = default;\n");
@@ -1221,11 +1521,13 @@ inline std::string stringify(const std::string& value) { return value; }
                 output_ << '\n';
             }
 
-            std::string functionSignature(const lowered::Function& function, const bool declaration) const
+            std::string functionSignature(const lowered::Function& function, const bool declaration,
+                                          const std::string_view emittedName = {}) const
             {
                 std::ostringstream signature;
                 signature << (function.isExternal && !function.nativeBinding ? "extern " : "")
-                          << cppType(function.returnType) << ' ' << functionName(function.id) << '(';
+                          << cppType(function.returnType) << ' '
+                          << (emittedName.empty() ? functionName(function.id) : std::string{emittedName}) << '(';
                 for (std::size_t index = 0; index < function.parameters.size(); ++index)
                 {
                     if (index)
@@ -1257,7 +1559,11 @@ inline std::string stringify(const std::string& value) { return value; }
             {
                 for (const lowered::Function& function : module_.functions)
                     if (!functionIsOpen(function))
+                    {
                         output_ << functionSignature(function, true) << '\n';
+                        if (!function.isExternal && !behavioralPipeline(function.id).empty())
+                            output_ << functionSignature(function, true, coreFunctionName(function.id)) << '\n';
+                    }
                 output_ << '\n';
             }
 
@@ -1319,8 +1625,16 @@ inline std::string stringify(const std::string& value) { return value; }
 
             std::string literal(const lowered::Instruction& instruction) const
             {
-                if (std::holds_alternative<typed::NullLiteral>(instruction.literal) ||
-                    std::holds_alternative<std::monostate>(instruction.literal))
+                if (std::holds_alternative<typed::NullLiteral>(instruction.literal))
+                {
+                    const Type& result = module_.types.get(instruction.resultType);
+                    if (result.kind == TypeKind::Opaque ||
+                        (result.kind == TypeKind::Nullable && !result.arguments.empty() &&
+                         module_.types.get(result.arguments.front()).kind == TypeKind::Opaque))
+                        return "nullptr";
+                    return cppType(instruction.resultType) + "{}";
+                }
+                if (std::holds_alternative<std::monostate>(instruction.literal))
                     return "{}";
                 if (const auto* value = std::get_if<bool>(&instruction.literal))
                     return *value ? "true" : "false";
@@ -1440,6 +1754,97 @@ inline std::string stringify(const std::string& value) { return value; }
 
             std::string intrinsicExpression(const lowered::Instruction& instruction) const
             {
+                if (instruction.intrinsicFamily == IntrinsicFamily::Pack)
+                {
+                    if (instruction.selector == "Size")
+                        return "std::tuple_size_v<" + cppType(instruction.targetType) + ">";
+                    if (instruction.selector == "Array")
+                    {
+                        const Type& receiverType = module_.types.get(valueType(instruction.operands.front()));
+                        const Type& receiverValueType = receiverType.kind == TypeKind::Reference
+                                                            ? module_.types.get(receiverType.arguments.front())
+                                                            : receiverType;
+                        if (instruction.operands.size() == 1 && receiverValueType.kind == TypeKind::PackStorage)
+                        {
+                            const std::string receiver = operand(instruction.operands.front()) +
+                                                         (receiverType.kind == TypeKind::Reference ? ".read()" : "");
+                            std::string elements;
+                            for (std::size_t index = 0; index < receiverValueType.arguments.size(); ++index)
+                            {
+                                if (index)
+                                    elements += ", ";
+                                elements += "std::get<" + std::to_string(index) + ">(" + receiver + ")";
+                            }
+                            return cppType(instruction.resultType) + "{" + elements + "}";
+                        }
+                        return cppType(instruction.resultType) + "{" + callArguments(instruction, 0, true) + "}";
+                    }
+                    const std::string element =
+                        "std::get<" + std::to_string(instruction.projectionIndex) + ">(" +
+                        operand(instruction.operands.front()) +
+                        (module_.types.get(valueType(instruction.operands.front())).kind == TypeKind::Reference
+                             ? ".read()"
+                             : "") +
+                        ")";
+                    const Type& result = module_.types.get(instruction.resultType);
+                    return result.kind == TypeKind::Reference
+                               ? "wio::wir_backend::Place<" + placeValueType(instruction.resultType) + ">::borrow(" +
+                                     element + ")"
+                               : element;
+                }
+                if (instruction.intrinsicFamily == IntrinsicFamily::AsyncTask && instruction.selector == "Poll")
+                {
+                    const Type& pollType = module_.types.get(instruction.resultType);
+                    const std::string poll = cppType(instruction.resultType);
+                    const std::string task = operand(instruction.operands.front());
+                    const TypeId statusType = pollType.fields.front().type;
+                    const auto status = [&](const std::string_view name)
+                    { return enumCaseExpression(statusType, *findEnumCase(statusType, name)); };
+                    const std::string cancelled = status("cancelled");
+                    const std::string pending = status("pending");
+                    const std::string failed = status("failed");
+                    const std::string ready = status("ready");
+                    if (pollType.fields.size() == 2)
+                    {
+                        return "([&]() -> " + poll + " { if (wio::intrinsics::TaskIsCancelled(" + task + ")) return " +
+                               poll + "::Create(" + cancelled + ", \"\"); if (!wio::intrinsics::TaskIsReady(" + task +
+                               ")) return " + poll + "::Create(" + pending +
+                               ", \"\"); if (wio::intrinsics::TaskIsFaulted(" + task + ")) return " + poll +
+                               "::Create(" + failed + ", wio::runtime::AsyncFailureMessage(" + task + ")); return " +
+                               poll + "::Create(" + ready + ", \"\"); }())";
+                    }
+
+                    const std::string option = cppType(pollType.fields[1].type);
+                    return "([&]() -> " + poll + " { if (wio::intrinsics::TaskIsCancelled(" + task + ")) return " +
+                           poll + "::Create(" + cancelled + ", " + option + "::Create(), \"\"); if " +
+                           "(!wio::intrinsics::TaskIsReady(" + task + ")) return " + poll + "::Create(" + pending +
+                           ", " + option + "::Create(), \"\"); if (wio::intrinsics::TaskIsFaulted(" + task +
+                           ")) return " + poll + "::Create(" + failed + ", " + option +
+                           "::Create(), wio::runtime::AsyncFailureMessage(" + task + ")); return " + poll +
+                           "::Create(" + ready + ", " + option + "::Create(wio::intrinsics::TaskBlock(" + task +
+                           ")), \"\"); }())";
+                }
+                if (instruction.intrinsicFamily == IntrinsicFamily::AsyncTask && instruction.selector == "Within")
+                {
+                    const Type& resultTask = module_.types.get(instruction.resultType);
+                    const TypeId payloadType = resultTask.arguments.front();
+                    const Type& payload = module_.types.get(payloadType);
+                    const std::string task = operand(instruction.operands.front());
+                    const std::string milliseconds = operand(instruction.operands[1]);
+                    std::string timeoutValue = "false";
+                    std::string completedValue = "true";
+                    if (payload.nominalValueModel == NominalValueModel::Option)
+                    {
+                        const std::string option = cppType(payloadType);
+                        timeoutValue = option + "::Create()";
+                        completedValue = option + "::Create(wio::intrinsics::TaskBlock(task))";
+                    }
+                    return "wio::runtime::RunAsync<" + cppType(payloadType) + ">([task = " + task +
+                           ", milliseconds = " + milliseconds + "]() mutable -> " + cppType(payloadType) +
+                           " { if (!wio::intrinsics::TaskWaitFor(task, milliseconds)) { " +
+                           "wio::intrinsics::TaskCancel(task); return " + timeoutValue + "; } return " +
+                           completedValue + "; })";
+                }
                 if (const auto helper = wirIntrinsicHelper(instruction.intrinsicFamily, instruction.selector))
                 {
                     std::vector<std::string> arguments;
@@ -1586,8 +1991,11 @@ inline std::string stringify(const std::string& value) { return value; }
                                                   operand(instruction.operands[2]) + ")");
                     break;
                 case lowered::Opcode::Convert:
-                    assignResult(instruction, "static_cast<" + cppType(instruction.resultType) + ">(" +
-                                                  operand(instruction.operands[0]) + ")");
+                    assignResult(instruction, instruction.conversionKind == typed::ConversionKind::NumericFit
+                                                  ? "wio::wir_backend::numeric_fit<" + cppType(instruction.resultType) +
+                                                        ">(" + operand(instruction.operands[0]) + ")"
+                                                  : "static_cast<" + cppType(instruction.resultType) + ">(" +
+                                                        operand(instruction.operands[0]) + ")");
                     break;
                 case lowered::Opcode::Call:
                 case lowered::Opcode::ExtensionCall:
@@ -1614,7 +2022,11 @@ inline std::string stringify(const std::string& value) { return value; }
                     {
                         if (index)
                             captures += ", ";
-                        captures += "_c" + std::to_string(index) + " = " + operand(instruction.operands[index]);
+                        std::string capturedValue = operand(instruction.operands[index]);
+                        if (index < instruction.captureKinds.size() &&
+                            instruction.captureKinds[index] == CaptureKind::RetainedSelf)
+                            capturedValue += ".read()";
+                        captures += "_c" + std::to_string(index) + " = " + capturedValue;
                     }
                     captures += "]";
                     const Type& callable = module_.types.get(instruction.resultType);
@@ -1703,12 +2115,16 @@ inline std::string stringify(const std::string& value) { return value; }
                                                   operand(instruction.operands[0]) + ".size())");
                     break;
                 case lowered::Opcode::ArrayElement:
+                    assignResult(instruction, operand(instruction.operands[0]) + "[" +
+                                                  std::to_string(instruction.projectionIndex) + "]");
+                    break;
                 case lowered::Opcode::ArrayGet:
-                    assignResult(instruction,
-                                 operand(instruction.operands[0]) +
-                                     (instruction.boundsCheck == lowered::BoundsCheckMode::Required ? ".at(" : "[") +
-                                     operand(instruction.operands[1]) +
-                                     (instruction.boundsCheck == lowered::BoundsCheckMode::Required ? ")" : "]"));
+                    if (instruction.boundsCheck == lowered::BoundsCheckMode::Required)
+                        assignResult(instruction, "wio::intrinsics::Index(" + operand(instruction.operands[0]) + ", " +
+                                                      operand(instruction.operands[1]) + ")");
+                    else
+                        assignResult(instruction,
+                                     operand(instruction.operands[0]) + "[" + operand(instruction.operands[1]) + "]");
                     break;
                 case lowered::Opcode::ArrayCreate:
                 case lowered::Opcode::DefaultValue:
@@ -1766,11 +2182,16 @@ inline std::string stringify(const std::string& value) { return value; }
                 {
                     const bool range = instruction.selector.starts_with("range.");
                     std::string args;
-                    for (const ValueId id : instruction.operands)
+                    for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                     {
                         if (!args.empty())
                             args += ", ";
-                        args += operand(id);
+                        const ValueId id = instruction.operands[index];
+                        const Type* operandType = module_.types.tryGet(valueType(id));
+                        if (!range && index == 0 && operandType && operandType->kind == TypeKind::Reference)
+                            args += "wio::wir_backend::value_base(" + operand(id) + ")";
+                        else
+                            args += operand(id);
                     }
                     if (range)
                         args += instruction.selector == "range.inclusive" ? ", true" : ", false";
@@ -1860,6 +2281,11 @@ inline std::string stringify(const std::string& value) { return value; }
                                      ? cppType(instruction.resultType) + "{}"
                                      : cppType(instruction.resultType) + "{" + operand(instruction.operands[0]) + "}");
                     break;
+                case lowered::Opcode::NullableUnwrap:
+                    assignResult(instruction, module_.types.get(instruction.resultType).kind == TypeKind::Opaque
+                                                  ? operand(instruction.operands.front())
+                                                  : operand(instruction.operands.front()) + ".value()");
+                    break;
                 case lowered::Opcode::ResultIsError:
                     assignResult(instruction, "(!" + operand(instruction.operands.front()) + "->_f0)");
                     break;
@@ -1874,9 +2300,13 @@ inline std::string stringify(const std::string& value) { return value; }
                             << operand(instruction.operands.front()) << "->_f2);\n";
                     break;
                 case lowered::Opcode::GlobalPlace:
+                {
+                    const auto& placeType = module_.types.get(instruction.resultType);
                     assignResult(instruction, "wio::wir_backend::Place<" + placeValueType(instruction.resultType) +
-                                                  ">::borrow(" + globalName(instruction.global) + ")");
+                                                  (placeType.isMutable ? ">::borrow(" : ">::borrowView(") +
+                                                  globalName(instruction.global) + ")");
                     break;
+                }
                 case lowered::Opcode::LocalPlace:
                     assignResult(instruction, cppType(instruction.resultType) + "::local()");
                     break;
@@ -1918,40 +2348,71 @@ inline std::string stringify(const std::string& value) { return value; }
                 {
                     const std::string base = "wio::wir_backend::value_base(" + operand(instruction.operands[0]) + ")";
                     const std::string index = operand(instruction.operands[1]);
-                    assignResult(instruction, "wio::wir_backend::Place<" + placeValueType(instruction.resultType) +
-                                                  ">::borrow(" +
-                                                  (instruction.boundsCheck == lowered::BoundsCheckMode::Required
-                                                       ? "wio::intrinsics::Index(" + base + ", " + index + ")"
-                                                       : base + "[" + index + "]") +
-                                                  ")");
+                    const Type& elementType =
+                        module_.types.get(module_.types.get(instruction.resultType).arguments.front());
+                    assignResult(instruction,
+                                 "wio::wir_backend::Place<" + placeValueType(instruction.resultType) +
+                                     (elementType.kind == TypeKind::Bool ? ">::borrowProxy(" : ">::borrow(") +
+                                     (instruction.boundsCheck == lowered::BoundsCheckMode::Required
+                                          ? "wio::intrinsics::Index(" + base + ", " + index + ")"
+                                          : base + "[" + index + "]") +
+                                     ")");
                     break;
                 }
                 case lowered::Opcode::ConstructComponent:
-                    if (instruction.callee)
+                {
+                    const Type& constructedType = module_.types.get(instruction.resultType);
+                    const bool initializesFields = static_cast<bool>(constructedType.fieldInitializer);
+                    if (instruction.callee || (initializesFields && instruction.operands.empty()))
                     {
-                        const auto& constructor = *functions_.at(instruction.callee.value());
-                        std::string expression = "([&]() { " + cppType(instruction.resultType) + " instance{}; " +
-                                                 functionName(instruction.callee) + "(" +
-                                                 cppType(constructor.parameters.front().type) + "::borrow(instance)";
-                        if (!instruction.operands.empty())
-                            expression += ", " + callArguments(instruction, 0, true);
-                        assignResult(instruction, expression + "); return instance; }())");
+                        std::string expression = "([&]() { " + cppType(instruction.resultType) + " instance{}; ";
+                        if (initializesFields)
+                        {
+                            const auto& initializer = *functions_.at(constructedType.fieldInitializer.value());
+                            expression += functionName(constructedType.fieldInitializer) + "(" +
+                                          cppType(initializer.parameters.front().type) + "::borrow(instance)); ";
+                        }
+                        if (instruction.callee)
+                        {
+                            const auto& constructor = *functions_.at(instruction.callee.value());
+                            if (!initializesFields || constructor.parameters.size() > 1)
+                            {
+                                expression += functionName(instruction.callee) + "(" +
+                                              cppType(constructor.parameters.front().type) + "::borrow(instance)";
+                                if (!instruction.operands.empty())
+                                    expression += ", " + callArguments(instruction, 0, true);
+                                expression += "); ";
+                            }
+                        }
+                        assignResult(instruction, expression + "return instance; }())");
                     }
                     else
                         assignResult(instruction,
                                      cppType(instruction.resultType) + "{" + callArguments(instruction, 0, true) + "}");
                     break;
+                }
                 case lowered::Opcode::ConstructObject:
                     if (instruction.callee)
                     {
+                        const Type& constructedType = module_.types.get(instruction.resultType);
                         const auto& constructor = *functions_.at(instruction.callee.value());
                         std::string expression = "([&]() { auto instance = " + cppType(instruction.resultType) +
-                                                 "::Create(wio::wir_backend::SkipConstructor{}); " +
-                                                 functionName(instruction.callee) + "(" +
-                                                 cppType(constructor.parameters.front().type) + "::borrow(instance)";
-                        if (!instruction.operands.empty())
-                            expression += ", " + callArguments(instruction, 0, true);
-                        assignResult(instruction, expression + "); return instance; }())");
+                                                 "::Create(wio::wir_backend::SkipConstructor{}); ";
+                        if (constructedType.fieldInitializer)
+                        {
+                            const auto& initializer = *functions_.at(constructedType.fieldInitializer.value());
+                            expression += functionName(constructedType.fieldInitializer) + "(" +
+                                          cppType(initializer.parameters.front().type) + "::borrow(instance)); ";
+                        }
+                        if (!constructedType.fieldInitializer || constructor.parameters.size() > 1)
+                        {
+                            expression += functionName(instruction.callee) + "(" +
+                                          cppType(constructor.parameters.front().type) + "::borrow(instance)";
+                            if (!instruction.operands.empty())
+                                expression += ", " + callArguments(instruction, 0, true);
+                            expression += "); ";
+                        }
+                        assignResult(instruction, expression + "return instance; }())");
                     }
                     else
                         assignResult(instruction, cppType(instruction.resultType) + "::Create(" +
@@ -2045,6 +2506,253 @@ inline std::string stringify(const std::string& value) { return value; }
                 }
             }
 
+            std::string forwardedParameters(const lowered::Function& function) const
+            {
+                std::string arguments;
+                for (std::size_t index = 0; index < function.parameters.size(); ++index)
+                {
+                    if (index)
+                        arguments += ", ";
+                    arguments += "std::move(_p" + std::to_string(index) + ")";
+                }
+                return arguments;
+            }
+
+            std::string processorHookCall(const AttributeProcessorDescriptor& processor, const std::size_t index,
+                                          const std::string_view argument = {}) const
+            {
+                const auto& hook = *functions_.at(processor.hookFunction.value());
+                std::string arguments =
+                    cppType(hook.parameters.front().type) + "::raw(_wio_processor_" + std::to_string(index) + ".Get())";
+                if (!argument.empty())
+                    arguments += ", " + std::string{argument};
+                return functionName(processor.hookFunction) + "(" + arguments + ")";
+            }
+
+            void emitProcessorInstances(const std::vector<const AttributeProcessorDescriptor*>& processors)
+            {
+                for (std::size_t index = 0; index < processors.size(); ++index)
+                {
+                    output_ << "    auto _wio_processor_" << index << " = " << cppType(processors[index]->processorType)
+                            << "::Create();\n";
+                    if (processors[index]->phase == AttributeProcessorPhase::Finally)
+                        output_ << "    bool _wio_processor_finalized_" << index << " = false;\n";
+                }
+            }
+
+            std::string preProcessorArgument(const AttributeProcessorDescriptor& processor) const
+            {
+                if (processor.hookMode.starts_with("receiver_any"))
+                    return "wio::runtime::Any::FromObject(_p0.read())";
+                if (processor.hookMode.starts_with("receiver_typed"))
+                    return cppType(processor.valueType) + "::borrowView(_p0.read())";
+                return {};
+            }
+
+            void emitPreProcessors(const std::vector<const AttributeProcessorDescriptor*>& processors,
+                                   const std::string_view indent, const bool coroutine)
+            {
+                for (std::size_t index = 0; index < processors.size(); ++index)
+                {
+                    const auto& processor = *processors[index];
+                    if (processor.phase != AttributeProcessorPhase::Pre)
+                        continue;
+                    const std::string invocation = processorHookCall(processor, index, preProcessorArgument(processor));
+                    output_ << indent;
+                    if (processor.hookMode.ends_with("_guard"))
+                        output_ << "if (!(" << invocation << ")) " << (coroutine ? "co_return" : "return") << ";\n";
+                    else
+                        output_ << invocation << ";\n";
+                }
+            }
+
+            void emitPostProcessors(const std::vector<const AttributeProcessorDescriptor*>& processors,
+                                    const std::string_view indent, const std::string_view result)
+            {
+                for (std::size_t offset = processors.size(); offset > 0; --offset)
+                {
+                    const std::size_t index = offset - 1;
+                    const auto& processor = *processors[index];
+                    if (processor.phase != AttributeProcessorPhase::Post)
+                        continue;
+                    output_ << indent
+                            << processorHookCall(processor, index,
+                                                 processor.hookMode == "result" ? result : std::string_view{})
+                            << ";\n";
+                }
+            }
+
+            void emitFinallyProcessors(const std::vector<const AttributeProcessorDescriptor*>& processors,
+                                       const std::string_view indent, const bool succeeded)
+            {
+                for (std::size_t offset = processors.size(); offset > 0; --offset)
+                {
+                    const std::size_t index = offset - 1;
+                    const auto& processor = *processors[index];
+                    if (processor.phase != AttributeProcessorPhase::Finally)
+                        continue;
+                    const std::string argument =
+                        processor.hookMode == "outcome_bool" ? (succeeded ? "true" : "false") : std::string{};
+                    output_ << indent << "if (!_wio_processor_finalized_" << index << ") {\n"
+                            << indent << "    _wio_processor_finalized_" << index << " = true;\n"
+                            << indent << "    " << processorHookCall(processor, index, argument) << ";\n"
+                            << indent << "}\n";
+                }
+            }
+
+            void emitRawFunction(const lowered::Function& function, const std::string_view emittedName)
+            {
+                currentFunction_ = &function;
+                collectValueTypes(function);
+                output_ << functionSignature(function, false, emittedName) << " {\n";
+                if (function.coroutine && function.coroutine->retainedReceiver)
+                {
+                    output_ << "    auto _selfGuard = " << cppType(function.ownerType) << "(_p0.Get());\n";
+                    output_ << "    _p0 = " << cppType(function.parameters.front().type)
+                            << "::raw(_selfGuard.Get());\n";
+                }
+                if (function.coroutine)
+                    for (const auto& state : function.coroutine->states)
+                        if (state.resumedValue)
+                            output_ << "    std::optional<" << cppType(state.resultType) << "> _resume" << state.index
+                                    << ";\n";
+                std::vector<std::pair<std::uint32_t, TypeId>> values(valueTypes_.begin(), valueTypes_.end());
+                std::ranges::sort(values, {}, &std::pair<std::uint32_t, TypeId>::first);
+                for (const auto& [id, type] : values)
+                    output_ << "    std::optional<"
+                            << (objectBorrowedLoads_.contains(id)
+                                    ? "wio::wir_backend::ObjectBorrow<" + objectName(type) + ">"
+                                    : (borrowedLoads_.contains(id) ? "std::reference_wrapper<" : "") + cppType(type) +
+                                          (borrowedLoads_.contains(id) ? ">" : ""))
+                            << "> _v" << id << ";\n";
+                for (std::size_t index = 0; index < function.parameters.size(); ++index)
+                    output_ << "    " << valueName(function.parameters[index].id) << " = std::move(_p" << index
+                            << ");\n";
+                output_ << "    std::uint32_t _block = " << function.blocks.front().id.value()
+                        << ";\n"
+                           "    for (;;) {\n        switch (_block) {\n";
+                for (const lowered::BasicBlock& block : function.blocks)
+                {
+                    currentBlock_ = &block;
+                    output_ << "        case " << block.id.value() << ": {\n";
+                    for (const lowered::Instruction& instruction : block.instructions)
+                        emitInstruction(instruction);
+                    output_ << "                throw std::logic_error(\"Wio block has no terminator\");\n"
+                               "        }\n";
+                }
+                output_ << "        default: throw std::logic_error(\"invalid Wio block id\");\n"
+                           "        }\n    }\n}\n\n";
+            }
+
+            void emitAsyncBehavioralFunction(const lowered::Function& function,
+                                             const std::vector<const AttributeProcessorDescriptor*>& processors)
+            {
+                const Type& taskType = module_.types.get(function.returnType);
+                const TypeId resultType = taskType.arguments.front();
+                const bool returnsValue = module_.types.get(resultType).kind != TypeKind::Void;
+                output_ << functionSignature(function, false) << " {\n";
+                emitProcessorInstances(processors);
+                output_ << "    try {\n";
+                emitPreProcessors(processors, "        ", true);
+                if (returnsValue)
+                    output_ << "        auto _wio_behavior_result = co_await " << coreFunctionName(function.id) << "("
+                            << forwardedParameters(function) << ");\n";
+                else
+                    output_ << "        co_await " << coreFunctionName(function.id) << "("
+                            << forwardedParameters(function) << ");\n";
+                emitPostProcessors(processors, "        ", "_wio_behavior_result");
+                emitFinallyProcessors(processors, "        ", true);
+                output_ << "        co_return" << (returnsValue ? " std::move(_wio_behavior_result)" : "")
+                        << ";\n"
+                           "    } catch (...) {\n";
+                emitFinallyProcessors(processors, "        ", false);
+                output_ << "        throw;\n    }\n}\n\n";
+            }
+
+            void emitSyncBehavioralFunction(const lowered::Function& function,
+                                            const std::vector<const AttributeProcessorDescriptor*>& processors)
+            {
+                const bool returnsValue = module_.types.get(function.returnType).kind != TypeKind::Void;
+                output_ << functionSignature(function, false) << " {\n";
+                emitProcessorInstances(processors);
+                output_ << "    auto _wio_behavior_core = [&]()";
+                if (returnsValue)
+                    output_ << " -> " << cppType(function.returnType);
+                output_ << " {\n        try {\n";
+                emitPreProcessors(processors, "            ", false);
+                if (returnsValue)
+                    output_ << "            auto _wio_behavior_result = " << coreFunctionName(function.id) << "("
+                            << forwardedParameters(function) << ");\n";
+                else
+                    output_ << "            " << coreFunctionName(function.id) << "(" << forwardedParameters(function)
+                            << ");\n";
+                emitPostProcessors(processors, "            ", "_wio_behavior_result");
+                emitFinallyProcessors(processors, "            ", true);
+                output_ << "            return" << (returnsValue ? " std::move(_wio_behavior_result)" : "")
+                        << ";\n"
+                           "        } catch (...) {\n";
+                emitFinallyProcessors(processors, "            ", false);
+                output_ << "            throw;\n        }\n    };\n";
+
+                std::string next = "_wio_behavior_core";
+                std::size_t aroundIndex = 0;
+                for (std::size_t offset = processors.size(); offset > 0; --offset)
+                {
+                    const std::size_t processorIndex = offset - 1;
+                    const auto& processor = *processors[processorIndex];
+                    if (processor.phase != AttributeProcessorPhase::Around)
+                        continue;
+                    const std::string wrapper = "_wio_around_" + std::to_string(aroundIndex);
+                    const std::string state = "_wio_proceed_state_" + std::to_string(aroundIndex);
+                    const std::string guard = "_wio_proceed_guard_" + std::to_string(aroundIndex);
+                    output_ << "    auto " << wrapper << " = [&]()";
+                    if (returnsValue)
+                        output_ << " -> " << cppType(function.returnType);
+                    output_ << " {\n"
+                            << "        auto " << state << " = std::make_shared<std::pair<bool, bool>>(true, false);\n"
+                            << "        auto " << guard << " = std::shared_ptr<void>(nullptr, [" << state
+                            << "](void*) { " << state
+                            << "->first = false; });\n"
+                               "        try {\n"
+                            << "            ";
+                    if (returnsValue)
+                        output_ << "return ";
+                    output_ << processorHookCall(
+                                   processor, processorIndex,
+                                   "std::function<" + cppType(function.returnType) + "()>([&, " + state + "]()" +
+                                       (returnsValue ? " -> " + cppType(function.returnType) : "") + " { if (!" +
+                                       state +
+                                       "->first) throw wio::runtime::RuntimeException(\"Attribute Proceed escaped "
+                                       "its Around invocation.\"); if (" +
+                                       state +
+                                       "->second) throw wio::runtime::RuntimeException(\"Attribute Proceed may be "
+                                       "invoked at most once.\"); " +
+                                       state + "->second = true; " + (returnsValue ? "return " : "") + next + "(); })")
+                            << ";\n"
+                               "        } catch (...) {\n"
+                            << "            " << state
+                            << "->first = false;\n"
+                               "            throw;\n"
+                               "        }\n"
+                            << "        " << state
+                            << "->first = false;\n"
+                               "    };\n";
+                    next = wrapper;
+                    ++aroundIndex;
+                }
+                output_ << "    " << (returnsValue ? "return " : "") << next << "();\n}\n\n";
+            }
+
+            void emitBehavioralFunction(const lowered::Function& function)
+            {
+                const auto processors = behavioralPipeline(function.id);
+                emitRawFunction(function, coreFunctionName(function.id));
+                if (function.isAsync)
+                    emitAsyncBehavioralFunction(function, processors);
+                else
+                    emitSyncBehavioralFunction(function, processors);
+            }
+
             void emitFunctions()
             {
                 for (const lowered::Function& function : module_.functions)
@@ -2063,6 +2771,7 @@ inline std::string stringify(const std::string& value) { return value; }
                             // Wrapper parameters are ordinary variables rather than SSA
                             // optionals, so emit the ABI adaptation directly here.
                             std::string arguments;
+                            std::vector<std::string> nativeArguments;
                             for (std::size_t index = 0; index < function.parameters.size(); ++index)
                             {
                                 if (index)
@@ -2079,6 +2788,12 @@ inline std::string stringify(const std::string& value) { return value; }
                                     : passing == NativePassingMode::Consume
                                         ? "std::move(_p" + std::to_string(index) + ")"
                                         : "_p" + std::to_string(index);
+                                if (index == 0 && function.nativeBinding->receiver != NativeReceiverKind::None)
+                                {
+                                    argument = function.nativeBinding->receiver == NativeReceiverKind::ConstReference
+                                                   ? "std::addressof(std::as_const(_p0.read()))"
+                                                   : "std::addressof(_p0.read())";
+                                }
                                 if (index < function.nativeBinding->parameters.size() &&
                                     function.nativeBinding->parameters[index].marshalling ==
                                         NativeMarshallingKind::Utf8String &&
@@ -2096,6 +2811,7 @@ inline std::string stringify(const std::string& value) { return value; }
                                         ", " +
                                         (binding.callbackThread == NativeCallbackThread::Any ? "true" : "false") + ")";
                                 }
+                                nativeArguments.push_back(argument);
                                 arguments += argument;
                             }
                             std::string symbol = function.nativeBinding->symbol;
@@ -2114,6 +2830,37 @@ inline std::string stringify(const std::string& value) { return value; }
                                 symbol += '>';
                             }
                             std::string call = symbol + "(" + arguments + ")";
+                            if (function.nativeBinding->receiver != NativeReceiverKind::None &&
+                                !nativeArguments.empty())
+                            {
+                                std::string lambdaParameters;
+                                std::string referenceArguments;
+                                std::string pointerArguments;
+                                std::string invokeArguments;
+                                for (std::size_t index = 0; index < nativeArguments.size(); ++index)
+                                {
+                                    if (index)
+                                    {
+                                        lambdaParameters += ", ";
+                                        referenceArguments += ", ";
+                                        pointerArguments += ", ";
+                                        invokeArguments += ", ";
+                                    }
+                                    const std::string parameter = "_wio_native_arg" + std::to_string(index);
+                                    lambdaParameters += "auto&& " + parameter;
+                                    const std::string forwarded =
+                                        "std::forward<decltype(" + parameter + ")>(" + parameter + ")";
+                                    referenceArguments += index == 0 ? "*" + parameter : forwarded;
+                                    pointerArguments += forwarded;
+                                    invokeArguments += nativeArguments[index];
+                                }
+                                const std::string referenceCall = symbol + "(" + referenceArguments + ")";
+                                const std::string pointerCall = symbol + "(" + pointerArguments + ")";
+                                call = "([&](" + lambdaParameters + ") -> " + cppType(function.returnType) +
+                                       " { if constexpr (requires { " + referenceCall + "; }) { return " +
+                                       referenceCall + "; } else { return " + pointerCall + "; } })(" +
+                                       invokeArguments + ")";
+                            }
                             const auto& returnType = module_.types.get(function.returnType);
                             if (returnType.kind == TypeKind::Reference)
                                 call = cppType(function.returnType) +
@@ -2136,46 +2883,10 @@ inline std::string stringify(const std::string& value) { return value; }
                         }
                         continue;
                     }
-                    currentFunction_ = &function;
-                    collectValueTypes(function);
-                    output_ << functionSignature(function, false) << " {\n";
-                    if (function.coroutine && function.coroutine->retainedReceiver)
-                    {
-                        output_ << "    auto _selfGuard = " << cppType(function.ownerType) << "(_p0.Get());\n";
-                        output_ << "    _p0 = " << cppType(function.parameters.front().type)
-                                << "::raw(_selfGuard.Get());\n";
-                    }
-                    if (function.coroutine)
-                        for (const auto& state : function.coroutine->states)
-                            if (state.resumedValue)
-                                output_ << "    std::optional<" << cppType(state.resultType) << "> _resume"
-                                        << state.index << ";\n";
-                    std::vector<std::pair<std::uint32_t, TypeId>> values(valueTypes_.begin(), valueTypes_.end());
-                    std::ranges::sort(values, {}, &std::pair<std::uint32_t, TypeId>::first);
-                    for (const auto& [id, type] : values)
-                        output_ << "    std::optional<"
-                                << (objectBorrowedLoads_.contains(id)
-                                        ? "wio::wir_backend::ObjectBorrow<" + objectName(type) + ">"
-                                        : (borrowedLoads_.contains(id) ? "std::reference_wrapper<" : "") +
-                                              cppType(type) + (borrowedLoads_.contains(id) ? ">" : ""))
-                                << "> _v" << id << ";\n";
-                    for (std::size_t index = 0; index < function.parameters.size(); ++index)
-                        output_ << "    " << valueName(function.parameters[index].id) << " = std::move(_p" << index
-                                << ");\n";
-                    output_ << "    std::uint32_t _block = " << function.blocks.front().id.value()
-                            << ";\n"
-                               "    for (;;) {\n        switch (_block) {\n";
-                    for (const lowered::BasicBlock& block : function.blocks)
-                    {
-                        currentBlock_ = &block;
-                        output_ << "        case " << block.id.value() << ": {\n";
-                        for (const lowered::Instruction& instruction : block.instructions)
-                            emitInstruction(instruction);
-                        output_ << "                throw std::logic_error(\"Wio block has no terminator\");\n"
-                                   "        }\n";
-                    }
-                    output_ << "        default: throw std::logic_error(\"invalid Wio block id\");\n"
-                               "        }\n    }\n}\n\n";
+                    if (behavioralPipeline(function.id).empty())
+                        emitRawFunction(function, functionName(function.id));
+                    else
+                        emitBehavioralFunction(function);
                 }
                 currentFunction_ = nullptr;
                 currentBlock_ = nullptr;
@@ -2223,22 +2934,34 @@ inline std::string stringify(const std::string& value) { return value; }
                     output_ << "    auto _wio_entry_arguments = wio::runtime::CollectEntryArguments(argc, argv);\n";
                 const std::string invocation =
                     functionName(entry->id) + (hasArguments ? "(std::move(_wio_entry_arguments))" : "()");
+                output_ << "    try {\n";
                 if (resultType->kind == TypeKind::AsyncTask)
                 {
-                    output_ << "    wio::runtime::BindAsyncMainExecutor();\n    ";
+                    output_ << "        wio::runtime::BindAsyncMainExecutor();\n        ";
                     if (module_.types.get(resultType->arguments.front()).kind == TypeKind::I32)
                         output_ << "return ";
                     output_ << "wio::wir_backend::RunEntry(" << invocation << ");\n";
                     if (module_.types.get(resultType->arguments.front()).kind != TypeKind::I32)
-                        output_ << "    return 0;\n";
+                        output_ << "        return 0;\n";
                 }
                 else if (resultType->kind == TypeKind::Void)
-                    output_ << "    " << invocation << ";\n    return 0;\n";
+                    output_ << "        " << invocation << ";\n        return 0;\n";
                 else if (resultType->kind == TypeKind::I32)
-                    output_ << "    return " << invocation << ";\n";
+                    output_ << "        return " << invocation << ";\n";
                 else
-                    output_ << "    (void)" << invocation << ";\n    return 0;\n";
-                output_ << "}\n";
+                    output_ << "        (void)" << invocation << ";\n        return 0;\n";
+                output_ << "    } catch (const wio::runtime::RuntimeException& error) {\n"
+                           "        std::cout << \"Runtime Error: \" << error.what() << '\\n';\n"
+                           "        return 1;\n"
+                           "    } catch (const std::exception& error) {\n"
+                           "        std::cout << \"Runtime Error: Unhandled native exception: \" << error.what() "
+                           "<< '\\n';\n"
+                           "        return 1;\n"
+                           "    } catch (...) {\n"
+                           "        std::cout << \"Runtime Error: Unknown native exception\" << '\\n';\n"
+                           "        return 1;\n"
+                           "    }\n"
+                           "}\n";
             }
         };
     } // namespace

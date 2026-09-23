@@ -21,25 +21,21 @@ namespace wio::runtime
         OpaquePayload
     };
 
-    template <typename T>
-    inline const void* GetAnyTypeToken() noexcept
+    template <typename T> inline const void* GetAnyTypeToken() noexcept
     {
         static const int token = 0;
         return &token;
     }
 
-    template <typename T>
-    struct IsRuntimeRefType : std::false_type
+    template <typename T> struct IsRuntimeRefType : std::false_type
     {
     };
 
-    template <typename TObject>
-    struct IsRuntimeRefType<Ref<TObject>> : std::true_type
+    template <typename TObject> struct IsRuntimeRefType<Ref<TObject>> : std::true_type
     {
     };
 
-    template <typename T>
-    inline constexpr bool IsRuntimeRefTypeV = IsRuntimeRefType<std::remove_cvref_t<T>>::value;
+    template <typename T> inline constexpr bool IsRuntimeRefTypeV = IsRuntimeRefType<std::remove_cvref_t<T>>::value;
 
     class AnyCellBase : public RefCountedObject
     {
@@ -55,14 +51,12 @@ namespace wio::runtime
         }
     };
 
-    template <typename T>
-    class AnyValueCell final : public AnyCellBase
+    template <typename T> class AnyValueCell final : public AnyCellBase
     {
     public:
         using StoredType = std::remove_cvref_t<T>;
 
-        explicit AnyValueCell(StoredType value)
-            : value_(std::move(value))
+        explicit AnyValueCell(StoredType value) : value_(std::move(value))
         {
         }
 
@@ -96,12 +90,11 @@ namespace wio::runtime
     };
 
     template <typename TObject>
-    requires std::is_base_of_v<RefCountedObject, TObject>
+        requires std::is_base_of_v<RefCountedObject, TObject>
     class AnyObjectCell final : public AnyCellBase
     {
     public:
-        explicit AnyObjectCell(Ref<TObject> value)
-            : value_(std::move(value))
+        explicit AnyObjectCell(Ref<TObject> value) : value_(std::move(value))
         {
         }
 
@@ -137,8 +130,7 @@ namespace wio::runtime
     class AnyOpaqueCell final : public AnyCellBase
     {
     public:
-        explicit AnyOpaqueCell(void* value) noexcept
-            : value_(value)
+        explicit AnyOpaqueCell(void* value) noexcept : value_(value)
         {
         }
 
@@ -169,8 +161,7 @@ namespace wio::runtime
     class AnyRuntimeObjectCell final : public AnyCellBase
     {
     public:
-        explicit AnyRuntimeObjectCell(Ref<RefCountedObject> value)
-            : value_(std::move(value))
+        explicit AnyRuntimeObjectCell(Ref<RefCountedObject> value) : value_(std::move(value))
         {
         }
 
@@ -209,8 +200,7 @@ namespace wio::runtime
         }
 
         Any() = default;
-        Any(std::nullptr_t) noexcept
-            : cell_(nullptr)
+        Any(std::nullptr_t) noexcept : cell_(nullptr)
         {
         }
 
@@ -226,24 +216,19 @@ namespace wio::runtime
                 cell_ = Ref<AnyOpaqueCell>::Create(opaqueValue);
         }
 
-        Any(const char* text)
-            : cell_(Ref<AnyValueCell<std::string>>::Create(text ? std::string(text) : std::string{}))
+        Any(const char* text) : cell_(Ref<AnyValueCell<std::string>>::Create(text ? std::string(text) : std::string{}))
         {
         }
 
-        template <std::size_t N>
-        Any(const char (&text)[N])
-            : Any(static_cast<const char*>(text))
+        template <std::size_t N> Any(const char (&text)[N]) : Any(static_cast<const char*>(text))
         {
         }
 
-        Any(std::string text)
-            : cell_(Ref<AnyValueCell<std::string>>::Create(std::move(text)))
+        Any(std::string text) : cell_(Ref<AnyValueCell<std::string>>::Create(std::move(text)))
         {
         }
 
-        Any(std::string_view text)
-            : cell_(Ref<AnyValueCell<std::string>>::Create(std::string(text)))
+        Any(std::string_view text) : cell_(Ref<AnyValueCell<std::string>>::Create(std::string(text)))
         {
         }
 
@@ -253,17 +238,14 @@ namespace wio::runtime
         Any& operator=(Any&&) noexcept = default;
 
         template <typename T>
-        requires (!std::is_same_v<std::remove_cvref_t<T>, Any> &&
-                  !std::is_same_v<std::remove_cvref_t<T>, std::nullptr_t> &&
-                  !IsRuntimeRefTypeV<T>)
-        Any(T&& value)
-            : cell_(Ref<AnyValueCell<std::remove_cvref_t<T>>>::Create(std::forward<T>(value)))
+            requires(!std::is_same_v<std::remove_cvref_t<T>, Any> &&
+                     !std::is_same_v<std::remove_cvref_t<T>, std::nullptr_t> && !IsRuntimeRefTypeV<T>)
+        Any(T&& value) : cell_(Ref<AnyValueCell<std::remove_cvref_t<T>>>::Create(std::forward<T>(value)))
         {
         }
 
         template <typename TObject>
-        requires (std::is_base_of_v<RefCountedObject, TObject> &&
-                  !std::is_base_of_v<AnyCellBase, TObject>)
+            requires(std::is_base_of_v<RefCountedObject, TObject> && !std::is_base_of_v<AnyCellBase, TObject>)
         Any(const Ref<TObject>& object)
         {
             if (object)
@@ -271,24 +253,21 @@ namespace wio::runtime
         }
 
         template <typename TObject>
-        requires (std::is_base_of_v<RefCountedObject, TObject> &&
-                  !std::is_base_of_v<AnyCellBase, TObject>)
+            requires(std::is_base_of_v<RefCountedObject, TObject> && !std::is_base_of_v<AnyCellBase, TObject>)
         Any(Ref<TObject>&& object)
         {
             if (object)
                 cell_ = Ref<AnyObjectCell<TObject>>::Create(std::move(object));
         }
 
-        template <typename T>
-        [[nodiscard]] static Any Box(T&& value)
+        template <typename T> [[nodiscard]] static Any Box(T&& value)
         {
             using StoredType = std::remove_cvref_t<T>;
             return FromCell(Ref<AnyValueCell<StoredType>>::Create(std::forward<T>(value)));
         }
 
         template <typename TObject>
-        requires (std::is_base_of_v<RefCountedObject, TObject> &&
-                  !std::is_base_of_v<AnyCellBase, TObject>)
+            requires(std::is_base_of_v<RefCountedObject, TObject> && !std::is_base_of_v<AnyCellBase, TObject>)
         [[nodiscard]] static Any FromObject(const Ref<TObject>& object)
         {
             if (!object)
@@ -318,8 +297,7 @@ namespace wio::runtime
             return Any(value);
         }
 
-        template <typename TInterface>
-        [[nodiscard]] static Any FromInterface(TInterface* interfaceValue)
+        template <typename TInterface> [[nodiscard]] static Any FromInterface(TInterface* interfaceValue)
         {
             if (!interfaceValue)
                 return Any(nullptr);
@@ -332,9 +310,8 @@ namespace wio::runtime
         }
 
         template <typename T>
-        requires (!std::is_same_v<std::remove_cvref_t<T>, Any> &&
-                  !std::is_same_v<std::remove_cvref_t<T>, std::nullptr_t> &&
-                  !IsRuntimeRefTypeV<T>)
+            requires(!std::is_same_v<std::remove_cvref_t<T>, Any> &&
+                     !std::is_same_v<std::remove_cvref_t<T>, std::nullptr_t> && !IsRuntimeRefTypeV<T>)
         Any& operator=(T&& value)
         {
             using StoredType = std::remove_cvref_t<T>;
@@ -343,8 +320,7 @@ namespace wio::runtime
         }
 
         template <typename TObject>
-        requires (std::is_base_of_v<RefCountedObject, TObject> &&
-                  !std::is_base_of_v<AnyCellBase, TObject>)
+            requires(std::is_base_of_v<RefCountedObject, TObject> && !std::is_base_of_v<AnyCellBase, TObject>)
         Any& operator=(const Ref<TObject>& object)
         {
             if (!object)
@@ -358,8 +334,7 @@ namespace wio::runtime
         }
 
         template <typename TObject>
-        requires (std::is_base_of_v<RefCountedObject, TObject> &&
-                  !std::is_base_of_v<AnyCellBase, TObject>)
+            requires(std::is_base_of_v<RefCountedObject, TObject> && !std::is_base_of_v<AnyCellBase, TObject>)
         Any& operator=(Ref<TObject>&& object)
         {
             if (!object)
@@ -408,8 +383,7 @@ namespace wio::runtime
             return *this;
         }
 
-        template <std::size_t N>
-        Any& operator=(const char (&text)[N])
+        template <std::size_t N> Any& operator=(const char (&text)[N])
         {
             return operator=(static_cast<const char*>(text));
         }
@@ -461,6 +435,16 @@ namespace wio::runtime
             return !IsNull();
         }
 
+        [[nodiscard]] bool operator==(const Any& other) const noexcept
+        {
+            return cell_.Get() == other.cell_.Get();
+        }
+
+        [[nodiscard]] bool operator!=(const Any& other) const noexcept
+        {
+            return !(*this == other);
+        }
+
         friend bool operator==(std::nullptr_t, const Any& value) noexcept
         {
             return value.IsNull();
@@ -471,12 +455,10 @@ namespace wio::runtime
             return !value.IsNull();
         }
 
-        template <typename T>
-        [[nodiscard]] bool IsBoxed() const noexcept
+        template <typename T> [[nodiscard]] bool IsBoxed() const noexcept
         {
             using StoredType = std::remove_cvref_t<T>;
-            return cell_ &&
-                   cell_->Kind() == AnyStorageKind::BoxedValue &&
+            return cell_ && cell_->Kind() == AnyStorageKind::BoxedValue &&
                    cell_->TypeToken() == GetAnyTypeToken<StoredType>();
         }
 
@@ -486,31 +468,28 @@ namespace wio::runtime
         }
 
         template <typename TObject>
-        requires std::is_base_of_v<RefCountedObject, TObject>
+            requires std::is_base_of_v<RefCountedObject, TObject>
         [[nodiscard]] bool IsObject() const noexcept
         {
-            return cell_ &&
-                   cell_->Kind() == AnyStorageKind::ObjectReference &&
+            return cell_ && cell_->Kind() == AnyStorageKind::ObjectReference &&
                    cell_->TypeToken() == GetAnyTypeToken<TObject>();
         }
 
         template <typename TObject>
-        requires std::is_base_of_v<RefCountedObject, TObject>
+            requires std::is_base_of_v<RefCountedObject, TObject>
         [[nodiscard]] bool CanCastObject() const noexcept
         {
             const auto runtimeObject = cell_ ? cell_->RuntimeObject() : Ref<RefCountedObject>{};
             return runtimeObject && runtimeObject->_WF_CastTo(TObject::TYPE_ID) != nullptr;
         }
 
-        template <typename TInterface>
-        [[nodiscard]] bool IsInterface() const noexcept
+        template <typename TInterface> [[nodiscard]] bool IsInterface() const noexcept
         {
             const auto runtimeObject = cell_ ? cell_->RuntimeObject() : Ref<RefCountedObject>{};
             return runtimeObject && runtimeObject->_WF_CastTo(TInterface::TYPE_ID) != nullptr;
         }
 
-        template <typename T>
-        [[nodiscard]] T& AsBoxed()
+        template <typename T> [[nodiscard]] T& AsBoxed()
         {
             using StoredType = std::remove_cvref_t<T>;
             if (!IsBoxed<StoredType>())
@@ -519,8 +498,7 @@ namespace wio::runtime
             return static_cast<AnyValueCell<StoredType>*>(cell_.Get())->Value();
         }
 
-        template <typename T>
-        [[nodiscard]] const T& AsBoxed() const
+        template <typename T> [[nodiscard]] const T& AsBoxed() const
         {
             using StoredType = std::remove_cvref_t<T>;
             if (!IsBoxed<StoredType>())
@@ -538,7 +516,7 @@ namespace wio::runtime
         }
 
         template <typename TObject>
-        requires std::is_base_of_v<RefCountedObject, TObject>
+            requires std::is_base_of_v<RefCountedObject, TObject>
         [[nodiscard]] Ref<TObject> AsObject() const
         {
             if (!IsObject<TObject>())
@@ -548,7 +526,7 @@ namespace wio::runtime
         }
 
         template <typename TObject>
-        requires std::is_base_of_v<RefCountedObject, TObject>
+            requires std::is_base_of_v<RefCountedObject, TObject>
         [[nodiscard]] Ref<TObject> CastObject() const
         {
             const auto runtimeObject = cell_ ? cell_->RuntimeObject() : Ref<RefCountedObject>{};
@@ -562,8 +540,7 @@ namespace wio::runtime
             return Ref<TObject>(static_cast<TObject*>(casted));
         }
 
-        template <typename TInterface>
-        [[nodiscard]] TInterface* AsInterface() const
+        template <typename TInterface> [[nodiscard]] TInterface* AsInterface() const
         {
             const auto runtimeObject = cell_ ? cell_->RuntimeObject() : Ref<RefCountedObject>{};
             if (!runtimeObject)
@@ -577,11 +554,10 @@ namespace wio::runtime
         }
 
     private:
-        explicit Any(Ref<AnyCellBase> cell)
-            : cell_(std::move(cell))
+        explicit Any(Ref<AnyCellBase> cell) : cell_(std::move(cell))
         {
         }
 
         Ref<AnyCellBase> cell_;
     };
-}
+} // namespace wio::runtime

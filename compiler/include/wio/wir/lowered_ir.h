@@ -80,6 +80,7 @@ namespace wio::wir::lowered
         AnyCheckedCast,
         AnyTypeTest,
         NullableWrap,
+        NullableUnwrap,
         IteratorCreate,
         IteratorHasNext,
         IteratorValue,
@@ -228,4 +229,4 @@ namespace wio::wir::lowered
     [[nodiscard]] std::string_view storageClassName(StorageClass storageClass);
     [[nodiscard]] std::string_view escapeClassName(EscapeClass escapeClass);
     [[nodiscard]] std::string_view boundsCheckModeName(BoundsCheckMode mode);
-}
+} // namespace wio::wir::lowered

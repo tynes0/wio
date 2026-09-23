@@ -1,5 +1,6 @@
 #include "wio/wir/generic_specializer.h"
 #include "wio/wir/native_abi_types.h"
+#include "wio/sema/generic_support.h"
 
 #include <algorithm>
 #include <charconv>
@@ -44,6 +45,7 @@ namespace wio::wir
                     {
                         instances_.emplace(function.specializationKey, function.id);
                         instanceKeys_.emplace(function.id, function.specializationKey);
+                        ++instanceCounts_[function.genericOrigin];
                     }
                 }
             }
@@ -64,6 +66,15 @@ namespace wio::wir
                     request.signatureTypes = entry.parameterTypes;
                     request.resultType = entry.returnType;
                     entry.function = instantiate(request);
+                    const auto concrete = std::ranges::find(module_.functions, entry.function, &Function::id);
+                    if (concrete != module_.functions.end())
+                    {
+                        entry.parameterTypes.clear();
+                        entry.parameterTypes.reserve(concrete->parameters.size());
+                        for (const Parameter& parameter : concrete->parameters)
+                            entry.parameterTypes.push_back(parameter.type);
+                        entry.returnType = concrete->returnType;
+                    }
                 }
                 // Appending a body grows this worklist. Cache entries are registered
                 // before visiting it, so self/mutual recursion closes on existing IDs.
@@ -86,6 +97,41 @@ namespace wio::wir
                             instruction.callee = instantiate(instruction);
                             if (const auto key = instanceKeys_.find(instruction.callee); key != instanceKeys_.end())
                                 instruction.specializationKey = key->second;
+                            const auto concrete =
+                                std::ranges::find(module_.functions, instruction.callee, &Function::id);
+                            if (concrete == module_.functions.end() ||
+                                concrete->parameters.size() != instruction.operands.size() ||
+                                instruction.signatureTypes.size() != instruction.operands.size())
+                                continue;
+                            for (std::size_t argumentIndex = 0; argumentIndex < instruction.operands.size();
+                                 ++argumentIndex)
+                            {
+                                const TypeId oldType = instruction.signatureTypes[argumentIndex];
+                                // A closure body's hidden parameters are references to its capture storage,
+                                // while ClosureCreate consumes the captured values themselves.  Reconcile
+                                // those operands against the concrete capture layout, not the hidden ABI.
+                                const TypeId concreteType =
+                                    instruction.opcode == Opcode::ClosureCreate &&
+                                            argumentIndex < concrete->captures.size()
+                                        ? concrete->captures[argumentIndex].type
+                                        : concrete->parameters[argumentIndex].type;
+                                if (oldType == concreteType)
+                                    continue;
+                                instruction.signatureTypes[argumentIndex] = concreteType;
+                                for (auto& definingBlock : function.blocks)
+                                {
+                                    const auto definition =
+                                        std::ranges::find(definingBlock.instructions,
+                                                          instruction.operands[argumentIndex], &Instruction::result);
+                                    if (definition == definingBlock.instructions.end() ||
+                                        definition->resultType != oldType)
+                                        continue;
+                                    definition->resultType = concreteType;
+                                    if (definition->targetType == oldType)
+                                        definition->targetType = concreteType;
+                                    break;
+                                }
+                            }
                         }
                     module_.functions[index] = std::move(function);
                     materializeMethods();
@@ -102,6 +148,31 @@ namespace wio::wir
                 for (std::size_t i = 0; i < module_.types.size() && diagnostics_.empty(); ++i)
                 {
                     TypeId id{static_cast<TypeId::ValueType>(i)};
+                    if (openType(id) || openMethodLayouts(id))
+                    {
+                        const Type candidate = module_.types.get(id);
+                        const bool concreteNominalArguments =
+                            candidate.kind == TypeKind::Named && !candidate.arguments.empty() &&
+                            std::ranges::none_of(candidate.arguments,
+                                                 [&](const TypeId argument) { return openType(argument); });
+                        if (concreteNominalArguments)
+                        {
+                            for (std::size_t primaryIndex = 0; primaryIndex < module_.types.size(); ++primaryIndex)
+                            {
+                                const TypeId primaryId{static_cast<TypeId::ValueType>(primaryIndex)};
+                                const Type& primary = module_.types.get(primaryId);
+                                if (primaryId == id || primary.kind != TypeKind::Named ||
+                                    primary.name != candidate.name || !openType(primaryId))
+                                    continue;
+                                Bindings bindings;
+                                if (!bind(primaryId, id, bindings))
+                                    continue;
+                                Bindings cache;
+                                (void)substitute(primaryId, bindings, cache);
+                                break;
+                            }
+                        }
+                    }
                     if (openType(id))
                         continue;
                     auto methods = module_.types.get(id).methods;
@@ -112,7 +183,7 @@ namespace wio::wir
                     {
                         const auto source = templates_.find(method.function);
                         if (method.isAbstract || source == templates_.end() || source->second.isExternal ||
-                            !openFunction(source->second))
+                            !openFunction(source->second) || !source->second.genericParameters.empty())
                             continue;
                         TypeId owner = id;
                         const std::string ownerName = module_.types.get(source->second.ownerType).name;
@@ -138,8 +209,19 @@ namespace wio::wir
                             continue;
                         Bindings cache;
                         method.returnType = substitute(method.returnType, ownerBindings, cache);
-                        for (TypeId& parameter : method.parameterTypes)
-                            parameter = substitute(parameter, ownerBindings, cache);
+                        std::vector<TypeId> concreteParameters;
+                        for (const TypeId parameter : method.parameterTypes)
+                        {
+                            const TypeId concrete = substitute(parameter, ownerBindings, cache);
+                            const Type& concreteType = module_.types.get(concrete);
+                            if ((concreteType.kind == TypeKind::TypePack || concreteType.kind == TypeKind::ValuePack) &&
+                                !concreteType.arguments.empty())
+                                concreteParameters.insert(concreteParameters.end(), concreteType.arguments.begin(),
+                                                          concreteType.arguments.end());
+                            else
+                                concreteParameters.push_back(concrete);
+                        }
+                        method.parameterTypes = std::move(concreteParameters);
                         if (openType(method.returnType) ||
                             std::ranges::any_of(method.parameterTypes,
                                                 [&](const TypeId parameter) { return openType(parameter); }))
@@ -185,7 +267,9 @@ namespace wio::wir
             std::map<TypeId, std::vector<MethodLayout>> processedMethods_;
             std::map<std::string, FunctionId> instances_;
             std::map<FunctionId, std::string> instanceKeys_;
+            std::map<FunctionId, std::size_t> instanceCounts_;
             std::vector<SpecializationDiagnostic> diagnostics_;
+            std::string lastBindMismatch_;
             FunctionId::ValueType nextId_ = 0;
             std::size_t maximumBodies_;
 
@@ -196,7 +280,9 @@ namespace wio::wir
                     return false;
                 if (parameterKind(type->kind))
                     return true;
-                if ((type->kind == TypeKind::ValuePack || type->kind == TypeKind::TypePack) && type->arguments.empty())
+                if ((type->kind == TypeKind::ValuePack || type->kind == TypeKind::TypePack ||
+                     type->kind == TypeKind::PackStorage) &&
+                    type->arguments.empty())
                     return !type->name.empty();
                 return openType(type->extentParameter, visiting) ||
                        std::ranges::any_of(type->arguments,
@@ -210,6 +296,55 @@ namespace wio::wir
             {
                 std::set<TypeId> visiting;
                 return openType(id, visiting);
+            }
+            bool openMethodLayouts(TypeId id) const
+            {
+                const Type* type = module_.types.tryGet(id);
+                return type &&
+                       std::ranges::any_of(type->methods,
+                                           [&](const MethodLayout& method)
+                                           {
+                                               return openType(method.returnType) ||
+                                                      std::ranges::any_of(method.parameterTypes, [&](TypeId parameter)
+                                                                          { return openType(parameter); });
+                                           });
+            }
+            bool typeReferencesBindings(TypeId id, const Bindings& bindings, std::set<TypeId>& visiting) const
+            {
+                if (!id)
+                    return false;
+                if (bindings.contains(id))
+                    return true;
+                const Type* type = module_.types.tryGet(id);
+                if (!type || !visiting.insert(id).second)
+                    return false;
+                const bool references =
+                    typeReferencesBindings(type->extentParameter, bindings, visiting) ||
+                    std::ranges::any_of(type->arguments, [&](const TypeId argument)
+                                        { return typeReferencesBindings(argument, bindings, visiting); });
+                visiting.erase(id);
+                return references;
+            }
+            bool methodLayoutsReferenceBindings(TypeId id, const Bindings& bindings) const
+            {
+                const Type* type = module_.types.tryGet(id);
+                if (!type)
+                    return false;
+                return std::ranges::any_of(type->methods,
+                                           [&](const MethodLayout& method)
+                                           {
+                                               std::set<TypeId> visiting;
+                                               if (typeReferencesBindings(method.returnType, bindings, visiting))
+                                                   return true;
+                                               return std::ranges::any_of(method.parameterTypes,
+                                                                          [&](const TypeId parameter)
+                                                                          {
+                                                                              std::set<TypeId> parameterVisiting;
+                                                                              return typeReferencesBindings(
+                                                                                  parameter, bindings,
+                                                                                  parameterVisiting);
+                                                                          });
+                                           });
             }
             bool openFunction(const Function& function) const
             {
@@ -230,17 +365,45 @@ namespace wio::wir
                 const Type patternType = module_.types.get(pattern), actualType = module_.types.get(actual);
                 const Type* p = &patternType;
                 const Type* a = &actualType;
+                if (nativeAbiTypeKey(module_.types, pattern) == nativeAbiTypeKey(module_.types, actual))
+                    return true;
                 if (parameterKind(p->kind))
                 {
-                    if (p->kind == TypeKind::ConstGenericParameter && a->kind == TypeKind::ConstValue &&
-                        p->arguments.size() == 1)
-                    {
-                        Type normalized = *a;
-                        normalized.arguments = p->arguments;
-                        actual = module_.types.intern(std::move(normalized));
-                    }
                     const auto [it, inserted] = bindings.emplace(pattern, actual);
-                    return inserted || it->second == actual;
+                    if (inserted || it->second == actual)
+                        return true;
+                    const Type& previous = module_.types.get(it->second);
+                    if (nativeAbiTypeKey(module_.types, it->second) == nativeAbiTypeKey(module_.types, actual))
+                        return true;
+                    const bool previousPack = previous.kind == TypeKind::TypePack ||
+                                              previous.kind == TypeKind::ValuePack ||
+                                              previous.kind == TypeKind::PackStorage;
+                    const bool actualPack = a->kind == TypeKind::TypePack || a->kind == TypeKind::ValuePack ||
+                                            a->kind == TypeKind::PackStorage;
+                    if (previousPack && actualPack && previous.arguments == a->arguments)
+                        return true;
+                    lastBindMismatch_ = "parameter #" + std::to_string(pattern.value()) + " was bound to #" +
+                                        std::to_string(it->second.value()) + " (" +
+                                        nativeAbiTypeKey(module_.types, it->second) + ") but inferred #" +
+                                        std::to_string(actual.value()) + " (" +
+                                        nativeAbiTypeKey(module_.types, actual) + ")";
+                    return false;
+                }
+                const bool hasTrailingPack = !p->arguments.empty() && module_.types.get(p->arguments.back()).kind ==
+                                                                          TypeKind::GenericParameterPack;
+                if (p->kind == a->kind && hasTrailingPack)
+                {
+                    if (p->kind == TypeKind::Named && p->name != a->name)
+                        return false;
+                    const std::size_t fixedCount = p->arguments.size() - 1;
+                    if (a->arguments.size() < fixedCount)
+                        return false;
+                    for (std::size_t i = 0; i < fixedCount; ++i)
+                        if (!bind(p->arguments[i], a->arguments[i], bindings))
+                            return false;
+                    Type pack{.kind = TypeKind::TypePack, .name = module_.types.get(p->arguments.back()).name};
+                    pack.arguments.insert(pack.arguments.end(), a->arguments.begin() + fixedCount, a->arguments.end());
+                    return bind(p->arguments.back(), module_.types.intern(std::move(pack)), bindings);
                 }
                 if (p->kind != a->kind || p->arguments.size() != a->arguments.size())
                     return false;
@@ -275,10 +438,62 @@ namespace wio::wir
                 if (const auto it = cache.find(id); it != cache.end())
                     return it->second;
                 Type type = module_.types.get(id);
+                if (type.kind == TypeKind::GenericParameter)
+                {
+                    if (const auto element = sema::generic_support::tryParsePackElementBindingName(type.name))
+                    {
+                        for (const auto& [parameter, bound] : bindings)
+                        {
+                            const Type& parameterType = module_.types.get(parameter);
+                            const Type& pack = module_.types.get(bound);
+                            if (parameterType.kind != TypeKind::GenericParameterPack ||
+                                parameterType.name != element->packName)
+                                continue;
+                            if (const auto index = sema::generic_support::tryResolveConcretePackElementIndex(
+                                    *element, pack.arguments.size()))
+                                return pack.arguments[*index];
+                        }
+                    }
+                }
                 if (!openType(id))
                     return id;
-                for (TypeId& argument : type.arguments)
-                    argument = substitute(argument, bindings, cache);
+                if ((type.kind == TypeKind::ValuePack || type.kind == TypeKind::TypePack ||
+                     type.kind == TypeKind::PackStorage) &&
+                    type.arguments.empty() && !type.name.empty())
+                {
+                    for (const auto& [parameter, bound] : bindings)
+                    {
+                        const Type& parameterType = module_.types.get(parameter);
+                        const Type& pack = module_.types.get(bound);
+                        if (parameterType.kind == TypeKind::GenericParameterPack && parameterType.name == type.name)
+                        {
+                            type.arguments = pack.arguments;
+                            break;
+                        }
+                    }
+                }
+                std::vector<TypeId> arguments;
+                for (const TypeId argument : type.arguments)
+                {
+                    if (type.kind == TypeKind::Named || type.kind == TypeKind::TypePack ||
+                        type.kind == TypeKind::ValuePack)
+                    {
+                        if (const Type* pack = boundPack(argument, bindings))
+                        {
+                            arguments.insert(arguments.end(), pack->arguments.begin(), pack->arguments.end());
+                            continue;
+                        }
+                    }
+                    arguments.push_back(substitute(argument, bindings, cache));
+                }
+                type.arguments = std::move(arguments);
+                if ((type.kind == TypeKind::ValuePack || type.kind == TypeKind::TypePack ||
+                     type.kind == TypeKind::PackStorage) &&
+                    !type.arguments.empty() &&
+                    std::ranges::none_of(type.arguments, [&](const TypeId argument) { return openType(argument); }))
+                {
+                    type.name.clear();
+                }
                 if (type.extentParameter)
                 {
                     const TypeId extent = substitute(type.extentParameter, bindings, cache);
@@ -306,14 +521,25 @@ namespace wio::wir
                 for (MethodLayout& method : type.methods)
                 {
                     method.returnType = substitute(method.returnType, bindings, cache);
-                    for (TypeId& p : method.parameterTypes)
-                        p = substitute(p, bindings, cache);
+                    std::vector<TypeId> concreteParameters;
+                    for (const TypeId parameter : method.parameterTypes)
+                    {
+                        const TypeId concrete = substitute(parameter, bindings, cache);
+                        const Type& concreteType = module_.types.get(concrete);
+                        if ((concreteType.kind == TypeKind::TypePack || concreteType.kind == TypeKind::ValuePack) &&
+                            !concreteType.arguments.empty())
+                            concreteParameters.insert(concreteParameters.end(), concreteType.arguments.begin(),
+                                                      concreteType.arguments.end());
+                        else
+                            concreteParameters.push_back(concrete);
+                    }
+                    method.parameterTypes = std::move(concreteParameters);
                 }
                 if (result)
                 {
                     // An existing concrete layout from semantic analysis is the
                     // canonical identity; never overwrite its resolved fields.
-                    if (openType(result))
+                    if (openType(result) || methodLayoutsReferenceBindings(result, bindings))
                         module_.types.getMutable(result) = std::move(type);
                 }
                 else
@@ -402,8 +628,61 @@ namespace wio::wir
                 for (BasicBlock& block : function.blocks)
                 {
                     std::vector<Instruction> instructions;
+                    std::map<ValueId, TypeId> specializedValues;
+                    std::map<ValueId, TypeId> specializedPlaces;
                     for (Instruction instruction : block.instructions)
                     {
+                        if (instruction.opcode == Opcode::PlaceInit && instruction.operands.size() == 2)
+                        {
+                            const auto sourceType = specializedValues.find(instruction.operands[1]);
+                            if (sourceType != specializedValues.end())
+                            {
+                                specializedPlaces[instruction.operands[0]] = sourceType->second;
+                                const auto place =
+                                    std::ranges::find(instructions, instruction.operands[0], &Instruction::result);
+                                if (place != instructions.end())
+                                {
+                                    Type reference = module_.types.get(place->resultType);
+                                    if (reference.kind == TypeKind::Reference && reference.arguments.size() == 1)
+                                    {
+                                        reference.arguments.front() = sourceType->second;
+                                        place->resultType = module_.types.intern(std::move(reference));
+                                    }
+                                }
+                            }
+                        }
+                        if (instruction.opcode == Opcode::Load && instruction.operands.size() == 1)
+                        {
+                            const auto placeType = specializedPlaces.find(instruction.operands.front());
+                            if (placeType != specializedPlaces.end())
+                            {
+                                instruction.resultType = placeType->second;
+                                specializedValues[instruction.result] = placeType->second;
+                            }
+                        }
+                        if (instruction.opcode == Opcode::IteratorCreate && instruction.operands.size() == 1)
+                        {
+                            const auto sourceType = specializedValues.find(instruction.operands.front());
+                            if (sourceType != specializedValues.end())
+                            {
+                                Type iterator = module_.types.get(instruction.resultType);
+                                if (iterator.kind == TypeKind::Iterator && iterator.arguments.size() == 1)
+                                {
+                                    iterator.arguments.front() = sourceType->second;
+                                    instruction.resultType = module_.types.intern(std::move(iterator));
+                                    specializedValues[instruction.result] = instruction.resultType;
+                                }
+                            }
+                        }
+                        for (std::size_t index = 0;
+                             index < instruction.operands.size() && index < instruction.signatureTypes.size(); ++index)
+                        {
+                            if (const auto type = specializedValues.find(instruction.operands[index]);
+                                type != specializedValues.end())
+                            {
+                                instruction.signatureTypes[index] = type->second;
+                            }
+                        }
                         if (instruction.opcode == Opcode::LocalPlace)
                         {
                             const Type* reference = module_.types.tryGet(instruction.resultType);
@@ -429,6 +708,66 @@ namespace wio::wir
                         {
                             expansions[instruction.result] = expansions.at(instruction.operands.front());
                             continue;
+                        }
+                        if (instruction.opcode == Opcode::IntrinsicCall &&
+                            instruction.intrinsicFamily == IntrinsicFamily::Pack)
+                        {
+                            const ExpandedPackValue* expansion =
+                                instruction.operands.size() == 1 && expansions.contains(instruction.operands.front())
+                                    ? &expansions.at(instruction.operands.front())
+                                    : nullptr;
+                            const Type* bound = !expansion ? boundPack(instruction.targetType, bindings) : nullptr;
+                            const std::size_t packSize = expansion ? expansion->types.size()
+                                                         : bound   ? bound->arguments.size()
+                                                                   : 0;
+                            if (instruction.selector == "Size" && (expansion || bound))
+                            {
+                                instruction.opcode = Opcode::Constant;
+                                instruction.operands.clear();
+                                instruction.signatureTypes.clear();
+                                instruction.intrinsicFamily = IntrinsicFamily::None;
+                                instruction.targetType = {};
+                                instruction.literal = static_cast<std::uint64_t>(packSize);
+                                instructions.push_back(std::move(instruction));
+                                continue;
+                            }
+                            if (instruction.selector == "Array" && expansion)
+                            {
+                                instruction.operands = expansion->values;
+                                instruction.signatureTypes = expansion->types;
+                                Type array = module_.types.get(instruction.resultType);
+                                if (array.kind == TypeKind::Array)
+                                {
+                                    array.staticExtent = expansion->types.size();
+                                    array.extentParameter = {};
+                                    instruction.resultType = module_.types.intern(std::move(array));
+                                }
+                                specializedValues[instruction.result] = instruction.resultType;
+                                instructions.push_back(std::move(instruction));
+                                continue;
+                            }
+                            if (expansion)
+                            {
+                                const auto element =
+                                    sema::generic_support::tryParsePackElementBindingName(instruction.selector);
+                                const auto index = element ? sema::generic_support::tryResolveConcretePackElementIndex(
+                                                                 *element, expansion->values.size())
+                                                           : std::nullopt;
+                                if (!index)
+                                {
+                                    fail("Concrete parameter-pack element index could not be resolved.",
+                                         instruction.source);
+                                    return false;
+                                }
+                                instruction.opcode = Opcode::Copy;
+                                instruction.operands = {expansion->values[*index]};
+                                instruction.signatureTypes.clear();
+                                instruction.intrinsicFamily = IntrinsicFamily::None;
+                                instruction.targetType = {};
+                                instruction.selector.clear();
+                                instructions.push_back(std::move(instruction));
+                                continue;
+                            }
                         }
                         if ((instruction.opcode == Opcode::Copy || instruction.opcode == Opcode::Move) &&
                             instruction.operands.size() == 1 && expansions.contains(instruction.operands.front()))
@@ -655,6 +994,21 @@ namespace wio::wir
                     {
                         instruction.resultType = replace(instruction.resultType);
                         instruction.targetType = replace(instruction.targetType);
+                        if (instruction.opcode == Opcode::IntrinsicCall &&
+                            instruction.intrinsicFamily == IntrinsicFamily::Pack && instruction.selector != "Size" &&
+                            instruction.selector != "Array")
+                        {
+                            const Type& pack = module_.types.get(instruction.targetType);
+                            const auto element =
+                                sema::generic_support::tryParsePackElementBindingName(instruction.selector);
+                            const auto index = element ? sema::generic_support::tryResolveConcretePackElementIndex(
+                                                             *element, pack.arguments.size())
+                                                       : std::nullopt;
+                            if (!index)
+                                fail("Concrete pack-storage element index could not be resolved.", instruction.source);
+                            else
+                                instruction.projectionIndex = static_cast<std::uint32_t>(*index);
+                        }
                         if (instruction.opcode == Opcode::GenericConstant)
                         {
                             const Type& constant = module_.types.get(instruction.targetType);
@@ -711,8 +1065,18 @@ namespace wio::wir
                         }
                         for (TypeId& type : instruction.signatureTypes)
                             type = replace(type);
-                        for (TypeId& type : instruction.genericArguments)
-                            type = replace(type);
+                        std::vector<TypeId> genericArguments;
+                        for (const TypeId argument : instruction.genericArguments)
+                        {
+                            if (const Type* pack = boundPack(argument, bindings))
+                            {
+                                genericArguments.insert(genericArguments.end(), pack->arguments.begin(),
+                                                        pack->arguments.end());
+                                continue;
+                            }
+                            genericArguments.push_back(replace(argument));
+                        }
+                        instruction.genericArguments = std::move(genericArguments);
                         if (instruction.result)
                         {
                             if (!(module_.types.get(instruction.resultType).kind == TypeKind::Reference &&
@@ -769,15 +1133,36 @@ namespace wio::wir
 
             FunctionId instantiate(const Instruction& request)
             {
+                lastBindMismatch_.clear();
                 const auto found = templates_.find(request.callee);
                 if (found == templates_.end())
                     return request.callee;
                 const Function& source = found->second;
                 Bindings bindings;
-                bool valid = request.genericArguments.size() <= source.genericParameters.size();
-                for (std::size_t i = 0; valid && i < request.genericArguments.size(); ++i)
+                const bool hasGenericPack =
+                    !source.genericParameters.empty() &&
+                    module_.types.get(source.genericParameters.back()).kind == TypeKind::GenericParameterPack;
+                const std::size_t fixedGenericCount =
+                    source.genericParameters.size() - static_cast<std::size_t>(hasGenericPack);
+                bool valid = hasGenericPack ? request.genericArguments.size() >= fixedGenericCount
+                                            : request.genericArguments.size() <= source.genericParameters.size();
+                std::string failureStage = valid ? std::string{} : "generic-argument-count";
+                for (std::size_t i = 0; valid && i < fixedGenericCount && i < request.genericArguments.size(); ++i)
                     if (!openType(request.genericArguments[i]))
+                    {
                         valid = bind(source.genericParameters[i], request.genericArguments[i], bindings);
+                        if (!valid)
+                            failureStage = "explicit-generic-argument";
+                    }
+                if (valid && hasGenericPack && request.genericArguments.size() > fixedGenericCount)
+                {
+                    Type pack{.kind = TypeKind::TypePack};
+                    pack.arguments.insert(pack.arguments.end(), request.genericArguments.begin() + fixedGenericCount,
+                                          request.genericArguments.end());
+                    valid = std::ranges::none_of(pack.arguments,
+                                                 [&](const TypeId argument) { return openType(argument); }) &&
+                            bind(source.genericParameters.back(), module_.types.intern(std::move(pack)), bindings);
+                }
                 std::vector<TypeId> signature = request.signatureTypes;
                 TypeId result = request.resultType ? request.resultType : module_.types.voidType();
                 if (request.opcode == Opcode::ConstructObject || request.opcode == Opcode::ConstructComponent)
@@ -818,8 +1203,14 @@ namespace wio::wir
                 if (packParameter == source.parameters.end())
                 {
                     valid &= signature.size() == source.parameters.size();
+                    if (!valid && failureStage.empty())
+                        failureStage = "parameter-count";
                     for (std::size_t i = 0; valid && i < signature.size(); ++i)
+                    {
                         valid = bind(source.parameters[i].type, signature[i], bindings);
+                        if (!valid)
+                            failureStage = "parameter-" + std::to_string(i);
+                    }
                 }
                 else
                 {
@@ -828,35 +1219,69 @@ namespace wio::wir
                     valid &= std::next(packParameter) == source.parameters.end() && signature.size() >= packIndex;
                     for (std::size_t i = 0; valid && i < packIndex; ++i)
                         valid = bind(source.parameters[i].type, signature[i], bindings);
-                    if (valid)
+                    if (valid && !bindings.contains(packParameter->type))
                     {
-                        Type pack{.kind = TypeKind::TypePack};
-                        pack.arguments.insert(pack.arguments.end(), signature.begin() + packIndex, signature.end());
-                        valid = bind(packParameter->type, module_.types.intern(std::move(pack)), bindings);
+                        const Type* existingPack =
+                            signature.size() == packIndex + 1 ? module_.types.tryGet(signature[packIndex]) : nullptr;
+                        if (existingPack &&
+                            (existingPack->kind == TypeKind::TypePack || existingPack->kind == TypeKind::ValuePack ||
+                             existingPack->kind == TypeKind::PackStorage))
+                        {
+                            valid = bind(packParameter->type, signature[packIndex], bindings);
+                        }
+                        else
+                        {
+                            Type pack{.kind = TypeKind::TypePack};
+                            pack.arguments.insert(pack.arguments.end(), signature.begin() + packIndex, signature.end());
+                            valid = bind(packParameter->type, module_.types.intern(std::move(pack)), bindings);
+                        }
                     }
                 }
-                valid &= bind(source.returnType, result, bindings);
+                const bool resultBound = valid && bind(source.returnType, result, bindings);
+                if (valid && !resultBound)
+                    failureStage = "result";
+                valid = resultBound;
+                if (valid && hasGenericPack && !bindings.contains(source.genericParameters.back()))
+                {
+                    Type pack{.kind = TypeKind::TypePack};
+                    valid = bind(source.genericParameters.back(), module_.types.intern(std::move(pack)), bindings);
+                }
                 for (TypeId p : source.genericParameters)
                     valid &= bindings.contains(p);
                 for (const auto& [p, actual] : bindings)
                     valid &= !openType(actual);
                 if (!valid)
                 {
-                    fail("Cannot materialize generic function '" + source.name + "' from its pinned signature.",
-                         request.source);
+                    std::ostringstream details;
+                    details << "Cannot materialize generic function '" << source.name
+                            << "' from its pinned signature (generic arguments=" << request.genericArguments.size()
+                            << ", generic parameters=" << source.genericParameters.size()
+                            << ", signature=" << signature.size() << ", parameters=" << source.parameters.size()
+                            << ", bindings=" << bindings.size() << ", stage=" << failureStage;
+                    for (std::size_t index = 0; index < std::min(signature.size(), source.parameters.size()); ++index)
+                        details << ", p" << index << "=!t" << source.parameters[index].type.value() << ':'
+                                << typeKindName(module_.types.get(source.parameters[index].type).kind) << "->!t"
+                                << signature[index].value() << ':'
+                                << typeKindName(module_.types.get(signature[index]).kind) << '['
+                                << nativeAbiTypeKey(module_.types, source.parameters[index].type) << "->"
+                                << nativeAbiTypeKey(module_.types, signature[index]) << ']';
+                    if (!lastBindMismatch_.empty())
+                        details << ", mismatch=" << lastBindMismatch_;
+                    details << ").";
+                    fail(details.str(), request.source);
                     return request.callee;
                 }
                 std::ostringstream key;
                 key << source.id.value();
                 for (const auto& [p, actual] : bindings)
-                    key << ':' << p.value() << '=' << actual.value();
+                    key << ':' << p.value() << '=' << nativeAbiTypeKey(module_.types, actual);
                 if (const auto it = instances_.find(key.str()); it != instances_.end())
                     return it->second;
-                if (instances_.size() >= maximumBodies_)
+                if (instanceCounts_[source.id] >= maximumBodies_)
                 {
                     diagnostics_.push_back({"WIR3101",
-                                            "Generic materialization exceeded its body limit (" +
-                                                std::to_string(maximumBodies_) +
+                                            "Generic materialization of '" + source.name +
+                                                "' exceeded its body limit (" + std::to_string(maximumBodies_) +
                                                 "); possible expanding polymorphic recursion.",
                                             request.source});
                     return request.callee;
@@ -864,6 +1289,7 @@ namespace wio::wir
                 const FunctionId id{nextId_++};
                 instances_[key.str()] = id;
                 instanceKeys_[id] = key.str();
+                ++instanceCounts_[source.id];
                 Function function = source;
                 if (function.nativeBinding)
                 {

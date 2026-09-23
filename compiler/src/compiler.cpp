@@ -70,10 +70,9 @@ namespace wio
         std::unordered_map<std::string, bool> moduleDeclaresTopLevelRealms;
         std::vector<RequiredCppHeader> requiredCppHeaders;
         BuildTarget buildTarget = BuildTarget::Executable;
-        std::string cppBackend = "legacy";
+        std::string cppBackend = "wir";
     };
 
-    
     namespace
     {
         AppData gAppData;
@@ -81,7 +80,7 @@ namespace wio
         std::filesystem::path getCompileTimeDefaultRootDir()
         {
 #ifdef WIO_DEFAULT_ROOT_DIR
-            return { WIO_DEFAULT_ROOT_DIR };
+            return {WIO_DEFAULT_ROOT_DIR};
 #else
             return {};
 #endif
@@ -89,14 +88,15 @@ namespace wio
 
         std::optional<std::filesystem::path> tryGetEnvironmentToolchainRoot()
         {
-            const char* envNames[] = { "WIO_ROOT", "WIO_HOME" };
+            const char* envNames[] = {"WIO_ROOT", "WIO_HOME"};
             for (const char* envName : envNames)
             {
                 const char* rawValue = std::getenv(envName);
                 if (rawValue == nullptr || *rawValue == '\0')
                     continue;
 
-                std::filesystem::path candidate = std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred();
+                std::filesystem::path candidate =
+                    std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred();
                 std::error_code ec;
                 if (std::filesystem::exists(candidate, ec) && !ec)
                     return candidate;
@@ -111,7 +111,8 @@ namespace wio
             std::wstring buffer(MAX_PATH, L'\0');
             for (;;)
             {
-                const DWORD copiedLength = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+                const DWORD copiedLength =
+                    GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
                 if (copiedLength == 0)
                     return std::nullopt;
 
@@ -201,8 +202,8 @@ namespace wio
                     return std::nullopt;
 
                 std::error_code ec;
-                if (std::filesystem::exists(candidate, ec) && !ec &&
-                    std::filesystem::is_directory(candidate, ec) && !ec)
+                if (std::filesystem::exists(candidate, ec) && !ec && std::filesystem::is_directory(candidate, ec) &&
+                    !ec)
                 {
                     return std::filesystem::absolute(candidate).make_preferred();
                 }
@@ -214,7 +215,8 @@ namespace wio
             {
                 for (const auto& relativeCandidate : relativeCandidates)
                 {
-                    if (auto resolved = tryCandidate((rootCandidate / relativeCandidate).make_preferred()); resolved.has_value())
+                    if (auto resolved = tryCandidate((rootCandidate / relativeCandidate).make_preferred());
+                        resolved.has_value())
                         return *resolved;
                 }
             }
@@ -234,8 +236,8 @@ namespace wio
                     return std::nullopt;
 
                 std::error_code ec;
-                if (std::filesystem::exists(candidate, ec) && !ec &&
-                    std::filesystem::is_regular_file(candidate, ec) && !ec)
+                if (std::filesystem::exists(candidate, ec) && !ec && std::filesystem::is_regular_file(candidate, ec) &&
+                    !ec)
                 {
                     return std::filesystem::absolute(candidate).make_preferred();
                 }
@@ -247,7 +249,8 @@ namespace wio
             {
                 for (const auto& relativeCandidate : relativeCandidates)
                 {
-                    if (auto resolved = tryCandidate((rootCandidate / relativeCandidate).make_preferred()); resolved.has_value())
+                    if (auto resolved = tryCandidate((rootCandidate / relativeCandidate).make_preferred());
+                        resolved.has_value())
                         return *resolved;
                 }
             }
@@ -262,42 +265,33 @@ namespace wio
         {
             return resolveToolchainDirectory(
 #ifdef WIO_RUNTIME_INCLUDE_DIR
-                std::filesystem::path{ WIO_RUNTIME_INCLUDE_DIR },
+                std::filesystem::path{WIO_RUNTIME_INCLUDE_DIR},
 #else
                 std::filesystem::path{},
 #endif
-                {
-                    std::filesystem::path("runtime") / "include"
-                }
-            );
+                {std::filesystem::path("runtime") / "include"});
         }
 
         std::filesystem::path getSdkIncludeDir()
         {
             return resolveToolchainDirectory(
 #ifdef WIO_SDK_INCLUDE_DIR
-                std::filesystem::path{ WIO_SDK_INCLUDE_DIR },
+                std::filesystem::path{WIO_SDK_INCLUDE_DIR},
 #else
                 std::filesystem::path{},
 #endif
-                {
-                    std::filesystem::path("sdk") / "include"
-                }
-            );
+                {std::filesystem::path("sdk") / "include"});
         }
 
         std::filesystem::path getStdSourceDir()
         {
             return resolveToolchainDirectory(
 #ifdef WIO_STD_SOURCE_DIR
-                std::filesystem::path{ WIO_STD_SOURCE_DIR },
+                std::filesystem::path{WIO_STD_SOURCE_DIR},
 #else
                 std::filesystem::path{},
 #endif
-                {
-                    "std"
-                }
-            );
+                {"std"});
         }
 
         std::optional<std::filesystem::path> tryResolveExecutableFromPath(const std::string& executableName)
@@ -307,17 +301,16 @@ namespace wio
 
             std::error_code ec;
             const std::filesystem::path configuredPath = std::filesystem::path(executableName);
-            if (configuredPath.is_absolute() &&
-                std::filesystem::exists(configuredPath, ec) &&
-                std::filesystem::is_regular_file(configuredPath, ec) &&
-                !ec)
+            if (configuredPath.is_absolute() && std::filesystem::exists(configuredPath, ec) &&
+                std::filesystem::is_regular_file(configuredPath, ec) && !ec)
             {
                 return std::filesystem::absolute(configuredPath).make_preferred();
             }
 
 #if defined(_WIN32)
             std::vector<char> buffer(MAX_PATH, '\0');
-            const DWORD copied = SearchPathA(nullptr, executableName.c_str(), nullptr, static_cast<DWORD>(buffer.size()), buffer.data(), nullptr);
+            const DWORD copied = SearchPathA(nullptr, executableName.c_str(), nullptr,
+                                             static_cast<DWORD>(buffer.size()), buffer.data(), nullptr);
             if (copied > 0 && copied < buffer.size())
                 return std::filesystem::path(buffer.data()).make_preferred();
 #endif
@@ -325,8 +318,9 @@ namespace wio
             return std::nullopt;
         }
 
-        std::filesystem::path resolveBundledBackendExecutable(std::string_view configuredExecutable,
-                                                              std::initializer_list<std::filesystem::path> relativeCandidates)
+        std::filesystem::path
+        resolveBundledBackendExecutable(std::string_view configuredExecutable,
+                                        std::initializer_list<std::filesystem::path> relativeCandidates)
         {
             const std::string configuredValue(configuredExecutable);
 
@@ -349,11 +343,7 @@ namespace wio
 
 #if defined(_WIN32)
             return resolveBundledBackendExecutable(
-                configuredCompiler,
-                {
-                    std::filesystem::path("toolchains") / "windows-x64-mingw" / "bin" / "g++.exe"
-                }
-            );
+                configuredCompiler, {std::filesystem::path("toolchains") / "windows-x64-mingw" / "bin" / "g++.exe"});
 #else
             return resolveBundledBackendExecutable(configuredCompiler, {});
 #endif
@@ -369,11 +359,7 @@ namespace wio
 
 #if defined(_WIN32)
             return resolveBundledBackendExecutable(
-                configuredArchiver,
-                {
-                    std::filesystem::path("toolchains") / "windows-x64-mingw" / "bin" / "ar.exe"
-                }
-            );
+                configuredArchiver, {std::filesystem::path("toolchains") / "windows-x64-mingw" / "bin" / "ar.exe"});
 #else
             return resolveBundledBackendExecutable(configuredArchiver, {});
 #endif
@@ -393,18 +379,15 @@ namespace wio
         {
             return resolveToolchainFile(
 #ifdef WIO_RUNTIME_LIBRARY_FILE
-                std::filesystem::path{ WIO_RUNTIME_LIBRARY_FILE },
+                std::filesystem::path{WIO_RUNTIME_LIBRARY_FILE},
 #else
                 std::filesystem::path{},
 #endif
-                {
-                    std::filesystem::path("runtime") / "backend" / "libwio_runtime.a",
-                    std::filesystem::path("runtime") / "lib" / "libwio_runtime.a",
-                    std::filesystem::path("lib") / "libwio_runtime.a",
-                    std::filesystem::path("build") / "runtime" / "backend" / "libwio_runtime.a",
-                    std::filesystem::path("build") / "runtime" / "libwio_runtime.a"
-                }
-            );
+                {std::filesystem::path("runtime") / "backend" / "libwio_runtime.a",
+                 std::filesystem::path("runtime") / "lib" / "libwio_runtime.a",
+                 std::filesystem::path("lib") / "libwio_runtime.a",
+                 std::filesystem::path("build") / "runtime" / "backend" / "libwio_runtime.a",
+                 std::filesystem::path("build") / "runtime" / "libwio_runtime.a"});
         }
 
         std::filesystem::path makeBackendStagingPath(const std::filesystem::path& outputPath)
@@ -416,8 +399,7 @@ namespace wio
         }
 
         bool replaceBackendOutputWithRetry(const std::filesystem::path& stagingPath,
-                                           const std::filesystem::path& outputPath,
-                                           std::string& errorMessage)
+                                           const std::filesystem::path& outputPath, std::string& errorMessage)
         {
             constexpr int attemptCount = 40;
             constexpr auto retryDelay = std::chrono::milliseconds(25);
@@ -425,10 +407,8 @@ namespace wio
             for (int attempt = 0; attempt < attemptCount; ++attempt)
             {
 #if defined(_WIN32)
-                if (MoveFileExW(
-                        stagingPath.c_str(),
-                        outputPath.c_str(),
-                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+                if (MoveFileExW(stagingPath.c_str(), outputPath.c_str(),
+                                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
                 {
                     return true;
                 }
@@ -465,18 +445,14 @@ namespace wio
 
         std::string normalizeLowercase(std::string value)
         {
-            std::ranges::transform(value, value.begin(), [](unsigned char ch)
-            {
-                return static_cast<char>(std::tolower(ch));
-            });
+            std::ranges::transform(value, value.begin(),
+                                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
             return value;
         }
 
         bool isSourceFilePath(std::string_view value)
         {
-            return value.ends_with(".c") ||
-                   value.ends_with(".cc") ||
-                   value.ends_with(".cpp") ||
+            return value.ends_with(".c") || value.ends_with(".cc") || value.ends_with(".cpp") ||
                    value.ends_with(".cxx");
         }
 
@@ -487,7 +463,8 @@ namespace wio
                 return BuildTarget::Executable;
             if (normalized == "static" || normalized == "staticlib" || normalized == "static-library")
                 return BuildTarget::StaticLibrary;
-            if (normalized == "shared" || normalized == "sharedlib" || normalized == "shared-library" || normalized == "dll")
+            if (normalized == "shared" || normalized == "sharedlib" || normalized == "shared-library" ||
+                normalized == "dll")
                 return BuildTarget::SharedLibrary;
 
             throw std::invalid_argument("Unknown build target: " + value + ". Expected one of: exe, static, shared.");
@@ -511,8 +488,7 @@ namespace wio
         bool backendCompilerLooksGnuLike(std::string_view compilerText)
         {
             const std::string lower = normalizeLowercase(std::string(compilerText));
-            return lower.find("g++") != std::string::npos ||
-                   lower.find("gcc") != std::string::npos ||
+            return lower.find("g++") != std::string::npos || lower.find("gcc") != std::string::npos ||
                    lower.find("mingw") != std::string::npos;
         }
 
@@ -556,10 +532,9 @@ namespace wio
                 return cppPath.make_preferred();
             }
 
-            std::filesystem::path root =
-                intermediateDir.has_value()
-                    ? std::filesystem::absolute(*intermediateDir).make_preferred()
-                    : outputPath.parent_path().make_preferred();
+            std::filesystem::path root = intermediateDir.has_value()
+                                             ? std::filesystem::absolute(*intermediateDir).make_preferred()
+                                             : outputPath.parent_path().make_preferred();
 
             std::filesystem::path cppPath = root / outputPath.stem();
             cppPath += ".wio.cpp";
@@ -582,14 +557,13 @@ namespace wio
             return WirEmitKind::None;
         }
 
-        std::filesystem::path makeDefaultWirPath(
-            const std::filesystem::path& sourcePath,
-            const std::optional<std::filesystem::path>& intermediateDir,
-            const WirEmitKind kind)
+        std::filesystem::path makeDefaultWirPath(const std::filesystem::path& sourcePath,
+                                                 const std::optional<std::filesystem::path>& intermediateDir,
+                                                 const WirEmitKind kind)
         {
             const std::filesystem::path root = intermediateDir.has_value()
-                ? std::filesystem::absolute(*intermediateDir).make_preferred()
-                : sourcePath.parent_path().make_preferred();
+                                                   ? std::filesystem::absolute(*intermediateDir).make_preferred()
+                                                   : sourcePath.parent_path().make_preferred();
             std::filesystem::path outputPath = root / sourcePath.stem();
             outputPath += kind == WirEmitKind::Typed ? ".typed.wir" : ".lowered.wir";
             return outputPath.make_preferred();
@@ -634,11 +608,7 @@ namespace wio
         {
             for (const wir::typed::BuildDiagnostic& diagnostic : result.diagnostics())
             {
-                WIO_LOG_ADD_ERROR(
-                    diagnostic.source.begin,
-                    "Typed WIR {}: {}",
-                    diagnostic.code,
-                    diagnostic.message);
+                WIO_LOG_ADD_ERROR(diagnostic.source.begin, "Typed WIR {}: {}", diagnostic.code, diagnostic.message);
             }
         }
 
@@ -646,11 +616,7 @@ namespace wio
         {
             for (const wir::typed::VerificationDiagnostic& diagnostic : result.diagnostics())
             {
-                WIO_LOG_ADD_ERROR(
-                    diagnostic.source.begin,
-                    "Typed WIR {}: {}",
-                    diagnostic.code,
-                    diagnostic.message);
+                WIO_LOG_ADD_ERROR(diagnostic.source.begin, "Typed WIR {}: {}", diagnostic.code, diagnostic.message);
             }
         }
 
@@ -658,12 +624,8 @@ namespace wio
         {
             for (const wir::LoweringDiagnostic& diagnostic : result.diagnostics())
             {
-                WIO_LOG_ADD_ERROR(
-                    diagnostic.source.begin,
-                    "Lowered WIR {} ({}): {}",
-                    diagnostic.code,
-                    diagnostic.pass,
-                    diagnostic.message);
+                WIO_LOG_ADD_ERROR(diagnostic.source.begin, "Lowered WIR {} ({}): {}", diagnostic.code, diagnostic.pass,
+                                  diagnostic.message);
             }
         }
 
@@ -673,49 +635,40 @@ namespace wio
             {
                 if (diagnostic.severity == codegen::WirCppDiagnosticSeverity::Warning)
                 {
-                    WIO_LOG_ADD_WARN(
-                        diagnostic.source.begin,
-                        "WIR C++ backend {}: {}",
-                        diagnostic.code,
-                        diagnostic.message);
+                    WIO_LOG_ADD_WARN(diagnostic.source.begin, "WIR C++ backend {}: {}", diagnostic.code,
+                                     diagnostic.message);
                 }
                 else
                 {
-                    WIO_LOG_ADD_ERROR(
-                        diagnostic.source.begin,
-                        "WIR C++ backend {}: {}",
-                        diagnostic.code,
-                        diagnostic.message);
+                    WIO_LOG_ADD_ERROR(diagnostic.source.begin, "WIR C++ backend {}: {}", diagnostic.code,
+                                      diagnostic.message);
                 }
             }
         }
 
-        int emitWir(
-            const Ref<Program>& program,
-            const std::filesystem::path& sourcePath,
-            const WirEmitKind kind)
+        int emitWir(const Ref<Program>& program, const std::filesystem::path& sourcePath, const WirEmitKind kind)
         {
             const std::vector<std::string> intermediateDirs =
                 gAppData.argParser.GetValuesOf<std::string>("INTERMEDIATE-DIR");
-            const std::optional<std::filesystem::path> intermediateDir = intermediateDirs.empty()
-                ? std::nullopt
-                : std::optional<std::filesystem::path>(
-                      std::filesystem::absolute(std::filesystem::path(intermediateDirs.front())).make_preferred());
-            const std::vector<std::string> configuredOutputs =
-                gAppData.argParser.GetValuesOf<std::string>("IR-OUTPUT");
-            const std::filesystem::path outputPath = configuredOutputs.empty()
-                ? makeDefaultWirPath(sourcePath, intermediateDir, kind)
-                : std::filesystem::absolute(std::filesystem::path(configuredOutputs.front())).make_preferred();
+            const std::optional<std::filesystem::path> intermediateDir =
+                intermediateDirs.empty()
+                    ? std::nullopt
+                    : std::optional<std::filesystem::path>(
+                          std::filesystem::absolute(std::filesystem::path(intermediateDirs.front())).make_preferred());
+            const std::vector<std::string> configuredOutputs = gAppData.argParser.GetValuesOf<std::string>("IR-OUTPUT");
+            const std::filesystem::path outputPath =
+                configuredOutputs.empty()
+                    ? makeDefaultWirPath(sourcePath, intermediateDir, kind)
+                    : std::filesystem::absolute(std::filesystem::path(configuredOutputs.front())).make_preferred();
 
             wir::typed::BuildOptions buildOptions;
-            const std::vector<std::string> configuredBinaries =
-                gAppData.argParser.GetValuesOf<std::string>("OUTPUT");
-            buildOptions.logicalModuleName = configuredBinaries.empty()
-                ? sourcePath.filename().generic_string()
-                : std::filesystem::path(configuredBinaries.front()).stem().generic_string();
+            const std::vector<std::string> configuredBinaries = gAppData.argParser.GetValuesOf<std::string>("OUTPUT");
+            buildOptions.logicalModuleName =
+                configuredBinaries.empty() ? sourcePath.filename().generic_string()
+                                           : std::filesystem::path(configuredBinaries.front()).stem().generic_string();
             buildOptions.moduleKind = Compiler::get().getBuildTarget() == BuildTarget::Executable
-                ? wir::ModuleKind::Program
-                : wir::ModuleKind::WioLibrary;
+                                          ? wir::ModuleKind::Program
+                                          : wir::ModuleKind::WioLibrary;
             wir::typed::BuildResult typedResult = wir::typed::Builder{}.build(program, buildOptions);
             reportTypedWirDiagnostics(typedResult);
             WIO_LOG_PROCESS_ERRORS(CompilationError);
@@ -745,7 +698,8 @@ namespace wio
                 std::filesystem::create_directories(outputPath.parent_path(), directoryError);
             if (directoryError)
             {
-                WIO_LOG_FATAL("{} output directory could not be created: {}", outputName, outputPath.parent_path().string());
+                WIO_LOG_FATAL("{} output directory could not be created: {}", outputName,
+                              outputPath.parent_path().string());
                 return EXIT_FAILURE;
             }
             if (!filesystem::writeFilepath(output, outputPath))
@@ -775,7 +729,7 @@ namespace wio
         {
             if (value.find_first_of(" \t") == std::string::npos)
                 return value;
-            
+
             return "\"" + value + "\"";
         }
 
@@ -830,8 +784,7 @@ namespace wio
         }
 #endif
 
-        int runExecutable(const std::filesystem::path& executablePath,
-                          const std::vector<std::string>& arguments)
+        int runExecutable(const std::filesystem::path& executablePath, const std::vector<std::string>& arguments)
         {
 #if defined(_WIN32)
             std::string commandLineText = quoteRunArgument(executablePath.string());
@@ -849,23 +802,12 @@ namespace wio
             PROCESS_INFORMATION processInfo{};
             const std::string executable = executablePath.string();
 
-            const BOOL created = CreateProcessA(
-                executable.c_str(),
-                commandLine.data(),
-                nullptr,
-                nullptr,
-                TRUE,
-                0,
-                nullptr,
-                nullptr,
-                &startupInfo,
-                &processInfo
-            );
+            const BOOL created = CreateProcessA(executable.c_str(), commandLine.data(), nullptr, nullptr, TRUE, 0,
+                                                nullptr, nullptr, &startupInfo, &processInfo);
 
             if (created == FALSE)
             {
-                WIO_LOG_ERROR("Could not launch generated executable '{}'. Windows error: {}",
-                              executablePath.string(),
+                WIO_LOG_ERROR("Could not launch generated executable '{}'. Windows error: {}", executablePath.string(),
                               static_cast<unsigned long>(GetLastError()));
                 return EXIT_FAILURE;
             }
@@ -881,8 +823,7 @@ namespace wio
             const pid_t processId = fork();
             if (processId < 0)
             {
-                WIO_LOG_ERROR("Could not fork generated executable '{}': {}",
-                              executablePath.string(),
+                WIO_LOG_ERROR("Could not fork generated executable '{}': {}", executablePath.string(),
                               std::strerror(errno));
                 return EXIT_FAILURE;
             }
@@ -902,8 +843,8 @@ namespace wio
                 argvView.push_back(nullptr);
 
                 execv(executable.c_str(), argvView.data());
-                std::fprintf(stderr, "Could not launch generated executable '%s': %s\n",
-                             executable.c_str(), std::strerror(errno));
+                std::fprintf(stderr, "Could not launch generated executable '%s': %s\n", executable.c_str(),
+                             std::strerror(errno));
                 _exit(errno == ENOENT ? 127 : 126);
             }
 
@@ -913,8 +854,7 @@ namespace wio
                 if (errno == EINTR)
                     continue;
 
-                WIO_LOG_ERROR("Could not wait for generated executable '{}': {}",
-                              executablePath.string(),
+                WIO_LOG_ERROR("Could not wait for generated executable '{}': {}", executablePath.string(),
                               std::strerror(errno));
                 return EXIT_FAILURE;
             }
@@ -935,14 +875,9 @@ namespace wio
         bool isLibraryFilePath(std::string_view libraryValue)
         {
             return libraryValue.find('\\') != std::string_view::npos ||
-                   libraryValue.find('/') != std::string_view::npos ||
-                   libraryValue.ends_with(".lib") ||
-                   libraryValue.ends_with(".a") ||
-                   libraryValue.ends_with(".so") ||
-                   libraryValue.ends_with(".dll") ||
-                   libraryValue.ends_with(".dylib") ||
-                   libraryValue.ends_with(".o") ||
-                   libraryValue.ends_with(".obj");
+                   libraryValue.find('/') != std::string_view::npos || libraryValue.ends_with(".lib") ||
+                   libraryValue.ends_with(".a") || libraryValue.ends_with(".so") || libraryValue.ends_with(".dll") ||
+                   libraryValue.ends_with(".dylib") || libraryValue.ends_with(".o") || libraryValue.ends_with(".obj");
         }
 
         std::vector<std::string> normalizeDirectoryArguments(const std::vector<std::string>& rawValues)
@@ -955,7 +890,8 @@ namespace wio
                 if (rawValue.empty())
                     continue;
 
-                normalizedValues.push_back(std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
+                normalizedValues.push_back(
+                    std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
             }
 
             return normalizedValues;
@@ -972,7 +908,8 @@ namespace wio
                     continue;
 
                 if (isSourceFilePath(rawValue))
-                    normalizedValues.push_back(std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
+                    normalizedValues.push_back(
+                        std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
                 else
                     normalizedValues.push_back(rawValue);
             }
@@ -996,7 +933,8 @@ namespace wio
                     continue;
                 }
 
-                normalizedValues.push_back(std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
+                normalizedValues.push_back(
+                    std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
             }
 
             return normalizedValues;
@@ -1036,18 +974,15 @@ namespace wio
             return formatted;
         }
 
-        void logResolvedBackendInfo(const std::filesystem::path& sourcePath,
-                                    const std::filesystem::path& cppPath,
-                                    const std::filesystem::path& outputPath,
-                                    const std::filesystem::path& runtimeIncludeDir,
-                                    const std::filesystem::path& sdkIncludeDir,
-                                    const std::filesystem::path& stdSourceDir,
-                                    const std::filesystem::path& runtimeLibraryPath,
-                                    const std::vector<std::filesystem::path>& systemIncludeDirs,
-                                    const std::vector<std::string>& includeDirs,
-                                    const std::vector<std::string>& linkDirs,
-                                    const std::vector<std::string>& linkLibraries,
-                                    const std::vector<std::string>& backendArgs)
+        void
+        logResolvedBackendInfo(const std::filesystem::path& sourcePath, const std::filesystem::path& cppPath,
+                               const std::filesystem::path& outputPath, const std::filesystem::path& runtimeIncludeDir,
+                               const std::filesystem::path& sdkIncludeDir, const std::filesystem::path& stdSourceDir,
+                               const std::filesystem::path& runtimeLibraryPath,
+                               const std::vector<std::filesystem::path>& systemIncludeDirs,
+                               const std::vector<std::string>& includeDirs, const std::vector<std::string>& linkDirs,
+                               const std::vector<std::string>& linkLibraries,
+                               const std::vector<std::string>& backendArgs)
         {
             WIO_LOG_INFO("Resolved backend configuration:");
             WIO_LOG_INFO("  Target: {}", buildTargetToString(gAppData.buildTarget));
@@ -1228,7 +1163,7 @@ namespace wio
 #endif
 
         CommandResult runCommandCaptureOutput(const std::string& command,
-                                             const std::vector<std::filesystem::path>& extraPathEntries = {})
+                                              const std::vector<std::filesystem::path>& extraPathEntries = {})
         {
             CommandResult result;
             result.command = command;
@@ -1242,9 +1177,9 @@ namespace wio
             HANDLE writePipe = nullptr;
             if (CreatePipe(&readPipe, &writePipe, &securityAttributes, 0) == FALSE)
             {
-                result.output =
-                    "Failed to create backend output pipe.\n"
-                    "Command: " + command;
+                result.output = "Failed to create backend output pipe.\n"
+                                "Command: " +
+                                command;
                 return result;
             }
 
@@ -1262,33 +1197,25 @@ namespace wio
             commandLine.push_back('\0');
             ScopedWindowsPathOverride scopedPathOverride(extraPathEntries);
 
-            const BOOL created = CreateProcessA(
-                nullptr,
-                commandLine.data(),
-                nullptr,
-                nullptr,
-                TRUE,
-                CREATE_NO_WINDOW,
-                nullptr,
-                nullptr,
-                &startupInfo,
-                &processInfo
-            );
+            const BOOL created = CreateProcessA(nullptr, commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
+                                                nullptr, nullptr, &startupInfo, &processInfo);
 
             CloseHandle(writePipe);
 
             if (created == FALSE)
             {
                 CloseHandle(readPipe);
-                result.output =
-                    "Failed to start backend command. Verify that the backend tool exists on PATH or is configured correctly.\n"
-                    "Command: " + command;
+                result.output = "Failed to start backend command. Verify that the backend tool exists on PATH or is "
+                                "configured correctly.\n"
+                                "Command: " +
+                                command;
                 return result;
             }
 
             std::array<char, 4096> buffer{};
             DWORD bytesRead = 0;
-            while (ReadFile(readPipe, buffer.data(), static_cast<DWORD>(buffer.size()), &bytesRead, nullptr) == TRUE && bytesRead > 0)
+            while (ReadFile(readPipe, buffer.data(), static_cast<DWORD>(buffer.size()), &bytesRead, nullptr) == TRUE &&
+                   bytesRead > 0)
                 result.output.append(buffer.data(), bytesRead);
 
             WaitForSingleObject(processInfo.hProcess, INFINITE);
@@ -1304,9 +1231,10 @@ namespace wio
             FILE* pipe = popen(redirectedCommand.c_str(), "r");
             if (pipe == nullptr)
             {
-                result.output =
-                    "Failed to start backend command. Verify that the backend tool exists on PATH or is configured correctly.\n"
-                    "Command: " + command;
+                result.output = "Failed to start backend command. Verify that the backend tool exists on PATH or is "
+                                "configured correctly.\n"
+                                "Command: " +
+                                command;
                 return result;
             }
 
@@ -1347,11 +1275,8 @@ namespace wio
             {
                 const std::string prefix = message.substr(0, colonPos);
                 const bool isExceptionPrefix =
-                    !prefix.empty() &&
-                    prefix.size() > 2 &&
-                    prefix.find(' ') == std::string::npos &&
-                    prefix.find('\\') == std::string::npos &&
-                    prefix.find('/') == std::string::npos &&
+                    !prefix.empty() && prefix.size() > 2 && prefix.find(' ') == std::string::npos &&
+                    prefix.find('\\') == std::string::npos && prefix.find('/') == std::string::npos &&
                     std::isupper(static_cast<unsigned char>(prefix.front())) != 0;
 
                 if (isExceptionPrefix)
@@ -1390,10 +1315,8 @@ namespace wio
         std::string toLowerAscii(std::string_view value)
         {
             std::string result(value);
-            std::transform(result.begin(), result.end(), result.begin(), [](unsigned char ch)
-            {
-                return static_cast<char>(std::tolower(ch));
-            });
+            std::transform(result.begin(), result.end(), result.begin(),
+                           [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
             return result;
         }
 
@@ -1403,15 +1326,9 @@ namespace wio
                 return false;
 
             const std::string lower = toLowerAscii(trimWhitespace(value));
-            return lower.ends_with(".wio") ||
-                   lower.ends_with(".h") ||
-                   lower.ends_with(".hh") ||
-                   lower.ends_with(".hpp") ||
-                   lower.ends_with(".hxx") ||
-                   lower.ends_with(".c") ||
-                   lower.ends_with(".cc") ||
-                   lower.ends_with(".cpp") ||
-                   lower.ends_with(".cxx") ||
+            return lower.ends_with(".wio") || lower.ends_with(".h") || lower.ends_with(".hh") ||
+                   lower.ends_with(".hpp") || lower.ends_with(".hxx") || lower.ends_with(".c") ||
+                   lower.ends_with(".cc") || lower.ends_with(".cpp") || lower.ends_with(".cxx") ||
                    lower.ends_with(".ixx");
         }
 
@@ -1462,11 +1379,21 @@ namespace wio
                 {
                     switch (ch)
                     {
-                    case '\\': result.push_back('\\'); break;
-                    case '"': result.push_back('"'); break;
-                    case 'n': result.push_back('\n'); break;
-                    case 'r': result.push_back('\r'); break;
-                    case 't': result.push_back('\t'); break;
+                    case '\\':
+                        result.push_back('\\');
+                        break;
+                    case '"':
+                        result.push_back('"');
+                        break;
+                    case 'n':
+                        result.push_back('\n');
+                        break;
+                    case 'r':
+                        result.push_back('\r');
+                        break;
+                    case 't':
+                        result.push_back('\t');
+                        break;
                     default:
                         result.push_back(ch);
                         break;
@@ -1520,10 +1447,7 @@ namespace wio
                     if (physicalLine == location.line)
                     {
                         return common::Location{
-                            .file = currentVirtualFile,
-                            .line = currentVirtualLine + 1,
-                            .column = location.column
-                        };
+                            .file = currentVirtualFile, .line = currentVirtualLine + 1, .column = location.column};
                     }
 
                     continue;
@@ -1538,10 +1462,7 @@ namespace wio
                         return std::nullopt;
 
                     return common::Location{
-                        .file = currentVirtualFile,
-                        .line = currentVirtualLine,
-                        .column = location.column
-                    };
+                        .file = currentVirtualFile, .line = currentVirtualLine, .column = location.column};
                 }
             }
 
@@ -1592,24 +1513,20 @@ namespace wio
         {
             const std::string lower = toLowerAscii(trimWhitespace(toolText));
 
-            if (lower.find("link") != std::string::npos ||
-                lower.find("collect2") != std::string::npos ||
-                lower.ends_with("ld") ||
-                lower.find("ld.exe") != std::string::npos)
+            if (lower.find("link") != std::string::npos || lower.find("collect2") != std::string::npos ||
+                lower.ends_with("ld") || lower.find("ld.exe") != std::string::npos)
             {
                 return BackendDiagnosticDomain::Linker;
             }
 
-            if (lower == "ar" || lower.ends_with("/ar") || lower.ends_with("\\ar") ||
-                lower == "lib" || lower.find("lib.exe") != std::string::npos)
+            if (lower == "ar" || lower.ends_with("/ar") || lower.ends_with("\\ar") || lower == "lib" ||
+                lower.find("lib.exe") != std::string::npos)
             {
                 return BackendDiagnosticDomain::Archiver;
             }
 
-            if (lower.find("clang") != std::string::npos ||
-                lower.find("g++") != std::string::npos ||
-                lower.find("gcc") != std::string::npos ||
-                lower == "cl" || lower.find("cl.exe") != std::string::npos ||
+            if (lower.find("clang") != std::string::npos || lower.find("g++") != std::string::npos ||
+                lower.find("gcc") != std::string::npos || lower == "cl" || lower.find("cl.exe") != std::string::npos ||
                 looksLikeSourceFilePath(lower))
             {
                 return BackendDiagnosticDomain::Compiler;
@@ -1665,8 +1582,7 @@ namespace wio
                 std::regex(R"(^.*?(multiple definition of .*)$)"),
                 std::regex(R"(^.*?(duplicate symbol .*)$)", std::regex::icase),
                 std::regex(R"(^.*?(cannot find .*)$)", std::regex::icase),
-                std::regex(R"(^.*?(symbol\(s\) not found.*)$)", std::regex::icase)
-            };
+                std::regex(R"(^.*?(symbol\(s\) not found.*)$)", std::regex::icase)};
 
             std::smatch match;
             for (const auto& pattern : linkerPrimaryPatterns)
@@ -1683,13 +1599,11 @@ namespace wio
             const std::string lower = toLowerAscii(trimWhitespace(message));
             return lower.find("ld returned 1 exit status") != std::string::npos ||
                    lower.find("linker command failed with exit code") != std::string::npos ||
-                   lower.find("1 unresolved externals") != std::string::npos ||
-                   lower == "compilation terminated.";
+                   lower.find("1 unresolved externals") != std::string::npos || lower == "compilation terminated.";
         }
 
-        common::Location buildBackendDiagnosticLocation(std::string fileText,
-                                                       const std::string& lineText,
-                                                       const std::string& columnText)
+        common::Location buildBackendDiagnosticLocation(std::string fileText, const std::string& lineText,
+                                                        const std::string& columnText)
         {
             common::Location location;
             location.file = normalizeDiagnosticFilePath(fileText);
@@ -1701,7 +1615,8 @@ namespace wio
 
         std::optional<BackendDiagnostic> parseBackendContextNoteLine(std::string_view rawLine)
         {
-            static const std::regex includeStackLeadPattern(R"(^In file included from (.*):([0-9]+)(?::([0-9]+))?[,:]?$)");
+            static const std::regex includeStackLeadPattern(
+                R"(^In file included from (.*):([0-9]+)(?::([0-9]+))?[,:]?$)");
             static const std::regex includeStackContinuationPattern(R"(^\s+from (.*):([0-9]+)(?::([0-9]+))?[,:]?$)");
             static const std::regex locationContextWithColumnPattern(
                 R"(^(.*):([0-9]+):([0-9]+):\s+(required from here|required from .*|instantiated from here|declared here)$)");
@@ -1711,19 +1626,16 @@ namespace wio
             const std::string line(rawLine);
             std::smatch match;
 
-            auto buildNote = [](std::string fileText,
-                                const std::string& lineText,
-                                const std::string& columnText,
+            auto buildNote = [](std::string fileText, const std::string& lineText, const std::string& columnText,
                                 std::string_view message)
             {
-                return BackendDiagnostic{
-                    .severity = BackendDiagnosticSeverity::Note,
-                    .domain = BackendDiagnosticDomain::Compiler,
-                    .location = buildBackendDiagnosticLocation(std::move(fileText), lineText, columnText),
-                    .sourceLabel = {},
-                    .code = {},
-                    .message = trimWhitespace(message)
-                };
+                return BackendDiagnostic{.severity = BackendDiagnosticSeverity::Note,
+                                         .domain = BackendDiagnosticDomain::Compiler,
+                                         .location =
+                                             buildBackendDiagnosticLocation(std::move(fileText), lineText, columnText),
+                                         .sourceLabel = {},
+                                         .code = {},
+                                         .message = trimWhitespace(message)};
             };
 
             if (std::regex_match(line, match, includeStackLeadPattern))
@@ -1764,11 +1676,16 @@ namespace wio
 
         std::optional<BackendDiagnostic> parseBackendDiagnosticLine(std::string_view rawLine)
         {
-            static const std::regex gccWithColumnPattern(R"(^(.*):([0-9]+):([0-9]+):\s*(fatal error|error|warning|note):\s*(.*)$)");
-            static const std::regex gccWithoutColumnPattern(R"(^(.*):([0-9]+):\s*(fatal error|error|warning|note):\s*(.*)$)");
-            static const std::regex msvcPattern(R"(^(.*)\(([0-9]+)(?:,([0-9]+))?\):\s*(fatal error|error|warning|note)(?:\s+([A-Za-z]+[0-9]+))?:\s*(.*)$)");
-            static const std::regex toolSeverityPattern(R"(^(.*?)(?:\s*:\s*|\s+)(fatal error|error|warning|note)(?:\s+([A-Za-z]+[0-9]+))?:\s*(.*)$)");
-            static const std::regex linkerToolPattern(R"(^(.*?(?:ld(?:\.exe)?|collect2|link(?:\.exe)?|LINK))(?:\s*:\s*|\s+)(.*)$)", std::regex::icase);
+            static const std::regex gccWithColumnPattern(
+                R"(^(.*):([0-9]+):([0-9]+):\s*(fatal error|error|warning|note):\s*(.*)$)");
+            static const std::regex gccWithoutColumnPattern(
+                R"(^(.*):([0-9]+):\s*(fatal error|error|warning|note):\s*(.*)$)");
+            static const std::regex msvcPattern(
+                R"(^(.*)\(([0-9]+)(?:,([0-9]+))?\):\s*(fatal error|error|warning|note)(?:\s+([A-Za-z]+[0-9]+))?:\s*(.*)$)");
+            static const std::regex toolSeverityPattern(
+                R"(^(.*?)(?:\s*:\s*|\s+)(fatal error|error|warning|note)(?:\s+([A-Za-z]+[0-9]+))?:\s*(.*)$)");
+            static const std::regex linkerToolPattern(
+                R"(^(.*?(?:ld(?:\.exe)?|collect2|link(?:\.exe)?|LINK))(?:\s*:\s*|\s+)(.*)$)", std::regex::icase);
 
             const std::string line(rawLine);
             std::smatch match;
@@ -1782,8 +1699,9 @@ namespace wio
                     .location = buildBackendDiagnosticLocation(match[1].str(), match[2].str(), match[3].str()),
                     .sourceLabel = {},
                     .code = {},
-                    .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[5].str())
-                };
+                    .message = normalizeBackendMessage(
+                        domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
+                        match[5].str())};
             }
 
             if (std::regex_match(line, match, gccWithoutColumnPattern))
@@ -1795,8 +1713,9 @@ namespace wio
                     .location = buildBackendDiagnosticLocation(match[1].str(), match[2].str(), ""),
                     .sourceLabel = {},
                     .code = {},
-                    .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[4].str())
-                };
+                    .message = normalizeBackendMessage(
+                        domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
+                        match[4].str())};
             }
 
             if (std::regex_match(line, match, msvcPattern))
@@ -1808,8 +1727,9 @@ namespace wio
                     .location = buildBackendDiagnosticLocation(match[1].str(), match[2].str(), match[3].str()),
                     .sourceLabel = {},
                     .code = trimWhitespace(match[5].str()),
-                    .message = normalizeBackendMessage(domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain, match[6].str())
-                };
+                    .message = normalizeBackendMessage(
+                        domain == BackendDiagnosticDomain::Unknown ? BackendDiagnosticDomain::Compiler : domain,
+                        match[6].str())};
             }
 
             if (auto contextNote = parseBackendContextNoteLine(line); contextNote.has_value())
@@ -1864,7 +1784,8 @@ namespace wio
                 bool allDigitsBeforePipe = pipePos > 0;
                 for (size_t i = 0; i < pipePos; ++i)
                 {
-                    if (!std::isspace(static_cast<unsigned char>(line[i])) && !std::isdigit(static_cast<unsigned char>(line[i])))
+                    if (!std::isspace(static_cast<unsigned char>(line[i])) &&
+                        !std::isdigit(static_cast<unsigned char>(line[i])))
                     {
                         allDigitsBeforePipe = false;
                         break;
@@ -1877,8 +1798,7 @@ namespace wio
 
             return line.find("In function") != std::string::npos ||
                    line.find("In member function") != std::string::npos ||
-                   line.find("required from") != std::string::npos ||
-                   line == "compilation terminated.";
+                   line.find("required from") != std::string::npos || line == "compilation terminated.";
         }
 
         void logBackendDiagnostic(const BackendDiagnostic& diagnostic)
@@ -1911,7 +1831,8 @@ namespace wio
             }
             else
             {
-                label = !diagnostic.sourceLabel.empty() ? diagnostic.sourceLabel : backendDomainLabel(diagnostic.domain);
+                label =
+                    !diagnostic.sourceLabel.empty() ? diagnostic.sourceLabel : backendDomainLabel(diagnostic.domain);
             }
 
             if (isGeneratedSource)
@@ -1982,9 +1903,7 @@ namespace wio
             return std::string(fallbackSummary);
         }
 
-        void reportBackendCommandFailure(std::string_view summary,
-                                         int exitCode,
-                                         const std::string& output,
+        void reportBackendCommandFailure(std::string_view summary, int exitCode, const std::string& output,
                                          std::string_view command = {})
         {
             std::vector<BackendDiagnostic> diagnostics;
@@ -1996,10 +1915,9 @@ namespace wio
                     diagnostics.push_back(std::move(*diagnostic));
             }
 
-            const bool hasSpecificDiagnostics = std::ranges::any_of(diagnostics, [](const BackendDiagnostic& diagnostic)
-            {
-                return !isGenericBackendSummaryMessage(diagnostic.message);
-            });
+            const bool hasSpecificDiagnostics =
+                std::ranges::any_of(diagnostics, [](const BackendDiagnostic& diagnostic)
+                                    { return !isGenericBackendSummaryMessage(diagnostic.message); });
 
             for (const auto& diagnostic : diagnostics)
             {
@@ -2054,13 +1972,8 @@ namespace wio
         {
             for (const auto& token : tokens)
             {
-                WIO_LOG_INFO(
-                    "[{}:{}] {:<24} '{}'",
-                    token.loc.line,
-                    token.loc.column,
-                    tokenTypeToString(token.type),
-                    escapeTokenValueForDisplay(token.value)
-                );
+                WIO_LOG_INFO("[{}:{}] {:<24} '{}'", token.loc.line, token.loc.column, tokenTypeToString(token.type),
+                             escapeTokenValueForDisplay(token.value));
             }
         }
 
@@ -2135,11 +2048,9 @@ namespace wio
 
                 if (sourceDeclarations.contains(useStatement->aliasName))
                 {
-                    WIO_LOG_ADD_ERROR(
-                        useStatement->location(),
-                        "Symbol '{}' already exists and cannot be used as an import alias.",
-                        useStatement->aliasName
-                    );
+                    WIO_LOG_ADD_ERROR(useStatement->location(),
+                                      "Symbol '{}' already exists and cannot be used as an import alias.",
+                                      useStatement->aliasName);
                 }
             }
         }
@@ -2147,13 +2058,10 @@ namespace wio
         bool hasDeclaredTopLevelRealms(const std::vector<NodePtr<Statement>>& statements)
         {
             return std::ranges::any_of(statements, [](const NodePtr<Statement>& statement)
-            {
-                return statement && statement->is<RealmDeclaration>();
-            });
+                                       { return statement && statement->is<RealmDeclaration>(); });
         }
 
-        NodePtr<Statement> wrapStatementsInAliasRealm(std::string aliasName,
-                                                      std::vector<NodePtr<Statement>> statements,
+        NodePtr<Statement> wrapStatementsInAliasRealm(std::string aliasName, std::vector<NodePtr<Statement>> statements,
                                                       common::Location location)
         {
             Token aliasToken;
@@ -2168,12 +2076,11 @@ namespace wio
         bool hasAttribute(const std::vector<NodePtr<AttributeStatement>>& attributes, Attribute attribute)
         {
             return std::ranges::any_of(attributes, [attribute](const NodePtr<AttributeStatement>& stmt)
-            {
-                return stmt && matchesBuiltinAttribute(*stmt, attribute);
-            });
+                                       { return stmt && matchesBuiltinAttribute(*stmt, attribute); });
         }
 
-        std::optional<std::string> getCppHeaderAttributeValue(const std::vector<NodePtr<AttributeStatement>>& attributes)
+        std::optional<std::string>
+        getCppHeaderAttributeValue(const std::vector<NodePtr<AttributeStatement>>& attributes)
         {
             for (const auto& attribute : attributes)
             {
@@ -2189,18 +2096,14 @@ namespace wio
             return std::nullopt;
         }
 
-        void appendRequiredCppHeader(std::vector<RequiredCppHeader>& headers,
-                                     std::string header,
-                                     common::Location location,
-                                     const std::filesystem::path& sourcePath,
+        void appendRequiredCppHeader(std::vector<RequiredCppHeader>& headers, std::string header,
+                                     common::Location location, const std::filesystem::path& sourcePath,
                                      std::string origin)
         {
-            headers.push_back({
-                .header = std::move(header),
-                .location = location,
-                .sourcePath = sourcePath,
-                .origin = std::move(origin)
-            });
+            headers.push_back({.header = std::move(header),
+                               .location = location,
+                               .sourcePath = sourcePath,
+                               .origin = std::move(origin)});
         }
 
         void collectRequiredCppHeaderFromFunction(const FunctionDeclaration& declaration,
@@ -2213,21 +2116,14 @@ namespace wio
             if (auto headerValue = getCppHeaderAttributeValue(declaration.attributes); headerValue.has_value())
             {
                 appendRequiredCppHeader(
-                    headers,
-                    *headerValue,
-                    declaration.location(),
-                    sourcePath,
-                    common::formatString(
-                        "@CppHeader on native function '{}'",
-                        declaration.name ? declaration.name->token.value : "<anonymous>"
-                    )
-                );
+                    headers, *headerValue, declaration.location(), sourcePath,
+                    common::formatString("@CppHeader on native function '{}'",
+                                         declaration.name ? declaration.name->token.value : "<anonymous>"));
             }
         }
 
         void collectRequiredCppHeaders(const std::vector<NodePtr<Statement>>& statements,
-                                       const std::filesystem::path& sourcePath,
-                                       std::vector<RequiredCppHeader>& headers)
+                                       const std::filesystem::path& sourcePath, std::vector<RequiredCppHeader>& headers)
         {
             for (const auto& statement : statements)
             {
@@ -2244,7 +2140,8 @@ namespace wio
                 {
                     if (useStmt->isCppHeader && !useStmt->modulePath.empty())
                     {
-                        appendRequiredCppHeader(headers, useStmt->modulePath, useStmt->location(), sourcePath, "use @CppHeader");
+                        appendRequiredCppHeader(headers, useStmt->modulePath, useStmt->location(), sourcePath,
+                                                "use @CppHeader");
                     }
                     continue;
                 }
@@ -2259,14 +2156,19 @@ namespace wio
                 {
                     if (hasAttribute(objectDecl->attributes, Attribute::Native))
                     {
-                        if (auto headerValue = getCppHeaderAttributeValue(objectDecl->attributes); headerValue.has_value())
-                            appendRequiredCppHeader(headers, *headerValue, objectDecl->location(), sourcePath, common::formatString("@CppHeader on native object '{}'", objectDecl->name ? objectDecl->name->token.value : "<anonymous>"));
+                        if (auto headerValue = getCppHeaderAttributeValue(objectDecl->attributes);
+                            headerValue.has_value())
+                            appendRequiredCppHeader(
+                                headers, *headerValue, objectDecl->location(), sourcePath,
+                                common::formatString("@CppHeader on native object '{}'",
+                                                     objectDecl->name ? objectDecl->name->token.value : "<anonymous>"));
                     }
 
                     for (const auto& member : objectDecl->members)
                     {
                         if (member.declaration && member.declaration->is<FunctionDeclaration>())
-                            collectRequiredCppHeaderFromFunction(*member.declaration->as<FunctionDeclaration>(), sourcePath, headers);
+                            collectRequiredCppHeaderFromFunction(*member.declaration->as<FunctionDeclaration>(),
+                                                                 sourcePath, headers);
                     }
                     continue;
                 }
@@ -2275,14 +2177,20 @@ namespace wio
                 {
                     if (hasAttribute(componentDecl->attributes, Attribute::Native))
                     {
-                        if (auto headerValue = getCppHeaderAttributeValue(componentDecl->attributes); headerValue.has_value())
-                            appendRequiredCppHeader(headers, *headerValue, componentDecl->location(), sourcePath, common::formatString("@CppHeader on native component '{}'", componentDecl->name ? componentDecl->name->token.value : "<anonymous>"));
+                        if (auto headerValue = getCppHeaderAttributeValue(componentDecl->attributes);
+                            headerValue.has_value())
+                            appendRequiredCppHeader(headers, *headerValue, componentDecl->location(), sourcePath,
+                                                    common::formatString("@CppHeader on native component '{}'",
+                                                                         componentDecl->name
+                                                                             ? componentDecl->name->token.value
+                                                                             : "<anonymous>"));
                     }
 
                     for (const auto& member : componentDecl->members)
                     {
                         if (member.declaration && member.declaration->is<FunctionDeclaration>())
-                            collectRequiredCppHeaderFromFunction(*member.declaration->as<FunctionDeclaration>(), sourcePath, headers);
+                            collectRequiredCppHeaderFromFunction(*member.declaration->as<FunctionDeclaration>(),
+                                                                 sourcePath, headers);
                     }
                     continue;
                 }
@@ -2298,9 +2206,10 @@ namespace wio
             }
         }
 
-        std::vector<std::filesystem::path> buildHeaderSearchRoots(const std::filesystem::path& sourceDir,
-                                                                  const std::vector<std::filesystem::path>& systemIncludeDirs,
-                                                                  const std::vector<std::string>& includeDirs)
+        std::vector<std::filesystem::path>
+        buildHeaderSearchRoots(const std::filesystem::path& sourceDir,
+                               const std::vector<std::filesystem::path>& systemIncludeDirs,
+                               const std::vector<std::string>& includeDirs)
         {
             std::vector<std::filesystem::path> roots;
 
@@ -2366,7 +2275,8 @@ namespace wio
             auto candidateIt = normalizedCandidate.begin();
             auto directoryIt = normalizedDirectory.begin();
 
-            for (; candidateIt != normalizedCandidate.end() && directoryIt != normalizedDirectory.end(); ++candidateIt, ++directoryIt)
+            for (; candidateIt != normalizedCandidate.end() && directoryIt != normalizedDirectory.end();
+                 ++candidateIt, ++directoryIt)
             {
                 if (*candidateIt != *directoryIt)
                     return false;
@@ -2432,10 +2342,9 @@ namespace wio
                     {
                         WIO_LOG_ADD_ERROR(
                             header.location,
-                            "Builtin std module '{}' references non-public header '{}'. Builtin std modules may only use toolchain public runtime/sdk headers by logical include name.",
-                            header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(),
-                            header.header
-                        );
+                            "Builtin std module '{}' references non-public header '{}'. Builtin std modules may only "
+                            "use toolchain public runtime/sdk headers by logical include name.",
+                            header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(), header.header);
                         isValid = false;
                         continue;
                     }
@@ -2443,14 +2352,12 @@ namespace wio
                     if (canResolveCppHeader(header.header, systemIncludeDirs))
                         continue;
 
-                    WIO_LOG_ADD_ERROR(
-                        header.location,
-                        "Builtin std module '{}' references C++ header '{}' via {} but it was not found in toolchain public include paths: {}",
-                        header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(),
-                        header.header,
-                        header.origin.empty() ? "@CppHeader" : header.origin,
-                        formattedSystemRoots
-                    );
+                    WIO_LOG_ADD_ERROR(header.location,
+                                      "Builtin std module '{}' references C++ header '{}' via {} but it was not found "
+                                      "in toolchain public include paths: {}",
+                                      header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(),
+                                      header.header, header.origin.empty() ? "@CppHeader" : header.origin,
+                                      formattedSystemRoots);
                     isValid = false;
                     continue;
                 }
@@ -2461,11 +2368,8 @@ namespace wio
                 WIO_LOG_ADD_ERROR(
                     header.location,
                     "Native C++ header '{}' referenced by {} in '{}' was not found in include search paths: {}",
-                    header.header,
-                    header.origin.empty() ? "@CppHeader" : header.origin,
-                    header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(),
-                    formattedRoots
-                );
+                    header.header, header.origin.empty() ? "@CppHeader" : header.origin,
+                    header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(), formattedRoots);
                 isValid = false;
             }
 
@@ -2490,8 +2394,7 @@ namespace wio
                 {
                     Logger::get().addError(
                         "Required backend include directory '{}' was not found or is not a directory.",
-                        resolvedPath.string()
-                    );
+                        resolvedPath.string());
                     isValid = false;
                 }
             }
@@ -2499,8 +2402,7 @@ namespace wio
             return isValid;
         }
 
-        bool validateSearchDirectories(const std::vector<std::string>& paths,
-                                       std::string_view label)
+        bool validateSearchDirectories(const std::vector<std::string>& paths, std::string_view label)
         {
             bool isValid = true;
 
@@ -2509,14 +2411,16 @@ namespace wio
                 if (rawPath.empty())
                     continue;
 
-                std::filesystem::path resolvedPath = std::filesystem::absolute(std::filesystem::path(rawPath)).make_preferred();
+                std::filesystem::path resolvedPath =
+                    std::filesystem::absolute(std::filesystem::path(rawPath)).make_preferred();
                 std::error_code ec;
                 const bool exists = std::filesystem::exists(resolvedPath, ec) && !ec;
                 const bool isDirectory = exists && std::filesystem::is_directory(resolvedPath, ec) && !ec;
 
                 if (!exists || !isDirectory)
                 {
-                    Logger::get().addError("{} '{}' was not found or is not a directory.", label, resolvedPath.string());
+                    Logger::get().addError("{} '{}' was not found or is not a directory.", label,
+                                           resolvedPath.string());
                     isValid = false;
                 }
             }
@@ -2534,7 +2438,8 @@ namespace wio
                 if (!isSourceFilePath(backendArg))
                     continue;
 
-                std::filesystem::path resolvedPath = std::filesystem::absolute(std::filesystem::path(backendArg)).make_preferred();
+                std::filesystem::path resolvedPath =
+                    std::filesystem::absolute(std::filesystem::path(backendArg)).make_preferred();
                 std::error_code ec;
                 const bool exists = std::filesystem::exists(resolvedPath, ec) && !ec;
                 const bool isRegularFile = exists && std::filesystem::is_regular_file(resolvedPath, ec) && !ec;
@@ -2551,7 +2456,8 @@ namespace wio
                 if (!isLibraryFilePath(linkLibrary) || linkLibrary.starts_with("-"))
                     continue;
 
-                std::filesystem::path resolvedPath = std::filesystem::absolute(std::filesystem::path(linkLibrary)).make_preferred();
+                std::filesystem::path resolvedPath =
+                    std::filesystem::absolute(std::filesystem::path(linkLibrary)).make_preferred();
                 std::error_code ec;
                 const bool exists = std::filesystem::exists(resolvedPath, ec) && !ec;
                 const bool isRegularFile = exists && std::filesystem::is_regular_file(resolvedPath, ec) && !ec;
@@ -2582,7 +2488,8 @@ namespace wio
             isValid = validateSearchDirectories(includeDirs, "Include directory") && isValid;
             isValid = validateSearchDirectories(linkDirs, "Link directory") && isValid;
             isValid = validateBackendFileInputs(backendArgs, linkLibraries) && isValid;
-            isValid = validateRequiredCppHeaders(requiredCppHeaders, sourceDir, systemIncludeDirs, includeDirs) && isValid;
+            isValid =
+                validateRequiredCppHeaders(requiredCppHeaders, sourceDir, systemIncludeDirs, includeDirs) && isValid;
             return isValid;
         }
 
@@ -2603,7 +2510,8 @@ namespace wio
             return searchDirs;
         }
 
-        std::vector<std::filesystem::path> buildModuleSearchRoots(bool isStdLib, const std::filesystem::path& currentDir)
+        std::vector<std::filesystem::path> buildModuleSearchRoots(bool isStdLib,
+                                                                  const std::filesystem::path& currentDir)
         {
             std::vector<std::filesystem::path> roots;
 
@@ -2627,9 +2535,11 @@ namespace wio
             return roots;
         }
 
-        std::optional<std::filesystem::path> resolveModuleSourcePath(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir)
+        std::optional<std::filesystem::path> resolveModuleSourcePath(const std::string& modulePath, bool isStdLib,
+                                                                     const std::filesystem::path& currentDir)
         {
-            const std::filesystem::path relativeModulePath = std::filesystem::path(modulePath + ".wio").make_preferred();
+            const std::filesystem::path relativeModulePath =
+                std::filesystem::path(modulePath + ".wio").make_preferred();
 
             for (const auto& searchRoot : buildModuleSearchRoots(isStdLib, currentDir))
             {
@@ -2656,152 +2566,101 @@ namespace wio
 
             return formattedRoots;
         }
-    }
-    
+    } // namespace
+
     Compiler::Compiler()
     {
         gAppData.argParser = Argonaut::Parser();
-        gAppData.argParser
-            .Add(
-                Argonaut::Argument("FILE")
-                    .Required()
-                    .SetDescription("File to be compiled.")
-            )
-            .Add(
-                Argonaut::Argument("SINGLE-FILE")
-                    .AddAlias("-S")
-                    .AddAlias("--single-file")
-                    .Flag()
-                    .SetDescription("Imports are ignored (Built-in imports are not). It is treated as a single file.")
-            )
-            .Add(
-                Argonaut::Argument("SHOW-TOKENS")
-                    .AddAlias("-t")
-                    .AddAlias("--show-tokens")
-                    .Flag()
-                    .SetDescription("Shows tokens.")
-            )
-            .Add(
-                Argonaut::Argument("SHOW-AST")
-                    .AddAlias("-a")
-                    .AddAlias("--show-ast")
-                    .Flag()
-                    .SetDescription("Shows AST.")
-            )
-            .Add(
-                Argonaut::Argument("DRY-RUN")
-                    .AddAlias("-d")
-                    .AddAlias("--dry-run")
-                    .Flag()
-                    .SetDescription("Builds the AST but does not execute the program.")
-            )
-            .Add(
-                Argonaut::Argument("EMIT-CPP")
-                    .AddAlias("--emit-cpp")
-                    .Flag()
-                    .SetDescription("Generates <file>.wio.cpp, keeps it on disk, and stops before native backend compilation.")
-            )
-            .Add(
-                Argonaut::Argument("EMIT-TYPED-WIR")
-                    .AddAlias("--emit-typed-wir")
-                    .Flag()
-                    .SetDescription("Generates analyzed Typed WIR and stops before backend lowering.")
-            )
-            .Add(
-                Argonaut::Argument("EMIT-LOWERED-WIR")
-                    .AddAlias("--emit-lowered-wir")
-                    .Flag()
-                    .SetDescription("Generates canonical Lowered WIR and stops before backend code generation.")
-            )
-            .Add(
-                Argonaut::Argument("SHOW-BACKEND-INFO")
-                    .AddAlias("--show-backend-info")
-                    .Flag()
-                    .SetDescription("Prints the resolved backend toolchain, paths, and normalized inputs.")
-            )
-            .Add(
-                Argonaut::Argument("NO-BUILTIN")
-                    .AddAlias("-B")
-                    .AddAlias("--no-builtin")
-                    .Flag()
-                    .SetDescription("Wio built-in library imports are ignored.")
-            )
-            .Add(
-                Argonaut::Argument("WARN-AS-ERROR")
-                    .AddAlias("-w")
-                    .AddAlias("--warn-as-error")
-                    .Flag()
-                    .SetDescription("Treat all warnings as errors.")
-            )
-            .Add(
-                Argonaut::Argument("RUN")
-                    .AddAlias("-r")
-                    .AddAlias("--run")
-                    .Flag()
-                    .SetDescription("Compiles and then runs the output executable.")
-            )
-            .Add(
-                Argonaut::Argument("RUN-ARG")
-                    .AddAlias("--run-arg")
-                    .MultiValue()
-                    .SetDescription("Adds a runtime argument when --run launches the output executable.")
-            )
-            .Add(
-                Argonaut::Argument("TARGET")
-                    .AddAlias("--target")
-                    .SetDescription("Selects backend output kind: exe, static, or shared.")
-            )
-            .Add(
-                Argonaut::Argument("OUTPUT")
-                    .AddAlias("-o")
-                    .AddAlias("--output")
-                    .SetDescription("Overrides the backend output path.")
-            )
-            .Add(
-                Argonaut::Argument("INTERMEDIATE-DIR")
-                    .AddAlias("--intermediate-dir")
-                    .SetDescription("Overrides the directory used for non-emitted generated backend intermediates.")
-            )
-            .Add(
-                Argonaut::Argument("CPP-BACKEND")
-                    .AddAlias("--cpp-backend")
-                    .SetDescription("Selects C++ generation input: legacy or wir (experimental).")
-            )
-            .Add(
-                Argonaut::Argument("IR-OUTPUT")
-                    .AddAlias("--ir-output")
-                    .SetDescription("Overrides the output path used by --emit-typed-wir or --emit-lowered-wir.")
-            )
-            .Add(
-                Argonaut::Argument("INCLUDE-DIR")
-                    .AddAlias("--include-dir")
-                    .MultiValue()
-                    .SetDescription("Adds an extra include directory for the backend C++ compiler.")
-            )
-            .Add(
-                Argonaut::Argument("MODULE-DIR")
-                    .AddAlias("--module-dir")
-                    .MultiValue()
-                    .SetDescription("Adds an extra Wio module search directory for user imports.")
-            )
-            .Add(
-                Argonaut::Argument("LINK-DIR")
-                    .AddAlias("--link-dir")
-                    .MultiValue()
-                    .SetDescription("Adds an extra library search directory for the backend C++ compiler.")
-            )
-            .Add(
-                Argonaut::Argument("LINK-LIB")
-                    .AddAlias("--link-lib")
-                    .MultiValue()
-                    .SetDescription("Adds an extra library or library file for the backend C++ linker.")
-            )
-            .Add(
-                Argonaut::Argument("BACKEND-ARG")
-                    .AddAlias("--backend-arg")
-                    .MultiValue()
-                    .SetDescription("Passes an extra raw argument to the backend C++ compiler.")
-            )
+        gAppData.argParser.Add(Argonaut::Argument("FILE").Required().SetDescription("File to be compiled."))
+            .Add(Argonaut::Argument("SINGLE-FILE")
+                     .AddAlias("-S")
+                     .AddAlias("--single-file")
+                     .Flag()
+                     .SetDescription("Imports are ignored (Built-in imports are not). It is treated as a single file."))
+            .Add(Argonaut::Argument("SHOW-TOKENS")
+                     .AddAlias("-t")
+                     .AddAlias("--show-tokens")
+                     .Flag()
+                     .SetDescription("Shows tokens."))
+            .Add(Argonaut::Argument("SHOW-AST")
+                     .AddAlias("-a")
+                     .AddAlias("--show-ast")
+                     .Flag()
+                     .SetDescription("Shows AST."))
+            .Add(Argonaut::Argument("DRY-RUN")
+                     .AddAlias("-d")
+                     .AddAlias("--dry-run")
+                     .Flag()
+                     .SetDescription("Builds the AST but does not execute the program."))
+            .Add(Argonaut::Argument("EMIT-CPP")
+                     .AddAlias("--emit-cpp")
+                     .Flag()
+                     .SetDescription(
+                         "Generates <file>.wio.cpp, keeps it on disk, and stops before native backend compilation."))
+            .Add(Argonaut::Argument("EMIT-TYPED-WIR")
+                     .AddAlias("--emit-typed-wir")
+                     .Flag()
+                     .SetDescription("Generates analyzed Typed WIR and stops before backend lowering."))
+            .Add(Argonaut::Argument("EMIT-LOWERED-WIR")
+                     .AddAlias("--emit-lowered-wir")
+                     .Flag()
+                     .SetDescription("Generates canonical Lowered WIR and stops before backend code generation."))
+            .Add(Argonaut::Argument("SHOW-BACKEND-INFO")
+                     .AddAlias("--show-backend-info")
+                     .Flag()
+                     .SetDescription("Prints the resolved backend toolchain, paths, and normalized inputs."))
+            .Add(Argonaut::Argument("NO-BUILTIN")
+                     .AddAlias("-B")
+                     .AddAlias("--no-builtin")
+                     .Flag()
+                     .SetDescription("Wio built-in library imports are ignored."))
+            .Add(Argonaut::Argument("WARN-AS-ERROR")
+                     .AddAlias("-w")
+                     .AddAlias("--warn-as-error")
+                     .Flag()
+                     .SetDescription("Treat all warnings as errors."))
+            .Add(Argonaut::Argument("RUN").AddAlias("-r").AddAlias("--run").Flag().SetDescription(
+                "Compiles and then runs the output executable."))
+            .Add(Argonaut::Argument("RUN-ARG")
+                     .AddAlias("--run-arg")
+                     .MultiValue()
+                     .SetDescription("Adds a runtime argument when --run launches the output executable."))
+            .Add(Argonaut::Argument("TARGET")
+                     .AddAlias("--target")
+                     .SetDescription("Selects backend output kind: exe, static, or shared."))
+            .Add(Argonaut::Argument("OUTPUT")
+                     .AddAlias("-o")
+                     .AddAlias("--output")
+                     .SetDescription("Overrides the backend output path."))
+            .Add(Argonaut::Argument("INTERMEDIATE-DIR")
+                     .AddAlias("--intermediate-dir")
+                     .SetDescription("Overrides the directory used for non-emitted generated backend intermediates."))
+            .Add(Argonaut::Argument("CPP-BACKEND")
+                     .AddAlias("--cpp-backend")
+                     .SetDescription("Selects C++ generation input: wir (default) or legacy (compatibility)."))
+            .Add(Argonaut::Argument("IR-OUTPUT")
+                     .AddAlias("--ir-output")
+                     .SetDescription("Overrides the output path used by --emit-typed-wir or --emit-lowered-wir."))
+            .Add(Argonaut::Argument("INCLUDE-DIR")
+                     .AddAlias("--include-dir")
+                     .MultiValue()
+                     .SetDescription("Adds an extra include directory for the backend C++ compiler."))
+            .Add(Argonaut::Argument("MODULE-DIR")
+                     .AddAlias("--module-dir")
+                     .MultiValue()
+                     .SetDescription("Adds an extra Wio module search directory for user imports."))
+            .Add(Argonaut::Argument("LINK-DIR")
+                     .AddAlias("--link-dir")
+                     .MultiValue()
+                     .SetDescription("Adds an extra library search directory for the backend C++ compiler."))
+            .Add(Argonaut::Argument("LINK-LIB")
+                     .AddAlias("--link-lib")
+                     .MultiValue()
+                     .SetDescription("Adds an extra library or library file for the backend C++ linker."))
+            .Add(Argonaut::Argument("BACKEND-ARG")
+                     .AddAlias("--backend-arg")
+                     .MultiValue()
+                     .SetDescription("Passes an extra raw argument to the backend C++ compiler."))
             .AutoHelp()
             .AutoVersion()
             .SetVersion(WIO_VERSION);
@@ -2816,9 +2675,11 @@ namespace wio
             if (argc > 0 && argv != nullptr && argv[0] != nullptr && argv[0][0] != '\0')
             {
                 std::error_code ec;
-                gAppData.executablePath = std::filesystem::weakly_canonical(std::filesystem::absolute(std::filesystem::path(argv[0])), ec);
+                gAppData.executablePath =
+                    std::filesystem::weakly_canonical(std::filesystem::absolute(std::filesystem::path(argv[0])), ec);
                 if (ec)
-                    gAppData.executablePath = std::filesystem::absolute(std::filesystem::path(argv[0])).make_preferred();
+                    gAppData.executablePath =
+                        std::filesystem::absolute(std::filesystem::path(argv[0])).make_preferred();
                 else
                     gAppData.executablePath = gAppData.executablePath.make_preferred();
             }
@@ -2854,15 +2715,15 @@ namespace wio
         {
             exitWithCliError("Unknown command line error.");
         }
-        
+
         try
         {
 
-#define DEFINE_FLAG_VALUE(FLAG_ID, FLAG_NAME)                                           \
-    auto FLAG_NAME##_Vec = gAppData.argParser.GetValuesOf<bool>(FLAG_ID);               \
-    bool FLAG_NAME##_Val = (FLAG_NAME##_Vec).empty() ? false : (FLAG_NAME##_Vec).at(0); \
+#define DEFINE_FLAG_VALUE(FLAG_ID, FLAG_NAME)                                                                          \
+    auto FLAG_NAME##_Vec = gAppData.argParser.GetValuesOf<bool>(FLAG_ID);                                              \
+    bool FLAG_NAME##_Val = (FLAG_NAME##_Vec).empty() ? false : (FLAG_NAME##_Vec).at(0);                                \
     gAppData.flags.set_##FLAG_NAME(FLAG_NAME##_Val)
-            
+
             DEFINE_FLAG_VALUE("SINGLE-FILE", SingleFile);
             DEFINE_FLAG_VALUE("SHOW-TOKENS", ShowTokens);
             DEFINE_FLAG_VALUE("SHOW-AST", ShowAst);
@@ -2874,7 +2735,7 @@ namespace wio
             DEFINE_FLAG_VALUE("NO-BUILTIN", NoBuiltin);
             DEFINE_FLAG_VALUE("WARN-AS-ERROR", WarnAsError);
             DEFINE_FLAG_VALUE("RUN", Run);
-            
+
 #undef DEFINE_FLAG_VALUE
 
             std::vector<std::string> buildTargetValues = gAppData.argParser.GetValuesOf<std::string>("TARGET");
@@ -2882,7 +2743,7 @@ namespace wio
             gAppData.buildTarget = parseBuildTarget(buildTargetValue);
             const std::vector<std::string> cppBackendValues =
                 gAppData.argParser.GetValuesOf<std::string>("CPP-BACKEND");
-            gAppData.cppBackend = cppBackendValues.empty() ? "legacy" : cppBackendValues.front();
+            gAppData.cppBackend = cppBackendValues.empty() ? "wir" : cppBackendValues.front();
             if (gAppData.cppBackend != "legacy" && gAppData.cppBackend != "wir")
                 throw std::invalid_argument("--cpp-backend expects 'legacy' or 'wir'.");
         }
@@ -2899,11 +2760,12 @@ namespace wio
         {
             std::vector<std::string> filePaths = gAppData.argParser.GetValuesOf<std::string>("FILE");
             std::string filePathStr = filePaths.at(0);
-            std::filesystem::path sourcePath = std::filesystem::absolute(std::filesystem::path(filePathStr)).make_preferred();
+            std::filesystem::path sourcePath =
+                std::filesystem::absolute(std::filesystem::path(filePathStr)).make_preferred();
             gAppData.basePath = sourcePath.parent_path();
-            
+
             std::string source = filesystem::readFile(sourcePath);
-            
+
             if (source.empty())
             {
                 WIO_LOG_ERROR("File is empty or not found: {}", filePathStr);
@@ -2932,15 +2794,17 @@ namespace wio
             // leaking an internal Scope::define ordering error.
             validateImportAliasConflicts(program->statements);
             WIO_LOG_PROCESS_ERRORS(CompilationError);
-            
+
             gAppData.loadedModules.clear();
             gAppData.moduleExportedSymbols.clear();
             gAppData.moduleDeclaresTopLevelRealms.clear();
             gAppData.requiredCppHeaders.clear();
             gAppData.loadedModules.insert(sourceDisplayPath);
-            collectRequiredCppHeaders(program->statements, std::filesystem::path(sourceDisplayPath), gAppData.requiredCppHeaders);
+            collectRequiredCppHeaders(program->statements, std::filesystem::path(sourceDisplayPath),
+                                      gAppData.requiredCppHeaders);
 
-            validateSearchDirectories(gAppData.argParser.GetValuesOf<std::string>("MODULE-DIR"), "Module search directory");
+            validateSearchDirectories(gAppData.argParser.GetValuesOf<std::string>("MODULE-DIR"),
+                                      "Module search directory");
             WIO_LOG_PROCESS_ERRORS(CompilationError);
 
             std::vector<NodePtr<Statement>> finalStatements;
@@ -2957,19 +2821,13 @@ namespace wio
                         {
                             std::vector<std::string> importedSymbols;
                             bool declaresTopLevelRealms = false;
-                            auto moduleProg = parseAndMerge(useStmt->modulePath, true, sourcePath.parent_path(), &importedSymbols, &declaresTopLevelRealms);
+                            auto moduleProg = parseAndMerge(useStmt->modulePath, true, sourcePath.parent_path(),
+                                                            &importedSymbols, &declaresTopLevelRealms);
 
-                            if (!useStmt->aliasName.empty() &&
-                                !useStmt->importAllIntoScope &&
-                                !declaresTopLevelRealms)
+                            if (!useStmt->aliasName.empty() && !useStmt->importAllIntoScope && !declaresTopLevelRealms)
                             {
-                                finalStatements.push_back(
-                                    wrapStatementsInAliasRealm(
-                                        useStmt->aliasName,
-                                        std::move(moduleProg->statements),
-                                        useStmt->location()
-                                    )
-                                );
+                                finalStatements.push_back(wrapStatementsInAliasRealm(
+                                    useStmt->aliasName, std::move(moduleProg->statements), useStmt->location()));
                             }
                             else
                             {
@@ -2996,19 +2854,15 @@ namespace wio
                             {
                                 std::vector<std::string> importedSymbols;
                                 bool declaresTopLevelRealms = false;
-                                auto moduleProg = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path(), &importedSymbols, &declaresTopLevelRealms);
+                                auto moduleProg =
+                                    parseAndMerge(useStmt->modulePath, useStmt->isStdLib, sourcePath.parent_path(),
+                                                  &importedSymbols, &declaresTopLevelRealms);
 
-                                if (!useStmt->aliasName.empty() &&
-                                    !useStmt->importAllIntoScope &&
+                                if (!useStmt->aliasName.empty() && !useStmt->importAllIntoScope &&
                                     !declaresTopLevelRealms)
                                 {
-                                    finalStatements.push_back(
-                                        wrapStatementsInAliasRealm(
-                                            useStmt->aliasName,
-                                            std::move(moduleProg->statements),
-                                            useStmt->location()
-                                        )
-                                    );
+                                    finalStatements.push_back(wrapStatementsInAliasRealm(
+                                        useStmt->aliasName, std::move(moduleProg->statements), useStmt->location()));
                                 }
                                 else
                                 {
@@ -3046,19 +2900,14 @@ namespace wio
             if (!gAppData.flags.get_NoBuiltin())
             {
                 auto optionProgram = parseAndMerge("option", true, sourcePath.parent_path());
-                finalStatements.insert(
-                    finalStatements.end(),
-                    std::make_move_iterator(optionProgram->statements.begin()),
-                    std::make_move_iterator(optionProgram->statements.end())
-                );
+                finalStatements.insert(finalStatements.end(),
+                                       std::make_move_iterator(optionProgram->statements.begin()),
+                                       std::make_move_iterator(optionProgram->statements.end()));
             }
 
-            finalStatements.insert(
-                finalStatements.end(),
-                std::make_move_iterator(sourceStatements.begin()),
-                std::make_move_iterator(sourceStatements.end())
-            );
-            
+            finalStatements.insert(finalStatements.end(), std::make_move_iterator(sourceStatements.begin()),
+                                   std::make_move_iterator(sourceStatements.end()));
+
             program->statements = std::move(finalStatements);
 
             // 3. Semantic Analysis
@@ -3113,10 +2962,9 @@ namespace wio
             linkLibraries = normalizeLinkLibraries(rawLinkLibraries);
             backendArgs = normalizeBackendArguments(rawBackendArgs);
 
-            outputPath =
-                outputPaths.empty()
-                    ? makeDefaultOutputPath(sourcePath, gAppData.buildTarget)
-                    : std::filesystem::absolute(std::filesystem::path(outputPaths.front())).make_preferred();
+            outputPath = outputPaths.empty()
+                             ? makeDefaultOutputPath(sourcePath, gAppData.buildTarget)
+                             : std::filesystem::absolute(std::filesystem::path(outputPaths.front())).make_preferred();
 
             outputPath = std::filesystem::absolute(outputPath).make_preferred();
 
@@ -3126,7 +2974,8 @@ namespace wio
                     : std::optional<std::filesystem::path>(
                           std::filesystem::absolute(std::filesystem::path(intermediateDirs.front())).make_preferred());
 
-            cppPath = makeDefaultGeneratedCppPath(sourcePath, outputPath, intermediateDir, gAppData.flags.get_EmitCpp());
+            cppPath =
+                makeDefaultGeneratedCppPath(sourcePath, outputPath, intermediateDir, gAppData.flags.get_EmitCpp());
 
             runtimeLibraryPath = getRuntimeLibraryFile();
             stdSourceDir = getStdSourceDir();
@@ -3148,20 +2997,9 @@ namespace wio
 
             if (gAppData.flags.get_ShowBackendInfo())
             {
-                logResolvedBackendInfo(
-                    sourcePath,
-                    cppPath,
-                    outputPath,
-                    runtimeIncludeDir,
-                    sdkIncludeDir,
-                    stdSourceDir,
-                    runtimeLibraryPath,
-                    systemIncludeDirs,
-                    includeDirs,
-                    linkDirs,
-                    linkLibraries,
-                    backendArgs
-                );
+                logResolvedBackendInfo(sourcePath, cppPath, outputPath, runtimeIncludeDir, sdkIncludeDir, stdSourceDir,
+                                       runtimeLibraryPath, systemIncludeDirs, includeDirs, linkDirs, linkLibraries,
+                                       backendArgs);
             }
 
             if (gAppData.flags.get_DryRun())
@@ -3176,9 +3014,8 @@ namespace wio
             {
                 wir::typed::BuildOptions buildOptions;
                 buildOptions.logicalModuleName = outputPath.stem().generic_string();
-                buildOptions.moduleKind = gAppData.buildTarget == BuildTarget::Executable
-                    ? wir::ModuleKind::Program
-                    : wir::ModuleKind::WioLibrary;
+                buildOptions.moduleKind = gAppData.buildTarget == BuildTarget::Executable ? wir::ModuleKind::Program
+                                                                                          : wir::ModuleKind::WioLibrary;
                 wir::typed::BuildResult typedResult = wir::typed::Builder{}.build(program, buildOptions);
                 reportTypedWirDiagnostics(typedResult);
                 WIO_LOG_PROCESS_ERRORS(CompilationError);
@@ -3210,7 +3047,8 @@ namespace wio
                 std::filesystem::create_directories(cppPath.parent_path(), intermediateDirEc);
             if (intermediateDirEc)
             {
-                WIO_LOG_FATAL("Generated C++ output directory could not be created: {}", cppPath.parent_path().string());
+                WIO_LOG_FATAL("Generated C++ output directory could not be created: {}",
+                              cppPath.parent_path().string());
                 return EXIT_FAILURE;
             }
 
@@ -3239,7 +3077,8 @@ namespace wio
                     return EXIT_FAILURE;
                 }
 
-                if ((gAppData.buildTarget == BuildTarget::Executable || gAppData.buildTarget == BuildTarget::SharedLibrary) &&
+                if ((gAppData.buildTarget == BuildTarget::Executable ||
+                     gAppData.buildTarget == BuildTarget::SharedLibrary) &&
                     (runtimeLibraryPath.empty() || !std::filesystem::exists(runtimeLibraryPath)))
                 {
                     WIO_LOG_FATAL("Runtime library was not found. Expected file: {}", runtimeLibraryPath.string());
@@ -3276,7 +3115,8 @@ namespace wio
                     auto buildObjectPath = [&](const std::filesystem::path& inputPath, size_t index)
                     {
                         std::string stem = inputPath.stem().string();
-                        std::filesystem::path objectPath = outputPath.parent_path() /
+                        std::filesystem::path objectPath =
+                            outputPath.parent_path() /
                             (outputPath.stem().string() + "." + stem + "." + std::to_string(index) + ".o");
                         return objectPath.make_preferred();
                     };
@@ -3299,7 +3139,7 @@ namespace wio
                         appendBackendArguments(compileCmd, backendCompilerArgs);
                         compileCmd << " -o " << quotePath(objectPath);
 
-                        return runCommandCaptureOutput(compileCmd.str(), { backendCompilerPath.parent_path() });
+                        return runCommandCaptureOutput(compileCmd.str(), {backendCompilerPath.parent_path()});
                     };
 
                     CommandResult compileResult = compileObject(cppPath, 0);
@@ -3317,7 +3157,8 @@ namespace wio
 
                     if (exitCode != 0)
                     {
-                        reportBackendCommandFailure("Backend object compilation failed", exitCode, compileResult.output, compileResult.command);
+                        reportBackendCommandFailure("Backend object compilation failed", exitCode, compileResult.output,
+                                                    compileResult.command);
                         return EXIT_FAILURE;
                     }
 
@@ -3328,11 +3169,13 @@ namespace wio
                         archiveCmd << " " << quotePath(objectFile);
 
                     const std::filesystem::path backendArchiverPath = getBackendArchiverPath();
-                    const CommandResult archiveResult = runCommandCaptureOutput(archiveCmd.str(), { backendArchiverPath.parent_path() });
+                    const CommandResult archiveResult =
+                        runCommandCaptureOutput(archiveCmd.str(), {backendArchiverPath.parent_path()});
                     exitCode = archiveResult.exitCode;
                     if (exitCode != 0)
                     {
-                        reportBackendCommandFailure("Static library archive creation failed", exitCode, archiveResult.output, archiveResult.command);
+                        reportBackendCommandFailure("Static library archive creation failed", exitCode,
+                                                    archiveResult.output, archiveResult.command);
                         return EXIT_FAILURE;
                     }
                 }
@@ -3379,14 +3222,16 @@ namespace wio
 #endif
                     cmd << " -o " << quotePath(stagingOutputPath);
 
-                    const CommandResult backendResult = runCommandCaptureOutput(cmd.str(), { backendCompilerPath.parent_path() });
+                    const CommandResult backendResult =
+                        runCommandCaptureOutput(cmd.str(), {backendCompilerPath.parent_path()});
                     exitCode = backendResult.exitCode;
 
                     if (exitCode != 0)
                     {
                         std::error_code cleanupError;
                         std::filesystem::remove(stagingOutputPath, cleanupError);
-                        reportBackendCommandFailure("Backend compilation failed", exitCode, backendResult.output, backendResult.command);
+                        reportBackendCommandFailure("Backend compilation failed", exitCode, backendResult.output,
+                                                    backendResult.command);
                         return EXIT_FAILURE;
                     }
 
@@ -3395,11 +3240,8 @@ namespace wio
                     {
                         std::error_code cleanupError;
                         std::filesystem::remove(stagingOutputPath, cleanupError);
-                        WIO_LOG_FATAL(
-                            "Generated backend output could not replace '{}': {}",
-                            outputPath.string(),
-                            replaceError
-                        );
+                        WIO_LOG_FATAL("Generated backend output could not replace '{}': {}", outputPath.string(),
+                                      replaceError);
                         return EXIT_FAILURE;
                     }
                 }
@@ -3410,10 +3252,8 @@ namespace wio
                 {
                     WIO_LOG_INFO("Running {} ...", outputPath.filename().string());
 
-                    const int runExitCode = runExecutable(
-                        outputPath,
-                        gAppData.argParser.GetValuesOf<std::string>("RUN-ARG")
-                    );
+                    const int runExitCode =
+                        runExecutable(outputPath, gAppData.argParser.GetValuesOf<std::string>("RUN-ARG"));
                     if (runExitCode != 0)
                     {
                         WIO_LOG_WARN("Program exited with code: {}", runExitCode);
@@ -3428,8 +3268,7 @@ namespace wio
             std::filesystem::remove(cppPath, cleanupEc);
             if (cleanupEc)
             {
-                WIO_LOG_WARN("Could not remove generated intermediate C++ file '{}': {}",
-                             cppPath.string(),
+                WIO_LOG_WARN("Could not remove generated intermediate C++ file '{}': {}", cppPath.string(),
                              cleanupEc.message());
             }
 
@@ -3480,16 +3319,16 @@ namespace wio
         return instance;
     }
 
-    Ref<Program> Compiler::parseAndMerge(const std::string& modulePath, bool isStdLib, const std::filesystem::path& currentDir, std::vector<std::string>* exportedSymbols, bool* declaresTopLevelRealms)
+    Ref<Program> Compiler::parseAndMerge(const std::string& modulePath, bool isStdLib,
+                                         const std::filesystem::path& currentDir,
+                                         std::vector<std::string>* exportedSymbols, bool* declaresTopLevelRealms)
     {
-        std::optional<std::filesystem::path> resolvedModulePath = resolveModuleSourcePath(modulePath, isStdLib, currentDir);
+        std::optional<std::filesystem::path> resolvedModulePath =
+            resolveModuleSourcePath(modulePath, isStdLib, currentDir);
         if (!resolvedModulePath.has_value())
         {
-            Logger::get().addError(
-                "Module file was not found: {}.wio (searched in: {})",
-                modulePath,
-                formatModuleSearchRoots(isStdLib, currentDir)
-            );
+            Logger::get().addError("Module file was not found: {}.wio (searched in: {})", modulePath,
+                                   formatModuleSearchRoots(isStdLib, currentDir));
             WIO_LOG_PROCESS_ERRORS(CompilationError);
             return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
         }
@@ -3556,19 +3395,13 @@ namespace wio
                     {
                         std::vector<std::string> childExportedSymbols;
                         bool childDeclaresTopLevelRealms = false;
-                        auto childProgram = parseAndMerge(useStmt->modulePath, true, actualPath.parent_path(), &childExportedSymbols, &childDeclaresTopLevelRealms);
+                        auto childProgram = parseAndMerge(useStmt->modulePath, true, actualPath.parent_path(),
+                                                          &childExportedSymbols, &childDeclaresTopLevelRealms);
 
-                        if (!useStmt->aliasName.empty() &&
-                            !useStmt->importAllIntoScope &&
-                            !childDeclaresTopLevelRealms)
+                        if (!useStmt->aliasName.empty() && !useStmt->importAllIntoScope && !childDeclaresTopLevelRealms)
                         {
-                            mergedStatements.push_back(
-                                wrapStatementsInAliasRealm(
-                                    useStmt->aliasName,
-                                    std::move(childProgram->statements),
-                                    useStmt->location()
-                                )
-                            );
+                            mergedStatements.push_back(wrapStatementsInAliasRealm(
+                                useStmt->aliasName, std::move(childProgram->statements), useStmt->location()));
                         }
                         else
                         {
@@ -3597,19 +3430,15 @@ namespace wio
                         {
                             std::vector<std::string> childExportedSymbols;
                             bool childDeclaresTopLevelRealms = false;
-                            auto childProgram = parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path(), &childExportedSymbols, &childDeclaresTopLevelRealms);
+                            auto childProgram =
+                                parseAndMerge(useStmt->modulePath, useStmt->isStdLib, actualPath.parent_path(),
+                                              &childExportedSymbols, &childDeclaresTopLevelRealms);
 
-                            if (!useStmt->aliasName.empty() &&
-                                !useStmt->importAllIntoScope &&
+                            if (!useStmt->aliasName.empty() && !useStmt->importAllIntoScope &&
                                 !childDeclaresTopLevelRealms)
                             {
-                                mergedStatements.push_back(
-                                    wrapStatementsInAliasRealm(
-                                        useStmt->aliasName,
-                                        std::move(childProgram->statements),
-                                        useStmt->location()
-                                    )
-                                );
+                                mergedStatements.push_back(wrapStatementsInAliasRealm(
+                                    useStmt->aliasName, std::move(childProgram->statements), useStmt->location()));
                             }
                             else
                             {
@@ -3636,4 +3465,4 @@ namespace wio
 
         return makeNodePtr<Program>(std::move(mergedStatements));
     }
-}
+} // namespace wio

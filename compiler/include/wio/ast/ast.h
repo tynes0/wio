@@ -15,29 +15,37 @@
 #include <vector>
 #include <frenum.h>
 
-#define WIO_NODE_BODY_1(K)                                      \
-    static constexpr NodeKind KIND = NodeKind::K;               \
-    NodeKind kind() const override { return KIND; }             \
-    void accept(ASTVisitor& v) override { v.visit(*this); }
+#define WIO_NODE_BODY_1(K)                                                                                             \
+    static constexpr NodeKind KIND = NodeKind::K;                                                                      \
+    NodeKind kind() const override                                                                                     \
+    {                                                                                                                  \
+        return KIND;                                                                                                   \
+    }                                                                                                                  \
+    void accept(ASTVisitor& v) override                                                                                \
+    {                                                                                                                  \
+        v.visit(*this);                                                                                                \
+    }
 
-#define WIO_AST_NODE_BODY(K)         \
-    protected:                       \
-        using ASTNode::ASTNode;      \
-    public:                          \
-        WIO_NODE_BODY_1(K)
+#define WIO_AST_NODE_BODY(K)                                                                                           \
+protected:                                                                                                             \
+    using ASTNode::ASTNode;                                                                                            \
+                                                                                                                       \
+public:                                                                                                                \
+    WIO_NODE_BODY_1(K)
 
-#define WIO_EXP_NODE_BODY(K)         \
-    protected:                       \
-        using Expression::Expression;\
-    public:                          \
-        WIO_NODE_BODY_1(K)
+#define WIO_EXP_NODE_BODY(K)                                                                                           \
+protected:                                                                                                             \
+    using Expression::Expression;                                                                                      \
+                                                                                                                       \
+public:                                                                                                                \
+    WIO_NODE_BODY_1(K)
 
-
-#define WIO_STMT_NODE_BODY(K)       \
-    protected:                      \
-        using Statement::Statement; \
-    public:                         \
-        WIO_NODE_BODY_1(K)
+#define WIO_STMT_NODE_BODY(K)                                                                                          \
+protected:                                                                                                             \
+    using Statement::Statement;                                                                                        \
+                                                                                                                       \
+public:                                                                                                                \
+    WIO_NODE_BODY_1(K)
 
 namespace wio
 {
@@ -45,8 +53,8 @@ namespace wio
     {
         struct Type;
         struct Symbol;
-    }
-    
+    } // namespace sema
+
     enum class NodeKind : uint8_t
     {
         Unknown,
@@ -54,12 +62,14 @@ namespace wio
 #include "ast_nodes.def"
 #undef X
     };
-    
+
     inline std::string_view getKindName(NodeKind kind)
     {
         switch (kind)
         {
-#define X(item) case NodeKind::item: return #item;
+#define X(item)                                                                                                        \
+    case NodeKind::item:                                                                                               \
+        return #item;
 #include "ast_nodes.def"
 #undef X
         case NodeKind::Unknown:
@@ -73,73 +83,24 @@ namespace wio
     }
 
     FrenumClassInNamespace(wio, Mutability, uint8_t,
-        Immutable, // let
-        Mutable,   // mut
-        Const      // const
+                           Immutable, // let
+                           Mutable,   // mut
+                           Const      // const
     );
 
-    FrenumClassInNamespace(wio, Attribute ,uint8_t,
-        Unknown,
-        ReadOnly,
-        Default,
-        NoDefaultCtor,
-        GenerateCtors,
-        From,
-        Trust,
-        Final,
-        Type,
-        Native,
-        CppHeader,
-        CppName,
-        Instantiate,
-        Specialize,
-        Apply,
-        Export,
-        Command,
-        Event,
-        ModuleApiVersion,
-        ModuleLoad,
-        ModuleUpdate,
-        ModuleUnload,
-        ModuleSaveState,
-        ModuleRestoreState,
-        ApplicationStart,
-        ApplicationUpdate,
-        ApplicationClose,
-        Fixed,
-        After,
-        Main,
-        Worker
-    );
+    FrenumClassInNamespace(wio, Attribute, uint8_t, Unknown, ReadOnly, Default, NoDefaultCtor, GenerateCtors, From,
+                           Trust, Final, Type, Native, CppHeader, CppName, Instantiate, Specialize, Apply, Export,
+                           Command, Event, ModuleApiVersion, ModuleLoad, ModuleUpdate, ModuleUnload, ModuleSaveState,
+                           ModuleRestoreState, ApplicationStart, ApplicationUpdate, ApplicationClose, Fixed, After,
+                           Main, Worker);
 
-    FrenumClassInNamespace(wio, AttributeOrigin, uint8_t,
-        Direct,
-        Inherited,
-        Scoped,
-        Composed,
-        Generated,
-        Compiler
-    );
+    FrenumClassInNamespace(wio, AttributeOrigin, uint8_t, Direct, Inherited, Scoped, Composed, Generated, Compiler);
 
-    FrenumClassInNamespace(wio, AccessModifier, uint8_t,
-        Public,
-        Private,
-        Protected,
-        None
-    );
+    FrenumClassInNamespace(wio, AccessModifier, uint8_t, Public, Private, Protected, None);
 
-    FrenumClassInNamespace(wio, ForBindingMode, uint8_t,
-        ValueImmutable,
-        ValueMutable,
-        ReferenceMutable,
-        ReferenceView
-    );
+    FrenumClassInNamespace(wio, ForBindingMode, uint8_t, ValueImmutable, ValueMutable, ReferenceMutable, ReferenceView);
 
-    FrenumClassInNamespace(wio, OperatorDispatchKind, uint8_t,
-        None,
-        Member,
-        Free
-    );
+    FrenumClassInNamespace(wio, OperatorDispatchKind, uint8_t, None, Member, Free);
 
     enum class BorrowOrigin : uint8_t
     {
@@ -310,40 +271,41 @@ namespace wio
     struct Expression;
     struct Statement;
 
-    template <typename T, typename = void>
-    struct Has_KIND : std::false_type {};
+    template <typename T, typename = void> struct Has_KIND : std::false_type
+    {
+    };
 
     template <typename T>
     struct Has_KIND<T, std::void_t<decltype(T::KIND)>>
-        : std::bool_constant<std::is_same_v<std::remove_cv_t<decltype(T::KIND)>, NodeKind>> {};
-    
+        : std::bool_constant<std::is_same_v<std::remove_cv_t<decltype(T::KIND)>, NodeKind>>
+    {
+    };
+
     template <typename T>
     concept ASTType = (std::derived_from<T, ASTNode> &&
-        (Has_KIND<T>::value || std::same_as<T, Expression> || std::same_as<T, Statement>));
+                       (Has_KIND<T>::value || std::same_as<T, Expression> || std::same_as<T, Statement>));
 
     template <typename T>
-    requires ASTType<T>
+        requires ASTType<T>
     using NodePtr = Ref<T>;
-    
-    template <typename T>
-    using NodePtrUnchecked = Ref<T>;
 
-    template <typename T, typename... Args>
-    NodePtr<T> makeNodePtr(Args ...args)
+    template <typename T> using NodePtrUnchecked = Ref<T>;
+
+    template <typename T, typename... Args> NodePtr<T> makeNodePtr(Args... args)
     {
         return Ref<T>::Create(std::forward<Args>(args)...);
     }
-    
+
     struct ASTNode : RefCountedObject
     {
     protected:
         ASTNode();
         explicit ASTNode(common::Location loc);
         common::Location loc;
-        
+
     public:
         WeakRef<sema::Type> refType = nullptr;
-        
+
         ASTNode(const ASTNode&) = delete;
         ASTNode& operator=(const ASTNode&) = delete;
         ASTNode(ASTNode&&) = default;
@@ -352,33 +314,52 @@ namespace wio
         ~ASTNode() override;
         virtual void accept(ASTVisitor& v) = 0;
         virtual NodeKind kind() const = 0;
-        
-        const common::Location& location() const { return loc; }
-        std::string_view kindName() const { return getKindName(kind()); }
-        std::string kindNameStr() const { return getKindNameStr(kind()); }
 
-        bool is(NodeKind k) const { return kind() == k; }
+        const common::Location& location() const
+        {
+            return loc;
+        }
+        std::string_view kindName() const
+        {
+            return getKindName(kind());
+        }
+        std::string kindNameStr() const
+        {
+            return getKindNameStr(kind());
+        }
 
-        template <ASTType T>
-        bool is() const { return kind() == T::KIND; }
+        bool is(NodeKind k) const
+        {
+            return kind() == k;
+        }
 
-        template <ASTType T>
-        T* as() { return (is<T>()) ? static_cast<T*>(this) : nullptr; }
+        template <ASTType T> bool is() const
+        {
+            return kind() == T::KIND;
+        }
 
-        template <ASTType T>
-        const T* as() const { return (is<T>()) ? static_cast<const T*>(this) : nullptr; }
+        template <ASTType T> T* as()
+        {
+            return (is<T>()) ? static_cast<T*>(this) : nullptr;
+        }
+
+        template <ASTType T> const T* as() const
+        {
+            return (is<T>()) ? static_cast<const T*>(this) : nullptr;
+        }
     };
 
     // NOLINTBEGIN(cppcoreguidelines-special-member-functions)
-    
+
     struct Expression : ASTNode
     {
     protected:
         using ASTNode::ASTNode;
+
     public:
         Expression();
         ~Expression() override;
-        
+
         WeakRef<sema::Symbol> referencedSymbol = nullptr;
         BorrowOrigin borrowOrigin = BorrowOrigin::None;
     };
@@ -387,6 +368,7 @@ namespace wio
     {
     protected:
         using ASTNode::ASTNode;
+
     public:
         Statement();
         ~Statement() override;
@@ -398,7 +380,7 @@ namespace wio
 
         explicit Program(std::vector<NodePtr<Statement>> _statements);
         ~Program() override;
-        
+
         std::vector<NodePtr<Statement>> statements;
     };
 
@@ -406,7 +388,7 @@ namespace wio
     {
         WIO_AST_NODE_BODY(TypeSpecifier)
 
-        Token name; // Type name (Ex: Result)
+        Token name;                                            // Type name (Ex: Result)
         std::vector<NodePtrUnchecked<TypeSpecifier>> generics; // Generic parameters (Ex: <Texture>)
         NodePtr<Expression> packIndex;
         // Static-array extents may be ordinary integer literals or const
@@ -420,36 +402,36 @@ namespace wio
         bool isNullable = false;
         bool isPackExpansion = false;
 
-        TypeSpecifier(Token _name,
-            std::vector<NodePtrUnchecked<TypeSpecifier>> _generics,
-            NodePtr<Expression> _packIndex,
-            size_t size,
-            bool _isMut,
-            bool _isRef,
-            bool _isPackExpansion,
-            common::Location _loc);
+        TypeSpecifier(Token _name, std::vector<NodePtrUnchecked<TypeSpecifier>> _generics,
+                      NodePtr<Expression> _packIndex, size_t size, bool _isMut, bool _isRef, bool _isPackExpansion,
+                      common::Location _loc);
         ~TypeSpecifier() override;
     };
 
     struct BinaryExpression : Expression
     {
         WIO_EXP_NODE_BODY(BinaryExpression)
-        
+
         NodePtr<Expression> left;
         Token op;
         NodePtr<Expression> right;
         OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
         WeakRef<sema::Type> overloadFunctionType = nullptr;
-        
-        BinaryExpression(NodePtr<Expression> _left, Token _op, NodePtr<Expression> _right, common::Location _loc = common::Location::invalid());
+
+        BinaryExpression(NodePtr<Expression> _left, Token _op, NodePtr<Expression> _right,
+                         common::Location _loc = common::Location::invalid());
         ~BinaryExpression() override;
     };
 
     struct UnaryExpression : Expression
     {
         WIO_EXP_NODE_BODY(UnaryExpression)
-        
-        enum class UnaryOperatorType : uint8_t { Prefix, Postfix };
+
+        enum class UnaryOperatorType : uint8_t
+        {
+            Prefix,
+            Postfix
+        };
 
         Token op;
         NodePtr<Expression> operand;
@@ -458,21 +440,23 @@ namespace wio
         OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
         WeakRef<sema::Type> overloadFunctionType = nullptr;
 
-        UnaryExpression(Token _op, NodePtr<Expression> _operand, UnaryOperatorType _opType = UnaryOperatorType::Prefix, common::Location _loc = common::Location::invalid());
+        UnaryExpression(Token _op, NodePtr<Expression> _operand, UnaryOperatorType _opType = UnaryOperatorType::Prefix,
+                        common::Location _loc = common::Location::invalid());
         ~UnaryExpression() override;
     };
 
     struct AssignmentExpression : Expression
     {
         WIO_EXP_NODE_BODY(AssignmentExpression)
-        
+
         NodePtr<Expression> left;
         Token op;
         NodePtr<Expression> right;
         OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
         WeakRef<sema::Type> overloadFunctionType = nullptr;
-        
-        AssignmentExpression(NodePtr<Expression> _left, Token _op, NodePtr<Expression> _right, common::Location _loc = common::Location::invalid());
+
+        AssignmentExpression(NodePtr<Expression> _left, Token _op, NodePtr<Expression> _right,
+                             common::Location _loc = common::Location::invalid());
         ~AssignmentExpression() override;
     };
 
@@ -484,17 +468,15 @@ namespace wio
         NodePtr<Expression> whenTrue;
         NodePtr<Expression> whenFalse;
 
-        ConditionalExpression(NodePtr<Expression> _condition,
-                              NodePtr<Expression> _whenTrue,
-                              NodePtr<Expression> _whenFalse,
-                              common::Location _loc = common::Location::invalid());
+        ConditionalExpression(NodePtr<Expression> _condition, NodePtr<Expression> _whenTrue,
+                              NodePtr<Expression> _whenFalse, common::Location _loc = common::Location::invalid());
         ~ConditionalExpression() override;
     };
 
     struct IntegerLiteral : Expression
     {
         WIO_EXP_NODE_BODY(IntegerLiteral)
-        
+
         Token token;
 
         explicit IntegerLiteral(Token _token, common::Location _loc = common::Location::invalid());
@@ -504,9 +486,9 @@ namespace wio
     struct FloatLiteral : Expression
     {
         WIO_EXP_NODE_BODY(FloatLiteral)
-        
+
         Token token;
-        
+
         FloatLiteral(Token _token, common::Location _loc = common::Location::invalid());
         ~FloatLiteral() override;
     };
@@ -516,7 +498,7 @@ namespace wio
         WIO_EXP_NODE_BODY(StringLiteral)
 
         Token token;
-        
+
         explicit StringLiteral(Token _token, common::Location _loc = common::Location::invalid());
         ~StringLiteral() override;
     };
@@ -527,9 +509,8 @@ namespace wio
 
         std::vector<NodePtr<Expression>> parts;
         bool isUnicode = false;
-        
-        explicit InterpolatedStringLiteral(std::vector<NodePtr<Expression>> _parts,
-                                           bool _isUnicode = false,
+
+        explicit InterpolatedStringLiteral(std::vector<NodePtr<Expression>> _parts, bool _isUnicode = false,
                                            common::Location _loc = common::Location::invalid());
         ~InterpolatedStringLiteral() override;
     };
@@ -537,9 +518,9 @@ namespace wio
     struct BoolLiteral : Expression
     {
         WIO_EXP_NODE_BODY(BoolLiteral)
-        
+
         Token token;
-        
+
         explicit BoolLiteral(Token _token, common::Location _loc = common::Location::invalid());
         ~BoolLiteral() override;
     };
@@ -547,9 +528,9 @@ namespace wio
     struct CharLiteral : Expression
     {
         WIO_EXP_NODE_BODY(CharLiteral)
-        
+
         Token token;
-        
+
         explicit CharLiteral(Token _token, common::Location _loc = common::Location::invalid());
         ~CharLiteral() override;
     };
@@ -557,9 +538,9 @@ namespace wio
     struct ByteLiteral : Expression
     {
         WIO_EXP_NODE_BODY(ByteLiteral)
-        
+
         Token token;
-        
+
         explicit ByteLiteral(Token _token, common::Location _loc = common::Location::invalid());
         ~ByteLiteral() override;
     };
@@ -567,40 +548,40 @@ namespace wio
     struct DurationLiteral : Expression
     {
         WIO_EXP_NODE_BODY(DurationLiteral)
-        
+
         Token token;
-        
+
         explicit DurationLiteral(Token _token, common::Location _loc = common::Location::invalid());
         ~DurationLiteral() override;
-        
     };
 
     struct ArrayLiteral : Expression
     {
         WIO_EXP_NODE_BODY(ArrayLiteral)
-        
+
         std::vector<NodePtr<Expression>> elements;
-        
-        explicit ArrayLiteral(std::vector<NodePtr<Expression>> _elements, common::Location _loc = common::Location::invalid());
+
+        explicit ArrayLiteral(std::vector<NodePtr<Expression>> _elements,
+                              common::Location _loc = common::Location::invalid());
         ~ArrayLiteral() override;
     };
 
     struct DictionaryLiteral : Expression
     {
         WIO_EXP_NODE_BODY(DictionaryLiteral)
-        
+
         std::vector<std::pair<NodePtr<Expression>, NodePtr<Expression>>> pairs;
         bool isOrdered;
 
         explicit DictionaryLiteral(std::vector<std::pair<NodePtr<Expression>, NodePtr<Expression>>> _pairs,
-            bool _isOrdered, common::Location _loc = common::Location::invalid());
+                                   bool _isOrdered, common::Location _loc = common::Location::invalid());
         ~DictionaryLiteral() override;
     };
 
     struct Identifier : Expression
     {
         WIO_EXP_NODE_BODY(Identifier)
-        
+
         Token token;
         // Populated only when the identifier is used as a generic parameter.
         // Keeping the default beside the parameter preserves source order and
@@ -629,7 +610,7 @@ namespace wio
     struct NullExpression : Expression
     {
         WIO_EXP_NODE_BODY(NullExpression)
-        
+
         explicit NullExpression(common::Location _loc = common::Location::invalid());
         ~NullExpression() override;
     };
@@ -642,8 +623,11 @@ namespace wio
         NodePtr<Expression> index;
         OperatorDispatchKind operatorDispatchKind = OperatorDispatchKind::None;
         WeakRef<sema::Type> overloadFunctionType = nullptr;
+        std::optional<std::size_t> resolvedPackIndex;
+        std::string packElementBindingName;
 
-        ArrayAccessExpression(NodePtr<Expression> _object, NodePtr<Expression> _index, common::Location _loc = common::Location::invalid());
+        ArrayAccessExpression(NodePtr<Expression> _object, NodePtr<Expression> _index,
+                              common::Location _loc = common::Location::invalid());
         ~ArrayAccessExpression() override;
     };
 
@@ -658,7 +642,8 @@ namespace wio
         std::vector<IntrinsicMember> intrinsicOverloadMembers;
         std::vector<WeakRef<sema::Type>> intrinsicOverloadTypes;
 
-        MemberAccessExpression(NodePtr<Expression> _object, NodePtr<Identifier> _member, TokenType _opType, common::Location _loc = common::Location::invalid());
+        MemberAccessExpression(NodePtr<Expression> _object, NodePtr<Identifier> _member, TokenType _opType,
+                               common::Location _loc = common::Location::invalid());
         ~MemberAccessExpression() override;
     };
 
@@ -680,12 +665,9 @@ namespace wio
         bool propagateResult = false;
         bool isPipelineCall = false;
 
-        FunctionCallExpression(NodePtr<Expression> _callee,
-            std::vector<NodePtr<TypeSpecifier>> _explicitTypeArguments,
-            std::vector<NodePtr<Expression>> _args,
-            bool _unwrapResult = false,
-            bool _propagateResult = false,
-            common::Location _loc = common::Location::invalid());
+        FunctionCallExpression(NodePtr<Expression> _callee, std::vector<NodePtr<TypeSpecifier>> _explicitTypeArguments,
+                               std::vector<NodePtr<Expression>> _args, bool _unwrapResult = false,
+                               bool _propagateResult = false, common::Location _loc = common::Location::invalid());
         ~FunctionCallExpression() override;
     };
 
@@ -695,7 +677,8 @@ namespace wio
 
         NodePtr<Expression> operand;
 
-        explicit PackExpansionExpression(NodePtr<Expression> _operand, common::Location _loc = common::Location::invalid());
+        explicit PackExpansionExpression(NodePtr<Expression> _operand,
+                                         common::Location _loc = common::Location::invalid());
         ~PackExpansionExpression() override;
     };
 
@@ -707,10 +690,8 @@ namespace wio
         NodePtr<Expression> defaultValue;
         bool isParameterPack = false;
 
-        Parameter(NodePtr<Identifier> _name = nullptr,
-            NodePtr<TypeSpecifier> _type = nullptr,
-            NodePtr<Expression> _defaultValue = nullptr,
-            bool _isParameterPack = false);
+        Parameter(NodePtr<Identifier> _name = nullptr, NodePtr<TypeSpecifier> _type = nullptr,
+                  NodePtr<Expression> _defaultValue = nullptr, bool _isParameterPack = false);
     };
 
     struct LambdaExpression : Expression
@@ -726,7 +707,7 @@ namespace wio
         bool capturesSelf = false;
 
         LambdaExpression(std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Statement> _body,
-            common::Location _loc = common::Location::invalid());
+                         common::Location _loc = common::Location::invalid());
         ~LambdaExpression() override;
     };
 
@@ -757,7 +738,7 @@ namespace wio
     struct SelfExpression : Expression
     {
         WIO_EXP_NODE_BODY(SelfExpression)
-        
+
         explicit SelfExpression(common::Location _loc = common::Location::invalid());
         ~SelfExpression() override;
     };
@@ -765,7 +746,7 @@ namespace wio
     struct SuperExpression : Expression
     {
         WIO_EXP_NODE_BODY(SuperExpression)
-        
+
         explicit SuperExpression(common::Location _loc = common::Location::invalid());
         ~SuperExpression() override;
     };
@@ -778,7 +759,8 @@ namespace wio
         NodePtr<Expression> end;
         bool isInclusive; // true '...', false '..<'
 
-        RangeExpression(NodePtr<Expression> _start, NodePtr<Expression> _end, bool _isInclusive, common::Location _loc = common::Location::invalid());
+        RangeExpression(NodePtr<Expression> _start, NodePtr<Expression> _end, bool _isInclusive,
+                        common::Location _loc = common::Location::invalid());
         ~RangeExpression() override;
     };
 
@@ -798,7 +780,8 @@ namespace wio
         NodePtr<Expression> value;
         std::vector<MatchCase> cases;
 
-        MatchExpression(NodePtr<Expression> _value, std::vector<MatchCase> _cases, common::Location _loc = common::Location::invalid());
+        MatchExpression(NodePtr<Expression> _value, std::vector<MatchCase> _cases,
+                        common::Location _loc = common::Location::invalid());
         ~MatchExpression() override;
     };
 
@@ -807,8 +790,9 @@ namespace wio
         WIO_STMT_NODE_BODY(ExpressionStatement)
 
         NodePtr<Expression> expression;
-        
-        explicit ExpressionStatement(NodePtr<Expression> _expression, common::Location _loc = common::Location::invalid());
+
+        explicit ExpressionStatement(NodePtr<Expression> _expression,
+                                     common::Location _loc = common::Location::invalid());
         ~ExpressionStatement() override;
     };
 
@@ -848,6 +832,8 @@ namespace wio
             std::string phase;
             std::string hookCppName;
             std::string hookMode;
+            WeakRef<sema::Type> processorType;
+            WeakRef<sema::Symbol> hookSymbol;
             WeakRef<sema::Type> hookValueType;
         };
         // Effective, declaration-ordered processors bound by semantic
@@ -856,10 +842,9 @@ namespace wio
         size_t processorOrder = 0;
 
         AttributeStatement(Attribute _attribute, std::vector<Token> _args,
-            std::vector<NodePtr<TypeSpecifier>> _typeArgs = {},
-            common::Location _loc = common::Location::invalid(),
-            std::string _qualifiedName = {},
-            std::vector<std::string> _argumentNames = {});
+                           std::vector<NodePtr<TypeSpecifier>> _typeArgs = {},
+                           common::Location _loc = common::Location::invalid(), std::string _qualifiedName = {},
+                           std::vector<std::string> _argumentNames = {});
         ~AttributeStatement() override;
     };
 
@@ -892,15 +877,10 @@ namespace wio
         bool inherited = false;
         bool scoped = false;
 
-        AttributeDeclaration(NodePtr<Identifier> _name,
-            std::vector<Parameter> _parameters,
-            std::vector<std::string> _targets,
-            std::vector<std::string> _retention,
-            std::vector<std::string> _conflictGroups,
-            bool _repeatable,
-            bool _inherited,
-            bool _scoped,
-            common::Location _loc = common::Location::invalid());
+        AttributeDeclaration(NodePtr<Identifier> _name, std::vector<Parameter> _parameters,
+                             std::vector<std::string> _targets, std::vector<std::string> _retention,
+                             std::vector<std::string> _conflictGroups, bool _repeatable, bool _inherited, bool _scoped,
+                             common::Location _loc = common::Location::invalid());
         ~AttributeDeclaration() override;
     };
 
@@ -909,7 +889,7 @@ namespace wio
         WIO_STMT_NODE_BODY(DeclarationGroup)
         std::vector<NodePtr<Statement>> declarations;
         explicit DeclarationGroup(std::vector<NodePtr<Statement>> _declarations,
-            common::Location _loc = common::Location::invalid());
+                                  common::Location _loc = common::Location::invalid());
         ~DeclarationGroup() override;
     };
 
@@ -923,13 +903,10 @@ namespace wio
         NodePtr<TypeSpecifier> type;
         NodePtr<Expression> initializer;
         bool isPackField = false;
-        
+
         VariableDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, Mutability _mutability,
-            NodePtr<Identifier> _name,
-            NodePtr<TypeSpecifier> _type,
-            NodePtr<Expression> _init,
-            bool _isPackField,
-            common::Location _loc);
+                            NodePtr<Identifier> _name, NodePtr<TypeSpecifier> _type, NodePtr<Expression> _init,
+                            bool _isPackField, common::Location _loc);
         ~VariableDeclaration() override;
     };
 
@@ -943,15 +920,12 @@ namespace wio
         bool hasGenericParameterPack = false;
         NodePtr<TypeSpecifier> aliasedType;
 
-        TypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
-            NodePtr<Identifier> _name,
-            std::vector<NodePtr<Identifier>> _genericParameters,
-            bool _hasGenericParameterPack,
-            NodePtr<TypeSpecifier> _aliasedType,
-            common::Location _loc);
+        TypeAliasDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
+                             std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack,
+                             NodePtr<TypeSpecifier> _aliasedType, common::Location _loc);
         ~TypeAliasDeclaration() override;
     };
-    
+
     struct ApplicationStageRunMetadata
     {
         std::string target;
@@ -985,7 +959,7 @@ namespace wio
         bool hasGenericParameterPack = false;
         std::vector<Parameter> parameters;
         NodePtr<TypeSpecifier> returnType;
-        NodePtr<Expression> whenCondition; 
+        NodePtr<Expression> whenCondition;
         NodePtr<Expression> whenFallback;
         NodePtr<Statement> body;
         bool isExtensionMethod = false;
@@ -999,8 +973,10 @@ namespace wio
         std::string attributeTargetOverride;
 
         FunctionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
-            std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack, std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType, NodePtr<Expression> _whenCondition,
-            NodePtr<Expression> _whenFallback, NodePtr<Statement> _body, common::Location _loc);
+                            std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack,
+                            std::vector<Parameter> _params, NodePtr<TypeSpecifier> _retType,
+                            NodePtr<Expression> _whenCondition, NodePtr<Expression> _whenFallback,
+                            NodePtr<Statement> _body, common::Location _loc);
         ~FunctionDeclaration() override;
     };
 
@@ -1015,10 +991,8 @@ namespace wio
         std::vector<NodePtr<FunctionDeclaration>> methods;
 
         InterfaceDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
-            std::vector<NodePtr<Identifier>> _genericParameters,
-            bool _hasGenericParameterPack,
-            std::vector<NodePtr<FunctionDeclaration>> _methods,
-            common::Location _loc);
+                             std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack,
+                             std::vector<NodePtr<FunctionDeclaration>> _methods, common::Location _loc);
         ~InterfaceDeclaration() override;
     };
 
@@ -1026,7 +1000,7 @@ namespace wio
     {
         std::vector<NodePtr<AttributeStatement>> attributes;
         AccessModifier access;
-        NodePtr<Statement> declaration; 
+        NodePtr<Statement> declaration;
     };
 
     struct ComponentDeclaration : Statement
@@ -1041,10 +1015,8 @@ namespace wio
         std::string attributeTargetOverride;
 
         ComponentDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
-            std::vector<NodePtr<Identifier>> _genericParameters,
-            bool _hasGenericParameterPack,
-            std::vector<ComponentMember> _members,
-            common::Location _loc);
+                             std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack,
+                             std::vector<ComponentMember> _members, common::Location _loc);
         ~ComponentDeclaration() override;
     };
 
@@ -1064,19 +1036,17 @@ namespace wio
         NodePtr<TypeSpecifier> targetType;
         std::vector<ExtensionMember> members;
 
-        ExtensionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes,
-            NodePtr<Identifier> _name,
-            NodePtr<TypeSpecifier> _targetType,
-            std::vector<ExtensionMember> _members,
-            common::Location _loc);
+        ExtensionDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
+                             NodePtr<TypeSpecifier> _targetType, std::vector<ExtensionMember> _members,
+                             common::Location _loc);
         ~ExtensionDeclaration() override;
     };
 
     struct ObjectMember
     {
         std::vector<NodePtr<AttributeStatement>> attributes;
-        AccessModifier access; 
-        NodePtr<Statement> declaration; 
+        AccessModifier access;
+        NodePtr<Statement> declaration;
     };
 
     struct ObjectDeclaration : Statement
@@ -1090,10 +1060,8 @@ namespace wio
         std::vector<ObjectMember> members;
 
         ObjectDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
-            std::vector<NodePtr<Identifier>> _genericParameters,
-            bool _hasGenericParameterPack,
-            std::vector<ObjectMember> _members,
-            common::Location _loc);
+                          std::vector<NodePtr<Identifier>> _genericParameters, bool _hasGenericParameterPack,
+                          std::vector<ObjectMember> _members, common::Location _loc);
         ~ObjectDeclaration() override;
     };
 
@@ -1111,7 +1079,8 @@ namespace wio
         NodePtr<Identifier> name;
         std::vector<EnumMember> members;
 
-        EnumDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<EnumMember> _members, common::Location _loc = common::Location::invalid());
+        EnumDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
+                        std::vector<EnumMember> _members, common::Location _loc = common::Location::invalid());
         ~EnumDeclaration() override;
     };
 
@@ -1122,7 +1091,8 @@ namespace wio
         NodePtr<Identifier> name;
         std::vector<EnumMember> members;
 
-        FlagsetDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, std::vector<EnumMember> _members, common::Location _loc = common::Location::invalid());
+        FlagsetDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
+                           std::vector<EnumMember> _members, common::Location _loc = common::Location::invalid());
         ~FlagsetDeclaration() override;
     };
 
@@ -1132,17 +1102,19 @@ namespace wio
         std::vector<NodePtr<AttributeStatement>> attributes;
         NodePtr<Identifier> name;
 
-        FlagDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name, common::Location _loc = common::Location::invalid());
+        FlagDeclaration(std::vector<NodePtr<AttributeStatement>> _attributes, NodePtr<Identifier> _name,
+                        common::Location _loc = common::Location::invalid());
         ~FlagDeclaration() override;
     };
-    
+
     struct BlockStatement : Statement
     {
         WIO_STMT_NODE_BODY(BlockStatement)
-        
+
         std::vector<NodePtr<Statement>> statements;
-        
-        explicit BlockStatement(std::vector<NodePtr<Statement>> _statements, common::Location _loc = common::Location::invalid());
+
+        explicit BlockStatement(std::vector<NodePtr<Statement>> _statements,
+                                common::Location _loc = common::Location::invalid());
         ~BlockStatement() override;
     };
 
@@ -1154,8 +1126,10 @@ namespace wio
         NodePtr<Statement> thenBranch;
         NodePtr<Statement> elseBranch;
         Token matchVar;
+        WeakRef<sema::Symbol> matchSymbol;
 
-        IfStatement(NodePtr<Expression> _cond, NodePtr<Statement> _then, NodePtr<Statement> _else, Token _matchVar, common::Location _loc);
+        IfStatement(NodePtr<Expression> _cond, NodePtr<Statement> _then, NodePtr<Statement> _else, Token _matchVar,
+                    common::Location _loc);
         ~IfStatement() override;
     };
 
@@ -1181,7 +1155,9 @@ namespace wio
         NodePtr<Expression> step;
         NodePtr<Statement> body;
 
-        ForInStatement(std::vector<NodePtr<Identifier>> _bindings, std::vector<ForBindingMode> _bindingModes, NodePtr<Expression> _iterable, NodePtr<Expression> _step, NodePtr<Statement> _body, common::Location _loc);
+        ForInStatement(std::vector<NodePtr<Identifier>> _bindings, std::vector<ForBindingMode> _bindingModes,
+                       NodePtr<Expression> _iterable, NodePtr<Expression> _step, NodePtr<Statement> _body,
+                       common::Location _loc);
         ~ForInStatement() override;
     };
 
@@ -1194,14 +1170,15 @@ namespace wio
         NodePtr<Expression> increment;
         NodePtr<Statement> body;
 
-        CForStatement(NodePtr<Statement> _initializer, NodePtr<Expression> _condition, NodePtr<Expression> _increment, NodePtr<Statement> _body, common::Location _loc);
+        CForStatement(NodePtr<Statement> _initializer, NodePtr<Expression> _condition, NodePtr<Expression> _increment,
+                      NodePtr<Statement> _body, common::Location _loc);
         ~CForStatement() override;
     };
 
     struct BreakStatement : Statement
     {
         WIO_STMT_NODE_BODY(BreakStatement)
-        
+
         explicit BreakStatement(common::Location _loc = common::Location::invalid());
         ~BreakStatement() override;
     };
@@ -1209,11 +1186,11 @@ namespace wio
     struct ContinueStatement : Statement
     {
         WIO_STMT_NODE_BODY(ContinueStatement)
-        
+
         explicit ContinueStatement(common::Location _loc = common::Location::invalid());
         ~ContinueStatement() override;
     };
-    
+
     struct ReturnStatement : Statement
     {
         WIO_STMT_NODE_BODY(ReturnStatement)
@@ -1235,8 +1212,10 @@ namespace wio
         bool isStdLib = false;
         bool isCppHeader = false;
         bool importAllIntoScope = false;
-        
-        explicit UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib, bool _isCppHeader, bool _importAllIntoScope = false, common::Location _loc = common::Location::invalid());
+
+        explicit UseStatement(std::string _moduleName, std::string _modulePath, std::string _aliasName, bool _isStdLib,
+                              bool _isCppHeader, bool _importAllIntoScope = false,
+                              common::Location _loc = common::Location::invalid());
         ~UseStatement() override;
     };
 
@@ -1247,9 +1226,8 @@ namespace wio
         NodePtr<AttributeStatement> attribute;
         NodePtr<DeclarationGroup> body;
 
-        UsingAttributeStatement(NodePtr<AttributeStatement> _attribute,
-            NodePtr<DeclarationGroup> _body,
-            common::Location _loc = common::Location::invalid());
+        UsingAttributeStatement(NodePtr<AttributeStatement> _attribute, NodePtr<DeclarationGroup> _body,
+                                common::Location _loc = common::Location::invalid());
         ~UsingAttributeStatement() override;
     };
 
@@ -1260,12 +1238,13 @@ namespace wio
         NodePtr<Identifier> name;
         std::vector<NodePtr<Statement>> statements;
 
-        RealmDeclaration(NodePtr<Identifier> _name, std::vector<NodePtr<Statement>> _statements, common::Location _loc = common::Location::invalid());
+        RealmDeclaration(NodePtr<Identifier> _name, std::vector<NodePtr<Statement>> _statements,
+                         common::Location _loc = common::Location::invalid());
         ~RealmDeclaration() override;
     };
-    
+
     // NOLINTEND(cppcoreguidelines-special-member-functions)
-}
+} // namespace wio
 
 #undef WIO_NODE_BODY_1
 #undef WIO_AST_NODE_BODY

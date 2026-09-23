@@ -11,10 +11,7 @@ namespace wio::wir
         boolType_ = intern(Type{.kind = TypeKind::Bool});
         i32Type_ = intern(Type{.kind = TypeKind::I32});
         stringType_ = intern(Type{
-            .kind = TypeKind::String,
-            .ownership = OwnershipModel::OwnedValue,
-            .cleanup = CleanupKind::DestroyValue
-        });
+            .kind = TypeKind::String, .ownership = OwnershipModel::OwnedValue, .cleanup = CleanupKind::DestroyValue});
     }
 
     TypeId TypeTable::intern(Type type)
@@ -76,42 +73,78 @@ namespace wio::wir
     {
         switch (kind)
         {
-        case TypeKind::Invalid: return "invalid";
-        case TypeKind::Void: return "void";
-        case TypeKind::Bool: return "bool";
-        case TypeKind::I8: return "i8";
-        case TypeKind::I16: return "i16";
-        case TypeKind::I32: return "i32";
-        case TypeKind::I64: return "i64";
-        case TypeKind::ISize: return "isize";
-        case TypeKind::U8: return "u8";
-        case TypeKind::U16: return "u16";
-        case TypeKind::U32: return "u32";
-        case TypeKind::U64: return "u64";
-        case TypeKind::USize: return "usize";
-        case TypeKind::F32: return "f32";
-        case TypeKind::F64: return "f64";
-        case TypeKind::Byte: return "byte";
-        case TypeKind::Char: return "char";
-        case TypeKind::String: return "string";
-        case TypeKind::Text: return "text";
-        case TypeKind::Any: return "any";
-        case TypeKind::Opaque: return "opaque";
-        case TypeKind::GenericParameter: return "generic-parameter";
-        case TypeKind::ConstGenericParameter: return "const-generic-parameter";
-        case TypeKind::ConstValue: return "const-value";
-        case TypeKind::GenericParameterPack: return "generic-parameter-pack";
-        case TypeKind::ValuePack: return "value-pack";
-        case TypeKind::TypePack: return "type-pack";
-        case TypeKind::PackStorage: return "pack-storage";
-        case TypeKind::Named: return "named";
-        case TypeKind::Reference: return "reference";
-        case TypeKind::Nullable: return "nullable";
-        case TypeKind::Array: return "array";
-        case TypeKind::Dictionary: return "dictionary";
-        case TypeKind::Function: return "function";
-        case TypeKind::AsyncTask: return "async-task";
-        case TypeKind::Iterator: return "iterator";
+        case TypeKind::Invalid:
+            return "invalid";
+        case TypeKind::Void:
+            return "void";
+        case TypeKind::Bool:
+            return "bool";
+        case TypeKind::I8:
+            return "i8";
+        case TypeKind::I16:
+            return "i16";
+        case TypeKind::I32:
+            return "i32";
+        case TypeKind::I64:
+            return "i64";
+        case TypeKind::ISize:
+            return "isize";
+        case TypeKind::U8:
+            return "u8";
+        case TypeKind::U16:
+            return "u16";
+        case TypeKind::U32:
+            return "u32";
+        case TypeKind::U64:
+            return "u64";
+        case TypeKind::USize:
+            return "usize";
+        case TypeKind::F32:
+            return "f32";
+        case TypeKind::F64:
+            return "f64";
+        case TypeKind::Byte:
+            return "byte";
+        case TypeKind::Char:
+            return "char";
+        case TypeKind::String:
+            return "string";
+        case TypeKind::Text:
+            return "text";
+        case TypeKind::Any:
+            return "any";
+        case TypeKind::Opaque:
+            return "opaque";
+        case TypeKind::GenericParameter:
+            return "generic-parameter";
+        case TypeKind::ConstGenericParameter:
+            return "const-generic-parameter";
+        case TypeKind::ConstValue:
+            return "const-value";
+        case TypeKind::GenericParameterPack:
+            return "generic-parameter-pack";
+        case TypeKind::ValuePack:
+            return "value-pack";
+        case TypeKind::TypePack:
+            return "type-pack";
+        case TypeKind::PackStorage:
+            return "pack-storage";
+        case TypeKind::Named:
+            return "named";
+        case TypeKind::Reference:
+            return "reference";
+        case TypeKind::Nullable:
+            return "nullable";
+        case TypeKind::Array:
+            return "array";
+        case TypeKind::Dictionary:
+            return "dictionary";
+        case TypeKind::Function:
+            return "function";
+        case TypeKind::AsyncTask:
+            return "async-task";
+        case TypeKind::Iterator:
+            return "iterator";
         }
         return "invalid";
     }
@@ -120,12 +153,18 @@ namespace wio::wir
     {
         switch (kind)
         {
-        case NominalKind::None: return "none";
-        case NominalKind::Component: return "component";
-        case NominalKind::Object: return "object";
-        case NominalKind::Interface: return "interface";
-        case NominalKind::Enum: return "enum";
-        case NominalKind::Flagset: return "flagset";
+        case NominalKind::None:
+            return "none";
+        case NominalKind::Component:
+            return "component";
+        case NominalKind::Object:
+            return "object";
+        case NominalKind::Interface:
+            return "interface";
+        case NominalKind::Enum:
+            return "enum";
+        case NominalKind::Flagset:
+            return "flagset";
         }
         return "none";
     }
@@ -134,8 +173,10 @@ namespace wio::wir
     {
         switch (representation)
         {
-        case NominalRepresentation::Wio: return "wio";
-        case NominalRepresentation::NativePod: return "native-pod";
+        case NominalRepresentation::Wio:
+            return "wio";
+        case NominalRepresentation::NativePod:
+            return "native-pod";
         }
         return "wio";
     }
@@ -144,11 +185,16 @@ namespace wio::wir
     {
         switch (model)
         {
-        case NominalValueModel::Regular: return "regular";
-        case NominalValueModel::Tuple: return "tuple";
-        case NominalValueModel::Span: return "span";
-        case NominalValueModel::Option: return "option";
-        case NominalValueModel::Result: return "result";
+        case NominalValueModel::Regular:
+            return "regular";
+        case NominalValueModel::Tuple:
+            return "tuple";
+        case NominalValueModel::Span:
+            return "span";
+        case NominalValueModel::Option:
+            return "option";
+        case NominalValueModel::Result:
+            return "result";
         }
         return "regular";
     }
@@ -157,19 +203,36 @@ namespace wio::wir
     {
         switch (family)
         {
-        case IntrinsicFamily::None: return "none";
-        case IntrinsicFamily::Array: return "array";
-        case IntrinsicFamily::Dictionary: return "dictionary";
-        case IntrinsicFamily::String: return "string";
-        case IntrinsicFamily::Text: return "text";
-        case IntrinsicFamily::Enum: return "enum";
-        case IntrinsicFamily::Flagset: return "flagset";
-        case IntrinsicFamily::Nullable: return "nullable";
-        case IntrinsicFamily::Any: return "any";
-        case IntrinsicFamily::Option: return "option";
-        case IntrinsicFamily::Result: return "result";
-        case IntrinsicFamily::Tuple: return "tuple";
-        case IntrinsicFamily::Span: return "span";
+        case IntrinsicFamily::None:
+            return "none";
+        case IntrinsicFamily::Array:
+            return "array";
+        case IntrinsicFamily::Dictionary:
+            return "dictionary";
+        case IntrinsicFamily::String:
+            return "string";
+        case IntrinsicFamily::Text:
+            return "text";
+        case IntrinsicFamily::Enum:
+            return "enum";
+        case IntrinsicFamily::Flagset:
+            return "flagset";
+        case IntrinsicFamily::Nullable:
+            return "nullable";
+        case IntrinsicFamily::Any:
+            return "any";
+        case IntrinsicFamily::Option:
+            return "option";
+        case IntrinsicFamily::Result:
+            return "result";
+        case IntrinsicFamily::Tuple:
+            return "tuple";
+        case IntrinsicFamily::Span:
+            return "span";
+        case IntrinsicFamily::Pack:
+            return "pack";
+        case IntrinsicFamily::AsyncTask:
+            return "async-task";
         }
         return "none";
     }
@@ -178,9 +241,12 @@ namespace wio::wir
     {
         switch (visibility)
         {
-        case FieldVisibility::Private: return "private";
-        case FieldVisibility::Protected: return "protected";
-        case FieldVisibility::Public: return "public";
+        case FieldVisibility::Private:
+            return "private";
+        case FieldVisibility::Protected:
+            return "protected";
+        case FieldVisibility::Public:
+            return "public";
         }
         return "private";
     }
@@ -189,9 +255,12 @@ namespace wio::wir
     {
         switch (kind)
         {
-        case CaptureKind::Value: return "value";
-        case CaptureKind::Reference: return "reference";
-        case CaptureKind::RetainedSelf: return "retained-self";
+        case CaptureKind::Value:
+            return "value";
+        case CaptureKind::Reference:
+            return "reference";
+        case CaptureKind::RetainedSelf:
+            return "retained-self";
         }
         return "value";
     }
@@ -200,11 +269,16 @@ namespace wio::wir
     {
         switch (executor)
         {
-        case AsyncExecutorKind::Inherit: return "inherit";
-        case AsyncExecutorKind::Main: return "main";
-        case AsyncExecutorKind::Worker: return "worker";
-        case AsyncExecutorKind::Blocking: return "blocking";
-        case AsyncExecutorKind::Io: return "io";
+        case AsyncExecutorKind::Inherit:
+            return "inherit";
+        case AsyncExecutorKind::Main:
+            return "main";
+        case AsyncExecutorKind::Worker:
+            return "worker";
+        case AsyncExecutorKind::Blocking:
+            return "blocking";
+        case AsyncExecutorKind::Io:
+            return "io";
         }
         return "inherit";
     }
@@ -213,21 +287,36 @@ namespace wio::wir
     {
         switch (operation)
         {
-        case AsyncOperation::None: return "none";
-        case AsyncOperation::AwaitTask: return "await-task";
-        case AsyncOperation::SwitchExecutor: return "switch-executor";
-        case AsyncOperation::Start: return "start";
-        case AsyncOperation::Spawn: return "spawn";
-        case AsyncOperation::SpawnWorker: return "spawn-worker";
-        case AsyncOperation::SpawnBlocking: return "spawn-blocking";
-        case AsyncOperation::SpawnIo: return "spawn-io";
-        case AsyncOperation::Join: return "join";
-        case AsyncOperation::Cancel: return "cancel";
-        case AsyncOperation::CancelAfter: return "cancel-after";
-        case AsyncOperation::Detach: return "detach";
-        case AsyncOperation::Yield: return "yield";
-        case AsyncOperation::Sleep: return "sleep";
-        case AsyncOperation::Wait: return "wait";
+        case AsyncOperation::None:
+            return "none";
+        case AsyncOperation::AwaitTask:
+            return "await-task";
+        case AsyncOperation::SwitchExecutor:
+            return "switch-executor";
+        case AsyncOperation::Start:
+            return "start";
+        case AsyncOperation::Spawn:
+            return "spawn";
+        case AsyncOperation::SpawnWorker:
+            return "spawn-worker";
+        case AsyncOperation::SpawnBlocking:
+            return "spawn-blocking";
+        case AsyncOperation::SpawnIo:
+            return "spawn-io";
+        case AsyncOperation::Join:
+            return "join";
+        case AsyncOperation::Cancel:
+            return "cancel";
+        case AsyncOperation::CancelAfter:
+            return "cancel-after";
+        case AsyncOperation::Detach:
+            return "detach";
+        case AsyncOperation::Yield:
+            return "yield";
+        case AsyncOperation::Sleep:
+            return "sleep";
+        case AsyncOperation::Wait:
+            return "wait";
         }
         return "none";
     }
@@ -236,10 +325,14 @@ namespace wio::wir
     {
         switch (kind)
         {
-        case CoroutineFrameSlotKind::Parameter: return "parameter";
-        case CoroutineFrameSlotKind::Local: return "local";
-        case CoroutineFrameSlotKind::AwaitedTask: return "awaited-task";
-        case CoroutineFrameSlotKind::Temporary: return "temporary";
+        case CoroutineFrameSlotKind::Parameter:
+            return "parameter";
+        case CoroutineFrameSlotKind::Local:
+            return "local";
+        case CoroutineFrameSlotKind::AwaitedTask:
+            return "awaited-task";
+        case CoroutineFrameSlotKind::Temporary:
+            return "temporary";
         }
         return "temporary";
     }
@@ -248,11 +341,16 @@ namespace wio::wir
     {
         switch (ownership)
         {
-        case OwnershipModel::Trivial: return "trivial";
-        case OwnershipModel::OwnedValue: return "owned-value";
-        case OwnershipModel::ReferenceCounted: return "reference-counted";
-        case OwnershipModel::Borrowed: return "borrowed";
-        case OwnershipModel::Generic: return "generic";
+        case OwnershipModel::Trivial:
+            return "trivial";
+        case OwnershipModel::OwnedValue:
+            return "owned-value";
+        case OwnershipModel::ReferenceCounted:
+            return "reference-counted";
+        case OwnershipModel::Borrowed:
+            return "borrowed";
+        case OwnershipModel::Generic:
+            return "generic";
         }
         return "trivial";
     }
@@ -261,9 +359,12 @@ namespace wio::wir
     {
         switch (cleanup)
         {
-        case CleanupKind::None: return "none";
-        case CleanupKind::DestroyValue: return "destroy-value";
-        case CleanupKind::ReleaseReference: return "release-reference";
+        case CleanupKind::None:
+            return "none";
+        case CleanupKind::DestroyValue:
+            return "destroy-value";
+        case CleanupKind::ReleaseReference:
+            return "release-reference";
         }
         return "none";
     }
@@ -277,10 +378,14 @@ namespace wio::wir
     {
         switch (convention)
         {
-        case NativeCallingConvention::PlatformDefault: return "default";
-        case NativeCallingConvention::Cdecl: return "cdecl";
-        case NativeCallingConvention::StdCall: return "stdcall";
-        case NativeCallingConvention::FastCall: return "fastcall";
+        case NativeCallingConvention::PlatformDefault:
+            return "default";
+        case NativeCallingConvention::Cdecl:
+            return "cdecl";
+        case NativeCallingConvention::StdCall:
+            return "stdcall";
+        case NativeCallingConvention::FastCall:
+            return "fastcall";
         }
         return "default";
     }
@@ -294,11 +399,16 @@ namespace wio::wir
     {
         switch (mode)
         {
-        case NativePassingMode::Value: return "value";
-        case NativePassingMode::Borrow: return "borrow";
-        case NativePassingMode::BorrowMut: return "borrow-mut";
-        case NativePassingMode::Consume: return "consume";
-        case NativePassingMode::ReturnOwned: return "return-owned";
+        case NativePassingMode::Value:
+            return "value";
+        case NativePassingMode::Borrow:
+            return "borrow";
+        case NativePassingMode::BorrowMut:
+            return "borrow-mut";
+        case NativePassingMode::Consume:
+            return "consume";
+        case NativePassingMode::ReturnOwned:
+            return "return-owned";
         }
         return "value";
     }
@@ -307,16 +417,26 @@ namespace wio::wir
     {
         switch (kind)
         {
-        case NativeMarshallingKind::Void: return "void";
-        case NativeMarshallingKind::Scalar: return "scalar";
-        case NativeMarshallingKind::Utf8String: return "utf8-string";
-        case NativeMarshallingKind::UnicodeText: return "unicode-text";
-        case NativeMarshallingKind::NativePod: return "native-pod";
-        case NativeMarshallingKind::OpaqueHandle: return "opaque-handle";
-        case NativeMarshallingKind::ObjectHandle: return "object-handle";
-        case NativeMarshallingKind::Callback: return "callback";
-        case NativeMarshallingKind::RuntimeValue: return "runtime-value";
-        case NativeMarshallingKind::Generic: return "generic";
+        case NativeMarshallingKind::Void:
+            return "void";
+        case NativeMarshallingKind::Scalar:
+            return "scalar";
+        case NativeMarshallingKind::Utf8String:
+            return "utf8-string";
+        case NativeMarshallingKind::UnicodeText:
+            return "unicode-text";
+        case NativeMarshallingKind::NativePod:
+            return "native-pod";
+        case NativeMarshallingKind::OpaqueHandle:
+            return "opaque-handle";
+        case NativeMarshallingKind::ObjectHandle:
+            return "object-handle";
+        case NativeMarshallingKind::Callback:
+            return "callback";
+        case NativeMarshallingKind::RuntimeValue:
+            return "runtime-value";
+        case NativeMarshallingKind::Generic:
+            return "generic";
         }
         return "scalar";
     }
@@ -335,9 +455,12 @@ namespace wio::wir
     {
         switch (kind)
         {
-        case NativeThunkKind::Direct: return "direct";
-        case NativeThunkKind::Adapter: return "adapter";
-        case NativeThunkKind::TemplateSpecialization: return "template-specialization";
+        case NativeThunkKind::Direct:
+            return "direct";
+        case NativeThunkKind::Adapter:
+            return "adapter";
+        case NativeThunkKind::TemplateSpecialization:
+            return "template-specialization";
         }
         return "direct";
     }
@@ -346,9 +469,12 @@ namespace wio::wir
     {
         switch (receiver)
         {
-        case NativeReceiverKind::None: return "none";
-        case NativeReceiverKind::ConstReference: return "const-reference";
-        case NativeReceiverKind::MutableReference: return "mutable-reference";
+        case NativeReceiverKind::None:
+            return "none";
+        case NativeReceiverKind::ConstReference:
+            return "const-reference";
+        case NativeReceiverKind::MutableReference:
+            return "mutable-reference";
         }
         return "none";
     }
@@ -357,4 +483,4 @@ namespace wio::wir
     {
         return type.cleanup != CleanupKind::None;
     }
-}
+} // namespace wio::wir

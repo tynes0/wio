@@ -77,19 +77,19 @@ realm std {
         }
 
         fn IndexOf(value: string, target: string) -> usize {
-            return value.IndexOf(target);
+            return value.IndexOf(target) fit usize;
         }
 
         fn LastIndexOf(value: string, target: string) -> usize {
-            return value.LastIndexOf(target);
+            return value.LastIndexOf(target) fit usize;
         }
 
         fn IndexOfChar(value: string, target: char) -> usize {
-            return value.IndexOfChar(target);
+            return value.IndexOfChar(target) fit usize;
         }
 
         fn LastIndexOfChar(value: string, target: char) -> usize {
-            return value.LastIndexOfChar(target);
+            return value.LastIndexOfChar(target) fit usize;
         }
 
         fn FirstOr(value: string, fallback: char) -> char {

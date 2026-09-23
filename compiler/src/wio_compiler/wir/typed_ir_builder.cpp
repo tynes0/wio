@@ -5,12 +5,15 @@
 #include "wio/ast/attribute_contract.h"
 #include "wio/common/utility.h"
 #include "wio/sema/intrinsic_member_resolver.h"
+#include "wio/sema/generic_support.h"
 #include "wio/sema/constant_evaluator.h"
 #include "wio/sema/scope.h"
 #include "wio/sema/symbol.h"
 #include "wio/sema/type.h"
 
 #include <algorithm>
+#include <charconv>
+#include <functional>
 #include <iomanip>
 #include <optional>
 #include <sstream>
@@ -57,6 +60,7 @@ namespace wio::wir::typed
             nextFunctionId_ = static_cast<FunctionId::ValueType>(declarations_.size());
             for (const DeclarationInfo& declaration : declarations_)
                 buildFunction(declaration);
+            buildObjectFieldInitializers();
             buildGlobalInitializers();
             buildTypeExportsAndReflection();
             buildApplicationSystemAttributeReflection();
@@ -81,6 +85,7 @@ namespace wio::wir::typed
             std::vector<const sema::Symbol*> placeOrder;
             std::unordered_map<ValueId::ValueType, ValueOwnership> ownerships;
             std::unordered_set<const sema::Symbol*> movedPlaces;
+            std::vector<std::pair<ValueId, TypeId>> temporaryPlaces;
             ValueId selfValue;
             TypeId selfType;
         };
@@ -134,6 +139,7 @@ namespace wio::wir::typed
             BlockId breakTarget;
             std::vector<const sema::Symbol*> carriedSymbols;
             std::size_t placeDepth = 0;
+            std::size_t temporaryPlaceDepth = 0;
         };
 
         BuildResult& result_;
@@ -145,6 +151,7 @@ namespace wio::wir::typed
         std::unordered_map<const sema::Symbol*, const FunctionDeclaration*> declarationsBySymbol_;
         std::unordered_map<const sema::Symbol*, GlobalId> globalsBySymbol_;
         std::unordered_map<const sema::Type*, TypeId> typesBySemanticType_;
+        std::unordered_map<TypeId::ValueType, std::vector<std::string>> genericParameterNamesByType_;
         std::unordered_map<const LambdaExpression*, FunctionId> lambdaFunctions_;
         FunctionId::ValueType nextFunctionId_ = 0;
         std::vector<LoopContext> loopContexts_;
@@ -205,6 +212,13 @@ namespace wio::wir::typed
                 return IntrinsicFamily::String;
             case TypeKind::Text:
                 return IntrinsicFamily::Text;
+            case TypeKind::AsyncTask:
+                return IntrinsicFamily::AsyncTask;
+            case TypeKind::GenericParameterPack:
+            case TypeKind::ValuePack:
+            case TypeKind::TypePack:
+            case TypeKind::PackStorage:
+                return IntrinsicFamily::Pack;
             case TypeKind::Nullable:
                 return IntrinsicFamily::Nullable;
             case TypeKind::Any:
@@ -232,6 +246,31 @@ namespace wio::wir::typed
                 break;
             }
             return IntrinsicFamily::None;
+        }
+
+        void normalizePackIdentity(Type& type) const
+        {
+            if (type.arguments.size() == 1)
+            {
+                const Type* argument = result_.module_.types.tryGet(type.arguments.front());
+                if (argument && argument->kind == TypeKind::GenericParameterPack)
+                {
+                    type.name = argument->name;
+                    type.arguments.clear();
+                    return;
+                }
+            }
+            if (!type.arguments.empty() &&
+                std::ranges::none_of(type.arguments,
+                                     [&](const TypeId argument)
+                                     {
+                                         const Type* element = result_.module_.types.tryGet(argument);
+                                         return element && (element->kind == TypeKind::GenericParameter ||
+                                                            element->kind == TypeKind::GenericParameterPack);
+                                     }))
+            {
+                type.name.clear();
+            }
         }
 
         bool nominalDerivesFrom(const TypeId sourceType, const TypeId destinationType) const
@@ -294,6 +333,13 @@ namespace wio::wir::typed
                      (referred->nominalKind == NominalKind::Object || referred->nominalKind == NominalKind::Interface));
         }
 
+        static bool isUnknownSemanticType(const Ref<sema::Type>& type)
+        {
+            if (!type || type->kind() != sema::TypeKind::Primitive)
+                return false;
+            return type.AsFast<sema::PrimitiveType>()->name == "<unknown>";
+        }
+
         ValueOwnership ownershipForType(const TypeId typeId) const
         {
             const Type* type = result_.module_.types.tryGet(typeId);
@@ -302,6 +348,26 @@ namespace wio::wir::typed
             if (type->ownership == OwnershipModel::Borrowed)
                 return ValueOwnership::Borrowed;
             return ValueOwnership::Owned;
+        }
+
+        static TypeId builtValueType(const FunctionState& state, const ValueId value)
+        {
+            if (!value || !state.function)
+                return {};
+            for (const Parameter& parameter : state.function->parameters)
+                if (parameter.id == value)
+                    return parameter.type;
+            for (const BasicBlock& block : state.function->blocks)
+            {
+                for (const Parameter& parameter : block.parameters)
+                    if (parameter.id == value)
+                        return parameter.type;
+                for (auto instruction = block.instructions.rbegin(); instruction != block.instructions.rend();
+                     ++instruction)
+                    if (instruction->result == value)
+                        return instruction->resultType;
+            }
+            return {};
         }
 
         bool typeRequiresCleanup(const TypeId typeId) const
@@ -389,17 +455,88 @@ namespace wio::wir::typed
                 if (source == parameters[index])
                     return arguments[index];
             const Type* sourceType = result_.module_.types.tryGet(source);
-            if (!sourceType || sourceType->arguments.empty())
+            if (!sourceType)
+                return source;
+            if ((sourceType->kind == TypeKind::ValuePack || sourceType->kind == TypeKind::TypePack ||
+                 sourceType->kind == TypeKind::PackStorage) &&
+                sourceType->arguments.empty() && !sourceType->name.empty())
+            {
+                for (std::size_t index = 0; index < parameters.size() && index < arguments.size(); ++index)
+                {
+                    const Type* parameter = result_.module_.types.tryGet(parameters[index]);
+                    const Type* argument = result_.module_.types.tryGet(arguments[index]);
+                    if (!parameter || parameter->kind != TypeKind::GenericParameterPack ||
+                        parameter->name != sourceType->name || !argument)
+                    {
+                        continue;
+                    }
+                    Type rebound = *sourceType;
+                    rebound.name = argument->name;
+                    if (argument->kind == TypeKind::ValuePack || argument->kind == TypeKind::TypePack ||
+                        argument->kind == TypeKind::PackStorage)
+                    {
+                        rebound.arguments = argument->arguments;
+                    }
+                    normalizePackIdentity(rebound);
+                    return result_.module_.types.intern(std::move(rebound));
+                }
+            }
+            if (sourceType->arguments.empty() && !sourceType->extentParameter)
                 return source;
             Type instantiated = *sourceType;
             bool changed = false;
-            for (TypeId& argument : instantiated.arguments)
+            if (instantiated.extentParameter)
+            {
+                const TypeId extent = substituteGenericType(instantiated.extentParameter, parameters, arguments);
+                changed |= extent != instantiated.extentParameter;
+                instantiated.extentParameter = extent;
+                const Type* extentType = result_.module_.types.tryGet(extent);
+                std::size_t value = 0;
+                if (extentType && extentType->kind == TypeKind::ConstValue)
+                {
+                    const auto parsed = std::from_chars(extentType->name.data(),
+                                                        extentType->name.data() + extentType->name.size(), value);
+                    if (parsed.ec == std::errc{} && parsed.ptr == extentType->name.data() + extentType->name.size())
+                    {
+                        instantiated.staticExtent = value;
+                        instantiated.extentParameter = {};
+                        changed = true;
+                    }
+                }
+            }
+            std::vector<TypeId> substitutedArguments;
+            for (const TypeId argument : instantiated.arguments)
             {
                 const TypeId replacement = substituteGenericType(argument, parameters, arguments);
                 changed |= replacement != argument;
-                argument = replacement;
+                const Type* replacementType = result_.module_.types.tryGet(replacement);
+                const bool expandsPack =
+                    (instantiated.kind == TypeKind::ValuePack || instantiated.kind == TypeKind::TypePack ||
+                     instantiated.kind == TypeKind::PackStorage) &&
+                    replacementType &&
+                    (replacementType->kind == TypeKind::ValuePack || replacementType->kind == TypeKind::TypePack ||
+                     replacementType->kind == TypeKind::PackStorage);
+                if (expandsPack)
+                {
+                    substitutedArguments.insert(substitutedArguments.end(), replacementType->arguments.begin(),
+                                                replacementType->arguments.end());
+                }
+                else
+                {
+                    substitutedArguments.push_back(replacement);
+                }
             }
-            return changed ? result_.module_.types.intern(std::move(instantiated)) : source;
+            instantiated.arguments = std::move(substitutedArguments);
+            if ((instantiated.kind == TypeKind::ValuePack || instantiated.kind == TypeKind::TypePack ||
+                 instantiated.kind == TypeKind::PackStorage) &&
+                !instantiated.arguments.empty())
+            {
+                normalizePackIdentity(instantiated);
+            }
+            if (!changed)
+                return source;
+            return instantiated.kind == TypeKind::Named ? result_.module_.types.internNominal(std::move(instantiated))
+                                                        : result_.module_.types.intern(std::move(instantiated));
         }
 
         static std::string nativeThunkSymbol(const std::string_view stableKey)
@@ -459,6 +596,32 @@ namespace wio::wir::typed
                  binding.symbol == "wio::runtime::EnumTryFromRaw" || binding.symbol == "wio::runtime::EnumFromRaw");
             for (const Ref<sema::Type>& parameter : functionType.paramTypes)
                 binding.parameters.push_back(nativeAbiValue(mapType(parameter, &declaration), false));
+            for (std::size_t index = 0; index < declaration.parameters.size() && index < binding.parameters.size();
+                 ++index)
+            {
+                for (const NodePtrUnchecked<AttributeStatement>& attribute : declaration.parameters[index].attributes)
+                {
+                    if (!attribute)
+                        continue;
+                    const std::string_view name = attribute->canonicalName.empty()
+                                                      ? std::string_view{attribute->qualifiedName}
+                                                      : std::string_view{attribute->canonicalName};
+                    if (name != "std::attribute::NativeCallback" && name != "attribute::NativeCallback" &&
+                        name != "NativeCallback")
+                        continue;
+
+                    const std::string lifetime = attribute->args.empty() ? "call" : attribute->args[0].value;
+                    const std::string thread = attribute->args.size() < 2 ? "caller" : attribute->args[1].value;
+                    if (lifetime == "retained")
+                        binding.parameters[index].callbackLifetime = NativeCallbackLifetime::Retained;
+                    else if (lifetime != "call")
+                        report("WIR2401", "NativeCallback lifetime must be 'call' or 'retained'.", attribute.Get());
+                    if (thread == "any")
+                        binding.parameters[index].callbackThread = NativeCallbackThread::Any;
+                    else if (thread != "caller")
+                        report("WIR2402", "NativeCallback thread must be 'caller' or 'any'.", attribute.Get());
+                }
+            }
             binding.result = nativeAbiValue(function.returnType, true);
             const bool needsMarshalling =
                 std::ranges::any_of(binding.parameters,
@@ -584,7 +747,8 @@ namespace wio::wir::typed
 
         void releaseOwnedTemporary(const ValueId value, const ASTNode* source, FunctionState& state)
         {
-            if (!value || valueOwnership(state, value) != ValueOwnership::Owned)
+            if (!value || valueOwnership(state, value) != ValueOwnership::Owned ||
+                !typeRequiresCleanup(builtValueType(state, value)))
                 return;
             currentBlock(state).instructions.push_back(
                 Instruction{.opcode = Opcode::Release,
@@ -612,6 +776,45 @@ namespace wio::wir::typed
             return result;
         }
 
+        ValueId buildImplicitFieldPlace(const std::string_view name, const bool needsMutable, const ASTNode* source,
+                                        FunctionState& state)
+        {
+            const Type* selfReference = result_.module_.types.tryGet(state.selfType);
+            if (!state.selfValue || !selfReference || selfReference->kind != TypeKind::Reference ||
+                selfReference->arguments.size() != 1)
+                return {};
+            const TypeId ownerType = selfReference->arguments.front();
+            const Type* owner = result_.module_.types.tryGet(ownerType);
+            if (!owner || owner->kind != TypeKind::Named)
+                return {};
+            const auto field = std::ranges::find(owner->fields, name, &FieldLayout::name);
+            if (field == owner->fields.end())
+                return {};
+            const bool constructorInitialization = state.function && (state.function->name == "OnConstruct" ||
+                                                                      state.function->name.ends_with("::OnConstruct"));
+            if (needsMutable && (!selfReference->isMutable || (!field->isMutable && !constructorInitialization)))
+            {
+                report("WIR2360", "Implicit field '" + std::string{name} + "' is not mutable.", source);
+                return {};
+            }
+            const ValueId place{state.nextValue++};
+            const TypeId placeType = referenceType(field->type, needsMutable);
+            currentBlock(state).instructions.push_back(
+                Instruction{.opcode = Opcode::FieldPlace,
+                            .result = place,
+                            .resultType = placeType,
+                            .operands = {state.selfValue},
+                            .selector = field->name,
+                            .projectionIndex = static_cast<std::uint32_t>(std::distance(owner->fields.begin(), field)),
+                            .targetType = ownerType,
+                            .resultOwnership = ValueOwnership::Borrowed,
+                            .borrowLifetime = BorrowLifetime::Lexical,
+                            .borrowOrigin = state.selfValue,
+                            .source = source ? SourceSpan::at(source->location()) : SourceSpan{}});
+            rememberOwnership(state, place, ValueOwnership::Borrowed);
+            return place;
+        }
+
         void emitDropsFrom(const std::size_t firstPlace, FunctionState& state, const ASTNode* source)
         {
             for (std::size_t index = state.placeOrder.size(); index > firstPlace; --index)
@@ -628,6 +831,20 @@ namespace wio::wir::typed
                 currentBlock(state).instructions.push_back(
                     Instruction{.opcode = Opcode::Drop,
                                 .operands = {place->second},
+                                .source = source ? SourceSpan::at(source->location()) : SourceSpan{}});
+            }
+        }
+
+        void emitTemporaryDropsFrom(const std::size_t firstPlace, FunctionState& state, const ASTNode* source)
+        {
+            for (std::size_t index = state.temporaryPlaces.size(); index > firstPlace; --index)
+            {
+                const auto& [place, valueType] = state.temporaryPlaces[index - 1];
+                if (!typeRequiresCleanup(valueType))
+                    continue;
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::Drop,
+                                .operands = {place},
                                 .source = source ? SourceSpan::at(source->location()) : SourceSpan{}});
             }
         }
@@ -672,6 +889,26 @@ namespace wio::wir::typed
         {
             const BasicBlock& block = currentBlock(state);
             return !block.instructions.empty() && isTerminator(block.instructions.back().opcode);
+        }
+
+        static TypeId emittedValueType(const ValueId value, const FunctionState& state)
+        {
+            if (!value || !state.function)
+                return {};
+            for (const Parameter& parameter : state.function->parameters)
+                if (parameter.id == value)
+                    return parameter.type;
+            for (auto block = state.function->blocks.rbegin(); block != state.function->blocks.rend(); ++block)
+            {
+                for (const Parameter& parameter : block->parameters)
+                    if (parameter.id == value)
+                        return parameter.type;
+                for (auto instruction = block->instructions.rbegin(); instruction != block->instructions.rend();
+                     ++instruction)
+                    if (instruction->result == value)
+                        return instruction->resultType;
+            }
+            return {};
         }
 
         static std::size_t createBlock(FunctionState& state, std::string name, const SourceSpan& source)
@@ -729,17 +966,25 @@ namespace wio::wir::typed
                                                    : (use->isStdLib ? ModuleImportKind::StandardModule
                                                                     : ModuleImportKind::WioModule);
                     import.importAll = use->importAllIntoScope;
-                    const std::string identity = result_.module_.contract.stableKey +
-                                                 ":import:" + std::string{moduleImportKindName(import.kind)} + ":" +
-                                                 import.sourcePath + ":" + import.logicalName;
+                    std::string identity = result_.module_.contract.stableKey +
+                                           ":import:" + std::string{moduleImportKindName(import.kind)} + ":" +
+                                           import.sourcePath + ":" + import.logicalName + ":" + import.alias + ":" +
+                                           (import.importAll ? "all" : "selected");
+                    for (const std::string& symbol : import.importedSymbols)
+                        identity += ":" + symbol;
                     import.stableId = stableHash(identity);
-                    result_.module_.contract.imports.push_back(std::move(import));
+                    if (std::ranges::none_of(result_.module_.contract.imports, [&](const ModuleImport& existing)
+                                             { return existing.stableId == import.stableId; }))
+                        result_.module_.contract.imports.push_back(std::move(import));
                     continue;
                 }
                 if (const auto* group = statement->as<DeclarationGroup>())
                     collectImports(group->declarations);
                 else if (const auto* realm = statement->as<RealmDeclaration>())
                     collectImports(realm->statements);
+                else if (const auto* usingAttribute = statement->as<UsingAttributeStatement>();
+                         usingAttribute && usingAttribute->body)
+                    collectImports(usingAttribute->body->declarations);
             }
         }
 
@@ -799,39 +1044,66 @@ namespace wio::wir::typed
                     collectTypeDeclarations(group->declarations);
                 else if (const auto* realm = statement->as<RealmDeclaration>())
                     collectTypeDeclarations(realm->statements);
+                else if (const auto* usingAttribute = statement->as<UsingAttributeStatement>();
+                         usingAttribute && usingAttribute->body)
+                    collectTypeDeclarations(usingAttribute->body->declarations);
             }
         }
 
         void collectGlobals(const std::vector<NodePtr<Statement>>& statements)
         {
+            const auto collect = [&](const VariableDeclaration* declaration, const bool nominalMember)
+            {
+                if (!declaration)
+                    return;
+                const Ref<sema::Symbol> symbol =
+                    declaration->name ? declaration->name->referencedSymbol.Lock() : nullptr;
+                if (!symbol ||
+                    (!symbol->flags.get_isGlobal() &&
+                     !(nominalMember && declaration->mutability == Mutability::Const)) ||
+                    globalsBySymbol_.contains(symbol.Get()))
+                    return;
+                const GlobalId id{static_cast<GlobalId::ValueType>(result_.module_.globals.size())};
+                const std::string name =
+                    symbol->scopePath.empty() ? symbol->name : symbol->scopePath + "::" + symbol->name;
+                result_.module_.globals.push_back(Global{.id = id,
+                                                         .name = name,
+                                                         .type = mapType(symbol->type, declaration),
+                                                         .source = SourceSpan::at(declaration->location()),
+                                                         .isMutable = symbol->flags.get_isMutable(),
+                                                         .isConst = symbol->flags.get_isConst()});
+                globalsBySymbol_[symbol.Get()] = id;
+                globalDeclarations_.push_back(
+                    GlobalDeclarationInfo{.declaration = declaration, .symbol = symbol.Get(), .id = id});
+            };
             for (const auto& statement : statements)
             {
                 if (!statement)
                     continue;
                 if (const auto* declaration = statement->as<VariableDeclaration>())
                 {
-                    const Ref<sema::Symbol> symbol =
-                        declaration->name ? declaration->name->referencedSymbol.Lock() : nullptr;
-                    if (!symbol || !symbol->flags.get_isGlobal())
-                        continue;
-                    const GlobalId id{static_cast<GlobalId::ValueType>(result_.module_.globals.size())};
-                    const std::string name =
-                        symbol->scopePath.empty() ? symbol->name : symbol->scopePath + "::" + symbol->name;
-                    result_.module_.globals.push_back(Global{.id = id,
-                                                             .name = name,
-                                                             .type = mapType(symbol->type, declaration),
-                                                             .source = SourceSpan::at(declaration->location()),
-                                                             .isMutable = symbol->flags.get_isMutable(),
-                                                             .isConst = symbol->flags.get_isConst()});
-                    globalsBySymbol_[symbol.Get()] = id;
-                    globalDeclarations_.push_back(
-                        GlobalDeclarationInfo{.declaration = declaration, .symbol = symbol.Get(), .id = id});
+                    collect(declaration, false);
+                    continue;
+                }
+                if (const auto* component = statement->as<ComponentDeclaration>())
+                {
+                    for (const ComponentMember& member : component->members)
+                        collect(member.declaration ? member.declaration->as<VariableDeclaration>() : nullptr, true);
+                    continue;
+                }
+                if (const auto* object = statement->as<ObjectDeclaration>())
+                {
+                    for (const ObjectMember& member : object->members)
+                        collect(member.declaration ? member.declaration->as<VariableDeclaration>() : nullptr, true);
                     continue;
                 }
                 if (const auto* group = statement->as<DeclarationGroup>())
                     collectGlobals(group->declarations);
                 else if (const auto* realm = statement->as<RealmDeclaration>())
                     collectGlobals(realm->statements);
+                else if (const auto* usingAttribute = statement->as<UsingAttributeStatement>();
+                         usingAttribute && usingAttribute->body)
+                    collectGlobals(usingAttribute->body->declarations);
             }
         }
 
@@ -860,9 +1132,105 @@ namespace wio::wir::typed
                     const auto appendCases = [&](const auto& members)
                     {
                         std::uint64_t nextValue = 0;
+                        std::unordered_map<std::string, std::uint64_t> resolvedMembers;
+                        std::function<std::optional<std::uint64_t>(const NodePtr<Expression>&)> evaluateMemberValue;
+                        evaluateMemberValue = [&](const NodePtr<Expression>& expression) -> std::optional<std::uint64_t>
+                        {
+                            if (!expression)
+                                return std::nullopt;
+                            if (const auto* literal = expression->template as<IntegerLiteral>())
+                            {
+                                const IntegerResult parsed = common::getInteger(literal->token.value);
+                                if (!parsed.isValid)
+                                    return std::nullopt;
+                                switch (parsed.type)
+                                {
+                                case IntegerType::i8:
+                                    return static_cast<std::uint64_t>(parsed.value.v_i8);
+                                case IntegerType::i16:
+                                    return static_cast<std::uint64_t>(parsed.value.v_i16);
+                                case IntegerType::i32:
+                                    return static_cast<std::uint64_t>(parsed.value.v_i32);
+                                case IntegerType::i64:
+                                    return static_cast<std::uint64_t>(parsed.value.v_i64);
+                                case IntegerType::u8:
+                                    return parsed.value.v_u8;
+                                case IntegerType::u16:
+                                    return parsed.value.v_u16;
+                                case IntegerType::u32:
+                                    return parsed.value.v_u32;
+                                case IntegerType::u64:
+                                    return parsed.value.v_u64;
+                                case IntegerType::isize:
+                                    return static_cast<std::uint64_t>(parsed.value.v_isize);
+                                case IntegerType::usize:
+                                    return static_cast<std::uint64_t>(parsed.value.v_usize);
+                                case IntegerType::Unknown:
+                                    return std::nullopt;
+                                }
+                            }
+                            if (const auto* identifier = expression->template as<Identifier>())
+                            {
+                                const auto found = resolvedMembers.find(identifier->token.value);
+                                return found == resolvedMembers.end() ? std::nullopt
+                                                                      : std::optional<std::uint64_t>(found->second);
+                            }
+                            if (const auto* unary = expression->template as<UnaryExpression>())
+                            {
+                                const auto operand = evaluateMemberValue(unary->operand);
+                                if (!operand)
+                                    return std::nullopt;
+                                switch (unary->op.type)
+                                {
+                                case TokenType::opPlus:
+                                    return *operand;
+                                case TokenType::opMinus:
+                                    return 0u - *operand;
+                                case TokenType::opBitNot:
+                                    return ~*operand;
+                                default:
+                                    return std::nullopt;
+                                }
+                            }
+                            if (const auto* fit = expression->template as<FitExpression>())
+                                return evaluateMemberValue(fit->operand);
+                            if (const auto* binary = expression->template as<BinaryExpression>())
+                            {
+                                const auto lhs = evaluateMemberValue(binary->left);
+                                const auto rhs = evaluateMemberValue(binary->right);
+                                if (!lhs || !rhs)
+                                    return std::nullopt;
+                                switch (binary->op.type)
+                                {
+                                case TokenType::opPlus:
+                                    return *lhs + *rhs;
+                                case TokenType::opMinus:
+                                    return *lhs - *rhs;
+                                case TokenType::opStar:
+                                    return *lhs * *rhs;
+                                case TokenType::opSlash:
+                                    return *rhs == 0 ? std::nullopt : std::optional<std::uint64_t>(*lhs / *rhs);
+                                case TokenType::opPercent:
+                                    return *rhs == 0 ? std::nullopt : std::optional<std::uint64_t>(*lhs % *rhs);
+                                case TokenType::opBitAnd:
+                                    return *lhs & *rhs;
+                                case TokenType::opBitOr:
+                                    return *lhs | *rhs;
+                                case TokenType::opBitXor:
+                                    return *lhs ^ *rhs;
+                                case TokenType::opShiftLeft:
+                                    return *rhs >= 64 ? std::nullopt : std::optional<std::uint64_t>(*lhs << *rhs);
+                                case TokenType::opShiftRight:
+                                    return *rhs >= 64 ? std::nullopt : std::optional<std::uint64_t>(*lhs >> *rhs);
+                                default:
+                                    return std::nullopt;
+                                }
+                            }
+                            return std::nullopt;
+                        };
                         for (const auto& member : members)
                         {
-                            std::optional<std::uint64_t> rawValue;
+                            std::optional<std::uint64_t> rawValue = evaluateMemberValue(member.value);
                             if (member.value)
                             {
                                 if (const auto* literal = member.value->template as<IntegerLiteral>())
@@ -928,6 +1296,8 @@ namespace wio::wir::typed
                             }
                             mutableDescriptor->enumCases.push_back(EnumCaseLayout{
                                 .name = member.name ? member.name->token.value : std::string{}, .rawValue = *rawValue});
+                            if (member.name)
+                                resolvedMembers.emplace(member.name->token.value, *rawValue);
                             nextValue = *rawValue + 1;
                         }
                     };
@@ -976,7 +1346,9 @@ namespace wio::wir::typed
                                          .logicalName = type.name,
                                          .type = typeId,
                                          .nominalKind = type.nominalKind,
-                                         .isExported = exportedTypes.contains(typeId.value())});
+                                         .isExported = exportedTypes.contains(typeId.value()),
+                                         .genericParameterNames = genericParameterNamesByType_[typeId.value()],
+                                         .genericArguments = type.arguments});
             }
         }
 
@@ -1102,6 +1474,14 @@ namespace wio::wir::typed
                     processor.hookName = binding.hookCppName;
                     processor.hookMode = binding.hookMode;
                     processor.phase = processorPhase(binding.phase);
+                    if (const Ref<sema::Type> processorType = binding.processorType.Lock())
+                        processor.processorType = mapType(processorType, attribute.Get());
+                    if (const Ref<sema::Symbol> hookSymbol = binding.hookSymbol.Lock())
+                    {
+                        const auto hook = functionsBySymbol_.find(hookSymbol.Get());
+                        if (hook != functionsBySymbol_.end())
+                            processor.hookFunction = hook->second;
+                    }
                     if (const Ref<sema::Type> valueType = binding.hookValueType.Lock())
                         processor.valueType = mapType(valueType, attribute.Get());
                     processor.stableId =
@@ -1204,6 +1584,114 @@ namespace wio::wir::typed
             const FunctionId id = function.id;
             result_.module_.functions.push_back(std::move(function));
             return id;
+        }
+
+        void buildObjectFieldInitializers()
+        {
+            for (const TypeDeclarationInfo& declaration : typeDeclarations_)
+            {
+                if (!declaration.declaration || !declaration.type)
+                    continue;
+                const TypeId ownerType = mapType(declaration.type, declaration.declaration);
+                const Type& initialLayout = result_.module_.types.get(ownerType);
+                if (initialLayout.kind != TypeKind::Named ||
+                    initialLayout.nominalRepresentation != NominalRepresentation::Wio ||
+                    initialLayout.nominalKind != NominalKind::Object)
+                {
+                    continue;
+                }
+                const std::string layoutName = initialLayout.name;
+                const std::vector<FieldLayout> fields = initialLayout.fields;
+                const std::vector<MethodLayout> methods = initialLayout.methods;
+
+                std::vector<const VariableDeclaration*> initializedFields;
+                const auto collectFields = [&](const auto& members)
+                {
+                    for (const auto& member : members)
+                    {
+                        const auto* variable =
+                            member.declaration ? member.declaration->template as<VariableDeclaration>() : nullptr;
+                        if (variable && variable->name && variable->initializer)
+                            initializedFields.push_back(variable);
+                    }
+                };
+                if (const auto* component = declaration.declaration->as<ComponentDeclaration>())
+                    collectFields(component->members);
+                else if (const auto* object = declaration.declaration->as<ObjectDeclaration>())
+                    collectFields(object->members);
+                if (initializedFields.empty())
+                    continue;
+
+                const SourceSpan source = SourceSpan::at(declaration.declaration->location());
+                const TypeId receiverType = referenceType(ownerType, true);
+                Function function;
+                function.id = FunctionId{nextFunctionId_++};
+                function.name = "$default::" + layoutName + "::OnConstruct";
+                function.returnType = result_.module_.types.voidType();
+                function.callableType = result_.module_.types.intern(Type{.kind = TypeKind::Function,
+                                                                          .arguments = {function.returnType},
+                                                                          .ownership = OwnershipModel::ReferenceCounted,
+                                                                          .cleanup = CleanupKind::ReleaseReference});
+                function.ownerType = ownerType;
+                function.source = source;
+                function.isMethod = true;
+
+                FunctionState state{.function = &function};
+                state.blockIndex = createBlock(state, "entry", source);
+                const ValueId receiver{state.nextValue++};
+                function.parameters.push_back(Parameter{.id = receiver,
+                                                        .name = "self",
+                                                        .type = receiverType,
+                                                        .ownership = ValueOwnership::Borrowed,
+                                                        .borrowLifetime = BorrowLifetime::Caller,
+                                                        .source = source});
+                rememberOwnership(state, receiver, ValueOwnership::Borrowed);
+                state.selfValue = receiver;
+                state.selfType = receiverType;
+
+                for (const VariableDeclaration* variable : initializedFields)
+                {
+                    const auto field = std::ranges::find(fields, variable->name->token.value, &FieldLayout::name);
+                    if (field == fields.end())
+                        continue;
+                    const ValueId value = buildExpressionAs(variable->initializer, field->type, state);
+                    if (!value)
+                        continue;
+                    const ValueId place{state.nextValue++};
+                    currentBlock(state).instructions.push_back(
+                        Instruction{.opcode = Opcode::FieldPlace,
+                                    .result = place,
+                                    .resultType = referenceType(field->type, true),
+                                    .operands = {receiver},
+                                    .selector = field->name,
+                                    .projectionIndex = static_cast<std::uint32_t>(std::distance(fields.begin(), field)),
+                                    .targetType = ownerType,
+                                    .source = SourceSpan::at(variable->location())});
+                    currentBlock(state).instructions.push_back(
+                        Instruction{.opcode = typeRequiresCleanup(field->type) ? Opcode::Replace : Opcode::Store,
+                                    .operands = {place, value},
+                                    .source = SourceSpan::at(variable->location())});
+                }
+
+                const auto defaultConstructor = std::ranges::find_if(
+                    methods, [](const MethodLayout& method)
+                    { return method.name == "OnConstruct" && method.parameterTypes.empty() && !method.isAbstract; });
+                if (defaultConstructor != methods.end())
+                {
+                    const Function* target = findFunction(defaultConstructor->function);
+                    currentBlock(state).instructions.push_back(
+                        Instruction{.opcode = target && target->nativeBinding ? Opcode::NativeCall : Opcode::Call,
+                                    .resultType = result_.module_.types.voidType(),
+                                    .operands = {receiver},
+                                    .callee = defaultConstructor->function,
+                                    .signatureTypes = {receiverType},
+                                    .source = source});
+                }
+                currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Return, .source = source});
+                Type& layout = result_.module_.types.getMutable(ownerType);
+                layout.fieldInitializer = function.id;
+                result_.module_.functions.push_back(std::move(function));
+            }
         }
 
         void buildApplicationSystemAttributeReflection()
@@ -1366,6 +1854,26 @@ namespace wio::wir::typed
                 }
             }
 
+            for (ReflectionDescriptor& descriptor : result_.module_.contract.reflection)
+            {
+                std::ranges::stable_sort(
+                    descriptor.methods,
+                    [&](const ReflectedMethodDescriptor& left, const ReflectedMethodDescriptor& right)
+                    {
+                        const Function* leftFunction = findFunction(left.function);
+                        const Function* rightFunction = findFunction(right.function);
+                        const auto leftLine = leftFunction ? leftFunction->source.begin.line : 0;
+                        const auto rightLine = rightFunction ? rightFunction->source.begin.line : 0;
+                        if (leftLine != rightLine)
+                            return leftLine < rightLine;
+                        const auto leftColumn = leftFunction ? leftFunction->source.begin.column : 0;
+                        const auto rightColumn = rightFunction ? rightFunction->source.begin.column : 0;
+                        if (leftColumn != rightColumn)
+                            return leftColumn < rightColumn;
+                        return left.function.value() < right.function.value();
+                    });
+            }
+
             for (const TypeDeclarationInfo& declaration : typeDeclarations_)
             {
                 if (declaration.role != "system" || !declaration.type)
@@ -1405,7 +1913,9 @@ namespace wio::wir::typed
                 application.type = mapType(applicationType->type, applicationType->declaration);
                 application.stableId =
                     stableHash(result_.module_.contract.stableKey + ":application:" + application.logicalName);
-                application.construct = buildApplicationInitializer(*applicationType, application.type);
+                application.construct = result_.module_.types.get(application.type).fieldInitializer;
+                if (!application.construct)
+                    application.construct = buildApplicationInitializer(*applicationType, application.type);
                 application.entry = FunctionId{static_cast<FunctionId::ValueType>(index)};
                 application.start = findExtensionFunction(application.type, "Start");
                 application.update = findExtensionFunction(application.type, "Update");
@@ -1522,6 +2032,9 @@ namespace wio::wir::typed
                 }
                 if (const auto* realm = statement->as<RealmDeclaration>())
                     collectFunctions(realm->statements);
+                else if (const auto* usingAttribute = statement->as<UsingAttributeStatement>();
+                         usingAttribute && usingAttribute->body)
+                    collectFunctions(usingAttribute->body->declarations);
             }
         }
 
@@ -1679,6 +2192,7 @@ namespace wio::wir::typed
                 wirType.name = pack->packName;
                 for (const Ref<sema::Type>& element : pack->elementTypes)
                     wirType.arguments.push_back(mapType(element, source));
+                normalizePackIdentity(wirType);
                 wirType.ownership = OwnershipModel::Borrowed;
                 break;
             }
@@ -1689,6 +2203,7 @@ namespace wio::wir::typed
                 wirType.name = pack->packName;
                 for (const Ref<sema::Type>& element : pack->elementTypes)
                     wirType.arguments.push_back(mapType(element, source));
+                normalizePackIdentity(wirType);
                 break;
             }
             case sema::TypeKind::PackStorage:
@@ -1698,6 +2213,7 @@ namespace wio::wir::typed
                 wirType.name = pack->packName;
                 for (const Ref<sema::Type>& element : pack->elementTypes)
                     wirType.arguments.push_back(mapType(element, source));
+                normalizePackIdentity(wirType);
                 wirType.ownership = OwnershipModel::OwnedValue;
                 wirType.cleanup = CleanupKind::DestroyValue;
                 break;
@@ -1774,26 +2290,58 @@ namespace wio::wir::typed
             case sema::TypeKind::Struct:
             {
                 const auto structure = type.AsFast<sema::StructType>();
+                const Ref<sema::StructType> primary = structure->genericPrimaryType.Lock();
+                Ref<sema::StructType> identity = structure;
+                std::unordered_set<const sema::StructType*> identityChain;
+                while (identity && identityChain.insert(identity.Get()).second)
+                {
+                    const Ref<sema::StructType> next = identity->genericPrimaryType.Lock();
+                    if (!next)
+                        break;
+                    identity = next;
+                }
+                const auto& genericParameters =
+                    !structure->genericParameterTypes.empty()
+                        ? structure->genericParameterTypes
+                        : (primary ? primary->genericParameterTypes : structure->genericParameterTypes);
+                const auto mapGenericArgument = [&](const Ref<sema::Type>& argument, const std::size_t index) -> TypeId
+                {
+                    Ref<sema::Type> parameter = index < genericParameters.size() ? genericParameters[index] : nullptr;
+                    while (parameter && parameter->kind() == sema::TypeKind::Alias)
+                        parameter = parameter.AsFast<sema::AliasType>()->aliasedType;
+                    if (argument && argument->kind() == sema::TypeKind::ConstValue && parameter &&
+                        parameter->kind() == sema::TypeKind::ConstGenericParameter)
+                    {
+                        const auto value = argument.AsFast<sema::ConstValueType>();
+                        const auto constParameter = parameter.AsFast<sema::ConstGenericParameterType>();
+                        Type constant;
+                        constant.kind = TypeKind::ConstValue;
+                        constant.name = value->value;
+                        constant.arguments.push_back(mapType(constParameter->valueType, source));
+                        return result_.module_.types.intern(std::move(constant));
+                    }
+                    return mapType(argument, source);
+                };
                 wirType.kind = TypeKind::Named;
                 wirType.name =
-                    structure->scopePath.empty() ? structure->name : structure->scopePath + "::" + structure->name;
-                for (const auto& argument : structure->genericArguments)
-                    wirType.arguments.push_back(mapType(argument, source));
+                    identity->scopePath.empty() ? identity->name : identity->scopePath + "::" + identity->name;
+                for (std::size_t index = 0; index < structure->genericArguments.size(); ++index)
+                    wirType.arguments.push_back(mapGenericArgument(structure->genericArguments[index], index));
                 if (structure->genericArguments.empty())
                     for (const auto& parameter : structure->genericParameterTypes)
                         wirType.arguments.push_back(mapType(parameter, source));
-                wirType.nominalKind = structure->isFlagset     ? NominalKind::Flagset
-                                      : structure->isEnum      ? NominalKind::Enum
-                                      : structure->isInterface ? NominalKind::Interface
-                                      : structure->isObject    ? NominalKind::Object
-                                                               : NominalKind::Component;
+                wirType.nominalKind = identity->isFlagset     ? NominalKind::Flagset
+                                      : identity->isEnum      ? NominalKind::Enum
+                                      : identity->isInterface ? NominalKind::Interface
+                                      : identity->isObject    ? NominalKind::Object
+                                                              : NominalKind::Component;
                 wirType.nominalRepresentation =
-                    structure->isNativePodComponent ? NominalRepresentation::NativePod : NominalRepresentation::Wio;
-                if (structure->isNativePodComponent)
+                    identity->isNativePodComponent ? NominalRepresentation::NativePod : NominalRepresentation::Wio;
+                if (identity->isNativePodComponent)
                 {
                     wirType.nativeBinding = NativeTypeBinding{
-                        .cppName = structure->nativeCppName.empty() ? structure->name : structure->nativeCppName,
-                        .header = structure->nativeCppHeader};
+                        .cppName = identity->nativeCppName.empty() ? identity->name : identity->nativeCppName,
+                        .header = identity->nativeCppHeader};
                 }
                 if (wirType.nominalKind == NominalKind::Object || wirType.nominalKind == NominalKind::Interface)
                 {
@@ -1804,13 +2352,13 @@ namespace wio::wir::typed
                 {
                     wirType.ownership = OwnershipModel::OwnedValue;
                 }
-                if (structure->name == "Tuple")
+                if (identity->name == "Tuple")
                     wirType.nominalValueModel = NominalValueModel::Tuple;
-                else if (structure->name == "Span")
+                else if (identity->name == "Span")
                     wirType.nominalValueModel = NominalValueModel::Span;
-                else if (structure->name == "Option")
+                else if (identity->name == "Option")
                     wirType.nominalValueModel = NominalValueModel::Option;
-                else if (structure->name == "Result")
+                else if (identity->name == "Result")
                     wirType.nominalValueModel = NominalValueModel::Result;
                 for (const TypeId argument : wirType.arguments)
                 {
@@ -1820,6 +2368,7 @@ namespace wio::wir::typed
 
                 const TypeId id = result_.module_.types.internNominal(std::move(wirType));
                 typesBySemanticType_[type.Get()] = id;
+                genericParameterNamesByType_[id.value()] = identity->genericParameterNames;
 
                 std::vector<TypeId> baseTypes;
                 baseTypes.reserve(structure->baseTypes.size());
@@ -1832,23 +2381,41 @@ namespace wio::wir::typed
                 // Some instantiated signatures are created before the primary's
                 // field list is populated. Its selected declaration still owns
                 // the layout; fill this snapshot using the pinned arguments.
-                const Ref<sema::StructType> primary = structure->genericPrimaryType.Lock();
-                const bool usePrimaryFields = structure->fieldNames.empty() && primary &&
-                                              !structure->isExplicitSpecialization &&
-                                              !structure->isPartialSpecialization;
+                const bool usePrimaryFields =
+                    primary && !structure->isExplicitSpecialization && !structure->isPartialSpecialization;
                 auto fieldNames = usePrimaryFields ? primary->fieldNames : structure->fieldNames;
                 auto fieldTypes = usePrimaryFields ? primary->fieldTypes : structure->fieldTypes;
                 std::vector<TypeId> parameters, arguments;
                 if (!structure->genericArguments.empty())
                 {
-                    const auto& genericParameters =
+                    const auto& fieldGenericParameters =
                         primary && !structure->isExplicitSpecialization && !structure->isPartialSpecialization
                             ? primary->genericParameterTypes
                             : structure->genericParameterTypes;
-                    for (const auto& parameter : genericParameters)
+                    for (const auto& parameter : fieldGenericParameters)
                         parameters.push_back(mapType(parameter, source));
-                    for (const auto& argument : structure->genericArguments)
-                        arguments.push_back(mapType(argument, source));
+                    std::vector<TypeId> mappedArguments;
+                    for (std::size_t index = 0; index < structure->genericArguments.size(); ++index)
+                        mappedArguments.push_back(mapGenericArgument(structure->genericArguments[index], index));
+                    const Type* packParameter =
+                        !parameters.empty() ? result_.module_.types.tryGet(parameters.back()) : nullptr;
+                    if (packParameter && packParameter->kind == TypeKind::GenericParameterPack)
+                    {
+                        const std::size_t fixedCount = parameters.size() - 1;
+                        arguments.insert(arguments.end(), mappedArguments.begin(),
+                                         mappedArguments.begin() + std::min(fixedCount, mappedArguments.size()));
+                        Type pack{.kind = TypeKind::TypePack};
+                        if (mappedArguments.size() > fixedCount)
+                        {
+                            pack.arguments.insert(pack.arguments.end(), mappedArguments.begin() + fixedCount,
+                                                  mappedArguments.end());
+                        }
+                        arguments.push_back(result_.module_.types.intern(std::move(pack)));
+                    }
+                    else
+                    {
+                        arguments = std::move(mappedArguments);
+                    }
                 }
                 if (fieldNames.empty() && structScope)
                 {
@@ -1977,8 +2544,12 @@ namespace wio::wir::typed
                     }
                 }
             }
-            if (symbol->flags.get_isExtension() && symbol->extensionImplementation)
+            std::unordered_set<const sema::Symbol*> visited;
+            while (symbol->flags.get_isExtension() && symbol->extensionImplementation &&
+                   visited.insert(symbol.Get()).second)
+            {
                 symbol = symbol->extensionImplementation;
+            }
             return symbol;
         }
 
@@ -2054,36 +2625,64 @@ namespace wio::wir::typed
         std::vector<TypeId> genericArguments(const FunctionCallExpression& call, const Ref<sema::Symbol>& symbol,
                                              const Ref<sema::Type>& selectedCallableType)
         {
+            const auto mapArgument = [&](Ref<sema::Type> argument, const std::size_t index) -> TypeId
+            {
+                Ref<sema::Type> parameter =
+                    symbol && index < symbol->genericParameterTypes.size() ? symbol->genericParameterTypes[index]
+                                                                         : nullptr;
+                while (parameter && parameter->kind() == sema::TypeKind::Alias)
+                    parameter = parameter.AsFast<sema::AliasType>()->aliasedType;
+                if (argument && argument->kind() == sema::TypeKind::ConstValue && parameter &&
+                    parameter->kind() == sema::TypeKind::ConstGenericParameter)
+                {
+                    const auto value = argument.AsFast<sema::ConstValueType>();
+                    const auto constParameter = parameter.AsFast<sema::ConstGenericParameterType>();
+                    return result_.module_.types.intern(
+                        Type{.kind = TypeKind::ConstValue,
+                             .name = value->value,
+                             .arguments = {mapType(constParameter->valueType, &call)}});
+                }
+                return mapType(argument, &call);
+            };
+            if (!call.resolvedGenericArguments.empty())
+            {
+                std::vector<TypeId> arguments;
+                arguments.reserve(call.resolvedGenericArguments.size());
+                for (std::size_t index = 0; index < call.resolvedGenericArguments.size(); ++index)
+                {
+                    const WeakRef<sema::Type>& argument = call.resolvedGenericArguments[index];
+                    if (const Ref<sema::Type> type = argument.Lock())
+                        arguments.push_back(mapArgument(type, index));
+                }
+                return arguments;
+            }
+
+            if (!call.explicitTypeArguments.empty())
+            {
+                std::vector<TypeId> arguments;
+                arguments.reserve(call.explicitTypeArguments.size());
+                for (std::size_t index = 0; index < call.explicitTypeArguments.size(); ++index)
+                {
+                    const NodePtr<TypeSpecifier>& argument = call.explicitTypeArguments[index];
+                    if (argument)
+                        arguments.push_back(mapArgument(argument->refType.Lock(), index));
+                }
+                return arguments;
+            }
+
             std::unordered_map<std::string, Ref<sema::Type>> bindings;
-            for (std::size_t index = 0;
-                 index < call.explicitTypeArguments.size() && symbol && index < symbol->genericParameterNames.size();
-                 ++index)
-            {
-                if (const Ref<sema::Type> argument =
-                        call.explicitTypeArguments[index] ? call.explicitTypeArguments[index]->refType.Lock() : nullptr)
-                {
-                    bindings[symbol->genericParameterNames[index]] = argument;
-                }
-            }
-            for (std::size_t index = 0; index < call.resolvedGenericArguments.size(); ++index)
-            {
-                if (const Ref<sema::Type> argument = call.resolvedGenericArguments[index].Lock();
-                    symbol && index < symbol->genericParameterNames.size())
-                {
-                    bindings.try_emplace(symbol->genericParameterNames[index], argument);
-                }
-            }
             if (symbol)
                 bindGenericArguments(symbol->type, selectedCallableType, bindings);
 
             std::vector<TypeId> arguments;
             if (symbol)
             {
-                for (const std::string& name : symbol->genericParameterNames)
+                for (std::size_t index = 0; index < symbol->genericParameterNames.size(); ++index)
                 {
+                    const std::string& name = symbol->genericParameterNames[index];
                     const auto found = bindings.find(name);
                     if (found != bindings.end())
-                        arguments.push_back(mapType(found->second, &call));
+                        arguments.push_back(mapArgument(found->second, index));
                 }
             }
             return arguments;
@@ -2227,7 +2826,23 @@ namespace wio::wir::typed
                     if (value)
                         resultInstruction.operands.push_back(value);
                 }
+                else
+                {
+                    const ValueId discarded = buildExpression(expressionBody->expression, state);
+                    const TypeId discardedType = expressionBody->expression
+                                                     ? mapExpressionType(expressionBody->expression, expressionBody)
+                                                     : TypeId{};
+                    if (discarded && typeRequiresCleanup(discardedType) &&
+                        valueOwnership(state, discarded) == ValueOwnership::Owned)
+                    {
+                        currentBlock(state).instructions.push_back(
+                            Instruction{.opcode = Opcode::Release,
+                                        .operands = {discarded},
+                                        .source = SourceSpan::at(expressionBody->location())});
+                    }
+                }
                 emitDropsFrom(0, state, &lambda);
+                emitTemporaryDropsFrom(0, state, &lambda);
                 currentBlock(state).instructions.push_back(std::move(resultInstruction));
             }
             else
@@ -2239,6 +2854,7 @@ namespace wio::wir::typed
                     if (returnType && returnType->kind == TypeKind::Void)
                     {
                         emitDropsFrom(0, state, &lambda);
+                        emitTemporaryDropsFrom(0, state, &lambda);
                         currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Return});
                     }
                     else
@@ -2284,7 +2900,7 @@ namespace wio::wir::typed
                 for (std::size_t index = 0; index < genericArguments.size(); ++index)
                 {
                     if (index > 0)
-                        entry.logicalName += ",";
+                        entry.logicalName += ", ";
                     entry.logicalName += typeStableKey(genericArguments[index]);
                 }
                 entry.logicalName += ">";
@@ -2462,6 +3078,45 @@ namespace wio::wir::typed
 
             if (!function.isExternal)
             {
+                if (declaration.whenCondition)
+                {
+                    const ValueId condition = buildExpression(declaration.whenCondition, state);
+                    if (condition)
+                    {
+                        const std::size_t conditionBlockIndex = state.blockIndex;
+                        const std::size_t bodyBlockIndex =
+                            createBlock(state, "when.body", SourceSpan::at(declaration.body->location()));
+                        const SourceSpan fallbackSource =
+                            SourceSpan::at(declaration.whenFallback ? declaration.whenFallback->location()
+                                                                    : declaration.whenCondition->location());
+                        const std::size_t fallbackBlockIndex = createBlock(state, "when.fallback", fallbackSource);
+                        currentBlockAt(state, conditionBlockIndex)
+                            .instructions.push_back(
+                                Instruction{.opcode = Opcode::CondBranch,
+                                            .operands = {condition},
+                                            .targets = {currentBlockAt(state, bodyBlockIndex).id,
+                                                        currentBlockAt(state, fallbackBlockIndex).id},
+                                            .source = SourceSpan::at(declaration.whenCondition->location())});
+
+                        FunctionState fallbackState = state;
+                        fallbackState.blockIndex = fallbackBlockIndex;
+                        Instruction fallbackReturn{.opcode = Opcode::Return, .source = fallbackSource};
+                        if (declaration.whenFallback)
+                        {
+                            const ValueId fallback =
+                                buildExpressionAs(declaration.whenFallback, asyncResultType(function), fallbackState);
+                            if (fallback)
+                                fallbackReturn.operands.push_back(fallback);
+                        }
+                        emitDropsFrom(0, fallbackState, &declaration);
+                        emitTemporaryDropsFrom(0, fallbackState, &declaration);
+                        currentBlock(fallbackState).instructions.push_back(std::move(fallbackReturn));
+
+                        state.nextValue = fallbackState.nextValue;
+                        state.nextBlock = fallbackState.nextBlock;
+                        state.blockIndex = bodyBlockIndex;
+                    }
+                }
                 buildStatement(declaration.body, state);
                 if (!blockIsTerminated(state))
                 {
@@ -2469,6 +3124,7 @@ namespace wio::wir::typed
                     if (returnType && returnType->kind == TypeKind::Void)
                     {
                         emitDropsFrom(0, state, &declaration);
+                        emitTemporaryDropsFrom(0, state, &declaration);
                         currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Return});
                     }
                     else
@@ -2506,6 +3162,7 @@ namespace wio::wir::typed
                                           : buildDefaultValue(global.type, info.declaration, state);
                 if (value)
                 {
+                    emitTemporaryDropsFrom(0, state, info.declaration);
                     currentBlock(state).instructions.push_back(
                         Instruction{.opcode = Opcode::Return, .operands = {value}, .source = global.source});
                 }
@@ -2527,17 +3184,18 @@ namespace wio::wir::typed
             {
                 const std::size_t visibleValueCount = state.valueOrder.size();
                 const std::size_t visiblePlaceCount = state.placeOrder.size();
+                const std::size_t visibleTemporaryPlaceCount = state.temporaryPlaces.size();
                 for (const auto& child : block->statements)
                 {
                     if (blockIsTerminated(state))
-                    {
-                        report("WIR2200", "Statement appears after a terminator.", child.Get());
                         break;
-                    }
                     buildStatement(child, state);
                 }
                 if (!blockIsTerminated(state))
+                {
                     emitDropsFrom(visiblePlaceCount, state, block);
+                    emitTemporaryDropsFrom(visibleTemporaryPlaceCount, state, block);
+                }
                 while (state.valueOrder.size() > visibleValueCount)
                 {
                     state.values.erase(state.valueOrder.back());
@@ -2548,6 +3206,7 @@ namespace wio::wir::typed
                     state.places.erase(state.placeOrder.back());
                     state.placeOrder.pop_back();
                 }
+                state.temporaryPlaces.resize(visibleTemporaryPlaceCount);
                 return;
             }
             if (const auto* declaration = statement->as<VariableDeclaration>())
@@ -2568,6 +3227,13 @@ namespace wio::wir::typed
                 if (!value)
                     return;
                 const TypeId valueType = mapType(symbol->type, declaration);
+                const Type* valueTypeInfo = result_.module_.types.tryGet(valueType);
+                if (valueTypeInfo && valueTypeInfo->kind == TypeKind::Reference)
+                {
+                    state.values[symbol.Get()] = value;
+                    state.valueOrder.push_back(symbol.Get());
+                    return;
+                }
                 const TypeId placeType = referenceType(valueType, symbol->flags.get_isMutable());
                 const ValueId place{state.nextValue++};
                 currentBlock(state).instructions.push_back(
@@ -2648,6 +3314,7 @@ namespace wio::wir::typed
                         instruction.operands.push_back(value);
                 }
                 emitDropsFrom(0, state, returnStatement);
+                emitTemporaryDropsFrom(0, state, returnStatement);
                 currentBlock(state).instructions.push_back(std::move(instruction));
                 return;
             }
@@ -2688,6 +3355,80 @@ namespace wio::wir::typed
                 if (instruction.expandedOperands.empty())
                     instruction.expandedOperands.resize(previousOperands, false);
                 instruction.expandedOperands.push_back(expansion != nullptr);
+            }
+            return true;
+        }
+
+        bool appendDefaultCallArguments(Instruction& instruction, const FunctionCallExpression& call,
+                                        const Ref<sema::FunctionType>& functionType,
+                                        const Ref<sema::Symbol>& implementationSymbol,
+                                        const std::size_t parameterOffset, FunctionState& state)
+        {
+            Ref<sema::FunctionType> declaredFunctionType = functionType;
+            if (implementationSymbol && implementationSymbol->type &&
+                implementationSymbol->type->kind() == sema::TypeKind::Function)
+            {
+                const Ref<sema::FunctionType> implementationType =
+                    implementationSymbol->type.AsFast<sema::FunctionType>();
+                if (!declaredFunctionType ||
+                    implementationType->paramTypes.size() > declaredFunctionType->paramTypes.size())
+                {
+                    declaredFunctionType = implementationType;
+                }
+            }
+            if (!declaredFunctionType)
+                return true;
+
+            const FunctionDeclaration* function = nullptr;
+            if (implementationSymbol)
+            {
+                if (const auto direct = declarationsBySymbol_.find(implementationSymbol.Get());
+                    direct != declarationsBySymbol_.end())
+                {
+                    function = direct->second;
+                }
+                else
+                {
+                    // Generic/overload resolution can produce a concrete
+                    // semantic symbol while the declaration index owns the
+                    // source symbol. Recover the declaration through the same
+                    // stable source identity used for FunctionId lookup.
+                    for (const auto& [candidate, declaration] : declarationsBySymbol_)
+                    {
+                        if (!candidate || candidate->name != implementationSymbol->name ||
+                            candidate->scopePath != implementationSymbol->scopePath ||
+                            candidate->definitionLoc.file != implementationSymbol->definitionLoc.file ||
+                            candidate->definitionLoc.line != implementationSymbol->definitionLoc.line ||
+                            candidate->definitionLoc.column != implementationSymbol->definitionLoc.column)
+                        {
+                            continue;
+                        }
+                        function = declaration;
+                        break;
+                    }
+                }
+            }
+            if (!function)
+                return call.arguments.size() + parameterOffset >= declaredFunctionType->paramTypes.size();
+
+            std::size_t suppliedArgumentCount = call.arguments.size();
+            for (std::size_t parameterIndex = parameterOffset; parameterIndex < function->parameters.size();
+                 ++parameterIndex)
+            {
+                const wio::Parameter& parameter = function->parameters[parameterIndex];
+                if (parameter.isParameterPack)
+                    return true;
+                if (suppliedArgumentCount > 0)
+                {
+                    --suppliedArgumentCount;
+                    continue;
+                }
+                if (!parameter.defaultValue || parameterIndex >= declaredFunctionType->paramTypes.size())
+                    return false;
+                if (!appendCallArgument(
+                        instruction, parameter.defaultValue,
+                        mapType(declaredFunctionType->paramTypes[parameterIndex], parameter.defaultValue.Get()), state))
+                    return false;
             }
             return true;
         }
@@ -2816,6 +3557,7 @@ namespace wio::wir::typed
             FunctionState errorState = state;
             errorState.blockIndex = errorBlockIndex;
             emitDropsFrom(0, errorState, &call);
+            emitTemporaryDropsFrom(0, errorState, &call);
             currentBlock(errorState)
                 .instructions.push_back(Instruction{.opcode = Opcode::ResultPropagate,
                                                     .operands = {resultValue},
@@ -2834,6 +3576,48 @@ namespace wio::wir::typed
             return payload;
         }
 
+        ValueId buildLeftAssociativeAddition(const BinaryExpression& expression, FunctionState& state)
+        {
+            std::vector<const BinaryExpression*> chain;
+            const BinaryExpression* current = &expression;
+            while (current && current->operatorDispatchKind == OperatorDispatchKind::None &&
+                   current->op.type == TokenType::opPlus)
+            {
+                chain.push_back(current);
+                const auto* nested = current->left ? current->left->as<BinaryExpression>() : nullptr;
+                if (!nested || nested->operatorDispatchKind != OperatorDispatchKind::None ||
+                    nested->op.type != TokenType::opPlus)
+                    break;
+                current = nested;
+            }
+
+            ValueId accumulated = buildAutoReadableExpression(chain.back()->left, state);
+            if (!accumulated)
+                return {};
+            for (auto iterator = chain.rbegin(); iterator != chain.rend(); ++iterator)
+            {
+                const BinaryExpression& operation = **iterator;
+                const ValueId right = buildAutoReadableExpression(operation.right, state);
+                if (!right)
+                    return {};
+                const TypeId resultType = mapType(operation.refType.Lock(), &operation);
+                const ValueOwnership resultOwnership = ownershipForType(resultType);
+                const ValueId result{state.nextValue++};
+                currentBlock(state).instructions.push_back(Instruction{.opcode = Opcode::Binary,
+                                                                       .result = result,
+                                                                       .resultType = resultType,
+                                                                       .operands = {accumulated, right},
+                                                                       .binaryOperator = BinaryOperator::Add,
+                                                                       .resultOwnership = resultOwnership,
+                                                                       .source = SourceSpan::at(operation.location())});
+                rememberOwnership(state, result, resultOwnership);
+                releaseOwnedTemporary(accumulated, &operation, state);
+                releaseOwnedTemporary(right, &operation, state);
+                accumulated = result;
+            }
+            return accumulated;
+        }
+
         ValueId buildExpression(const NodePtr<Expression>& expression, FunctionState& state)
         {
             if (!expression)
@@ -2841,15 +3625,19 @@ namespace wio::wir::typed
             auto appendValue = [&](Instruction instruction)
             {
                 instruction.result = ValueId{state.nextValue++};
-                TypeId actualResultType = mapExpressionType(expression, expression.Get());
+                TypeId actualResultType =
+                    instruction.resultType ? instruction.resultType : mapExpressionType(expression, expression.Get());
                 const auto* resultCall = expression->as<FunctionCallExpression>();
-                if (resultCall && (resultCall->unwrapResult || resultCall->propagateResult))
+                if (resultCall && !resultCall->resolvedConstructor.Lock())
                 {
                     const Ref<sema::Type> callableType =
                         resultCall->callee ? resultCall->callee->refType.Lock() : nullptr;
                     if (callableType && callableType->kind() == sema::TypeKind::Function)
-                        actualResultType =
-                            mapType(callableType.AsFast<sema::FunctionType>()->returnType, expression.Get());
+                    {
+                        const Ref<sema::Type> returnType = callableType.AsFast<sema::FunctionType>()->returnType;
+                        if (!isUnknownSemanticType(returnType))
+                            actualResultType = mapType(returnType, expression.Get());
+                    }
                 }
                 instruction.resultType = actualResultType;
                 if (instruction.resultOwnership == ValueOwnership::Trivial)
@@ -3221,6 +4009,11 @@ namespace wio::wir::typed
                     rememberOwnership(state, globalPlace, ValueOwnership::Borrowed);
                     return emitLoad(globalPlace, descriptor.type, expression.Get(), state);
                 }
+                if (const ValueId fieldPlace =
+                        buildImplicitFieldPlace(identifier->token.value, false, expression.Get(), state))
+                {
+                    return emitLoad(fieldPlace, mapType(symbol->type, expression.Get()), expression.Get(), state);
+                }
                 const Ref<sema::Symbol> callable = resolveCallableSymbol(symbol, expression->refType.Lock());
                 const auto function = callable ? functionsBySymbol_.find(callable.Get()) : functionsBySymbol_.end();
                 if (function != functionsBySymbol_.end())
@@ -3252,10 +4045,67 @@ namespace wio::wir::typed
                 const TypeId ownerType =
                     member->object ? mapType(member->object->refType.Lock(), member->object.Get()) : TypeId{};
                 const Type* ownerTypeInfo = result_.module_.types.tryGet(ownerType);
+                if (member->intrinsicMember == IntrinsicMember::PackSize ||
+                    member->intrinsicMember == IntrinsicMember::PackArray)
+                {
+                    Instruction instruction{.opcode = Opcode::IntrinsicCall,
+                                            .selector =
+                                                member->intrinsicMember == IntrinsicMember::PackSize ? "Size" : "Array",
+                                            .intrinsicFamily = IntrinsicFamily::Pack,
+                                            .targetType = ownerType,
+                                            .source = SourceSpan::at(expression->location())};
+                    ValueId receiver;
+                    if (const auto* identifier = member->object->as<Identifier>())
+                    {
+                        const Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
+                        const sema::Symbol* lexical = lexicalSymbol(symbol.Get(), state);
+                        if (const auto value = lexical ? state.values.find(lexical) : state.values.end();
+                            value != state.values.end())
+                            receiver = value->second;
+                        else if (const auto place = lexical ? state.places.find(lexical) : state.places.end();
+                                 place != state.places.end())
+                            receiver = emitLoad(place->second, ownerType, member->object.Get(), state);
+                    }
+                    else
+                    {
+                        receiver = buildAutoReadableExpression(member->object, state);
+                    }
+                    if (receiver)
+                    {
+                        instruction.operands.push_back(receiver);
+                        instruction.signatureTypes.push_back(ownerType);
+                    }
+                    else if (member->intrinsicMember == IntrinsicMember::PackArray)
+                    {
+                        report("WIR2361", "Pack array materialization requires a runtime value pack.",
+                               expression.Get());
+                        return {};
+                    }
+                    return appendValue(std::move(instruction));
+                }
                 const bool isStaticNominalAccess =
                     member->object && (member->object->is<TypeExpression>() ||
                                        (ownerSymbol && (ownerSymbol->kind == sema::SymbolKind::Struct ||
                                                         ownerSymbol->kind == sema::SymbolKind::TypeAlias)));
+                const Ref<sema::Symbol> memberSymbol = member->referencedSymbol.Lock();
+                const auto staticGlobal =
+                    memberSymbol ? globalsBySymbol_.find(memberSymbol.Get()) : globalsBySymbol_.end();
+                if (isStaticNominalAccess && staticGlobal != globalsBySymbol_.end())
+                {
+                    const Global& descriptor = result_.module_.globals.at(staticGlobal->second.value());
+                    const ValueId globalPlace{state.nextValue++};
+                    currentBlock(state).instructions.push_back(
+                        Instruction{.opcode = Opcode::GlobalPlace,
+                                    .result = globalPlace,
+                                    .resultType = referenceType(descriptor.type, descriptor.isMutable),
+                                    .global = descriptor.id,
+                                    .selector = descriptor.name,
+                                    .resultOwnership = ValueOwnership::Borrowed,
+                                    .borrowLifetime = BorrowLifetime::Caller,
+                                    .source = SourceSpan::at(expression->location())});
+                    rememberOwnership(state, globalPlace, ValueOwnership::Borrowed);
+                    return emitLoad(globalPlace, descriptor.type, expression.Get(), state);
+                }
                 if (isStaticNominalAccess && ownerTypeInfo && ownerTypeInfo->kind == TypeKind::Named &&
                     (ownerTypeInfo->nominalKind == NominalKind::Enum ||
                      ownerTypeInfo->nominalKind == NominalKind::Flagset))
@@ -3275,10 +4125,19 @@ namespace wio::wir::typed
                            expression.Get());
                     return {};
                 }
+                const std::size_t temporaryPlaceCount = state.temporaryPlaces.size();
                 const ValueId place = buildPlace(expression, false, state);
                 if (!place)
                     return {};
-                return emitLoad(place, mapType(expression->refType.Lock(), expression.Get()), expression.Get(), state);
+                const TypeId fieldType = mapType(expression->refType.Lock(), expression.Get());
+                ValueId result = emitLoad(place, fieldType, expression.Get(), state);
+                if (state.temporaryPlaces.size() > temporaryPlaceCount)
+                {
+                    result = ensureOwned(result, fieldType, expression.Get(), state);
+                    emitTemporaryDropsFrom(temporaryPlaceCount, state, expression.Get());
+                    state.temporaryPlaces.resize(temporaryPlaceCount);
+                }
+                return result;
             }
             if (const auto* access = expression->as<ArrayAccessExpression>())
             {
@@ -3291,6 +4150,23 @@ namespace wio::wir::typed
                 {
                     objectTypeId = objectType->arguments.front();
                     objectType = result_.module_.types.tryGet(objectTypeId);
+                }
+                if (objectType &&
+                    (objectType->kind == TypeKind::GenericParameterPack || objectType->kind == TypeKind::ValuePack ||
+                     objectType->kind == TypeKind::TypePack || objectType->kind == TypeKind::PackStorage))
+                {
+                    const ValueId object = buildAutoReadableExpression(access->object, state);
+                    if (!object)
+                        return {};
+                    return appendValue(Instruction{
+                        .opcode = Opcode::IntrinsicCall,
+                        .operands = {object},
+                        .selector = access->packElementBindingName,
+                        .projectionIndex = static_cast<std::uint32_t>(access->resolvedPackIndex.value_or(0)),
+                        .signatureTypes = {objectTypeId},
+                        .intrinsicFamily = IntrinsicFamily::Pack,
+                        .targetType = objectTypeId,
+                        .source = SourceSpan::at(expression->location())});
                 }
                 if (!objectType || (objectType->kind != TypeKind::Array && objectType->kind != TypeKind::Dictionary &&
                                     objectType->kind != TypeKind::String && objectType->kind != TypeKind::Text))
@@ -3326,15 +4202,15 @@ namespace wio::wir::typed
                                                    {assignment->left, assignment->right}, state);
                 TypeId targetType = mapType(assignment->left->refType.Lock(), assignment->left.Get());
                 const Type* targetTypeInfo = result_.module_.types.tryGet(targetType);
-                const bool assignsThroughReadableReference = targetTypeInfo &&
-                                                             targetTypeInfo->kind == TypeKind::Reference &&
-                                                             autoReadableReference(*targetTypeInfo);
-                const ValueId target = assignsThroughReadableReference ? buildExpression(assignment->left, state)
-                                                                       : buildPlace(assignment->left, true, state);
+                const bool assignsThroughReference = targetTypeInfo && targetTypeInfo->kind == TypeKind::Reference &&
+                                                     targetTypeInfo->arguments.size() == 1;
+                const TypeId assignedValueType =
+                    assignsThroughReference ? targetTypeInfo->arguments.front() : targetType;
+                const ValueId target = assignsThroughReference ? buildExpression(assignment->left, state)
+                                                               : buildPlace(assignment->left, true, state);
                 if (!target)
                     return {};
-                if (assignsThroughReadableReference)
-                    targetType = targetTypeInfo->arguments.front();
+                targetType = assignedValueType;
                 const ValueId right = buildExpressionAs(assignment->right, targetType, state);
                 if (!right)
                     return {};
@@ -3438,6 +4314,13 @@ namespace wio::wir::typed
                 if (isLogicalAnd(binary->op.type) || isLogicalOr(binary->op.type))
                 {
                     return buildShortCircuitExpression(*binary, isLogicalAnd(binary->op.type), state);
+                }
+                if (binary->op.type == TokenType::opPlus)
+                {
+                    const auto* nested = binary->left ? binary->left->as<BinaryExpression>() : nullptr;
+                    if (nested && nested->operatorDispatchKind == OperatorDispatchKind::None &&
+                        nested->op.type == TokenType::opPlus)
+                        return buildLeftAssociativeAddition(*binary, state);
                 }
                 if (binary->op.type == TokenType::kwIs)
                 {
@@ -3550,12 +4433,15 @@ namespace wio::wir::typed
                 if (!calleeSymbol && call->callee)
                     calleeSymbol = call->callee->referencedSymbol.Lock();
                 TypeId callResultType = mapExpressionType(expression, expression.Get());
-                if (call->unwrapResult || call->propagateResult)
+                if (!call->resolvedConstructor.Lock())
                 {
                     const Ref<sema::Type> callableType = call->callee ? call->callee->refType.Lock() : nullptr;
                     if (callableType && callableType->kind() == sema::TypeKind::Function)
-                        callResultType =
-                            mapType(callableType.AsFast<sema::FunctionType>()->returnType, expression.Get());
+                    {
+                        const Ref<sema::Type> returnType = callableType.AsFast<sema::FunctionType>()->returnType;
+                        if (!isUnknownSemanticType(returnType))
+                            callResultType = mapType(returnType, expression.Get());
+                    }
                 }
                 const Type* callResultTypeInfo = result_.module_.types.tryGet(callResultType);
                 const bool hasNominalConstructionResult = callResultTypeInfo &&
@@ -3612,6 +4498,12 @@ namespace wio::wir::typed
                         if (!appendCallArgument(instruction, argument, expectedType, state))
                             return {};
                     }
+                    if (!appendDefaultCallArguments(instruction, *call, constructorType, constructorSymbol, 0, state))
+                    {
+                        report("WIR2359", "Constructor call is missing a materializable default argument.",
+                               expression.Get());
+                        return {};
+                    }
                     return appendValue(std::move(instruction));
                 }
 
@@ -3630,13 +4522,15 @@ namespace wio::wir::typed
                                                       : buildAutoReadableExpression(memberCallee->object, state);
                     if (!receiver)
                         return {};
-                    Instruction instruction{.opcode = Opcode::IntrinsicCall,
-                                            .operands = {receiver},
-                                            .selector = memberCallee->member ? memberCallee->member->token.value
-                                                                             : std::string{},
-                                            .intrinsicFamily = intrinsicFamilyFor(receiverType),
-                                            .targetType = receiverType,
-                                            .source = SourceSpan::at(expression->location())};
+                    Instruction instruction{
+                        .opcode = Opcode::IntrinsicCall,
+                        .operands = {receiver},
+                        .selector = memberCallee->intrinsicMember == IntrinsicMember::PackToStaticArray ? "Array"
+                                    : memberCallee->member ? memberCallee->member->token.value
+                                                           : std::string{},
+                        .intrinsicFamily = intrinsicFamilyFor(receiverType),
+                        .targetType = receiverType,
+                        .source = SourceSpan::at(expression->location())};
                     instruction.signatureTypes.push_back(mutating ? referenceType(receiverType, true) : receiverType);
                     const Ref<sema::Type> selectedCallableType = call->callee->refType.Lock();
                     const auto functionType =
@@ -3678,6 +4572,9 @@ namespace wio::wir::typed
                                                        : functionsBySymbol_.end();
                     if (extensionFunction != functionsBySymbol_.end())
                     {
+                        const auto implementation =
+                            std::ranges::find_if(result_.module_.functions, [&](const Function& function)
+                                                 { return function.id == extensionFunction->second; });
                         const auto implementationType =
                             extensionImplementation->type &&
                                     extensionImplementation->type->kind() == sema::TypeKind::Function
@@ -3687,6 +4584,77 @@ namespace wio::wir::typed
                                                                                      sema::TypeKind::Function
                                                      ? call->callee->refType.Lock().AsFast<sema::FunctionType>()
                                                      : nullptr;
+                        if (selectedMember->flags.get_isDerived() &&
+                            implementation != result_.module_.functions.end() && implementation->isMethod &&
+                            implementation->ownerType)
+                        {
+                            const MethodLayout* method =
+                                findMethodLayout(implementation->ownerType, extensionImplementation);
+                            if (!method || !implementationType || implementationType->paramTypes.empty())
+                            {
+                                report("WIR2357", "Derived extension is missing its processor method layout.",
+                                       expression.Get());
+                                return {};
+                            }
+
+                            const ValueId processor{state.nextValue++};
+                            currentBlock(state).instructions.push_back(
+                                Instruction{.opcode = Opcode::ConstructObject,
+                                            .result = processor,
+                                            .resultType = implementation->ownerType,
+                                            .selector = implementation->name + "::OnConstruct",
+                                            .resultOwnership = ValueOwnership::Owned,
+                                            .source = SourceSpan::at(expression->location())});
+                            rememberOwnership(state, processor, ValueOwnership::Owned);
+
+                            Instruction instruction{.opcode = Opcode::MethodCall,
+                                                    .operands = {processor},
+                                                    .callee = extensionFunction->second,
+                                                    .selector = method->name,
+                                                    .projectionIndex = method->slot,
+                                                    .targetType = implementation->ownerType,
+                                                    .source = SourceSpan::at(expression->location())};
+                            instruction.signatureTypes.push_back(
+                                referenceType(implementation->ownerType, method->receiverMutable));
+                            const TypeId receiverType =
+                                mapType(implementationType->paramTypes.front(), memberCallee->object.Get());
+                            const ValueId receiver = buildExpressionAs(memberCallee->object, receiverType, state);
+                            if (!receiver)
+                                return {};
+                            instruction.operands.push_back(receiver);
+                            instruction.signatureTypes.push_back(receiverType);
+                            for (std::size_t index = 0; index < call->arguments.size(); ++index)
+                            {
+                                const auto& argument = call->arguments[index];
+                                const TypeId expectedType =
+                                    index + 1 < implementationType->paramTypes.size()
+                                        ? mapType(implementationType->paramTypes[index + 1], argument.Get())
+                                        : mapType(argument->refType.Lock(), argument.Get());
+                                if (!appendCallArgument(instruction, argument, expectedType, state))
+                                    return {};
+                            }
+                            if (!appendDefaultCallArguments(instruction, *call, implementationType,
+                                                            extensionImplementation, 1, state))
+                            {
+                                report("WIR2359",
+                                       "Derived extension call is missing a materializable default argument.",
+                                       expression.Get());
+                                return {};
+                            }
+                            instruction.specializationKey =
+                                specializationKey(instruction.callee, {}, instruction.signatureTypes, callResultType);
+                            if (callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Void)
+                            {
+                                currentBlock(state).instructions.push_back(std::move(instruction));
+                                releaseOwnedTemporary(receiver, expression.Get(), state);
+                                releaseOwnedTemporary(processor, expression.Get(), state);
+                                return {};
+                            }
+                            const ValueId result = appendValue(std::move(instruction));
+                            releaseOwnedTemporary(receiver, expression.Get(), state);
+                            releaseOwnedTemporary(processor, expression.Get(), state);
+                            return result;
+                        }
                         Instruction instruction{
                             .opcode = isNativeFunction(extensionFunction->second) ? Opcode::NativeCall
                                                                                   : Opcode::ExtensionCall,
@@ -3717,6 +4685,13 @@ namespace wio::wir::typed
                                                             : mapType(argument->refType.Lock(), argument.Get());
                             if (!appendCallArgument(instruction, argument, expectedType, state))
                                 return {};
+                        }
+                        if (!appendDefaultCallArguments(instruction, *call, implementationType, extensionImplementation,
+                                                        1, state))
+                        {
+                            report("WIR2358", "Extension call is missing a materializable default argument.",
+                                   expression.Get());
+                            return {};
                         }
                         instruction.genericArguments =
                             genericArguments(*call, extensionImplementation, implementationType);
@@ -3784,6 +4759,12 @@ namespace wio::wir::typed
                                                             : mapType(argument->refType.Lock(), argument.Get());
                             if (!appendCallArgument(instruction, argument, expectedType, state))
                                 return {};
+                        }
+                        if (!appendDefaultCallArguments(instruction, *call, functionType, calleeSymbol, 0, state))
+                        {
+                            report("WIR2359", "Method call is missing a materializable default argument.",
+                                   expression.Get());
+                            return {};
                         }
                         const TypeId resultType = mapType(expression->refType.Lock(), expression.Get());
                         instruction.genericArguments =
@@ -3863,6 +4844,13 @@ namespace wio::wir::typed
                                             isNativeFunction(functionIt->second) ? Opcode::NativeCall : Opcode::Call,
                                         .callee = functionIt->second,
                                         .source = SourceSpan::at(expression->location())};
+                const auto implementationType =
+                    calleeSymbol->type && calleeSymbol->type->kind() == sema::TypeKind::Function
+                        ? calleeSymbol->type.AsFast<sema::FunctionType>()
+                        : nullptr;
+                if (implementationType)
+                    callResultType = mapType(implementationType->returnType, expression.Get());
+                instruction.resultType = callResultType;
                 for (std::size_t index = 0; index < call->arguments.size(); ++index)
                 {
                     const auto& argument = call->arguments[index];
@@ -3871,6 +4859,11 @@ namespace wio::wir::typed
                                                     : mapType(argument->refType.Lock(), argument.Get());
                     if (!appendCallArgument(instruction, argument, expectedType, state))
                         return {};
+                }
+                if (!appendDefaultCallArguments(instruction, *call, implementationType, calleeSymbol, 0, state))
+                {
+                    report("WIR2359", "Function call is missing a materializable default argument.", expression.Get());
+                    return {};
                 }
                 instruction.genericArguments = genericArguments(*call, calleeSymbol, selectedCallableType);
                 instruction.specializationKey = specializationKey(instruction.callee, instruction.genericArguments,
@@ -3956,6 +4949,9 @@ namespace wio::wir::typed
                     rememberOwnership(state, place, ValueOwnership::Borrowed);
                     return adaptPlaceMutability(place, placeType, needsMutable, expression.Get(), state);
                 }
+                if (const ValueId fieldPlace =
+                        buildImplicitFieldPlace(identifier->token.value, needsMutable, expression.Get(), state))
+                    return fieldPlace;
                 report("WIR2327", "Addressable identifier is not available in the current Typed WIR function.",
                        expression.Get());
                 return {};
@@ -3989,6 +4985,32 @@ namespace wio::wir::typed
                 }
                 if (!container || (container->kind != TypeKind::Array && container->kind != TypeKind::Dictionary))
                 {
+                    if (container &&
+                        (container->kind == TypeKind::GenericParameterPack || container->kind == TypeKind::ValuePack ||
+                         container->kind == TypeKind::TypePack || container->kind == TypeKind::PackStorage))
+                    {
+                        const ValueId base = buildPlace(access->object, needsMutable, state);
+                        if (!base)
+                            return {};
+                        const TypeId valueType = mapType(expression->refType.Lock(), expression.Get());
+                        const ValueId result{state.nextValue++};
+                        currentBlock(state).instructions.push_back(Instruction{
+                            .opcode = Opcode::IntrinsicCall,
+                            .result = result,
+                            .resultType = referenceType(valueType, needsMutable),
+                            .operands = {base},
+                            .selector = access->packElementBindingName,
+                            .projectionIndex = static_cast<std::uint32_t>(access->resolvedPackIndex.value_or(0)),
+                            .signatureTypes = {emittedValueType(base, state)},
+                            .intrinsicFamily = IntrinsicFamily::Pack,
+                            .targetType = containerType,
+                            .resultOwnership = ValueOwnership::Borrowed,
+                            .borrowLifetime = BorrowLifetime::Lexical,
+                            .borrowOrigin = base,
+                            .source = SourceSpan::at(expression->location())});
+                        rememberOwnership(state, result, ValueOwnership::Borrowed);
+                        return result;
+                    }
                     report("WIR2328", "Only array and dictionary index expressions are addressable WIR places.",
                            expression.Get());
                     return {};
@@ -4015,17 +5037,91 @@ namespace wio::wir::typed
                     report("WIR2329", "Addressable member must resolve to a data field.", expression.Get());
                     return {};
                 }
-                const ValueId base = buildPlace(member->object, needsMutable, state);
+                const TypeId objectType = mapExpressionType(member->object, member->object.Get());
+                const Type* objectTypeInfo = result_.module_.types.tryGet(objectType);
+                ValueId base;
+                if (objectTypeInfo && objectTypeInfo->kind == TypeKind::Reference)
+                {
+                    const ValueId reference = buildExpression(member->object, state);
+                    base = reference
+                               ? adaptPlaceMutability(reference, objectType, needsMutable, member->object.Get(), state)
+                               : ValueId{};
+                }
+                else if (objectTypeInfo && objectTypeInfo->kind == TypeKind::Named &&
+                         (objectTypeInfo->nominalKind == NominalKind::Object ||
+                          objectTypeInfo->nominalKind == NominalKind::Interface))
+                {
+                    // Object values are stable handles. Mutating their pointee does not mutate the local handle,
+                    // so an immutable `let` binding may still expose mutable object fields.
+                    base = buildExpression(member->object, state);
+                }
+                bool identifierHasStablePlace = false;
+                if (const auto* identifier = member->object->as<Identifier>())
+                {
+                    const Ref<sema::Symbol> symbol = identifier->referencedSymbol.Lock();
+                    identifierHasStablePlace =
+                        symbol && (state.places.contains(symbol.Get()) || globalsBySymbol_.contains(symbol.Get()) ||
+                                   (objectTypeInfo && objectTypeInfo->kind == TypeKind::Reference));
+                }
+                const bool hasStablePlace =
+                    !base && objectTypeInfo &&
+                    (identifierHasStablePlace || member->object->is<SelfExpression>() ||
+                     member->object->is<SuperExpression>() || member->object->is<MemberAccessExpression>() ||
+                     member->object->is<ArrayAccessExpression>() ||
+                     (member->object->is<UnaryExpression>() &&
+                      member->object->as<UnaryExpression>()->op.type == TokenType::kwDeref));
+                if (hasStablePlace)
+                {
+                    base = buildPlace(member->object, needsMutable, state);
+                }
+                else
+                {
+                    const ValueId value = buildExpression(member->object, state);
+                    if (value && objectTypeInfo && objectTypeInfo->kind == TypeKind::Named)
+                    {
+                        base = ValueId{state.nextValue++};
+                        currentBlock(state).instructions.push_back(
+                            Instruction{.opcode = Opcode::LocalPlace,
+                                        .result = base,
+                                        .resultType = referenceType(objectType, true),
+                                        .selector = "$temporary." + std::to_string(base.value()),
+                                        .source = SourceSpan::at(member->object->location())});
+                        currentBlock(state).instructions.push_back(
+                            Instruction{.opcode = Opcode::PlaceInit,
+                                        .operands = {base, value},
+                                        .source = SourceSpan::at(member->object->location())});
+                        state.temporaryPlaces.emplace_back(base, objectType);
+                    }
+                }
                 if (!base)
                     return {};
+                const TypeId fieldType = mapType(expression->refType.Lock(), expression.Get());
+                TypeId ownerTypeId;
+                if (underlyingNamedType(objectType, &ownerTypeId))
+                {
+                    Type& owner = result_.module_.types.getMutable(ownerTypeId);
+                    const auto field = std::ranges::find(owner.fields, memberSymbol->name, &FieldLayout::name);
+                    if (field != owner.fields.end())
+                    {
+                        const Type* layoutType = result_.module_.types.tryGet(field->type);
+                        const Type* resolvedType = result_.module_.types.tryGet(fieldType);
+                        const bool unresolvedPackLayout = layoutType && layoutType->kind == TypeKind::PackStorage &&
+                                                          layoutType->name.empty() && layoutType->arguments.empty();
+                        if (unresolvedPackLayout && resolvedType && resolvedType->kind == TypeKind::PackStorage &&
+                            (!resolvedType->name.empty() || !resolvedType->arguments.empty()))
+                        {
+                            field->type = fieldType;
+                        }
+                    }
+                }
                 const ValueId result{state.nextValue++};
-                currentBlock(state).instructions.push_back(Instruction{
-                    .opcode = Opcode::FieldPlace,
-                    .result = result,
-                    .resultType = referenceType(mapType(expression->refType.Lock(), expression.Get()), needsMutable),
-                    .operands = {base},
-                    .selector = memberSymbol->name,
-                    .source = SourceSpan::at(expression->location())});
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::FieldPlace,
+                                .result = result,
+                                .resultType = referenceType(fieldType, needsMutable),
+                                .operands = {base},
+                                .selector = memberSymbol->name,
+                                .source = SourceSpan::at(expression->location())});
                 return result;
             }
 
@@ -4144,12 +5240,34 @@ namespace wio::wir::typed
             ValueId value = buildExpression(expression, state);
             if (!value)
                 return {};
-            TypeId sourceType = mapExpressionType(expression, expression.Get());
+            TypeId sourceType = emittedValueType(value, state);
+            if (!sourceType)
+                sourceType = mapExpressionType(expression, expression.Get());
             if (sourceType == destinationType)
                 return ensureOwned(value, destinationType, expression.Get(), state);
 
             const Type* source = result_.module_.types.tryGet(sourceType);
             const Type* destination = result_.module_.types.tryGet(destinationType);
+            const auto packValue = [](const Type* type)
+            {
+                return type && (type->kind == TypeKind::GenericParameterPack || type->kind == TypeKind::ValuePack ||
+                                type->kind == TypeKind::PackStorage);
+            };
+            if (packValue(source) && packValue(destination) && !source->name.empty() &&
+                source->name == destination->name)
+            {
+                for (auto instruction = currentBlock(state).instructions.rbegin();
+                     instruction != currentBlock(state).instructions.rend(); ++instruction)
+                {
+                    if (instruction->result != value)
+                        continue;
+                    instruction->resultType = destinationType;
+                    instruction->targetType = destinationType;
+                    break;
+                }
+                rememberOwnership(state, value, ownershipForType(destinationType));
+                return ensureOwned(value, destinationType, expression.Get(), state);
+            }
             if (source && destination && source->kind == TypeKind::Reference &&
                 destination->kind == TypeKind::Reference && source->arguments == destination->arguments &&
                 source->isMutable && !destination->isMutable)
@@ -4194,6 +5312,24 @@ namespace wio::wir::typed
 
             if (destination && destination->kind == TypeKind::Any)
             {
+                if (source && source->kind == TypeKind::Array && source->staticExtent && expression->is<ArrayLiteral>())
+                {
+                    Type dynamicArray = *source;
+                    dynamicArray.staticExtent.reset();
+                    dynamicArray.extentParameter = {};
+                    sourceType = result_.module_.types.intern(std::move(dynamicArray));
+                    source = result_.module_.types.tryGet(sourceType);
+                    for (auto instruction = currentBlock(state).instructions.rbegin();
+                         instruction != currentBlock(state).instructions.rend(); ++instruction)
+                    {
+                        if (instruction->result == value)
+                        {
+                            instruction->resultType = sourceType;
+                            break;
+                        }
+                    }
+                    rememberOwnership(state, value, ownershipForType(sourceType));
+                }
                 value = ensureOwned(value, sourceType, expression.Get(), state);
                 const ValueId boxed{state.nextValue++};
                 currentBlock(state).instructions.push_back(
@@ -4225,6 +5361,40 @@ namespace wio::wir::typed
                                 .source = SourceSpan::at(expression->location())});
                 rememberOwnership(state, wrapped, ownershipForType(destinationType));
                 return wrapped;
+            }
+
+            if (source && source->kind == TypeKind::Nullable && source->arguments.size() == 1 &&
+                source->arguments.front() == destinationType)
+            {
+                const ValueId unwrapped{state.nextValue++};
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::NullableUnwrap,
+                                .result = unwrapped,
+                                .resultType = destinationType,
+                                .operands = {value},
+                                .targetType = destinationType,
+                                .resultOwnership = ownershipForType(destinationType),
+                                .source = SourceSpan::at(expression->location())});
+                rememberOwnership(state, unwrapped, ownershipForType(destinationType));
+                return unwrapped;
+            }
+
+            if (source && destination && source->kind == TypeKind::Text && destination->kind == TypeKind::String)
+            {
+                const ValueId converted{state.nextValue++};
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::IntrinsicCall,
+                                .result = converted,
+                                .resultType = destinationType,
+                                .operands = {value},
+                                .selector = "Utf8",
+                                .signatureTypes = {sourceType},
+                                .intrinsicFamily = IntrinsicFamily::Text,
+                                .targetType = sourceType,
+                                .resultOwnership = ValueOwnership::Owned,
+                                .source = SourceSpan::at(expression->location())});
+                rememberOwnership(state, converted, ValueOwnership::Owned);
+                return converted;
             }
 
             if (!source || !destination || !isSafeNumericWiden(source->kind, destination->kind))
@@ -4835,111 +6005,131 @@ namespace wio::wir::typed
         ValueId buildShortCircuitExpression(const BinaryExpression& expression, const bool logicalAnd,
                                             FunctionState& state)
         {
-            const ValueId left = buildExpression(expression.left, state);
-            if (!left)
-                return {};
-
-            const auto incomingValues = state.values;
-            const auto incomingOrder = state.valueOrder;
-            const std::size_t conditionBlockIndex = state.blockIndex;
-            const std::string prefix = logicalAnd ? "logical.and" : "logical.or";
-            const std::size_t rightBlockIndex =
-                createBlock(state, prefix + ".rhs", SourceSpan::at(expression.right->location()));
-            const std::size_t shortBlockIndex =
-                createBlock(state, prefix + ".short", SourceSpan::at(expression.left->location()));
-            const std::size_t mergeBlockIndex =
-                createBlock(state, prefix + ".merge", SourceSpan::at(expression.location()));
-
-            const BlockId rightBlock = currentBlockAt(state, rightBlockIndex).id;
-            const BlockId shortBlock = currentBlockAt(state, shortBlockIndex).id;
-            const BlockId mergeBlock = currentBlockAt(state, mergeBlockIndex).id;
-            currentBlockAt(state, conditionBlockIndex)
-                .instructions.push_back(Instruction{.opcode = Opcode::CondBranch,
-                                                    .operands = {left},
-                                                    .targets = logicalAnd
-                                                                   ? std::vector<BlockId>{rightBlock, shortBlock}
-                                                                   : std::vector<BlockId>{shortBlock, rightBlock},
-                                                    .source = SourceSpan::at(expression.location())});
-
-            FunctionState rightState = state;
-            rightState.blockIndex = rightBlockIndex;
-            rightState.values = incomingValues;
-            rightState.valueOrder = incomingOrder;
-            const ValueId right = buildExpression(expression.right, rightState);
-            if (!right)
-                return {};
-            state.nextValue = rightState.nextValue;
-            state.nextBlock = rightState.nextBlock;
-
-            FunctionState shortState = state;
-            shortState.blockIndex = shortBlockIndex;
-            shortState.values = incomingValues;
-            shortState.valueOrder = incomingOrder;
-            const ValueId shortValue{shortState.nextValue++};
-            currentBlock(shortState)
-                .instructions.push_back(Instruction{.opcode = Opcode::Constant,
-                                                    .result = shortValue,
-                                                    .resultType = result_.module_.types.boolType(),
-                                                    .literal = !logicalAnd,
-                                                    .source = SourceSpan::at(expression.left->location())});
-            state.nextValue = shortState.nextValue;
-            state.nextBlock = shortState.nextBlock;
-
-            BasicBlock& merge = currentBlockAt(state, mergeBlockIndex);
-            const ValueId result{state.nextValue++};
-            merge.parameters.push_back(
-                Parameter{.id = result,
-                          .name = "logical.result",
-                          .type = mapType(expression.refType.Lock(), &expression),
-                          .ownership = ownershipForType(mapType(expression.refType.Lock(), &expression)),
-                          .borrowLifetime = ownershipForType(mapType(expression.refType.Lock(), &expression)) ==
-                                                    ValueOwnership::Borrowed
-                                                ? BorrowLifetime::Caller
-                                                : BorrowLifetime::None,
-                          .source = SourceSpan::at(expression.location())});
-            rememberOwnership(state, result, ownershipForType(mapType(expression.refType.Lock(), &expression)));
-
-            std::vector<ValueId> rightArguments{right};
-            std::vector<ValueId> shortArguments{shortValue};
-            auto mergedValues = incomingValues;
-            for (const sema::Symbol* symbol : incomingOrder)
+            std::vector<const BinaryExpression*> chain;
+            const BinaryExpression* current = &expression;
+            while (current && current->operatorDispatchKind == OperatorDispatchKind::None &&
+                   (logicalAnd ? isLogicalAnd(current->op.type) : isLogicalOr(current->op.type)))
             {
-                const ValueId incoming = incomingValues.at(symbol);
-                const ValueId rightValue = rightState.values.contains(symbol) ? rightState.values.at(symbol) : incoming;
-                if (rightValue == incoming)
-                    continue;
-
-                const ValueId merged{state.nextValue++};
-                merge.parameters.push_back(Parameter{
-                    .id = merged,
-                    .name = symbol->name + ".logical",
-                    .type = mapType(symbol->type, &expression),
-                    .ownership = ownershipForType(mapType(symbol->type, &expression)),
-                    .borrowLifetime = ownershipForType(mapType(symbol->type, &expression)) == ValueOwnership::Borrowed
-                                          ? BorrowLifetime::Caller
-                                          : BorrowLifetime::None,
-                    .source = SourceSpan::at(expression.location())});
-                rememberOwnership(state, merged, ownershipForType(mapType(symbol->type, &expression)));
-                rightArguments.push_back(rightValue);
-                shortArguments.push_back(incoming);
-                mergedValues[symbol] = merged;
+                chain.push_back(current);
+                const auto* nested = current->left ? current->left->as<BinaryExpression>() : nullptr;
+                if (!nested || nested->operatorDispatchKind != OperatorDispatchKind::None ||
+                    !(logicalAnd ? isLogicalAnd(nested->op.type) : isLogicalOr(nested->op.type)))
+                    break;
+                current = nested;
             }
 
-            currentBlock(rightState)
-                .instructions.push_back(Instruction{.opcode = Opcode::Branch,
-                                                    .operands = std::move(rightArguments),
-                                                    .targets = {mergeBlock},
-                                                    .source = SourceSpan::at(expression.right->location())});
-            currentBlock(shortState)
-                .instructions.push_back(Instruction{.opcode = Opcode::Branch,
-                                                    .operands = std::move(shortArguments),
-                                                    .targets = {mergeBlock},
-                                                    .source = SourceSpan::at(expression.left->location())});
+            ValueId accumulated = buildExpression(chain.back()->left, state);
+            if (!accumulated)
+                return {};
+            const std::string prefix = logicalAnd ? "logical.and" : "logical.or";
 
-            state.blockIndex = mergeBlockIndex;
-            state.values = std::move(mergedValues);
-            state.valueOrder = incomingOrder;
-            return result;
+            for (auto iterator = chain.rbegin(); iterator != chain.rend(); ++iterator)
+            {
+                const BinaryExpression& operation = **iterator;
+                const auto incomingValues = state.values;
+                const auto incomingOrder = state.valueOrder;
+                const std::size_t conditionBlockIndex = state.blockIndex;
+                const std::size_t rightBlockIndex =
+                    createBlock(state, prefix + ".rhs", SourceSpan::at(operation.right->location()));
+                const std::size_t shortBlockIndex =
+                    createBlock(state, prefix + ".short", SourceSpan::at(operation.left->location()));
+                const std::size_t mergeBlockIndex =
+                    createBlock(state, prefix + ".merge", SourceSpan::at(operation.location()));
+
+                const BlockId rightBlock = currentBlockAt(state, rightBlockIndex).id;
+                const BlockId shortBlock = currentBlockAt(state, shortBlockIndex).id;
+                const BlockId mergeBlock = currentBlockAt(state, mergeBlockIndex).id;
+                currentBlockAt(state, conditionBlockIndex)
+                    .instructions.push_back(Instruction{.opcode = Opcode::CondBranch,
+                                                        .operands = {accumulated},
+                                                        .targets = logicalAnd
+                                                                       ? std::vector<BlockId>{rightBlock, shortBlock}
+                                                                       : std::vector<BlockId>{shortBlock, rightBlock},
+                                                        .source = SourceSpan::at(operation.location())});
+
+                FunctionState rightState = state;
+                rightState.blockIndex = rightBlockIndex;
+                rightState.values = incomingValues;
+                rightState.valueOrder = incomingOrder;
+                const ValueId right = buildExpression(operation.right, rightState);
+                if (!right)
+                    return {};
+                state.nextValue = rightState.nextValue;
+                state.nextBlock = rightState.nextBlock;
+
+                FunctionState shortState = state;
+                shortState.blockIndex = shortBlockIndex;
+                shortState.values = incomingValues;
+                shortState.valueOrder = incomingOrder;
+                const ValueId shortValue{shortState.nextValue++};
+                currentBlock(shortState)
+                    .instructions.push_back(Instruction{.opcode = Opcode::Constant,
+                                                        .result = shortValue,
+                                                        .resultType = result_.module_.types.boolType(),
+                                                        .literal = !logicalAnd,
+                                                        .source = SourceSpan::at(operation.left->location())});
+                state.nextValue = shortState.nextValue;
+                state.nextBlock = shortState.nextBlock;
+
+                BasicBlock& merge = currentBlockAt(state, mergeBlockIndex);
+                const TypeId resultType = mapType(operation.refType.Lock(), &operation);
+                const ValueOwnership resultOwnership = ownershipForType(resultType);
+                const ValueId result{state.nextValue++};
+                merge.parameters.push_back(Parameter{.id = result,
+                                                     .name = "logical.result",
+                                                     .type = resultType,
+                                                     .ownership = resultOwnership,
+                                                     .borrowLifetime = resultOwnership == ValueOwnership::Borrowed
+                                                                           ? BorrowLifetime::Caller
+                                                                           : BorrowLifetime::None,
+                                                     .source = SourceSpan::at(operation.location())});
+                rememberOwnership(state, result, resultOwnership);
+
+                std::vector<ValueId> rightArguments{right};
+                std::vector<ValueId> shortArguments{shortValue};
+                auto mergedValues = incomingValues;
+                for (const sema::Symbol* symbol : incomingOrder)
+                {
+                    const ValueId incoming = incomingValues.at(symbol);
+                    const ValueId rightValue =
+                        rightState.values.contains(symbol) ? rightState.values.at(symbol) : incoming;
+                    if (rightValue == incoming)
+                        continue;
+
+                    const TypeId mergedType = mapType(symbol->type, &operation);
+                    const ValueOwnership mergedOwnership = ownershipForType(mergedType);
+                    const ValueId merged{state.nextValue++};
+                    merge.parameters.push_back(Parameter{.id = merged,
+                                                         .name = symbol->name + ".logical",
+                                                         .type = mergedType,
+                                                         .ownership = mergedOwnership,
+                                                         .borrowLifetime = mergedOwnership == ValueOwnership::Borrowed
+                                                                               ? BorrowLifetime::Caller
+                                                                               : BorrowLifetime::None,
+                                                         .source = SourceSpan::at(operation.location())});
+                    rememberOwnership(state, merged, mergedOwnership);
+                    rightArguments.push_back(rightValue);
+                    shortArguments.push_back(incoming);
+                    mergedValues[symbol] = merged;
+                }
+
+                currentBlock(rightState)
+                    .instructions.push_back(Instruction{.opcode = Opcode::Branch,
+                                                        .operands = std::move(rightArguments),
+                                                        .targets = {mergeBlock},
+                                                        .source = SourceSpan::at(operation.right->location())});
+                currentBlock(shortState)
+                    .instructions.push_back(Instruction{.opcode = Opcode::Branch,
+                                                        .operands = std::move(shortArguments),
+                                                        .targets = {mergeBlock},
+                                                        .source = SourceSpan::at(operation.left->location())});
+
+                state.blockIndex = mergeBlockIndex;
+                state.values = std::move(mergedValues);
+                state.valueOrder = incomingOrder;
+                accumulated = result;
+            }
+            return accumulated;
         }
 
         void buildIfStatement(const IfStatement& statement, FunctionState& state)
@@ -4967,7 +6157,64 @@ namespace wio::wir::typed
             thenState.blockIndex = thenBlockIndex;
             thenState.values = incomingValues;
             thenState.valueOrder = incomingOrder;
+            if (const Ref<sema::Symbol> matchSymbol = statement.matchSymbol.Lock())
+            {
+                const auto* typeTest = statement.condition ? statement.condition->as<BinaryExpression>() : nullptr;
+                if (typeTest && typeTest->op.type == TokenType::kwIs)
+                {
+                    const TypeId sourceType = mapType(typeTest->left->refType.Lock(), typeTest->left.Get());
+                    const TypeId targetType = mapType(matchSymbol->type, &statement);
+                    const Type* sourceTypeInfo = result_.module_.types.tryGet(sourceType);
+                    const ValueId source = buildExpression(typeTest->left, thenState);
+                    if (source)
+                    {
+                        const ValueId narrowed{thenState.nextValue++};
+                        currentBlock(thenState).instructions.push_back(Instruction{
+                            .opcode = sourceTypeInfo && sourceTypeInfo->kind == TypeKind::Any ? Opcode::AnyCheckedCast
+                                                                                              : Opcode::CheckedCast,
+                            .result = narrowed,
+                            .resultType = targetType,
+                            .operands = {source},
+                            .targetType = targetType,
+                            .resultOwnership = ownershipForType(targetType),
+                            .source = SourceSpan::at(statement.matchVar.loc)});
+                        rememberOwnership(thenState, narrowed, ownershipForType(targetType));
+                        releaseOwnedTemporary(source, &statement, thenState);
+
+                        const ValueId place{thenState.nextValue++};
+                        currentBlock(thenState).instructions.push_back(
+                            Instruction{.opcode = Opcode::LocalPlace,
+                                        .result = place,
+                                        .resultType = referenceType(targetType, true),
+                                        .selector = matchSymbol->name,
+                                        .source = SourceSpan::at(statement.matchVar.loc)});
+                        currentBlock(thenState).instructions.push_back(
+                            Instruction{.opcode = Opcode::PlaceInit,
+                                        .operands = {place, narrowed},
+                                        .source = SourceSpan::at(statement.matchVar.loc)});
+                        thenState.places[matchSymbol.Get()] = place;
+                        thenState.placeOrder.push_back(matchSymbol.Get());
+                    }
+                }
+            }
             buildStatement(statement.thenBranch, thenState);
+            if (const Ref<sema::Symbol> matchSymbol = statement.matchSymbol.Lock(); !blockIsTerminated(thenState))
+            {
+                const auto place = thenState.places.find(matchSymbol.Get());
+                if (place != thenState.places.end())
+                {
+                    const TypeId valueType = mapType(matchSymbol->type, &statement);
+                    if (typeRequiresCleanup(valueType))
+                    {
+                        currentBlock(thenState).instructions.push_back(
+                            Instruction{.opcode = Opcode::Drop,
+                                        .operands = {place->second},
+                                        .source = SourceSpan::at(statement.thenBranch->location())});
+                    }
+                    thenState.places.erase(place);
+                    std::erase(thenState.placeOrder, matchSymbol.Get());
+                }
+            }
             state.nextValue = thenState.nextValue;
             state.nextBlock = thenState.nextBlock;
 
@@ -4979,6 +6226,15 @@ namespace wio::wir::typed
                 buildStatement(statement.elseBranch, elseState);
             state.nextValue = elseState.nextValue;
             state.nextBlock = elseState.nextBlock;
+
+            if (const auto* literal = statement.condition->as<BoolLiteral>())
+            {
+                FunctionState& unreachableState = literal->token.type == TokenType::kwTrue ? elseState : thenState;
+                if (!blockIsTerminated(unreachableState))
+                    currentBlock(unreachableState)
+                        .instructions.push_back(Instruction{.opcode = Opcode::Unreachable,
+                                                            .source = SourceSpan::at(statement.condition->location())});
+            }
 
             const bool thenFallsThrough = !blockIsTerminated(thenState);
             const bool elseFallsThrough = !blockIsTerminated(elseState);
@@ -5107,6 +6363,7 @@ namespace wio::wir::typed
 
             const LoopContext& loop = loopContexts_.back();
             emitDropsFrom(loop.placeDepth, state, statement);
+            emitTemporaryDropsFrom(loop.temporaryPlaceDepth, state, statement);
             currentBlock(state).instructions.push_back(
                 Instruction{.opcode = Opcode::Branch,
                             .operands = collectCarriedValues(state.values, loop.carriedSymbols, statement),
@@ -5151,12 +6408,19 @@ namespace wio::wir::typed
                             .targets = {currentBlockAt(state, bodyBlockIndex).id,
                                         currentBlockAt(state, conditionExitBlockIndex).id},
                             .source = SourceSpan::at(statement.condition->location())});
-            currentBlockAt(state, conditionExitBlockIndex)
-                .instructions.push_back(
-                    Instruction{.opcode = Opcode::Branch,
-                                .operands = collectCarriedValues(conditionValues, carriedSymbols, &statement),
-                                .targets = {currentBlockAt(state, exitBlockIndex).id},
-                                .source = SourceSpan::at(statement.condition->location())});
+            const auto* literalCondition = statement.condition->as<BoolLiteral>();
+            const bool conditionAlwaysTrue = literalCondition && literalCondition->token.type == TokenType::kwTrue;
+            if (conditionAlwaysTrue)
+                currentBlockAt(state, conditionExitBlockIndex)
+                    .instructions.push_back(Instruction{.opcode = Opcode::Unreachable,
+                                                        .source = SourceSpan::at(statement.condition->location())});
+            else
+                currentBlockAt(state, conditionExitBlockIndex)
+                    .instructions.push_back(
+                        Instruction{.opcode = Opcode::Branch,
+                                    .operands = collectCarriedValues(conditionValues, carriedSymbols, &statement),
+                                    .targets = {currentBlockAt(state, exitBlockIndex).id},
+                                    .source = SourceSpan::at(statement.condition->location())});
 
             FunctionState bodyState = state;
             bodyState.blockIndex = bodyBlockIndex;
@@ -5165,7 +6429,8 @@ namespace wio::wir::typed
             loopContexts_.push_back(LoopContext{.continueTarget = currentBlockAt(state, headerBlockIndex).id,
                                                 .breakTarget = currentBlockAt(state, exitBlockIndex).id,
                                                 .carriedSymbols = carriedSymbols,
-                                                .placeDepth = state.placeOrder.size()});
+                                                .placeDepth = state.placeOrder.size(),
+                                                .temporaryPlaceDepth = state.temporaryPlaces.size()});
             buildStatement(statement.body, bodyState);
             loopContexts_.pop_back();
             state.nextValue = bodyState.nextValue;
@@ -5180,6 +6445,23 @@ namespace wio::wir::typed
                                 .source = SourceSpan::at(statement.body->location())});
             }
 
+            if (conditionAlwaysTrue)
+            {
+                const BlockId exitId = currentBlockAt(state, exitBlockIndex).id;
+                const bool hasBreakEdge = std::ranges::any_of(
+                    state.function->blocks,
+                    [&](const BasicBlock& block)
+                    {
+                        return std::ranges::any_of(
+                            block.instructions, [&](const Instruction& instruction)
+                            { return std::ranges::find(instruction.targets, exitId) != instruction.targets.end(); });
+                    });
+                if (!hasBreakEdge)
+                    currentBlockAt(state, exitBlockIndex)
+                        .instructions.push_back(
+                            Instruction{.opcode = Opcode::Unreachable, .source = SourceSpan::at(statement.location())});
+            }
+
             state.blockIndex = exitBlockIndex;
             state.values = exitValues;
             state.valueOrder = carriedSymbols;
@@ -5188,9 +6470,7 @@ namespace wio::wir::typed
         void buildForInStatement(const ForInStatement& statement, FunctionState& state)
         {
             const std::size_t outerPlaceCount = state.placeOrder.size();
-            const auto carriedSymbols = state.valueOrder;
-            const auto incomingValues = state.values;
-            const std::size_t preheaderBlockIndex = state.blockIndex;
+            const std::size_t outerTemporaryPlaceCount = state.temporaryPlaces.size();
 
             Instruction create{.opcode = Opcode::IteratorCreate, .source = SourceSpan::at(statement.location())};
             TypeId iterableType;
@@ -5243,7 +6523,21 @@ namespace wio::wir::typed
                     iterableType = iterableInfo->arguments.front();
                     iterableInfo = result_.module_.types.tryGet(iterableType);
                 }
-                const ValueId iterable = buildAutoReadableExpression(statement.iterable, state);
+                bool referenceBinding = false;
+                bool mutableReferenceBinding = false;
+                for (const auto& binding : statement.bindings)
+                {
+                    const Ref<sema::Symbol> symbol = binding ? binding->referencedSymbol.Lock() : nullptr;
+                    const TypeId bindingType = symbol ? mapType(symbol->type, binding.Get()) : TypeId{};
+                    const Type* bindingInfo = result_.module_.types.tryGet(bindingType);
+                    if (!bindingInfo || bindingInfo->kind != TypeKind::Reference)
+                        continue;
+                    referenceBinding = true;
+                    mutableReferenceBinding |= bindingInfo->isMutable;
+                }
+                const ValueId iterable = referenceBinding
+                                             ? buildPlace(statement.iterable, mutableReferenceBinding, state)
+                                             : buildAutoReadableExpression(statement.iterable, state);
                 // Building the expression can intern types and invalidate table pointers.
                 iterableInfo = result_.module_.types.tryGet(iterableType);
                 if (!iterable || !iterableInfo ||
@@ -5253,7 +6547,7 @@ namespace wio::wir::typed
                     return;
                 }
                 create.operands.push_back(iterable);
-                create.signatureTypes.push_back(iterableType);
+                create.signatureTypes.push_back(referenceBinding ? emittedValueType(iterable, state) : iterableType);
                 create.selector = iterableInfo->kind == TypeKind::Array ? "array" : "dictionary";
                 if (statement.step)
                 {
@@ -5265,6 +6559,17 @@ namespace wio::wir::typed
                     create.signatureTypes.push_back(stepType);
                 }
             }
+
+            // Building the iterable may introduce control flow. Result
+            // propagation, for example, terminates the incoming block and
+            // continues in a newly-created success block. Freeze the loop
+            // preheader and its carried SSA values only after the iterable is
+            // completely materialized.
+            const auto carriedSymbols = state.valueOrder;
+            const auto incomingValues = state.values;
+            const std::size_t preheaderBlockIndex = state.blockIndex;
+            const std::size_t loopPlaceDepth = state.placeOrder.size();
+            const std::size_t loopTemporaryPlaceDepth = state.temporaryPlaces.size();
 
             const TypeId iteratorType = result_.module_.types.intern(Type{.kind = TypeKind::Iterator,
                                                                           .arguments = {iterableType},
@@ -5373,14 +6678,16 @@ namespace wio::wir::typed
             loopContexts_.push_back(LoopContext{.continueTarget = currentBlockAt(state, advanceBlockIndex).id,
                                                 .breakTarget = currentBlockAt(state, exitBlockIndex).id,
                                                 .carriedSymbols = carriedSymbols,
-                                                .placeDepth = outerPlaceCount});
+                                                .placeDepth = loopPlaceDepth,
+                                                .temporaryPlaceDepth = loopTemporaryPlaceDepth});
             buildStatement(statement.body, bodyState);
             loopContexts_.pop_back();
             state.nextValue = bodyState.nextValue;
             state.nextBlock = bodyState.nextBlock;
             if (!blockIsTerminated(bodyState))
             {
-                emitDropsFrom(outerPlaceCount, bodyState, &statement);
+                emitDropsFrom(loopPlaceDepth, bodyState, &statement);
+                emitTemporaryDropsFrom(loopTemporaryPlaceDepth, bodyState, &statement);
                 currentBlock(bodyState).instructions.push_back(
                     Instruction{.opcode = Opcode::Branch,
                                 .operands = collectCarriedValues(bodyState.values, carriedSymbols, &statement),
@@ -5408,12 +6715,21 @@ namespace wio::wir::typed
             state.valueOrder = carriedSymbols;
             currentBlock(state).instructions.push_back(Instruction{
                 .opcode = Opcode::Release, .operands = {iterator}, .source = SourceSpan::at(statement.location())});
+            emitDropsFrom(outerPlaceCount, state, &statement);
+            emitTemporaryDropsFrom(outerTemporaryPlaceCount, state, &statement);
+            while (state.placeOrder.size() > outerPlaceCount)
+            {
+                state.places.erase(state.placeOrder.back());
+                state.placeOrder.pop_back();
+            }
+            state.temporaryPlaces.resize(outerTemporaryPlaceCount);
         }
 
         void buildCForStatement(const CForStatement& statement, FunctionState& state)
         {
             const std::size_t outerValueCount = state.valueOrder.size();
             const std::size_t outerPlaceCount = state.placeOrder.size();
+            const std::size_t outerTemporaryPlaceCount = state.temporaryPlaces.size();
             if (statement.initializer)
                 buildStatement(statement.initializer, state);
             if (blockIsTerminated(state))
@@ -5485,7 +6801,8 @@ namespace wio::wir::typed
             loopContexts_.push_back(LoopContext{.continueTarget = currentBlockAt(state, incrementBlockIndex).id,
                                                 .breakTarget = currentBlockAt(state, exitBlockIndex).id,
                                                 .carriedSymbols = carriedSymbols,
-                                                .placeDepth = state.placeOrder.size()});
+                                                .placeDepth = state.placeOrder.size(),
+                                                .temporaryPlaceDepth = state.temporaryPlaces.size()});
             buildStatement(statement.body, bodyState);
             loopContexts_.pop_back();
             state.nextValue = bodyState.nextValue;
@@ -5522,11 +6839,13 @@ namespace wio::wir::typed
             state.values = exitValues;
             state.valueOrder = carriedSymbols;
             emitDropsFrom(outerPlaceCount, state, &statement);
+            emitTemporaryDropsFrom(outerTemporaryPlaceCount, state, &statement);
             while (state.placeOrder.size() > outerPlaceCount)
             {
                 state.places.erase(state.placeOrder.back());
                 state.placeOrder.pop_back();
             }
+            state.temporaryPlaces.resize(outerTemporaryPlaceCount);
             while (state.valueOrder.size() > outerValueCount)
             {
                 state.values.erase(state.valueOrder.back());

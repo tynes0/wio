@@ -24,6 +24,46 @@ namespace wio::wir::typed
         using ValueDefinitionMap = std::unordered_map<ValueId::ValueType, ValueDefinition>;
         using BlockSet = std::unordered_set<BlockId::ValueType>;
 
+        std::string describeType(const TypeTable& types, const TypeId typeId)
+        {
+            if (!typeId)
+                return "<invalid>";
+            const Type* type = types.tryGet(typeId);
+            if (!type)
+                return "#" + std::to_string(typeId.value()) + ":<missing>";
+
+            std::string description =
+                "#" + std::to_string(typeId.value()) + ":" + std::string(typeKindName(type->kind));
+            if (!type->name.empty())
+                description += "(" + type->name + ")";
+            if (type->kind == TypeKind::Named)
+            {
+                description += "[" + std::string(nominalKindName(type->nominalKind)) + "," +
+                               std::string(nominalRepresentationName(type->nominalRepresentation)) + "," +
+                               std::string(nominalValueModelName(type->nominalValueModel)) + "]";
+            }
+            if (type->kind == TypeKind::Reference)
+                description += type->isMutable ? "(mut)" : "(view)";
+            if (type->staticExtent)
+                description += "[extent=" + std::to_string(*type->staticExtent) + "]";
+            if (type->extentParameter)
+                description += "[extent-parameter=#" + std::to_string(type->extentParameter.value()) + "]";
+            description += "[ownership=" + std::string(ownershipModelName(type->ownership)) + ",cleanup=" +
+                           std::string(cleanupKindName(type->cleanup)) + "]";
+            if (!type->arguments.empty())
+            {
+                description += "<";
+                for (std::size_t index = 0; index < type->arguments.size(); ++index)
+                {
+                    if (index)
+                        description += ",";
+                    description += "#" + std::to_string(type->arguments[index].value());
+                }
+                description += ">";
+            }
+            return description;
+        }
+
         bool isComparison(const BinaryOperator op)
         {
             return op == BinaryOperator::Equal || op == BinaryOperator::NotEqual || op == BinaryOperator::Less ||
@@ -58,6 +98,30 @@ namespace wio::wir::typed
 
             const std::size_t packIndex = static_cast<std::size_t>(std::distance(callee.parameters.begin(), pack));
             return std::next(pack) == callee.parameters.end() && argumentCount >= packIndex;
+        }
+
+        bool nativeReferenceArgumentMatches(const TypeTable& types, const TypeId operandId, const TypeId expectedId)
+        {
+            const Type* operand = types.tryGet(operandId);
+            const Type* expected = types.tryGet(expectedId);
+            if (!operand || !expected || operand->kind != TypeKind::Reference ||
+                expected->kind != TypeKind::Reference || operand->arguments.size() != 1 ||
+                expected->arguments.size() != 1 || (expected->isMutable && !operand->isMutable))
+                return false;
+            if (operand->arguments.front() == expected->arguments.front())
+                return true;
+
+            const Type* operandValue = types.tryGet(operand->arguments.front());
+            const Type* expectedValue = types.tryGet(expected->arguments.front());
+            if (!operandValue || !expectedValue)
+                return false;
+            if (operandValue->kind == TypeKind::Nullable && operandValue->arguments.size() == 1 &&
+                operandValue->arguments.front() == expected->arguments.front())
+            {
+                const Type* nullableValue = types.tryGet(operandValue->arguments.front());
+                return nullableValue && nullableValue->kind == TypeKind::Opaque;
+            }
+            return false;
         }
 
         TypeId coroutineResultType(const TypeTable& types, const Function& function)
@@ -161,6 +225,31 @@ namespace wio::wir::typed
             const Type* type = types.tryGet(source);
             return type && std::ranges::any_of(type->baseTypes, [&](const TypeId base)
                                                { return nominalDerivesFrom(types, base, destination, visited); });
+        }
+
+        bool containsOpenType(const TypeTable& types, const TypeId id, std::unordered_set<TypeId::ValueType>& visited)
+        {
+            if (!id || !visited.insert(id.value()).second)
+                return false;
+            const Type* type = types.tryGet(id);
+            if (!type)
+                return true;
+            if (type->kind == TypeKind::GenericParameter || type->kind == TypeKind::ConstGenericParameter ||
+                type->kind == TypeKind::GenericParameterPack || type->kind == TypeKind::ValuePack ||
+                type->kind == TypeKind::TypePack)
+            {
+                return true;
+            }
+            if (type->extentParameter && containsOpenType(types, type->extentParameter, visited))
+                return true;
+            return std::ranges::any_of(type->arguments, [&](const TypeId argument)
+                                       { return containsOpenType(types, argument, visited); });
+        }
+
+        bool containsOpenType(const TypeTable& types, const TypeId id)
+        {
+            std::unordered_set<TypeId::ValueType> visited;
+            return containsOpenType(types, id, visited);
         }
 
         bool validNativeAbiValue(const TypeTable& types, const NativeAbiValue& value)
@@ -570,12 +659,21 @@ namespace wio::wir::typed
                 report("WIR1508", "Typed WIR attribute applications require unique identities and valid targets.");
             std::unordered_set<std::uint64_t> processorIds;
             for (const AttributeProcessorDescriptor& processor : attribute.processors)
+            {
+                const bool behavioral = processor.phase == AttributeProcessorPhase::Pre ||
+                                        processor.phase == AttributeProcessorPhase::Post ||
+                                        processor.phase == AttributeProcessorPhase::Finally ||
+                                        processor.phase == AttributeProcessorPhase::Around;
                 if (processor.stableId == 0 || processor.canonicalTypeName.empty() ||
                     processor.phase == AttributeProcessorPhase::Unknown ||
+                    (behavioral && (!processor.processorType || !module.types.tryGet(processor.processorType) ||
+                                    !processor.hookFunction || !functions.contains(processor.hookFunction.value()))) ||
                     (processor.valueType && !module.types.tryGet(processor.valueType)) ||
                     !processorIds.insert(processor.stableId).second)
                     report("WIR1509",
-                           "Typed WIR attribute processors require a stable phase, identity, and value type.");
+                           "Typed WIR attribute processors require a stable phase, identity, executable hook, and "
+                           "value type.");
+            }
         }
         const auto attributesKnown = [&](const std::vector<std::uint64_t>& ids)
         { return std::ranges::all_of(ids, [&](const std::uint64_t id) { return attributeIds.contains(id); }); };
@@ -1222,15 +1320,31 @@ namespace wio::wir::typed
                             signaturesMatch = instruction.signatureTypes[operandIndex] ==
                                               valueType(instruction.operands[operandIndex]);
                         }
+                        const bool packSizeWithoutValue = instruction.intrinsicFamily == IntrinsicFamily::Pack &&
+                                                          instruction.selector == "Size" &&
+                                                          instruction.operands.empty();
                         if (instruction.intrinsicFamily == IntrinsicFamily::None || instruction.selector.empty() ||
-                            instruction.operands.empty() ||
+                            (instruction.operands.empty() && !packSizeWithoutValue) ||
                             instruction.signatureTypes.size() != instruction.operands.size() ||
                             !module.types.tryGet(instruction.targetType) || !signaturesMatch)
                         {
-                            report("WIR1460",
-                                   "Typed WIR intrinsic call requires a family, selector, receiver, target type, and "
-                                   "concrete operand signature.",
-                                   instruction.source, function.id, block.id);
+                            std::string detail =
+                                "Typed WIR intrinsic call requires a family, selector, receiver, target type, and "
+                                "concrete operand signature (family=" +
+                                std::to_string(static_cast<unsigned>(instruction.intrinsicFamily)) + ", selector='" +
+                                instruction.selector +
+                                "', target=" + describeType(module.types, instruction.targetType) +
+                                ", operands=" + std::to_string(instruction.operands.size()) +
+                                ", signatures=" + std::to_string(instruction.signatureTypes.size());
+                            for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                            {
+                                detail += ", operand[" + std::to_string(index) +
+                                          "]=" + describeType(module.types, valueType(instruction.operands[index]));
+                                if (index < instruction.signatureTypes.size())
+                                    detail += "/" + describeType(module.types, instruction.signatureTypes[index]);
+                            }
+                            detail += ").";
+                            report("WIR1460", std::move(detail), instruction.source, function.id, block.id);
                         }
                     }
                     else if (instruction.opcode == Opcode::AnyBox)
@@ -1271,6 +1385,21 @@ namespace wio::wir::typed
                         {
                             report("WIR1463",
                                    "Typed WIR nullable wrap requires one value matching the nullable payload type.",
+                                   instruction.source, function.id, block.id);
+                        }
+                    }
+                    else if (instruction.opcode == Opcode::NullableUnwrap)
+                    {
+                        const Type* sourceType = instruction.operands.size() == 1
+                                                     ? module.types.tryGet(valueType(instruction.operands.front()))
+                                                     : nullptr;
+                        if (!sourceType || sourceType->kind != TypeKind::Nullable ||
+                            sourceType->arguments.size() != 1 ||
+                            sourceType->arguments.front() != instruction.resultType ||
+                            instruction.targetType != instruction.resultType)
+                        {
+                            report("WIR1481",
+                                   "Typed WIR nullable unwrap requires one nullable value and its payload result.",
                                    instruction.source, function.id, block.id);
                         }
                     }
@@ -1381,12 +1510,23 @@ namespace wio::wir::typed
                             valueType(instruction.operands[1]) != placeType->arguments.front() || !mutabilityValid ||
                             !ownershipOperationValid)
                         {
+                            const TypeId placeTypeId =
+                                instruction.operands.size() == 2 ? valueType(instruction.operands[0]) : TypeId{};
+                            const TypeId storedTypeId =
+                                instruction.operands.size() == 2 ? valueType(instruction.operands[1]) : TypeId{};
+                            const TypeId expectedTypeId =
+                                placeType && placeType->kind == TypeKind::Reference && placeType->arguments.size() == 1
+                                    ? placeType->arguments.front()
+                                    : TypeId{};
                             report(
                                 instruction.opcode == Opcode::PlaceInit ? "WIR1430" : "WIR1431",
                                 instruction.opcode == Opcode::PlaceInit
                                     ? "Typed WIR place initialization requires a reference place and a matching value."
                                     : "Typed WIR store/replace requires a mutable reference place, matching value, and "
-                                      "correct cleanup semantics.",
+                                      "correct cleanup semantics. Place=" +
+                                          describeType(module.types, placeTypeId) +
+                                          ", expected=" + describeType(module.types, expectedTypeId) +
+                                          ", value=" + describeType(module.types, storedTypeId) + ".",
                                 instruction.source, function.id, block.id);
                         }
                         if (instruction.opcode == Opcode::PlaceInit && instruction.operands.size() == 2)
@@ -1454,13 +1594,22 @@ namespace wio::wir::typed
                             std::unordered_set<TypeId::ValueType> visited;
                             const FieldLayout* field =
                                 findFieldLayout(module.types, *baseValueType, instruction.selector, visited);
+                            const bool constructorInitialization =
+                                function.name == "OnConstruct" || function.name.ends_with("::OnConstruct");
                             if (!field || field->type != placeType->arguments.front() ||
-                                (placeType->isMutable && !field->isMutable))
+                                (placeType->isMutable && !field->isMutable && !constructorInitialization))
                             {
-                                report(
-                                    "WIR1437",
-                                    "Typed WIR field place must match the nominal field layout and field mutability.",
-                                    instruction.source, function.id, block.id);
+                                report("WIR1437",
+                                       "Typed WIR field place must match the nominal field layout and field "
+                                       "mutability (owner=" +
+                                           describeType(module.types, valueType(instruction.operands.front())) +
+                                           ", selector='" + instruction.selector +
+                                           "', expected=" + describeType(module.types, field ? field->type : TypeId{}) +
+                                           ", actual=" + describeType(module.types, placeType->arguments.front()) +
+                                           ", field-mutable=" + (field && field->isMutable ? "true" : "false") +
+                                           ", place-mutable=" + (placeType->isMutable ? "true" : "false") +
+                                           ", constructor=" + (constructorInitialization ? "true" : "false") + ").",
+                                       instruction.source, function.id, block.id);
                             }
                         }
                     }
@@ -1777,17 +1926,44 @@ namespace wio::wir::typed
                                 callee.genericOrigin ? callee.returnType : method->returnType;
                             const Type* returnType = module.types.tryGet(effectiveReturnType);
                             const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
+                            const bool hasOpenReturn = containsOpenType(module.types, method->returnType);
                             valid = valid && returnType &&
-                                    (returnsVoid                        ? !instruction.result
-                                     : callee.genericParameters.empty() ? instruction.resultType == effectiveReturnType
-                                                                        : module.types.tryGet(instruction.resultType) &&
-                                                                              !instruction.specializationKey.empty());
+                                    (returnsVoid ? !instruction.result
+                                     : callee.genericParameters.empty() && !hasOpenReturn
+                                         ? instruction.resultType == effectiveReturnType
+                                         : module.types.tryGet(instruction.resultType) &&
+                                               !instruction.specializationKey.empty());
                         }
                         if (!valid)
-                            report(
-                                "WIR1440",
-                                "Typed WIR method dispatch must match its owner slot, receiver, signature, and callee.",
-                                instruction.source, function.id, block.id);
+                        {
+                            const TypeId receiverType =
+                                instruction.operands.empty() ? TypeId{} : valueType(instruction.operands.front());
+                            const bool methodFound = owner && method != owner->methods.end();
+                            report("WIR1440",
+                                   "Typed WIR method dispatch must match its owner slot, receiver, signature, and "
+                                   "callee (selector='" +
+                                       instruction.selector + "', slot=" + std::to_string(instruction.projectionIndex) +
+                                       ", owner=" + describeType(module.types, instruction.targetType) +
+                                       ", receiver=" + describeType(module.types, receiverType) + ", callee=#" +
+                                       std::to_string(instruction.callee.value()) +
+                                       ", operands=" + std::to_string(instruction.operands.size()) +
+                                       ", signatures=" + std::to_string(instruction.signatureTypes.size()) +
+                                       ", dispatch-valid=" + (dispatchKindValid ? "true" : "false") +
+                                       ", callee-found=" + (calleeIt != functions.end() ? "true" : "false") +
+                                       ", method-found=" + (methodFound ? "true" : "false") + ", result=" +
+                                       describeType(module.types, instruction.resultType) + ", method-result=" +
+                                       describeType(module.types, methodFound ? method->returnType : TypeId{}) +
+                                       ", callee-result=" +
+                                       describeType(module.types, calleeIt != functions.end()
+                                                                      ? calleeIt->second->returnType
+                                                                      : TypeId{}) +
+                                       ", callee-generic=" +
+                                       (calleeIt != functions.end() && !calleeIt->second->genericParameters.empty()
+                                            ? "true"
+                                            : "false") +
+                                       ").",
+                                   instruction.source, function.id, block.id);
+                        }
                     }
                     else if (instruction.opcode == Opcode::Upcast || instruction.opcode == Opcode::CheckedCast)
                     {
@@ -1877,10 +2053,20 @@ namespace wio::wir::typed
                                                                         signatureType->kind == TypeKind::Reference &&
                                                                         signatureType->arguments.size() == 1 &&
                                                                         signatureType->arguments.front() == operandType;
-                                    if ((!extensionReceiverMatch && operandType != instruction.signatureTypes[index]) ||
+                                    const bool nativeReferenceMatch =
+                                        callee.nativeBinding &&
+                                        nativeReferenceArgumentMatches(module.types, operandType,
+                                                                       instruction.signatureTypes[index]);
+                                    if ((!extensionReceiverMatch && !nativeReferenceMatch &&
+                                         operandType != instruction.signatureTypes[index]) ||
                                         (callee.genericParameters.empty() &&
                                          instruction.signatureTypes[index] != callee.parameters[index].type))
-                                        report("WIR1411", "Typed WIR call argument type does not match its parameter.",
+                                        report("WIR1411",
+                                               "Typed WIR call argument type does not match its parameter (operand=" +
+                                                   describeType(module.types, operandType) + ", signature=" +
+                                                   describeType(module.types, instruction.signatureTypes[index]) +
+                                                   ", parameter=" +
+                                                   describeType(module.types, callee.parameters[index].type) + ").",
                                                instruction.source, function.id, block.id);
                                 }
                             }

@@ -22,6 +22,11 @@ function(run_checked label)
 endfunction()
 
 function(build_project project_root backend build_dir elapsed_output)
+    set(backend_arguments)
+    if(NOT backend STREQUAL "default")
+        list(APPEND backend_arguments --cpp-backend "${backend}")
+    endif()
+
     execute_process(
         COMMAND
             "${CMAKE_COMMAND}" -E time
@@ -29,7 +34,7 @@ function(build_project project_root backend build_dir elapsed_output)
             "${WIO_EXECUTABLE}" project build
             --project "${project_root}"
             --build-dir "${build_dir}"
-            --cpp-backend "${backend}"
+            ${backend_arguments}
             --rebuild
         WORKING_DIRECTORY "${WIO_ROOT}"
         RESULT_VARIABLE build_result
@@ -48,13 +53,18 @@ function(build_project project_root backend build_dir elapsed_output)
 endfunction()
 
 function(run_project project_root backend build_dir result_output stdout_output stderr_output)
+    set(backend_arguments)
+    if(NOT backend STREQUAL "default")
+        list(APPEND backend_arguments --cpp-backend "${backend}")
+    endif()
+
     execute_process(
         COMMAND
             "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
             "${WIO_EXECUTABLE}" project run
             --project "${project_root}"
             --build-dir "${build_dir}"
-            --cpp-backend "${backend}"
+            ${backend_arguments}
             --no-build
             -- "parity" "two words"
         WORKING_DIRECTORY "${WIO_ROOT}"
@@ -77,11 +87,14 @@ function(check_project template_name project_name)
     set(project_root "${WIO_OUTPUT_DIR}/${project_name}")
     set(legacy_build "${WIO_OUTPUT_DIR}/${project_name}-legacy")
     set(wir_build "${WIO_OUTPUT_DIR}/${project_name}-wir")
+    set(default_build "${WIO_OUTPUT_DIR}/${project_name}-default")
 
     build_project("${project_root}" legacy "${legacy_build}" legacy_elapsed)
     build_project("${project_root}" wir "${wir_build}" wir_elapsed)
+    build_project("${project_root}" default "${default_build}" default_elapsed)
     run_project("${project_root}" legacy "${legacy_build}" legacy_result legacy_stdout legacy_stderr)
     run_project("${project_root}" wir "${wir_build}" wir_result wir_stdout wir_stderr)
+    run_project("${project_root}" default "${default_build}" default_result default_stdout default_stderr)
 
     if(NOT legacy_result STREQUAL wir_result)
         message(FATAL_ERROR
@@ -95,8 +108,21 @@ function(check_project template_name project_name)
         message(FATAL_ERROR
             "${template_name} stderr mismatch.\nlegacy:\n${legacy_stderr}\nwir:\n${wir_stderr}")
     endif()
+    if(NOT default_result STREQUAL wir_result)
+        message(FATAL_ERROR
+            "${template_name} default/WIR exit mismatch: default=${default_result}, wir=${wir_result}.")
+    endif()
+    if(NOT default_stdout STREQUAL wir_stdout)
+        message(FATAL_ERROR
+            "${template_name} default/WIR stdout mismatch.\ndefault:\n${default_stdout}\nwir:\n${wir_stdout}")
+    endif()
+    if(NOT default_stderr STREQUAL wir_stderr)
+        message(FATAL_ERROR
+            "${template_name} default/WIR stderr mismatch.\ndefault:\n${default_stderr}\nwir:\n${wir_stderr}")
+    endif()
     message(STATUS
-        "${template_name} parity: exit=${wir_result}; legacy ${legacy_elapsed}; wir ${wir_elapsed}")
+        "${template_name} parity: exit=${wir_result}; legacy ${legacy_elapsed}; "
+        "wir ${wir_elapsed}; default ${default_elapsed}")
 endfunction()
 
 check_project(wio-app WirProjectParity)

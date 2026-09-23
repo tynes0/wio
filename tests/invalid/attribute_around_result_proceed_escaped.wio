@@ -1,0 +1,25 @@
+use std::attribute as attr;
+
+fn DefaultValue() -> i32 { return 0; }
+mut EscapedProceed: fn() -> i32 = DefaultValue;
+
+[From(attr::AroundProcessor)]
+object EscapingResultAround {
+    public fn Around(proceed: fn() -> i32) -> i32 {
+        EscapedProceed = proceed;
+        return 7;
+    }
+}
+
+[attribute::Targets(fn)]
+[attribute::Processor(EscapingResultAround)]
+attribute EscapingResult();
+
+[EscapingResult]
+fn Work() -> i32 { return 42; }
+
+fn Entry() -> i32 {
+    Work();
+    EscapedProceed();
+    return 0;
+}

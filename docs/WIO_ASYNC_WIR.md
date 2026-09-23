@@ -1,9 +1,8 @@
 # Async, Coroutine, and Thread WIR Contract
 
 This document freezes the backend-neutral representation of Wio async
-functions. The existing C++ generator remains the production backend during
-migration, but neither the opt-in Lowered-WIR C++ backend nor the future bytecode VM
-may reinterpret these rules.
+functions. The Lowered-WIR C++ backend is the production backend, and neither it
+nor the future bytecode VM may reinterpret these rules.
 
 ## Typed WIR
 
@@ -79,12 +78,12 @@ Both backends must implement the same observable contract:
 - Native async calls use the native ABI adapter contract and return the same
   task-handle ownership as Wio-created tasks.
 
-Sprint 17.3 executes these instructions in the opt-in C++ backend using C++20
+Sprint 17.3 executes these instructions in the default C++ backend using C++20
 coroutines. A resume payload has separate optional storage; the physical C++
 coroutine frame preserves WIR values across suspension. RAII unwinds on normal
 exit, cancellation and failure. Current-promise cancellation checks cover both
 suspending and already-ready awaits. The executable async entry adapter pumps
 the main queue; ordinary awaits do not block a thread. Worker/blocking/IO/main
-handoffs are tested directly from canonical WIR. Full native/SDK adapter and
-whole-project parity remain later backend work. See
+handoffs are tested directly from canonical WIR. Native/SDK adapters and
+whole-project differential parity are covered by the Sprint 17 release gates. See
 [`WIO_CPP_BACKEND.md`](WIO_CPP_BACKEND.md#sprint-173-async-and-coroutine-execution).

@@ -9,14 +9,13 @@ source -> AST -> semantic analysis -> Typed WIR -> Lowered WIR
                                                 `-> bytecode backend
 ```
 
-The WIR path is experimental and opt-in. Ordinary builds still use the proven
-AST-to-C++ generator while WIR coverage grows. This keeps current native output
-stable and lets the new representation acquire executable parity in measured
-slices.
+The WIR path is the production compiler pipeline. Ordinary builds lower through
+Typed WIR and verified canonical Lowered WIR before selecting the C++ backend.
+The former AST-to-C++ generator remains temporarily selectable with
+`--cpp-backend legacy` as a rollback and differential oracle.
 
-The first independent C++ backend slice is now executable with
-`--cpp-backend wir`; it consumes verified Lowered WIR and never falls back to
-AST generation. Its supported surface, stable diagnostics, parity gates, and
+The independent C++ backend consumes verified Lowered WIR and never falls back
+to AST generation. Its supported surface, stable diagnostics, parity gates, and
 cutover rules are documented in
 [`WIO_CPP_BACKEND.md`](WIO_CPP_BACKEND.md).
 
@@ -364,7 +363,7 @@ Async functions are also canonicalized here. Typed `await` and executor
 handoffs become explicit cancellation-check, suspend, resume, and completion
 operations backed by a stable coroutine frame/state layout. Async object
 methods additionally pin a verified retained receiver. Sprint 17.3 executes
-these states in the opt-in C++ backend with non-blocking awaits, cancellation
+these states in the default C++ backend with non-blocking awaits, cancellation
 checkpoints, executor handoffs and frame cleanup. See
 [`WIO_ASYNC_WIR.md`](WIO_ASYNC_WIR.md).
 

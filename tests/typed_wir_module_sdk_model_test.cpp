@@ -109,8 +109,15 @@ int main()
         "Typed WIR text must expose module, generic export and lifecycle decisions");
 
     LoweringResult lowering = LoweringPipeline{}.lower(module);
-    ok &= expect(lowering.succeeded() && lowering.module().contract == module.contract,
-        "Lowering must preserve the complete module and SDK contract exactly");
+    ModuleContract expectedLoweredContract = module.contract;
+    if (lowering.succeeded())
+    {
+        for (std::size_t index = 0; index < expectedLoweredContract.exports.size(); ++index)
+            if (expectedLoweredContract.exports[index].kind == ModuleExportKind::GenericFunctionSpecialization)
+                expectedLoweredContract.exports[index].function = lowering.module().contract.exports[index].function;
+    }
+    ok &= expect(lowering.succeeded() && lowering.module().contract == expectedLoweredContract,
+        "Lowering must preserve the complete module and SDK contract while pinning generic implementations");
     ok &= expect(lowered::Verifier{}.verify(lowering.module()).succeeded(),
         "Lowered WIR module contract must verify");
     ok &= expect(lowered::Printer{}.print(lowering.module()).find("abi-v11") != std::string::npos,

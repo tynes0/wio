@@ -93,7 +93,9 @@ namespace wio::wir
         Option,
         Result,
         Tuple,
-        Span
+        Span,
+        Pack,
+        AsyncTask
     };
 
     enum class FieldVisibility : std::uint8_t
@@ -389,6 +391,7 @@ namespace wio::wir
         std::vector<DispatchEntry> dispatchEntries;
         FunctionId destructor;
         FunctionId defaultConstructor;
+        FunctionId fieldInitializer;
         TypeId enumUnderlyingType;
         std::vector<EnumCaseLayout> enumCases;
         bool hasConstructor = false;

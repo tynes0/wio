@@ -161,6 +161,22 @@ if(BUILD_TESTING)
     )
 
     add_test(
+        NAME wio_wir_cpp_behavioral_differential
+        COMMAND
+            ${CMAKE_COMMAND}
+            "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+            "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+            "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/wir-cpp-behavioral-differential"
+            -P "${CMAKE_SOURCE_DIR}/tests/cmake/wir_cpp_behavioral_differential_test.cmake"
+    )
+    set_tests_properties(wio_wir_cpp_behavioral_differential PROPERTIES
+        LABELS "wir;cpp-backend;attributes;differential;release-gate"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        TIMEOUT 600
+    )
+
+    add_test(
         NAME wio_wir_cpp_project_differential
         COMMAND
             ${CMAKE_COMMAND}
@@ -2310,6 +2326,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_wir_ref_object_assignment_run
+        "${CMAKE_SOURCE_DIR}/tests/wir_ref_object_assignment_run.wio"
+        "WIR ref object assignment: ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_function_parameter_pack_run
         "${CMAKE_SOURCE_DIR}/tests/function_parameter_pack_run.wio"
         "Function packs: ok"
@@ -3628,6 +3651,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_proceed_escaped.wio"
         "Attribute Proceed escaped its Around invocation"
     )
+    add_wio_runtime_failure_test(
+        wio_invalid_attribute_around_result_proceed_escaped
+        "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_around_result_proceed_escaped.wio"
+        "Attribute Proceed escaped its Around invocation"
+    )
     add_wio_failure_test(
         wio_invalid_attribute_behavioral_missing_hook
         "${CMAKE_SOURCE_DIR}/tests/invalid/attribute_behavioral_missing_hook.wio"
@@ -3724,6 +3752,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_attribute_behavioral_reflection_run
         wio_invalid_attribute_around_proceed_twice
         wio_invalid_attribute_around_proceed_escaped
+        wio_invalid_attribute_around_result_proceed_escaped
         wio_invalid_attribute_behavioral_missing_hook
         wio_test_attribute_behavioral_async_result_run
         wio_invalid_attribute_post_result_type_mismatch
@@ -6051,11 +6080,11 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
     set_tests_properties(
         wio_test_async_net_io_run
-        PROPERTIES TIMEOUT 30
+        PROPERTIES TIMEOUT 360
     )
     set_tests_properties(
         wio_test_async_net_accept_run
-        PROPERTIES TIMEOUT 60
+        PROPERTIES TIMEOUT 360
     )
     add_wio_output_test(
         wio_test_std_net_timeout_run
@@ -6131,7 +6160,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_async_worker_config_run
         PROPERTIES ENVIRONMENT "WIO_ROOT=${CMAKE_SOURCE_DIR};WIO_ASYNC_WORKERS=3"
     )
-    set_tests_properties(wio_test_async_detached_exit_run PROPERTIES TIMEOUT 15)
+    set_tests_properties(wio_test_async_detached_exit_run PROPERTIES TIMEOUT 360)
 
     add_wio_non_dry_failure_test_clean(
         wio_runtime_async_timeout

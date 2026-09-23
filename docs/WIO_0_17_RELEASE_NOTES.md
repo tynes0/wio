@@ -83,6 +83,30 @@ receives explicitly injected `ref`/`view` resources.
 `wio migrate applications PATH --check|--write` performs the safe lifecycle
 and field rewrites while preserving comments, strings, and explicit schedules.
 
+## Lowered WIR C++ backend cutover
+
+File and project builds now use the independent Lowered-WIR C++ backend by
+default. The compiler freezes overloads, generic specializations, ownership,
+native ABI adapters, SDK exports, application scheduling, reflection, and
+behavioral attribute hooks before C++ emission; the backend does not inspect the
+AST or repeat semantic decisions.
+
+Behavioral pre/post/finally/around attributes execute through canonical
+processor type and hook function identities, including typed receiver guards,
+result hooks, async results, exactly-once finalization, and escape/call-count
+checks for `proceed`. Windows and Ubuntu release gates compare exit status,
+stdout, and stderr with the former generator across focused source and clean
+project matrices.
+
+`--cpp-backend legacy` remains available for this release line as an explicit
+rollback and differential oracle. WIR never falls back to it automatically.
+
+The cutover also freezes native callback lifetime and thread affinity through
+the parameter-level `[attribute::NativeCallback]` contract. The standard async
+and concurrency modules mark callbacks that escape to worker threads as
+`("retained", "any")`; ordinary native callbacks remain call-scoped and
+caller-thread-only.
+
 Automatic owned-system and compiler-consumed composed-attribute discovery are
 currently source-order local. Import-aware and forward discovery require
 application lowering to move into semantic analysis and remain tracked before

@@ -138,6 +138,9 @@ namespace wio::wir
             case typed::Opcode::NullableWrap:
                 opcode = lowered::Opcode::NullableWrap;
                 break;
+            case typed::Opcode::NullableUnwrap:
+                opcode = lowered::Opcode::NullableUnwrap;
+                break;
             case typed::Opcode::IteratorCreate:
                 opcode = lowered::Opcode::IteratorCreate;
                 break;
