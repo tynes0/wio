@@ -110,11 +110,10 @@ namespace wio::wir
                                 // A closure body's hidden parameters are references to its capture storage,
                                 // while ClosureCreate consumes the captured values themselves.  Reconcile
                                 // those operands against the concrete capture layout, not the hidden ABI.
-                                const TypeId concreteType =
-                                    instruction.opcode == Opcode::ClosureCreate &&
-                                            argumentIndex < concrete->captures.size()
-                                        ? concrete->captures[argumentIndex].type
-                                        : concrete->parameters[argumentIndex].type;
+                                const TypeId concreteType = instruction.opcode == Opcode::ClosureCreate &&
+                                                                    argumentIndex < concrete->captures.size()
+                                                                ? concrete->captures[argumentIndex].type
+                                                                : concrete->parameters[argumentIndex].type;
                                 if (oldType == concreteType)
                                     continue;
                                 instruction.signatureTypes[argumentIndex] = concreteType;
@@ -387,6 +386,19 @@ namespace wio::wir
                                         nativeAbiTypeKey(module_.types, it->second) + ") but inferred #" +
                                         std::to_string(actual.value()) + " (" +
                                         nativeAbiTypeKey(module_.types, actual) + ")";
+                    return false;
+                }
+                if (p->kind == TypeKind::Named && a->kind == TypeKind::Named && p->name != a->name)
+                {
+                    for (const TypeId base : a->baseTypes)
+                    {
+                        Bindings candidate = bindings;
+                        if (bind(pattern, base, candidate))
+                        {
+                            bindings = std::move(candidate);
+                            return true;
+                        }
+                    }
                     return false;
                 }
                 const bool hasTrailingPack = !p->arguments.empty() && module_.types.get(p->arguments.back()).kind ==

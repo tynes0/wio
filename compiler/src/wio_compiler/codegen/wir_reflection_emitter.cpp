@@ -185,38 +185,37 @@ namespace wio::codegen
                 offsets.push_back(fieldAttrs.size());
             }
             for (const auto& f : r.methods)
-                if (f.name != "OnConstruct")
+            {
+                methods.push_back(f.name);
+                methodAccess.emplace_back(fieldVisibilityName(f.visibility));
+                std::string s = "fn(";
+                for (std::size_t i = 0; i < f.parameterTypes.size(); ++i)
                 {
-                    methods.push_back(f.name);
-                    methodAccess.emplace_back(fieldVisibilityName(f.visibility));
-                    std::string s = "fn(";
-                    for (std::size_t i = 0; i < f.parameterTypes.size(); ++i)
-                    {
-                        if (i)
-                            s += ", ";
-                        s += name(f.parameterTypes[i]);
-                    }
-                    signatures.push_back(s + ") -> " + name(f.returnType));
-                    for (const auto& a : m.contract.attributes)
-                        if (a.targetFunction == f.function)
-                            for (const auto& processor : a.processors)
-                                if (processor.phase == AttributeProcessorPhase::Pre ||
-                                    processor.phase == AttributeProcessorPhase::Post ||
-                                    processor.phase == AttributeProcessorPhase::Finally ||
-                                    processor.phase == AttributeProcessorPhase::Around)
-                                {
-                                    behaviorAttrs.push_back(a.canonicalName);
-                                    behaviorTypes.push_back(processor.canonicalTypeName);
-                                    behaviorPhases.emplace_back(attributeProcessorPhaseName(processor.phase));
-                                    behaviorHooks.push_back(processor.phase == AttributeProcessorPhase::Pre ? "Before"
-                                                            : processor.phase == AttributeProcessorPhase::Post ? "After"
-                                                            : processor.phase == AttributeProcessorPhase::Finally
-                                                                ? "Finally"
-                                                                : "Around");
-                                    behaviorModes.push_back(processor.hookMode);
-                                }
-                    behaviorOffsets.push_back(behaviorPhases.size());
+                    if (i)
+                        s += ", ";
+                    s += name(f.parameterTypes[i]);
                 }
+                signatures.push_back(s + ") -> " + name(f.returnType));
+                for (const auto& a : m.contract.attributes)
+                    if (a.targetFunction == f.function)
+                        for (const auto& processor : a.processors)
+                            if (processor.phase == AttributeProcessorPhase::Pre ||
+                                processor.phase == AttributeProcessorPhase::Post ||
+                                processor.phase == AttributeProcessorPhase::Finally ||
+                                processor.phase == AttributeProcessorPhase::Around)
+                            {
+                                behaviorAttrs.push_back(a.canonicalName);
+                                behaviorTypes.push_back(processor.canonicalTypeName);
+                                behaviorPhases.emplace_back(attributeProcessorPhaseName(processor.phase));
+                                behaviorHooks.push_back(processor.phase == AttributeProcessorPhase::Pre    ? "Before"
+                                                        : processor.phase == AttributeProcessorPhase::Post ? "After"
+                                                        : processor.phase == AttributeProcessorPhase::Finally
+                                                            ? "Finally"
+                                                            : "Around");
+                                behaviorModes.push_back(processor.hookMode);
+                            }
+                behaviorOffsets.push_back(behaviorPhases.size());
+            }
             for (auto base : layout.baseTypes)
                 bases.push_back(name(base));
             for (auto attributeId : r.attributes)

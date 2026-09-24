@@ -785,7 +785,7 @@ namespace wio::codegen
                         return cppType(type->arguments.front());
                     return "std::optional<" + cppType(type->arguments.front()) + ">";
                 case TypeKind::Array:
-                    if (type->staticExtent)
+                    if (type->staticExtent && type->name != "literal")
                         return "std::array<" + cppType(type->arguments.front()) + ", " +
                                std::to_string(*type->staticExtent) + ">";
                     return "std::vector<" + cppType(type->arguments.front()) + ">";
@@ -1118,6 +1118,14 @@ template<class T, class U> T* require_object_cast(const U& value) {
     return result;
 }
 template<class T> wio::runtime::RefCountedObject* object_identity(const T& value) { return object_ptr(value); }
+template<class T> bool nullable_equal(const std::optional<T>& left, const std::optional<T>& right) {
+    if (left.has_value() != right.has_value()) return false;
+    if (!left) return true;
+    if constexpr (requires { static_cast<bool>(*left == *right); }) return static_cast<bool>(*left == *right);
+    else if constexpr (requires { std::addressof(left->read()); std::addressof(right->read()); })
+        return std::addressof(left->read()) == std::addressof(right->read());
+    else return false;
+}
 inline std::string stringify(const bool value) { return value ? "true" : "false"; }
 inline std::string stringify(const std::int8_t value) { return std::to_string(static_cast<std::int32_t>(value)); }
 inline std::string stringify(const std::uint8_t value) { return std::to_string(static_cast<std::uint32_t>(value)); }
@@ -1253,6 +1261,32 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 for (TypeId id : nominalOrder())
                 {
                     const auto& type = module_.types.get(id);
+                    if (type.nominalKind == NominalKind::Component)
+                    {
+                        if (type.destructor)
+                        {
+                            const auto& function = *functions_.at(type.destructor.value());
+                            output_ << typeName(id) << "::" << typeName(id) << "(" << typeName(id) << "&& other) {\n";
+                            for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
+                                output_ << "    _f" << fieldIndex << " = std::move(other._f" << fieldIndex << ");\n";
+                            output_ << "    _wio_lifetime_active = std::exchange(other._wio_lifetime_active, false);\n"
+                                    << "}\n";
+                            output_ << typeName(id) << "& " << typeName(id) << "::operator=(" << typeName(id)
+                                    << "&& other) {\n"
+                                    << "    if (this == std::addressof(other)) return *this;\n"
+                                    << "    if (_wio_lifetime_active) " << functionName(function.id)
+                                    << "(wio::wir_backend::Place<" << typeName(id) << ">::borrow(*this));\n";
+                            for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
+                                output_ << "    _f" << fieldIndex << " = std::move(other._f" << fieldIndex << ");\n";
+                            output_ << "    _wio_lifetime_active = std::exchange(other._wio_lifetime_active, false);\n"
+                                    << "    return *this;\n"
+                                    << "}\n";
+                            output_ << typeName(id) << "::~" << typeName(id) << "() { if (_wio_lifetime_active) "
+                                    << functionName(function.id) << "(wio::wir_backend::Place<" << typeName(id)
+                                    << ">::borrow(*this)); }\n";
+                        }
+                        continue;
+                    }
                     if (type.nominalKind != NominalKind::Object && type.nominalKind != NominalKind::Interface)
                         continue;
                     for (const auto& entry : type.dispatchEntries)
@@ -1445,6 +1479,33 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
                         output_ << "    " << cppType(type.fields[fieldIndex].type) << " _f" << fieldIndex << "{}; // "
                                 << safeIdentifier(type.fields[fieldIndex].name) << "\n";
+                    if (!object && type.destructor)
+                        output_ << "    bool _wio_lifetime_active = true;\n"
+                                << "    " << typeName(id) << "() = default;\n"
+                                << "    " << typeName(id) << "(const " << typeName(id) << "&) = default;\n"
+                                << "    " << typeName(id) << "& operator=(const " << typeName(id) << "&) = default;\n";
+                    if (!object && type.destructor && !type.fields.empty())
+                    {
+                        output_ << "    " << typeName(id) << '(';
+                        for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
+                        {
+                            if (fieldIndex)
+                                output_ << ", ";
+                            output_ << cppType(type.fields[fieldIndex].type) << " _a" << fieldIndex;
+                        }
+                        output_ << ") : ";
+                        for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
+                        {
+                            if (fieldIndex)
+                                output_ << ", ";
+                            output_ << "_f" << fieldIndex << "(std::move(_a" << fieldIndex << "))";
+                        }
+                        output_ << " {}\n";
+                    }
+                    if (!object && type.destructor)
+                        output_ << "    " << typeName(id) << "(" << typeName(id) << "&& other);\n"
+                                << "    " << typeName(id) << "& operator=(" << typeName(id) << "&& other);\n"
+                                << "    ~" << typeName(id) << "();\n";
                     if (object)
                     {
                         output_ << "    static constexpr std::uint64_t TYPE_ID = " << id.value() << ";\n";
@@ -1739,8 +1800,11 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 }
                 else
                 {
-                    receiver = cppType(instruction.signatureTypes.front()) + "::borrow(" +
-                               operand(instruction.operands.front()) + ")";
+                    const Type& receiverValue = module_.types.get(valueType(instruction.operands.front()));
+                    receiver = receiverValue.kind == TypeKind::Reference
+                                   ? operand(instruction.operands.front())
+                                   : cppType(instruction.signatureTypes.front()) + "::borrow(" +
+                                         operand(instruction.operands.front()) + ")";
                 }
                 const std::string remaining = callArguments(instruction, 1, true);
                 return remaining.empty() ? receiver : receiver + ", " + remaining;
@@ -1960,12 +2024,26 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                          operand(instruction.operands[0]));
                     break;
                 case lowered::Opcode::Binary:
-                    if (integerType(instruction.resultType) &&
-                        (instruction.binaryOperator == typed::BinaryOperator::Add ||
-                         instruction.binaryOperator == typed::BinaryOperator::Subtract ||
-                         instruction.binaryOperator == typed::BinaryOperator::Multiply ||
-                         instruction.binaryOperator == typed::BinaryOperator::Divide ||
-                         instruction.binaryOperator == typed::BinaryOperator::Remainder))
+                    if (!instruction.operands.empty() &&
+                        module_.types.get(valueType(instruction.operands.front())).kind == TypeKind::Nullable &&
+                        module_.types.get(module_.types.get(valueType(instruction.operands.front())).arguments.front())
+                                .kind != TypeKind::Opaque &&
+                        (instruction.binaryOperator == typed::BinaryOperator::Equal ||
+                         instruction.binaryOperator == typed::BinaryOperator::NotEqual))
+                    {
+                        const std::string equality = "wio::wir_backend::nullable_equal(" +
+                                                     operand(instruction.operands[0]) + ", " +
+                                                     operand(instruction.operands[1]) + ")";
+                        assignResult(instruction, instruction.binaryOperator == typed::BinaryOperator::NotEqual
+                                                      ? "(!" + equality + ")"
+                                                      : equality);
+                    }
+                    else if (integerType(instruction.resultType) &&
+                             (instruction.binaryOperator == typed::BinaryOperator::Add ||
+                              instruction.binaryOperator == typed::BinaryOperator::Subtract ||
+                              instruction.binaryOperator == typed::BinaryOperator::Multiply ||
+                              instruction.binaryOperator == typed::BinaryOperator::Divide ||
+                              instruction.binaryOperator == typed::BinaryOperator::Remainder))
                     {
                         const char* helper =
                             instruction.binaryOperator == typed::BinaryOperator::Add        ? "WrappingAdd"
@@ -2776,10 +2854,19 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                             {
                                 if (index)
                                     arguments += ", ";
+                                const bool methodReceiver = function.isMethod && index == 0;
+                                const std::size_t bindingIndex = function.isMethod && index > 0 ? index - 1 : index;
+                                const NativeAbiValue* binding =
+                                    !methodReceiver && bindingIndex < function.nativeBinding->parameters.size()
+                                        ? &function.nativeBinding->parameters[bindingIndex]
+                                        : nullptr;
                                 const NativePassingMode passing =
-                                    index < function.nativeBinding->parameters.size()
-                                        ? function.nativeBinding->parameters[index].passing
-                                        : NativePassingMode::Value;
+                                    methodReceiver
+                                        ? (function.nativeBinding->receiver == NativeReceiverKind::ConstReference
+                                               ? NativePassingMode::Borrow
+                                               : NativePassingMode::BorrowMut)
+                                    : binding ? binding->passing
+                                              : NativePassingMode::Value;
                                 std::string argument =
                                     (passing == NativePassingMode::Borrow || passing == NativePassingMode::BorrowMut)
                                         ? std::string(passing == NativePassingMode::Borrow ? "std::as_const(" : "") +
@@ -2790,26 +2877,29 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                         : "_p" + std::to_string(index);
                                 if (index == 0 && function.nativeBinding->receiver != NativeReceiverKind::None)
                                 {
-                                    argument = function.nativeBinding->receiver == NativeReceiverKind::ConstReference
-                                                   ? "std::addressof(std::as_const(_p0.read()))"
-                                                   : "std::addressof(_p0.read())";
+                                    const Type* owner = module_.types.tryGet(function.ownerType);
+                                    if (owner && (owner->nominalKind == NominalKind::Object ||
+                                                  owner->nominalKind == NominalKind::Interface))
+                                        argument = "wio::wir_backend::object_ptr(_p0)";
+                                    else
+                                        argument =
+                                            function.nativeBinding->receiver == NativeReceiverKind::ConstReference
+                                                ? "std::addressof(std::as_const(_p0.read()))"
+                                                : "std::addressof(_p0.read())";
                                 }
-                                if (index < function.nativeBinding->parameters.size() &&
-                                    function.nativeBinding->parameters[index].marshalling ==
-                                        NativeMarshallingKind::Utf8String &&
-                                    function.nativeBinding->parameters[index].passing == NativePassingMode::Value &&
+                                if (binding && binding->marshalling == NativeMarshallingKind::Utf8String &&
+                                    binding->passing == NativePassingMode::Value &&
                                     function.nativeBinding->thunkKind != NativeThunkKind::TemplateSpecialization)
                                     argument = "wio::intrinsics::NativeStringArg(" + argument + ")";
                                 if (module_.types.get(function.parameters[index].type).kind == TypeKind::Function &&
-                                    !runtimeAsyncBinding(function))
+                                    !runtimeAsyncBinding(function) && binding)
                                 {
-                                    const auto& binding = function.nativeBinding->parameters[index];
                                     argument =
                                         "_nativeScope.callback(" + argument + ", " +
-                                        (binding.callbackLifetime == NativeCallbackLifetime::Retained ? "true"
-                                                                                                      : "false") +
+                                        (binding->callbackLifetime == NativeCallbackLifetime::Retained ? "true"
+                                                                                                       : "false") +
                                         ", " +
-                                        (binding.callbackThread == NativeCallbackThread::Any ? "true" : "false") + ")";
+                                        (binding->callbackThread == NativeCallbackThread::Any ? "true" : "false") + ")";
                                 }
                                 nativeArguments.push_back(argument);
                                 arguments += argument;

@@ -940,6 +940,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             RESOURCE_LOCK wio_distribution_package
+            RUN_SERIAL TRUE
     )
 
     add_test(
@@ -1167,12 +1168,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             TIMEOUT 900
             RESOURCE_LOCK wio_distribution_package
+            RUN_SERIAL TRUE
     )
     set_tests_properties(
         wio_test_packaged_file_run_uses_user_cache
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             RESOURCE_LOCK wio_distribution_package
+            RUN_SERIAL TRUE
     )
 
     add_wio_success_test(

@@ -575,15 +575,16 @@ namespace wio::wir::typed
                 symbol = declaration.extensionMemberName.empty()
                              ? (declaration.name ? declaration.name->token.value : function.name)
                              : declaration.extensionMemberName;
+            const bool hasReceiver = function.isMethod || function.isExtension;
             NativeBinding binding{.symbol = std::move(symbol),
                                   .header = attributeValue(declaration.attributes, Attribute::CppHeader),
                                   .language = NativeSymbolLanguage::Cpp,
                                   .callingConvention = NativeCallingConvention::PlatformDefault,
                                   .exceptionBoundary = NativeExceptionBoundary::TranslateToWioFailure,
-                                  .receiver = function.isExtension ? (declaration.extensionMutableReceiver
-                                                                          ? NativeReceiverKind::MutableReference
-                                                                          : NativeReceiverKind::ConstReference)
-                                                                   : NativeReceiverKind::None};
+                                  .receiver = hasReceiver ? (declaration.extensionMutableReceiver || function.isMethod
+                                                                 ? NativeReceiverKind::MutableReference
+                                                                 : NativeReceiverKind::ConstReference)
+                                                          : NativeReceiverKind::None};
             binding.stableKey = "cpp:" + binding.symbol + ":" + functionType.toString();
             binding.thunkSymbol = nativeThunkSymbol(binding.stableKey);
             binding.explicitTemplateArguments =
@@ -2073,8 +2074,9 @@ namespace wio::wir::typed
                                 .returnType = mapType(functionType->returnType, source),
                                 .function = function->second,
                                 .receiverMutable = true,
-                                .isAbstract = !declarationsBySymbol_.contains(methodSymbol.Get()) ||
-                                              declarationsBySymbol_.at(methodSymbol.Get())->body == nullptr};
+                                .isAbstract = (!declarationsBySymbol_.contains(methodSymbol.Get()) ||
+                                               declarationsBySymbol_.at(methodSymbol.Get())->body == nullptr) &&
+                                              !isNativeFunction(function->second)};
             for (const Ref<sema::Type>& parameterType : functionType->paramTypes)
                 layout.parameterTypes.push_back(mapType(parameterType, source));
             layout.visibility = methodSymbol->flags.get_isPublic()      ? FieldVisibility::Public
@@ -2250,6 +2252,8 @@ namespace wio::wir::typed
                     array->arrayKind == sema::ArrayType::ArrayKind::Literal)
                 {
                     wirType.staticExtent = array->size;
+                    if (array->arrayKind == sema::ArrayType::ArrayKind::Literal)
+                        wirType.name = "literal";
                     if (array->extentType && array->extentType->kind() == sema::TypeKind::ConstGenericParameter)
                     {
                         wirType.extentParameter = mapType(array->extentType, source);
@@ -2627,9 +2631,9 @@ namespace wio::wir::typed
         {
             const auto mapArgument = [&](Ref<sema::Type> argument, const std::size_t index) -> TypeId
             {
-                Ref<sema::Type> parameter =
-                    symbol && index < symbol->genericParameterTypes.size() ? symbol->genericParameterTypes[index]
-                                                                         : nullptr;
+                Ref<sema::Type> parameter = symbol && index < symbol->genericParameterTypes.size()
+                                                ? symbol->genericParameterTypes[index]
+                                                : nullptr;
                 while (parameter && parameter->kind() == sema::TypeKind::Alias)
                     parameter = parameter.AsFast<sema::AliasType>()->aliasedType;
                 if (argument && argument->kind() == sema::TypeKind::ConstValue && parameter &&
@@ -2637,10 +2641,9 @@ namespace wio::wir::typed
                 {
                     const auto value = argument.AsFast<sema::ConstValueType>();
                     const auto constParameter = parameter.AsFast<sema::ConstGenericParameterType>();
-                    return result_.module_.types.intern(
-                        Type{.kind = TypeKind::ConstValue,
-                             .name = value->value,
-                             .arguments = {mapType(constParameter->valueType, &call)}});
+                    return result_.module_.types.intern(Type{.kind = TypeKind::ConstValue,
+                                                             .name = value->value,
+                                                             .arguments = {mapType(constParameter->valueType, &call)}});
                 }
                 return mapType(argument, &call);
             };
@@ -3435,7 +3438,8 @@ namespace wio::wir::typed
 
         ValueId buildOverloadedOperator(const Expression& expression, const OperatorDispatchKind dispatch,
                                         const WeakRef<sema::Type>& weakFunctionType,
-                                        const std::vector<NodePtr<Expression>>& operands, FunctionState& state)
+                                        const std::vector<NodePtr<Expression>>& operands, FunctionState& state,
+                                        const bool forceReceiverPlace = false)
         {
             Ref<sema::Symbol> symbol = expression.referencedSymbol.Lock();
             const Ref<sema::Type> selectedType = weakFunctionType.Lock();
@@ -3465,7 +3469,9 @@ namespace wio::wir::typed
                     report("WIR2353", "Member operator is missing its nominal owner slot.", &expression);
                     return {};
                 }
-                const ValueId receiver = buildExpression(operands.front(), state);
+                const bool mutatesAssignmentTarget = forceReceiverPlace || expression.is<AssignmentExpression>();
+                const ValueId receiver = mutatesAssignmentTarget ? buildPlace(operands.front(), true, state)
+                                                                 : buildExpression(operands.front(), state);
                 if (!receiver)
                     return {};
                 instruction.opcode = owner->nominalKind == NominalKind::Interface ? Opcode::InterfaceCall
@@ -3946,9 +3952,11 @@ namespace wio::wir::typed
                 const Type* destinationType = result_.module_.types.tryGet(destinationTypeId);
                 const bool numeric = sourceType && destinationType && isNumericType(sourceType->kind) &&
                                      isNumericType(destinationType->kind);
+                const bool genericNumericTarget =
+                    destinationType && destinationType->kind == TypeKind::GenericParameter;
                 const bool anyCast = sourceType && sourceType->kind == TypeKind::Any;
                 const bool objectLike = underlyingNominalType(sourceTypeId) && underlyingNominalType(destinationTypeId);
-                if (!numeric && !objectLike && !anyCast)
+                if (!numeric && !genericNumericTarget && !objectLike && !anyCast)
                 {
                     report("WIR2313", "Typed WIR fit lowering requires numeric or object/interface operands.",
                            expression.Get());
@@ -4042,8 +4050,10 @@ namespace wio::wir::typed
             {
                 const Ref<sema::Symbol> ownerSymbol =
                     member->object ? member->object->referencedSymbol.Lock() : nullptr;
-                const TypeId ownerType =
-                    member->object ? mapType(member->object->refType.Lock(), member->object.Get()) : TypeId{};
+                const bool isNamespaceAccess = ownerSymbol && ownerSymbol->kind == sema::SymbolKind::Namespace;
+                const TypeId ownerType = member->object && !isNamespaceAccess
+                                             ? mapType(member->object->refType.Lock(), member->object.Get())
+                                             : TypeId{};
                 const Type* ownerTypeInfo = result_.module_.types.tryGet(ownerType);
                 if (member->intrinsicMember == IntrinsicMember::PackSize ||
                     member->intrinsicMember == IntrinsicMember::PackArray)
@@ -4090,7 +4100,7 @@ namespace wio::wir::typed
                 const Ref<sema::Symbol> memberSymbol = member->referencedSymbol.Lock();
                 const auto staticGlobal =
                     memberSymbol ? globalsBySymbol_.find(memberSymbol.Get()) : globalsBySymbol_.end();
-                if (isStaticNominalAccess && staticGlobal != globalsBySymbol_.end())
+                if (staticGlobal != globalsBySymbol_.end())
                 {
                     const Global& descriptor = result_.module_.globals.at(staticGlobal->second.value());
                     const ValueId globalPlace{state.nextValue++};
@@ -4200,17 +4210,18 @@ namespace wio::wir::typed
                     return buildOverloadedOperator(*assignment, assignment->operatorDispatchKind,
                                                    assignment->overloadFunctionType,
                                                    {assignment->left, assignment->right}, state);
-                TypeId targetType = mapType(assignment->left->refType.Lock(), assignment->left.Get());
-                const Type* targetTypeInfo = result_.module_.types.tryGet(targetType);
-                const bool assignsThroughReference = targetTypeInfo && targetTypeInfo->kind == TypeKind::Reference &&
-                                                     targetTypeInfo->arguments.size() == 1;
-                const TypeId assignedValueType =
-                    assignsThroughReference ? targetTypeInfo->arguments.front() : targetType;
-                const ValueId target = assignsThroughReference ? buildExpression(assignment->left, state)
-                                                               : buildPlace(assignment->left, true, state);
+                const ValueId target = buildPlace(assignment->left, true, state);
                 if (!target)
                     return {};
-                targetType = assignedValueType;
+                const TypeId targetPlaceType = emittedValueType(target, state);
+                const Type* targetTypeInfo = result_.module_.types.tryGet(targetPlaceType);
+                if (!targetTypeInfo || targetTypeInfo->kind != TypeKind::Reference ||
+                    targetTypeInfo->arguments.size() != 1)
+                {
+                    report("WIR2309", "Assignment target did not lower to a reference place.", assignment->left.Get());
+                    return {};
+                }
+                TypeId targetType = targetTypeInfo->arguments.front();
                 const ValueId right = buildExpressionAs(assignment->right, targetType, state);
                 if (!right)
                     return {};
@@ -4386,10 +4397,15 @@ namespace wio::wir::typed
                     }
                     return id;
                 };
-                const ValueId left = leftLiteral && !rightLiteral
+                const TypeId expressionType = mapExpressionType(expression, expression.Get());
+                const Type* expressionTypeInfo = result_.module_.types.tryGet(expressionType);
+                const bool numericResult = expressionTypeInfo && isNumericType(expressionTypeInfo->kind);
+                const ValueId left = numericResult ? buildExpressionAs(binary->left, expressionType, state)
+                                     : leftLiteral && !rightLiteral
                                          ? buildExpressionAs(binary->left, readableType(binary->right), state)
                                          : buildAutoReadableExpression(binary->left, state);
-                const ValueId right = rightLiteral && !leftLiteral
+                const ValueId right = numericResult ? buildExpressionAs(binary->right, expressionType, state)
+                                      : rightLiteral && !leftLiteral
                                           ? buildExpressionAs(binary->right, readableType(binary->left), state)
                                           : buildAutoReadableExpression(binary->right, state);
                 if (!op || !left || !right)
@@ -4429,6 +4445,15 @@ namespace wio::wir::typed
                 return buildMatchExpression(*match, state);
             if (const auto* call = expression->as<FunctionCallExpression>())
             {
+                if (call->operatorDispatchKind != OperatorDispatchKind::None)
+                {
+                    std::vector<NodePtr<Expression>> operands;
+                    operands.reserve(call->arguments.size() + 1);
+                    operands.push_back(call->callee);
+                    operands.insert(operands.end(), call->arguments.begin(), call->arguments.end());
+                    return buildOverloadedOperator(*call, call->operatorDispatchKind, call->overloadFunctionType,
+                                                   operands, state);
+                }
                 Ref<sema::Symbol> calleeSymbol = call->referencedSymbol.Lock();
                 if (!calleeSymbol && call->callee)
                     calleeSymbol = call->callee->referencedSymbol.Lock();
@@ -4728,7 +4753,12 @@ namespace wio::wir::typed
                     const MethodLayout* method = findMethodLayout(receiverNominalType, calleeSymbol);
                     if (receiverOwner && functionIt != functionsBySymbol_.end() && method)
                     {
-                        const ValueId receiver = buildExpression(memberCallee->object, state);
+                        const Type* methodResultType = result_.module_.types.tryGet(callResultType);
+                        const bool borrowedResult = methodResultType && methodResultType->kind == TypeKind::Reference;
+                        const bool temporaryReceiver = memberCallee->object->is<FunctionCallExpression>();
+                        const ValueId receiver = borrowedResult && temporaryReceiver
+                                                     ? buildPlace(memberCallee->object, method->receiverMutable, state)
+                                                     : buildExpressionAs(memberCallee->object, rawReceiverType, state);
                         if (!receiver)
                             return {};
                         Instruction instruction{
@@ -4766,7 +4796,7 @@ namespace wio::wir::typed
                                    expression.Get());
                             return {};
                         }
-                        const TypeId resultType = mapType(expression->refType.Lock(), expression.Get());
+                        const TypeId resultType = callResultType;
                         instruction.genericArguments =
                             genericArguments(*call, calleeSymbol, call->callee->refType.Lock());
                         instruction.specializationKey = specializationKey(
@@ -4776,11 +4806,13 @@ namespace wio::wir::typed
                         if (type && type->kind == TypeKind::Void)
                         {
                             currentBlock(state).instructions.push_back(std::move(instruction));
-                            releaseOwnedTemporary(receiver, expression.Get(), state);
+                            if (!borrowedResult)
+                                releaseOwnedTemporary(receiver, expression.Get(), state);
                             return {};
                         }
                         const ValueId result = appendValue(std::move(instruction));
-                        releaseOwnedTemporary(receiver, expression.Get(), state);
+                        if (!borrowedResult)
+                            releaseOwnedTemporary(receiver, expression.Get(), state);
                         return result;
                     }
                 }
@@ -4800,7 +4832,8 @@ namespace wio::wir::typed
                                         (call->callee && call->callee->is<LambdaExpression>());
                 if (isIndirect)
                 {
-                    const ValueId callableValue = buildExpression(call->callee, state);
+                    const TypeId callableType = mapType(selectedCallableType, call->callee.Get());
+                    const ValueId callableValue = buildExpressionAs(call->callee, callableType, state);
                     if (!callableValue || !visibleFunctionType)
                     {
                         report("WIR2344", "Indirect call requires a resolved function value.", expression.Get());
@@ -4809,7 +4842,7 @@ namespace wio::wir::typed
                     Instruction instruction{.opcode = Opcode::IndirectCall,
                                             .operands = {callableValue},
                                             .source = SourceSpan::at(expression->location())};
-                    instruction.signatureTypes.push_back(mapType(selectedCallableType, call->callee.Get()));
+                    instruction.signatureTypes.push_back(callableType);
                     for (std::size_t index = 0; index < call->arguments.size(); ++index)
                     {
                         const auto& argument = call->arguments[index];
@@ -4839,6 +4872,56 @@ namespace wio::wir::typed
                 {
                     report("WIR2304", "Call target has no indexed WIR function identity.", expression.Get());
                     return {};
+                }
+                const Function* calleeFunction = findFunction(functionIt->second);
+                if (calleeFunction && calleeFunction->isMethod && state.selfValue &&
+                    !isNativeFunction(functionIt->second))
+                {
+                    const MethodLayout* method = findMethodLayout(calleeFunction->ownerType, calleeSymbol);
+                    const Type* owner = result_.module_.types.tryGet(calleeFunction->ownerType);
+                    if (!method || !owner)
+                    {
+                        report("WIR2362", "Implicit self method call is missing its canonical owner slot.",
+                               expression.Get());
+                        return {};
+                    }
+                    Instruction instruction{
+                        .opcode = owner->nominalKind == NominalKind::Interface ? Opcode::InterfaceCall
+                                  : owner->nominalKind == NominalKind::Object  ? Opcode::VirtualCall
+                                                                               : Opcode::MethodCall,
+                        .operands = {state.selfValue},
+                        .callee = functionIt->second,
+                        .selector = method->name,
+                        .projectionIndex = method->slot,
+                        .signatureTypes = {referenceType(calleeFunction->ownerType, method->receiverMutable)},
+                        .targetType = calleeFunction->ownerType,
+                        .source = SourceSpan::at(expression->location())};
+                    for (std::size_t index = 0; index < call->arguments.size(); ++index)
+                    {
+                        const auto& argument = call->arguments[index];
+                        const TypeId expectedType =
+                            visibleFunctionType && index < visibleFunctionType->paramTypes.size()
+                                ? mapType(visibleFunctionType->paramTypes[index], argument.Get())
+                                : mapType(argument->refType.Lock(), argument.Get());
+                        if (!appendCallArgument(instruction, argument, expectedType, state))
+                            return {};
+                    }
+                    if (!appendDefaultCallArguments(instruction, *call, visibleFunctionType, calleeSymbol, 0, state))
+                    {
+                        report("WIR2359", "Implicit self method call is missing a materializable default argument.",
+                               expression.Get());
+                        return {};
+                    }
+                    instruction.genericArguments = genericArguments(*call, calleeSymbol, selectedCallableType);
+                    instruction.specializationKey = specializationKey(instruction.callee, instruction.genericArguments,
+                                                                      instruction.signatureTypes, callResultType);
+                    const Type* resultType = result_.module_.types.tryGet(callResultType);
+                    if (resultType && resultType->kind == TypeKind::Void)
+                    {
+                        currentBlock(state).instructions.push_back(std::move(instruction));
+                        return {};
+                    }
+                    return appendValue(std::move(instruction));
                 }
                 Instruction instruction{.opcode =
                                             isNativeFunction(functionIt->second) ? Opcode::NativeCall : Opcode::Call,
@@ -4971,7 +5054,7 @@ namespace wio::wir::typed
                 {
                     const ValueId place =
                         buildOverloadedOperator(*access, access->operatorDispatchKind, access->overloadFunctionType,
-                                                {access->object, access->index}, state);
+                                                {access->object, access->index}, state, true);
                     const TypeId placeType = mapType(expression->refType.Lock(), expression.Get());
                     return place ? adaptPlaceMutability(place, placeType, needsMutable, expression.Get(), state)
                                  : ValueId{};
@@ -5129,11 +5212,46 @@ namespace wio::wir::typed
             {
                 const TypeId callType = mapType(expression->refType.Lock(), expression.Get());
                 const Type* callTypeInfo = result_.module_.types.tryGet(callType);
+                if (call->operatorDispatchKind != OperatorDispatchKind::None)
+                {
+                    std::vector<NodePtr<Expression>> operands;
+                    operands.reserve(call->arguments.size() + 1);
+                    operands.push_back(call->callee);
+                    operands.insert(operands.end(), call->arguments.begin(), call->arguments.end());
+                    const ValueId place = buildOverloadedOperator(*call, call->operatorDispatchKind,
+                                                                  call->overloadFunctionType, operands, state, true);
+                    return place ? adaptPlaceMutability(place, callType, needsMutable, expression.Get(), state)
+                                 : ValueId{};
+                }
                 if (callTypeInfo && callTypeInfo->kind == TypeKind::Reference)
                 {
                     const ValueId place = buildExpression(expression, state);
                     return place ? adaptPlaceMutability(place, callType, needsMutable, expression.Get(), state)
                                  : ValueId{};
+                }
+
+                // A value-returning call may be used as the receiver of a
+                // borrowing member/extension call. Give that temporary a
+                // concrete place for the duration of the containing
+                // expression; the analyzer has already rejected references
+                // that would escape this lifetime.
+                const ValueId value = buildExpression(expression, state);
+                if (value && callTypeInfo && callTypeInfo->kind != TypeKind::Void)
+                {
+                    const ValueId place{state.nextValue++};
+                    currentBlock(state).instructions.push_back(
+                        Instruction{.opcode = Opcode::LocalPlace,
+                                    .result = place,
+                                    .resultType = referenceType(callType, true),
+                                    .selector = "$temporary." + std::to_string(place.value()),
+                                    .source = SourceSpan::at(expression->location())});
+                    currentBlock(state).instructions.push_back(
+                        Instruction{.opcode = Opcode::PlaceInit,
+                                    .operands = {place, value},
+                                    .source = SourceSpan::at(expression->location())});
+                    state.temporaryPlaces.emplace_back(place, callType);
+                    return adaptPlaceMutability(place, referenceType(callType, true), needsMutable, expression.Get(),
+                                                state);
                 }
             }
 
@@ -5202,6 +5320,41 @@ namespace wio::wir::typed
                     }
                 }
             }
+            const Type* destination = result_.module_.types.tryGet(destinationType);
+            if (expression && expression->is<NullExpression>() && destination &&
+                (destination->kind == TypeKind::Nullable || destination->kind == TypeKind::Any ||
+                 destination->kind == TypeKind::Opaque))
+            {
+                const ValueId value{state.nextValue++};
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::Constant,
+                                .result = value,
+                                .resultType = destinationType,
+                                .literal = NullLiteral{},
+                                .resultOwnership = ownershipForType(destinationType),
+                                .source = SourceSpan::at(expression->location())});
+                rememberOwnership(state, value, ownershipForType(destinationType));
+                return value;
+            }
+            if (expression && destination && destination->kind == TypeKind::Function)
+            {
+                Ref<sema::Symbol> symbol = expression->referencedSymbol.Lock();
+                symbol = resolveCallableSymbol(std::move(symbol), expression->refType.Lock());
+                const auto function = symbol ? functionsBySymbol_.find(symbol.Get()) : functionsBySymbol_.end();
+                if (function != functionsBySymbol_.end())
+                {
+                    const ValueId value{state.nextValue++};
+                    currentBlock(state).instructions.push_back(
+                        Instruction{.opcode = Opcode::FunctionReference,
+                                    .result = value,
+                                    .resultType = destinationType,
+                                    .callee = function->second,
+                                    .specializationKey = specializationKey(function->second, {}, {}, destinationType),
+                                    .source = SourceSpan::at(expression->location())});
+                    rememberOwnership(state, value, ownershipForType(destinationType));
+                    return value;
+                }
+            }
             // Ref expressions are contextual: semantic analysis intentionally
             // leaves their placeholder type unresolved and the selected
             // parameter supplies view/ref mutability. Do not leak that
@@ -5209,13 +5362,32 @@ namespace wio::wir::typed
             // place directly.
             if (const auto* reference = expression ? expression->as<RefExpression>() : nullptr)
             {
-                const Type* destination = result_.module_.types.tryGet(destinationType);
                 if (destination && destination->kind == TypeKind::Reference && destination->arguments.size() == 1)
                 {
                     // Building the place may grow the interned type table.
                     const Type destinationInfo = *destination;
                     const ValueId place = buildPlace(reference->operand, destinationInfo.isMutable, state);
                     const TypeId sourceNominal = mapType(reference->operand->refType.Lock(), expression.Get());
+                    const Type* sourceValueType = result_.module_.types.tryGet(sourceNominal);
+                    const Type* destinationValueType = result_.module_.types.tryGet(destinationInfo.arguments.front());
+                    if (place && sourceValueType && destinationValueType && sourceValueType->kind == TypeKind::Array &&
+                        sourceValueType->name == "literal" && destinationValueType->kind == TypeKind::Array &&
+                        !destinationValueType->staticExtent &&
+                        sourceValueType->arguments == destinationValueType->arguments)
+                    {
+                        const ValueId borrowed{state.nextValue++};
+                        currentBlock(state).instructions.push_back(
+                            Instruction{.opcode = Opcode::Borrow,
+                                        .result = borrowed,
+                                        .resultType = destinationType,
+                                        .operands = {place},
+                                        .resultOwnership = ValueOwnership::Borrowed,
+                                        .borrowLifetime = BorrowLifetime::Caller,
+                                        .borrowOrigin = place,
+                                        .source = SourceSpan::at(expression->location())});
+                        rememberOwnership(state, borrowed, ValueOwnership::Borrowed);
+                        return borrowed;
+                    }
                     TypeId underlyingSource;
                     if (place && underlyingNominalType(sourceNominal, &underlyingSource) &&
                         underlyingSource != destinationInfo.arguments.front() &&
@@ -5247,7 +5419,6 @@ namespace wio::wir::typed
                 return ensureOwned(value, destinationType, expression.Get(), state);
 
             const Type* source = result_.module_.types.tryGet(sourceType);
-            const Type* destination = result_.module_.types.tryGet(destinationType);
             const auto packValue = [](const Type* type)
             {
                 return type && (type->kind == TypeKind::GenericParameterPack || type->kind == TypeKind::ValuePack ||
@@ -5397,9 +5568,9 @@ namespace wio::wir::typed
                 return converted;
             }
 
-            if (!source || !destination || !isSafeNumericWiden(source->kind, destination->kind))
+            if (!source || !destination || !isImplicitNumericConversion(source->kind, destination->kind))
             {
-                report("WIR2314", "Expression requires a conversion that is not a safe implicit numeric widening.",
+                report("WIR2314", "Expression requires a conversion that is not allowed by Wio numeric promotion.",
                        expression.Get());
                 return {};
             }
@@ -5421,7 +5592,9 @@ namespace wio::wir::typed
                 return {};
 
             Literal literal;
-            if (type->kind == TypeKind::GenericParameter)
+            if (type->kind == TypeKind::GenericParameter || type->kind == TypeKind::Array ||
+                type->kind == TypeKind::Dictionary || type->kind == TypeKind::Nullable ||
+                type->kind == TypeKind::Function || type->kind == TypeKind::Opaque || type->kind == TypeKind::Named)
             {
                 const ValueId value{state.nextValue++};
                 currentBlock(state).instructions.push_back(
@@ -6177,6 +6350,11 @@ namespace wio::wir::typed
                             .operands = {source},
                             .targetType = targetType,
                             .resultOwnership = ownershipForType(targetType),
+                            .borrowLifetime = ownershipForType(targetType) == ValueOwnership::Borrowed
+                                                  ? BorrowLifetime::Lexical
+                                                  : BorrowLifetime::None,
+                            .borrowOrigin =
+                                ownershipForType(targetType) == ValueOwnership::Borrowed ? source : ValueId{},
                             .source = SourceSpan::at(statement.matchVar.loc)});
                         rememberOwnership(thenState, narrowed, ownershipForType(targetType));
                         releaseOwnedTemporary(source, &statement, thenState);
@@ -6988,7 +7166,7 @@ namespace wio::wir::typed
             }
         }
 
-        static bool isSafeNumericWiden(const TypeKind sourceKind, const TypeKind destinationKind)
+        static bool isImplicitNumericConversion(const TypeKind sourceKind, const TypeKind destinationKind)
         {
             if (sourceKind == destinationKind)
                 return true;
@@ -7000,14 +7178,11 @@ namespace wio::wir::typed
             {
                 if (source->isFloat)
                     return destination->bits >= source->bits;
-                const int exactIntegerBits = destination->bits == 32 ? 24 : 53;
-                return source->bits - (source->isSigned ? 1 : 0) <= exactIntegerBits;
+                return true;
             }
             if (source->isFloat)
                 return false;
-            if (destination->isSigned == source->isSigned)
-                return destination->bits >= source->bits;
-            return destination->isSigned && !source->isSigned && destination->bits > source->bits;
+            return destination->bits >= source->bits;
         }
 
         static std::optional<Literal> integerLiteral(const IntegerResult& value)
