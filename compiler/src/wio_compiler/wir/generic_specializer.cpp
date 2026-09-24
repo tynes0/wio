@@ -207,10 +207,18 @@ namespace wio::wir
                         if (!bind(source->second.ownerType, owner, ownerBindings))
                             continue;
                         Bindings cache;
-                        method.returnType = substitute(method.returnType, ownerBindings, cache);
+                        // A concrete semantic type can be interned before its
+                        // generic declaration has finished populating every
+                        // layout snapshot. The source function is the stable
+                        // callable contract; derive the concrete method
+                        // signature from it instead of re-specializing a
+                        // possibly stale method-layout copy.
+                        method.returnType = substitute(source->second.returnType, ownerBindings, cache);
                         std::vector<TypeId> concreteParameters;
-                        for (const TypeId parameter : method.parameterTypes)
+                        for (std::size_t parameterIndex = 1; parameterIndex < source->second.parameters.size();
+                             ++parameterIndex)
                         {
+                            const TypeId parameter = source->second.parameters[parameterIndex].type;
                             const TypeId concrete = substitute(parameter, ownerBindings, cache);
                             const Type& concreteType = module_.types.get(concrete);
                             if ((concreteType.kind == TypeKind::TypePack || concreteType.kind == TypeKind::ValuePack) &&
@@ -549,10 +557,18 @@ namespace wio::wir
                 }
                 if (result)
                 {
-                    // An existing concrete layout from semantic analysis is the
-                    // canonical identity; never overwrite its resolved fields.
-                    if (openType(result) || methodLayoutsReferenceBindings(result, bindings))
-                        module_.types.getMutable(result) = std::move(type);
+                    // This path starts from an open nominal declaration. Its
+                    // fully substituted layout is authoritative even when the
+                    // nominal identity was interned earlier from a signature;
+                    // that earlier snapshot can otherwise carry fields or
+                    // method types from a different instantiation.
+                    const Type& existing = module_.types.get(result);
+                    const bool hasMaterializedMethods =
+                        std::ranges::any_of(existing.methods, [&](const MethodLayout& method)
+                                            { return !templates_.contains(method.function); });
+                    if (hasMaterializedMethods)
+                        type.methods = existing.methods;
+                    module_.types.getMutable(result) = std::move(type);
                 }
                 else
                     result = module_.types.intern(std::move(type));

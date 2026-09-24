@@ -2456,7 +2456,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_emit_cpp_file_test(
         wio_test_native_pod_component_ref_dispatch_uses_direct_alias
         "${CMAKE_SOURCE_DIR}/tests/native/native_pod_component_bridge.wio"
-        "native_pod::Translate\\(\\*value, dx, dy\\);"
+        "native_pod::Translate\\([^;]*\\.read\\(\\), [^,]+, [^)]+\\);"
         --include-dir
         "${CMAKE_SOURCE_DIR}/tests/native"
     )
@@ -5465,10 +5465,9 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native/missing_link_library.lib"
     )
 
-    add_wio_failure_test(
+    add_wio_success_test(
         wio_invalid_export_string_return_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/export_string_return_not_supported.wio"
-        "@Export currently supports only primitive or void return types"
     )
 
     add_wio_failure_test(

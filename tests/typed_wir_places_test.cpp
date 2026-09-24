@@ -19,7 +19,7 @@ namespace
         std::cerr << message << '\n';
         return false;
     }
-}
+} // namespace
 
 int main()
 {
@@ -29,19 +29,19 @@ int main()
     namespace typed = wio::wir::typed;
 
     bool ok = true;
-    Lexer lexer(
-        "component Pair { public x: i32; public y: i32; } "
-        "fn First(values: ref i32[]) -> ref i32 { return ref values[0usize]; } "
-        "fn Update(values: ref i32[], target: ref Pair) -> i32 { "
-        "  target.x += 2; "
-        "  values[1usize] = target.x; "
-        "  mut local: i32 = 3; "
-        "  local += 4; "
-        "  if target.y > 0 { local += target.y; } else { local -= 1; } "
-        "  let observed: view i32 = ref local; "
-        "  return First(values) + deref observed + target.x; "
-        "}",
-        "typed_wir_places_test.wio");
+    Lexer lexer("component Pair { public x: i32; public y: i32; } "
+                "fn First(values: ref i32[]) -> ref i32 { return ref values[0usize]; } "
+                "fn Update(values: ref i32[], target: ref Pair) -> i32 { "
+                "  target.x += 2; "
+                "  values[1usize] = target.x; "
+                "  mut local: i32 = 3; "
+                "  local += 4; "
+                "  if target.y > 0 { local += target.y; } else { local -= 1; } "
+                "  let observed: view i32 = ref local; "
+                "  return First(values) + deref observed + target.x; "
+                "} "
+                "fn Entry() -> i32 { return 0; }",
+                "typed_wir_places_test.wio");
     Parser parser(lexer.lex());
     const Ref<Program> program = parser.parseProgram();
     sema::SemanticAnalyzer analyzer;
@@ -87,17 +87,15 @@ int main()
             }
         }
     }
-    ok &= expect(localPlaces == 2 && initializations == 2,
-        "Local values, including stored views, must have explicit initialized places");
+    ok &= expect(localPlaces == 1 && initializations == 1,
+                 "Addressable local values must have explicit initialized places while borrowed views remain SSA");
     ok &= expect(loads >= 8 && stores >= 5 && fieldPlaces >= 5 && arrayPlaces >= 2 && borrows >= 1,
-        "Typed WIR must expose loads, stores, projections, and read-only borrows");
+                 "Typed WIR must expose loads, stores, projections, and read-only borrows");
 
     const std::string typedText = typed::Printer{}.print(build.module());
     ok &= expect(
-        typedText.find("local-place") != std::string::npos &&
-            typedText.find("place-init") != std::string::npos &&
-            typedText.find("field-place") != std::string::npos &&
-            typedText.find("array-place") != std::string::npos &&
+        typedText.find("local-place") != std::string::npos && typedText.find("place-init") != std::string::npos &&
+            typedText.find("field-place") != std::string::npos && typedText.find("array-place") != std::string::npos &&
             typedText.find("borrow") != std::string::npos,
         "Typed WIR printer must make memory semantics inspectable");
 
@@ -109,11 +107,10 @@ int main()
     }
     ok &= expect(lowering.succeeded(), "Place-oriented Typed WIR must lower successfully");
     const std::string loweredText = lowered::Printer{}.print(lowering.module());
-    ok &= expect(
-        loweredText.find("local-place") != std::string::npos &&
-            loweredText.find("store") != std::string::npos &&
-            loweredText.find("field-place") != std::string::npos,
-        "Lowered WIR must preserve backend-neutral memory operations");
+    ok &=
+        expect(loweredText.find("local-place") != std::string::npos && loweredText.find("store") != std::string::npos &&
+                   loweredText.find("field-place") != std::string::npos,
+               "Lowered WIR must preserve backend-neutral memory operations");
 
     typed::Module malformed = build.module();
     bool damaged = false;
@@ -152,7 +149,7 @@ int main()
         }
     }
     ok &= expect(damaged && !typed::Verifier{}.verify(malformed).succeeded(),
-        "Typed WIR verifier must reject stores through read-only places");
+                 "Typed WIR verifier must reject stores through read-only places");
 
     return ok ? 0 : 1;
 }

@@ -284,16 +284,15 @@ namespace wio::wir::typed
                                        [&](const TypeId base) { return nominalDerivesFrom(base, destinationType); });
         }
 
-        const MethodLayout* findMethodLayout(const TypeId ownerTypeId, const Ref<sema::Symbol>& symbol) const
+        std::optional<MethodLayout> findMethodLayout(const TypeId ownerTypeId, const Ref<sema::Symbol>& symbol) const
         {
             const Type* owner = result_.module_.types.tryGet(ownerTypeId);
             if (!owner || !symbol)
-                return nullptr;
-            const auto function = functionsBySymbol_.find(symbol.Get());
-            const auto found = std::ranges::find_if(
-                owner->methods, [&](const MethodLayout& method)
-                { return function != functionsBySymbol_.end() && method.function == function->second; });
-            return found == owner->methods.end() ? nullptr : &*found;
+                return std::nullopt;
+            const std::optional<FunctionId> function = indexedFunction(symbol);
+            const auto found = std::ranges::find_if(owner->methods, [&](const MethodLayout& method)
+                                                    { return function && method.function == *function; });
+            return found == owner->methods.end() ? std::nullopt : std::optional<MethodLayout>{*found};
         }
 
         std::optional<FunctionId> indexedFunction(const Ref<sema::Symbol>& symbol) const
@@ -2063,20 +2062,20 @@ namespace wio::wir::typed
             }
             if (methodSymbol->kind != sema::SymbolKind::Function || isLifecycleMethod(methodSymbol->name))
                 return;
-            const auto function = functionsBySymbol_.find(methodSymbol.Get());
+            const std::optional<FunctionId> function = indexedFunction(methodSymbol);
             const auto functionType = methodSymbol->type && methodSymbol->type->kind() == sema::TypeKind::Function
                                           ? methodSymbol->type.AsFast<sema::FunctionType>()
                                           : nullptr;
-            if (function == functionsBySymbol_.end() || !functionType)
+            if (!function || !functionType)
                 return;
 
             MethodLayout layout{.name = methodSymbol->name,
                                 .returnType = mapType(functionType->returnType, source),
-                                .function = function->second,
+                                .function = *function,
                                 .receiverMutable = true,
                                 .isAbstract = (!declarationsBySymbol_.contains(methodSymbol.Get()) ||
                                                declarationsBySymbol_.at(methodSymbol.Get())->body == nullptr) &&
-                                              !isNativeFunction(function->second)};
+                                              !isNativeFunction(*function)};
             for (const Ref<sema::Type>& parameterType : functionType->paramTypes)
                 layout.parameterTypes.push_back(mapType(parameterType, source));
             layout.visibility = methodSymbol->flags.get_isPublic()      ? FieldVisibility::Public
@@ -2093,11 +2092,9 @@ namespace wio::wir::typed
                                                [&](const WeakRef<sema::Symbol>& candidate)
                                                {
                                                    const Ref<sema::Symbol> symbol = candidate.Lock();
-                                                   const auto implementation =
-                                                       symbol ? functionsBySymbol_.find(symbol.Get())
-                                                              : functionsBySymbol_.end();
-                                                   return implementation != functionsBySymbol_.end() &&
-                                                          inherited.function == implementation->second;
+                                                   const std::optional<FunctionId> implementation =
+                                                       indexedFunction(symbol);
+                                                   return implementation && inherited.function == *implementation;
                                                });
                 });
             if (overridden != methods.end())
@@ -2305,9 +2302,7 @@ namespace wio::wir::typed
                     identity = next;
                 }
                 const auto& genericParameters =
-                    !structure->genericParameterTypes.empty()
-                        ? structure->genericParameterTypes
-                        : (primary ? primary->genericParameterTypes : structure->genericParameterTypes);
+                    primary ? identity->genericParameterTypes : structure->genericParameterTypes;
                 const auto mapGenericArgument = [&](const Ref<sema::Type>& argument, const std::size_t index) -> TypeId
                 {
                     Ref<sema::Type> parameter = index < genericParameters.size() ? genericParameters[index] : nullptr;
@@ -2387,15 +2382,15 @@ namespace wio::wir::typed
                 // the layout; fill this snapshot using the pinned arguments.
                 const bool usePrimaryFields =
                     primary && !structure->isExplicitSpecialization && !structure->isPartialSpecialization;
-                auto fieldNames = usePrimaryFields ? primary->fieldNames : structure->fieldNames;
-                auto fieldTypes = usePrimaryFields ? primary->fieldTypes : structure->fieldTypes;
+                const Ref<sema::Scope> layoutScope =
+                    usePrimaryFields && identity->structScope.Lock() ? identity->structScope.Lock() : structScope;
+                auto fieldNames = usePrimaryFields ? identity->fieldNames : structure->fieldNames;
+                auto fieldTypes = usePrimaryFields ? identity->fieldTypes : structure->fieldTypes;
                 std::vector<TypeId> parameters, arguments;
                 if (!structure->genericArguments.empty())
                 {
                     const auto& fieldGenericParameters =
-                        primary && !structure->isExplicitSpecialization && !structure->isPartialSpecialization
-                            ? primary->genericParameterTypes
-                            : structure->genericParameterTypes;
+                        usePrimaryFields ? identity->genericParameterTypes : structure->genericParameterTypes;
                     for (const auto& parameter : fieldGenericParameters)
                         parameters.push_back(mapType(parameter, source));
                     std::vector<TypeId> mappedArguments;
@@ -2474,9 +2469,9 @@ namespace wio::wir::typed
                         }
                     }
                 }
-                if (structScope)
+                if (layoutScope)
                 {
-                    for (const auto& [name, member] : structScope->getSymbols())
+                    for (const auto& [name, member] : layoutScope->getSymbols())
                     {
                         WIO_UNUSED(name);
                         appendMethodLayout(member, methods, source);
@@ -2493,8 +2488,8 @@ namespace wio::wir::typed
                 storedType.baseTypes = std::move(baseTypes);
                 storedType.fields = std::move(fields);
                 storedType.methods = std::move(methods);
-                storedType.hasConstructor = structScope && structScope->resolveLocally("OnConstruct");
-                storedType.hasDestructor = structScope && structScope->resolveLocally("OnDestruct");
+                storedType.hasConstructor = layoutScope && layoutScope->resolveLocally("OnConstruct");
+                storedType.hasDestructor = layoutScope && layoutScope->resolveLocally("OnDestruct");
                 if (storedType.nominalKind == NominalKind::Component)
                 {
                     const bool managedField = std::ranges::any_of(storedType.fields,
@@ -2884,9 +2879,17 @@ namespace wio::wir::typed
             if (hasBuiltinAttribute(declaration.attributes, Attribute::ModuleUnload))
                 lifecycle.unload = function;
             if (hasBuiltinAttribute(declaration.attributes, Attribute::ModuleSaveState))
+            {
                 lifecycle.saveState = function;
+                if (lifecycle.stateSchemaVersion == 0)
+                    lifecycle.stateSchemaVersion = 1;
+            }
             if (hasBuiltinAttribute(declaration.attributes, Attribute::ModuleRestoreState))
+            {
                 lifecycle.restoreState = function;
+                if (lifecycle.stateSchemaVersion == 0)
+                    lifecycle.stateSchemaVersion = 1;
+            }
         }
 
         void appendFunctionExport(const FunctionDeclaration& declaration, const Ref<sema::Symbol>& symbol,
@@ -3463,7 +3466,7 @@ namespace wio::wir::typed
                 TypeId ownerType;
                 const TypeId receiverType = mapType(operands.front()->refType.Lock(), operands.front().Get());
                 const Type* owner = underlyingNamedType(receiverType, &ownerType);
-                const MethodLayout* method = owner ? findMethodLayout(ownerType, symbol) : nullptr;
+                const std::optional<MethodLayout> method = owner ? findMethodLayout(ownerType, symbol) : std::nullopt;
                 if (!owner || !method)
                 {
                     report("WIR2353", "Member operator is missing its nominal owner slot.", &expression);
@@ -4613,7 +4616,7 @@ namespace wio::wir::typed
                             implementation != result_.module_.functions.end() && implementation->isMethod &&
                             implementation->ownerType)
                         {
-                            const MethodLayout* method =
+                            const std::optional<MethodLayout> method =
                                 findMethodLayout(implementation->ownerType, extensionImplementation);
                             if (!method || !implementationType || implementationType->paramTypes.empty())
                             {
@@ -4750,7 +4753,7 @@ namespace wio::wir::typed
                     const Type* receiverOwner = underlyingNominalType(rawReceiverType, &receiverNominalType);
                     const auto functionIt =
                         calleeSymbol ? functionsBySymbol_.find(calleeSymbol.Get()) : functionsBySymbol_.end();
-                    const MethodLayout* method = findMethodLayout(receiverNominalType, calleeSymbol);
+                    const std::optional<MethodLayout> method = findMethodLayout(receiverNominalType, calleeSymbol);
                     if (receiverOwner && functionIt != functionsBySymbol_.end() && method)
                     {
                         const Type* methodResultType = result_.module_.types.tryGet(callResultType);
@@ -4877,7 +4880,8 @@ namespace wio::wir::typed
                 if (calleeFunction && calleeFunction->isMethod && state.selfValue &&
                     !isNativeFunction(functionIt->second))
                 {
-                    const MethodLayout* method = findMethodLayout(calleeFunction->ownerType, calleeSymbol);
+                    const std::optional<MethodLayout> method =
+                        findMethodLayout(calleeFunction->ownerType, calleeSymbol);
                     const Type* owner = result_.module_.types.tryGet(calleeFunction->ownerType);
                     if (!method || !owner)
                     {
