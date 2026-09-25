@@ -138,6 +138,8 @@ namespace wio::wir
                 if (diagnostics_.empty())
                     for (Function& function : module_.functions)
                         materializeOwnedLoads(function);
+                if (diagnostics_.empty())
+                    refreshReflectionLayouts();
                 return std::move(diagnostics_);
             }
 
@@ -279,6 +281,26 @@ namespace wio::wir
             std::string lastBindMismatch_;
             FunctionId::ValueType nextId_ = 0;
             std::size_t maximumBodies_;
+
+            void refreshReflectionLayouts()
+            {
+                for (ReflectionDescriptor& descriptor : module_.contract.reflection)
+                {
+                    const Type* type = module_.types.tryGet(descriptor.type);
+                    if (!type || type->kind != TypeKind::Named || !descriptor.fields.empty() || type->fields.empty())
+                        continue;
+
+                    descriptor.fields.reserve(type->fields.size());
+                    for (const FieldLayout& field : type->fields)
+                        descriptor.fields.push_back(ReflectedFieldDescriptor{
+                            .stableId =
+                                stableModuleHash(std::to_string(descriptor.stableTypeId) + ":field:" + field.name),
+                            .name = field.name,
+                            .type = field.type,
+                            .visibility = field.visibility,
+                            .isMutable = field.isMutable});
+                }
+            }
 
             bool openType(TypeId id, std::set<TypeId>& visiting) const
             {
