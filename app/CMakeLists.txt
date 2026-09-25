@@ -1090,7 +1090,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             ${CMAKE_COMMAND}
             -DWIO_EXE=$<TARGET_FILE:wio_app>
             -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/telemetry_pipeline
-            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.17.0
+            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.18.0
             -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
     )
     set_tests_properties(
