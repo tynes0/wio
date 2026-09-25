@@ -140,6 +140,7 @@ namespace wio::codegen
 
                 emitPreamble();
                 emitNominalDeclarations();
+                emitStructuralAliases();
                 output_ << WirReflectionEmitter::traits(module_, [this](TypeId id) { return cppType(id); });
                 emitFunctionDeclarations();
                 emitHierarchyBodies();
@@ -163,6 +164,7 @@ namespace wio::codegen
             std::set<std::uint32_t> borrowedLoads_;
             std::set<std::uint32_t> objectBorrowedLoads_;
             std::set<std::uint32_t> ownedValues_;
+            std::set<std::uint32_t> structuralAliases_;
 
             std::vector<const AttributeProcessorDescriptor*> behavioralPipeline(const FunctionId function) const
             {
@@ -695,7 +697,44 @@ namespace wio::codegen
                 return result;
             }
 
+            static bool structuralType(const TypeKind kind)
+            {
+                return kind == TypeKind::PackStorage || kind == TypeKind::Reference || kind == TypeKind::Nullable ||
+                       kind == TypeKind::Array || kind == TypeKind::Dictionary || kind == TypeKind::Function ||
+                       kind == TypeKind::AsyncTask || kind == TypeKind::Iterator;
+            }
+
+            std::size_t structuralDepth(const TypeId id, std::set<std::uint32_t>& visiting) const
+            {
+                const Type* type = module_.types.tryGet(id);
+                if (!type || !structuralType(type->kind) || !visiting.insert(id.value()).second)
+                    return 0;
+                std::size_t depth = 1;
+                for (const TypeId argument : type->arguments)
+                    depth = std::max(depth, 1 + structuralDepth(argument, visiting));
+                visiting.erase(id.value());
+                return depth;
+            }
+
+            std::size_t structuralDepth(const TypeId id) const
+            {
+                std::set<std::uint32_t> visiting;
+                return structuralDepth(id, visiting);
+            }
+
+            std::string structuralAlias(const TypeId id) const
+            {
+                return "_wio_type" + std::to_string(id.value());
+            }
+
             std::string cppType(const TypeId id) const
+            {
+                if (structuralAliases_.contains(id.value()))
+                    return structuralAlias(id);
+                return cppTypeRaw(id);
+            }
+
+            std::string cppTypeRaw(const TypeId id) const
             {
                 const Type* type = module_.types.tryGet(id);
                 if (!type)
@@ -810,6 +849,26 @@ namespace wio::codegen
                 default:
                     return "void";
                 }
+            }
+
+            void emitStructuralAlias(const TypeId id)
+            {
+                const Type* type = module_.types.tryGet(id);
+                if (!type || !structuralType(type->kind) || structuralAliases_.contains(id.value()) || typeIsOpen(id) ||
+                    structuralDepth(id) < 8)
+                    return;
+                for (const TypeId argument : type->arguments)
+                    emitStructuralAlias(argument);
+                output_ << "using " << structuralAlias(id) << " = " << cppTypeRaw(id) << ";\n";
+                structuralAliases_.insert(id.value());
+            }
+
+            void emitStructuralAliases()
+            {
+                for (std::size_t index = 0; index < module_.types.size(); ++index)
+                    emitStructuralAlias(TypeId{static_cast<TypeId::ValueType>(index)});
+                if (!structuralAliases_.empty())
+                    output_ << '\n';
             }
 
             std::string legacyMangledType(const TypeId id) const

@@ -275,6 +275,41 @@ int main()
     ok &= expect(!lowered::Verifier{}.verify(malformedStorage).succeeded(),
                  "Verifier must reject storage metadata on a non-allocation instruction");
 
+    lowered::Module unusedDefaultLocal;
+    unusedDefaultLocal.name = "unused-default-local";
+    const TypeId nestedArray = unusedDefaultLocal.types.intern(
+        Type{.kind = TypeKind::Array,
+             .arguments = {unusedDefaultLocal.types.intern(
+                 Type{.kind = TypeKind::Array, .arguments = {unusedDefaultLocal.types.i32Type()}})}});
+    const TypeId nestedArrayPlace = unusedDefaultLocal.types.intern(
+        Type{.kind = TypeKind::Reference, .arguments = {nestedArray}, .isMutable = true});
+    lowered::Function unusedFunction;
+    unusedFunction.id = FunctionId{0};
+    unusedFunction.name = "UnusedDefaultLocal";
+    unusedFunction.returnType = unusedDefaultLocal.types.i32Type();
+    unusedFunction.callableType = unusedDefaultLocal.types.intern(
+        Type{.kind = TypeKind::Function, .arguments = {unusedDefaultLocal.types.i32Type()}});
+    lowered::BasicBlock unusedEntry;
+    unusedEntry.id = BlockId{0};
+    unusedEntry.name = "entry";
+    unusedEntry.instructions = {
+        lowered::Instruction{.opcode = lowered::Opcode::DefaultValue, .result = ValueId{0}, .resultType = nestedArray},
+        lowered::Instruction{
+            .opcode = lowered::Opcode::LocalPlace, .result = ValueId{1}, .resultType = nestedArrayPlace},
+        lowered::Instruction{.opcode = lowered::Opcode::PlaceInit, .operands = {ValueId{1}, ValueId{0}}},
+        lowered::Instruction{.opcode = lowered::Opcode::DropPlace, .operands = {ValueId{1}}},
+        lowered::Instruction{.opcode = lowered::Opcode::Constant,
+                             .result = ValueId{2},
+                             .resultType = unusedDefaultLocal.types.i32Type(),
+                             .literal = std::int64_t{0}},
+        lowered::Instruction{.opcode = lowered::Opcode::Return, .operands = {ValueId{2}}}};
+    unusedFunction.blocks.push_back(std::move(unusedEntry));
+    unusedDefaultLocal.functions.push_back(std::move(unusedFunction));
+    const OptimizationStatistics unusedStatistics = CanonicalOptimizer{}.optimize(unusedDefaultLocal);
+    ok &= expect(unusedStatistics.instructionsRemoved == 4 &&
+                     unusedDefaultLocal.functions.front().blocks.front().instructions.size() == 2,
+                 "Unused default locals with unobservable lifetimes must be removed as one ownership chain");
+
     const LoweringResult pipeline = LoweringPipeline{}.lower(makePipelineModule());
     ok &= expect(pipeline.succeeded() && pipeline.optimizationStatistics().constantsFolded == 1 &&
                      pipeline.optimizationStatistics().instructionsRemoved == 1 &&
