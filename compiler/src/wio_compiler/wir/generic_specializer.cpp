@@ -555,6 +555,23 @@ namespace wio::wir
                     }
                     method.parameterTypes = std::move(concreteParameters);
                 }
+                if (type.kind == TypeKind::Named && type.nominalKind == NominalKind::Component &&
+                    std::ranges::none_of(type.arguments, [&](const TypeId argument) { return openType(argument); }))
+                {
+                    const bool managedField =
+                        std::ranges::any_of(type.fields,
+                                            [&](const FieldLayout& field)
+                                            {
+                                                const Type* fieldType = module_.types.tryGet(field.type);
+                                                return fieldType && fieldType->cleanup != CleanupKind::None;
+                                            });
+                    // Open generic components conservatively require cleanup because their
+                    // arguments may own resources. Once all arguments are concrete, derive
+                    // the contract from the substituted layout. Carrying the open cleanup
+                    // bit into Pair<i32, i32> would make already-built stores require
+                    // Replace and invent drops that the source value never needed.
+                    type.cleanup = type.hasDestructor || managedField ? CleanupKind::DestroyValue : CleanupKind::None;
+                }
                 if (result)
                 {
                     // This path starts from an open nominal declaration. Its
