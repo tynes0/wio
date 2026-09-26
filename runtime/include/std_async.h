@@ -314,12 +314,18 @@ namespace wio::runtime
     {
         const char* configured = std::getenv("WIO_ASYNC_WORKERS");
         if (!configured || *configured == '\0')
-            return 0;
+        {
+            const auto hardware = static_cast<std::size_t>(std::thread::hardware_concurrency());
+            return hardware == 0 ? 2 : std::clamp<std::size_t>(hardware, 2, 8);
+        }
 
         char* end = nullptr;
         const unsigned long long parsed = std::strtoull(configured, &end, 10);
-        if (end == configured || *end != '\0' || parsed == 0 || parsed > 256)
-            return 0;
+        if (end == configured || *end != '\0' || parsed < 2 || parsed > 256)
+        {
+            const auto hardware = static_cast<std::size_t>(std::thread::hardware_concurrency());
+            return hardware == 0 ? 2 : std::clamp<std::size_t>(hardware, 2, 8);
+        }
         return static_cast<std::size_t>(parsed);
     }
 
@@ -534,10 +540,38 @@ namespace wio::runtime
 
     namespace detail
     {
+        template<typename Promise>
+        std::shared_ptr<void> CoroutineOwner(const std::coroutine_handle<Promise> continuation)
+        {
+            if constexpr (requires(Promise& promise) { promise.state; })
+                return continuation.promise().state;
+            else
+                return {};
+        }
+
+        inline std::shared_ptr<void> CoroutineOwner(const std::coroutine_handle<>)
+        {
+            return {};
+        }
+
+        inline void ResumeCoroutine(
+            const std::coroutine_handle<> continuation,
+            std::shared_ptr<void> owner = {})
+        {
+            // `owner` keeps an AsyncTask state, and therefore its coroutine
+            // frame, alive until resume() has completely returned. This is
+            // intentionally carried by value so it also works across shared
+            // library boundaries without process-global or thread-local state.
+            (void)owner;
+            continuation.resume();
+        }
+
         struct AsyncContinuationRegistration final
         {
-            explicit AsyncContinuationRegistration(std::coroutine_handle<> value)
-                : continuation(value)
+            explicit AsyncContinuationRegistration(
+                std::coroutine_handle<> value,
+                std::shared_ptr<void> owner = {})
+                : continuation(value), owner(std::move(owner))
             {
             }
 
@@ -545,8 +579,9 @@ namespace wio::runtime
             {
                 if (phase.exchange(2, std::memory_order_acq_rel) != 1)
                     return;
-                if (!DefaultAsyncScheduler().Post([value = continuation] { value.resume(); }))
-                    continuation.resume();
+                if (!DefaultAsyncScheduler().Post([value = continuation, keepAlive = owner]
+                    { ResumeCoroutine(value, keepAlive); }))
+                    ResumeCoroutine(continuation, owner);
             }
 
             bool Arm() noexcept
@@ -560,12 +595,15 @@ namespace wio::runtime
             // armed, 2 = completion/cancellation already claimed it.
             std::atomic<int> phase{0};
             std::coroutine_handle<> continuation;
+            std::shared_ptr<void> owner;
         };
 
         struct AsyncInlineContinuationRegistration final
         {
-            explicit AsyncInlineContinuationRegistration(std::coroutine_handle<> value)
-                : continuation(value)
+            explicit AsyncInlineContinuationRegistration(
+                std::coroutine_handle<> value,
+                std::shared_ptr<void> owner = {})
+                : continuation(value), owner(std::move(owner))
             {
             }
 
@@ -573,7 +611,7 @@ namespace wio::runtime
             {
                 if (phase.exchange(2, std::memory_order_acq_rel) != 1)
                     return;
-                continuation.resume();
+                ResumeCoroutine(continuation, owner);
             }
 
             bool Arm() noexcept
@@ -585,6 +623,7 @@ namespace wio::runtime
 
             std::atomic<int> phase{0};
             std::coroutine_handle<> continuation;
+            std::shared_ptr<void> owner;
         };
 
         struct AsyncCancellationRegistration final
@@ -638,7 +677,7 @@ namespace wio::runtime
                         owner->Complete();
                         return;
                     }
-                    owner->handle.resume();
+                    ResumeCoroutine(owner->handle, owner);
                 }))
                 {
                     {
@@ -737,9 +776,11 @@ namespace wio::runtime
             }
 
             std::shared_ptr<AsyncContinuationRegistration> AddContinuation(
-                std::coroutine_handle<> continuation)
+                std::coroutine_handle<> continuation,
+                std::shared_ptr<void> owner = {})
             {
-                auto registration = std::make_shared<AsyncContinuationRegistration>(continuation);
+                auto registration =
+                    std::make_shared<AsyncContinuationRegistration>(continuation, std::move(owner));
                 std::lock_guard lock(mutex);
                 if (completed)
                     return nullptr;
@@ -840,6 +881,28 @@ namespace wio::runtime
         {
             std::shared_ptr<detail::AsyncTaskState<T>> state;
 
+            struct final_awaiter final
+            {
+                bool await_ready() const noexcept { return false; }
+
+                bool await_suspend(std::coroutine_handle<promise_type> coroutine) const noexcept
+                {
+                    auto owner = std::move(coroutine.promise().state);
+                    if (!owner)
+                        return false;
+
+                    // Every asynchronous resume carries a strong reference to
+                    // this state. A synchronously completing coroutine still
+                    // has its not-yet-returned AsyncTask object. Suspending the
+                    // final frame therefore lets the eventual last task owner
+                    // destroy it only after await_suspend has returned.
+                    owner->Complete();
+                    return true;
+                }
+
+                void await_resume() const noexcept {}
+            };
+
             AsyncTask get_return_object()
             {
                 auto owner = std::make_shared<detail::AsyncTaskState<T>>();
@@ -850,14 +913,8 @@ namespace wio::runtime
                 return AsyncTask(std::move(owner));
             }
 
-            ~promise_type()
-            {
-                if (state)
-                    state->handle = {};
-            }
-
             std::suspend_never initial_suspend() const noexcept { return {}; }
-            std::suspend_never final_suspend() const noexcept { return {}; }
+            final_awaiter final_suspend() const noexcept { return {}; }
 
             template<typename U>
             void return_value(U&& value)
@@ -868,8 +925,6 @@ namespace wio::runtime
                     std::lock_guard lock(owner->mutex);
                     owner->value.emplace(std::forward<U>(value));
                 }
-                if (owner)
-                    owner->Complete();
             }
 
             void unhandled_exception() noexcept
@@ -881,7 +936,6 @@ namespace wio::runtime
                     std::lock_guard lock(owner->mutex);
                     owner->failure = std::current_exception();
                 }
-                owner->Complete();
             }
         };
 
@@ -943,7 +997,8 @@ namespace wio::runtime
                 if constexpr (requires(Promise& promise) { promise.state; })
                     awaitingState = continuation.promise().state;
 
-                auto registration = state->AddContinuation(continuation);
+                auto registration = state->AddContinuation(
+                    continuation, detail::CoroutineOwner(continuation));
                 if (!registration)
                     return false;
 
@@ -1006,6 +1061,22 @@ namespace wio::runtime
         {
             std::shared_ptr<detail::AsyncTaskState<void>> state;
 
+            struct final_awaiter final
+            {
+                bool await_ready() const noexcept { return false; }
+
+                bool await_suspend(std::coroutine_handle<promise_type> coroutine) const noexcept
+                {
+                    auto owner = std::move(coroutine.promise().state);
+                    if (!owner)
+                        return false;
+                    owner->Complete();
+                    return true;
+                }
+
+                void await_resume() const noexcept {}
+            };
+
             AsyncTask get_return_object()
             {
                 auto owner = std::make_shared<detail::AsyncTaskState<void>>();
@@ -1016,19 +1087,9 @@ namespace wio::runtime
                 return AsyncTask(std::move(owner));
             }
 
-            ~promise_type()
-            {
-                if (state)
-                    state->handle = {};
-            }
-
             std::suspend_never initial_suspend() const noexcept { return {}; }
-            std::suspend_never final_suspend() const noexcept { return {}; }
-            void return_void()
-            {
-                if (state)
-                    state->Complete();
-            }
+            final_awaiter final_suspend() const noexcept { return {}; }
+            void return_void() noexcept {}
 
             void unhandled_exception() noexcept
             {
@@ -1039,7 +1100,6 @@ namespace wio::runtime
                     std::lock_guard lock(owner->mutex);
                     owner->failure = std::current_exception();
                 }
-                owner->Complete();
             }
         };
 
@@ -1078,7 +1138,8 @@ namespace wio::runtime
                 if constexpr (requires(Promise& promise) { promise.state; })
                     awaitingState = continuation.promise().state;
 
-                auto registration = state->AddContinuation(continuation);
+                auto registration = state->AddContinuation(
+                    continuation, detail::CoroutineOwner(continuation));
                 if (!registration)
                     return false;
                 if constexpr (requires(Promise& promise) { promise.state; })
@@ -1135,11 +1196,13 @@ namespace wio::runtime
 
         bool await_ready() const { return state && state->Ready(); }
 
-        bool await_suspend(std::coroutine_handle<> continuation)
+        template<typename Promise>
+        bool await_suspend(std::coroutine_handle<Promise> continuation)
         {
             if (!state)
                 throw std::runtime_error("cannot await an empty scoped task");
-            auto registration = state->AddContinuation(continuation);
+            auto registration = state->AddContinuation(
+                continuation, detail::CoroutineOwner(continuation));
             if (!registration)
                 return false;
             state->Start();
@@ -1324,7 +1387,8 @@ namespace wio::runtime
             if constexpr (requires(Promise& promise) { promise.state; })
                 taskState = continuation.promise().state;
 
-            auto registration = std::make_shared<detail::AsyncInlineContinuationRegistration>(continuation);
+            auto registration = std::make_shared<detail::AsyncInlineContinuationRegistration>(
+                continuation, detail::CoroutineOwner(continuation));
             if constexpr (requires(Promise& promise) { promise.state; })
             {
                 if (auto state = taskState.lock())
@@ -1367,7 +1431,8 @@ namespace wio::runtime
             if constexpr (requires(Promise& promise) { promise.state; })
                 taskState = continuation.promise().state;
 
-            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(
+                continuation, detail::CoroutineOwner(continuation));
             if constexpr (requires(Promise& promise) { promise.state; })
             {
                 if (auto state = taskState.lock())
@@ -1408,7 +1473,8 @@ namespace wio::runtime
             if constexpr (requires(Promise& promise) { promise.state; })
                 taskState = continuation.promise().state;
 
-            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(
+                continuation, detail::CoroutineOwner(continuation));
             auto timer = DefaultAsyncScheduler().PostAfter(
                 delay, [registration] { registration->ResumeOnce(); });
             if (!timer)
@@ -1525,10 +1591,12 @@ namespace wio::runtime
         std::exception_ptr failure;
 
         bool await_ready() const noexcept { return false; }
-        bool await_suspend(std::coroutine_handle<> continuation)
+        template<typename Promise>
+        bool await_suspend(std::coroutine_handle<Promise> continuation)
         {
             auto& scheduler = DefaultAsyncBlockingScheduler();
-            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(
+                continuation, detail::CoroutineOwner(continuation));
             if (!registration->Arm())
                 return false;
             if (!scheduler.Submit([this, registration]
@@ -1560,10 +1628,12 @@ namespace wio::runtime
         std::exception_ptr failure;
 
         bool await_ready() const noexcept { return false; }
-        bool await_suspend(std::coroutine_handle<> continuation)
+        template<typename Promise>
+        bool await_suspend(std::coroutine_handle<Promise> continuation)
         {
             auto& scheduler = DefaultAsyncBlockingScheduler();
-            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(
+                continuation, detail::CoroutineOwner(continuation));
             if (!registration->Arm())
                 return false;
             if (!scheduler.Submit([this, registration]
@@ -1628,10 +1698,12 @@ namespace wio::runtime
         std::exception_ptr failure;
 
         bool await_ready() const noexcept { return false; }
-        bool await_suspend(std::coroutine_handle<> continuation)
+        template<typename Promise>
+        bool await_suspend(std::coroutine_handle<Promise> continuation)
         {
             auto& scheduler = DefaultAsyncIoScheduler();
-            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(
+                continuation, detail::CoroutineOwner(continuation));
             if (!registration->Arm())
                 return false;
             if (!scheduler.Submit([this, registration]
@@ -1663,10 +1735,12 @@ namespace wio::runtime
         std::exception_ptr failure;
 
         bool await_ready() const noexcept { return false; }
-        bool await_suspend(std::coroutine_handle<> continuation)
+        template<typename Promise>
+        bool await_suspend(std::coroutine_handle<Promise> continuation)
         {
             auto& scheduler = DefaultAsyncIoScheduler();
-            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(continuation);
+            auto registration = std::make_shared<detail::AsyncContinuationRegistration>(
+                continuation, detail::CoroutineOwner(continuation));
             if (!registration->Arm())
                 return false;
             if (!scheduler.Submit([this, registration]

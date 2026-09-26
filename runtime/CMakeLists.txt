@@ -412,6 +412,21 @@ if(BUILD_TESTING)
         ENVIRONMENT "WIO_ASYNC_WORKERS=2"
     )
 
+    add_executable(wio_async_scheduler_config_test
+        "${CMAKE_SOURCE_DIR}/tests/async_scheduler_config_test.cpp"
+    )
+    target_include_directories(wio_async_scheduler_config_test PRIVATE
+        "${WIO_RUNTIME_INCLUDE_DIR}"
+    )
+    if(NOT WIN32)
+        target_link_libraries(wio_async_scheduler_config_test PRIVATE pthread)
+    endif()
+    add_test(NAME wio_async_scheduler_config COMMAND wio_async_scheduler_config_test)
+    set_tests_properties(wio_async_scheduler_config PROPERTIES
+        TIMEOUT 15
+        LABELS "async;runtime;configuration"
+    )
+
     add_executable(wio_async_scope_runtime_stress
         "${CMAKE_SOURCE_DIR}/tests/async_scope_runtime_stress.cpp"
     )

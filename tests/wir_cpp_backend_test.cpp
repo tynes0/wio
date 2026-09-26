@@ -663,7 +663,10 @@ int main(int argc, char** argv)
                 "  auto mainDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);\n"
                 "  while (AsyncMainPendingCount() == 0 && std::chrono::steady_clock::now() < mainDeadline) "
                 "mainWait.WaitFor(1);\n"
-                "  if (AsyncMainPendingCount() == 0) return 27; mainWait.Cancel();\n"
+                "  if (AsyncMainPendingCount() == 0) { std::cerr << \"main handoff missing: ready=\" << "
+                "mainWait.IsReady() << \" cancelled=\" << mainWait.IsCancelled() << \" faulted=\" << "
+                "mainWait.IsFaulted() << \" worker-pending=\" << DefaultAsyncScheduler().PendingCount() "
+                "<< '\\n'; return 27; } mainWait.Cancel();\n"
                 "  if (!mainWait.WaitFor(2000) || !mainWait.IsCancelled()) return 28;\n"
                 "  DrainAsyncMainExecutor(); if (afterCancel != 0) return 29;\n"
                 "  auto ready = " +
