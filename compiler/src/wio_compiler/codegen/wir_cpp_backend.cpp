@@ -3,10 +3,13 @@
 #include "wio/codegen/wir_module_emitter.h"
 #include "wio/codegen/wir_reflection_emitter.h"
 
+#include "wio/common/profiling.h"
 #include "wio/wir/lowered_ir_verifier.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
+#include <concepts>
 #include <iomanip>
 #include <functional>
 #include <limits>
@@ -15,6 +18,7 @@
 #include <set>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace wio::codegen
@@ -39,38 +43,43 @@ namespace wio::codegen
 
         std::string cppString(const std::string_view value)
         {
-            std::ostringstream output;
-            output << '"';
+            constexpr char hex[] = "0123456789abcdef";
+            std::string output;
+            output.reserve(value.size() + 2);
+            output.push_back('"');
             for (const unsigned char character : value)
             {
                 switch (character)
                 {
                 case '\\':
-                    output << "\\\\";
+                    output += "\\\\";
                     break;
                 case '"':
-                    output << "\\\"";
+                    output += "\\\"";
                     break;
                 case '\n':
-                    output << "\\n";
+                    output += "\\n";
                     break;
                 case '\r':
-                    output << "\\r";
+                    output += "\\r";
                     break;
                 case '\t':
-                    output << "\\t";
+                    output += "\\t";
                     break;
                 default:
                     if (character < 0x20)
-                        output << "\\x" << std::hex << std::setw(2) << std::setfill('0')
-                               << static_cast<unsigned>(character) << std::dec;
+                    {
+                        output += "\\x";
+                        output.push_back(hex[character >> 4]);
+                        output.push_back(hex[character & 0x0f]);
+                    }
                     else
-                        output << static_cast<char>(character);
+                        output.push_back(static_cast<char>(character));
                     break;
                 }
             }
-            output << '"';
-            return output.str();
+            output.push_back('"');
+            return output;
         }
 
         std::string safeIdentifier(const std::string_view value)
@@ -109,80 +118,212 @@ namespace wio::codegen
             return "_v" + std::to_string(id.value());
         }
 
+        class CppOutputBuffer final
+        {
+        public:
+            void reserve(const std::size_t capacity)
+            {
+                value_.reserve(capacity);
+            }
+
+            CppOutputBuffer& operator<<(const std::string_view value)
+            {
+                value_.append(value);
+                return *this;
+            }
+
+            CppOutputBuffer& operator<<(const std::string& value)
+            {
+                value_.append(value);
+                return *this;
+            }
+
+            CppOutputBuffer& operator<<(const char* value)
+            {
+                value_.append(value);
+                return *this;
+            }
+
+            CppOutputBuffer& operator<<(const char value)
+            {
+                value_.push_back(value);
+                return *this;
+            }
+
+            CppOutputBuffer& operator<<(const bool value)
+            {
+                value_.push_back(value ? '1' : '0');
+                return *this;
+            }
+
+            template<std::integral Integer>
+                requires(!std::same_as<Integer, char> && !std::same_as<Integer, bool>)
+            CppOutputBuffer& operator<<(const Integer value)
+            {
+                char buffer[32];
+                const auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), value);
+                if (error == std::errc{})
+                    value_.append(buffer, end);
+                return *this;
+            }
+
+            [[nodiscard]] std::string take()
+            {
+                return std::move(value_);
+            }
+
+        private:
+            std::string value_;
+        };
+
         class Emitter final
         {
         public:
             Emitter(const lowered::Module& module, WirCppGenerationResult& result, const WirCppBackendOptions& options)
                 : module_(module), result_(result), options_(options)
             {
+                functions_.reserve(module.functions.size());
                 for (const lowered::Function& function : module.functions)
                     functions_.emplace(function.id.value(), &function);
+                globals_.reserve(module.globals.size());
                 for (const lowered::Global& global : module.globals)
                     globals_.emplace(global.id.value(), &global);
+
+                std::size_t estimatedOutputSize = 16 * 1024 + module.types.size() * 256 +
+                                                  module.functions.size() * 512 + module.globals.size() * 64;
+                for (const lowered::Function& function : module.functions)
+                    for (const lowered::BasicBlock& block : function.blocks)
+                        estimatedOutputSize += block.parameters.size() * 64 + block.instructions.size() * 256;
+                output_.reserve(estimatedOutputSize);
+
+                openTypeCache_.assign(module.types.size(), 0);
+                cppTypeCache_.resize(module.types.size());
+                cppTypeCacheReady_.assign(module.types.size(), false);
+
+                std::unordered_map<std::uint32_t, std::vector<const AttributeApplicationDescriptor*>> attributes;
+                attributes.reserve(module.contract.attributes.size());
+                for (const auto& attribute : module.contract.attributes)
+                    if (attribute.targetFunction)
+                        attributes[attribute.targetFunction.value()].push_back(&attribute);
+                behavioralPipelines_.reserve(attributes.size());
+                for (auto& [function, applications] : attributes)
+                {
+                    std::ranges::stable_sort(applications, {}, &AttributeApplicationDescriptor::sourceOrder);
+                    auto& pipeline = behavioralPipelines_[function];
+                    for (const auto* application : applications)
+                        for (const auto& processor : application->processors)
+                            if (processor.phase == AttributeProcessorPhase::Pre ||
+                                processor.phase == AttributeProcessorPhase::Post ||
+                                processor.phase == AttributeProcessorPhase::Finally ||
+                                processor.phase == AttributeProcessorPhase::Around)
+                                pipeline.push_back(&processor);
+                }
             }
 
             void run()
             {
-                const lowered::VerificationResult verification = lowered::Verifier{}.verify(module_);
-                for (const lowered::VerificationDiagnostic& diagnostic : verification.diagnostics())
+                if (options_.verifyInput)
                 {
-                    diagnose("WCPP1000", "invalid Lowered WIR: " + diagnostic.code + ": " + diagnostic.message,
-                             diagnostic.source, diagnostic.function, diagnostic.block);
+                    common::profiling::Scope verifyScope("Backend.Cpp.VerifyInput");
+                    const lowered::VerificationResult verification = lowered::Verifier{}.verify(module_);
+                    verifyScope.stop();
+                    for (const lowered::VerificationDiagnostic& diagnostic : verification.diagnostics())
+                    {
+                        diagnose("WCPP1000", "invalid Lowered WIR: " + diagnostic.code + ": " + diagnostic.message,
+                                 diagnostic.source, diagnostic.function, diagnostic.block);
+                    }
+                    if (!verification.succeeded())
+                        return;
                 }
-                if (!verification.succeeded())
-                    return;
 
-                validateTypes();
-                validateInstructions();
-                validateWireBoundaries();
+                {
+                    common::profiling::Scope scope("Backend.Cpp.ValidateTypes");
+                    validateTypes();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.ValidateInstructions");
+                    validateInstructions();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.ValidateWireBoundaries");
+                    validateWireBoundaries();
+                }
                 if (!result_.succeeded())
                     return;
 
-                emitPreamble();
-                emitNominalDeclarations();
-                emitStructuralAliases();
-                output_ << WirReflectionEmitter::traits(module_, [this](TypeId id) { return cppType(id); });
-                emitFunctionDeclarations();
-                emitHierarchyBodies();
-                emitGlobals();
-                emitFunctions();
-                output_ << WirModuleEmitter::emit(module_, [this](TypeId id) { return cppType(id); });
-                emitMain();
-                WirCppResultSink::setCode(result_, output_.str());
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitPreamble");
+                    emitPreamble();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitNominals");
+                    emitNominalDeclarations();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitStructuralAliases");
+                    emitStructuralAliases();
+                }
+                cppTypeCacheEnabled_ = true;
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitReflection");
+                    output_ << WirReflectionEmitter::traits(module_, [this](TypeId id) { return cppType(id); });
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitFunctionDeclarations");
+                    emitFunctionDeclarations();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitHierarchy");
+                    emitHierarchyBodies();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitGlobals");
+                    emitGlobals();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitFunctions");
+                    emitFunctions();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitModule");
+                    output_ << WirModuleEmitter::emit(module_, [this](TypeId id) { return cppType(id); });
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitMain");
+                    emitMain();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.FinalizeOutput");
+                    WirCppResultSink::setCode(result_, output_.take());
+                }
             }
 
         private:
             const lowered::Module& module_;
             WirCppGenerationResult& result_;
             const WirCppBackendOptions& options_;
-            std::ostringstream output_;
+            CppOutputBuffer output_;
             std::unordered_map<std::uint32_t, const lowered::Function*> functions_;
             std::unordered_map<std::uint32_t, const lowered::Global*> globals_;
+            std::unordered_map<std::uint32_t, std::vector<const AttributeProcessorDescriptor*>> behavioralPipelines_;
             const lowered::Function* currentFunction_ = nullptr;
             const lowered::BasicBlock* currentBlock_ = nullptr;
             std::unordered_map<std::uint32_t, TypeId> valueTypes_;
-            std::set<std::uint32_t> borrowedLoads_;
-            std::set<std::uint32_t> objectBorrowedLoads_;
-            std::set<std::uint32_t> ownedValues_;
-            std::set<std::uint32_t> structuralAliases_;
+            std::unordered_set<std::uint32_t> borrowedLoads_;
+            std::unordered_set<std::uint32_t> objectBorrowedLoads_;
+            std::unordered_set<std::uint32_t> ownedValues_;
+            std::unordered_set<std::uint32_t> structuralAliases_;
+            mutable std::vector<std::uint8_t> openTypeCache_;
+            mutable std::vector<std::string> cppTypeCache_;
+            mutable std::vector<std::uint8_t> cppTypeCacheReady_;
+            bool cppTypeCacheEnabled_ = false;
 
-            std::vector<const AttributeProcessorDescriptor*> behavioralPipeline(const FunctionId function) const
+            const std::vector<const AttributeProcessorDescriptor*>& behavioralPipeline(
+                const FunctionId function) const
             {
-                std::vector<const AttributeApplicationDescriptor*> attributes;
-                for (const auto& attribute : module_.contract.attributes)
-                    if (attribute.targetFunction == function)
-                        attributes.push_back(&attribute);
-                std::ranges::stable_sort(attributes, {}, &AttributeApplicationDescriptor::sourceOrder);
-
-                std::vector<const AttributeProcessorDescriptor*> processors;
-                for (const auto* attribute : attributes)
-                    for (const auto& processor : attribute->processors)
-                        if (processor.phase == AttributeProcessorPhase::Pre ||
-                            processor.phase == AttributeProcessorPhase::Post ||
-                            processor.phase == AttributeProcessorPhase::Finally ||
-                            processor.phase == AttributeProcessorPhase::Around)
-                            processors.push_back(&processor);
-                return processors;
+                static const std::vector<const AttributeProcessorDescriptor*> empty;
+                const auto found = behavioralPipelines_.find(function.value());
+                return found == behavioralPipelines_.end() ? empty : found->second;
             }
 
             void diagnose(std::string code, std::string message, const SourceSpan& source = {},
@@ -195,30 +336,54 @@ namespace wio::codegen
                                                                           .block = block});
             }
 
-            bool typeIsOpenImpl(const TypeId id, std::set<TypeId::ValueType>& visiting) const
+            struct OpenTypeResult
+            {
+                bool open = false;
+                bool encounteredCycle = false;
+            };
+
+            OpenTypeResult typeIsOpenCached(const TypeId id) const
             {
                 const Type* type = module_.types.tryGet(id);
                 if (!type)
-                    return true;
+                    return {.open = true};
+                std::uint8_t& state = openTypeCache_[id.value()];
+                if (state == 3)
+                    return {.open = true};
+                if (state == 2)
+                    return {};
+                if (state == 1)
+                    return {.encounteredCycle = true};
+                state = 1;
                 if (type->kind == TypeKind::GenericParameter || type->kind == TypeKind::ConstGenericParameter ||
                     type->kind == TypeKind::GenericParameterPack || type->kind == TypeKind::ValuePack ||
                     type->kind == TypeKind::TypePack)
-                    return true;
-                if (!visiting.insert(id.value()).second)
-                    return false;
-                const auto open = [&](const TypeId nested) { return nested && typeIsOpenImpl(nested, visiting); };
-                const bool result =
-                    open(type->extentParameter) || std::ranges::any_of(type->arguments, open) ||
-                    std::ranges::any_of(type->baseTypes, open) ||
-                    std::ranges::any_of(type->fields, [&](const FieldLayout& field) { return open(field.type); });
-                visiting.erase(id.value());
-                return result;
+                {
+                    state = 3;
+                    return {.open = true};
+                }
+
+                bool encounteredCycle = false;
+                const auto observe = [&](const TypeId nested)
+                {
+                    if (!nested)
+                        return false;
+                    const OpenTypeResult result = typeIsOpenCached(nested);
+                    encounteredCycle |= result.encounteredCycle;
+                    return result.open;
+                };
+                const bool open = observe(type->extentParameter) ||
+                                  std::ranges::any_of(type->arguments, observe) ||
+                                  std::ranges::any_of(type->baseTypes, observe) ||
+                                  std::ranges::any_of(type->fields,
+                                                      [&](const FieldLayout& field) { return observe(field.type); });
+                state = open ? 3 : encounteredCycle ? 0 : 2;
+                return {.open = open, .encounteredCycle = encounteredCycle};
             }
 
             bool typeIsOpen(const TypeId id) const
             {
-                std::set<TypeId::ValueType> visiting;
-                return typeIsOpenImpl(id, visiting);
+                return typeIsOpenCached(id).open;
             }
 
             bool functionIsOpen(const lowered::Function& function) const
@@ -729,9 +894,15 @@ namespace wio::codegen
 
             std::string cppType(const TypeId id) const
             {
-                if (structuralAliases_.contains(id.value()))
-                    return structuralAlias(id);
-                return cppTypeRaw(id);
+                if (!cppTypeCacheEnabled_ || !id || id.value() >= cppTypeCache_.size())
+                    return structuralAliases_.contains(id.value()) ? structuralAlias(id) : cppTypeRaw(id);
+                if (cppTypeCacheReady_[id.value()])
+                    return cppTypeCache_[id.value()];
+                std::string result =
+                    structuralAliases_.contains(id.value()) ? structuralAlias(id) : cppTypeRaw(id);
+                cppTypeCache_[id.value()] = result;
+                cppTypeCacheReady_[id.value()] = true;
+                return result;
             }
 
             std::string cppTypeRaw(const TypeId id) const
@@ -1646,20 +1817,26 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
             std::string functionSignature(const lowered::Function& function, const bool declaration,
                                           const std::string_view emittedName = {}) const
             {
-                std::ostringstream signature;
-                signature << (function.isExternal && !function.nativeBinding ? "extern " : "")
-                          << cppType(function.returnType) << ' '
-                          << (emittedName.empty() ? functionName(function.id) : std::string{emittedName}) << '(';
+                std::string signature;
+                signature.reserve(48 + function.parameters.size() * 32);
+                if (function.isExternal && !function.nativeBinding)
+                    signature += "extern ";
+                signature += cppType(function.returnType);
+                signature.push_back(' ');
+                signature += emittedName.empty() ? functionName(function.id) : std::string{emittedName};
+                signature.push_back('(');
                 for (std::size_t index = 0; index < function.parameters.size(); ++index)
                 {
                     if (index)
-                        signature << ", ";
-                    signature << cppType(function.parameters[index].type) << " _p" << index;
+                        signature += ", ";
+                    signature += cppType(function.parameters[index].type);
+                    signature += " _p";
+                    signature += std::to_string(index);
                 }
-                signature << ')';
+                signature.push_back(')');
                 if (declaration)
-                    signature << ';';
-                return signature.str();
+                    signature.push_back(';');
+                return signature;
             }
 
             void emitGlobals()
@@ -1691,10 +1868,17 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
 
             void collectValueTypes(const lowered::Function& function)
             {
+                std::size_t valueCapacity = function.parameters.size();
+                for (const lowered::BasicBlock& block : function.blocks)
+                    valueCapacity += block.parameters.size() + block.instructions.size();
                 valueTypes_.clear();
+                valueTypes_.reserve(valueCapacity);
                 borrowedLoads_.clear();
+                borrowedLoads_.reserve(valueCapacity);
                 objectBorrowedLoads_.clear();
+                objectBorrowedLoads_.reserve(valueCapacity);
                 ownedValues_.clear();
+                ownedValues_.reserve(valueCapacity);
                 for (const lowered::Parameter& parameter : function.parameters)
                 {
                     valueTypes_[parameter.id.value()] = parameter.type;

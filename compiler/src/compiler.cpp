@@ -3077,6 +3077,7 @@ namespace wio
 
                 codegen::WirCppBackendOptions backendOptions;
                 backendOptions.emitMain = gAppData.buildTarget == BuildTarget::Executable;
+                backendOptions.verifyInput = false;
                 common::profiling::Scope backendScope("Backend.Cpp.Generate");
                 codegen::WirCppGenerationResult generation =
                     codegen::WirCppBackend{}.generate(loweringResult.module(), backendOptions);

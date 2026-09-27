@@ -32,6 +32,7 @@ namespace wio::codegen
         bool emitMain = true;
         bool emitLineDirectives = true;
         bool emitComments = true;
+        bool verifyInput = true;
     };
 
     class WirCppGenerationResult final
