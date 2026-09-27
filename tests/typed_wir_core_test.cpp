@@ -79,6 +79,19 @@ int main()
     const TypeId secondNamed = module.types.intern(Type{.kind = TypeKind::Named, .name = "game::Player"});
     ok &= expect(firstNamed == secondNamed, "Typed WIR type table must intern structurally equal types");
 
+    const TypeId mutableFunction = module.types.intern(
+        Type{.kind = TypeKind::Function, .arguments = {module.types.i32Type()}});
+    module.types.getMutable(mutableFunction).arguments.push_back(module.types.boolType());
+    const TypeId sameMutatedFunction = module.types.intern(
+        Type{.kind = TypeKind::Function,
+             .arguments = {module.types.i32Type(), module.types.boolType()}});
+    const TypeId originalFunctionShape = module.types.intern(
+        Type{.kind = TypeKind::Function, .arguments = {module.types.i32Type()}});
+    ok &= expect(mutableFunction == sameMutatedFunction,
+                 "Mutated WIR types must be refreshed in the interning index");
+    ok &= expect(originalFunctionShape != mutableFunction,
+                 "A mutated WIR type must not retain its stale interning identity");
+
     const VerificationResult validResult = Verifier{}.verify(module);
     ok &= expect(validResult.succeeded(), "Well-formed Typed WIR module must pass verification");
 

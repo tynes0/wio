@@ -8,6 +8,8 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace wio::wir
@@ -440,7 +442,14 @@ namespace wio::wir
         }
 
     private:
+        [[nodiscard]] static std::size_t fingerprint(const Type& type);
+        void refreshDirtyIndex();
+        void indexType(TypeId id, const Type& type);
+
         std::vector<Type> types_;
+        std::unordered_multimap<std::size_t, TypeId> typeIndex_;
+        std::vector<std::size_t> fingerprints_;
+        std::unordered_set<TypeId::ValueType> dirtyTypes_;
         TypeId voidType_;
         TypeId boolType_;
         TypeId i32Type_;

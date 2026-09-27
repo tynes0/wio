@@ -4,6 +4,7 @@
 #include "wio/ast/attribute_queries.h"
 #include "wio/ast/attribute_contract.h"
 #include "wio/common/utility.h"
+#include "wio/common/profiling.h"
 #include "wio/sema/intrinsic_member_resolver.h"
 #include "wio/sema/generic_support.h"
 #include "wio/sema/constant_evaluator.h"
@@ -32,6 +33,7 @@ namespace wio::wir::typed
 
         void build(const Ref<Program>& program)
         {
+            common::profiling::Scope buildScope("WIR.Typed.BuildContext");
             result_.module_.name = program && program->location().hasFile() ? program->location().file : "module";
             if (!program)
             {
@@ -53,17 +55,35 @@ namespace wio::wir::typed
             result_.module_.contract.stableId = stableModuleHash(result_.module_.contract.stableKey);
             result_.module_.contract.callTable.stableId = stableModuleHash(
                 result_.module_.contract.stableKey + ":sdk-call-table:v" + std::to_string(ModuleAbiDescriptorVersion));
+            common::profiling::Scope importsScope("WIR.Typed.CollectImports");
             collectImports(program->statements);
+            importsScope.stop();
+            common::profiling::Scope functionsScope("WIR.Typed.CollectFunctions");
             collectFunctions(program->statements);
+            functionsScope.stop();
+            common::profiling::Scope typesScope("WIR.Typed.CollectTypes");
             collectTypeDeclarations(program->statements);
+            typesScope.stop();
+            common::profiling::Scope globalsScope("WIR.Typed.CollectGlobals");
             collectGlobals(program->statements);
+            globalsScope.stop();
             nextFunctionId_ = static_cast<FunctionId::ValueType>(declarations_.size());
+            common::profiling::Scope functionBodiesScope("WIR.Typed.BuildFunctions");
             for (const DeclarationInfo& declaration : declarations_)
                 buildFunction(declaration);
+            functionBodiesScope.stop();
+            common::profiling::Scope objectInitializersScope("WIR.Typed.ObjectInitializers");
             buildObjectFieldInitializers();
+            objectInitializersScope.stop();
+            common::profiling::Scope globalInitializersScope("WIR.Typed.GlobalInitializers");
             buildGlobalInitializers();
+            globalInitializersScope.stop();
+            common::profiling::Scope reflectionScope("WIR.Typed.Reflection");
             buildTypeExportsAndReflection();
+            reflectionScope.stop();
+            common::profiling::Scope applicationReflectionScope("WIR.Typed.ApplicationReflection");
             buildApplicationSystemAttributeReflection();
+            applicationReflectionScope.stop();
             const ModuleLifecycle& lifecycle = result_.module_.contract.lifecycle;
             if (!options_.moduleKind &&
                 (!result_.module_.contract.exports.empty() || lifecycle.apiVersion || lifecycle.load ||
