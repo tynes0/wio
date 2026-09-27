@@ -1,4 +1,5 @@
 #include "wio/wir/canonical_optimizer.h"
+#include "wio/common/profiling.h"
 
 #include <algorithm>
 #include <cmath>
@@ -15,6 +16,22 @@ namespace wio::wir
         using LiteralMap = std::unordered_map<ValueId::ValueType, typed::Literal>;
         using TypeMap = std::unordered_map<ValueId::ValueType, TypeId>;
         using ReplacementMap = std::unordered_map<ValueId::ValueType, ValueId>;
+
+        std::size_t instructionCount(const lowered::Function& function)
+        {
+            std::size_t count = 0;
+            for (const lowered::BasicBlock& block : function.blocks)
+                count += block.instructions.size();
+            return count;
+        }
+
+        std::size_t valueCapacity(const lowered::Function& function)
+        {
+            std::size_t count = function.parameters.size() + instructionCount(function);
+            for (const lowered::BasicBlock& block : function.blocks)
+                count += block.parameters.size();
+            return count;
+        }
 
         bool isSignedInteger(const TypeKind kind)
         {
@@ -419,6 +436,7 @@ namespace wio::wir
         LiteralMap collectConstants(const lowered::Function& function)
         {
             LiteralMap constants;
+            constants.reserve(instructionCount(function) / 4 + 1);
             for (const lowered::BasicBlock& block : function.blocks)
                 for (const lowered::Instruction& instruction : block.instructions)
                     if (instruction.opcode == lowered::Opcode::Constant && instruction.result)
@@ -429,6 +447,7 @@ namespace wio::wir
         TypeMap collectTypes(const lowered::Function& function)
         {
             TypeMap types;
+            types.reserve(valueCapacity(function));
             for (const lowered::Parameter& parameter : function.parameters)
                 types[parameter.id.value()] = parameter.type;
             for (const lowered::BasicBlock& block : function.blocks)
@@ -509,8 +528,11 @@ namespace wio::wir
 
         ValueId resolveReplacement(ValueId value, const ReplacementMap& replacements)
         {
-            std::unordered_set<ValueId::ValueType> visited;
-            while (value && visited.insert(value.value()).second)
+            // Replacements are SSA edges and normally point strictly toward an
+            // earlier value. Bound the walk by the table size to retain cycle
+            // safety for malformed IR without allocating a visited set for
+            // every operand in the module.
+            for (std::size_t step = 0; value && step < replacements.size(); ++step)
             {
                 const auto replacement = replacements.find(value.value());
                 if (replacement == replacements.end())
@@ -569,6 +591,8 @@ namespace wio::wir
                 const TypeMap valueTypes = collectTypes(function);
                 ReplacementMap replacements;
                 std::unordered_set<ValueId::ValueType> removeResults;
+                replacements.reserve(instructionCount(function) / 8 + 1);
+                removeResults.reserve(instructionCount(function) / 8 + 1);
 
                 for (lowered::BasicBlock& block : function.blocks)
                     for (const lowered::Instruction& instruction : block.instructions)
@@ -835,6 +859,9 @@ namespace wio::wir
             {
                 std::unordered_map<ValueId::ValueType, const lowered::Instruction*> producers;
                 std::unordered_map<ValueId::ValueType, std::vector<const lowered::Instruction*>> uses;
+                const std::size_t capacity = valueCapacity(function);
+                producers.reserve(capacity);
+                uses.reserve(capacity);
                 for (const lowered::BasicBlock& block : function.blocks)
                     for (const lowered::Instruction& instruction : block.instructions)
                     {
@@ -862,6 +889,7 @@ namespace wio::wir
                 }
 
                 std::unordered_set<const lowered::Instruction*> obsolete;
+                obsolete.reserve(capacity / 8 + 1);
                 for (const auto& [value, producer] : producers)
                 {
                     if (producer->opcode != lowered::Opcode::LocalPlace)
@@ -920,11 +948,14 @@ namespace wio::wir
             std::size_t removed = eliminateUnusedDefaultLocals(module);
             for (lowered::Function& function : module.functions)
             {
+                const std::size_t functionInstructionCount = instructionCount(function);
+                std::unordered_set<ValueId::ValueType> used;
+                used.reserve(functionInstructionCount * 2);
                 bool changed = true;
                 while (changed)
                 {
                     changed = false;
-                    std::unordered_set<ValueId::ValueType> used;
+                    used.clear();
                     for (const lowered::BasicBlock& block : function.blocks)
                         for (const lowered::Instruction& instruction : block.instructions)
                         {
@@ -994,6 +1025,7 @@ namespace wio::wir
             for (lowered::Function& function : module.functions)
             {
                 std::unordered_map<ValueId::ValueType, lowered::EscapeClass> escapes;
+                escapes.reserve(valueCapacity(function));
                 for (const lowered::BasicBlock& block : function.blocks)
                     for (const lowered::Instruction& instruction : block.instructions)
                     {
@@ -1111,6 +1143,7 @@ namespace wio::wir
                 const LiteralMap constants = collectConstants(function);
                 const TypeMap valueTypes = collectTypes(function);
                 std::unordered_map<ValueId::ValueType, const lowered::Instruction*> producers;
+                producers.reserve(valueCapacity(function));
                 for (const lowered::BasicBlock& block : function.blocks)
                     for (const lowered::Instruction& instruction : block.instructions)
                         if (instruction.result)
@@ -1160,15 +1193,33 @@ namespace wio::wir
     OptimizationStatistics CanonicalOptimizer::optimize(lowered::Module& module) const
     {
         OptimizationStatistics statistics;
+        common::profiling::Scope foldScope("WIR.Optimize.FoldConstants");
         statistics.constantsFolded = foldConstants(module);
+        foldScope.stop();
+        common::profiling::Scope simplifyScope("WIR.Optimize.SimplifyBranches");
         statistics.branchesSimplified = simplifyBranches(module);
+        simplifyScope.stop();
+        common::profiling::Scope unreachableScope("WIR.Optimize.RemoveUnreachable");
         statistics.blocksRemoved = removeUnreachableBlocks(module);
+        unreachableScope.stop();
+        common::profiling::Scope propagateScope("WIR.Optimize.PropagateValues");
         statistics.valuesPropagated = propagateTrivialValues(module);
+        propagateScope.stop();
+        common::profiling::Scope simplifyAfterPropagationScope("WIR.Optimize.SimplifyAfterPropagation");
         statistics.branchesSimplified += simplifyBranches(module);
+        simplifyAfterPropagationScope.stop();
+        common::profiling::Scope unreachableAfterPropagationScope("WIR.Optimize.RemoveUnreachableAfterPropagation");
         statistics.blocksRemoved += removeUnreachableBlocks(module);
+        unreachableAfterPropagationScope.stop();
+        common::profiling::Scope deadValuesScope("WIR.Optimize.EliminateDeadValues");
         statistics.instructionsRemoved = eliminateDeadValues(module);
+        deadValuesScope.stop();
+        common::profiling::Scope storageScope("WIR.Optimize.ClassifyStorage");
         classifyStorage(module, statistics);
+        storageScope.stop();
+        common::profiling::Scope boundsScope("WIR.Optimize.EliminateBoundsChecks");
         statistics.boundsChecksEliminated = eliminateBoundsChecks(module);
+        boundsScope.stop();
         return statistics;
     }
 } // namespace wio::wir
