@@ -285,15 +285,20 @@ namespace wio
                 {std::filesystem::path("sdk") / "include"});
         }
 
-        std::filesystem::path getStdSourceDir()
+        const std::filesystem::path& getStdSourceDir()
         {
-            return resolveToolchainDirectory(
+            static const std::filesystem::path directory = []
+            {
+                std::filesystem::path resolved = resolveToolchainDirectory(
 #ifdef WIO_STD_SOURCE_DIR
-                std::filesystem::path{WIO_STD_SOURCE_DIR},
+                    std::filesystem::path{WIO_STD_SOURCE_DIR},
 #else
-                std::filesystem::path{},
+                    std::filesystem::path{},
 #endif
-                {"std"});
+                    {"std"});
+                return resolved.empty() ? resolved : filesystem::getCanonicalPath(resolved).make_preferred();
+            }();
+            return directory;
         }
 
         std::optional<std::filesystem::path> tryResolveExecutableFromPath(const std::string& executableName)
@@ -2572,8 +2577,11 @@ namespace wio
                 std::error_code ec;
                 if (std::filesystem::exists(candidatePath, ec) && !ec)
                 {
-                    std::filesystem::path resolvedPath =
-                        filesystem::getCanonicalPath(std::filesystem::absolute(candidatePath)).make_preferred();
+                    std::filesystem::path resolvedPath = isStdLib
+                                                             ? candidatePath.lexically_normal().make_preferred()
+                                                             : filesystem::getCanonicalPath(
+                                                                   std::filesystem::absolute(candidatePath))
+                                                                   .make_preferred();
                     gAppData.resolvedModulePaths.emplace(std::move(cacheKey), resolvedPath);
                     return resolvedPath;
                 }

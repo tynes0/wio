@@ -1,7 +1,5 @@
 ﻿#include "wio/lexer/token.h"
 
-#include <ranges>
-
 namespace wio
 {
    std::string_view tokenTypeToString(TokenType type)
@@ -271,18 +269,17 @@ namespace wio
 
    bool Token::isValid() const
    {
-       Token inv = invalid();
-       return !(type == inv.type && value == inv.value);
+       return type != TokenType::invalid || !value.empty();
    }
 
    bool Token::isKeyword() const
    {
-       return std::ranges::find(std::views::values(keywordMap), type) != std::views::values((keywordMap)).end();
+       return type >= TokenType::kwFn && type <= TokenType::kwApplication;
    }
 
    bool Token::isOperator() const
    {
-       return std::ranges::find(std::views::values(operatorMap), type) != std::views::values((operatorMap)).end();
+       return type >= TokenType::opPlus && type <= TokenType::opRangeExclusive;
    }
 
    bool Token::isAssignment() const
@@ -317,7 +314,7 @@ namespace wio
 
    bool Token::isSymbol() const
    {
-       return std::ranges::find(std::views::values(symbolMap), type) != std::views::values((symbolMap)).end();
+       return type >= TokenType::atSign && type <= TokenType::semicolon;
    }
 
    bool Token::isIdentifier() const

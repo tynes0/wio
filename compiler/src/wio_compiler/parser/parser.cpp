@@ -161,7 +161,7 @@ namespace wio
         return makeNodePtr<Program>(std::move(statements));
     }
 
-    Token Parser::peek(int offset) const
+    const Token& Parser::peek(int offset) const
     {
         using SignedIndex = std::ptrdiff_t;
 
@@ -172,17 +172,18 @@ namespace wio
             return tokens_[static_cast<size_t>(candidateIndex)];
         }
 
-        return Token::invalid();
+        static const Token invalidToken = Token::invalid();
+        return invalidToken;
     }
 
-    Token Parser::previous() const
+    const Token& Parser::previous() const
     {
         return peek(-1);
     }
 
-    Token Parser::advance()
+    const Token& Parser::advance()
     {
-        Token current = peek();
+        const Token& current = peek();
         if (currentTokenIndex_ < tokens_.size())
             currentTokenIndex_++;
         return current;
@@ -190,13 +191,12 @@ namespace wio
 
     void Parser::multiAdvance(int count)
     {
-        while (count--)
-            advance();
+        currentTokenIndex_ = std::min(tokens_.size(), currentTokenIndex_ + static_cast<std::size_t>(count));
     }
 
     bool Parser::match(TokenType type, bool consume)
     {
-        Token current = peek();
+        const Token& current = peek();
 
         if (current.type != type)
             return false;
@@ -209,7 +209,7 @@ namespace wio
 
     bool Parser::match(TokenType type, std::string_view value, bool consume)
     {
-        Token current = peek();
+        const Token& current = peek();
 
         if (current.type != type)
         {
@@ -250,7 +250,7 @@ namespace wio
         if (match(type, value))
             return advance();
 
-        Token current = peek();
+        const Token& current = peek();
 
         if (value.empty())
         {
@@ -339,7 +339,7 @@ namespace wio
 
     Location Parser::currentOrPreviousLocation() const
     {
-        const Token current = peek();
+        const Token& current = peek();
         if (current.loc.isValid())
             return current.loc;
 

@@ -2,7 +2,9 @@
 #include "wio/common/exception.h"
 #include "wio/common/utility.h"
 
+#include <algorithm>
 #include <ranges>
+#include <utility>
 
 namespace
 {
@@ -73,6 +75,7 @@ namespace wio
     {
         position_ = 0;
         tokens_.clear();
+        tokens_.reserve(std::max<std::size_t>(tokens_.capacity(), source_.size() / 5u));
         interpolationStack_.clear();
         flags_ = LexerFlags::createAllFalse();
         location_.line = 1;
@@ -142,7 +145,7 @@ namespace wio
             }
         }
 
-        return tokens_;
+        return std::move(tokens_);
     }
 
     std::string Lexer::toString() const
@@ -341,61 +344,67 @@ namespace wio
     Token Lexer::readIdentifier()
     {
         Location start = location_;
-        std::string result;
+        const std::size_t begin = position_;
 
         while (std::isalnum(upeek()) || match('_'))
-            result += advance();
+            advance();
+
+        std::string result = source_.substr(begin, position_ - begin);
 
         TokenType tType = TokenType::identifier;
 
         if (auto it = keywordMap.find(result); it != keywordMap.end())
             tType = it->second;
 
-        return Token{.type = tType, .value = std::move(result), .loc = start};
+        return Token{.type = tType, .value = std::move(result), .loc = std::move(start)};
     }
 
     Token Lexer::readNumber()
     {
         Location start = location_;
-        std::string result;
+        const std::size_t begin = position_;
         bool isFloat = false;
+        bool hasRadixPrefix = false;
 
         if (match('0'))
         {
-            result += advance();
+            advance();
             if (matchOneOf("bB"))
             {
-                result += advance();
+                hasRadixPrefix = true;
+                advance();
                 if (!matchOneOf("01"))
                     throw InvalidNumberError("Invalid binary number!", location_);
 
                 while (matchOneOf("01"))
-                    result += advance();
+                    advance();
             }
             else if (matchOneOf("xX"))
             {
-                result += advance();
+                hasRadixPrefix = true;
+                advance();
                 if (!std::isxdigit(upeek()))
                     throw InvalidNumberError("Invalid hexadecimal number!", location_);
 
                 while (std::isxdigit(upeek()))
-                    result += advance();
+                    advance();
             }
             else if (matchOneOf("oO"))
             {
-                result += advance();
+                hasRadixPrefix = true;
+                advance();
                 if (!matchOneOf("01234567"))
                     throw InvalidNumberError("Invalid octal number!", location_);
 
                 while (matchOneOf("01234567"))
-                    result += advance();
+                    advance();
             }
         }
 
-        if (result.empty() || result == "0")
+        if (!hasRadixPrefix)
         {
             while (std::isdigit(upeek()))
-                result += advance();
+                advance();
         }
 
         if (peek() == '.')
@@ -403,33 +412,31 @@ namespace wio
             if (peek(1) != '.')
             {
                 isFloat = true;
-                result += advance();
+                advance();
 
                 while (std::isdigit(upeek()))
-                    result += advance();
+                    advance();
             }
         }
 
         if (matchOneOf("eE"))
         {
-            result += advance();
+            advance();
             if (matchOneOf("+-"))
-                result += advance();
+                advance();
 
             if (!std::isdigit(upeek()))
                 throw InvalidNumberError("Invalid scientific notation!", location_);
 
             while (std::isdigit(upeek()))
-                result += advance();
+                advance();
         }
 
-        std::string suffix;
+        const std::size_t suffixBegin = position_;
         while (std::isalnum(upeek()) || match('_'))
-        {
-            suffix += advance();
-        }
+            advance();
 
-        result += suffix;
+        const std::string_view suffix(source_.data() + suffixBegin, position_ - suffixBegin);
 
         TokenType type = isFloat ? TokenType::floatLiteral : TokenType::integerLiteral;
 
@@ -455,11 +462,12 @@ namespace wio
             }
             else
             {
-                throw InvalidNumberError(("Unknown literal suffix: '" + suffix + "'").c_str(), location_);
+                throw InvalidNumberError(("Unknown literal suffix: '" + std::string(suffix) + "'").c_str(),
+                                         location_);
             }
         }
 
-        return {.type = type, .value = result, .loc = start};
+        return {.type = type, .value = source_.substr(begin, position_ - begin), .loc = std::move(start)};
     }
 
     Token Lexer::readChar()
@@ -495,26 +503,157 @@ namespace wio
     Token Lexer::readOperator()
     {
         Location start = location_;
-        std::string op(1, advance());
+        const std::size_t begin = position_;
+        const char first = advance();
+        TokenType type = TokenType::invalid;
 
-        if (operatorMap.contains(op + peek() + peek(1)))
+        const auto accept = [&](TokenType acceptedType, int trailingCharacters = 0)
         {
-            op += advance();
-            op += advance();
-        }
-        else if (operatorMap.contains(op + peek()))
+            advance(trailingCharacters);
+            type = acceptedType;
+        };
+
+        switch (first)
         {
-            op += advance();
+        case '+':
+            match('=') ? accept(TokenType::opPlusAssign, 1) : accept(TokenType::opPlus);
+            break;
+        case '-':
+            if (match('='))
+                accept(TokenType::opMinusAssign, 1);
+            else if (match('>'))
+                accept(TokenType::opArrow, 1);
+            else
+                accept(TokenType::opMinus);
+            break;
+        case '*':
+            match('=') ? accept(TokenType::opStarAssign, 1) : accept(TokenType::opStar);
+            break;
+        case '/':
+            match('=') ? accept(TokenType::opSlashAssign, 1) : accept(TokenType::opSlash);
+            break;
+        case '%':
+            match('=') ? accept(TokenType::opPercentAssign, 1) : accept(TokenType::opPercent);
+            break;
+        case '<':
+            if (multiMatch("<="))
+                accept(TokenType::opShiftLeftAssign, 2);
+            else if (match('<'))
+                accept(TokenType::opShiftLeft, 1);
+            else if (match('='))
+                accept(TokenType::opLessEqual, 1);
+            else if (match('|'))
+                accept(TokenType::opFlowLeft, 1);
+            else
+                accept(TokenType::opLess);
+            break;
+        case '>':
+            if (multiMatch(">="))
+                accept(TokenType::opShiftRightAssign, 2);
+            else if (match('>'))
+                accept(TokenType::opShiftRight, 1);
+            else if (match('='))
+                accept(TokenType::opGreaterEqual, 1);
+            else
+                accept(TokenType::opGreater);
+            break;
+        case '=':
+            if (match('='))
+                accept(TokenType::opEqual, 1);
+            else if (match('>'))
+                accept(TokenType::opFatArrow, 1);
+            else
+                accept(TokenType::opAssign);
+            break;
+        case '!':
+            match('=') ? accept(TokenType::opNotEqual, 1) : accept(TokenType::opLogicalNot);
+            break;
+        case '&':
+            if (match('='))
+                accept(TokenType::opBitAndAssign, 1);
+            else if (match('&'))
+                accept(TokenType::opLogicalAnd, 1);
+            else
+                accept(TokenType::opBitAnd);
+            break;
+        case '|':
+            if (match('='))
+                accept(TokenType::opBitOrAssign, 1);
+            else if (match('|'))
+                accept(TokenType::opLogicalOr, 1);
+            else if (match('>'))
+                accept(TokenType::opFlowRight, 1);
+            else
+                accept(TokenType::opBitOr);
+            break;
+        case '^':
+            match('=') ? accept(TokenType::opBitXorAssign, 1) : accept(TokenType::opBitXor);
+            break;
+        case '~':
+            match('=') ? accept(TokenType::opBitNotAssign, 1) : accept(TokenType::opBitNot);
+            break;
+        case ':':
+            match(':') ? accept(TokenType::opScope, 1) : accept(TokenType::opColon);
+            break;
+        case '.':
+            if (multiMatch(".."))
+                accept(TokenType::opRangeInclusive, 2);
+            else if (multiMatch(".<"))
+                accept(TokenType::opRangeExclusive, 2);
+            else
+                accept(TokenType::opDot);
+            break;
+        case '?':
+            accept(TokenType::opQuestion);
+            break;
+        default:
+            break;
         }
 
-        return {.type = operatorMap.at(op), .value = op, .loc = start};
+        return {.type = type, .value = source_.substr(begin, position_ - begin), .loc = std::move(start)};
     }
 
     Token Lexer::readSymbol()
     {
         Location start = location_;
+        TokenType type = TokenType::invalid;
+        switch (peek())
+        {
+        case '(':
+            type = TokenType::leftParen;
+            break;
+        case ')':
+            type = TokenType::rightParen;
+            break;
+        case '{':
+            type = TokenType::leftBrace;
+            break;
+        case '}':
+            type = TokenType::rightBrace;
+            break;
+        case '[':
+            type = TokenType::leftBracket;
+            break;
+        case ']':
+            type = TokenType::rightBracket;
+            break;
+        case ',':
+            type = TokenType::comma;
+            break;
+        case ';':
+            type = TokenType::semicolon;
+            break;
+        case '@':
+            type = TokenType::atSign;
+            break;
+        case '$':
+            type = TokenType::dollar;
+            break;
+        default:
+            break;
+        }
 
-        Token tok{.type = symbolMap.at(peek()), .value = std::string(1, peek()), .loc = start};
+        Token tok{.type = type, .value = std::string(1, peek()), .loc = std::move(start)};
 
         if (multiMatch("$\""))
         {
@@ -657,12 +796,47 @@ namespace wio
 
     bool Lexer::isOperator(char c)
     {
-        return std::ranges::any_of(std::views::keys(operatorMap).begin(), std::views::keys(operatorMap).end(),
-                                   [c](const auto& op) { return !op.empty() && op[0] == c; });
+        switch (c)
+        {
+        case '+':
+        case '-':
+        case '*':
+        case '/':
+        case '%':
+        case '<':
+        case '>':
+        case '=':
+        case '&':
+        case '|':
+        case '^':
+        case '~':
+        case '!':
+        case '?':
+        case ':':
+        case '.':
+            return true;
+        default:
+            return false;
+        }
     }
 
     bool Lexer::isSymbol(char c)
     {
-        return symbolMap.contains(c);
+        switch (c)
+        {
+        case '(':
+        case ')':
+        case '{':
+        case '}':
+        case '[':
+        case ']':
+        case ',':
+        case ';':
+        case '@':
+        case '$':
+            return true;
+        default:
+            return false;
+        }
     }
 } // namespace wio
