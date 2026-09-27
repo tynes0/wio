@@ -1,4 +1,5 @@
 #include "wio/wir/lowered_ir_verifier.h"
+#include "wio/wir/dense_id_map.h"
 #include "wio/wir/hierarchy_lowering.h"
 
 #include <algorithm>
@@ -11,11 +12,6 @@ namespace wio::wir::lowered
 {
     namespace
     {
-        using FunctionMap = std::unordered_map<FunctionId::ValueType, const Function*>;
-        using GlobalMap = std::unordered_map<GlobalId::ValueType, const Global*>;
-        using BlockMap = std::unordered_map<BlockId::ValueType, const BasicBlock*>;
-        using ValueTypeMap = std::unordered_map<ValueId::ValueType, TypeId>;
-
         bool isComparison(const typed::BinaryOperator op)
         {
             return op == typed::BinaryOperator::Equal || op == typed::BinaryOperator::NotEqual ||
@@ -288,24 +284,22 @@ namespace wio::wir::lowered
             }
         }
 
-        GlobalMap globals;
-        globals.reserve(module.globals.size());
+        DenseIdMap<const Global*> globals(module.globals.size());
         for (const Global& global : module.globals)
         {
-            if (!global.id || !globals.emplace(global.id.value(), &global).second)
+            if (!global.id || !globals.insert(global.id.value(), &global))
                 report("LIR1020", "Lowered WIR global id must be valid and unique.", global.source);
             if (global.name.empty() || !module.types.tryGet(global.type) || (global.isConst && global.isMutable))
                 report("LIR1021", "Lowered WIR global requires a name, type, and consistent mutability.",
                        global.source);
         }
 
-        FunctionMap functions;
-        functions.reserve(module.functions.size());
+        DenseIdMap<const Function*> functions(module.functions.size());
         for (const Function& function : module.functions)
         {
             if (!function.id)
                 report("LIR1100", "Lowered WIR function has an invalid id.", function.source);
-            else if (!functions.emplace(function.id.value(), &function).second)
+            else if (!functions.insert(function.id.value(), &function))
                 report("LIR1101", "Lowered WIR function id is duplicated.", function.source, function.id);
             if (function.name.empty())
                 report("LIR1102", "Lowered WIR function name cannot be empty.", function.source, function.id);
@@ -384,6 +378,16 @@ namespace wio::wir::lowered
                            function.source, function.id);
             }
         }
+        const auto functionById = [&](const FunctionId id) -> const Function*
+        {
+            const Function* const* function = id ? functions.tryGet(id.value()) : nullptr;
+            return function ? *function : nullptr;
+        };
+        const auto globalById = [&](const GlobalId id) -> const Global*
+        {
+            const Global* const* global = id ? globals.tryGet(id.value()) : nullptr;
+            return global ? *global : nullptr;
+        };
 
         if (std::ranges::any_of(module.types.types(), [](const Type& type) { return !type.castTypes.empty(); }))
         {
@@ -402,7 +406,7 @@ namespace wio::wir::lowered
                     report("LIR1530",
                            "Object hierarchy cast/dispatch/lifecycle table does not match canonical contracts.");
                 for (const auto& entry : actual.dispatchEntries)
-                    if (entry.implementation && !functions.contains(entry.implementation.value()))
+                    if (entry.implementation && !functionById(entry.implementation))
                         report("LIR1531", "Object dispatch references an unknown implementation.");
             }
             for (std::size_t f = 0; f < module.functions.size(); ++f)
@@ -447,7 +451,7 @@ namespace wio::wir::lowered
             bool targetValid = false;
             if (entry.kind == ModuleExportKind::Function ||
                 entry.kind == ModuleExportKind::GenericFunctionSpecialization)
-                targetValid = entry.function && functions.contains(entry.function.value()) &&
+                targetValid = functionById(entry.function) &&
                               module.types.tryGet(entry.returnType) != nullptr;
             else
             {
@@ -460,7 +464,7 @@ namespace wio::wir::lowered
                 report("LIR1502", "Lowered WIR export descriptor has an invalid stable identity, slot, or target.");
         }
         const ModuleLifecycle& lifecycle = module.contract.lifecycle;
-        const auto lifecycleKnown = [&](const FunctionId id) { return !id || functions.contains(id.value()); };
+        const auto lifecycleKnown = [&](const FunctionId id) { return !id || functionById(id); };
         if (!lifecycleKnown(lifecycle.apiVersion) || !lifecycleKnown(lifecycle.load) ||
             !lifecycleKnown(lifecycle.update) || !lifecycleKnown(lifecycle.unload) ||
             !lifecycleKnown(lifecycle.saveState) || !lifecycleKnown(lifecycle.restoreState) ||
@@ -484,7 +488,7 @@ namespace wio::wir::lowered
                            "Lowered WIR reflected fields require unique identities, names, and valid types.");
             for (const ReflectedMethodDescriptor& method : descriptor.methods)
                 if (method.stableId == 0 || method.name.empty() || !module.types.tryGet(method.returnType) ||
-                    !functions.contains(method.function.value()) || !memberIds.insert(method.stableId).second)
+                    !functionById(method.function) || !memberIds.insert(method.stableId).second)
                     report("LIR1507",
                            "Lowered WIR reflected methods require unique identities and valid callable signatures.");
             for (const ReflectedCaseDescriptor& enumCase : descriptor.cases)
@@ -498,7 +502,7 @@ namespace wio::wir::lowered
             if (attribute.targetType)
                 targetValid = targetValid && module.types.tryGet(attribute.targetType);
             if (attribute.targetFunction)
-                targetValid = targetValid && functions.contains(attribute.targetFunction.value());
+                targetValid = targetValid && functionById(attribute.targetFunction);
             if (attribute.stableId == 0 || attribute.canonicalName.empty() || !targetValid ||
                 !attributeIds.insert(attribute.stableId).second)
                 report("LIR1508", "Lowered WIR attribute applications require unique identities and valid targets.");
@@ -512,7 +516,7 @@ namespace wio::wir::lowered
                 if (processor.stableId == 0 || processor.canonicalTypeName.empty() ||
                     processor.phase == AttributeProcessorPhase::Unknown ||
                     (behavioral && (!processor.processorType || !module.types.tryGet(processor.processorType) ||
-                                    !processor.hookFunction || !functions.contains(processor.hookFunction.value()))) ||
+                                    !processor.hookFunction || !functionById(processor.hookFunction))) ||
                     (processor.valueType && !module.types.tryGet(processor.valueType)) ||
                     !processorIds.insert(processor.stableId).second)
                     report("LIR1509",
@@ -541,7 +545,7 @@ namespace wio::wir::lowered
         for (const SystemDescriptor& system : module.contract.systems)
         {
             const Type* type = module.types.tryGet(system.type);
-            const auto knownFunction = [&](const FunctionId id) { return !id || functions.contains(id.value()); };
+            const auto knownFunction = [&](const FunctionId id) { return !id || functionById(id); };
             if (system.stableId == 0 || system.logicalName.empty() || !type ||
                 type->nominalKind != NominalKind::Component || !systemTypes.insert(system.type.value()).second ||
                 !knownFunction(system.start) || !knownFunction(system.update) || !knownFunction(system.close))
@@ -551,7 +555,7 @@ namespace wio::wir::lowered
         {
             const ApplicationDescriptor& application = *module.contract.application;
             const Type* type = module.types.tryGet(application.type);
-            const auto requiredFunction = [&](const FunctionId id) { return id && functions.contains(id.value()); };
+            const auto requiredFunction = [&](const FunctionId id) { return id && functionById(id); };
             if (application.stableId == 0 || application.logicalName.empty() || !type ||
                 type->nominalKind != NominalKind::Component || !requiredFunction(application.entry) ||
                 !requiredFunction(application.construct) || !requiredFunction(application.start) ||
@@ -591,17 +595,16 @@ namespace wio::wir::lowered
         {
             for (const MethodLayout& method : type.methods)
             {
-                const auto function = functions.find(method.function.value());
-                if (function == functions.end() || !function->second->isMethod)
+                const Function* methodFunction = functionById(method.function);
+                if (!methodFunction || !methodFunction->isMethod)
                     report("LIR1009", "Lowered WIR method layout references an unknown or non-method function.");
             }
         }
 
         for (const Global& global : module.globals)
         {
-            const auto initializer = global.initializer ? functions.find(global.initializer.value()) : functions.end();
-            if (initializer == functions.end() || !initializer->second->parameters.empty() ||
-                initializer->second->returnType != global.type)
+            const Function* initializer = functionById(global.initializer);
+            if (!initializer || !initializer->parameters.empty() || initializer->returnType != global.type)
                 report(
                     "LIR1022",
                     "Lowered WIR global initializer must be a known zero-argument function returning the global type.",
@@ -613,12 +616,9 @@ namespace wio::wir::lowered
             std::size_t valueCapacity = function.parameters.size();
             for (const BasicBlock& block : function.blocks)
                 valueCapacity += block.parameters.size() + block.instructions.size();
-            ValueTypeMap values;
-            values.reserve(valueCapacity);
-            std::unordered_map<ValueId::ValueType, Opcode> producerOpcodes;
-            producerOpcodes.reserve(valueCapacity);
-            std::unordered_map<ValueId::ValueType, const Instruction*> producers;
-            producers.reserve(valueCapacity);
+            DenseIdMap<TypeId> values(valueCapacity);
+            DenseIdMap<Opcode> producerOpcodes(valueCapacity);
+            DenseIdMap<const Instruction*> producers(valueCapacity);
             auto defineValue = [&](const Parameter& parameter, const BlockId block)
             {
                 if (!parameter.id)
@@ -628,7 +628,7 @@ namespace wio::wir::lowered
                 }
                 if (!module.types.tryGet(parameter.type))
                     report("LIR1201", "Lowered WIR value has an invalid type.", parameter.source, function.id, block);
-                if (!values.emplace(parameter.id.value(), parameter.type).second)
+                if (!values.insert(parameter.id.value(), parameter.type))
                     report("LIR1202", "Lowered WIR value id is defined more than once.", parameter.source, function.id,
                            block);
             };
@@ -649,13 +649,12 @@ namespace wio::wir::lowered
                 continue;
             }
 
-            BlockMap blocks;
-            blocks.reserve(function.blocks.size());
+            DenseIdMap<const BasicBlock*> blocks(function.blocks.size());
             for (const BasicBlock& block : function.blocks)
             {
                 if (!block.id)
                     report("LIR1300", "Lowered WIR block has an invalid id.", block.source, function.id);
-                else if (!blocks.emplace(block.id.value(), &block).second)
+                else if (!blocks.insert(block.id.value(), &block))
                     report("LIR1301", "Lowered WIR block id is duplicated.", block.source, function.id, block.id);
                 for (const Parameter& parameter : block.parameters)
                     defineValue(parameter, block.id);
@@ -669,8 +668,8 @@ namespace wio::wir::lowered
                                               .borrowLifetime = instruction.borrowLifetime,
                                               .source = instruction.source},
                                     block.id);
-                        producerOpcodes.emplace(instruction.result.value(), instruction.opcode);
-                        producers.emplace(instruction.result.value(), &instruction);
+                        producerOpcodes.insert(instruction.result.value(), instruction.opcode);
+                        producers.insert(instruction.result.value(), &instruction);
                     }
                 }
             }
@@ -693,7 +692,7 @@ namespace wio::wir::lowered
                     const Type* type = module.types.tryGet(slot.type);
                     if (!frameSlots.insert(slot.slot).second || slot.slot >= function.coroutine->frameSlots.size() ||
                         !slot.value || !values.contains(slot.value.value()) ||
-                        (values.contains(slot.value.value()) && values.at(slot.value.value()) != slot.type) ||
+                        (values.contains(slot.value.value()) && *values.tryGet(slot.value.value()) != slot.type) ||
                         !frameValues.insert(slot.value.value()).second || !type || type->ownership != slot.ownership ||
                         type->cleanup != slot.cleanup)
                     {
@@ -723,8 +722,8 @@ namespace wio::wir::lowered
             {
                 if (!value)
                     return {};
-                const auto found = values.find(value.value());
-                return found == values.end() ? TypeId{} : found->second;
+                const TypeId* found = values.tryGet(value.value());
+                return found ? *found : TypeId{};
             };
 
             std::unordered_set<ValueId::ValueType> initializedPlaces;
@@ -782,10 +781,10 @@ namespace wio::wir::lowered
                         instruction.opcode == Opcode::InterfaceCall || instruction.opcode == Opcode::IntrinsicCall;
                     if (isCallInstruction && instruction.callee)
                     {
-                        const auto calleeIt = functions.find(instruction.callee.value());
-                        if (calleeIt != functions.end())
+                        const Function* callee = functionById(instruction.callee);
+                        if (callee)
                         {
-                            const Type* returnType = module.types.tryGet(calleeIt->second->returnType);
+                            const Type* returnType = module.types.tryGet(callee->returnType);
                             callReturnsVoid = returnType && returnType->kind == TypeKind::Void;
                         }
                     }
@@ -865,14 +864,15 @@ namespace wio::wir::lowered
                         std::optional<std::uint64_t> constantIndex;
                         if (proofValid)
                         {
-                            const auto indexProducer = producers.find(instruction.operands[1].value());
-                            if (indexProducer != producers.end() && indexProducer->second->opcode == Opcode::Constant)
+                            const Instruction* const* indexProducer =
+                                producers.tryGet(instruction.operands[1].value());
+                            if (indexProducer && (*indexProducer)->opcode == Opcode::Constant)
                             {
                                 if (const auto* unsignedIndex =
-                                        std::get_if<std::uint64_t>(&indexProducer->second->literal))
+                                        std::get_if<std::uint64_t>(&(*indexProducer)->literal))
                                     constantIndex = *unsignedIndex;
                                 else if (const auto* signedIndex =
-                                             std::get_if<std::int64_t>(&indexProducer->second->literal);
+                                             std::get_if<std::int64_t>(&(*indexProducer)->literal);
                                          signedIndex && *signedIndex >= 0)
                                     constantIndex = static_cast<std::uint64_t>(*signedIndex);
                             }
@@ -890,11 +890,11 @@ namespace wio::wir::lowered
                         }
                         else
                         {
-                            const auto baseProducer =
-                                proofValid ? producers.find(instruction.operands[0].value()) : producers.end();
-                            proofValid = proofValid && baseProducer != producers.end() &&
-                                         baseProducer->second->opcode == Opcode::ArrayCreate &&
-                                         *constantIndex < baseProducer->second->operands.size();
+                            const Instruction* const* baseProducer =
+                                proofValid ? producers.tryGet(instruction.operands[0].value()) : nullptr;
+                            proofValid = proofValid && baseProducer &&
+                                         (*baseProducer)->opcode == Opcode::ArrayCreate &&
+                                         *constantIndex < (*baseProducer)->operands.size();
                         }
                         if (!proofValid)
                             report("LIR1485",
@@ -1289,12 +1289,11 @@ namespace wio::wir::lowered
                     }
                     else if (instruction.opcode == Opcode::GlobalPlace)
                     {
-                        const auto global =
-                            instruction.global ? globals.find(instruction.global.value()) : globals.end();
+                        const Global* global = globalById(instruction.global);
                         const Type* placeType = module.types.tryGet(instruction.resultType);
-                        if (global == globals.end() || !placeType || placeType->kind != TypeKind::Reference ||
-                            placeType->arguments.size() != 1 || placeType->arguments.front() != global->second->type ||
-                            placeType->isMutable != global->second->isMutable || !instruction.operands.empty())
+                        if (!global || !placeType || placeType->kind != TypeKind::Reference ||
+                            placeType->arguments.size() != 1 || placeType->arguments.front() != global->type ||
+                            placeType->isMutable != global->isMutable || !instruction.operands.empty())
                             report("LIR1480",
                                    "Lowered WIR global-place must match a declared global and its mutability.",
                                    instruction.source, function.id, block.id);
@@ -1320,8 +1319,8 @@ namespace wio::wir::lowered
                         if (instruction.opcode == Opcode::PlaceInit && instruction.operands.size() == 2)
                         {
                             const ValueId place = instruction.operands.front();
-                            const auto producer = producerOpcodes.find(place.value());
-                            if (producer == producerOpcodes.end() || producer->second != Opcode::LocalPlace ||
+                            const Opcode* producer = producerOpcodes.tryGet(place.value());
+                            if (!producer || *producer != Opcode::LocalPlace ||
                                 !initializedPlaces.insert(place.value()).second)
                             {
                                 report("LIR1431",
@@ -1551,27 +1550,24 @@ namespace wio::wir::lowered
                     }
                     else if (instruction.opcode == Opcode::FunctionReference)
                     {
-                        const auto calleeIt =
-                            instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Function* callee = functionById(instruction.callee);
                         const Type* resultType = module.types.tryGet(instruction.resultType);
-                        if (calleeIt == functions.end() || !resultType || resultType->kind != TypeKind::Function ||
+                        if (!callee || !resultType || resultType->kind != TypeKind::Function ||
                             !instruction.operands.empty() ||
-                            (calleeIt->second->genericParameters.empty() &&
-                             instruction.resultType != calleeIt->second->callableType))
+                            (callee->genericParameters.empty() && instruction.resultType != callee->callableType))
                             report("LIR1439", "Lowered WIR function reference must pin a known callable declaration.",
                                    instruction.source, function.id, block.id);
                     }
                     else if (instruction.opcode == Opcode::ClosureCreate)
                     {
-                        const auto calleeIt =
-                            instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Function* callee = functionById(instruction.callee);
                         const Type* resultType = module.types.tryGet(instruction.resultType);
-                        bool valid = calleeIt != functions.end() && calleeIt->second->isClosureBody && resultType &&
+                        bool valid = callee && callee->isClosureBody && resultType &&
                                      resultType->kind == TypeKind::Function &&
-                                     instruction.resultType == calleeIt->second->callableType &&
+                                     instruction.resultType == callee->callableType &&
                                      instruction.operands.size() == instruction.signatureTypes.size() &&
                                      instruction.operands.size() == instruction.captureKinds.size() &&
-                                     instruction.operands.size() == calleeIt->second->captures.size();
+                                     instruction.operands.size() == callee->captures.size();
                         if (valid)
                         {
                             for (std::size_t captureIndex = 0; captureIndex < instruction.operands.size();
@@ -1580,9 +1576,9 @@ namespace wio::wir::lowered
                                         valueType(instruction.operands[captureIndex]) ==
                                             instruction.signatureTypes[captureIndex] &&
                                         instruction.signatureTypes[captureIndex] ==
-                                            calleeIt->second->captures[captureIndex].type &&
+                                            callee->captures[captureIndex].type &&
                                         instruction.captureKinds[captureIndex] ==
-                                            calleeIt->second->captures[captureIndex].kind;
+                                            callee->captures[captureIndex].kind;
                         }
                         if (!valid)
                             report("LIR1440", "Lowered WIR closure creation must match its capture layout.",
@@ -1618,10 +1614,9 @@ namespace wio::wir::lowered
                     }
                     else if (instruction.opcode == Opcode::ExtensionCall)
                     {
-                        const auto calleeIt =
-                            instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Function* callee = functionById(instruction.callee);
                         const Type* target = module.types.tryGet(instruction.targetType);
-                        bool valid = calleeIt != functions.end() && calleeIt->second->isExtension && target &&
+                        bool valid = callee && callee->isExtension && target &&
                                      target->kind == TypeKind::Named && !instruction.operands.empty() &&
                                      instruction.signatureTypes.size() == instruction.operands.size() &&
                                      !instruction.selector.empty() && !instruction.specializationKey.empty();
@@ -1637,11 +1632,11 @@ namespace wio::wir::lowered
                                      (receiver && receiver->kind == TypeKind::Reference &&
                                       receiver->arguments.size() == 1 &&
                                       receiver->arguments.front() == valueType(instruction.operands.front())));
-                            const Type* returnType = module.types.tryGet(calleeIt->second->returnType);
+                            const Type* returnType = module.types.tryGet(callee->returnType);
                             valid = valid && returnType &&
                                     (returnType->kind == TypeKind::Void ? !instruction.result
-                                     : calleeIt->second->genericParameters.empty()
-                                         ? instruction.resultType == calleeIt->second->returnType
+                                     : callee->genericParameters.empty()
+                                         ? instruction.resultType == callee->returnType
                                          : module.types.tryGet(instruction.resultType) &&
                                                !instruction.specializationKey.empty());
                         }
@@ -1654,22 +1649,21 @@ namespace wio::wir::lowered
                              instruction.opcode == Opcode::InterfaceCall)
                     {
                         const Type* owner = module.types.tryGet(instruction.targetType);
-                        const auto calleeIt =
-                            instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Function* callee = functionById(instruction.callee);
                         const auto method =
                             owner
                                 ? std::ranges::find_if(
                                       owner->methods,
                                       [&](const MethodLayout& layout)
                                       {
-                                          const auto layoutFunction = functions.find(layout.function.value());
+                                          const Function* layoutFunction = functionById(layout.function);
                                           const FunctionId layoutOrigin =
-                                              layoutFunction != functions.end() && layoutFunction->second->genericOrigin
-                                                  ? layoutFunction->second->genericOrigin
+                                              layoutFunction && layoutFunction->genericOrigin
+                                                  ? layoutFunction->genericOrigin
                                                   : layout.function;
                                           const FunctionId calleeOrigin =
-                                              calleeIt != functions.end() && calleeIt->second->genericOrigin
-                                                  ? calleeIt->second->genericOrigin
+                                              callee && callee->genericOrigin
+                                                  ? callee->genericOrigin
                                                   : instruction.callee;
                                           const bool implementationMatches = layoutOrigin == calleeOrigin;
                                           return layout.slot == instruction.projectionIndex &&
@@ -1681,7 +1675,7 @@ namespace wio::wir::lowered
                             (instruction.opcode != Opcode::VirtualCall || owner->nominalKind == NominalKind::Object) &&
                             (instruction.opcode != Opcode::InterfaceCall ||
                              owner->nominalKind == NominalKind::Interface);
-                        bool valid = dispatchKindValid && calleeIt != functions.end() &&
+                        bool valid = dispatchKindValid && callee &&
                                      method != owner->methods.end() && !instruction.operands.empty() &&
                                      instruction.signatureTypes.size() == instruction.operands.size();
                         if (valid)
@@ -1698,16 +1692,16 @@ namespace wio::wir::lowered
                                     underlyingNamedType(module.types, valueType(instruction.operands.front()),
                                                         &receiverNominal) &&
                                     nominalDerivesFrom(module.types, receiverNominal, instruction.targetType, visited);
-                            const Function& callee = *calleeIt->second;
                             const TypeId effectiveReturnType =
-                                callee.genericOrigin ? callee.returnType : method->returnType;
+                                callee->genericOrigin ? callee->returnType : method->returnType;
                             const Type* returnType = module.types.tryGet(effectiveReturnType);
                             const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
                             valid = valid && returnType &&
                                     (returnsVoid                        ? !instruction.result
-                                     : callee.genericParameters.empty() ? instruction.resultType == effectiveReturnType
-                                                                        : module.types.tryGet(instruction.resultType) &&
-                                                                              !instruction.specializationKey.empty());
+                                     : callee->genericParameters.empty()
+                                           ? instruction.resultType == effectiveReturnType
+                                           : module.types.tryGet(instruction.resultType) &&
+                                                 !instruction.specializationKey.empty());
                         }
                         if (!valid)
                             report("LIR1435",
@@ -1761,16 +1755,15 @@ namespace wio::wir::lowered
                     }
                     else if (instruction.opcode == Opcode::Call || instruction.opcode == Opcode::NativeInvoke)
                     {
-                        const auto calleeIt =
-                            instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
-                        if (calleeIt == functions.end())
+                        const Function* calleePointer = functionById(instruction.callee);
+                        if (!calleePointer)
                         {
                             report("LIR1407", "Lowered WIR call references an unknown function.", instruction.source,
                                    function.id, block.id);
                         }
                         else
                         {
-                            const Function& callee = *calleeIt->second;
+                            const Function& callee = *calleePointer;
                             if ((instruction.opcode == Opcode::NativeInvoke) != callee.nativeBinding.has_value())
                                 report("LIR1450",
                                        "Lowered native-invoke and ordinary call must match the callee ABI binding.",
@@ -1937,14 +1930,15 @@ namespace wio::wir::lowered
 
                     for (const BranchTarget& target : instruction.targets)
                     {
-                        const auto targetIt = target.block ? blocks.find(target.block.value()) : blocks.end();
-                        if (targetIt == blocks.end())
+                        const BasicBlock* const* targetEntry =
+                            target.block ? blocks.tryGet(target.block.value()) : nullptr;
+                        if (!targetEntry)
                         {
                             report("LIR1414", "Lowered WIR jump references an unknown block.", instruction.source,
                                    function.id, block.id);
                             continue;
                         }
-                        const BasicBlock& targetBlock = *targetIt->second;
+                        const BasicBlock& targetBlock = **targetEntry;
                         if (target.arguments.size() != targetBlock.parameters.size())
                         {
                             report("LIR1415", "Lowered WIR jump argument count does not match target block parameters.",

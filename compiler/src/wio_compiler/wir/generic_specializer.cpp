@@ -9,9 +9,9 @@
 #include <functional>
 #include <limits>
 #include <map>
-#include <set>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace wio::wir
 {
@@ -19,6 +19,15 @@ namespace wio::wir
     {
         using namespace typed;
         using Bindings = std::map<TypeId, TypeId>;
+
+        struct IdHash
+        {
+            template<typename Tag>
+            std::size_t operator()(const Id<Tag> id) const noexcept
+            {
+                return id.value();
+            }
+        };
 
         struct ExpandedPackValue
         {
@@ -37,6 +46,12 @@ namespace wio::wir
         public:
             Materializer(Module& module, std::size_t maximumBodies) : module_(module), maximumBodies_(maximumBodies)
             {
+                templates_.reserve(module.functions.size());
+                lifecycleTemplates_.reserve(module.functions.size() / 8 + 1);
+                processedMethods_.reserve(module.types.size());
+                instances_.reserve(module.functions.size() / 4 + 1);
+                instanceKeys_.reserve(module.functions.size() / 4 + 1);
+                instanceCounts_.reserve(module.functions.size() / 4 + 1);
                 for (const Function& function : module.functions)
                 {
                     templates_.emplace(function.id, function);
@@ -212,10 +227,16 @@ namespace wio::wir
                 if (openType(id))
                     return;
 
-                auto methods = module_.types.get(id).methods;
+                const Type& currentType = module_.types.get(id);
                 if (const auto found = processedMethods_.find(id);
-                    found != processedMethods_.end() && found->second == methods)
+                    found != processedMethods_.end() && found->second == currentType.methods)
                     return;
+                const bool hasLifecycle = currentType.nominalKind == NominalKind::Object &&
+                                          lifecycleTemplates_.contains(currentType.name);
+                if (currentType.methods.empty() && !hasLifecycle)
+                    return;
+
+                auto methods = currentType.methods;
                 for (auto& method : methods)
                 {
                     const auto source = templates_.find(method.function);
@@ -224,7 +245,7 @@ namespace wio::wir
                         continue;
                     TypeId owner = id;
                     const std::string ownerName = module_.types.get(source->second.ownerType).name;
-                    std::set<TypeId> visited;
+                    std::unordered_set<TypeId, IdHash> visited;
                     std::function<TypeId(TypeId)> findOwner = [&](TypeId candidate) -> TypeId
                     {
                         if (!visited.insert(candidate).second)
@@ -340,12 +361,12 @@ namespace wio::wir
             }
 
             Module& module_;
-            std::map<FunctionId, Function> templates_;
-            std::map<std::string, std::vector<FunctionId>> lifecycleTemplates_;
-            std::map<TypeId, std::vector<MethodLayout>> processedMethods_;
-            std::map<std::string, FunctionId> instances_;
-            std::map<FunctionId, std::string> instanceKeys_;
-            std::map<FunctionId, std::size_t> instanceCounts_;
+            std::unordered_map<FunctionId, Function, IdHash> templates_;
+            std::unordered_map<std::string, std::vector<FunctionId>> lifecycleTemplates_;
+            std::unordered_map<TypeId, std::vector<MethodLayout>, IdHash> processedMethods_;
+            std::unordered_map<std::string, FunctionId> instances_;
+            std::unordered_map<FunctionId, std::string, IdHash> instanceKeys_;
+            std::unordered_map<FunctionId, std::size_t, IdHash> instanceCounts_;
             std::vector<SpecializationDiagnostic> diagnostics_;
             std::string lastBindMismatch_;
             FunctionId::ValueType nextId_ = 0;
@@ -453,7 +474,8 @@ namespace wio::wir
                                                                           { return openType(parameter); });
                                            });
             }
-            bool typeReferencesBindings(TypeId id, const Bindings& bindings, std::set<TypeId>& visiting) const
+            bool typeReferencesBindings(TypeId id, const Bindings& bindings,
+                                        std::unordered_set<TypeId, IdHash>& visiting) const
             {
                 if (!id)
                     return false;
@@ -477,13 +499,14 @@ namespace wio::wir
                 return std::ranges::any_of(type->methods,
                                            [&](const MethodLayout& method)
                                            {
-                                               std::set<TypeId> visiting;
+                                               std::unordered_set<TypeId, IdHash> visiting;
                                                if (typeReferencesBindings(method.returnType, bindings, visiting))
                                                    return true;
                                                return std::ranges::any_of(method.parameterTypes,
                                                                           [&](const TypeId parameter)
                                                                           {
-                                                                              std::set<TypeId> parameterVisiting;
+                                                                              std::unordered_set<TypeId, IdHash>
+                                                                                  parameterVisiting;
                                                                               return typeReferencesBindings(
                                                                                   parameter, bindings,
                                                                                   parameterVisiting);
@@ -767,6 +790,7 @@ namespace wio::wir
             bool expandPackParameters(Function& function, const Bindings& bindings)
             {
                 ValueId::ValueType nextValue = 0;
+                std::size_t instructionCount = 0;
                 const auto observe = [&](const ValueId value)
                 {
                     if (value)
@@ -776,14 +800,17 @@ namespace wio::wir
                     observe(parameter.id);
                 for (const BasicBlock& block : function.blocks)
                 {
+                    instructionCount += block.instructions.size();
                     for (const Parameter& parameter : block.parameters)
                         observe(parameter.id);
                     for (const Instruction& instruction : block.instructions)
                         observe(instruction.result);
                 }
 
-                std::map<ValueId, ExpandedPackValue> expansions;
+                std::unordered_map<ValueId, ExpandedPackValue, IdHash> expansions;
+                expansions.reserve(function.parameters.size() + instructionCount / 8 + 1);
                 std::vector<Parameter> parameters;
+                parameters.reserve(function.parameters.size());
                 for (const Parameter& parameter : function.parameters)
                 {
                     const Type* parameterType = module_.types.tryGet(parameter.type);
@@ -822,8 +849,11 @@ namespace wio::wir
                 for (BasicBlock& block : function.blocks)
                 {
                     std::vector<Instruction> instructions;
-                    std::map<ValueId, TypeId> specializedValues;
-                    std::map<ValueId, TypeId> specializedPlaces;
+                    instructions.reserve(block.instructions.size());
+                    std::unordered_map<ValueId, TypeId, IdHash> specializedValues;
+                    std::unordered_map<ValueId, TypeId, IdHash> specializedPlaces;
+                    specializedValues.reserve(block.instructions.size());
+                    specializedPlaces.reserve(block.instructions.size() / 4 + 1);
                     for (Instruction instruction : block.instructions)
                     {
                         if (instruction.opcode == Opcode::PlaceInit && instruction.operands.size() == 2)
@@ -1143,7 +1173,11 @@ namespace wio::wir
                 function.returnType = replace(function.returnType);
                 function.ownerType = replace(function.ownerType);
                 function.genericParameters.clear();
-                std::map<ValueId, TypeId> values;
+                std::size_t valueCapacity = function.parameters.size();
+                for (const BasicBlock& block : function.blocks)
+                    valueCapacity += block.parameters.size() + block.instructions.size();
+                std::unordered_map<ValueId, TypeId, IdHash> values;
+                values.reserve(valueCapacity);
                 const auto parameter = [&](Parameter& p)
                 {
                     p.type = replace(p.type);
@@ -1301,7 +1335,8 @@ namespace wio::wir
                     }
                 }
                 materializeOwnedLoads(function);
-                std::map<ValueId, ValueId> aliases;
+                std::unordered_map<ValueId, ValueId, IdHash> aliases;
+                aliases.reserve(valueCapacity / 8 + 1);
                 for (auto& block : function.blocks)
                 {
                     std::erase_if(block.instructions,

@@ -67,6 +67,7 @@ namespace wio
         Argonaut::Parser argParser;
         sema::TypeContext typeContext_;
         std::unordered_set<std::string> loadedModules;
+        std::unordered_map<std::string, std::optional<std::filesystem::path>> resolvedModulePaths;
         std::unordered_map<std::string, std::vector<std::string>> moduleExportedSymbols;
         std::unordered_map<std::string, bool> moduleDeclaresTopLevelRealms;
         std::vector<RequiredCppHeader> requiredCppHeaders;
@@ -2547,6 +2548,21 @@ namespace wio
         std::optional<std::filesystem::path> resolveModuleSourcePath(const std::string& modulePath, bool isStdLib,
                                                                      const std::filesystem::path& currentDir)
         {
+            std::string cacheKey;
+            cacheKey.reserve(modulePath.size() + currentDir.native().size() + 2);
+            cacheKey += isStdLib ? "S\x1f" : "U\x1f";
+            cacheKey += modulePath;
+
+            if (!isStdLib)
+            {
+                cacheKey += '\x1f';
+                cacheKey += currentDir.lexically_normal().generic_string();
+            }
+
+            if (const auto cached = gAppData.resolvedModulePaths.find(cacheKey);
+                cached != gAppData.resolvedModulePaths.end())
+                return cached->second;
+
             const std::filesystem::path relativeModulePath =
                 std::filesystem::path(modulePath + ".wio").make_preferred();
 
@@ -2555,9 +2571,15 @@ namespace wio
                 std::filesystem::path candidatePath = (searchRoot / relativeModulePath).make_preferred();
                 std::error_code ec;
                 if (std::filesystem::exists(candidatePath, ec) && !ec)
-                    return std::filesystem::absolute(candidatePath).make_preferred();
+                {
+                    std::filesystem::path resolvedPath =
+                        filesystem::getCanonicalPath(std::filesystem::absolute(candidatePath)).make_preferred();
+                    gAppData.resolvedModulePaths.emplace(std::move(cacheKey), resolvedPath);
+                    return resolvedPath;
+                }
             }
 
+            gAppData.resolvedModulePaths.emplace(std::move(cacheKey), std::nullopt);
             return std::nullopt;
         }
 
@@ -2841,6 +2863,7 @@ namespace wio
             WIO_LOG_PROCESS_ERRORS(CompilationError);
 
             gAppData.loadedModules.clear();
+            gAppData.resolvedModulePaths.clear();
             gAppData.moduleExportedSymbols.clear();
             gAppData.moduleDeclaresTopLevelRealms.clear();
             gAppData.requiredCppHeaders.clear();
@@ -3376,8 +3399,10 @@ namespace wio
                                          const std::filesystem::path& currentDir,
                                          std::vector<std::string>* exportedSymbols, bool* declaresTopLevelRealms)
     {
+        common::profiling::Scope resolveScope("Frontend.Import.Resolve");
         std::optional<std::filesystem::path> resolvedModulePath =
             resolveModuleSourcePath(modulePath, isStdLib, currentDir);
+        resolveScope.stop();
         if (!resolvedModulePath.has_value())
         {
             Logger::get().addError("Module file was not found: {}.wio (searched in: {})", modulePath,
@@ -3386,7 +3411,7 @@ namespace wio
             return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
         }
 
-        std::filesystem::path actualPath = filesystem::getCanonicalPath(*resolvedModulePath).make_preferred();
+        const std::filesystem::path& actualPath = *resolvedModulePath;
         std::string absolutePath = actualPath.string();
 
         if (gAppData.loadedModules.contains(absolutePath))
@@ -3407,7 +3432,9 @@ namespace wio
         }
         gAppData.loadedModules.insert(absolutePath);
 
+        common::profiling::Scope readScope("Frontend.Import.Read");
         std::string source = filesystem::readFile(actualPath);
+        readScope.stop();
         if (source.empty())
         {
             Logger::get().addError("Module file is empty or not found: {}", actualPath.string());
@@ -3416,18 +3443,25 @@ namespace wio
         }
         filesystem::stripBOM(source);
 
+        common::profiling::Scope lexerScope("Frontend.Import.Lexer");
         Lexer lexer(source, actualPath.string());
-        Parser parser(lexer.lex());
+        auto tokens = lexer.lex();
+        lexerScope.stop();
+        common::profiling::Scope parserScope("Frontend.Import.Parser");
+        Parser parser(std::move(tokens));
         auto subProgram = parser.parseProgram();
+        parserScope.stop();
         // A recovered parser error leaves a deliberately incomplete AST. Do not
         // merge that tree into the importing program: semantic analysis would
         // otherwise diagnose every symbol omitted by recovery as an unrelated
         // error and hide the actual syntax failure in a cascade.
         WIO_LOG_PROCESS_ERRORS(CompilationError);
+        common::profiling::Scope metadataScope("Frontend.Import.Metadata");
         collectRequiredCppHeaders(subProgram->statements, actualPath, gAppData.requiredCppHeaders);
         const bool moduleDeclaresTopLevelRealms = hasDeclaredTopLevelRealms(subProgram->statements);
 
         std::vector<std::string> moduleExportedSymbols = collectExportedSymbols(subProgram->statements);
+        metadataScope.stop();
         gAppData.moduleExportedSymbols[absolutePath] = moduleExportedSymbols;
         gAppData.moduleDeclaresTopLevelRealms[absolutePath] = moduleDeclaresTopLevelRealms;
         if (exportedSymbols)

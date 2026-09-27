@@ -68,6 +68,8 @@ namespace wio::wir::typed
             collectGlobals(program->statements);
             globalsScope.stop();
             nextFunctionId_ = static_cast<FunctionId::ValueType>(declarations_.size());
+            result_.module_.functions.reserve(declarations_.size() + typeDeclarations_.size() +
+                                              globalDeclarations_.size() + 1);
             common::profiling::Scope functionBodiesScope("WIR.Typed.BuildFunctions");
             for (const DeclarationInfo& declaration : declarations_)
                 buildFunction(declaration);
@@ -934,8 +936,10 @@ namespace wio::wir::typed
         static std::size_t createBlock(FunctionState& state, std::string name, const SourceSpan& source)
         {
             const std::size_t index = state.function->blocks.size();
-            state.function->blocks.push_back(
-                BasicBlock{.id = BlockId{state.nextBlock++}, .name = std::move(name), .source = source});
+            BasicBlock block{.id = BlockId{state.nextBlock++}, .name = std::move(name), .source = source};
+            block.parameters.reserve(2);
+            block.instructions.reserve(8);
+            state.function->blocks.push_back(std::move(block));
             return index;
         }
 
@@ -2995,6 +2999,7 @@ namespace wio::wir::typed
             }
 
             Function function;
+            function.parameters.reserve(declaration.parameters.size() + (declarationInfo.ownerType ? 1u : 0u));
             function.id = functionsBySymbol_.at(symbol.Get());
             function.name = symbol->scopePath.empty() ? symbol->name : symbol->scopePath + "::" + symbol->name;
             function.returnType = mapType(functionType->returnType, &declaration);
@@ -3004,6 +3009,8 @@ namespace wio::wir::typed
             function.source = SourceSpan::at(declaration.location());
             function.isAsync = declaration.isAsync;
             function.isExternal = declaration.body == nullptr;
+            if (!function.isExternal)
+                function.blocks.reserve(8);
             function.isMethod = static_cast<bool>(function.ownerType);
             function.isExtension = declarationInfo.isExtension;
             if (function.isAsync)
@@ -3027,6 +3034,15 @@ namespace wio::wir::typed
             }
 
             FunctionState state{.function = &function};
+            const std::size_t localCapacity = declaration.parameters.size() + 8;
+            state.values.reserve(localCapacity);
+            state.valueOrder.reserve(localCapacity);
+            state.places.reserve(localCapacity);
+            state.placeOrder.reserve(localCapacity);
+            state.captureTypes.reserve(localCapacity);
+            state.ownerships.reserve(localCapacity * 2);
+            state.movedPlaces.reserve(localCapacity);
+            state.temporaryPlaces.reserve(8);
             if (!function.isExternal)
             {
                 state.blockIndex = createBlock(state, "entry", SourceSpan::at(declaration.body->location()));
@@ -3056,19 +3072,19 @@ namespace wio::wir::typed
                            parameter.name.Get());
                     continue;
                 }
+                const TypeId parameterType = mapType(functionType->paramTypes[index], parameter.name.Get());
+                const ValueOwnership parameterOwnership = ownershipForType(parameterType);
                 const ValueId value{state.nextValue++};
                 function.parameters.push_back(Parameter{
                     .id = value,
                     .name = parameterSymbol->name,
-                    .type = mapType(functionType->paramTypes[index], parameter.name.Get()),
-                    .ownership = ownershipForType(mapType(functionType->paramTypes[index], parameter.name.Get())),
-                    .borrowLifetime = ownershipForType(mapType(functionType->paramTypes[index],
-                                                               parameter.name.Get())) == ValueOwnership::Borrowed
+                    .type = parameterType,
+                    .ownership = parameterOwnership,
+                    .borrowLifetime = parameterOwnership == ValueOwnership::Borrowed
                                           ? BorrowLifetime::Caller
                                           : BorrowLifetime::None,
                     .source = SourceSpan::at(parameter.name->location())});
-                const TypeId parameterType = mapType(functionType->paramTypes[index], parameter.name.Get());
-                rememberOwnership(state, value, ownershipForType(parameterType));
+                rememberOwnership(state, value, parameterOwnership);
                 const Type* parameterTypeInfo = result_.module_.types.tryGet(parameterType);
                 if (function.isExtension && index == 0)
                 {
@@ -3245,14 +3261,14 @@ namespace wio::wir::typed
                     return;
                 }
 
+                const TypeId valueType = mapType(symbol->type, declaration);
                 ValueId value;
                 if (declaration->initializer)
-                    value = buildExpressionAs(declaration->initializer, mapType(symbol->type, declaration), state);
+                    value = buildExpressionAs(declaration->initializer, valueType, state);
                 else
-                    value = buildDefaultValue(mapType(symbol->type, declaration), declaration, state);
+                    value = buildDefaultValue(valueType, declaration, state);
                 if (!value)
                     return;
-                const TypeId valueType = mapType(symbol->type, declaration);
                 const Type* valueTypeInfo = result_.module_.types.tryGet(valueType);
                 if (valueTypeInfo && valueTypeInfo->kind == TypeKind::Reference)
                 {

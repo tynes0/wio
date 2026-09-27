@@ -1,4 +1,5 @@
 #include "wio/wir/typed_ir_verifier.h"
+#include "wio/wir/dense_id_map.h"
 
 #include <algorithm>
 #include <unordered_map>
@@ -10,18 +11,12 @@ namespace wio::wir::typed
 {
     namespace
     {
-        using ValueTypeMap = std::unordered_map<ValueId::ValueType, TypeId>;
-        using FunctionMap = std::unordered_map<FunctionId::ValueType, const Function*>;
-        using GlobalMap = std::unordered_map<GlobalId::ValueType, const Global*>;
-        using BlockMap = std::unordered_map<BlockId::ValueType, const BasicBlock*>;
-
         struct ValueDefinition
         {
             BlockId block;
             std::optional<std::size_t> instructionIndex;
         };
 
-        using ValueDefinitionMap = std::unordered_map<ValueId::ValueType, ValueDefinition>;
         using BlockSet = std::unordered_set<BlockId::ValueType>;
 
         std::string describeType(const TypeTable& types, const TypeId typeId)
@@ -426,18 +421,16 @@ namespace wio::wir::typed
             }
         }
 
-        GlobalMap globals;
-        globals.reserve(module.globals.size());
+        DenseIdMap<const Global*> globals(module.globals.size());
         for (const Global& global : module.globals)
         {
-            if (!global.id || !globals.emplace(global.id.value(), &global).second)
+            if (!global.id || !globals.insert(global.id.value(), &global))
                 report("WIR1020", "Typed WIR global id must be valid and unique.", global.source);
             if (global.name.empty() || !module.types.tryGet(global.type) || (global.isConst && global.isMutable))
                 report("WIR1021", "Typed WIR global requires a name, type, and consistent mutability.", global.source);
         }
 
-        FunctionMap functions;
-        functions.reserve(module.functions.size());
+        DenseIdMap<const Function*> functions(module.functions.size());
         for (const Function& function : module.functions)
         {
             if (!function.id)
@@ -445,7 +438,7 @@ namespace wio::wir::typed
                 report("WIR1100", "Typed WIR function has an invalid id.", function.source);
                 continue;
             }
-            if (!functions.emplace(function.id.value(), &function).second)
+            if (!functions.insert(function.id.value(), &function))
                 report("WIR1101", "Typed WIR function id is duplicated.", function.source, function.id);
             if (function.name.empty())
                 report("WIR1102", "Typed WIR function name cannot be empty.", function.source, function.id);
@@ -568,6 +561,16 @@ namespace wio::wir::typed
                         function.source, function.id);
             }
         }
+        const auto functionById = [&](const FunctionId id) -> const Function*
+        {
+            const Function* const* function = id ? functions.tryGet(id.value()) : nullptr;
+            return function ? *function : nullptr;
+        };
+        const auto globalById = [&](const GlobalId id) -> const Global*
+        {
+            const Global* const* global = id ? globals.tryGet(id.value()) : nullptr;
+            return global ? *global : nullptr;
+        };
 
         if (module.contract.logicalName.empty() || module.contract.stableKey.empty() || module.contract.stableId == 0 ||
             module.contract.stableId != stableModuleHash(module.contract.stableKey))
@@ -597,8 +600,8 @@ namespace wio::wir::typed
             if (entry.kind == ModuleExportKind::Function ||
                 entry.kind == ModuleExportKind::GenericFunctionSpecialization)
             {
-                const auto function = entry.function ? functions.find(entry.function.value()) : functions.end();
-                targetValid = function != functions.end() && module.types.tryGet(entry.returnType) &&
+                const Function* targetFunction = functionById(entry.function);
+                targetValid = targetFunction && module.types.tryGet(entry.returnType) &&
                               std::ranges::all_of(entry.parameterTypes, [&](const TypeId type)
                                                   { return module.types.tryGet(type) != nullptr; }) &&
                               std::ranges::all_of(entry.genericArguments, [&](const TypeId type)
@@ -606,7 +609,7 @@ namespace wio::wir::typed
                 if (entry.kind == ModuleExportKind::GenericFunctionSpecialization)
                     targetValid = targetValid && !entry.genericArguments.empty();
                 else
-                    targetValid = targetValid && entry.returnType == function->second->returnType;
+                    targetValid = targetValid && entry.returnType == targetFunction->returnType;
             }
             else
             {
@@ -640,7 +643,7 @@ namespace wio::wir::typed
                     report("WIR1506", "Typed WIR reflected fields require unique identities, names, and valid types.");
             for (const ReflectedMethodDescriptor& method : descriptor.methods)
                 if (method.stableId == 0 || method.name.empty() || !module.types.tryGet(method.returnType) ||
-                    !functions.contains(method.function.value()) || !memberIds.insert(method.stableId).second)
+                    !functionById(method.function) || !memberIds.insert(method.stableId).second)
                     report("WIR1507",
                            "Typed WIR reflected methods require unique identities and valid callable signatures.");
             for (const ReflectedCaseDescriptor& enumCase : descriptor.cases)
@@ -655,7 +658,7 @@ namespace wio::wir::typed
             if (attribute.targetType)
                 targetValid = targetValid && module.types.tryGet(attribute.targetType);
             if (attribute.targetFunction)
-                targetValid = targetValid && functions.contains(attribute.targetFunction.value());
+                targetValid = targetValid && functionById(attribute.targetFunction);
             if (attribute.stableId == 0 || attribute.canonicalName.empty() || !targetValid ||
                 !attributeIds.insert(attribute.stableId).second)
                 report("WIR1508", "Typed WIR attribute applications require unique identities and valid targets.");
@@ -669,7 +672,7 @@ namespace wio::wir::typed
                 if (processor.stableId == 0 || processor.canonicalTypeName.empty() ||
                     processor.phase == AttributeProcessorPhase::Unknown ||
                     (behavioral && (!processor.processorType || !module.types.tryGet(processor.processorType) ||
-                                    !processor.hookFunction || !functions.contains(processor.hookFunction.value()))) ||
+                                    !processor.hookFunction || !functionById(processor.hookFunction))) ||
                     (processor.valueType && !module.types.tryGet(processor.valueType)) ||
                     !processorIds.insert(processor.stableId).second)
                     report("WIR1509",
@@ -699,7 +702,7 @@ namespace wio::wir::typed
         for (const SystemDescriptor& system : module.contract.systems)
         {
             const Type* type = module.types.tryGet(system.type);
-            const auto knownFunction = [&](const FunctionId id) { return !id || functions.contains(id.value()); };
+            const auto knownFunction = [&](const FunctionId id) { return !id || functionById(id); };
             if (system.stableId == 0 || system.logicalName.empty() || !type ||
                 type->nominalKind != NominalKind::Component || !systemTypes.insert(system.type.value()).second ||
                 !knownFunction(system.start) || !knownFunction(system.update) || !knownFunction(system.close))
@@ -709,7 +712,7 @@ namespace wio::wir::typed
         {
             const ApplicationDescriptor& application = *module.contract.application;
             const Type* type = module.types.tryGet(application.type);
-            const auto requiredFunction = [&](const FunctionId id) { return id && functions.contains(id.value()); };
+            const auto requiredFunction = [&](const FunctionId id) { return id && functionById(id); };
             if (application.stableId == 0 || application.logicalName.empty() || !type ||
                 type->nominalKind != NominalKind::Component || !requiredFunction(application.entry) ||
                 !requiredFunction(application.construct) || !requiredFunction(application.start) ||
@@ -746,7 +749,7 @@ namespace wio::wir::typed
         }
 
         const ModuleLifecycle& lifecycle = module.contract.lifecycle;
-        const auto lifecycleKnown = [&](const FunctionId id) { return !id || functions.contains(id.value()); };
+        const auto lifecycleKnown = [&](const FunctionId id) { return !id || functionById(id); };
         if (!lifecycleKnown(lifecycle.apiVersion) || !lifecycleKnown(lifecycle.load) ||
             !lifecycleKnown(lifecycle.update) || !lifecycleKnown(lifecycle.unload) ||
             !lifecycleKnown(lifecycle.saveState) || !lifecycleKnown(lifecycle.restoreState) ||
@@ -758,17 +761,16 @@ namespace wio::wir::typed
         {
             for (const MethodLayout& method : type.methods)
             {
-                const auto function = functions.find(method.function.value());
-                if (function == functions.end() || !function->second->isMethod)
+                const Function* methodFunction = functionById(method.function);
+                if (!methodFunction || !methodFunction->isMethod)
                     report("WIR1013", "Typed WIR method layout references an unknown or non-method function.");
             }
         }
 
         for (const Global& global : module.globals)
         {
-            const auto initializer = global.initializer ? functions.find(global.initializer.value()) : functions.end();
-            if (initializer == functions.end() || !initializer->second->parameters.empty() ||
-                initializer->second->returnType != global.type)
+            const Function* initializer = functionById(global.initializer);
+            if (!initializer || !initializer->parameters.empty() || initializer->returnType != global.type)
                 report("WIR1022",
                        "Typed WIR global initializer must be a known zero-argument function returning the global type.",
                        global.source);
@@ -790,17 +792,13 @@ namespace wio::wir::typed
                 continue;
             }
 
-            BlockMap blocks;
-            ValueTypeMap values;
-            ValueDefinitionMap definitions;
-            std::unordered_map<ValueId::ValueType, Opcode> producerOpcodes;
+            DenseIdMap<const BasicBlock*> blocks(function.blocks.size());
             std::size_t valueCapacity = function.parameters.size();
             for (const BasicBlock& block : function.blocks)
                 valueCapacity += block.parameters.size() + block.instructions.size();
-            blocks.reserve(function.blocks.size());
-            values.reserve(valueCapacity);
-            definitions.reserve(valueCapacity);
-            producerOpcodes.reserve(valueCapacity);
+            DenseIdMap<TypeId> values(valueCapacity);
+            DenseIdMap<ValueDefinition> definitions(valueCapacity);
+            DenseIdMap<Opcode> producerOpcodes(valueCapacity);
             auto defineValue = [&](const Parameter& value, const BlockId block,
                                    const std::optional<std::size_t> instructionIndex = std::nullopt,
                                    const bool enforceTypeOwnership = true)
@@ -821,11 +819,11 @@ namespace wio::wir::typed
                            "Borrowed Typed WIR values require lifetime metadata, and owned values cannot carry it.",
                            value.source, function.id, block);
                 }
-                if (!values.emplace(value.id.value(), value.type).second)
+                if (!values.insert(value.id.value(), value.type))
                     report("WIR1202", "Typed WIR value id is defined more than once.", value.source, function.id,
                            block);
                 else
-                    definitions.emplace(value.id.value(), ValueDefinition{block, instructionIndex});
+                    definitions.insert(value.id.value(), ValueDefinition{block, instructionIndex});
             };
 
             for (const Parameter& parameter : function.parameters)
@@ -835,7 +833,7 @@ namespace wio::wir::typed
             {
                 if (!block.id)
                     report("WIR1300", "Typed WIR block has an invalid id.", block.source, function.id);
-                else if (!blocks.emplace(block.id.value(), &block).second)
+                else if (!blocks.insert(block.id.value(), &block))
                     report("WIR1301", "Typed WIR block id is duplicated.", block.source, function.id, block.id);
                 for (const Parameter& parameter : block.parameters)
                     defineValue(parameter, block.id);
@@ -850,7 +848,7 @@ namespace wio::wir::typed
                                           .borrowLifetime = instruction.borrowLifetime,
                                           .source = instruction.source};
                     defineValue(resultValue, block.id, instructionIndex, false);
-                    producerOpcodes.emplace(instruction.result.value(), instruction.opcode);
+                    producerOpcodes.insert(instruction.result.value(), instruction.opcode);
                 }
             }
 
@@ -858,8 +856,8 @@ namespace wio::wir::typed
             {
                 if (!id)
                     return {};
-                const auto found = values.find(id.value());
-                return found == values.end() ? TypeId{} : found->second;
+                const TypeId* found = values.tryGet(id.value());
+                return found ? *found : TypeId{};
             };
 
             std::unordered_map<BlockId::ValueType, std::vector<BlockId::ValueType>> predecessors;
@@ -887,7 +885,8 @@ namespace wio::wir::typed
                     pending.pop_back();
                     if (!reachableBlocks.insert(blockId).second)
                         continue;
-                    const BasicBlock* block = blocks.contains(blockId) ? blocks.at(blockId) : nullptr;
+                    const BasicBlock* const* blockEntry = blocks.tryGet(blockId);
+                    const BasicBlock* block = blockEntry ? *blockEntry : nullptr;
                     if (!block || block->instructions.empty())
                         continue;
                     for (const BlockId target : block->instructions.back().targets)
@@ -973,7 +972,7 @@ namespace wio::wir::typed
                             continue;
                         }
 
-                        const ValueDefinition& definition = definitions.at(operand.value());
+                        const ValueDefinition& definition = *definitions.tryGet(operand.value());
                         if (!definition.block)
                             continue;
                         if (definition.block == block.id)
@@ -1022,10 +1021,10 @@ namespace wio::wir::typed
                         instruction.opcode == Opcode::InterfaceCall || instruction.opcode == Opcode::IntrinsicCall;
                     if (isCallInstruction && instruction.callee)
                     {
-                        const auto calleeIt = functions.find(instruction.callee.value());
-                        if (calleeIt != functions.end())
+                        const Function* callee = functionById(instruction.callee);
+                        if (callee)
                         {
-                            const Type* returnType = module.types.tryGet(calleeIt->second->returnType);
+                            const Type* returnType = module.types.tryGet(callee->returnType);
                             callReturnsVoid = returnType && returnType->kind == TypeKind::Void;
                         }
                     }
@@ -1491,12 +1490,11 @@ namespace wio::wir::typed
                     }
                     else if (instruction.opcode == Opcode::GlobalPlace)
                     {
-                        const auto global =
-                            instruction.global ? globals.find(instruction.global.value()) : globals.end();
+                        const Global* global = globalById(instruction.global);
                         const Type* placeType = module.types.tryGet(instruction.resultType);
-                        if (global == globals.end() || !placeType || placeType->kind != TypeKind::Reference ||
-                            placeType->arguments.size() != 1 || placeType->arguments.front() != global->second->type ||
-                            placeType->isMutable != global->second->isMutable || !instruction.operands.empty())
+                        if (!global || !placeType || placeType->kind != TypeKind::Reference ||
+                            placeType->arguments.size() != 1 || placeType->arguments.front() != global->type ||
+                            placeType->isMutable != global->isMutable || !instruction.operands.empty())
                             report("WIR1480", "Typed WIR global-place must match a declared global and its mutability.",
                                    instruction.source, function.id, block.id);
                     }
@@ -1542,8 +1540,8 @@ namespace wio::wir::typed
                         if (instruction.opcode == Opcode::PlaceInit && instruction.operands.size() == 2)
                         {
                             const ValueId place = instruction.operands.front();
-                            const auto producer = producerOpcodes.find(place.value());
-                            if (producer == producerOpcodes.end() || producer->second != Opcode::LocalPlace ||
+                            const Opcode* producer = producerOpcodes.tryGet(place.value());
+                            if (!producer || *producer != Opcode::LocalPlace ||
                                 !initializedPlaces.insert(place.value()).second)
                             {
                                 report("WIR1436",
@@ -1786,13 +1784,12 @@ namespace wio::wir::typed
                     }
                     else if (instruction.opcode == Opcode::FunctionReference)
                     {
-                        const auto calleeIt =
-                            instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Function* callee = functionById(instruction.callee);
                         const Type* resultType = module.types.tryGet(instruction.resultType);
-                        const bool valid = calleeIt != functions.end() && resultType &&
+                        const bool valid = callee && resultType &&
                                            resultType->kind == TypeKind::Function && instruction.operands.empty() &&
-                                           (calleeIt->second->genericParameters.empty()
-                                                ? instruction.resultType == calleeIt->second->callableType
+                                           (callee->genericParameters.empty()
+                                                ? instruction.resultType == callee->callableType
                                                 : !instruction.specializationKey.empty());
                         if (!valid)
                             report(
@@ -1802,15 +1799,14 @@ namespace wio::wir::typed
                     }
                     else if (instruction.opcode == Opcode::ClosureCreate)
                     {
-                        const auto calleeIt =
-                            instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Function* callee = functionById(instruction.callee);
                         const Type* resultType = module.types.tryGet(instruction.resultType);
-                        bool valid = calleeIt != functions.end() && calleeIt->second->isClosureBody && resultType &&
+                        bool valid = callee && callee->isClosureBody && resultType &&
                                      resultType->kind == TypeKind::Function &&
-                                     instruction.resultType == calleeIt->second->callableType &&
+                                     instruction.resultType == callee->callableType &&
                                      instruction.operands.size() == instruction.signatureTypes.size() &&
                                      instruction.operands.size() == instruction.captureKinds.size() &&
-                                     instruction.operands.size() == calleeIt->second->captures.size();
+                                     instruction.operands.size() == callee->captures.size();
                         if (valid)
                         {
                             for (std::size_t captureIndex = 0; captureIndex < instruction.operands.size();
@@ -1820,9 +1816,9 @@ namespace wio::wir::typed
                                         valueType(instruction.operands[captureIndex]) ==
                                             instruction.signatureTypes[captureIndex] &&
                                         instruction.signatureTypes[captureIndex] ==
-                                            calleeIt->second->captures[captureIndex].type &&
+                                            callee->captures[captureIndex].type &&
                                         instruction.captureKinds[captureIndex] ==
-                                            calleeIt->second->captures[captureIndex].kind;
+                                            callee->captures[captureIndex].kind;
                             }
                         }
                         if (!valid)
@@ -1862,10 +1858,9 @@ namespace wio::wir::typed
                     }
                     else if (instruction.opcode == Opcode::ExtensionCall)
                     {
-                        const auto calleeIt =
-                            instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Function* callee = functionById(instruction.callee);
                         const Type* target = module.types.tryGet(instruction.targetType);
-                        bool valid = calleeIt != functions.end() && calleeIt->second->isExtension && target &&
+                        bool valid = callee && callee->isExtension && target &&
                                      target->kind == TypeKind::Named && !instruction.operands.empty() &&
                                      instruction.signatureTypes.size() == instruction.operands.size() &&
                                      instruction.selector.size() > 0 && !instruction.specializationKey.empty();
@@ -1881,11 +1876,11 @@ namespace wio::wir::typed
                                               (receiverSignature && receiverSignature->kind == TypeKind::Reference &&
                                                receiverSignature->arguments.size() == 1 &&
                                                receiverSignature->arguments.front() == receiverValue));
-                            const Type* returnType = module.types.tryGet(calleeIt->second->returnType);
+                            const Type* returnType = module.types.tryGet(callee->returnType);
                             valid = valid && returnType &&
                                     (returnType->kind == TypeKind::Void ? !instruction.result
-                                     : calleeIt->second->genericParameters.empty()
-                                         ? instruction.resultType == calleeIt->second->returnType
+                                     : callee->genericParameters.empty()
+                                         ? instruction.resultType == callee->returnType
                                          : module.types.tryGet(instruction.resultType) &&
                                                !instruction.specializationKey.empty());
                         }
@@ -1899,22 +1894,21 @@ namespace wio::wir::typed
                              instruction.opcode == Opcode::InterfaceCall)
                     {
                         const Type* owner = module.types.tryGet(instruction.targetType);
-                        const auto calleeIt =
-                            instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
+                        const Function* callee = functionById(instruction.callee);
                         const auto method =
                             owner
                                 ? std::ranges::find_if(
                                       owner->methods,
                                       [&](const MethodLayout& layout)
                                       {
-                                          const auto layoutFunction = functions.find(layout.function.value());
+                                          const Function* layoutFunction = functionById(layout.function);
                                           const FunctionId layoutOrigin =
-                                              layoutFunction != functions.end() && layoutFunction->second->genericOrigin
-                                                  ? layoutFunction->second->genericOrigin
+                                              layoutFunction && layoutFunction->genericOrigin
+                                                  ? layoutFunction->genericOrigin
                                                   : layout.function;
                                           const FunctionId calleeOrigin =
-                                              calleeIt != functions.end() && calleeIt->second->genericOrigin
-                                                  ? calleeIt->second->genericOrigin
+                                              callee && callee->genericOrigin
+                                                  ? callee->genericOrigin
                                                   : instruction.callee;
                                           const bool implementationMatches = layoutOrigin == calleeOrigin;
                                           return layout.slot == instruction.projectionIndex &&
@@ -1926,7 +1920,7 @@ namespace wio::wir::typed
                             (instruction.opcode != Opcode::VirtualCall || owner->nominalKind == NominalKind::Object) &&
                             (instruction.opcode != Opcode::InterfaceCall ||
                              owner->nominalKind == NominalKind::Interface);
-                        bool valid = dispatchKindValid && calleeIt != functions.end() &&
+                        bool valid = dispatchKindValid && callee &&
                                      method != owner->methods.end() && !instruction.operands.empty() &&
                                      instruction.signatureTypes.size() == instruction.operands.size();
                         if (valid)
@@ -1943,15 +1937,14 @@ namespace wio::wir::typed
                                     underlyingNamedType(module.types, valueType(instruction.operands.front()),
                                                         &receiverNominal) &&
                                     nominalDerivesFrom(module.types, receiverNominal, instruction.targetType, visited);
-                            const Function& callee = *calleeIt->second;
                             const TypeId effectiveReturnType =
-                                callee.genericOrigin ? callee.returnType : method->returnType;
+                                callee->genericOrigin ? callee->returnType : method->returnType;
                             const Type* returnType = module.types.tryGet(effectiveReturnType);
                             const bool returnsVoid = returnType && returnType->kind == TypeKind::Void;
                             const bool hasOpenReturn = containsOpenType(module.types, method->returnType);
                             valid = valid && returnType &&
                                     (returnsVoid ? !instruction.result
-                                     : callee.genericParameters.empty() && !hasOpenReturn
+                                     : callee->genericParameters.empty() && !hasOpenReturn
                                          ? instruction.resultType == effectiveReturnType
                                          : module.types.tryGet(instruction.resultType) &&
                                                !instruction.specializationKey.empty());
@@ -1971,16 +1964,14 @@ namespace wio::wir::typed
                                        ", operands=" + std::to_string(instruction.operands.size()) +
                                        ", signatures=" + std::to_string(instruction.signatureTypes.size()) +
                                        ", dispatch-valid=" + (dispatchKindValid ? "true" : "false") +
-                                       ", callee-found=" + (calleeIt != functions.end() ? "true" : "false") +
+                                       ", callee-found=" + (callee ? "true" : "false") +
                                        ", method-found=" + (methodFound ? "true" : "false") + ", result=" +
                                        describeType(module.types, instruction.resultType) + ", method-result=" +
                                        describeType(module.types, methodFound ? method->returnType : TypeId{}) +
                                        ", callee-result=" +
-                                       describeType(module.types, calleeIt != functions.end()
-                                                                      ? calleeIt->second->returnType
-                                                                      : TypeId{}) +
+                                       describeType(module.types, callee ? callee->returnType : TypeId{}) +
                                        ", callee-generic=" +
-                                       (calleeIt != functions.end() && !calleeIt->second->genericParameters.empty()
+                                       (callee && !callee->genericParameters.empty()
                                             ? "true"
                                             : "false") +
                                        ").",
@@ -2038,16 +2029,15 @@ namespace wio::wir::typed
                     }
                     else if (instruction.opcode == Opcode::Call || instruction.opcode == Opcode::NativeCall)
                     {
-                        const auto calleeIt =
-                            instruction.callee ? functions.find(instruction.callee.value()) : functions.end();
-                        if (calleeIt == functions.end())
+                        const Function* calleePointer = functionById(instruction.callee);
+                        if (!calleePointer)
                         {
                             report("WIR1409", "Typed WIR call references an unknown function.", instruction.source,
                                    function.id, block.id);
                         }
                         else
                         {
-                            const Function& callee = *calleeIt->second;
+                            const Function& callee = *calleePointer;
                             const bool nativeOpcodeMatches =
                                 (instruction.opcode == Opcode::NativeCall) == callee.nativeBinding.has_value();
                             if (!nativeOpcodeMatches)
@@ -2160,7 +2150,7 @@ namespace wio::wir::typed
                                    function.id, block.id);
                         else if (instruction.targets.front() && blocks.contains(instruction.targets.front().value()))
                         {
-                            const BasicBlock& target = *blocks.at(instruction.targets.front().value());
+                            const BasicBlock& target = **blocks.tryGet(instruction.targets.front().value());
                             if (instruction.operands.size() != target.parameters.size())
                             {
                                 report("WIR1417", "Typed WIR branch argument count does not match its target block.",
@@ -2192,7 +2182,7 @@ namespace wio::wir::typed
                             for (const BlockId targetId : instruction.targets)
                             {
                                 if (targetId && blocks.contains(targetId.value()) &&
-                                    !blocks.at(targetId.value())->parameters.empty())
+                                    !(*blocks.tryGet(targetId.value()))->parameters.empty())
                                 {
                                     report("WIR1419",
                                            "Typed WIR conditional branch targets cannot require block arguments.",
@@ -2242,7 +2232,8 @@ namespace wio::wir::typed
                 {
                     const BlockId::ValueType blockId = pending.back();
                     pending.pop_back();
-                    const BasicBlock* block = blocks.contains(blockId) ? blocks.at(blockId) : nullptr;
+                    const BasicBlock* const* blockEntry = blocks.tryGet(blockId);
+                    const BasicBlock* block = blockEntry ? *blockEntry : nullptr;
                     if (!block)
                         continue;
                     LivePlaces live = entryStates.at(blockId);
@@ -2286,7 +2277,7 @@ namespace wio::wir::typed
                             pending.push_back(successor.value());
                         else if (found->second != live && mismatchReported.insert(successor.value()).second)
                             report("WIR1473", "Control-flow merge disagrees on live cleanup-bearing places.",
-                                   blocks.at(successor.value())->source, function.id, successor);
+                                   (*blocks.tryGet(successor.value()))->source, function.id, successor);
                     }
                 }
             }
