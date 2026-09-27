@@ -39,6 +39,7 @@
 #include "wio/common/exception.h"
 #include "wio/common/filesystem/filesystem.h"
 #include "wio/common/logger.h"
+#include "wio/common/profiling.h"
 #include "wio/lexer/lexer.h"
 #include "wio/parser/parser.h"
 #include "wio/sema/analyzer.h"
@@ -648,6 +649,7 @@ namespace wio
 
         int emitWir(const Ref<Program>& program, const std::filesystem::path& sourcePath, const WirEmitKind kind)
         {
+            common::profiling::Scope emitScope("WIR.Emit");
             const std::vector<std::string> intermediateDirs =
                 gAppData.argParser.GetValuesOf<std::string>("INTERMEDIATE-DIR");
             const std::optional<std::filesystem::path> intermediateDir =
@@ -669,11 +671,15 @@ namespace wio
             buildOptions.moduleKind = Compiler::get().getBuildTarget() == BuildTarget::Executable
                                           ? wir::ModuleKind::Program
                                           : wir::ModuleKind::WioLibrary;
+            common::profiling::Scope typedBuildScope("WIR.Typed.Build");
             wir::typed::BuildResult typedResult = wir::typed::Builder{}.build(program, buildOptions);
+            typedBuildScope.stop();
             reportTypedWirDiagnostics(typedResult);
             WIO_LOG_PROCESS_ERRORS(CompilationError);
+            common::profiling::Scope typedVerifyScope("WIR.Typed.Verify");
             const wir::typed::VerificationResult typedVerification =
                 wir::typed::Verifier{}.verify(typedResult.module());
+            typedVerifyScope.stop();
             reportTypedWirDiagnostics(typedVerification);
             WIO_LOG_PROCESS_ERRORS(CompilationError);
 
@@ -681,14 +687,18 @@ namespace wio
             std::string_view outputName;
             if (kind == WirEmitKind::Typed)
             {
+                common::profiling::Scope printScope("WIR.Typed.Print");
                 output = wir::typed::Printer{}.print(typedResult.module());
                 outputName = "Typed WIR";
             }
             else
             {
+                common::profiling::Scope loweringScope("WIR.Lower");
                 wir::LoweringResult loweringResult = wir::LoweringPipeline{}.lower(typedResult.module());
+                loweringScope.stop();
                 reportLoweringDiagnostics(loweringResult);
                 WIO_LOG_PROCESS_ERRORS(CompilationError);
+                common::profiling::Scope printScope("WIR.Lowered.Print");
                 output = wir::lowered::Printer{}.print(loweringResult.module());
                 outputName = "Lowered WIR";
             }
@@ -2641,6 +2651,9 @@ namespace wio
             .Add(Argonaut::Argument("IR-OUTPUT")
                      .AddAlias("--ir-output")
                      .SetDescription("Overrides the output path used by --emit-typed-wir or --emit-lowered-wir."))
+            .Add(Argonaut::Argument("PROFILE-COMPILER")
+                     .AddAlias("--profile-compiler")
+                     .SetDescription("Writes a Chrome/Perfetto compiler phase trace to the selected JSON file."))
             .Add(Argonaut::Argument("INCLUDE-DIR")
                      .AddAlias("--include-dir")
                      .MultiValue()
@@ -2764,7 +2777,34 @@ namespace wio
                 std::filesystem::absolute(std::filesystem::path(filePathStr)).make_preferred();
             gAppData.basePath = sourcePath.parent_path();
 
+            const std::vector<std::string> profilePaths =
+                gAppData.argParser.GetValuesOf<std::string>("PROFILE-COMPILER");
+            std::optional<common::profiling::Session> profileSession;
+            if (!profilePaths.empty())
+            {
+                const std::filesystem::path profilePath =
+                    std::filesystem::absolute(std::filesystem::path(profilePaths.front())).make_preferred();
+                std::error_code profileDirectoryError;
+                if (profilePath.has_parent_path())
+                    std::filesystem::create_directories(profilePath.parent_path(), profileDirectoryError);
+                if (profileDirectoryError)
+                {
+                    WIO_LOG_FATAL("Compiler profile directory could not be created: {}",
+                                  profilePath.parent_path().string());
+                    return EXIT_FAILURE;
+                }
+                profileSession.emplace("Wio compiler", profilePath);
+                if (!profileSession->active())
+                {
+                    WIO_LOG_FATAL("Compiler profile could not be opened: {}", profilePath.string());
+                    return EXIT_FAILURE;
+                }
+            }
+            common::profiling::Scope compileScope("Compiler.Total");
+
+            common::profiling::Scope sourceReadScope("Frontend.ReadSource");
             std::string source = filesystem::readFile(sourcePath);
+            sourceReadScope.stop();
 
             if (source.empty())
             {
@@ -2776,8 +2816,10 @@ namespace wio
 
             // 1. Lexer
             const std::string sourceDisplayPath = std::filesystem::absolute(sourcePath).make_preferred().string();
+            common::profiling::Scope lexerScope("Frontend.Lexer");
             Lexer lexer(source, sourceDisplayPath);
             auto tokens = lexer.lex();
+            lexerScope.stop();
 
             if (gAppData.flags.get_ShowTokens())
             {
@@ -2785,8 +2827,12 @@ namespace wio
             }
 
             // 2. Parser
+            common::profiling::Scope parserScope("Frontend.Parser");
             Parser parser(std::move(tokens));
             auto program = parser.parseProgram();
+            parserScope.stop();
+
+            common::profiling::Scope importScope("Frontend.ImportMerge");
 
             // Imported module declarations are hoisted ahead of user source.
             // Diagnose source/alias collisions before that rewrite so the
@@ -2909,11 +2955,14 @@ namespace wio
                                    std::make_move_iterator(sourceStatements.end()));
 
             program->statements = std::move(finalStatements);
+            importScope.stop();
 
             // 3. Semantic Analysis
+            common::profiling::Scope semanticScope("Semantic.Total");
             sema::SemanticAnalyzer analyzer;
             analyzer.setCanonicalAbiExports(gAppData.cppBackend == "wir");
             analyzer.analyze(program);
+            semanticScope.stop();
 
             if (!validateWirEmitOptions())
                 return EXIT_FAILURE;
@@ -3016,22 +3065,30 @@ namespace wio
                 buildOptions.logicalModuleName = outputPath.stem().generic_string();
                 buildOptions.moduleKind = gAppData.buildTarget == BuildTarget::Executable ? wir::ModuleKind::Program
                                                                                           : wir::ModuleKind::WioLibrary;
+                common::profiling::Scope typedBuildScope("WIR.Typed.Build");
                 wir::typed::BuildResult typedResult = wir::typed::Builder{}.build(program, buildOptions);
+                typedBuildScope.stop();
                 reportTypedWirDiagnostics(typedResult);
                 WIO_LOG_PROCESS_ERRORS(CompilationError);
+                common::profiling::Scope typedVerifyScope("WIR.Typed.Verify");
                 const wir::typed::VerificationResult typedVerification =
                     wir::typed::Verifier{}.verify(typedResult.module());
+                typedVerifyScope.stop();
                 reportTypedWirDiagnostics(typedVerification);
                 WIO_LOG_PROCESS_ERRORS(CompilationError);
 
+                common::profiling::Scope loweringScope("WIR.Lower");
                 wir::LoweringResult loweringResult = wir::LoweringPipeline{}.lower(typedResult.module());
+                loweringScope.stop();
                 reportLoweringDiagnostics(loweringResult);
                 WIO_LOG_PROCESS_ERRORS(CompilationError);
 
                 codegen::WirCppBackendOptions backendOptions;
                 backendOptions.emitMain = gAppData.buildTarget == BuildTarget::Executable;
+                common::profiling::Scope backendScope("Backend.Cpp.Generate");
                 codegen::WirCppGenerationResult generation =
                     codegen::WirCppBackend{}.generate(loweringResult.module(), backendOptions);
+                backendScope.stop();
                 reportWirCppDiagnostics(generation);
                 WIO_LOG_PROCESS_ERRORS(CompilationError);
                 cppCode = generation.code();
@@ -3052,11 +3109,13 @@ namespace wio
                 return EXIT_FAILURE;
             }
 
+            common::profiling::Scope generatedWriteScope("Backend.Cpp.Write");
             if (!filesystem::writeFilepath(cppCode, cppPath))
             {
                 WIO_LOG_FATAL("Generated C++ output could not be written to: {}", cppPath.string());
                 return EXIT_FAILURE;
             }
+            generatedWriteScope.stop();
 
             WIO_LOG_INFO("Generated C++ output: {}", pathToDisplayString(cppPath));
 
@@ -3065,6 +3124,7 @@ namespace wio
 
             const int backendPhaseResult = [&]() -> int
             {
+                common::profiling::Scope nativeBackendScope("Backend.NativeCompiler");
                 if (runtimeIncludeDir.empty() || !std::filesystem::exists(runtimeIncludeDir))
                 {
                     WIO_LOG_FATAL("Runtime headers were not found. Expected directory: {}", runtimeIncludeDir.string());

@@ -49,10 +49,17 @@ This is still useful when you want to compile or run a single file directly:
 wio .\tests\test1.wio
 wio .\tests\test1.wio --run
 wio .\tests\native\exported_library.wio --target shared --output build\interop\exported_library.dll
+wio .\app.wio --emit-lowered-wir --profile-compiler .\artifacts\compiler-trace.json
 ```
 
 Think of it as a lower-level compiler entry path, while `wio file ...` is the
 more structured single-file UX.
+
+`--profile-compiler <trace.json>` records an opt-in Coco trace in the Chrome/
+Perfetto event format. It separates source loading, lexing, parsing, import
+merging, semantic passes, Typed WIR construction and verification, lowering,
+C++ generation, output writing, and native compilation. Profiling is disabled
+by default and does not create trace files during ordinary builds.
 
 ### 1.3 Common CLI Behavior
 
