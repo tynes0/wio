@@ -18,14 +18,14 @@ namespace wio::wir
 
         bool isSignedInteger(const TypeKind kind)
         {
-            return kind == TypeKind::I8 || kind == TypeKind::I16 || kind == TypeKind::I32 ||
-                kind == TypeKind::I64 || kind == TypeKind::ISize;
+            return kind == TypeKind::I8 || kind == TypeKind::I16 || kind == TypeKind::I32 || kind == TypeKind::I64 ||
+                   kind == TypeKind::ISize;
         }
 
         bool isUnsignedInteger(const TypeKind kind)
         {
-            return kind == TypeKind::U8 || kind == TypeKind::U16 || kind == TypeKind::U32 ||
-                kind == TypeKind::U64 || kind == TypeKind::USize || kind == TypeKind::Byte;
+            return kind == TypeKind::U8 || kind == TypeKind::U16 || kind == TypeKind::U32 || kind == TypeKind::U64 ||
+                   kind == TypeKind::USize || kind == TypeKind::Byte;
         }
 
         bool isFloatingPoint(const TypeKind kind)
@@ -37,11 +37,14 @@ namespace wio::wir
         {
             switch (kind)
             {
-            case TypeKind::I8: return {INT8_MIN, INT8_MAX};
-            case TypeKind::I16: return {INT16_MIN, INT16_MAX};
-            case TypeKind::I32: return {INT32_MIN, INT32_MAX};
-            default: return {(std::numeric_limits<std::int64_t>::min)(),
-                             (std::numeric_limits<std::int64_t>::max)()};
+            case TypeKind::I8:
+                return {INT8_MIN, INT8_MAX};
+            case TypeKind::I16:
+                return {INT16_MIN, INT16_MAX};
+            case TypeKind::I32:
+                return {INT32_MIN, INT32_MAX};
+            default:
+                return {(std::numeric_limits<std::int64_t>::min)(), (std::numeric_limits<std::int64_t>::max)()};
             }
         }
 
@@ -50,10 +53,14 @@ namespace wio::wir
             switch (kind)
             {
             case TypeKind::U8:
-            case TypeKind::Byte: return UINT8_MAX;
-            case TypeKind::U16: return UINT16_MAX;
-            case TypeKind::U32: return UINT32_MAX;
-            default: return (std::numeric_limits<std::uint64_t>::max)();
+            case TypeKind::Byte:
+                return UINT8_MAX;
+            case TypeKind::U16:
+                return UINT16_MAX;
+            case TypeKind::U32:
+                return UINT32_MAX;
+            default:
+                return (std::numeric_limits<std::uint64_t>::max)();
             }
         }
 
@@ -75,57 +82,69 @@ namespace wio::wir
 
         std::optional<std::int64_t> checkedMultiply(const std::int64_t left, const std::int64_t right)
         {
-            if (left == 0 || right == 0) return std::int64_t{0};
+            if (left == 0 || right == 0)
+                return std::int64_t{0};
             if ((left == -1 && right == (std::numeric_limits<std::int64_t>::min)()) ||
                 (right == -1 && left == (std::numeric_limits<std::int64_t>::min)()))
                 return std::nullopt;
             if (left > 0)
             {
-                if (right > 0 && left > (std::numeric_limits<std::int64_t>::max)() / right) return std::nullopt;
-                if (right < 0 && right < (std::numeric_limits<std::int64_t>::min)() / left) return std::nullopt;
+                if (right > 0 && left > (std::numeric_limits<std::int64_t>::max)() / right)
+                    return std::nullopt;
+                if (right < 0 && right < (std::numeric_limits<std::int64_t>::min)() / left)
+                    return std::nullopt;
             }
             else
             {
-                if (right > 0 && left < (std::numeric_limits<std::int64_t>::min)() / right) return std::nullopt;
-                if (right < 0 && left < (std::numeric_limits<std::int64_t>::max)() / right) return std::nullopt;
+                if (right > 0 && left < (std::numeric_limits<std::int64_t>::min)() / right)
+                    return std::nullopt;
+                if (right < 0 && left < (std::numeric_limits<std::int64_t>::max)() / right)
+                    return std::nullopt;
             }
             return left * right;
         }
 
-        template<typename Value>
-        std::optional<typed::Literal> foldComparison(
-            const typed::BinaryOperator operation,
-            const Value& left,
-            const Value& right)
+        template <typename Value>
+        std::optional<typed::Literal> foldComparison(const typed::BinaryOperator operation, const Value& left,
+                                                     const Value& right)
         {
             switch (operation)
             {
-            case typed::BinaryOperator::Equal: return typed::Literal{left == right};
-            case typed::BinaryOperator::NotEqual: return typed::Literal{left != right};
-            case typed::BinaryOperator::Less: return typed::Literal{left < right};
-            case typed::BinaryOperator::LessEqual: return typed::Literal{left <= right};
-            case typed::BinaryOperator::Greater: return typed::Literal{left > right};
-            case typed::BinaryOperator::GreaterEqual: return typed::Literal{left >= right};
-            default: return std::nullopt;
+            case typed::BinaryOperator::Equal:
+                return typed::Literal{left == right};
+            case typed::BinaryOperator::NotEqual:
+                return typed::Literal{left != right};
+            case typed::BinaryOperator::Less:
+                return typed::Literal{left < right};
+            case typed::BinaryOperator::LessEqual:
+                return typed::Literal{left <= right};
+            case typed::BinaryOperator::Greater:
+                return typed::Literal{left > right};
+            case typed::BinaryOperator::GreaterEqual:
+                return typed::Literal{left >= right};
+            default:
+                return std::nullopt;
             }
         }
 
-        std::optional<typed::Literal> foldSigned(
-            const typed::BinaryOperator operation,
-            const std::int64_t left,
-            const std::int64_t right)
+        std::optional<typed::Literal> foldSigned(const typed::BinaryOperator operation, const std::int64_t left,
+                                                 const std::int64_t right)
         {
-            if (const auto comparison = foldComparison(operation, left, right)) return comparison;
+            if (const auto comparison = foldComparison(operation, left, right))
+                return comparison;
             switch (operation)
             {
             case typed::BinaryOperator::Add:
-                if (const auto value = checkedAdd(left, right)) return typed::Literal{*value};
+                if (const auto value = checkedAdd(left, right))
+                    return typed::Literal{*value};
                 break;
             case typed::BinaryOperator::Subtract:
-                if (const auto value = checkedSubtract(left, right)) return typed::Literal{*value};
+                if (const auto value = checkedSubtract(left, right))
+                    return typed::Literal{*value};
                 break;
             case typed::BinaryOperator::Multiply:
-                if (const auto value = checkedMultiply(left, right)) return typed::Literal{*value};
+                if (const auto value = checkedMultiply(left, right))
+                    return typed::Literal{*value};
                 break;
             case typed::BinaryOperator::Divide:
                 if (right != 0 && !(left == (std::numeric_limits<std::int64_t>::min)() && right == -1))
@@ -135,20 +154,23 @@ namespace wio::wir
                 if (right != 0 && !(left == (std::numeric_limits<std::int64_t>::min)() && right == -1))
                     return typed::Literal{left % right};
                 break;
-            case typed::BinaryOperator::BitwiseAnd: return typed::Literal{left & right};
-            case typed::BinaryOperator::BitwiseOr: return typed::Literal{left | right};
-            case typed::BinaryOperator::BitwiseXor: return typed::Literal{left ^ right};
-            default: break;
+            case typed::BinaryOperator::BitwiseAnd:
+                return typed::Literal{left & right};
+            case typed::BinaryOperator::BitwiseOr:
+                return typed::Literal{left | right};
+            case typed::BinaryOperator::BitwiseXor:
+                return typed::Literal{left ^ right};
+            default:
+                break;
             }
             return std::nullopt;
         }
 
-        std::optional<typed::Literal> foldUnsigned(
-            const typed::BinaryOperator operation,
-            const std::uint64_t left,
-            const std::uint64_t right)
+        std::optional<typed::Literal> foldUnsigned(const typed::BinaryOperator operation, const std::uint64_t left,
+                                                   const std::uint64_t right)
         {
-            if (const auto comparison = foldComparison(operation, left, right)) return comparison;
+            if (const auto comparison = foldComparison(operation, left, right))
+                return comparison;
             switch (operation)
             {
             case typed::BinaryOperator::Add:
@@ -156,59 +178,70 @@ namespace wio::wir
                     return typed::Literal{left + right};
                 break;
             case typed::BinaryOperator::Subtract:
-                if (left >= right) return typed::Literal{left - right};
+                if (left >= right)
+                    return typed::Literal{left - right};
                 break;
             case typed::BinaryOperator::Multiply:
                 if (right == 0 || left <= (std::numeric_limits<std::uint64_t>::max)() / right)
                     return typed::Literal{left * right};
                 break;
             case typed::BinaryOperator::Divide:
-                if (right != 0) return typed::Literal{left / right};
+                if (right != 0)
+                    return typed::Literal{left / right};
                 break;
             case typed::BinaryOperator::Remainder:
-                if (right != 0) return typed::Literal{left % right};
+                if (right != 0)
+                    return typed::Literal{left % right};
                 break;
-            case typed::BinaryOperator::BitwiseAnd: return typed::Literal{left & right};
-            case typed::BinaryOperator::BitwiseOr: return typed::Literal{left | right};
-            case typed::BinaryOperator::BitwiseXor: return typed::Literal{left ^ right};
+            case typed::BinaryOperator::BitwiseAnd:
+                return typed::Literal{left & right};
+            case typed::BinaryOperator::BitwiseOr:
+                return typed::Literal{left | right};
+            case typed::BinaryOperator::BitwiseXor:
+                return typed::Literal{left ^ right};
             case typed::BinaryOperator::ShiftLeft:
                 if (right < 64 && left <= (std::numeric_limits<std::uint64_t>::max)() >> right)
                     return typed::Literal{left << right};
                 break;
             case typed::BinaryOperator::ShiftRight:
-                if (right < 64) return typed::Literal{left >> right};
+                if (right < 64)
+                    return typed::Literal{left >> right};
                 break;
-            default: break;
+            default:
+                break;
             }
             return std::nullopt;
         }
 
-        std::optional<typed::Literal> foldFloating(
-            const typed::BinaryOperator operation,
-            const double left,
-            const double right)
+        std::optional<typed::Literal> foldFloating(const typed::BinaryOperator operation, const double left,
+                                                   const double right)
         {
-            if (const auto comparison = foldComparison(operation, left, right)) return comparison;
+            if (const auto comparison = foldComparison(operation, left, right))
+                return comparison;
             switch (operation)
             {
-            case typed::BinaryOperator::Add: return typed::Literal{left + right};
-            case typed::BinaryOperator::Subtract: return typed::Literal{left - right};
-            case typed::BinaryOperator::Multiply: return typed::Literal{left * right};
+            case typed::BinaryOperator::Add:
+                return typed::Literal{left + right};
+            case typed::BinaryOperator::Subtract:
+                return typed::Literal{left - right};
+            case typed::BinaryOperator::Multiply:
+                return typed::Literal{left * right};
             case typed::BinaryOperator::Divide:
-                if (right != 0.0) return typed::Literal{left / right};
+                if (right != 0.0)
+                    return typed::Literal{left / right};
                 break;
             case typed::BinaryOperator::Remainder:
-                if (right != 0.0) return typed::Literal{std::fmod(left, right)};
+                if (right != 0.0)
+                    return typed::Literal{std::fmod(left, right)};
                 break;
-            default: return std::nullopt;
+            default:
+                return std::nullopt;
             }
             return std::nullopt;
         }
 
-        std::optional<typed::Literal> foldBinary(
-            const typed::BinaryOperator operation,
-            const typed::Literal& left,
-            const typed::Literal& right)
+        std::optional<typed::Literal> foldBinary(const typed::BinaryOperator operation, const typed::Literal& left,
+                                                 const typed::Literal& right)
         {
             if (const auto* signedLeft = std::get_if<std::int64_t>(&left))
                 if (const auto* signedRight = std::get_if<std::int64_t>(&right))
@@ -228,18 +261,15 @@ namespace wio::wir
             return std::nullopt;
         }
 
-        std::optional<typed::Literal> foldUnary(
-            const typed::UnaryOperator operation,
-            const typed::Literal& operand)
+        std::optional<typed::Literal> foldUnary(const typed::UnaryOperator operation, const typed::Literal& operand)
         {
             if (const auto* value = std::get_if<bool>(&operand))
                 return operation == typed::UnaryOperator::LogicalNot
-                    ? std::optional<typed::Literal>{typed::Literal{!*value}}
-                    : std::nullopt;
+                           ? std::optional<typed::Literal>{typed::Literal{!*value}}
+                           : std::nullopt;
             if (const auto* value = std::get_if<std::int64_t>(&operand))
             {
-                if (operation == typed::UnaryOperator::Negate &&
-                    *value != (std::numeric_limits<std::int64_t>::min)())
+                if (operation == typed::UnaryOperator::Negate && *value != (std::numeric_limits<std::int64_t>::min)())
                     return typed::Literal{-*value};
                 if (operation == typed::UnaryOperator::BitwiseNot)
                     return typed::Literal{~*value};
@@ -262,10 +292,14 @@ namespace wio::wir
             if (isFloatingPoint(destination.kind))
             {
                 double converted = 0.0;
-                if (const auto* signedValue = std::get_if<std::int64_t>(&value)) converted = static_cast<double>(*signedValue);
-                else if (const auto* unsignedValue = std::get_if<std::uint64_t>(&value)) converted = static_cast<double>(*unsignedValue);
-                else if (const auto* floatingValue = std::get_if<double>(&value)) converted = *floatingValue;
-                else return std::nullopt;
+                if (const auto* signedValue = std::get_if<std::int64_t>(&value))
+                    converted = static_cast<double>(*signedValue);
+                else if (const auto* unsignedValue = std::get_if<std::uint64_t>(&value))
+                    converted = static_cast<double>(*unsignedValue);
+                else if (const auto* floatingValue = std::get_if<double>(&value))
+                    converted = *floatingValue;
+                else
+                    return std::nullopt;
                 if (destination.kind == TypeKind::F32)
                     converted = static_cast<double>(static_cast<float>(converted));
                 return typed::Literal{converted};
@@ -274,10 +308,12 @@ namespace wio::wir
             {
                 const auto [minimum, maximum] = signedRange(destination.kind);
                 std::int64_t converted = 0;
-                if (const auto* signedValue = std::get_if<std::int64_t>(&value)) converted = *signedValue;
+                if (const auto* signedValue = std::get_if<std::int64_t>(&value))
+                    converted = *signedValue;
                 else if (const auto* unsignedValue = std::get_if<std::uint64_t>(&value))
                 {
-                    if (*unsignedValue > static_cast<std::uint64_t>(maximum)) return std::nullopt;
+                    if (*unsignedValue > static_cast<std::uint64_t>(maximum))
+                        return std::nullopt;
                     converted = static_cast<std::int64_t>(*unsignedValue);
                 }
                 else if (const auto* floatingValue = std::get_if<double>(&value))
@@ -287,18 +323,22 @@ namespace wio::wir
                         return std::nullopt;
                     converted = static_cast<std::int64_t>(*floatingValue);
                 }
-                else return std::nullopt;
-                if (converted < minimum || converted > maximum) return std::nullopt;
+                else
+                    return std::nullopt;
+                if (converted < minimum || converted > maximum)
+                    return std::nullopt;
                 return typed::Literal{converted};
             }
             if (isUnsignedInteger(destination.kind))
             {
                 const std::uint64_t maximum = unsignedMaximum(destination.kind);
                 std::uint64_t converted = 0;
-                if (const auto* unsignedValue = std::get_if<std::uint64_t>(&value)) converted = *unsignedValue;
+                if (const auto* unsignedValue = std::get_if<std::uint64_t>(&value))
+                    converted = *unsignedValue;
                 else if (const auto* signedValue = std::get_if<std::int64_t>(&value))
                 {
-                    if (*signedValue < 0) return std::nullopt;
+                    if (*signedValue < 0)
+                        return std::nullopt;
                     converted = static_cast<std::uint64_t>(*signedValue);
                 }
                 else if (const auto* floatingValue = std::get_if<double>(&value))
@@ -308,29 +348,24 @@ namespace wio::wir
                         return std::nullopt;
                     converted = static_cast<std::uint64_t>(*floatingValue);
                 }
-                else return std::nullopt;
-                if (converted > maximum) return std::nullopt;
+                else
+                    return std::nullopt;
+                if (converted > maximum)
+                    return std::nullopt;
                 return typed::Literal{converted};
             }
             return std::nullopt;
         }
 
-        template<typename Value>
-        std::optional<typed::Literal> foldRange(
-            const std::string& selector,
-            const Value& value,
-            const Value& start,
-            const Value& end)
+        template <typename Value>
+        std::optional<typed::Literal> foldRange(const std::string& selector, const Value& value, const Value& start,
+                                                const Value& end)
         {
-            return typed::Literal{value >= start &&
-                (selector == "inclusive" ? value <= end : value < end)};
+            return typed::Literal{value >= start && (selector == "inclusive" ? value <= end : value < end)};
         }
 
-        std::optional<typed::Literal> foldRangeContains(
-            const std::string& selector,
-            const typed::Literal& value,
-            const typed::Literal& start,
-            const typed::Literal& end)
+        std::optional<typed::Literal> foldRangeContains(const std::string& selector, const typed::Literal& value,
+                                                        const typed::Literal& start, const typed::Literal& end)
         {
             if (const auto* item = std::get_if<std::int64_t>(&value))
                 if (const auto* first = std::get_if<std::int64_t>(&start))
@@ -347,33 +382,33 @@ namespace wio::wir
             return std::nullopt;
         }
 
-        std::optional<typed::Literal> normalizeFoldedLiteral(
-            typed::Literal literal,
-            const Type& type)
+        std::optional<typed::Literal> normalizeFoldedLiteral(typed::Literal literal, const Type& type)
         {
             if (type.kind == TypeKind::ISize || type.kind == TypeKind::USize)
                 return std::nullopt;
             if (type.kind == TypeKind::Bool)
-                return std::holds_alternative<bool>(literal)
-                    ? std::optional<typed::Literal>{std::move(literal)} : std::nullopt;
+                return std::holds_alternative<bool>(literal) ? std::optional<typed::Literal>{std::move(literal)}
+                                                             : std::nullopt;
             if (isSignedInteger(type.kind))
             {
                 const auto* value = std::get_if<std::int64_t>(&literal);
-                if (!value) return std::nullopt;
+                if (!value)
+                    return std::nullopt;
                 const auto [minimum, maximum] = signedRange(type.kind);
-                return *value >= minimum && *value <= maximum
-                    ? std::optional<typed::Literal>{std::move(literal)} : std::nullopt;
+                return *value >= minimum && *value <= maximum ? std::optional<typed::Literal>{std::move(literal)}
+                                                              : std::nullopt;
             }
             if (isUnsignedInteger(type.kind))
             {
                 const auto* value = std::get_if<std::uint64_t>(&literal);
-                return value && *value <= unsignedMaximum(type.kind)
-                    ? std::optional<typed::Literal>{std::move(literal)} : std::nullopt;
+                return value && *value <= unsignedMaximum(type.kind) ? std::optional<typed::Literal>{std::move(literal)}
+                                                                     : std::nullopt;
             }
             if (isFloatingPoint(type.kind))
             {
                 const auto* value = std::get_if<double>(&literal);
-                if (!value) return std::nullopt;
+                if (!value)
+                    return std::nullopt;
                 if (type.kind == TypeKind::F32)
                     literal = static_cast<double>(static_cast<float>(*value));
                 return literal;
@@ -412,7 +447,8 @@ namespace wio::wir
             std::size_t folded = 0;
             for (lowered::Function& function : module.functions)
             {
-                if (function.isExternal) continue;
+                if (function.isExternal)
+                    continue;
                 LiteralMap constants = collectConstants(function);
                 for (lowered::BasicBlock& block : function.blocks)
                 {
@@ -422,7 +458,8 @@ namespace wio::wir
                         if (instruction.opcode == lowered::Opcode::Unary && instruction.operands.size() == 1)
                         {
                             const auto operand = constants.find(instruction.operands.front().value());
-                            if (operand != constants.end()) result = foldUnary(instruction.unaryOperator, operand->second);
+                            if (operand != constants.end())
+                                result = foldUnary(instruction.unaryOperator, operand->second);
                         }
                         else if (instruction.opcode == lowered::Opcode::Binary && instruction.operands.size() == 2)
                         {
@@ -438,19 +475,24 @@ namespace wio::wir
                             if (operand != constants.end() && destination)
                                 result = foldConversion(operand->second, *destination);
                         }
-                        else if (instruction.opcode == lowered::Opcode::RangeContains && instruction.operands.size() == 3)
+                        else if (instruction.opcode == lowered::Opcode::RangeContains &&
+                                 instruction.operands.size() == 3)
                         {
                             const auto value = constants.find(instruction.operands[0].value());
                             const auto start = constants.find(instruction.operands[1].value());
                             const auto end = constants.find(instruction.operands[2].value());
                             if (value != constants.end() && start != constants.end() && end != constants.end())
-                                result = foldRangeContains(instruction.selector, value->second, start->second, end->second);
+                                result =
+                                    foldRangeContains(instruction.selector, value->second, start->second, end->second);
                         }
-                        if (!result || !instruction.result) continue;
+                        if (!result || !instruction.result)
+                            continue;
                         const Type* resultType = module.types.tryGet(instruction.resultType);
-                        if (!resultType) continue;
+                        if (!resultType)
+                            continue;
                         result = normalizeFoldedLiteral(std::move(*result), *resultType);
-                        if (!result) continue;
+                        if (!result)
+                            continue;
                         instruction.opcode = lowered::Opcode::Constant;
                         instruction.operands.clear();
                         instruction.targets.clear();
@@ -471,7 +513,8 @@ namespace wio::wir
             while (value && visited.insert(value.value()).second)
             {
                 const auto replacement = replacements.find(value.value());
-                if (replacement == replacements.end()) break;
+                if (replacement == replacements.end())
+                    break;
                 value = replacement->second;
             }
             return value;
@@ -479,7 +522,8 @@ namespace wio::wir
 
         void applyReplacements(lowered::Function& function, const ReplacementMap& replacements)
         {
-            if (replacements.empty()) return;
+            if (replacements.empty())
+                return;
             for (lowered::BasicBlock& block : function.blocks)
                 for (lowered::Instruction& instruction : block.instructions)
                 {
@@ -491,24 +535,26 @@ namespace wio::wir
                     if (instruction.borrowOrigin)
                         instruction.borrowOrigin = resolveReplacement(instruction.borrowOrigin, replacements);
                 }
-            if (!function.coroutine) return;
+            if (!function.coroutine)
+                return;
             for (CoroutineFrameSlot& slot : function.coroutine->frameSlots)
                 slot.value = resolveReplacement(slot.value, replacements);
             for (CoroutineState& state : function.coroutine->states)
             {
-                if (state.awaitedTask) state.awaitedTask = resolveReplacement(state.awaitedTask, replacements);
-                if (state.resumedValue) state.resumedValue = resolveReplacement(state.resumedValue, replacements);
+                if (state.awaitedTask)
+                    state.awaitedTask = resolveReplacement(state.awaitedTask, replacements);
+                if (state.resumedValue)
+                    state.resumedValue = resolveReplacement(state.resumedValue, replacements);
             }
         }
 
         void normalizeCoroutineSlots(lowered::Function& function)
         {
-            if (!function.coroutine) return;
+            if (!function.coroutine)
+                return;
             std::unordered_set<ValueId::ValueType> values;
-            std::erase_if(function.coroutine->frameSlots, [&](const CoroutineFrameSlot& slot)
-            {
-                return !values.insert(slot.value.value()).second;
-            });
+            std::erase_if(function.coroutine->frameSlots,
+                          [&](const CoroutineFrameSlot& slot) { return !values.insert(slot.value.value()).second; });
             for (std::size_t index = 0; index < function.coroutine->frameSlots.size(); ++index)
                 function.coroutine->frameSlots[index].slot = static_cast<std::uint32_t>(index);
         }
@@ -518,7 +564,8 @@ namespace wio::wir
             std::size_t propagated = 0;
             for (lowered::Function& function : module.functions)
             {
-                if (function.isExternal) continue;
+                if (function.isExternal)
+                    continue;
                 const TypeMap valueTypes = collectTypes(function);
                 ReplacementMap replacements;
                 std::unordered_set<ValueId::ValueType> removeResults;
@@ -538,25 +585,28 @@ namespace wio::wir
 
                 for (lowered::BasicBlock& block : function.blocks)
                 {
-                    if (block.parameters.empty()) continue;
+                    if (block.parameters.empty())
+                        continue;
                     std::vector<lowered::BranchTarget*> incoming;
                     for (lowered::BasicBlock& predecessor : function.blocks)
                         for (lowered::Instruction& instruction : predecessor.instructions)
                             for (lowered::BranchTarget& target : instruction.targets)
                                 if (target.block == block.id)
                                     incoming.push_back(&target);
-                    if (incoming.empty()) continue;
+                    if (incoming.empty())
+                        continue;
                     for (std::size_t parameterIndex = block.parameters.size(); parameterIndex > 0; --parameterIndex)
                     {
                         const std::size_t index = parameterIndex - 1;
                         const Type* parameterType = module.types.tryGet(block.parameters[index].type);
-                        if (!parameterType || parameterType->ownership != OwnershipModel::Trivial) continue;
+                        if (!parameterType || parameterType->ownership != OwnershipModel::Trivial)
+                            continue;
                         if (std::ranges::any_of(incoming, [&](const lowered::BranchTarget* target)
-                            { return target->arguments.size() <= index; }))
+                                                { return target->arguments.size() <= index; }))
                             continue;
                         const ValueId candidate = incoming.front()->arguments[index];
                         if (!std::ranges::all_of(incoming, [&](const lowered::BranchTarget* target)
-                            { return target->arguments[index] == candidate; }))
+                                                 { return target->arguments[index] == candidate; }))
                             continue;
                         replacements[block.parameters[index].id.value()] = candidate;
                         block.parameters.erase(block.parameters.begin() + static_cast<std::ptrdiff_t>(index));
@@ -568,12 +618,14 @@ namespace wio::wir
 
                 applyReplacements(function, replacements);
                 for (lowered::BasicBlock& block : function.blocks)
-                    std::erase_if(block.instructions, [&](const lowered::Instruction& instruction)
-                    {
-                        if (!instruction.result || !removeResults.contains(instruction.result.value())) return false;
-                        ++propagated;
-                        return true;
-                    });
+                    std::erase_if(block.instructions,
+                                  [&](const lowered::Instruction& instruction)
+                                  {
+                                      if (!instruction.result || !removeResults.contains(instruction.result.value()))
+                                          return false;
+                                      ++propagated;
+                                      return true;
+                                  });
                 normalizeCoroutineSlots(function);
             }
             return propagated;
@@ -587,21 +639,21 @@ namespace wio::wir
                 LiteralMap constants = collectConstants(function);
                 for (lowered::BasicBlock& block : function.blocks)
                 {
-                    if (block.instructions.empty()) continue;
+                    if (block.instructions.empty())
+                        continue;
                     lowered::Instruction& terminator = block.instructions.back();
                     if (terminator.opcode != lowered::Opcode::CondJump || terminator.operands.size() != 1 ||
                         terminator.targets.size() != 2)
                         continue;
                     const auto condition = constants.find(terminator.operands.front().value());
-                    if (condition == constants.end()) continue;
+                    if (condition == constants.end())
+                        continue;
                     const auto* value = std::get_if<bool>(&condition->second);
-                    if (!value) continue;
+                    if (!value)
+                        continue;
                     const lowered::BranchTarget target = terminator.targets[*value ? 0 : 1];
                     terminator = lowered::Instruction{
-                        .opcode = lowered::Opcode::Jump,
-                        .targets = {target},
-                        .source = terminator.source
-                    };
+                        .opcode = lowered::Opcode::Jump, .targets = {target}, .source = terminator.source};
                     ++simplified;
                 }
 
@@ -609,7 +661,8 @@ namespace wio::wir
                 // loop is bounded by the number of blocks to remain robust in
                 // malformed cyclic input (the verifier runs again afterwards).
                 std::unordered_map<BlockId::ValueType, lowered::BasicBlock*> blocks;
-                for (lowered::BasicBlock& block : function.blocks) blocks[block.id.value()] = &block;
+                for (lowered::BasicBlock& block : function.blocks)
+                    blocks[block.id.value()] = &block;
                 for (lowered::BasicBlock& block : function.blocks)
                     for (lowered::Instruction& instruction : block.instructions)
                         for (lowered::BranchTarget& target : instruction.targets)
@@ -636,25 +689,29 @@ namespace wio::wir
             std::size_t removed = 0;
             for (lowered::Function& function : module.functions)
             {
-                if (function.blocks.empty()) continue;
+                if (function.blocks.empty())
+                    continue;
                 std::unordered_map<BlockId::ValueType, const lowered::BasicBlock*> blocks;
-                for (const lowered::BasicBlock& block : function.blocks) blocks[block.id.value()] = &block;
+                for (const lowered::BasicBlock& block : function.blocks)
+                    blocks[block.id.value()] = &block;
                 std::unordered_set<BlockId::ValueType> reachable;
                 std::vector<BlockId> pending{function.blocks.front().id};
                 while (!pending.empty())
                 {
                     const BlockId id = pending.back();
                     pending.pop_back();
-                    if (!reachable.insert(id.value()).second) continue;
+                    if (!reachable.insert(id.value()).second)
+                        continue;
                     const auto block = blocks.find(id.value());
-                    if (block == blocks.end()) continue;
+                    if (block == blocks.end())
+                        continue;
                     for (const lowered::Instruction& instruction : block->second->instructions)
                         for (const lowered::BranchTarget& target : instruction.targets)
                             pending.push_back(target.block);
                 }
                 const std::size_t before = function.blocks.size();
-                std::erase_if(function.blocks, [&](const lowered::BasicBlock& block)
-                    { return !reachable.contains(block.id.value()); });
+                std::erase_if(function.blocks,
+                              [&](const lowered::BasicBlock& block) { return !reachable.contains(block.id.value()); });
                 removed += before - function.blocks.size();
                 if (function.coroutine)
                 {
@@ -689,10 +746,11 @@ namespace wio::wir
                         for (const lowered::Parameter& parameter : block.parameters)
                             definedValues.insert(parameter.id.value());
                         for (const lowered::Instruction& instruction : block.instructions)
-                            if (instruction.result) definedValues.insert(instruction.result.value());
+                            if (instruction.result)
+                                definedValues.insert(instruction.result.value());
                     }
                     std::erase_if(function.coroutine->frameSlots, [&](const CoroutineFrameSlot& slot)
-                        { return !definedValues.contains(slot.value.value()); });
+                                  { return !definedValues.contains(slot.value.value()); });
                     normalizeCoroutineSlots(function);
                 }
             }
@@ -702,17 +760,164 @@ namespace wio::wir
         bool isPureDiscardable(const lowered::Opcode opcode)
         {
             return opcode == lowered::Opcode::Constant || opcode == lowered::Opcode::Unary ||
-                opcode == lowered::Opcode::Binary || opcode == lowered::Opcode::RangeContains ||
-                opcode == lowered::Opcode::Convert || opcode == lowered::Opcode::FunctionReference ||
-                opcode == lowered::Opcode::Upcast || opcode == lowered::Opcode::TypeTest ||
-                opcode == lowered::Opcode::IdentityEqual || opcode == lowered::Opcode::VariantTest ||
-                opcode == lowered::Opcode::ArrayLength || opcode == lowered::Opcode::EnumConstant ||
-                opcode == lowered::Opcode::AnyTypeTest;
+                   opcode == lowered::Opcode::Binary || opcode == lowered::Opcode::RangeContains ||
+                   opcode == lowered::Opcode::Convert || opcode == lowered::Opcode::FunctionReference ||
+                   opcode == lowered::Opcode::Upcast || opcode == lowered::Opcode::TypeTest ||
+                   opcode == lowered::Opcode::IdentityEqual || opcode == lowered::Opcode::VariantTest ||
+                   opcode == lowered::Opcode::ArrayLength || opcode == lowered::Opcode::EnumConstant ||
+                   opcode == lowered::Opcode::AnyTypeTest;
+        }
+
+        bool hasUnobservableDefaultLifetime(const TypeTable& types, const TypeId id,
+                                            std::unordered_set<TypeId::ValueType>& visiting)
+        {
+            const Type* type = types.tryGet(id);
+            if (!type || !visiting.insert(id.value()).second)
+                return false;
+            const auto finish = [&](const bool result)
+            {
+                visiting.erase(id.value());
+                return result;
+            };
+            switch (type->kind)
+            {
+            case TypeKind::Bool:
+            case TypeKind::I8:
+            case TypeKind::I16:
+            case TypeKind::I32:
+            case TypeKind::I64:
+            case TypeKind::ISize:
+            case TypeKind::U8:
+            case TypeKind::U16:
+            case TypeKind::U32:
+            case TypeKind::U64:
+            case TypeKind::USize:
+            case TypeKind::F32:
+            case TypeKind::F64:
+            case TypeKind::Byte:
+            case TypeKind::Char:
+            case TypeKind::String:
+            case TypeKind::Text:
+            case TypeKind::Opaque:
+            case TypeKind::ConstValue:
+                return finish(true);
+            case TypeKind::Nullable:
+            case TypeKind::Array:
+                return finish(type->arguments.size() == 1 &&
+                              hasUnobservableDefaultLifetime(types, type->arguments.front(), visiting));
+            case TypeKind::Dictionary:
+                return finish(type->arguments.size() == 2 &&
+                              hasUnobservableDefaultLifetime(types, type->arguments[0], visiting) &&
+                              hasUnobservableDefaultLifetime(types, type->arguments[1], visiting));
+            case TypeKind::PackStorage:
+                for (const TypeId argument : type->arguments)
+                    if (!hasUnobservableDefaultLifetime(types, argument, visiting))
+                        return finish(false);
+                return finish(true);
+            case TypeKind::Named:
+                return finish((type->nominalKind == NominalKind::Enum || type->nominalKind == NominalKind::Flagset) &&
+                              !type->hasDestructor);
+            default:
+                return finish(false);
+            }
+        }
+
+        bool hasUnobservableDefaultLifetime(const TypeTable& types, const TypeId id)
+        {
+            std::unordered_set<TypeId::ValueType> visiting;
+            return hasUnobservableDefaultLifetime(types, id, visiting);
+        }
+
+        std::size_t eliminateUnusedDefaultLocals(lowered::Module& module)
+        {
+            std::size_t removed = 0;
+            for (lowered::Function& function : module.functions)
+            {
+                std::unordered_map<ValueId::ValueType, const lowered::Instruction*> producers;
+                std::unordered_map<ValueId::ValueType, std::vector<const lowered::Instruction*>> uses;
+                for (const lowered::BasicBlock& block : function.blocks)
+                    for (const lowered::Instruction& instruction : block.instructions)
+                    {
+                        if (instruction.result)
+                            producers[instruction.result.value()] = &instruction;
+                        for (const ValueId operand : instruction.operands)
+                            uses[operand.value()].push_back(&instruction);
+                        for (const lowered::BranchTarget& target : instruction.targets)
+                            for (const ValueId argument : target.arguments)
+                                uses[argument.value()].push_back(&instruction);
+                        if (instruction.borrowOrigin)
+                            uses[instruction.borrowOrigin.value()].push_back(&instruction);
+                    }
+                if (function.coroutine)
+                {
+                    for (const CoroutineFrameSlot& slot : function.coroutine->frameSlots)
+                        uses[slot.value.value()].push_back(nullptr);
+                    for (const CoroutineState& state : function.coroutine->states)
+                    {
+                        if (state.awaitedTask)
+                            uses[state.awaitedTask.value()].push_back(nullptr);
+                        if (state.resumedValue)
+                            uses[state.resumedValue.value()].push_back(nullptr);
+                    }
+                }
+
+                std::unordered_set<const lowered::Instruction*> obsolete;
+                for (const auto& [value, producer] : producers)
+                {
+                    if (producer->opcode != lowered::Opcode::LocalPlace)
+                        continue;
+                    const lowered::Instruction* initializer = nullptr;
+                    bool valid = true;
+                    for (const lowered::Instruction* use : uses[value])
+                    {
+                        if (!use)
+                        {
+                            valid = false;
+                            break;
+                        }
+                        if (use->opcode == lowered::Opcode::PlaceInit && !use->operands.empty() &&
+                            use->operands.front().value() == value)
+                        {
+                            if (initializer)
+                                valid = false;
+                            initializer = use;
+                        }
+                        else if ((use->opcode != lowered::Opcode::DropPlace &&
+                                  use->opcode != lowered::Opcode::ReleasePlace) ||
+                                 use->operands.empty() || use->operands.front().value() != value)
+                            valid = false;
+                    }
+                    if (!valid || !initializer || initializer->operands.size() != 2)
+                        continue;
+                    const ValueId initialValue = initializer->operands[1];
+                    const auto initialProducer = producers.find(initialValue.value());
+                    if (initialProducer == producers.end() ||
+                        initialProducer->second->opcode != lowered::Opcode::DefaultValue ||
+                        uses[initialValue.value()].size() != 1 ||
+                        !hasUnobservableDefaultLifetime(module.types, initialProducer->second->resultType))
+                        continue;
+                    obsolete.insert(producer);
+                    obsolete.insert(initializer);
+                    obsolete.insert(initialProducer->second);
+                    for (const lowered::Instruction* use : uses[value])
+                        obsolete.insert(use);
+                }
+                for (lowered::BasicBlock& block : function.blocks)
+                    std::erase_if(block.instructions,
+                                  [&](const lowered::Instruction& instruction)
+                                  {
+                                      if (!obsolete.contains(&instruction))
+                                          return false;
+                                      ++removed;
+                                      return true;
+                                  });
+            }
+            return removed;
         }
 
         std::size_t eliminateDeadValues(lowered::Module& module)
         {
-            std::size_t removed = 0;
+            std::size_t removed = eliminateUnusedDefaultLocals(module);
             for (lowered::Function& function : module.functions)
             {
                 bool changed = true;
@@ -723,60 +928,65 @@ namespace wio::wir
                     for (const lowered::BasicBlock& block : function.blocks)
                         for (const lowered::Instruction& instruction : block.instructions)
                         {
-                            for (const ValueId operand : instruction.operands) used.insert(operand.value());
+                            for (const ValueId operand : instruction.operands)
+                                used.insert(operand.value());
                             for (const lowered::BranchTarget& target : instruction.targets)
-                                for (const ValueId argument : target.arguments) used.insert(argument.value());
-                            if (instruction.borrowOrigin) used.insert(instruction.borrowOrigin.value());
+                                for (const ValueId argument : target.arguments)
+                                    used.insert(argument.value());
+                            if (instruction.borrowOrigin)
+                                used.insert(instruction.borrowOrigin.value());
                         }
                     if (function.coroutine)
                     {
-                        for (const CoroutineFrameSlot& slot : function.coroutine->frameSlots) used.insert(slot.value.value());
+                        for (const CoroutineFrameSlot& slot : function.coroutine->frameSlots)
+                            used.insert(slot.value.value());
                         for (const CoroutineState& state : function.coroutine->states)
                         {
-                            if (state.awaitedTask) used.insert(state.awaitedTask.value());
-                            if (state.resumedValue) used.insert(state.resumedValue.value());
+                            if (state.awaitedTask)
+                                used.insert(state.awaitedTask.value());
+                            if (state.resumedValue)
+                                used.insert(state.resumedValue.value());
                         }
                     }
                     for (lowered::BasicBlock& block : function.blocks)
-                        std::erase_if(block.instructions, [&](const lowered::Instruction& instruction)
-                        {
-                            if (!instruction.result || used.contains(instruction.result.value()) ||
-                                !isPureDiscardable(instruction.opcode))
-                                return false;
-                            const Type* type = module.types.tryGet(instruction.resultType);
-                            if (!type || requiresCleanup(*type)) return false;
-                            ++removed;
-                            changed = true;
-                            return true;
-                        });
+                        std::erase_if(block.instructions,
+                                      [&](const lowered::Instruction& instruction)
+                                      {
+                                          if (!instruction.result || used.contains(instruction.result.value()) ||
+                                              !isPureDiscardable(instruction.opcode))
+                                              return false;
+                                          const Type* type = module.types.tryGet(instruction.resultType);
+                                          if (!type || requiresCleanup(*type))
+                                              return false;
+                                          ++removed;
+                                          changed = true;
+                                          return true;
+                                      });
                 }
             }
             return removed;
         }
 
-        lowered::EscapeClass mergeEscape(
-            const lowered::EscapeClass current,
-            const lowered::EscapeClass candidate)
+        lowered::EscapeClass mergeEscape(const lowered::EscapeClass current, const lowered::EscapeClass candidate)
         {
-            return static_cast<std::uint8_t>(candidate) > static_cast<std::uint8_t>(current)
-                ? candidate : current;
+            return static_cast<std::uint8_t>(candidate) > static_cast<std::uint8_t>(current) ? candidate : current;
         }
 
         bool isCall(const lowered::Opcode opcode)
         {
             return opcode == lowered::Opcode::Call || opcode == lowered::Opcode::NativeInvoke ||
-                opcode == lowered::Opcode::IndirectCall || opcode == lowered::Opcode::ExtensionCall ||
-                opcode == lowered::Opcode::MethodCall || opcode == lowered::Opcode::VirtualCall ||
-                opcode == lowered::Opcode::InterfaceCall || opcode == lowered::Opcode::IntrinsicCall;
+                   opcode == lowered::Opcode::IndirectCall || opcode == lowered::Opcode::ExtensionCall ||
+                   opcode == lowered::Opcode::MethodCall || opcode == lowered::Opcode::VirtualCall ||
+                   opcode == lowered::Opcode::InterfaceCall || opcode == lowered::Opcode::IntrinsicCall;
         }
 
         bool isAllocationCandidate(const lowered::Opcode opcode)
         {
             return opcode == lowered::Opcode::LocalPlace || opcode == lowered::Opcode::ConstructComponent ||
-                opcode == lowered::Opcode::ConstructObject || opcode == lowered::Opcode::ClosureCreate ||
-                opcode == lowered::Opcode::ArrayCreate || opcode == lowered::Opcode::DictionaryCreate ||
-                opcode == lowered::Opcode::Interpolate || opcode == lowered::Opcode::AnyBox ||
-                opcode == lowered::Opcode::NullableWrap || opcode == lowered::Opcode::IteratorCreate;
+                   opcode == lowered::Opcode::ConstructObject || opcode == lowered::Opcode::ClosureCreate ||
+                   opcode == lowered::Opcode::ArrayCreate || opcode == lowered::Opcode::DictionaryCreate ||
+                   opcode == lowered::Opcode::Interpolate || opcode == lowered::Opcode::AnyBox ||
+                   opcode == lowered::Opcode::NullableWrap || opcode == lowered::Opcode::IteratorCreate;
         }
 
         void classifyStorage(lowered::Module& module, OptimizationStatistics& statistics)
@@ -824,14 +1034,16 @@ namespace wio::wir
                         for (const lowered::Instruction& instruction : block.instructions)
                         {
                             const bool forwardsEscape = instruction.opcode == lowered::Opcode::Retain ||
-                                instruction.opcode == lowered::Opcode::CopyValue ||
-                                instruction.opcode == lowered::Opcode::Upcast ||
-                                instruction.opcode == lowered::Opcode::Borrow ||
-                                instruction.opcode == lowered::Opcode::AnyBox ||
-                                instruction.opcode == lowered::Opcode::NullableWrap;
-                            if (!forwardsEscape || !instruction.result) continue;
+                                                        instruction.opcode == lowered::Opcode::CopyValue ||
+                                                        instruction.opcode == lowered::Opcode::Upcast ||
+                                                        instruction.opcode == lowered::Opcode::Borrow ||
+                                                        instruction.opcode == lowered::Opcode::AnyBox ||
+                                                        instruction.opcode == lowered::Opcode::NullableWrap;
+                            if (!forwardsEscape || !instruction.result)
+                                continue;
                             const lowered::EscapeClass resultEscape = escapes.contains(instruction.result.value())
-                                ? escapes.at(instruction.result.value()) : lowered::EscapeClass::Local;
+                                                                          ? escapes.at(instruction.result.value())
+                                                                          : lowered::EscapeClass::Local;
                             for (const ValueId operand : instruction.operands)
                             {
                                 const lowered::EscapeClass previous = escapes[operand.value()];
@@ -848,19 +1060,21 @@ namespace wio::wir
                 for (lowered::BasicBlock& block : function.blocks)
                     for (lowered::Instruction& instruction : block.instructions)
                     {
-                        if (!instruction.result || !isAllocationCandidate(instruction.opcode)) continue;
+                        if (!instruction.result || !isAllocationCandidate(instruction.opcode))
+                            continue;
                         instruction.escapeClass = escapes.contains(instruction.result.value())
-                            ? escapes.at(instruction.result.value()) : lowered::EscapeClass::Local;
+                                                      ? escapes.at(instruction.result.value())
+                                                      : lowered::EscapeClass::Local;
                         const Type* type = module.types.tryGet(instruction.resultType);
                         if (instruction.opcode == lowered::Opcode::ConstructObject ||
-                                 instruction.opcode == lowered::Opcode::ArrayCreate ||
-                                 instruction.opcode == lowered::Opcode::DictionaryCreate ||
-                                 instruction.opcode == lowered::Opcode::Interpolate ||
-                                 instruction.opcode == lowered::Opcode::AnyBox ||
-                                 instruction.opcode == lowered::Opcode::IteratorCreate ||
-                                 (type && type->ownership == OwnershipModel::ReferenceCounted) ||
-                                 (instruction.opcode == lowered::Opcode::ClosureCreate &&
-                                  instruction.escapeClass != lowered::EscapeClass::Local))
+                            instruction.opcode == lowered::Opcode::ArrayCreate ||
+                            instruction.opcode == lowered::Opcode::DictionaryCreate ||
+                            instruction.opcode == lowered::Opcode::Interpolate ||
+                            instruction.opcode == lowered::Opcode::AnyBox ||
+                            instruction.opcode == lowered::Opcode::IteratorCreate ||
+                            (type && type->ownership == OwnershipModel::ReferenceCounted) ||
+                            (instruction.opcode == lowered::Opcode::ClosureCreate &&
+                             instruction.escapeClass != lowered::EscapeClass::Local))
                         {
                             instruction.storageClass = lowered::StorageClass::Heap;
                             ++statistics.heapAllocations;
@@ -881,9 +1095,11 @@ namespace wio::wir
 
         std::optional<std::uint64_t> nonNegativeIndex(const typed::Literal& literal)
         {
-            if (const auto* value = std::get_if<std::uint64_t>(&literal)) return *value;
+            if (const auto* value = std::get_if<std::uint64_t>(&literal))
+                return *value;
             if (const auto* value = std::get_if<std::int64_t>(&literal))
-                if (*value >= 0) return static_cast<std::uint64_t>(*value);
+                if (*value >= 0)
+                    return static_cast<std::uint64_t>(*value);
             return std::nullopt;
         }
 
@@ -897,7 +1113,8 @@ namespace wio::wir
                 std::unordered_map<ValueId::ValueType, const lowered::Instruction*> producers;
                 for (const lowered::BasicBlock& block : function.blocks)
                     for (const lowered::Instruction& instruction : block.instructions)
-                        if (instruction.result) producers[instruction.result.value()] = &instruction;
+                        if (instruction.result)
+                            producers[instruction.result.value()] = &instruction;
 
                 for (lowered::BasicBlock& block : function.blocks)
                     for (lowered::Instruction& instruction : block.instructions)
@@ -908,13 +1125,15 @@ namespace wio::wir
                             continue;
                         instruction.boundsCheck = lowered::BoundsCheckMode::Required;
                         const auto indexLiteral = constants.find(instruction.operands[1].value());
-                        if (indexLiteral == constants.end()) continue;
+                        if (indexLiteral == constants.end())
+                            continue;
                         const auto index = nonNegativeIndex(indexLiteral->second);
-                        if (!index) continue;
+                        if (!index)
+                            continue;
 
                         const auto baseTypeId = valueTypes.find(instruction.operands[0].value());
-                        const Type* baseType = baseTypeId == valueTypes.end()
-                            ? nullptr : module.types.tryGet(baseTypeId->second);
+                        const Type* baseType =
+                            baseTypeId == valueTypes.end() ? nullptr : module.types.tryGet(baseTypeId->second);
                         const Type* arrayType = baseType;
                         if (baseType && baseType->kind == TypeKind::Reference && baseType->arguments.size() == 1)
                             arrayType = module.types.tryGet(baseType->arguments.front());
@@ -936,7 +1155,7 @@ namespace wio::wir
             }
             return eliminated;
         }
-    }
+    } // namespace
 
     OptimizationStatistics CanonicalOptimizer::optimize(lowered::Module& module) const
     {
@@ -952,4 +1171,4 @@ namespace wio::wir
         statistics.boundsChecksEliminated = eliminateBoundsChecks(module);
         return statistics;
     }
-}
+} // namespace wio::wir

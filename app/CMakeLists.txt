@@ -940,6 +940,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             RESOURCE_LOCK wio_distribution_package
+            RUN_SERIAL TRUE
     )
 
     add_test(
@@ -1089,7 +1090,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             ${CMAKE_COMMAND}
             -DWIO_EXE=$<TARGET_FILE:wio_app>
             -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/telemetry_pipeline
-            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.17.0
+            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.18.0
             -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
     )
     set_tests_properties(
@@ -1167,12 +1168,14 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             TIMEOUT 900
             RESOURCE_LOCK wio_distribution_package
+            RUN_SERIAL TRUE
     )
     set_tests_properties(
         wio_test_packaged_file_run_uses_user_cache
         PROPERTIES
             WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
             RESOURCE_LOCK wio_distribution_package
+            RUN_SERIAL TRUE
     )
 
     add_wio_success_test(
@@ -2453,7 +2456,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     add_wio_emit_cpp_file_test(
         wio_test_native_pod_component_ref_dispatch_uses_direct_alias
         "${CMAKE_SOURCE_DIR}/tests/native/native_pod_component_bridge.wio"
-        "native_pod::Translate\\(\\*value, dx, dy\\);"
+        "native_pod::Translate\\([^;]*\\.read\\(\\), [^,]+, [^)]+\\);"
         --include-dir
         "${CMAKE_SOURCE_DIR}/tests/native"
     )
@@ -5462,10 +5465,9 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         "${CMAKE_SOURCE_DIR}/tests/native/missing_link_library.lib"
     )
 
-    add_wio_failure_test(
+    add_wio_success_test(
         wio_invalid_export_string_return_not_supported
         "${CMAKE_SOURCE_DIR}/tests/invalid/export_string_return_not_supported.wio"
-        "@Export currently supports only primitive or void return types"
     )
 
     add_wio_failure_test(

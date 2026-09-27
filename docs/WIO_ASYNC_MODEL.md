@@ -217,6 +217,13 @@ The runtime uses C++20 coroutine frames. A task keeps its frame and required
 object receiver alive through completion. Object async methods retain a strong
 `self` guard before they can suspend.
 
+Every scheduler, timer, blocking, I/O, and main-executor continuation carries
+a strong reference to the task state through the complete native `resume()`
+call. Completion is published only from `final_suspend`; the final frame stays
+suspended until the last task owner releases it. Dropping a detached task can
+therefore neither destroy a frame while native resume code is still using it
+nor publish a result before coroutine-local cleanup has finished.
+
 ## 3. Lifetime boundary
 
 The compiler rejects async surfaces whose current ownership model cannot make
@@ -235,11 +242,13 @@ storage outlives every suspension.
 
 ## 4. Scheduler and timers
 
-The default scheduler owns a worker pool sized from host hardware concurrency
-with a minimum of two workers. `WIO_ASYNC_WORKERS` may select 2 through 256
-workers before the scheduler is first used; invalid values fall back to the
-host default. Immediate work and timers share one synchronized priority queue
-in the frozen 0.11 runtime.
+The default scheduler owns a worker pool sized from host hardware concurrency,
+with a minimum of two and a maximum of eight workers. The upper bound prevents
+container or CI hosts from exposing a machine-wide CPU count to a process with
+a much smaller CPU quota. `WIO_ASYNC_WORKERS` may explicitly select 2 through
+256 workers before the scheduler is first used; invalid values fall back to
+the bounded host default. Immediate work and timers share one synchronized
+priority queue in the frozen 0.11 runtime.
 `Sleep` does not create a detached thread per timer. Equal-time work is ordered
 by an internal monotonic sequence number.
 

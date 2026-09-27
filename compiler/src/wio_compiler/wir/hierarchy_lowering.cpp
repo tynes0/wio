@@ -43,6 +43,30 @@ namespace wio::wir
         {
             const TypeId id{static_cast<TypeId::ValueType>(index)};
             auto& type = module.types.getMutable(id);
+            if (type.nominalKind == NominalKind::Component)
+            {
+                type.destructor = {};
+                type.defaultConstructor = type.fieldInitializer;
+                for (const auto& function : module.functions)
+                {
+                    if (function.ownerType != id)
+                        continue;
+                    std::string name = function.name;
+                    if (function.genericOrigin)
+                    {
+                        const auto origin =
+                            std::ranges::find(module.functions, function.genericOrigin, &lowered::Function::id);
+                        if (origin != module.functions.end())
+                            name = origin->name;
+                    }
+                    if (name == "OnDestruct" || name.ends_with("::OnDestruct"))
+                        type.destructor = function.id;
+                    if (!type.fieldInitializer && (name == "OnConstruct" || name.ends_with("::OnConstruct")) &&
+                        function.parameters.size() == 1)
+                        type.defaultConstructor = function.id;
+                }
+                continue;
+            }
             if (type.nominalKind != NominalKind::Object && type.nominalKind != NominalKind::Interface)
                 continue;
             type.castTypes.clear();

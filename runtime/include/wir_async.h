@@ -30,7 +30,8 @@ struct SwitchExecutor final {
         state = continuation.promise().state;
         // Inline delivery matters here: an ordinary task continuation would
         // bounce a blocking/IO handoff back onto the worker executor.
-        auto registration = std::make_shared<runtime::detail::AsyncInlineContinuationRegistration>(continuation);
+        auto registration = std::make_shared<runtime::detail::AsyncInlineContinuationRegistration>(
+            continuation, runtime::detail::CoroutineOwner(continuation));
         if (auto owner = state.lock()) {
             owner->AddCancellationCallback([registration] { registration->ResumeOnce(); });
         }

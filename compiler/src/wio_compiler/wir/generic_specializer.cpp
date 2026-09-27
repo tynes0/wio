@@ -110,11 +110,10 @@ namespace wio::wir
                                 // A closure body's hidden parameters are references to its capture storage,
                                 // while ClosureCreate consumes the captured values themselves.  Reconcile
                                 // those operands against the concrete capture layout, not the hidden ABI.
-                                const TypeId concreteType =
-                                    instruction.opcode == Opcode::ClosureCreate &&
-                                            argumentIndex < concrete->captures.size()
-                                        ? concrete->captures[argumentIndex].type
-                                        : concrete->parameters[argumentIndex].type;
+                                const TypeId concreteType = instruction.opcode == Opcode::ClosureCreate &&
+                                                                    argumentIndex < concrete->captures.size()
+                                                                ? concrete->captures[argumentIndex].type
+                                                                : concrete->parameters[argumentIndex].type;
                                 if (oldType == concreteType)
                                     continue;
                                 instruction.signatureTypes[argumentIndex] = concreteType;
@@ -139,6 +138,8 @@ namespace wio::wir
                 if (diagnostics_.empty())
                     for (Function& function : module_.functions)
                         materializeOwnedLoads(function);
+                if (diagnostics_.empty())
+                    refreshReflectionLayouts();
                 return std::move(diagnostics_);
             }
 
@@ -208,10 +209,18 @@ namespace wio::wir
                         if (!bind(source->second.ownerType, owner, ownerBindings))
                             continue;
                         Bindings cache;
-                        method.returnType = substitute(method.returnType, ownerBindings, cache);
+                        // A concrete semantic type can be interned before its
+                        // generic declaration has finished populating every
+                        // layout snapshot. The source function is the stable
+                        // callable contract; derive the concrete method
+                        // signature from it instead of re-specializing a
+                        // possibly stale method-layout copy.
+                        method.returnType = substitute(source->second.returnType, ownerBindings, cache);
                         std::vector<TypeId> concreteParameters;
-                        for (const TypeId parameter : method.parameterTypes)
+                        for (std::size_t parameterIndex = 1; parameterIndex < source->second.parameters.size();
+                             ++parameterIndex)
                         {
+                            const TypeId parameter = source->second.parameters[parameterIndex].type;
                             const TypeId concrete = substitute(parameter, ownerBindings, cache);
                             const Type& concreteType = module_.types.get(concrete);
                             if ((concreteType.kind == TypeKind::TypePack || concreteType.kind == TypeKind::ValuePack) &&
@@ -272,6 +281,26 @@ namespace wio::wir
             std::string lastBindMismatch_;
             FunctionId::ValueType nextId_ = 0;
             std::size_t maximumBodies_;
+
+            void refreshReflectionLayouts()
+            {
+                for (ReflectionDescriptor& descriptor : module_.contract.reflection)
+                {
+                    const Type* type = module_.types.tryGet(descriptor.type);
+                    if (!type || type->kind != TypeKind::Named || !descriptor.fields.empty() || type->fields.empty())
+                        continue;
+
+                    descriptor.fields.reserve(type->fields.size());
+                    for (const FieldLayout& field : type->fields)
+                        descriptor.fields.push_back(ReflectedFieldDescriptor{
+                            .stableId =
+                                stableModuleHash(std::to_string(descriptor.stableTypeId) + ":field:" + field.name),
+                            .name = field.name,
+                            .type = field.type,
+                            .visibility = field.visibility,
+                            .isMutable = field.isMutable});
+                }
+            }
 
             bool openType(TypeId id, std::set<TypeId>& visiting) const
             {
@@ -387,6 +416,19 @@ namespace wio::wir
                                         nativeAbiTypeKey(module_.types, it->second) + ") but inferred #" +
                                         std::to_string(actual.value()) + " (" +
                                         nativeAbiTypeKey(module_.types, actual) + ")";
+                    return false;
+                }
+                if (p->kind == TypeKind::Named && a->kind == TypeKind::Named && p->name != a->name)
+                {
+                    for (const TypeId base : a->baseTypes)
+                    {
+                        Bindings candidate = bindings;
+                        if (bind(pattern, base, candidate))
+                        {
+                            bindings = std::move(candidate);
+                            return true;
+                        }
+                    }
                     return false;
                 }
                 const bool hasTrailingPack = !p->arguments.empty() && module_.types.get(p->arguments.back()).kind ==
@@ -535,12 +577,37 @@ namespace wio::wir
                     }
                     method.parameterTypes = std::move(concreteParameters);
                 }
+                if (type.kind == TypeKind::Named && type.nominalKind == NominalKind::Component &&
+                    std::ranges::none_of(type.arguments, [&](const TypeId argument) { return openType(argument); }))
+                {
+                    const bool managedField =
+                        std::ranges::any_of(type.fields,
+                                            [&](const FieldLayout& field)
+                                            {
+                                                const Type* fieldType = module_.types.tryGet(field.type);
+                                                return fieldType && fieldType->cleanup != CleanupKind::None;
+                                            });
+                    // Open generic components conservatively require cleanup because their
+                    // arguments may own resources. Once all arguments are concrete, derive
+                    // the contract from the substituted layout. Carrying the open cleanup
+                    // bit into Pair<i32, i32> would make already-built stores require
+                    // Replace and invent drops that the source value never needed.
+                    type.cleanup = type.hasDestructor || managedField ? CleanupKind::DestroyValue : CleanupKind::None;
+                }
                 if (result)
                 {
-                    // An existing concrete layout from semantic analysis is the
-                    // canonical identity; never overwrite its resolved fields.
-                    if (openType(result) || methodLayoutsReferenceBindings(result, bindings))
-                        module_.types.getMutable(result) = std::move(type);
+                    // This path starts from an open nominal declaration. Its
+                    // fully substituted layout is authoritative even when the
+                    // nominal identity was interned earlier from a signature;
+                    // that earlier snapshot can otherwise carry fields or
+                    // method types from a different instantiation.
+                    const Type& existing = module_.types.get(result);
+                    const bool hasMaterializedMethods =
+                        std::ranges::any_of(existing.methods, [&](const MethodLayout& method)
+                                            { return !templates_.contains(method.function); });
+                    if (hasMaterializedMethods)
+                        type.methods = existing.methods;
+                    module_.types.getMutable(result) = std::move(type);
                 }
                 else
                     result = module_.types.intern(std::move(type));

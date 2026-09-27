@@ -665,8 +665,8 @@ namespace wio::codegen
                         value = value.substr(1, value.size() - 2);
                     argumentText += value;
                 }
-                out << '{' << WirCppText::quote(attribute.canonicalName) << ',' << WirCppText::quote(argumentText) << ','
-                    << legacyAttributeOrigin(attribute.origin) << ',' << attribute.processors.size() << "u,"
+                out << '{' << WirCppText::quote(attribute.canonicalName) << ',' << WirCppText::quote(argumentText)
+                    << ',' << legacyAttributeOrigin(attribute.origin) << ',' << attribute.processors.size() << "u,"
                     << (attribute.processors.empty() ? "nullptr"
                                                      : "_legacy_attribute_processors_" + std::to_string(tableIndex) +
                                                            "_" + std::to_string(attributeIndex))
@@ -1860,12 +1860,7 @@ namespace wio::codegen
         }
         const auto& l = module.contract.lifecycle;
         std::uint32_t flags = (l.apiVersion ? 1 : 0) | (l.load ? 2 : 0) | (l.update ? 4 : 0) | (l.unload ? 8 : 0) |
-                              (l.saveState ? 16 : 0) | (l.restoreState ? 32 : 0) | (1u << 6);
-        if (!legacyTypes.empty())
-            flags |= 1u << 7;
-        if (std::ranges::any_of(typeDescriptors, [](const LegacyTypeDescriptorInfo& descriptor)
-                                { return descriptor.kind == "WIO_MODULE_TYPE_DESC_TEXT"; }))
-            flags |= 1u << 8;
+                              (l.saveState ? 16 : 0) | (l.restoreState ? 32 : 0) | (1u << 6) | (1u << 7) | (1u << 8);
         if (attributeTableIndex != 0)
             flags |= 1u << 9;
         if (!legacyAsyncExports.empty())

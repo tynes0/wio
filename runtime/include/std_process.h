@@ -32,62 +32,40 @@ namespace wio::runtime::std_process
     [[nodiscard]] std::string StaticLibrarySuffix();
     [[nodiscard]] std::string WhichExecutable(std::string_view name);
 
-    [[nodiscard]] bool TryRunResult(
-        std::string_view program,
-        const std::vector<std::string>& args,
-        std::string_view workingDirectory,
-        int& exitCode,
-        ProcessError& error,
-        int& nativeError,
-        std::string& message) noexcept;
-    [[nodiscard]] bool TryRunCapture(
-        std::string_view program,
-        const std::vector<std::string>& args,
-        std::string_view workingDirectory,
-        int& exitCode,
-        std::string& output,
-        ProcessError& error,
-        int& nativeError,
-        std::string& message) noexcept;
+    [[nodiscard]] bool TryRunResult(std::string_view program, const std::vector<std::string>& args,
+                                    std::string_view workingDirectory, int& exitCode, ProcessError& error,
+                                    int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool TryRunCapture(std::string_view program, const std::vector<std::string>& args,
+                                     std::string_view workingDirectory, int& exitCode, std::string& output,
+                                     ProcessError& error, int& nativeError, std::string& message) noexcept;
 
-    [[nodiscard]] bool Spawn(
-        std::string_view program,
-        const std::vector<std::string>& args,
-        std::string_view workingDirectory,
-        void*& handle,
-        ProcessError& error,
-        int& nativeError,
-        std::string& message) noexcept;
-    [[nodiscard]] bool ProcessReadStdout(
-        void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
-        ProcessError& error, int& nativeError, std::string& message) noexcept;
-    [[nodiscard]] bool ProcessReadStderr(
-        void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
-        ProcessError& error, int& nativeError, std::string& message) noexcept;
-    [[nodiscard]] bool ProcessTryReadStdout(
-        void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
-        ProcessError& error, int& nativeError, std::string& message) noexcept;
-    [[nodiscard]] bool ProcessTryReadStderr(
-        void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
-        ProcessError& error, int& nativeError, std::string& message) noexcept;
-    [[nodiscard]] bool ProcessWriteStdin(
-        void* handle, std::string_view bytes, std::size_t& written,
-        ProcessError& error, int& nativeError, std::string& message) noexcept;
-    [[nodiscard]] bool ProcessCloseStdin(
-        void* handle, ProcessError& error, int& nativeError, std::string& message) noexcept;
-    [[nodiscard]] bool ProcessWait(
-        void* handle, int& exitCode,
-        ProcessError& error, int& nativeError, std::string& message) noexcept;
-    [[nodiscard]] bool ProcessIsRunning(
-        void* handle, bool& running,
-        ProcessError& error, int& nativeError, std::string& message) noexcept;
-    [[nodiscard]] bool ProcessTerminate(
-        void* handle, ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool Spawn(std::string_view program, const std::vector<std::string>& args,
+                             std::string_view workingDirectory, void*& handle, ProcessError& error, int& nativeError,
+                             std::string& message) noexcept;
+    [[nodiscard]] bool ProcessReadStdout(void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
+                                         ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessReadStderr(void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
+                                         ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessTryReadStdout(void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
+                                            ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessTryReadStderr(void* handle, std::size_t maximumBytes, std::string& bytes, bool& eof,
+                                            ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessWriteStdin(void* handle, std::string_view bytes, std::size_t& written,
+                                         ProcessError& error, int& nativeError, std::string& message) noexcept;
+    [[nodiscard]] bool ProcessCloseStdin(void* handle, ProcessError& error, int& nativeError,
+                                         std::string& message) noexcept;
+    [[nodiscard]] bool ProcessWait(void* handle, int& exitCode, ProcessError& error, int& nativeError,
+                                   std::string& message) noexcept;
+    [[nodiscard]] bool ProcessIsRunning(void* handle, bool& running, ProcessError& error, int& nativeError,
+                                        std::string& message) noexcept;
+    [[nodiscard]] bool ProcessTerminate(void* handle, ProcessError& error, int& nativeError,
+                                        std::string& message) noexcept;
     [[nodiscard]] bool ProcessRetain(void* handle, std::string& message) noexcept;
     [[nodiscard]] std::uint64_t LiveProcessCount() noexcept;
+    [[nodiscard]] std::size_t ProcessReferenceCount(void* handle) noexcept;
     void ProcessRelease(void* handle) noexcept;
     void ProcessClose(void* handle) noexcept;
-}
+} // namespace wio::runtime::std_process
 
 namespace wio::runtime::std_environment
 {
@@ -109,7 +87,7 @@ namespace wio::runtime::std_environment
     [[nodiscard]] std::string RuntimeDirectory();
     [[nodiscard]] std::string CurrentDirectory();
     [[nodiscard]] bool SetCurrentDirectory(std::string_view path) noexcept;
-}
+} // namespace wio::runtime::std_environment
 
 namespace wio::runtime::std_platform
 {
@@ -142,4 +120,4 @@ namespace wio::runtime::std_platform
     [[nodiscard]] std::uint32_t HardwareThreadCount() noexcept;
     [[nodiscard]] std::string PathListSeparator();
     [[nodiscard]] std::string NativeNewLine();
-}
+} // namespace wio::runtime::std_platform

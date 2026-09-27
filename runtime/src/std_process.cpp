@@ -22,25 +22,25 @@
 #include <vector>
 
 #if defined(_WIN32)
-    #include <windows.h>
-    #ifdef SetCurrentDirectory
-        #undef SetCurrentDirectory
-    #endif
+#include <windows.h>
+#ifdef SetCurrentDirectory
+#undef SetCurrentDirectory
+#endif
 #elif defined(__APPLE__)
-    #include <fcntl.h>
-    #include <mach-o/dyld.h>
-    #include <pthread.h>
-    #include <signal.h>
-    #include <sys/select.h>
-    #include <sys/wait.h>
-    #include <unistd.h>
+#include <fcntl.h>
+#include <mach-o/dyld.h>
+#include <pthread.h>
+#include <signal.h>
+#include <sys/select.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #else
-    #include <fcntl.h>
-    #include <pthread.h>
-    #include <signal.h>
-    #include <sys/select.h>
-    #include <sys/wait.h>
-    #include <unistd.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <signal.h>
+#include <sys/select.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 namespace wio::runtime::std_process
@@ -51,8 +51,14 @@ namespace wio::runtime::std_process
 
         struct ProcessHandle final
         {
-            ProcessHandle() { liveProcessCount.fetch_add(1, std::memory_order_relaxed); }
-            ~ProcessHandle() { liveProcessCount.fetch_sub(1, std::memory_order_relaxed); }
+            ProcessHandle()
+            {
+                liveProcessCount.fetch_add(1, std::memory_order_relaxed);
+            }
+            ~ProcessHandle()
+            {
+                liveProcessCount.fetch_sub(1, std::memory_order_relaxed);
+            }
 
             std::atomic<std::size_t> references{1};
             std::mutex lifecycleMutex;
@@ -113,7 +119,8 @@ namespace wio::runtime::std_process
 
             ~ScopedSigpipeBlock()
             {
-                if (!active_) return;
+                if (!active_)
+                    return;
                 if (!previouslyBlocked_)
                 {
                     sigset_t pending{};
@@ -134,9 +141,8 @@ namespace wio::runtime::std_process
         };
 #endif
 
-        void setProcessError(
-            ProcessError& error, int& nativeError, std::string& message,
-            const ProcessError value, const int native, std::string text)
+        void setProcessError(ProcessError& error, int& nativeError, std::string& message, const ProcessError value,
+                             const int native, std::string text)
         {
             error = value;
             nativeError = native;
@@ -164,16 +170,23 @@ namespace wio::runtime::std_process
         class ProcessLease final
         {
         public:
-            explicit ProcessLease(void* handle) noexcept : handle_(handle) {}
+            explicit ProcessLease(void* handle) noexcept : handle_(handle)
+            {
+            }
             ProcessLease(const ProcessLease&) = delete;
             ProcessLease& operator=(const ProcessLease&) = delete;
-            ~ProcessLease() { if (handle_) ProcessRelease(handle_); }
+            ~ProcessLease()
+            {
+                if (handle_)
+                    ProcessRelease(handle_);
+            }
+
         private:
             void* handle_ = nullptr;
         };
 
-        bool waitProcessState(ProcessHandle* state, int& exitCode, ProcessError& error,
-                              int& nativeError, std::string& message) noexcept
+        bool waitProcessState(ProcessHandle* state, int& exitCode, ProcessError& error, int& nativeError,
+                              std::string& message) noexcept
         {
             std::lock_guard waitLock(state->waitMutex);
             if (state->waited.load(std::memory_order_acquire))
@@ -186,40 +199,42 @@ namespace wio::runtime::std_process
             if (waitResult != WAIT_OBJECT_0)
             {
                 setProcessError(error, nativeError, message, ProcessError::wait_failed,
-                    static_cast<int>(GetLastError()), "waiting for process failed");
+                                static_cast<int>(GetLastError()), "waiting for process failed");
                 return false;
             }
             DWORD code = 0;
             if (!GetExitCodeProcess(state->process, &code))
             {
                 setProcessError(error, nativeError, message, ProcessError::wait_failed,
-                    static_cast<int>(GetLastError()), "reading process exit code failed");
+                                static_cast<int>(GetLastError()), "reading process exit code failed");
                 return false;
             }
             state->exitCode.store(static_cast<int>(code), std::memory_order_release);
 #else
             int status = 0;
             pid_t waited = -1;
-            do { waited = ::waitpid(state->process, &status, 0); }
-            while (waited < 0 && errno == EINTR);
+            do
+            {
+                waited = ::waitpid(state->process, &status, 0);
+            } while (waited < 0 && errno == EINTR);
             if (waited < 0)
             {
-                setProcessError(error, nativeError, message, ProcessError::wait_failed,
-                    errno, "waiting for process failed");
+                setProcessError(error, nativeError, message, ProcessError::wait_failed, errno,
+                                "waiting for process failed");
                 return false;
             }
-            state->exitCode.store(WIFEXITED(status)
-                ? WEXITSTATUS(status)
-                : WIFSIGNALED(status) ? 128 + WTERMSIG(status) : status,
-                std::memory_order_release);
+            state->exitCode.store(WIFEXITED(status)     ? WEXITSTATUS(status)
+                                  : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
+                                                        : status,
+                                  std::memory_order_release);
 #endif
             state->waited.store(true, std::memory_order_release);
             exitCode = state->exitCode.load(std::memory_order_acquire);
             return true;
         }
 
-        bool processRunningState(ProcessHandle* state, bool& running, ProcessError& error,
-                                 int& nativeError, std::string& message) noexcept
+        bool processRunningState(ProcessHandle* state, bool& running, ProcessError& error, int& nativeError,
+                                 std::string& message) noexcept
         {
             std::lock_guard waitLock(state->waitMutex);
             if (state->waited.load(std::memory_order_acquire))
@@ -232,7 +247,7 @@ namespace wio::runtime::std_process
             if (!GetExitCodeProcess(state->process, &code))
             {
                 setProcessError(error, nativeError, message, ProcessError::wait_failed,
-                    static_cast<int>(GetLastError()), "reading process status failed");
+                                static_cast<int>(GetLastError()), "reading process status failed");
                 return false;
             }
             running = code == STILL_ACTIVE;
@@ -246,25 +261,25 @@ namespace wio::runtime::std_process
             const pid_t result = ::waitpid(state->process, &status, WNOHANG);
             if (result < 0)
             {
-                setProcessError(error, nativeError, message, ProcessError::wait_failed,
-                    errno, "reading process status failed");
+                setProcessError(error, nativeError, message, ProcessError::wait_failed, errno,
+                                "reading process status failed");
                 return false;
             }
             running = result == 0;
             if (!running)
             {
-                state->exitCode.store(WIFEXITED(status)
-                    ? WEXITSTATUS(status)
-                    : WIFSIGNALED(status) ? 128 + WTERMSIG(status) : status,
-                    std::memory_order_release);
+                state->exitCode.store(WIFEXITED(status)     ? WEXITSTATUS(status)
+                                      : WIFSIGNALED(status) ? 128 + WTERMSIG(status)
+                                                            : status,
+                                      std::memory_order_release);
                 state->waited.store(true, std::memory_order_release);
             }
 #endif
             return true;
         }
 
-        bool terminateProcessState(ProcessHandle* state, ProcessError& error,
-                                   int& nativeError, std::string& message) noexcept
+        bool terminateProcessState(ProcessHandle* state, ProcessError& error, int& nativeError,
+                                   std::string& message) noexcept
         {
             if (state->waited.load(std::memory_order_acquire))
                 return true;
@@ -273,7 +288,7 @@ namespace wio::runtime::std_process
             if (!GetExitCodeProcess(state->process, &code))
             {
                 setProcessError(error, nativeError, message, ProcessError::terminate_failed,
-                    static_cast<int>(GetLastError()), "reading process status before terminate failed");
+                                static_cast<int>(GetLastError()), "reading process status before terminate failed");
                 return false;
             }
             if (code != STILL_ACTIVE)
@@ -281,14 +296,14 @@ namespace wio::runtime::std_process
             if (!TerminateProcess(state->process, 1))
             {
                 setProcessError(error, nativeError, message, ProcessError::terminate_failed,
-                    static_cast<int>(GetLastError()), "terminating process failed");
+                                static_cast<int>(GetLastError()), "terminating process failed");
                 return false;
             }
 #else
             if (::kill(state->process, SIGKILL) != 0 && errno != ESRCH)
             {
-                setProcessError(error, nativeError, message, ProcessError::terminate_failed,
-                    errno, "terminating process failed");
+                setProcessError(error, nativeError, message, ProcessError::terminate_failed, errno,
+                                "terminating process failed");
                 return false;
             }
 #endif
@@ -298,13 +313,15 @@ namespace wio::runtime::std_process
 #if defined(_WIN32)
         std::wstring widenProcessText(const std::string_view value)
         {
-            if (value.empty()) return {};
-            const int size = MultiByteToWideChar(
-                CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()), nullptr, 0);
-            if (size <= 0) return {};
+            if (value.empty())
+                return {};
+            const int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+                                                 static_cast<int>(value.size()), nullptr, 0);
+            if (size <= 0)
+                return {};
             std::wstring result(static_cast<std::size_t>(size), L'\0');
-            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
-                    static_cast<int>(value.size()), result.data(), size) <= 0)
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()),
+                                    result.data(), size) <= 0)
                 return {};
             return result;
         }
@@ -312,12 +329,14 @@ namespace wio::runtime::std_process
         std::wstring quoteWindowsProcessArgument(const std::string_view value)
         {
             const std::wstring wide = widenProcessText(value);
-            if (!value.empty() && wide.empty()) return {};
-            const bool needsQuotes = wide.empty() || std::ranges::any_of(wide, [](const wchar_t ch)
-            {
-                return ch == L' ' || ch == L'\t' || ch == L'\n' || ch == L'\v' || ch == L'"';
-            });
-            if (!needsQuotes) return wide;
+            if (!value.empty() && wide.empty())
+                return {};
+            const bool needsQuotes =
+                wide.empty() ||
+                std::ranges::any_of(wide, [](const wchar_t ch)
+                                    { return ch == L' ' || ch == L'\t' || ch == L'\n' || ch == L'\v' || ch == L'"'; });
+            if (!needsQuotes)
+                return wide;
 
             std::wstring result(1, L'"');
             std::size_t backslashes = 0;
@@ -344,8 +363,7 @@ namespace wio::runtime::std_process
             return result;
         }
 
-        std::wstring joinWindowsProcessCommand(
-            const std::string_view program, const std::vector<std::string>& args)
+        std::wstring joinWindowsProcessCommand(const std::string_view program, const std::vector<std::string>& args)
         {
             std::wstring result = quoteWindowsProcessArgument(program);
             for (const auto& argument : args)
@@ -366,7 +384,8 @@ namespace wio::runtime::std_process
             bool needsQuotes = false;
             for (const char ch : value)
             {
-                if (std::isspace(static_cast<unsigned char>(ch)) != 0 || ch == '"' || ch == '&' || ch == '(' || ch == ')' || ch == ';')
+                if (std::isspace(static_cast<unsigned char>(ch)) != 0 || ch == '"' || ch == '&' || ch == '(' ||
+                    ch == ')' || ch == ';')
                 {
                     needsQuotes = true;
                     break;
@@ -443,7 +462,7 @@ namespace wio::runtime::std_process
             std::filesystem::path previousPath_;
             bool active_ = false;
         };
-    }
+    } // namespace
 
     const char* ToString(const ProcessError error) noexcept
     {
@@ -487,8 +506,7 @@ namespace wio::runtime::std_process
         std::wstring buffer(MAX_PATH, L'\0');
         for (;;)
         {
-            const DWORD copied = GetModuleFileNameW(
-                nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+            const DWORD copied = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
             if (copied == 0)
                 return {};
             if (copied < buffer.size())
@@ -546,7 +564,7 @@ namespace wio::runtime::std_process
     {
         if (name.empty())
             return {};
-        const std::filesystem::path requested{ std::string(name) };
+        const std::filesystem::path requested{std::string(name)};
         std::error_code ec;
         if (requested.has_parent_path() && std::filesystem::is_regular_file(requested, ec))
             return std::filesystem::absolute(requested, ec).lexically_normal().generic_string();
@@ -564,11 +582,11 @@ namespace wio::runtime::std_process
 #if defined(_WIN32)
         constexpr char separator = ';';
         const std::vector<std::string> suffixes = requested.has_extension()
-            ? std::vector<std::string>{ "" }
-            : std::vector<std::string>{ "", ".exe", ".cmd", ".bat" };
+                                                      ? std::vector<std::string>{""}
+                                                      : std::vector<std::string>{"", ".exe", ".cmd", ".bat"};
 #else
         constexpr char separator = ':';
-        const std::vector<std::string> suffixes{ "" };
+        const std::vector<std::string> suffixes{""};
 #endif
         std::stringstream paths(pathValue);
         std::string directory;
@@ -579,8 +597,7 @@ namespace wio::runtime::std_process
             for (const auto& suffix : suffixes)
             {
                 ec.clear();
-                const std::filesystem::path candidate =
-                    std::filesystem::path(directory) / (std::string(name) + suffix);
+                const std::filesystem::path candidate = std::filesystem::path(directory) / (std::string(name) + suffix);
                 if (std::filesystem::is_regular_file(candidate, ec) && !ec)
                     return std::filesystem::absolute(candidate, ec).lexically_normal().generic_string();
             }
@@ -588,14 +605,9 @@ namespace wio::runtime::std_process
         return {};
     }
 
-    bool TryRunResult(
-        const std::string_view program,
-        const std::vector<std::string>& args,
-        const std::string_view workingDirectory,
-        int& exitCode,
-        ProcessError& error,
-        int& nativeError,
-        std::string& message) noexcept
+    bool TryRunResult(const std::string_view program, const std::vector<std::string>& args,
+                      const std::string_view workingDirectory, int& exitCode, ProcessError& error, int& nativeError,
+                      std::string& message) noexcept
     {
         exitCode = -1;
         error = ProcessError::none;
@@ -656,27 +668,41 @@ namespace wio::runtime::std_process
         return true;
     }
 
-    bool TryRunCapture(
-        const std::string_view program,
-        const std::vector<std::string>& args,
-        const std::string_view workingDirectory,
-        int& exitCode,
-        std::string& output,
-        ProcessError& error,
-        int& nativeError,
-        std::string& message) noexcept
+    bool TryRunCapture(const std::string_view program, const std::vector<std::string>& args,
+                       const std::string_view workingDirectory, int& exitCode, std::string& output, ProcessError& error,
+                       int& nativeError, std::string& message) noexcept
     {
-        exitCode = -1; output.clear(); error = ProcessError::none; nativeError = 0; message.clear();
-        if (program.empty()) { error = ProcessError::empty_program; message = "process program cannot be empty"; return false; }
+        exitCode = -1;
+        output.clear();
+        error = ProcessError::none;
+        nativeError = 0;
+        message.clear();
+        if (program.empty())
+        {
+            error = ProcessError::empty_program;
+            message = "process program cannot be empty";
+            return false;
+        }
         std::error_code pathError;
         std::optional<ScopedCurrentPath> pathGuard;
         if (!workingDirectory.empty())
         {
-            const std::filesystem::path directoryPath{ std::string(workingDirectory) };
+            const std::filesystem::path directoryPath{std::string(workingDirectory)};
             if (!std::filesystem::is_directory(directoryPath, pathError))
-            { error = ProcessError::invalid_working_directory; nativeError = pathError.value(); message = "working directory does not exist"; return false; }
+            {
+                error = ProcessError::invalid_working_directory;
+                nativeError = pathError.value();
+                message = "working directory does not exist";
+                return false;
+            }
             pathGuard.emplace(directoryPath, pathError);
-            if (pathError) { error = ProcessError::invalid_working_directory; nativeError = pathError.value(); message = "could not switch working directory"; return false; }
+            if (pathError)
+            {
+                error = ProcessError::invalid_working_directory;
+                nativeError = pathError.value();
+                message = "could not switch working directory";
+                return false;
+            }
         }
         const std::string command = joinCommand(program, args) + " 2>&1";
 #if defined(_WIN32)
@@ -684,9 +710,16 @@ namespace wio::runtime::std_process
 #else
         FILE* pipe = popen(command.c_str(), "r");
 #endif
-        if (!pipe) { error = ProcessError::launch_failed; nativeError = errno; message = "process capture launch failed"; return false; }
+        if (!pipe)
+        {
+            error = ProcessError::launch_failed;
+            nativeError = errno;
+            message = "process capture launch failed";
+            return false;
+        }
         char buffer[4096];
-        while (std::fgets(buffer, static_cast<int>(sizeof(buffer)), pipe) != nullptr) output += buffer;
+        while (std::fgets(buffer, static_cast<int>(sizeof(buffer)), pipe) != nullptr)
+            output += buffer;
 #if defined(_WIN32)
         exitCode = _pclose(pipe);
 #else
@@ -696,14 +729,9 @@ namespace wio::runtime::std_process
         return true;
     }
 
-    bool Spawn(
-        const std::string_view program,
-        const std::vector<std::string>& args,
-        const std::string_view workingDirectory,
-        void*& handle,
-        ProcessError& error,
-        int& nativeError,
-        std::string& message) noexcept
+    bool Spawn(const std::string_view program, const std::vector<std::string>& args,
+               const std::string_view workingDirectory, void*& handle, ProcessError& error, int& nativeError,
+               std::string& message) noexcept
     {
         handle = nullptr;
         error = ProcessError::none;
@@ -720,8 +748,8 @@ namespace wio::runtime::std_process
             std::error_code pathError;
             if (!std::filesystem::is_directory(std::filesystem::path(std::string(workingDirectory)), pathError))
             {
-                setProcessError(error, nativeError, message, ProcessError::invalid_working_directory,
-                    pathError.value(), "working directory does not exist: " + std::string(workingDirectory));
+                setProcessError(error, nativeError, message, ProcessError::invalid_working_directory, pathError.value(),
+                                "working directory does not exist: " + std::string(workingDirectory));
                 return false;
             }
         }
@@ -738,9 +766,12 @@ namespace wio::runtime::std_process
         HANDLE childStderrWrite = nullptr;
         auto closeAll = [&]()
         {
-            closePipe(childStdinRead); closePipe(parentStdinWrite);
-            closePipe(parentStdoutRead); closePipe(childStdoutWrite);
-            closePipe(parentStderrRead); closePipe(childStderrWrite);
+            closePipe(childStdinRead);
+            closePipe(parentStdinWrite);
+            closePipe(parentStdoutRead);
+            closePipe(childStdoutWrite);
+            closePipe(parentStderrRead);
+            closePipe(childStderrWrite);
         };
         if (!CreatePipe(&childStdinRead, &parentStdinWrite, &attributes, 0) ||
             !CreatePipe(&parentStdoutRead, &childStdoutWrite, &attributes, 0) ||
@@ -752,7 +783,7 @@ namespace wio::runtime::std_process
             const int code = static_cast<int>(GetLastError());
             closeAll();
             setProcessError(error, nativeError, message, ProcessError::pipe_failed, code,
-                "creating process pipes failed");
+                            "creating process pipes failed");
             return false;
         }
 
@@ -766,17 +797,15 @@ namespace wio::runtime::std_process
         const std::wstring application = widenProcessText(program);
         std::wstring commandLine = joinWindowsProcessCommand(program, args);
         const std::wstring directory = widenProcessText(workingDirectory);
-        if (application.empty() || commandLine.empty() ||
-            (!workingDirectory.empty() && directory.empty()))
+        if (application.empty() || commandLine.empty() || (!workingDirectory.empty() && directory.empty()))
         {
             closeAll();
-            setProcessError(error, nativeError, message, ProcessError::launch_failed,
-                ERROR_NO_UNICODE_TRANSLATION, "process path or argument is not valid UTF-8");
+            setProcessError(error, nativeError, message, ProcessError::launch_failed, ERROR_NO_UNICODE_TRANSLATION,
+                            "process path or argument is not valid UTF-8");
             return false;
         }
-        const BOOL created = CreateProcessW(
-            application.c_str(), commandLine.data(), nullptr, nullptr, TRUE, 0, nullptr,
-            directory.empty() ? nullptr : directory.c_str(), &startup, &information);
+        const BOOL created = CreateProcessW(application.c_str(), commandLine.data(), nullptr, nullptr, TRUE, 0, nullptr,
+                                            directory.empty() ? nullptr : directory.c_str(), &startup, &information);
         closePipe(childStdinRead);
         closePipe(childStdoutWrite);
         closePipe(childStderrWrite);
@@ -787,7 +816,7 @@ namespace wio::runtime::std_process
             closePipe(parentStdoutRead);
             closePipe(parentStderrRead);
             setProcessError(error, nativeError, message, ProcessError::launch_failed, code,
-                "process launch failed for: " + std::string(program));
+                            "process launch failed for: " + std::string(program));
             return false;
         }
         CloseHandle(information.hThread);
@@ -805,45 +834,60 @@ namespace wio::runtime::std_process
         argumentStorage.insert(argumentStorage.end(), args.begin(), args.end());
         std::vector<char*> argumentPointers;
         argumentPointers.reserve(argumentStorage.size() + 1);
-        for (auto& argument : argumentStorage) argumentPointers.push_back(argument.data());
+        for (auto& argument : argumentStorage)
+            argumentPointers.push_back(argument.data());
         argumentPointers.push_back(nullptr);
 
         int stdinPipe[2]{-1, -1};
         int stdoutPipe[2]{-1, -1};
         int stderrPipe[2]{-1, -1};
         int launchPipe[2]{-1, -1};
-        auto closePair = [](int (&pair)[2]) { closePipe(pair[0]); closePipe(pair[1]); };
-        if (::pipe(stdinPipe) != 0 || ::pipe(stdoutPipe) != 0 ||
-            ::pipe(stderrPipe) != 0 || ::pipe(launchPipe) != 0)
+        auto closePair = [](int(&pair)[2])
+        {
+            closePipe(pair[0]);
+            closePipe(pair[1]);
+        };
+        if (::pipe(stdinPipe) != 0 || ::pipe(stdoutPipe) != 0 || ::pipe(stderrPipe) != 0 || ::pipe(launchPipe) != 0)
         {
             const int code = errno;
-            closePair(stdinPipe); closePair(stdoutPipe); closePair(stderrPipe); closePair(launchPipe);
+            closePair(stdinPipe);
+            closePair(stdoutPipe);
+            closePair(stderrPipe);
+            closePair(launchPipe);
             setProcessError(error, nativeError, message, ProcessError::pipe_failed, code,
-                "creating process pipes failed");
+                            "creating process pipes failed");
             return false;
         }
         if (::fcntl(launchPipe[1], F_SETFD, FD_CLOEXEC) != 0)
         {
             const int code = errno;
-            closePair(stdinPipe); closePair(stdoutPipe); closePair(stderrPipe); closePair(launchPipe);
+            closePair(stdinPipe);
+            closePair(stdoutPipe);
+            closePair(stderrPipe);
+            closePair(launchPipe);
             setProcessError(error, nativeError, message, ProcessError::pipe_failed, code,
-                "configuring process launch pipe failed");
+                            "configuring process launch pipe failed");
             return false;
         }
         const pid_t child = ::fork();
         if (child < 0)
         {
             const int code = errno;
-            closePair(stdinPipe); closePair(stdoutPipe); closePair(stderrPipe); closePair(launchPipe);
+            closePair(stdinPipe);
+            closePair(stdoutPipe);
+            closePair(stderrPipe);
+            closePair(launchPipe);
             setProcessError(error, nativeError, message, ProcessError::launch_failed, code,
-                "fork failed for process: " + std::string(program));
+                            "fork failed for process: " + std::string(program));
             return false;
         }
         if (child == 0)
         {
-            closePipe(stdinPipe[1]); closePipe(stdoutPipe[0]); closePipe(stderrPipe[0]); closePipe(launchPipe[0]);
-            if (::dup2(stdinPipe[0], STDIN_FILENO) < 0 ||
-                ::dup2(stdoutPipe[1], STDOUT_FILENO) < 0 ||
+            closePipe(stdinPipe[1]);
+            closePipe(stdoutPipe[0]);
+            closePipe(stderrPipe[0]);
+            closePipe(launchPipe[0]);
+            if (::dup2(stdinPipe[0], STDIN_FILENO) < 0 || ::dup2(stdoutPipe[1], STDOUT_FILENO) < 0 ||
                 ::dup2(stderrPipe[1], STDERR_FILENO) < 0 ||
                 (!workingDirectoryText.empty() && ::chdir(workingDirectoryText.c_str()) != 0))
             {
@@ -851,17 +895,24 @@ namespace wio::runtime::std_process
                 static_cast<void>(::write(launchPipe[1], &code, sizeof(code)));
                 _exit(127);
             }
-            closePipe(stdinPipe[0]); closePipe(stdoutPipe[1]); closePipe(stderrPipe[1]);
+            closePipe(stdinPipe[0]);
+            closePipe(stdoutPipe[1]);
+            closePipe(stderrPipe[1]);
             ::execvp(programText.c_str(), argumentPointers.data());
             const int code = errno;
             static_cast<void>(::write(launchPipe[1], &code, sizeof(code)));
             _exit(127);
         }
-        closePipe(stdinPipe[0]); closePipe(stdoutPipe[1]); closePipe(stderrPipe[1]); closePipe(launchPipe[1]);
+        closePipe(stdinPipe[0]);
+        closePipe(stdoutPipe[1]);
+        closePipe(stderrPipe[1]);
+        closePipe(launchPipe[1]);
         int launchError = 0;
         ssize_t launchRead = -1;
-        do { launchRead = ::read(launchPipe[0], &launchError, sizeof(launchError)); }
-        while (launchRead < 0 && errno == EINTR);
+        do
+        {
+            launchRead = ::read(launchPipe[0], &launchError, sizeof(launchError));
+        } while (launchRead < 0 && errno == EINTR);
         const int launchReadError = errno;
         closePipe(launchPipe[0]);
         auto abortSpawnedChild = [&]()
@@ -869,34 +920,37 @@ namespace wio::runtime::std_process
             static_cast<void>(::kill(child, SIGKILL));
             int ignored = 0;
             pid_t waited = -1;
-            do { waited = ::waitpid(child, &ignored, 0); }
-            while (waited < 0 && errno == EINTR);
-            closePipe(stdinPipe[1]); closePipe(stdoutPipe[0]); closePipe(stderrPipe[0]);
+            do
+            {
+                waited = ::waitpid(child, &ignored, 0);
+            } while (waited < 0 && errno == EINTR);
+            closePipe(stdinPipe[1]);
+            closePipe(stdoutPipe[0]);
+            closePipe(stderrPipe[0]);
         };
         if (launchRead < 0)
         {
             abortSpawnedChild();
-            setProcessError(error, nativeError, message, ProcessError::launch_failed,
-                launchReadError, "reading process launch status failed");
+            setProcessError(error, nativeError, message, ProcessError::launch_failed, launchReadError,
+                            "reading process launch status failed");
             return false;
         }
         if (launchRead > 0)
         {
             abortSpawnedChild();
             setProcessError(error, nativeError, message, ProcessError::launch_failed, launchError,
-                "process exec failed for: " + std::string(program));
+                            "process exec failed for: " + std::string(program));
             return false;
         }
         const int stdoutFlags = ::fcntl(stdoutPipe[0], F_GETFL);
         const int stderrFlags = ::fcntl(stderrPipe[0], F_GETFL);
-        if (stdoutFlags < 0 || stderrFlags < 0 ||
-            ::fcntl(stdoutPipe[0], F_SETFL, stdoutFlags | O_NONBLOCK) != 0 ||
+        if (stdoutFlags < 0 || stderrFlags < 0 || ::fcntl(stdoutPipe[0], F_SETFL, stdoutFlags | O_NONBLOCK) != 0 ||
             ::fcntl(stderrPipe[0], F_SETFL, stderrFlags | O_NONBLOCK) != 0)
         {
             const int code = errno;
             abortSpawnedChild();
             setProcessError(error, nativeError, message, ProcessError::pipe_failed, code,
-                "configuring non-blocking process pipes failed");
+                            "configuring non-blocking process pipes failed");
             return false;
         }
         auto state = std::make_unique<ProcessHandle>();
@@ -912,24 +966,28 @@ namespace wio::runtime::std_process
     namespace
     {
         bool readProcessPipe(void* handle, const bool standardError, const bool waitForData,
-                             const std::size_t maximumBytes,
-                             std::string& bytes, bool& eof, ProcessError& error,
+                             const std::size_t maximumBytes, std::string& bytes, bool& eof, ProcessError& error,
                              int& nativeError, std::string& message) noexcept
         {
-            bytes.clear(); eof = false; error = ProcessError::none; nativeError = 0; message.clear();
-            if (!retainProcess(handle, error, nativeError, message)) return false;
+            bytes.clear();
+            eof = false;
+            error = ProcessError::none;
+            nativeError = 0;
+            message.clear();
+            if (!retainProcess(handle, error, nativeError, message))
+                return false;
             ProcessLease lease(handle);
             auto* state = asProcess(handle);
             std::unique_lock pipeLock(standardError ? state->stderrMutex : state->stdoutMutex);
-            const std::size_t requested = std::max<std::size_t>(
-                1, std::min<std::size_t>(maximumBytes, 1u << 20u));
+            const std::size_t requested = std::max<std::size_t>(1, std::min<std::size_t>(maximumBytes, 1u << 20u));
             while (true)
             {
                 {
                     std::lock_guard lifecycleLock(state->lifecycleMutex);
                     if (state->closed)
                     {
-                        setProcessError(error, nativeError, message, ProcessError::process_closed, 0, "process is closed");
+                        setProcessError(error, nativeError, message, ProcessError::process_closed, 0,
+                                        "process is closed");
                         return false;
                     }
                 }
@@ -944,14 +1002,15 @@ namespace wio::runtime::std_process
                         eof = true;
                         return true;
                     }
-                    setProcessError(error, nativeError, message, ProcessError::pipe_failed,
-                        static_cast<int>(code), "reading process pipe status failed");
+                    setProcessError(error, nativeError, message, ProcessError::pipe_failed, static_cast<int>(code),
+                                    "reading process pipe status failed");
                     return false;
                 }
                 if (available == 0)
                 {
                     bool running = false;
-                    if (!processRunningState(state, running, error, nativeError, message)) return false;
+                    if (!processRunningState(state, running, error, nativeError, message))
+                        return false;
                     if (!running)
                     {
                         // The process handle may signal just before the final
@@ -960,19 +1019,29 @@ namespace wio::runtime::std_process
                         // broken-pipe EOF without blocking on a live writer.
                         std::vector<char> finalBuffer(requested);
                         DWORD finalRead = 0;
-                        if (ReadFile(pipe, finalBuffer.data(), static_cast<DWORD>(finalBuffer.size()), &finalRead, nullptr))
+                        if (ReadFile(pipe, finalBuffer.data(), static_cast<DWORD>(finalBuffer.size()), &finalRead,
+                                     nullptr))
                         {
-                            if (finalRead == 0) { eof = true; return true; }
+                            if (finalRead == 0)
+                            {
+                                eof = true;
+                                return true;
+                            }
                             bytes.assign(finalBuffer.data(), finalRead);
                             return true;
                         }
                         const DWORD finalError = GetLastError();
-                        if (finalError == ERROR_BROKEN_PIPE) { eof = true; return true; }
+                        if (finalError == ERROR_BROKEN_PIPE)
+                        {
+                            eof = true;
+                            return true;
+                        }
                         setProcessError(error, nativeError, message, ProcessError::pipe_failed,
-                            static_cast<int>(finalError), "draining process pipe failed");
+                                        static_cast<int>(finalError), "draining process pipe failed");
                         return false;
                     }
-                    if (!waitForData) return true;
+                    if (!waitForData)
+                        return true;
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                     continue;
                 }
@@ -981,60 +1050,89 @@ namespace wio::runtime::std_process
                 if (!ReadFile(pipe, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr))
                 {
                     const DWORD code = GetLastError();
-                    if (code == ERROR_BROKEN_PIPE) { eof = true; return true; }
-                    setProcessError(error, nativeError, message, ProcessError::pipe_failed,
-                        static_cast<int>(code), "reading process pipe failed");
+                    if (code == ERROR_BROKEN_PIPE)
+                    {
+                        eof = true;
+                        return true;
+                    }
+                    setProcessError(error, nativeError, message, ProcessError::pipe_failed, static_cast<int>(code),
+                                    "reading process pipe failed");
                     return false;
                 }
                 bytes.assign(buffer.data(), read);
                 return true;
 #else
                 const int pipe = standardError ? state->stderrRead : state->stdoutRead;
-                fd_set readable; FD_ZERO(&readable); FD_SET(pipe, &readable);
+                fd_set readable;
+                FD_ZERO(&readable);
+                FD_SET(pipe, &readable);
                 timeval timeout{0, waitForData ? 50'000 : 0};
                 const int ready = ::select(pipe + 1, &readable, nullptr, nullptr, &timeout);
                 if (ready < 0 && errno != EINTR)
                 {
                     setProcessError(error, nativeError, message, ProcessError::pipe_failed, errno,
-                        "waiting for process pipe failed");
+                                    "waiting for process pipe failed");
                     return false;
                 }
-                if (ready == 0 && !waitForData) return true;
-                if (ready <= 0) continue;
+                if (ready == 0 && !waitForData)
+                    return true;
+                if (ready <= 0)
+                    continue;
                 std::vector<char> buffer(requested);
                 const ssize_t read = ::read(pipe, buffer.data(), buffer.size());
-                if (read > 0) { bytes.assign(buffer.data(), static_cast<std::size_t>(read)); return true; }
-                if (read == 0) { eof = true; return true; }
-                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                if (read > 0)
+                {
+                    bytes.assign(buffer.data(), static_cast<std::size_t>(read));
+                    return true;
+                }
+                if (read == 0)
+                {
+                    eof = true;
+                    return true;
+                }
+                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+                    continue;
                 setProcessError(error, nativeError, message, ProcessError::pipe_failed, errno,
-                    "reading process pipe failed");
+                                "reading process pipe failed");
                 return false;
 #endif
             }
         }
-    }
+    } // namespace
 
     bool ProcessReadStdout(void* handle, const std::size_t maximumBytes, std::string& bytes, bool& eof,
                            ProcessError& error, int& nativeError, std::string& message) noexcept
-    { return readProcessPipe(handle, false, true, maximumBytes, bytes, eof, error, nativeError, message); }
+    {
+        return readProcessPipe(handle, false, true, maximumBytes, bytes, eof, error, nativeError, message);
+    }
 
     bool ProcessReadStderr(void* handle, const std::size_t maximumBytes, std::string& bytes, bool& eof,
                            ProcessError& error, int& nativeError, std::string& message) noexcept
-    { return readProcessPipe(handle, true, true, maximumBytes, bytes, eof, error, nativeError, message); }
+    {
+        return readProcessPipe(handle, true, true, maximumBytes, bytes, eof, error, nativeError, message);
+    }
 
     bool ProcessTryReadStdout(void* handle, const std::size_t maximumBytes, std::string& bytes, bool& eof,
                               ProcessError& error, int& nativeError, std::string& message) noexcept
-    { return readProcessPipe(handle, false, false, maximumBytes, bytes, eof, error, nativeError, message); }
+    {
+        return readProcessPipe(handle, false, false, maximumBytes, bytes, eof, error, nativeError, message);
+    }
 
     bool ProcessTryReadStderr(void* handle, const std::size_t maximumBytes, std::string& bytes, bool& eof,
                               ProcessError& error, int& nativeError, std::string& message) noexcept
-    { return readProcessPipe(handle, true, false, maximumBytes, bytes, eof, error, nativeError, message); }
-
-    bool ProcessWriteStdin(void* handle, const std::string_view bytes, std::size_t& written,
-                           ProcessError& error, int& nativeError, std::string& message) noexcept
     {
-        written = 0; error = ProcessError::none; nativeError = 0; message.clear();
-        if (!retainProcess(handle, error, nativeError, message)) return false;
+        return readProcessPipe(handle, true, false, maximumBytes, bytes, eof, error, nativeError, message);
+    }
+
+    bool ProcessWriteStdin(void* handle, const std::string_view bytes, std::size_t& written, ProcessError& error,
+                           int& nativeError, std::string& message) noexcept
+    {
+        written = 0;
+        error = ProcessError::none;
+        nativeError = 0;
+        message.clear();
+        if (!retainProcess(handle, error, nativeError, message))
+            return false;
         ProcessLease lease(handle);
         auto* state = asProcess(handle);
         std::lock_guard writeLock(state->stdinMutex);
@@ -1052,10 +1150,11 @@ namespace wio::runtime::std_process
 #if defined(_WIN32)
             DWORD count = 0;
             if (!WriteFile(state->stdinWrite, bytes.data() + written,
-                    static_cast<DWORD>(std::min<std::size_t>(bytes.size() - written, 1u << 20u)), &count, nullptr))
+                           static_cast<DWORD>(std::min<std::size_t>(bytes.size() - written, 1u << 20u)), &count,
+                           nullptr))
             {
                 setProcessError(error, nativeError, message, ProcessError::pipe_failed,
-                    static_cast<int>(GetLastError()), "writing process stdin failed");
+                                static_cast<int>(GetLastError()), "writing process stdin failed");
                 return false;
             }
 #else
@@ -1063,9 +1162,10 @@ namespace wio::runtime::std_process
             const ssize_t count = ::write(state->stdinWrite, bytes.data() + written, bytes.size() - written);
             if (count < 0)
             {
-                if (errno == EINTR) continue;
+                if (errno == EINTR)
+                    continue;
                 setProcessError(error, nativeError, message, ProcessError::pipe_failed, errno,
-                    "writing process stdin failed");
+                                "writing process stdin failed");
                 return false;
             }
 #endif
@@ -1076,8 +1176,11 @@ namespace wio::runtime::std_process
 
     bool ProcessCloseStdin(void* handle, ProcessError& error, int& nativeError, std::string& message) noexcept
     {
-        error = ProcessError::none; nativeError = 0; message.clear();
-        if (!retainProcess(handle, error, nativeError, message)) return false;
+        error = ProcessError::none;
+        nativeError = 0;
+        message.clear();
+        if (!retainProcess(handle, error, nativeError, message))
+            return false;
         ProcessLease lease(handle);
         auto* state = asProcess(handle);
         std::lock_guard writeLock(state->stdinMutex);
@@ -1087,24 +1190,36 @@ namespace wio::runtime::std_process
 
     bool ProcessWait(void* handle, int& exitCode, ProcessError& error, int& nativeError, std::string& message) noexcept
     {
-        exitCode = -1; error = ProcessError::none; nativeError = 0; message.clear();
-        if (!retainProcess(handle, error, nativeError, message)) return false;
+        exitCode = -1;
+        error = ProcessError::none;
+        nativeError = 0;
+        message.clear();
+        if (!retainProcess(handle, error, nativeError, message))
+            return false;
         ProcessLease lease(handle);
         return waitProcessState(asProcess(handle), exitCode, error, nativeError, message);
     }
 
-    bool ProcessIsRunning(void* handle, bool& running, ProcessError& error, int& nativeError, std::string& message) noexcept
+    bool ProcessIsRunning(void* handle, bool& running, ProcessError& error, int& nativeError,
+                          std::string& message) noexcept
     {
-        running = false; error = ProcessError::none; nativeError = 0; message.clear();
-        if (!retainProcess(handle, error, nativeError, message)) return false;
+        running = false;
+        error = ProcessError::none;
+        nativeError = 0;
+        message.clear();
+        if (!retainProcess(handle, error, nativeError, message))
+            return false;
         ProcessLease lease(handle);
         return processRunningState(asProcess(handle), running, error, nativeError, message);
     }
 
     bool ProcessTerminate(void* handle, ProcessError& error, int& nativeError, std::string& message) noexcept
     {
-        error = ProcessError::none; nativeError = 0; message.clear();
-        if (!retainProcess(handle, error, nativeError, message)) return false;
+        error = ProcessError::none;
+        nativeError = 0;
+        message.clear();
+        if (!retainProcess(handle, error, nativeError, message))
+            return false;
         ProcessLease lease(handle);
         return terminateProcessState(asProcess(handle), error, nativeError, message);
     }
@@ -1121,9 +1236,15 @@ namespace wio::runtime::std_process
         return liveProcessCount.load(std::memory_order_acquire);
     }
 
+    std::size_t ProcessReferenceCount(void* handle) noexcept
+    {
+        return handle ? asProcess(handle)->references.load(std::memory_order_acquire) : 0;
+    }
+
     void ProcessRelease(void* handle) noexcept
     {
-        if (!handle) return;
+        if (!handle)
+            return;
         auto* state = asProcess(handle);
         if (state->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
             delete state;
@@ -1131,11 +1252,13 @@ namespace wio::runtime::std_process
 
     void ProcessClose(void* handle) noexcept
     {
-        if (!handle) return;
+        if (!handle)
+            return;
         auto* state = asProcess(handle);
         {
             std::lock_guard lifecycleLock(state->lifecycleMutex);
-            if (state->closed) return;
+            if (state->closed)
+                return;
             state->closed = true;
         }
         ProcessError error = ProcessError::none;
@@ -1143,23 +1266,32 @@ namespace wio::runtime::std_process
         std::string message;
         static_cast<void>(terminateProcessState(state, error, nativeError, message));
         int exitCode = -1;
-        error = ProcessError::none; nativeError = 0; message.clear();
+        error = ProcessError::none;
+        nativeError = 0;
+        message.clear();
         static_cast<void>(waitProcessState(state, exitCode, error, nativeError, message));
         {
-            std::lock_guard lock(state->stdinMutex); closePipe(state->stdinWrite);
+            std::lock_guard lock(state->stdinMutex);
+            closePipe(state->stdinWrite);
         }
         {
-            std::lock_guard lock(state->stdoutMutex); closePipe(state->stdoutRead);
+            std::lock_guard lock(state->stdoutMutex);
+            closePipe(state->stdoutRead);
         }
         {
-            std::lock_guard lock(state->stderrMutex); closePipe(state->stderrRead);
+            std::lock_guard lock(state->stderrMutex);
+            closePipe(state->stderrRead);
         }
 #if defined(_WIN32)
-        if (state->process) { CloseHandle(state->process); state->process = nullptr; }
+        if (state->process)
+        {
+            CloseHandle(state->process);
+            state->process = nullptr;
+        }
 #endif
         ProcessRelease(state);
     }
-}
+} // namespace wio::runtime::std_process
 
 namespace wio::runtime::std_platform
 {
@@ -1201,11 +1333,16 @@ namespace wio::runtime::std_platform
     {
         switch (value)
         {
-        case OperatingSystem::windows: return "windows";
-        case OperatingSystem::linux: return "linux";
-        case OperatingSystem::macos: return "macos";
-        case OperatingSystem::unix_like: return "unix";
-        case OperatingSystem::unknown: break;
+        case OperatingSystem::windows:
+            return "windows";
+        case OperatingSystem::linux:
+            return "linux";
+        case OperatingSystem::macos:
+            return "macos";
+        case OperatingSystem::unix_like:
+            return "unix";
+        case OperatingSystem::unknown:
+            break;
         }
         return "unknown";
     }
@@ -1214,13 +1351,20 @@ namespace wio::runtime::std_platform
     {
         switch (value)
         {
-        case Architecture::x86: return "x86";
-        case Architecture::x64: return "x64";
-        case Architecture::arm32: return "arm32";
-        case Architecture::arm64: return "arm64";
-        case Architecture::wasm32: return "wasm32";
-        case Architecture::wasm64: return "wasm64";
-        case Architecture::unknown: break;
+        case Architecture::x86:
+            return "x86";
+        case Architecture::x64:
+            return "x64";
+        case Architecture::arm32:
+            return "arm32";
+        case Architecture::arm64:
+            return "arm64";
+        case Architecture::wasm32:
+            return "wasm32";
+        case Architecture::wasm64:
+            return "wasm64";
+        case Architecture::unknown:
+            break;
         }
         return "unknown";
     }
@@ -1257,7 +1401,7 @@ namespace wio::runtime::std_platform
         return "\n";
 #endif
     }
-}
+} // namespace wio::runtime::std_platform
 
 namespace wio::runtime::std_environment
 {
@@ -1268,14 +1412,13 @@ namespace wio::runtime::std_environment
         {
             if (value.empty())
                 return {};
-            const int size = MultiByteToWideChar(
-                CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()), nullptr, 0);
+            const int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+                                                 static_cast<int>(value.size()), nullptr, 0);
             if (size <= 0)
                 return {};
             std::wstring result(static_cast<std::size_t>(size), L'\0');
-            if (MultiByteToWideChar(
-                    CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()),
-                    result.data(), size) <= 0)
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()),
+                                    result.data(), size) <= 0)
             {
                 return {};
             }
@@ -1286,15 +1429,13 @@ namespace wio::runtime::std_environment
         {
             if (value.empty())
                 return {};
-            const int size = WideCharToMultiByte(
-                CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()),
-                nullptr, 0, nullptr, nullptr);
+            const int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(),
+                                                 static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
             if (size <= 0)
                 return {};
             std::string result(static_cast<std::size_t>(size), '\0');
-            if (WideCharToMultiByte(
-                    CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()),
-                    result.data(), size, nullptr, nullptr) <= 0)
+            if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()),
+                                    result.data(), size, nullptr, nullptr) <= 0)
             {
                 return {};
             }
@@ -1307,9 +1448,8 @@ namespace wio::runtime::std_environment
             if (create)
             {
                 DWORD disposition = 0;
-                return RegCreateKeyExW(
-                    HKEY_CURRENT_USER, L"Environment", 0, nullptr, 0, access, nullptr,
-                    &key, &disposition) == ERROR_SUCCESS;
+                return RegCreateKeyExW(HKEY_CURRENT_USER, L"Environment", 0, nullptr, 0, access, nullptr, &key,
+                                       &disposition) == ERROR_SUCCESS;
             }
             return RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, access, &key) == ERROR_SUCCESS;
         }
@@ -1320,15 +1460,13 @@ namespace wio::runtime::std_environment
             DWORD type = 0;
             DWORD bytes = 0;
             LONG status = RegQueryValueExW(key, name.c_str(), nullptr, &type, nullptr, &bytes);
-            if (status != ERROR_SUCCESS || bytes == 0 ||
-                (type != REG_SZ && type != REG_EXPAND_SZ))
+            if (status != ERROR_SUCCESS || bytes == 0 || (type != REG_SZ && type != REG_EXPAND_SZ))
             {
                 return false;
             }
             std::wstring buffer(bytes / sizeof(wchar_t), L'\0');
-            status = RegQueryValueExW(
-                key, name.c_str(), nullptr, &type,
-                reinterpret_cast<BYTE*>(buffer.data()), &bytes);
+            status =
+                RegQueryValueExW(key, name.c_str(), nullptr, &type, reinterpret_cast<BYTE*>(buffer.data()), &bytes);
             if (status != ERROR_SUCCESS)
                 return false;
             while (!buffer.empty() && buffer.back() == L'\0')
@@ -1337,13 +1475,11 @@ namespace wio::runtime::std_environment
             return true;
         }
 
-        bool writeRegistryValue(
-            HKEY key, const std::wstring& name, const std::wstring& value) noexcept
+        bool writeRegistryValue(HKEY key, const std::wstring& name, const std::wstring& value) noexcept
         {
             const DWORD bytes = static_cast<DWORD>((value.size() + 1u) * sizeof(wchar_t));
-            return RegSetValueExW(
-                key, name.c_str(), 0, REG_EXPAND_SZ,
-                reinterpret_cast<const BYTE*>(value.c_str()), bytes) == ERROR_SUCCESS;
+            return RegSetValueExW(key, name.c_str(), 0, REG_EXPAND_SZ, reinterpret_cast<const BYTE*>(value.c_str()),
+                                  bytes) == ERROR_SUCCESS;
         }
 
         std::wstring normalizePath(std::wstring value)
@@ -1351,10 +1487,8 @@ namespace wio::runtime::std_environment
             std::replace(value.begin(), value.end(), L'/', L'\\');
             while (!value.empty() && (value.back() == L'\\' || value.back() == L'/'))
                 value.pop_back();
-            std::transform(value.begin(), value.end(), value.begin(), [](const wchar_t ch)
-            {
-                return static_cast<wchar_t>(std::towlower(ch));
-            });
+            std::transform(value.begin(), value.end(), value.begin(),
+                           [](const wchar_t ch) { return static_cast<wchar_t>(std::towlower(ch)); });
             return value;
         }
 
@@ -1375,10 +1509,8 @@ namespace wio::runtime::std_environment
 
         void broadcastEnvironmentChange() noexcept
         {
-            SendMessageTimeoutW(
-                HWND_BROADCAST, WM_SETTINGCHANGE, 0,
-                reinterpret_cast<LPARAM>(L"Environment"),
-                SMTO_ABORTIFHUNG, 5000, nullptr);
+            SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, reinterpret_cast<LPARAM>(L"Environment"),
+                                SMTO_ABORTIFHUNG, 5000, nullptr);
         }
 #else
         constexpr std::string_view ProfileMarkerBegin = "# >>> wio environment >>>";
@@ -1386,24 +1518,19 @@ namespace wio::runtime::std_environment
 
         bool validVariableName(const std::string_view name) noexcept
         {
-            if (name.empty() ||
-                !(std::isalpha(static_cast<unsigned char>(name.front())) != 0 ||
-                  name.front() == '_'))
+            if (name.empty() || !(std::isalpha(static_cast<unsigned char>(name.front())) != 0 || name.front() == '_'))
             {
                 return false;
             }
             return std::all_of(name.begin() + 1, name.end(), [](const char ch)
-            {
-                return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_';
-            });
+                               { return std::isalnum(static_cast<unsigned char>(ch)) != 0 || ch == '_'; });
         }
 
         std::filesystem::path profilePath()
         {
             const char* home = std::getenv("HOME");
-            return home == nullptr || *home == '\0'
-                ? std::filesystem::path{}
-                : std::filesystem::path(home) / ".profile";
+            return home == nullptr || *home == '\0' ? std::filesystem::path{}
+                                                    : std::filesystem::path(home) / ".profile";
         }
 
         std::string readFile(const std::filesystem::path& path)
@@ -1470,8 +1597,8 @@ namespace wio::runtime::std_environment
             parts.prefix = content.substr(0u, begin);
             const std::size_t bodyStart = begin + ProfileMarkerBegin.size();
             const std::size_t end = content.find(ProfileMarkerEnd, bodyStart);
-            const std::string body = content.substr(
-                bodyStart, end == std::string::npos ? std::string::npos : end - bodyStart);
+            const std::string body =
+                content.substr(bodyStart, end == std::string::npos ? std::string::npos : end - bodyStart);
             std::istringstream lines(body);
             std::string line;
             while (std::getline(lines, line))
@@ -1523,7 +1650,7 @@ namespace wio::runtime::std_environment
             return value;
         }
 #endif
-    }
+    } // namespace
 
     bool TryGet(const std::string_view name, std::string& value) noexcept
     {
@@ -1629,12 +1756,9 @@ namespace wio::runtime::std_environment
             return false;
         ProfileParts parts = parseProfile(readFile(profilePath()));
         const std::string prefix = "export " + std::string(name) + "=";
-        parts.lines.erase(
-            std::remove_if(parts.lines.begin(), parts.lines.end(), [&](const std::string& line)
-            {
-                return line.starts_with(prefix);
-            }),
-            parts.lines.end());
+        parts.lines.erase(std::remove_if(parts.lines.begin(), parts.lines.end(),
+                                         [&](const std::string& line) { return line.starts_with(prefix); }),
+                          parts.lines.end());
         parts.lines.push_back(prefix + shellQuote(value));
         return writeProfile(std::move(parts));
 #endif
@@ -1662,12 +1786,9 @@ namespace wio::runtime::std_environment
             return false;
         ProfileParts parts = parseProfile(readFile(profilePath()));
         const std::string prefix = "export " + std::string(name) + "=";
-        parts.lines.erase(
-            std::remove_if(parts.lines.begin(), parts.lines.end(), [&](const std::string& line)
-            {
-                return line.starts_with(prefix);
-            }),
-            parts.lines.end());
+        parts.lines.erase(std::remove_if(parts.lines.begin(), parts.lines.end(),
+                                         [&](const std::string& line) { return line.starts_with(prefix); }),
+                          parts.lines.end());
         return writeProfile(std::move(parts));
 #endif
     }
@@ -1687,10 +1808,8 @@ namespace wio::runtime::std_environment
         if (!found)
             return false;
         const auto entries = splitUserPath(pathValue);
-        return std::any_of(entries.begin(), entries.end(), [&](const std::wstring& current)
-        {
-            return normalizePath(current) == candidate;
-        });
+        return std::any_of(entries.begin(), entries.end(),
+                           [&](const std::wstring& current) { return normalizePath(current) == candidate; });
 #else
         const std::string candidate = normalizedPosixPath(std::string(entry));
         const ProfileParts parts = parseProfile(readFile(profilePath()));
@@ -1700,8 +1819,7 @@ namespace wio::runtime::std_environment
             constexpr std::string_view suffix = ":$PATH";
             if (!line.starts_with(prefix) || !line.ends_with(suffix))
                 continue;
-            const std::string_view encoded(line.data() + prefix.size(),
-                line.size() - prefix.size() - suffix.size());
+            const std::string_view encoded(line.data() + prefix.size(), line.size() - prefix.size() - suffix.size());
             std::string decoded;
             if (shellUnquote(encoded, decoded) && normalizedPosixPath(decoded) == candidate)
                 return true;
@@ -1779,18 +1897,18 @@ namespace wio::runtime::std_environment
         const std::string candidate = normalizedPosixPath(std::string(entry));
         ProfileParts parts = parseProfile(readFile(profilePath()));
         parts.lines.erase(
-            std::remove_if(parts.lines.begin(), parts.lines.end(), [&](const std::string& line)
-            {
-                constexpr std::string_view prefix = "export PATH=";
-                constexpr std::string_view suffix = ":$PATH";
-                if (!line.starts_with(prefix) || !line.ends_with(suffix))
-                    return false;
-                const std::string_view encoded(line.data() + prefix.size(),
-                    line.size() - prefix.size() - suffix.size());
-                std::string decoded;
-                return shellUnquote(encoded, decoded) &&
-                    normalizedPosixPath(decoded) == candidate;
-            }),
+            std::remove_if(parts.lines.begin(), parts.lines.end(),
+                           [&](const std::string& line)
+                           {
+                               constexpr std::string_view prefix = "export PATH=";
+                               constexpr std::string_view suffix = ":$PATH";
+                               if (!line.starts_with(prefix) || !line.ends_with(suffix))
+                                   return false;
+                               const std::string_view encoded(line.data() + prefix.size(),
+                                                              line.size() - prefix.size() - suffix.size());
+                               std::string decoded;
+                               return shellUnquote(encoded, decoded) && normalizedPosixPath(decoded) == candidate;
+                           }),
             parts.lines.end());
         return writeProfile(std::move(parts));
 #endif
@@ -1812,10 +1930,8 @@ namespace wio::runtime::std_environment
             if (equals == std::wstring_view::npos || equals == 0u)
                 continue;
             std::wstring key(entry.substr(0u, equals));
-            std::transform(key.begin(), key.end(), key.begin(), [](const wchar_t ch)
-            {
-                return static_cast<wchar_t>(std::towlower(ch));
-            });
+            std::transform(key.begin(), key.end(), key.begin(),
+                           [](const wchar_t ch) { return static_cast<wchar_t>(std::towlower(ch)); });
             if (!seen.insert(key).second)
                 duplicates.insert(std::move(key));
         }
@@ -1874,11 +1990,14 @@ namespace wio::runtime::std_environment
     {
         std::string value;
 #if defined(_WIN32)
-        if (TryGet("APPDATA", value)) return std::filesystem::path(value).lexically_normal().generic_string();
+        if (TryGet("APPDATA", value))
+            return std::filesystem::path(value).lexically_normal().generic_string();
 #else
-        if (TryGet("XDG_CONFIG_HOME", value)) return std::filesystem::path(value).lexically_normal().generic_string();
+        if (TryGet("XDG_CONFIG_HOME", value))
+            return std::filesystem::path(value).lexically_normal().generic_string();
         const std::string home = HomeDirectory();
-        if (!home.empty()) return (std::filesystem::path(home) / ".config").generic_string();
+        if (!home.empty())
+            return (std::filesystem::path(home) / ".config").generic_string();
 #endif
         return HomeDirectory();
     }
@@ -1887,11 +2006,14 @@ namespace wio::runtime::std_environment
     {
         std::string value;
 #if defined(_WIN32)
-        if (TryGet("LOCALAPPDATA", value)) return std::filesystem::path(value).lexically_normal().generic_string();
+        if (TryGet("LOCALAPPDATA", value))
+            return std::filesystem::path(value).lexically_normal().generic_string();
 #else
-        if (TryGet("XDG_DATA_HOME", value)) return std::filesystem::path(value).lexically_normal().generic_string();
+        if (TryGet("XDG_DATA_HOME", value))
+            return std::filesystem::path(value).lexically_normal().generic_string();
         const std::string home = HomeDirectory();
-        if (!home.empty()) return (std::filesystem::path(home) / ".local" / "share").generic_string();
+        if (!home.empty())
+            return (std::filesystem::path(home) / ".local" / "share").generic_string();
 #endif
         return HomeDirectory();
     }
@@ -1900,7 +2022,8 @@ namespace wio::runtime::std_environment
     {
         std::string value;
 #if !defined(_WIN32)
-        if (TryGet("XDG_RUNTIME_DIR", value)) return std::filesystem::path(value).lexically_normal().generic_string();
+        if (TryGet("XDG_RUNTIME_DIR", value))
+            return std::filesystem::path(value).lexically_normal().generic_string();
 #endif
         return TemporaryDirectory();
     }
@@ -1918,4 +2041,4 @@ namespace wio::runtime::std_environment
         std::filesystem::current_path(std::filesystem::path(std::string(path)), error);
         return !error;
     }
-}
+} // namespace wio::runtime::std_environment

@@ -951,8 +951,9 @@ namespace wio::wir::lowered
                                                      ? module.types.tryGet(valueType(instruction.operands.front()))
                                                      : nullptr;
                         const Type* destinationType = module.types.tryGet(instruction.resultType);
-                        if (!sourceType || !destinationType || !isNumeric(sourceType->kind) ||
-                            !isNumeric(destinationType->kind))
+                        const auto numericOrGeneric = [](const Type* type)
+                        { return type && (isNumeric(type->kind) || type->kind == TypeKind::GenericParameter); };
+                        if (!numericOrGeneric(sourceType) || !numericOrGeneric(destinationType))
                         {
                             report("LIR1417",
                                    "Lowered WIR numeric conversion requires one numeric operand and a numeric result.",
@@ -1434,10 +1435,22 @@ namespace wio::wir::lowered
                                                      ? module.types.tryGet(valueType(instruction.operands.front()))
                                                      : nullptr;
                         const Type* resultType = module.types.tryGet(instruction.resultType);
+                        const Type* sourceValue =
+                            sourceType && sourceType->kind == TypeKind::Reference && sourceType->arguments.size() == 1
+                                ? module.types.tryGet(sourceType->arguments.front())
+                                : nullptr;
+                        const Type* resultValue =
+                            resultType && resultType->kind == TypeKind::Reference && resultType->arguments.size() == 1
+                                ? module.types.tryGet(resultType->arguments.front())
+                                : nullptr;
+                        const bool literalArrayView =
+                            sourceValue && resultValue && sourceValue->kind == TypeKind::Array &&
+                            sourceValue->name == "literal" && resultValue->kind == TypeKind::Array &&
+                            !resultValue->staticExtent && sourceValue->arguments == resultValue->arguments;
                         if (!sourceType || sourceType->kind != TypeKind::Reference ||
                             sourceType->arguments.size() != 1 || !resultType ||
                             resultType->kind != TypeKind::Reference || resultType->arguments.size() != 1 ||
-                            sourceType->arguments.front() != resultType->arguments.front() ||
+                            (sourceType->arguments.front() != resultType->arguments.front() && !literalArrayView) ||
                             (resultType->isMutable && !sourceType->isMutable))
                         {
                             report("LIR1430",

@@ -10,9 +10,11 @@ qualification without installing a fuzzing framework.
 from __future__ import annotations
 
 import argparse
+import os
 import random
 import re
 import shutil
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -31,24 +33,37 @@ class FuzzFailure(RuntimeError):
 
 
 def run_process(command: list[str], timeout: float, cwd: Path) -> tuple[int, str]:
+    creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        creationflags=creation_flags,
+        start_new_session=os.name != "nt",
+    )
     try:
-        completed = subprocess.run(
-            command,
-            cwd=cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=timeout,
-            check=False,
-        )
+        output, _ = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as exc:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False,
+            )
+        else:
+            os.killpg(process.pid, signal.SIGKILL)
+        process.communicate()
         raise FuzzFailure(f"timeout after {timeout:.1f}s: {' '.join(command)}") from exc
 
-    output = completed.stdout.decode("utf-8", errors="replace")
-    if completed.returncode not in EXPECTED_EXIT_CODES:
+    decoded_output = output.decode("utf-8", errors="replace")
+    if process.returncode not in EXPECTED_EXIT_CODES:
         raise FuzzFailure(
-            f"abnormal exit {completed.returncode}: {' '.join(command)}\n{output[-4000:]}"
+            f"abnormal exit {process.returncode}: {' '.join(command)}\n{decoded_output[-4000:]}"
         )
-    return completed.returncode, output
+    return process.returncode, decoded_output
 
 
 def diagnostic_count(output: str) -> int:
