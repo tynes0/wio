@@ -41,5 +41,6 @@ namespace wio::wir
     {
     public:
         [[nodiscard]] LoweringResult lower(const typed::Module& module) const;
+        [[nodiscard]] LoweringResult lower(typed::Module&& module) const;
     };
 }

@@ -427,6 +427,7 @@ namespace wio::wir::typed
         }
 
         GlobalMap globals;
+        globals.reserve(module.globals.size());
         for (const Global& global : module.globals)
         {
             if (!global.id || !globals.emplace(global.id.value(), &global).second)
@@ -436,6 +437,7 @@ namespace wio::wir::typed
         }
 
         FunctionMap functions;
+        functions.reserve(module.functions.size());
         for (const Function& function : module.functions)
         {
             if (!function.id)
@@ -792,6 +794,13 @@ namespace wio::wir::typed
             ValueTypeMap values;
             ValueDefinitionMap definitions;
             std::unordered_map<ValueId::ValueType, Opcode> producerOpcodes;
+            std::size_t valueCapacity = function.parameters.size();
+            for (const BasicBlock& block : function.blocks)
+                valueCapacity += block.parameters.size() + block.instructions.size();
+            blocks.reserve(function.blocks.size());
+            values.reserve(valueCapacity);
+            definitions.reserve(valueCapacity);
+            producerOpcodes.reserve(valueCapacity);
             auto defineValue = [&](const Parameter& value, const BlockId block,
                                    const std::optional<std::size_t> instructionIndex = std::nullopt,
                                    const bool enforceTypeOwnership = true)

@@ -676,17 +676,16 @@ namespace wio
             typedBuildScope.stop();
             reportTypedWirDiagnostics(typedResult);
             WIO_LOG_PROCESS_ERRORS(CompilationError);
-            common::profiling::Scope typedVerifyScope("WIR.Typed.Verify");
-            const wir::typed::VerificationResult typedVerification =
-                wir::typed::Verifier{}.verify(typedResult.module());
-            typedVerifyScope.stop();
-            reportTypedWirDiagnostics(typedVerification);
-            WIO_LOG_PROCESS_ERRORS(CompilationError);
-
             std::string output;
             std::string_view outputName;
             if (kind == WirEmitKind::Typed)
             {
+                common::profiling::Scope typedVerifyScope("WIR.Typed.Verify");
+                const wir::typed::VerificationResult typedVerification =
+                    wir::typed::Verifier{}.verify(typedResult.module());
+                typedVerifyScope.stop();
+                reportTypedWirDiagnostics(typedVerification);
+                WIO_LOG_PROCESS_ERRORS(CompilationError);
                 common::profiling::Scope printScope("WIR.Typed.Print");
                 output = wir::typed::Printer{}.print(typedResult.module());
                 outputName = "Typed WIR";
@@ -694,7 +693,7 @@ namespace wio
             else
             {
                 common::profiling::Scope loweringScope("WIR.Lower");
-                wir::LoweringResult loweringResult = wir::LoweringPipeline{}.lower(typedResult.module());
+                wir::LoweringResult loweringResult = wir::LoweringPipeline{}.lower(typedResult.takeModule());
                 loweringScope.stop();
                 reportLoweringDiagnostics(loweringResult);
                 WIO_LOG_PROCESS_ERRORS(CompilationError);
@@ -3070,15 +3069,8 @@ namespace wio
                 typedBuildScope.stop();
                 reportTypedWirDiagnostics(typedResult);
                 WIO_LOG_PROCESS_ERRORS(CompilationError);
-                common::profiling::Scope typedVerifyScope("WIR.Typed.Verify");
-                const wir::typed::VerificationResult typedVerification =
-                    wir::typed::Verifier{}.verify(typedResult.module());
-                typedVerifyScope.stop();
-                reportTypedWirDiagnostics(typedVerification);
-                WIO_LOG_PROCESS_ERRORS(CompilationError);
-
                 common::profiling::Scope loweringScope("WIR.Lower");
-                wir::LoweringResult loweringResult = wir::LoweringPipeline{}.lower(typedResult.module());
+                wir::LoweringResult loweringResult = wir::LoweringPipeline{}.lower(typedResult.takeModule());
                 loweringScope.stop();
                 reportLoweringDiagnostics(loweringResult);
                 WIO_LOG_PROCESS_ERRORS(CompilationError);

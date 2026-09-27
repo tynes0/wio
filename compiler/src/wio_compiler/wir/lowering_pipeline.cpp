@@ -616,12 +616,17 @@ namespace wio::wir
 
     LoweringResult LoweringPipeline::lower(const typed::Module& module) const
     {
+        return lower(typed::Module{module});
+    }
+
+    LoweringResult LoweringPipeline::lower(typed::Module&& specialized) const
+    {
         LoweringResult result;
 
         const typed::VerificationResult typedVerification = [&]
         {
             common::profiling::Scope scope("WIR.Lower.VerifyTyped");
-            return typed::Verifier{}.verify(module);
+            return typed::Verifier{}.verify(specialized);
         }();
         if (!typedVerification.succeeded())
         {
@@ -636,11 +641,6 @@ namespace wio::wir
         }
         result.completedPasses_.push_back("verify-typed-wir");
 
-        typed::Module specialized = [&]
-        {
-            common::profiling::Scope scope("WIR.Lower.CloneTypedModule");
-            return module;
-        }();
         {
             common::profiling::Scope scope("WIR.Lower.SpecializeGenerics");
             for (auto& diagnostic : GenericSpecializer{}.specialize(specialized))
@@ -676,7 +676,8 @@ namespace wio::wir
         if (!result.diagnostics_.empty())
             return result;
         result.completedPasses_.push_back("lower-object-hierarchy");
-        if (std::ranges::any_of(module.functions, [](const typed::Function& function) { return function.isAsync; }))
+        if (std::ranges::any_of(specialized.functions,
+                                [](const typed::Function& function) { return function.isAsync; }))
             result.completedPasses_.push_back("lower-async-state-machines");
 
         {

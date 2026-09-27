@@ -289,6 +289,7 @@ namespace wio::wir::lowered
         }
 
         GlobalMap globals;
+        globals.reserve(module.globals.size());
         for (const Global& global : module.globals)
         {
             if (!global.id || !globals.emplace(global.id.value(), &global).second)
@@ -299,6 +300,7 @@ namespace wio::wir::lowered
         }
 
         FunctionMap functions;
+        functions.reserve(module.functions.size());
         for (const Function& function : module.functions)
         {
             if (!function.id)
@@ -608,9 +610,15 @@ namespace wio::wir::lowered
 
         for (const Function& function : module.functions)
         {
+            std::size_t valueCapacity = function.parameters.size();
+            for (const BasicBlock& block : function.blocks)
+                valueCapacity += block.parameters.size() + block.instructions.size();
             ValueTypeMap values;
+            values.reserve(valueCapacity);
             std::unordered_map<ValueId::ValueType, Opcode> producerOpcodes;
+            producerOpcodes.reserve(valueCapacity);
             std::unordered_map<ValueId::ValueType, const Instruction*> producers;
+            producers.reserve(valueCapacity);
             auto defineValue = [&](const Parameter& parameter, const BlockId block)
             {
                 if (!parameter.id)
@@ -642,6 +650,7 @@ namespace wio::wir::lowered
             }
 
             BlockMap blocks;
+            blocks.reserve(function.blocks.size());
             for (const BasicBlock& block : function.blocks)
             {
                 if (!block.id)
