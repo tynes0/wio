@@ -313,6 +313,15 @@ if(BUILD_TESTING)
         COMMAND wio_wir_canonical_optimizer_test
     )
 
+    add_executable(wio_bytecode_format_test
+        "${CMAKE_SOURCE_DIR}/tests/bytecode_format_test.cpp"
+    )
+    target_link_libraries(wio_bytecode_format_test PRIVATE wio_compiler)
+    add_test(
+        NAME wio_bytecode_format
+        COMMAND wio_bytecode_format_test
+    )
+
     add_executable(wio_wir_cpp_backend_test
         "${CMAKE_SOURCE_DIR}/tests/wir_cpp_backend_test.cpp"
     )
