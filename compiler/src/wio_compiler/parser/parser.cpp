@@ -551,6 +551,14 @@ namespace wio
                 continue;
             }
 
+            if (matchOneOf({TokenType::opIncrement, TokenType::opDecrement}))
+            {
+                Token op = advance();
+                left = makeNodePtr<UnaryExpression>(std::move(op), std::move(left),
+                                                    UnaryExpression::UnaryOperatorType::Postfix);
+                continue;
+            }
+
             int precedence = getPrecedence(peek().type);
             if (precedence < minPrecedence)
                 break;
@@ -4468,6 +4476,8 @@ namespace wio
         case TokenType::kwNot:        // not
         case TokenType::opLogicalNot: // !
         case TokenType::opBitNot:     // ~
+        case TokenType::opIncrement:  // ++
+        case TokenType::opDecrement:  // --
             return 13;
 
         // ---------------------------------

@@ -7,380 +7,382 @@
 
 namespace wio
 {
-   enum class TokenType :  uint8_t
-   {
-      /* ===============================
-         Special
-         =============================== */
-      invalid = 0,
-      endOfFile,
-   
-      /* ===============================
-         Identifiers & literals
-         =============================== */
-      identifier,
-   
-      integerLiteral,
-      floatLiteral,
-      stringLiteral,
-      interpolatedStringLiteral,
-      charLiteral,
-      durationLiteral,
-      byteLiteral,
-   
-      /* ===============================
-         Keywords – core
-         =============================== */
-      kwFn,
-      kwLet,
-      kwMut,
-      kwConst,
-      kwType,
-      kwRef,
-      kwView,
-      kwDeref,
-      kwFit,
-      kwEnum,
-      kwFlag,
-      kwFlagset,
+    enum class TokenType : uint8_t
+    {
+        /* ===============================
+           Special
+           =============================== */
+        invalid = 0,
+        endOfFile,
 
-      /* ===============================
-         Keywords – types
-         =============================== */
-      kwI8,
-      kwI16,
-      kwI32,
-      kwI64,
-      kwU8,
-      kwU16,
-      kwU32,
-      kwU64,
-      kwF32,
-      kwF64,
-      kwIsize,
-      kwUsize,
-      kwByte,
-      kwBit,
-      kwBool,
-      kwChar,
-      kwUchar,
-      kwString,
-      kwText,
-      kwAny,
-      kwOpaque,
-      kwComponent,
-      kwObject,
-      kwInterface,
-      kwExtension,
-      kwVoid,
-      
-      /* ===============================
-         Keywords – boolean & null
-         =============================== */
-      kwTrue,
-      kwFalse,
-      kwNull,
-      
-      /* ===============================
-         Keywords – control flow
-         =============================== */
-      kwIf,
-      kwElse,
-      kwMatch,
-      kwFor,
-      kwForeach,
-      kwIn,
-      kwStep,
-      kwWhile, // todo: rename with loop
-      kwBreak,
-      kwContinue,
-      kwReturn,
-      kwIs,
-      kwWhen,
-      kwWhere,
-      kwAssumed,
-   
-      /* ===============================
-         Keywords – logic / flow
-         =============================== */
-      kwAnd,
-      kwOr,
-      kwNot,
-   
-      /* ===============================
-         Keywords – time / game oriented
-         =============================== */
-      kwEvery,
-      kwAfter,
-      kwDuring,
-      kwWait,
-   
-      /* ===============================
-         Keywords – binding / modules
-         =============================== */
-      kwUse,
-      kwUsing,
-      kwWith,
-      kwAttribute,
-      kwAs,
-      kwRealm,
+        /* ===============================
+           Identifiers & literals
+           =============================== */
+        identifier,
 
-      /* ===============================
-         Keywords – access
-         =============================== */
-      kwPublic,
-      kwPrivate,
-      kwProtected,
-      kwSuper,
-      kwSelf,
-      
-      /* ===============================
-         Keywords – binding / modules
-         =============================== */
-      kwAsync,
-      kwAwait,
-      kwSpawn,
-      kwDetach,
-      kwCoroutine,
-      kwYield,
-      kwThread,
-      kwLoop,
+        integerLiteral,
+        floatLiteral,
+        stringLiteral,
+        interpolatedStringLiteral,
+        charLiteral,
+        durationLiteral,
+        byteLiteral,
 
-      /* ===============================
-         Keywords – app
-         =============================== */
-      kwSystem,
-      kwProgram,
-      kwApplication,
+        /* ===============================
+           Keywords – core
+           =============================== */
+        kwFn,
+        kwLet,
+        kwMut,
+        kwConst,
+        kwType,
+        kwRef,
+        kwView,
+        kwDeref,
+        kwFit,
+        kwEnum,
+        kwFlag,
+        kwFlagset,
 
-      /* ===============================
-         Arrays
-         =============================== */
-      StaticArray,       // [i32, 5] 
-      DynamicArray,       // i32[] 
-   
-      /* ===============================
-         Operators – arithmetic
-         =============================== */
-      opPlus,            // +
-      opMinus,           // -
-      opStar,            // *
-      opSlash,           // /
-      opPercent,         // %
-   
-      /* ===============================
-         Operators – assignment
-         =============================== */
-      opAssign,          // =
-      opPlusAssign,      // +=
-      opMinusAssign,     // -=
-      opStarAssign,      // *=
-      opSlashAssign,     // /=
-      opPercentAssign,   // %=
-   
-      /* ===============================
-         Operators – comparison
-         =============================== */
-      opEqual,           // ==
-      opNotEqual,        // !=
-      opLess,            // <
-      opLessEqual,       // <=
-      opGreater,         // >
-      opGreaterEqual,    // >=
-   
-      /* ===============================
-         Operators – bitwise
-         =============================== */
-      opBitAnd,          // &
-      opBitOr,           // |
-      opBitXor,          // ^
-      opBitNot,          // ~
-      opShiftLeft,       // <<
-      opShiftRight,      // >>
+        /* ===============================
+           Keywords – types
+           =============================== */
+        kwI8,
+        kwI16,
+        kwI32,
+        kwI64,
+        kwU8,
+        kwU16,
+        kwU32,
+        kwU64,
+        kwF32,
+        kwF64,
+        kwIsize,
+        kwUsize,
+        kwByte,
+        kwBit,
+        kwBool,
+        kwChar,
+        kwUchar,
+        kwString,
+        kwText,
+        kwAny,
+        kwOpaque,
+        kwComponent,
+        kwObject,
+        kwInterface,
+        kwExtension,
+        kwVoid,
 
-      /* ===============================
-         Operators – bitwise assign
-         =============================== */
-      opBitAndAssign,          // &=
-      opBitOrAssign,           // |=
-      opBitXorAssign,          // ^=
-      opBitNotAssign,          // ~=
-      opShiftLeftAssign,       // <<=
-      opShiftRightAssign,      // >>=
+        /* ===============================
+           Keywords – boolean & null
+           =============================== */
+        kwTrue,
+        kwFalse,
+        kwNull,
 
-      /* ===============================
-         Operators – bitwise assign
-         =============================== */
-      opLogicalNot,      // !
-      opLogicalAnd,      // &&
-      opLogicalOr,       // ||
-      
-      /* ===============================
-         Operators – data flow
-         =============================== */
-      opFlowRight,       // |>
-      opFlowLeft,        // <|
-      
-      /* ===============================
-         Operators – misc
-         =============================== */
-      opArrow,           // ->
-      opFatArrow,        // =>
-      opQuestion,        // ?
-      opColon,           // :
-      opScope,           // ::
-      opDot,             // .
+        /* ===============================
+           Keywords – control flow
+           =============================== */
+        kwIf,
+        kwElse,
+        kwMatch,
+        kwFor,
+        kwForeach,
+        kwIn,
+        kwStep,
+        kwWhile, // todo: rename with loop
+        kwBreak,
+        kwContinue,
+        kwReturn,
+        kwIs,
+        kwWhen,
+        kwWhere,
+        kwAssumed,
 
-      /* ===============================
-         Operators – range
-         =============================== */
+        /* ===============================
+           Keywords – logic / flow
+           =============================== */
+        kwAnd,
+        kwOr,
+        kwNot,
 
-      opRangeInclusive,  // ...
-      opRangeExclusive,  // ..<
-      
-      /* ===============================
-         Symbols
-         =============================== */
-      atSign,            // @
-      dollar,            // $
-   
-      /* ===============================
-         Delimiters
-         =============================== */
-      leftParen,         // (
-      rightParen,        // )
-      leftBrace,         // {
-      rightBrace,        // }
-      leftBracket,       // [
-      rightBracket,      // ]
-   
-      comma,             // ,
-      semicolon,         // ;
-      newline            // statement boundary
-   };
+        /* ===============================
+           Keywords – time / game oriented
+           =============================== */
+        kwEvery,
+        kwAfter,
+        kwDuring,
+        kwWait,
 
-   /* ===============================
-   Keywords
-   =============================== */
-   inline const std::unordered_map<std::string_view, TokenType> keywordMap = {
-      { "fn",        TokenType::kwFn },
-      { "let",       TokenType::kwLet },
-      { "mut",       TokenType::kwMut },
-      { "const",     TokenType::kwConst },
-      { "type",      TokenType::kwType },
-      { "ref",       TokenType::kwRef },
-      { "view",      TokenType::kwView },
-      { "deref",     TokenType::kwDeref },
-      { "fit",       TokenType::kwFit },
-      { "enum",      TokenType::kwEnum },
-      { "flag",      TokenType::kwFlag },
-      { "flagset",   TokenType::kwFlagset },
-      
-      { "i8",        TokenType::kwI8 },
-      { "i16",       TokenType::kwI16 },
-      { "i32",       TokenType::kwI32 },
-      { "i64",       TokenType::kwI64 },
-      { "u8",        TokenType::kwU8 },
-      { "u16",       TokenType::kwU16 },
-      { "u32",       TokenType::kwU32 },
-      { "u64",       TokenType::kwU64 },
-      { "f32",       TokenType::kwF32 },
-      { "f64",       TokenType::kwF64 },
-      { "isize",     TokenType::kwIsize },
-      { "usize",     TokenType::kwUsize },
-      { "byte",      TokenType::kwByte },
-      { "bit",       TokenType::kwBit },
-      { "bool",      TokenType::kwBool },
-      { "char",      TokenType::kwChar },
-      { "uchar",     TokenType::kwUchar },
-      { "string",    TokenType::kwString },
-      { "text",      TokenType::kwText },
-      { "any",       TokenType::kwAny },
-      { "opaque",    TokenType::kwOpaque },
-      { "component", TokenType::kwComponent },
-      { "object",    TokenType::kwObject },
-      { "interface", TokenType::kwInterface },
-      { "extension", TokenType::kwExtension },
-      { "void",      TokenType::kwVoid },
+        /* ===============================
+           Keywords – binding / modules
+           =============================== */
+        kwUse,
+        kwUsing,
+        kwWith,
+        kwAttribute,
+        kwAs,
+        kwRealm,
 
-      { "true",      TokenType::kwTrue },
-      { "false",     TokenType::kwFalse },
-      { "null",      TokenType::kwNull },
-   
-      { "if",        TokenType::kwIf },
-      { "else",      TokenType::kwElse },
-      { "match",     TokenType::kwMatch },
-      { "for",       TokenType::kwFor },
-      { "foreach",   TokenType::kwForeach },
-      { "in",        TokenType::kwIn },
-      { "step",      TokenType::kwStep },
-      { "while",     TokenType::kwWhile },
-      { "break",     TokenType::kwBreak },
-      { "continue",  TokenType::kwContinue },
-      { "return",    TokenType::kwReturn },
-      { "is",        TokenType::kwIs },
-      { "when",      TokenType::kwWhen },
-      { "where",     TokenType::kwWhere },
-      { "assumed",   TokenType::kwAssumed },
-      
-      { "and",       TokenType::kwAnd },
-      { "or",        TokenType::kwOr },
-      { "not",       TokenType::kwNot },
-   
-      { "every",     TokenType::kwEvery },
-      { "after",     TokenType::kwAfter },
-      { "during",    TokenType::kwDuring },
-      { "wait",      TokenType::kwWait },
-   
-      { "use",       TokenType::kwUse },
-      { "using",     TokenType::kwUsing },
-      { "with",      TokenType::kwWith },
-      { "attribute", TokenType::kwAttribute },
-      { "as",        TokenType::kwAs },
-      { "realm",     TokenType::kwRealm },
+        /* ===============================
+           Keywords – access
+           =============================== */
+        kwPublic,
+        kwPrivate,
+        kwProtected,
+        kwSuper,
+        kwSelf,
 
-      { "public",    TokenType::kwPublic },
-      { "private",   TokenType::kwPrivate },
-      { "protected", TokenType::kwProtected },
-      { "super",     TokenType::kwSuper },
-      { "self",      TokenType::kwSelf },
+        /* ===============================
+           Keywords – binding / modules
+           =============================== */
+        kwAsync,
+        kwAwait,
+        kwSpawn,
+        kwDetach,
+        kwCoroutine,
+        kwYield,
+        kwThread,
+        kwLoop,
 
-      { "async",     TokenType::kwAsync },
-      { "await",     TokenType::kwAwait },
-      { "spawn",     TokenType::kwSpawn },
-      { "detach",    TokenType::kwDetach },
-      { "coroutine", TokenType::kwCoroutine },
-      { "yield",     TokenType::kwYield },
-      { "thread",    TokenType::kwThread },
-      { "loop",      TokenType::kwLoop },
-      
-      { "system",    TokenType::kwSystem },
-      { "program",   TokenType::kwProgram },
-      { "application", TokenType::kwApplication },
-   };
+        /* ===============================
+           Keywords – app
+           =============================== */
+        kwSystem,
+        kwProgram,
+        kwApplication,
 
-   std::string_view tokenTypeToString(TokenType type);
+        /* ===============================
+           Arrays
+           =============================== */
+        StaticArray,  // [i32, 5]
+        DynamicArray, // i32[]
 
-   struct Token
-   {
-      TokenType type = TokenType::invalid;
-      std::string value;
-      common::Location loc;
-      bool isUnicodeString = false;
+        /* ===============================
+           Operators – arithmetic
+           =============================== */
+        opPlus,      // +
+        opMinus,     // -
+        opStar,      // *
+        opSlash,     // /
+        opPercent,   // %
+        opIncrement, // ++
+        opDecrement, // --
 
-      [[nodiscard]] static Token invalid();
-      
-      [[nodiscard]] bool isValid() const;
-      [[nodiscard]] bool isKeyword() const;
-      [[nodiscard]] bool isOperator() const;
-      [[nodiscard]] bool isAssignment() const;
-      [[nodiscard]] bool isUnary() const;
-      [[nodiscard]] bool isSymbol() const;
-      [[nodiscard]] bool isIdentifier() const;
-      [[nodiscard]] bool isType() const;
-      [[nodiscard]] bool isTypeDeclaration() const;
-      [[nodiscard]] bool isLiteral() const;
-      [[nodiscard]] bool isComparison() const;
-   };
-   
+        /* ===============================
+           Operators – assignment
+           =============================== */
+        opAssign,        // =
+        opPlusAssign,    // +=
+        opMinusAssign,   // -=
+        opStarAssign,    // *=
+        opSlashAssign,   // /=
+        opPercentAssign, // %=
+
+        /* ===============================
+           Operators – comparison
+           =============================== */
+        opEqual,        // ==
+        opNotEqual,     // !=
+        opLess,         // <
+        opLessEqual,    // <=
+        opGreater,      // >
+        opGreaterEqual, // >=
+
+        /* ===============================
+           Operators – bitwise
+           =============================== */
+        opBitAnd,     // &
+        opBitOr,      // |
+        opBitXor,     // ^
+        opBitNot,     // ~
+        opShiftLeft,  // <<
+        opShiftRight, // >>
+
+        /* ===============================
+           Operators – bitwise assign
+           =============================== */
+        opBitAndAssign,     // &=
+        opBitOrAssign,      // |=
+        opBitXorAssign,     // ^=
+        opBitNotAssign,     // ~=
+        opShiftLeftAssign,  // <<=
+        opShiftRightAssign, // >>=
+
+        /* ===============================
+           Operators – bitwise assign
+           =============================== */
+        opLogicalNot, // !
+        opLogicalAnd, // &&
+        opLogicalOr,  // ||
+
+        /* ===============================
+           Operators – data flow
+           =============================== */
+        opFlowRight, // |>
+        opFlowLeft,  // <|
+
+        /* ===============================
+           Operators – misc
+           =============================== */
+        opArrow,    // ->
+        opFatArrow, // =>
+        opQuestion, // ?
+        opColon,    // :
+        opScope,    // ::
+        opDot,      // .
+
+        /* ===============================
+           Operators – range
+           =============================== */
+
+        opRangeInclusive, // ...
+        opRangeExclusive, // ..<
+
+        /* ===============================
+           Symbols
+           =============================== */
+        atSign, // @
+        dollar, // $
+
+        /* ===============================
+           Delimiters
+           =============================== */
+        leftParen,    // (
+        rightParen,   // )
+        leftBrace,    // {
+        rightBrace,   // }
+        leftBracket,  // [
+        rightBracket, // ]
+
+        comma,     // ,
+        semicolon, // ;
+        newline    // statement boundary
+    };
+
+    /* ===============================
+    Keywords
+    =============================== */
+    inline const std::unordered_map<std::string_view, TokenType> keywordMap = {
+        {"fn", TokenType::kwFn},
+        {"let", TokenType::kwLet},
+        {"mut", TokenType::kwMut},
+        {"const", TokenType::kwConst},
+        {"type", TokenType::kwType},
+        {"ref", TokenType::kwRef},
+        {"view", TokenType::kwView},
+        {"deref", TokenType::kwDeref},
+        {"fit", TokenType::kwFit},
+        {"enum", TokenType::kwEnum},
+        {"flag", TokenType::kwFlag},
+        {"flagset", TokenType::kwFlagset},
+
+        {"i8", TokenType::kwI8},
+        {"i16", TokenType::kwI16},
+        {"i32", TokenType::kwI32},
+        {"i64", TokenType::kwI64},
+        {"u8", TokenType::kwU8},
+        {"u16", TokenType::kwU16},
+        {"u32", TokenType::kwU32},
+        {"u64", TokenType::kwU64},
+        {"f32", TokenType::kwF32},
+        {"f64", TokenType::kwF64},
+        {"isize", TokenType::kwIsize},
+        {"usize", TokenType::kwUsize},
+        {"byte", TokenType::kwByte},
+        {"bit", TokenType::kwBit},
+        {"bool", TokenType::kwBool},
+        {"char", TokenType::kwChar},
+        {"uchar", TokenType::kwUchar},
+        {"string", TokenType::kwString},
+        {"text", TokenType::kwText},
+        {"any", TokenType::kwAny},
+        {"opaque", TokenType::kwOpaque},
+        {"component", TokenType::kwComponent},
+        {"object", TokenType::kwObject},
+        {"interface", TokenType::kwInterface},
+        {"extension", TokenType::kwExtension},
+        {"void", TokenType::kwVoid},
+
+        {"true", TokenType::kwTrue},
+        {"false", TokenType::kwFalse},
+        {"null", TokenType::kwNull},
+
+        {"if", TokenType::kwIf},
+        {"else", TokenType::kwElse},
+        {"match", TokenType::kwMatch},
+        {"for", TokenType::kwFor},
+        {"foreach", TokenType::kwForeach},
+        {"in", TokenType::kwIn},
+        {"step", TokenType::kwStep},
+        {"while", TokenType::kwWhile},
+        {"break", TokenType::kwBreak},
+        {"continue", TokenType::kwContinue},
+        {"return", TokenType::kwReturn},
+        {"is", TokenType::kwIs},
+        {"when", TokenType::kwWhen},
+        {"where", TokenType::kwWhere},
+        {"assumed", TokenType::kwAssumed},
+
+        {"and", TokenType::kwAnd},
+        {"or", TokenType::kwOr},
+        {"not", TokenType::kwNot},
+
+        {"every", TokenType::kwEvery},
+        {"after", TokenType::kwAfter},
+        {"during", TokenType::kwDuring},
+        {"wait", TokenType::kwWait},
+
+        {"use", TokenType::kwUse},
+        {"using", TokenType::kwUsing},
+        {"with", TokenType::kwWith},
+        {"attribute", TokenType::kwAttribute},
+        {"as", TokenType::kwAs},
+        {"realm", TokenType::kwRealm},
+
+        {"public", TokenType::kwPublic},
+        {"private", TokenType::kwPrivate},
+        {"protected", TokenType::kwProtected},
+        {"super", TokenType::kwSuper},
+        {"self", TokenType::kwSelf},
+
+        {"async", TokenType::kwAsync},
+        {"await", TokenType::kwAwait},
+        {"spawn", TokenType::kwSpawn},
+        {"detach", TokenType::kwDetach},
+        {"coroutine", TokenType::kwCoroutine},
+        {"yield", TokenType::kwYield},
+        {"thread", TokenType::kwThread},
+        {"loop", TokenType::kwLoop},
+
+        {"system", TokenType::kwSystem},
+        {"program", TokenType::kwProgram},
+        {"application", TokenType::kwApplication},
+    };
+
+    std::string_view tokenTypeToString(TokenType type);
+
+    struct Token
+    {
+        TokenType type = TokenType::invalid;
+        std::string value;
+        common::Location loc;
+        bool isUnicodeString = false;
+
+        [[nodiscard]] static Token invalid();
+
+        [[nodiscard]] bool isValid() const;
+        [[nodiscard]] bool isKeyword() const;
+        [[nodiscard]] bool isOperator() const;
+        [[nodiscard]] bool isAssignment() const;
+        [[nodiscard]] bool isUnary() const;
+        [[nodiscard]] bool isSymbol() const;
+        [[nodiscard]] bool isIdentifier() const;
+        [[nodiscard]] bool isType() const;
+        [[nodiscard]] bool isTypeDeclaration() const;
+        [[nodiscard]] bool isLiteral() const;
+        [[nodiscard]] bool isComparison() const;
+    };
+
 } // namespace wio

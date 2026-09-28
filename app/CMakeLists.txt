@@ -1573,6 +1573,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_increment_decrement_run
+        "${CMAKE_SOURCE_DIR}/tests/increment_decrement_run.wio"
+        "increment-decrement-ok"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_contextual_keyword_identifiers_run
         "${CMAKE_SOURCE_DIR}/tests/contextual_keyword_identifiers_run.wio"
         "Contextual keyword identifiers: ok"

@@ -462,8 +462,7 @@ namespace wio
             }
             else
             {
-                throw InvalidNumberError(("Unknown literal suffix: '" + std::string(suffix) + "'").c_str(),
-                                         location_);
+                throw InvalidNumberError(("Unknown literal suffix: '" + std::string(suffix) + "'").c_str(), location_);
             }
         }
 
@@ -516,10 +515,17 @@ namespace wio
         switch (first)
         {
         case '+':
-            match('=') ? accept(TokenType::opPlusAssign, 1) : accept(TokenType::opPlus);
+            if (match('+'))
+                accept(TokenType::opIncrement, 1);
+            else if (match('='))
+                accept(TokenType::opPlusAssign, 1);
+            else
+                accept(TokenType::opPlus);
             break;
         case '-':
-            if (match('='))
+            if (match('-'))
+                accept(TokenType::opDecrement, 1);
+            else if (match('='))
                 accept(TokenType::opMinusAssign, 1);
             else if (match('>'))
                 accept(TokenType::opArrow, 1);

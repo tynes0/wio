@@ -3075,15 +3075,14 @@ namespace wio::wir::typed
                 const TypeId parameterType = mapType(functionType->paramTypes[index], parameter.name.Get());
                 const ValueOwnership parameterOwnership = ownershipForType(parameterType);
                 const ValueId value{state.nextValue++};
-                function.parameters.push_back(Parameter{
-                    .id = value,
-                    .name = parameterSymbol->name,
-                    .type = parameterType,
-                    .ownership = parameterOwnership,
-                    .borrowLifetime = parameterOwnership == ValueOwnership::Borrowed
-                                          ? BorrowLifetime::Caller
-                                          : BorrowLifetime::None,
-                    .source = SourceSpan::at(parameter.name->location())});
+                function.parameters.push_back(Parameter{.id = value,
+                                                        .name = parameterSymbol->name,
+                                                        .type = parameterType,
+                                                        .ownership = parameterOwnership,
+                                                        .borrowLifetime = parameterOwnership == ValueOwnership::Borrowed
+                                                                              ? BorrowLifetime::Caller
+                                                                              : BorrowLifetime::None,
+                                                        .source = SourceSpan::at(parameter.name->location())});
                 rememberOwnership(state, value, parameterOwnership);
                 const Type* parameterTypeInfo = result_.module_.types.tryGet(parameterType);
                 if (function.isExtension && index == 0)
@@ -4339,6 +4338,60 @@ namespace wio::wir::typed
                     return emitLoad(place, mapType(expression->refType.Lock(), expression.Get()), expression.Get(),
                                     state);
                 }
+                if (unary->op.type == TokenType::opIncrement || unary->op.type == TokenType::opDecrement)
+                {
+                    const ValueId place = buildPlace(unary->operand, true, state);
+                    const TypeId placeTypeId = emittedValueType(place, state);
+                    const Type* placeType = result_.module_.types.tryGet(placeTypeId);
+                    if (!place || !placeType || placeType->kind != TypeKind::Reference ||
+                        placeType->arguments.size() != 1)
+                    {
+                        report("WIR2357", "Increment/decrement operand did not lower to a mutable place.",
+                               expression.Get());
+                        return {};
+                    }
+
+                    const TypeId valueType = placeType->arguments.front();
+                    const Type* valueTypeInfo = result_.module_.types.tryGet(valueType);
+                    Literal one;
+                    const auto numeric = valueTypeInfo ? numericTypeInfo(valueTypeInfo->kind) : std::nullopt;
+                    if (!numeric)
+                    {
+                        report("WIR2358", "Increment/decrement requires a representable numeric WIR type.",
+                               expression.Get());
+                        return {};
+                    }
+                    if (numeric->isFloat)
+                        one = 1.0;
+                    else if (numeric->isSigned)
+                        one = std::int64_t{1};
+                    else
+                        one = std::uint64_t{1};
+
+                    const ValueId previous = emitLoad(place, valueType, unary->operand.Get(), state);
+                    const ValueId unit = appendValue(Instruction{.opcode = Opcode::Constant,
+                                                                 .resultType = valueType,
+                                                                 .literal = std::move(one),
+                                                                 .source = SourceSpan::at(expression->location())});
+                    const ValueId updated{state.nextValue++};
+                    currentBlock(state).instructions.push_back(Instruction{
+                        .opcode = Opcode::Binary,
+                        .result = updated,
+                        .resultType = valueType,
+                        .operands = {previous, unit},
+                        .binaryOperator =
+                            unary->op.type == TokenType::opIncrement ? BinaryOperator::Add : BinaryOperator::Subtract,
+                        .resultOwnership = ValueOwnership::Trivial,
+                        .source = SourceSpan::at(expression->location())});
+                    rememberOwnership(state, updated, ValueOwnership::Trivial);
+                    currentBlock(state).instructions.push_back(
+                        Instruction{.opcode = Opcode::Store,
+                                    .operands = {place, updated},
+                                    .source = SourceSpan::at(expression->location())});
+                    return unary->opType == UnaryExpression::UnaryOperatorType::Prefix ? updated : previous;
+                }
+                if (unary->op.type == TokenType::opPlus)
+                    return buildAutoReadableExpression(unary->operand, state);
                 if (unary->operatorDispatchKind != OperatorDispatchKind::None)
                     return buildOverloadedOperator(*unary, unary->operatorDispatchKind, unary->overloadFunctionType,
                                                    {unary->operand}, state);
@@ -4439,13 +4492,24 @@ namespace wio::wir::typed
                 const TypeId expressionType = mapExpressionType(expression, expression.Get());
                 const Type* expressionTypeInfo = result_.module_.types.tryGet(expressionType);
                 const bool numericResult = expressionTypeInfo && isNumericType(expressionTypeInfo->kind);
-                const ValueId left = numericResult ? buildExpressionAs(binary->left, expressionType, state)
+                const TypeId leftReadableType = readableType(binary->left);
+                const TypeId rightReadableType = readableType(binary->right);
+                const Type* leftTypeInfo = result_.module_.types.tryGet(leftReadableType);
+                const Type* rightTypeInfo = result_.module_.types.tryGet(rightReadableType);
+                TypeId commonNumericType;
+                if (leftTypeInfo && rightTypeInfo)
+                {
+                    if (const auto commonKind = commonNumericTypeKind(leftTypeInfo->kind, rightTypeInfo->kind))
+                        commonNumericType = result_.module_.types.intern(Type{.kind = *commonKind});
+                }
+                const TypeId operandType = numericResult ? expressionType : commonNumericType;
+                const ValueId left = operandType ? buildExpressionAs(binary->left, operandType, state)
                                      : leftLiteral && !rightLiteral
-                                         ? buildExpressionAs(binary->left, readableType(binary->right), state)
+                                         ? buildExpressionAs(binary->left, rightReadableType, state)
                                          : buildAutoReadableExpression(binary->left, state);
-                const ValueId right = numericResult ? buildExpressionAs(binary->right, expressionType, state)
+                const ValueId right = operandType ? buildExpressionAs(binary->right, operandType, state)
                                       : rightLiteral && !leftLiteral
-                                          ? buildExpressionAs(binary->right, readableType(binary->left), state)
+                                          ? buildExpressionAs(binary->right, leftReadableType, state)
                                           : buildAutoReadableExpression(binary->right, state);
                 if (!op || !left || !right)
                 {
@@ -4913,29 +4977,35 @@ namespace wio::wir::typed
                     return {};
                 }
                 const Function* calleeFunction = findFunction(functionIt->second);
-                if (calleeFunction && calleeFunction->isMethod && state.selfValue &&
-                    !isNativeFunction(functionIt->second))
+                TypeId calleeOwnerType =
+                    calleeFunction && calleeFunction->isMethod ? calleeFunction->ownerType : TypeId{};
+                if (!calleeOwnerType && functionIt->second.value() < declarations_.size())
                 {
-                    const std::optional<MethodLayout> method =
-                        findMethodLayout(calleeFunction->ownerType, calleeSymbol);
-                    const Type* owner = result_.module_.types.tryGet(calleeFunction->ownerType);
+                    const DeclarationInfo& indexedDeclaration = declarations_[functionIt->second.value()];
+                    if (indexedDeclaration.ownerType)
+                        calleeOwnerType = mapType(indexedDeclaration.ownerType, expression.Get());
+                }
+                if (calleeOwnerType && state.selfValue && !isNativeFunction(functionIt->second))
+                {
+                    const std::optional<MethodLayout> method = findMethodLayout(calleeOwnerType, calleeSymbol);
+                    const Type* owner = result_.module_.types.tryGet(calleeOwnerType);
                     if (!method || !owner)
                     {
                         report("WIR2362", "Implicit self method call is missing its canonical owner slot.",
                                expression.Get());
                         return {};
                     }
-                    Instruction instruction{
-                        .opcode = owner->nominalKind == NominalKind::Interface ? Opcode::InterfaceCall
-                                  : owner->nominalKind == NominalKind::Object  ? Opcode::VirtualCall
-                                                                               : Opcode::MethodCall,
-                        .operands = {state.selfValue},
-                        .callee = functionIt->second,
-                        .selector = method->name,
-                        .projectionIndex = method->slot,
-                        .signatureTypes = {referenceType(calleeFunction->ownerType, method->receiverMutable)},
-                        .targetType = calleeFunction->ownerType,
-                        .source = SourceSpan::at(expression->location())};
+                    Instruction instruction{.opcode = owner->nominalKind == NominalKind::Interface
+                                                          ? Opcode::InterfaceCall
+                                                      : owner->nominalKind == NominalKind::Object ? Opcode::VirtualCall
+                                                                                                  : Opcode::MethodCall,
+                                            .operands = {state.selfValue},
+                                            .callee = functionIt->second,
+                                            .selector = method->name,
+                                            .projectionIndex = method->slot,
+                                            .signatureTypes = {referenceType(calleeOwnerType, method->receiverMutable)},
+                                            .targetType = calleeOwnerType,
+                                            .source = SourceSpan::at(expression->location())};
                     for (std::size_t index = 0; index < call->arguments.size(); ++index)
                     {
                         const auto& argument = call->arguments[index];
@@ -7087,7 +7157,8 @@ namespace wio::wir::typed
                 return true;
             }
             if (const auto* unary = expression->as<UnaryExpression>())
-                return isSideEffectFree(unary->operand);
+                return unary->op.type != TokenType::opIncrement && unary->op.type != TokenType::opDecrement &&
+                       isSideEffectFree(unary->operand);
             if (const auto* binary = expression->as<BinaryExpression>())
                 return isSideEffectFree(binary->left) && isSideEffectFree(binary->right);
             if (const auto* conditional = expression->as<ConditionalExpression>())
@@ -7189,6 +7260,7 @@ namespace wio::wir::typed
             case TypeKind::ISize:
                 return NumericTypeInfo{64, true, false};
             case TypeKind::U8:
+            case TypeKind::Byte:
                 return NumericTypeInfo{8, false, false};
             case TypeKind::U16:
                 return NumericTypeInfo{16, false, false};
@@ -7204,6 +7276,22 @@ namespace wio::wir::typed
             default:
                 return std::nullopt;
             }
+        }
+
+        static std::optional<TypeKind> commonNumericTypeKind(const TypeKind left, const TypeKind right)
+        {
+            const auto lhs = numericTypeInfo(left);
+            const auto rhs = numericTypeInfo(right);
+            if (!lhs || !rhs)
+                return std::nullopt;
+            if (left == right)
+                return left;
+            if (lhs->isFloat || rhs->isFloat)
+                return left == TypeKind::F64 || right == TypeKind::F64 ? TypeKind::F64 : TypeKind::F32;
+            if (lhs->isSigned == rhs->isSigned)
+                return lhs->bits >= rhs->bits ? left : right;
+            const bool leftIsSelected = lhs->isSigned ? lhs->bits > rhs->bits : rhs->bits <= lhs->bits;
+            return leftIsSelected ? left : right;
         }
 
         static bool isImplicitNumericConversion(const TypeKind sourceKind, const TypeKind destinationKind)
