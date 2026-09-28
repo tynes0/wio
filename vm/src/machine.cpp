@@ -14,6 +14,14 @@
 
 namespace wio::vm
 {
+    class PlaceStorage final
+    {
+    public:
+        Value value;
+        bool initialized = false;
+        bool mutableValue = true;
+    };
+
     namespace
     {
         // These values are part of the pinned bytecode semantic-enum ABI.
@@ -70,6 +78,7 @@ namespace wio::vm
             const bytecode::Block* block = nullptr;
             std::size_t instruction = 0;
             std::vector<Register> registers;
+            std::vector<std::unique_ptr<PlaceStorage>> localPlaces;
             std::uint32_t callerResult = bytecode::InvalidIndex;
         };
 
@@ -223,6 +232,7 @@ namespace wio::vm
         const bytecode::Module* module = nullptr;
         ExecutionError loadError;
         std::vector<FunctionPlan> functions;
+        std::vector<std::unique_ptr<PlaceStorage>> globals;
         bool valid = false;
     };
 
@@ -264,6 +274,15 @@ namespace wio::vm
             for (const bytecode::Block& block : function.blocks)
                 plan.blocks.emplace(block.id, &block);
         }
+        program_->globals.reserve(module.globals.size());
+        for (const bytecode::Global& global : module.globals)
+        {
+            auto storage = std::make_unique<PlaceStorage>();
+            storage->value = defaultValue(module.types[global.type].kind);
+            storage->initialized = !storage->value.isEmpty();
+            storage->mutableValue = (global.flags & 0x01u) != 0;
+            program_->globals.push_back(std::move(storage));
+        }
         program_->valid = true;
     }
 
@@ -271,7 +290,7 @@ namespace wio::vm
     Machine::Machine(Machine&&) noexcept = default;
     Machine& Machine::operator=(Machine&&) noexcept = default;
 
-    ExecutionResult Machine::invoke(const std::uint32_t functionId, const std::span<const Value> arguments) const
+    ExecutionResult Machine::invoke(const std::uint32_t functionId, const std::span<const Value> arguments)
     {
         if (!program_ || !program_->module)
             return ExecutionResult::failure({"WVM1000", "The virtual machine has no loaded module"});
@@ -339,6 +358,8 @@ namespace wio::vm
                 return id < frame.registers.size() && frame.registers[id].initialized ? &frame.registers[id].value
                                                                                       : nullptr;
             };
+            const auto readRegister = [&](const std::uint32_t id) -> Register*
+            { return id < frame.registers.size() && frame.registers[id].initialized ? &frame.registers[id] : nullptr; };
             const auto write = [&](const std::uint32_t id, Value value) -> bool
             {
                 if (id >= frame.registers.size())
@@ -606,6 +627,103 @@ namespace wio::vm
                 else
                     return fail("WVM1027", "Conversion target is not a numeric bytecode type");
                 write(instruction.result, std::move(converted));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::LocalPlace)
+            {
+                auto storage = std::make_unique<PlaceStorage>();
+                storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
+                PlaceStorage* const pointer = storage.get();
+                frame.localPlaces.push_back(std::move(storage));
+                if (!write(instruction.result, Value::place(pointer)))
+                    return fail("WVM1038", "Local place result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::GlobalPlace)
+            {
+                if (instruction.global >= program_->globals.size() ||
+                    !write(instruction.result, Value::place(program_->globals[instruction.global].get())))
+                    return fail("WVM1039", "Global place id or result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::PlaceInit || instruction.opcode == bytecode::Opcode::Store ||
+                instruction.opcode == bytecode::Opcode::Replace)
+            {
+                const Value* placeValue = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* source = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
+                if (!place || !source)
+                    return fail("WVM1040", "Place write requires an available place and source value");
+                if (instruction.opcode == bytecode::Opcode::PlaceInit && place->initialized)
+                    return fail("WVM1041", "Place can only be initialized once");
+                if (instruction.opcode != bytecode::Opcode::PlaceInit && (!place->initialized || !place->mutableValue))
+                    return fail("WVM1042", "Store requires an initialized mutable place");
+                place->value = *source;
+                place->initialized = true;
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Load)
+            {
+                const Value* placeValue = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
+                if (!place || !place->initialized)
+                    return fail("WVM1043", "Load requires an initialized place");
+                write(instruction.result, place->value);
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Borrow)
+            {
+                const Value* place = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                if (!place || place->kind() != Value::Kind::Place)
+                    return fail("WVM1044", "Borrow requires an available place value");
+                write(instruction.result, *place);
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::CopyValue)
+            {
+                const Value* source = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                if (!source)
+                    return fail("WVM1045", "Copy/retain reads an unavailable value");
+                write(instruction.result, *source);
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::MoveValue)
+            {
+                const Value* placeValue = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
+                if (!place || !place->initialized)
+                    return fail("WVM1046", "Move requires an initialized place");
+                write(instruction.result, std::move(place->value));
+                place->initialized = false;
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::DropValue)
+            {
+                Register* const source =
+                    instruction.operands.size() == 1 ? readRegister(instruction.operands[0]) : nullptr;
+                if (!source)
+                    return fail("WVM1047", "Value cleanup reads an unavailable value");
+                source->value = {};
+                source->initialized = false;
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::DropPlace)
+            {
+                const Value* placeValue = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
+                if (!place || !place->initialized)
+                    return fail("WVM1048", "Place cleanup requires an initialized place");
+                place->value = {};
+                place->initialized = false;
                 ++frame.instruction;
                 continue;
             }

@@ -65,6 +65,7 @@ namespace
     {
         constexpr std::uint32_t Bool = 1;
         constexpr std::uint32_t I32 = 2;
+        constexpr std::uint32_t RefI32 = 3;
 
         bytecode::Module module;
         module.abiDescriptorVersion = 1;
@@ -73,10 +74,12 @@ namespace
                             bytecode::Constant{.kind = bytecode::ConstantKind::SignedInteger, .bits = 0},
                             bytecode::Constant{.kind = bytecode::ConstantKind::SignedInteger, .bits = 1}};
         module.types = {
-            bytecode::Type{.kind = 1}, // void
-            bytecode::Type{.kind = 2}, // bool
-            bytecode::Type{.kind = 5}  // i32
+            bytecode::Type{.kind = 1},                                     // void
+            bytecode::Type{.kind = 2},                                     // bool
+            bytecode::Type{.kind = 5},                                     // i32
+            bytecode::Type{.kind = 29, .arguments = {I32}, .flags = 0x01u} // mut ref i32
         };
+        module.globals = {bytecode::Global{.id = 0, .type = I32, .flags = 0x01u}};
 
         bytecode::Function addOne;
         addOne.id = 0;
@@ -179,6 +182,81 @@ namespace
         endlessEntry.instructions = {std::move(cycle)};
         endless.blocks.push_back(std::move(endlessEntry));
         module.functions.push_back(std::move(endless));
+
+        bytecode::Function localPlace;
+        localPlace.id = 6;
+        localPlace.returnType = I32;
+        localPlace.parameters = {parameter(0, I32)};
+        bytecode::Block localEntry;
+        localEntry.id = 0;
+        bytecode::Instruction local = instruction(bytecode::Opcode::LocalPlace);
+        local.result = 1;
+        local.resultType = RefI32;
+        bytecode::Instruction initialize = instruction(bytecode::Opcode::PlaceInit);
+        initialize.operands = {1, 0};
+        bytecode::Instruction load = instruction(bytecode::Opcode::Load);
+        load.result = 2;
+        load.resultType = I32;
+        load.operands = {1};
+        localEntry.instructions = {std::move(local), std::move(initialize), std::move(load), constant(3, I32, 2),
+                                   binary(4, I32, 2, 3, 0)};
+        bytecode::Instruction store = instruction(bytecode::Opcode::Store);
+        store.operands = {1, 4};
+        localEntry.instructions.push_back(std::move(store));
+        bytecode::Instruction finalLoad = instruction(bytecode::Opcode::Load);
+        finalLoad.result = 5;
+        finalLoad.resultType = I32;
+        finalLoad.operands = {1};
+        localEntry.instructions.push_back(std::move(finalLoad));
+        localEntry.instructions.push_back(returnValue(5));
+        localPlace.blocks.push_back(std::move(localEntry));
+        module.functions.push_back(std::move(localPlace));
+
+        bytecode::Function movePlace;
+        movePlace.id = 7;
+        movePlace.returnType = I32;
+        movePlace.parameters = {parameter(0, I32)};
+        bytecode::Block moveEntry;
+        moveEntry.id = 0;
+        bytecode::Instruction moveLocal = instruction(bytecode::Opcode::LocalPlace);
+        moveLocal.result = 1;
+        moveLocal.resultType = RefI32;
+        bytecode::Instruction moveInitialize = instruction(bytecode::Opcode::PlaceInit);
+        moveInitialize.operands = {1, 0};
+        bytecode::Instruction move = instruction(bytecode::Opcode::MoveValue);
+        move.result = 2;
+        move.resultType = I32;
+        move.operands = {1};
+        moveEntry.instructions = {std::move(moveLocal), std::move(moveInitialize), std::move(move), returnValue(2)};
+        movePlace.blocks.push_back(std::move(moveEntry));
+        module.functions.push_back(std::move(movePlace));
+
+        bytecode::Function incrementGlobal;
+        incrementGlobal.id = 8;
+        incrementGlobal.returnType = I32;
+        bytecode::Block globalEntry;
+        globalEntry.id = 0;
+        bytecode::Instruction global = instruction(bytecode::Opcode::GlobalPlace);
+        global.result = 0;
+        global.resultType = RefI32;
+        global.global = 0;
+        bytecode::Instruction globalLoad = instruction(bytecode::Opcode::Load);
+        globalLoad.result = 1;
+        globalLoad.resultType = I32;
+        globalLoad.operands = {0};
+        globalEntry.instructions = {std::move(global), std::move(globalLoad), constant(2, I32, 2),
+                                    binary(3, I32, 1, 2, 0)};
+        bytecode::Instruction globalStore = instruction(bytecode::Opcode::Store);
+        globalStore.operands = {0, 3};
+        globalEntry.instructions.push_back(std::move(globalStore));
+        bytecode::Instruction reloaded = instruction(bytecode::Opcode::Load);
+        reloaded.result = 4;
+        reloaded.resultType = I32;
+        reloaded.operands = {0};
+        globalEntry.instructions.push_back(std::move(reloaded));
+        globalEntry.instructions.push_back(returnValue(4));
+        incrementGlobal.blocks.push_back(std::move(globalEntry));
+        module.functions.push_back(std::move(incrementGlobal));
         return module;
     }
 } // namespace
@@ -192,7 +270,7 @@ int main()
     if (!decoded.succeeded())
         return 1;
 
-    const vm::Machine machine{decoded.module};
+    vm::Machine machine{decoded.module};
     const vm::Value five = vm::Value::signedInteger(5);
     const vm::ExecutionResult composed = machine.invoke(2, std::span{&five, 1});
     ok &= expect(composed.succeeded(), "Nested calls and loop CFG must execute");
@@ -210,7 +288,7 @@ int main()
     ok &= expect(!unsupported.succeeded() && unsupported.error().code == "WVM1036",
                  "Unsupported opcodes must fail explicitly instead of silently misexecuting");
 
-    const vm::Machine bounded{decoded.module, vm::MachineOptions{.instructionLimit = 8}};
+    vm::Machine bounded{decoded.module, vm::MachineOptions{.instructionLimit = 8}};
     const vm::ExecutionResult endless = bounded.invoke(5);
     ok &= expect(!endless.succeeded() && endless.error().code == "WVM1008",
                  "Instruction budget must stop non-terminating bytecode");
@@ -218,5 +296,17 @@ int main()
     const vm::ExecutionResult wrongArity = machine.invoke(0);
     ok &=
         expect(!wrongArity.succeeded() && wrongArity.error().code == "WVM1004", "Call boundaries must validate arity");
+
+    const vm::ExecutionResult local = machine.invoke(6, std::span{&five, 1});
+    ok &= expect(local.succeeded() && local.value().asSignedInteger() == 6,
+                 "Local place init/load/store must preserve mutable scalar storage");
+    const vm::ExecutionResult moved = machine.invoke(7, std::span{&five, 1});
+    ok &= expect(moved.succeeded() && moved.value().asSignedInteger() == 5,
+                 "Move-value must transfer an initialized place into an SSA result");
+    const vm::ExecutionResult firstGlobal = machine.invoke(8);
+    const vm::ExecutionResult secondGlobal = machine.invoke(8);
+    ok &= expect(firstGlobal.succeeded() && secondGlobal.succeeded() && firstGlobal.value().asSignedInteger() == 1 &&
+                     secondGlobal.value().asSignedInteger() == 2,
+                 "Global places must persist across invocations on one machine");
     return ok ? 0 : 1;
 }

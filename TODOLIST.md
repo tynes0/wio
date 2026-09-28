@@ -585,10 +585,11 @@ Rider, and CLion are defined in
    block/register indexing, bounded register call frames, direct calls,
    constants/defaults, scalar unary/binary/conversion/range operations, SSA
    block-argument transfer, jumps/conditional jumps/returns, source-aware
-   stable `WVM` diagnostics, and execution/call-depth/register safety budgets.
-   Heap values, places/cleanup, objects/containers, coroutines, stack traces,
-   debugger hooks, and the native bridge remain in the following Sprint 19/20
-   slices.
+   stable `WVM` diagnostics, execution/call-depth/register safety budgets, and
+   mutable local/persistent-global places with init/load/store/replace/borrow/
+   move/copy/drop semantics. Heap values, field/element places, intrusive
+   objects/containers, coroutines, stack traces, debugger hooks, and the native
+   bridge remain in the following Sprint 19/20 slices.
 
 ## P3 - Product Direction
 

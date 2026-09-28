@@ -82,6 +82,18 @@ namespace wio::vm
         return result;
     }
 
+    Value Value::place(PlaceStorage* const storage) noexcept
+    {
+        Value result{Kind::Place};
+        result.scalar_.place = storage;
+        return result;
+    }
+
+    PlaceStorage* Value::asPlace() const noexcept
+    {
+        return kind_ == Kind::Place ? scalar_.place : nullptr;
+    }
+
     std::string_view Value::asString() const noexcept
     {
         return kind_ == Kind::String ? std::string_view{text_.string} : std::string_view{};
@@ -106,6 +118,8 @@ namespace wio::vm
             return scalar_.floating == other.scalar_.floating;
         case Kind::String:
             return text_.string == other.text_.string;
+        case Kind::Place:
+            return scalar_.place == other.scalar_.place;
         }
         return false;
     }

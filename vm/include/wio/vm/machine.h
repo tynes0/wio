@@ -66,7 +66,7 @@ namespace wio::vm
         Machine(const Machine&) = delete;
         Machine& operator=(const Machine&) = delete;
 
-        [[nodiscard]] ExecutionResult invoke(std::uint32_t function, std::span<const Value> arguments = {}) const;
+        [[nodiscard]] ExecutionResult invoke(std::uint32_t function, std::span<const Value> arguments = {});
 
     private:
         struct Program;

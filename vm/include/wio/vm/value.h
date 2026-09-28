@@ -7,6 +7,9 @@
 
 namespace wio::vm
 {
+    class Machine;
+    class PlaceStorage;
+
     class Value final
     {
     public:
@@ -18,7 +21,8 @@ namespace wio::vm
             SignedInteger,
             UnsignedInteger,
             Float64,
-            String
+            String,
+            Place
         };
 
         Value() noexcept = default;
@@ -70,6 +74,7 @@ namespace wio::vm
             std::int64_t signedInteger;
             std::uint64_t unsignedInteger;
             double floating;
+            PlaceStorage* place;
 
             constexpr Scalar() noexcept : unsignedInteger(0)
             {
@@ -90,10 +95,14 @@ namespace wio::vm
         } text_;
 
         explicit Value(Kind kind) noexcept;
+        [[nodiscard]] static Value place(PlaceStorage* storage) noexcept;
+        [[nodiscard]] PlaceStorage* asPlace() const noexcept;
         void destroy() noexcept;
         void copyFrom(const Value& other);
         void moveFrom(Value&& other) noexcept;
 
         Kind kind_ = Kind::Empty;
+
+        friend class Machine;
     };
 } // namespace wio::vm
