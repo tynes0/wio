@@ -226,5 +226,20 @@ int main()
         bytecode::BranchTarget{.block = 999});
     ok &= expect(!bytecode::Verifier{}.verify(malformed).succeeded(),
                  "Verifier must reject branch targets outside the function CFG");
+
+    malformed = module;
+    malformed.functions.front().blocks.front().instructions.pop_back();
+    ok &= expect(!bytecode::Verifier{}.verify(malformed).succeeded(),
+                 "Verifier must reject blocks without a final terminator");
+
+    malformed = module;
+    malformed.functions.front().blocks.front().instructions[1].operands.front() = 999;
+    ok &= expect(!bytecode::Verifier{}.verify(malformed).succeeded(),
+                 "Verifier must reject undefined SSA operands");
+
+    malformed = module;
+    malformed.functions.front().blocks.front().instructions[1].result = 1;
+    ok &= expect(!bytecode::Verifier{}.verify(malformed).succeeded(),
+                 "Verifier must reject duplicate SSA result ids");
     return ok ? 0 : 1;
 }

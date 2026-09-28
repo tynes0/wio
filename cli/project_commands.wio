@@ -139,9 +139,10 @@ realm SelfHostedProject {
             if (emitMode == "cpp") { compileArgs.Push("--emit-cpp"); }
             else if (emitMode == "typed-wir") { compileArgs.Push("--emit-typed-wir"); }
             else if (emitMode == "lowered-wir") { compileArgs.Push("--emit-lowered-wir"); }
+            else if (emitMode == "bytecode") { compileArgs.Push("--emit-bytecode"); }
             else { return Failure<i32>($"Unknown compiler emission mode: ${emitMode}"); }
             if (irOutput != "") {
-                compileArgs.Push("--ir-output");
+                compileArgs.Push(emitMode == "bytecode" ? "--bytecode-output" : "--ir-output");
                 compileArgs.Push(path::AbsoluteFromRaw(info.projectRoot, irOutput));
             }
         }
@@ -204,24 +205,30 @@ realm SelfHostedProject {
         let emitCpp = HasFlag(args, "--emit-cpp");
         let emitTypedWir = HasFlag(args, "--emit-typed-wir");
         let emitLoweredWir = HasFlag(args, "--emit-lowered-wir");
+        let emitBytecode = HasFlag(args, "--emit-bytecode");
         let emitCount = (emitCpp ? 1i32 : 0i32) +
             (emitTypedWir ? 1i32 : 0i32) +
-            (emitLoweredWir ? 1i32 : 0i32);
+            (emitLoweredWir ? 1i32 : 0i32) +
+            (emitBytecode ? 1i32 : 0i32);
         if (emitCount > 1i32) {
-            return Failure<i32>("Choose only one of --emit-cpp, --emit-typed-wir, or --emit-lowered-wir.");
+            return Failure<i32>("Choose only one of --emit-cpp, --emit-typed-wir, --emit-lowered-wir, or --emit-bytecode.");
         }
         let irOutput = OptionValue(args, "--ir-output", "");
-        if (emitCount == 0i32 and irOutput != "") {
+        let bytecodeOutput = OptionValue(args, "--bytecode-output", "");
+        if ((not emitTypedWir and not emitLoweredWir) and irOutput != "") {
             return Failure<i32>("--ir-output requires --emit-typed-wir or --emit-lowered-wir.");
+        }
+        if (not emitBytecode and bytecodeOutput != "") {
+            return Failure<i32>("--bytecode-output requires --emit-bytecode.");
         }
         let emitMode = emitCpp
             ? "cpp"
-            : (emitTypedWir ? "typed-wir" : (emitLoweredWir ? "lowered-wir" : ""));
+            : (emitTypedWir ? "typed-wir" : (emitLoweredWir ? "lowered-wir" : (emitBytecode ? "bytecode" : "")));
         return BuildResolved(
             ResolveInfo?(args),
             HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
             emitMode,
-            irOutput,
+            emitBytecode ? bytecodeOutput : irOutput,
             HasFlag(args, "--no-builtin") or HasFlag(args, "-B"),
             OptionValue(args, "--cpp-backend", "")
         );

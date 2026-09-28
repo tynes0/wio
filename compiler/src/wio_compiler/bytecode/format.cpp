@@ -104,4 +104,76 @@ namespace wio::bytecode
     {
         return opcodeName(opcode) != "unknown";
     }
+
+    bool isTerminator(const Opcode opcode) noexcept
+    {
+        return opcode == Opcode::Return || opcode == Opcode::Jump || opcode == Opcode::CondJump ||
+               opcode == Opcode::CoroutineSuspend || opcode == Opcode::CoroutineComplete ||
+               opcode == Opcode::ResultPropagate || opcode == Opcode::Unreachable;
+    }
+
+    bool producesValue(const Opcode opcode) noexcept
+    {
+        switch (opcode)
+        {
+        case Opcode::Constant:
+        case Opcode::GenericConstant:
+        case Opcode::DefaultValue:
+        case Opcode::Unary:
+        case Opcode::Binary:
+        case Opcode::RangeContains:
+        case Opcode::Convert:
+        case Opcode::Call:
+        case Opcode::NativeInvoke:
+        case Opcode::FunctionReference:
+        case Opcode::ClosureCreate:
+        case Opcode::IndirectCall:
+        case Opcode::ExtensionCall:
+        case Opcode::MethodCall:
+        case Opcode::VirtualCall:
+        case Opcode::InterfaceCall:
+        case Opcode::Upcast:
+        case Opcode::CheckedCast:
+        case Opcode::TypeTest:
+        case Opcode::IdentityEqual:
+        case Opcode::VariantTest:
+        case Opcode::VariantPayload:
+        case Opcode::ArrayLength:
+        case Opcode::ArrayElement:
+        case Opcode::ArrayCreate:
+        case Opcode::ArrayGet:
+        case Opcode::DictionaryCreate:
+        case Opcode::DictionaryGet:
+        case Opcode::DictionaryPlace:
+        case Opcode::Interpolate:
+        case Opcode::EnumConstant:
+        case Opcode::IntrinsicCall:
+        case Opcode::AnyBox:
+        case Opcode::AnyCheckedCast:
+        case Opcode::AnyTypeTest:
+        case Opcode::NullableWrap:
+        case Opcode::NullableUnwrap:
+        case Opcode::IteratorCreate:
+        case Opcode::IteratorHasNext:
+        case Opcode::IteratorValue:
+        case Opcode::ResultIsError:
+        case Opcode::ResultValue:
+        case Opcode::ResultUnwrap:
+        case Opcode::CoroutineResume:
+        case Opcode::GlobalPlace:
+        case Opcode::LocalPlace:
+        case Opcode::Load:
+        case Opcode::FieldPlace:
+        case Opcode::ArrayPlace:
+        case Opcode::Borrow:
+        case Opcode::ConstructComponent:
+        case Opcode::ConstructObject:
+        case Opcode::Retain:
+        case Opcode::CopyValue:
+        case Opcode::MoveValue:
+            return true;
+        default:
+            return false;
+        }
+    }
 } // namespace wio::bytecode

@@ -17,7 +17,8 @@ realm SelfHostedFile {
             "  wio file tokens [FILE] [extra compiler args...]\n",
             "  wio file ast    [FILE] [extra compiler args...]\n",
             "  wio file typed-wir   [FILE] [--ir-output FILE] [extra compiler args...]\n",
-            "  wio file lowered-wir [FILE] [--ir-output FILE] [extra compiler args...]\n\n",
+            "  wio file lowered-wir [FILE] [--ir-output FILE] [extra compiler args...]\n",
+            "  wio file bytecode    [FILE] [--bytecode-output FILE] [extra compiler args...]\n\n",
             "When FILE is omitted, Wio looks for a conventional project entry file and\n",
             "then falls back to the repository playground entry when available.\n"
         ];
@@ -159,6 +160,9 @@ realm SelfHostedFile {
         else if (mode == "lowered-wir") {
             finalArgs.Push("--emit-lowered-wir");
         }
+        else if (mode == "bytecode") {
+            finalArgs.Push("--emit-bytecode");
+        }
 
         if (mode == "run" and not HasOutputOverride(compilerArgs)) {
             let outputRoot = RunOutputRoot(args[0usize], source);
@@ -203,10 +207,10 @@ realm SelfHostedFile {
             return std::Ok<i32>(0);
         }
         if (mode == "run" or mode == "check" or mode == "tokens" or mode == "ast" or
-            mode == "typed-wir" or mode == "lowered-wir") {
+            mode == "typed-wir" or mode == "lowered-wir" or mode == "bytecode") {
             return ExecuteMode(mode, args);
         }
-        let suggestion = SelfHostedCli::Suggest(mode, ["run", "check", "tokens", "ast", "typed-wir", "lowered-wir"]);
+        let suggestion = SelfHostedCli::Suggest(mode, ["run", "check", "tokens", "ast", "typed-wir", "lowered-wir", "bytecode"]);
         mut message = $"Unknown file subcommand: ${mode}";
         if (suggestion != "") {
             message.Append($"\nDid you mean 'wio file ${suggestion}'?");

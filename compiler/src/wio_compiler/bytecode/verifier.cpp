@@ -1,5 +1,7 @@
 #include "wio/bytecode/verifier.h"
 
+#include <algorithm>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace wio::bytecode
@@ -123,10 +125,43 @@ namespace wio::bytecode
             }
 
             std::unordered_set<std::uint32_t> blockIds;
+            std::unordered_map<std::uint32_t, const Block*> blocksById;
             for (const Block& block : function.blocks)
             {
                 if (block.id == InvalidIndex || !blockIds.insert(block.id).second)
                     report("WBC1011", "Block ids must be valid and unique within a function", function.id, block.id);
+                else
+                    blocksById.emplace(block.id, &block);
+            }
+            const bool external = (function.flags & 0x0002u) != 0;
+            if ((external && !function.blocks.empty()) || (!external && function.blocks.empty()))
+                report("WBC1034", "External functions must have no code and defined functions must have code",
+                       function.id);
+
+            std::unordered_map<std::uint32_t, std::uint32_t> valueTypes;
+            auto defineValue = [&](const Parameter& parameter, const std::uint32_t block)
+            {
+                if (parameter.value == InvalidIndex || !validType(parameter.type) ||
+                    !valueTypes.emplace(parameter.value, parameter.type).second)
+                    report("WBC1035", "Function value ids must be valid, typed, and unique", function.id, block);
+                if (!validString(parameter.name))
+                    report("WBC1036", "Function parameter references an invalid name", function.id, block);
+            };
+            for (const Parameter& parameter : function.parameters)
+                defineValue(parameter, InvalidIndex);
+            for (const Block& block : function.blocks)
+            {
+                for (const Parameter& parameter : block.parameters)
+                    defineValue(parameter, block.id);
+                for (const Instruction& instruction : block.instructions)
+                {
+                    if (!producesValue(instruction.opcode))
+                        continue;
+                    if (instruction.result == InvalidIndex || !validType(instruction.resultType) ||
+                        !valueTypes.emplace(instruction.result, instruction.resultType).second)
+                        report("WBC1037", "Value-producing instruction requires a unique typed result", function.id,
+                               block.id);
+                }
             }
             if (function.hasCoroutine)
             {
@@ -146,33 +181,92 @@ namespace wio::bytecode
             }
             for (const Block& block : function.blocks)
             {
+                if (block.instructions.empty())
+                {
+                    report("WBC1038", "Defined bytecode block cannot be empty", function.id, block.id);
+                    continue;
+                }
                 for (std::size_t index = 0; index < block.instructions.size(); ++index)
                 {
                     const Instruction& instruction = block.instructions[index];
+                    const std::uint32_t instructionIndex = static_cast<std::uint32_t>(index);
                     if (!isKnownOpcode(instruction.opcode))
                         report("WBC1012", "Instruction contains an unknown opcode", function.id, block.id,
-                               static_cast<std::uint32_t>(index));
+                               instructionIndex);
                     if (!validType(instruction.resultType) || !validType(instruction.targetType))
                         report("WBC1013", "Instruction references an invalid type id", function.id, block.id,
-                               static_cast<std::uint32_t>(index));
+                               instructionIndex);
                     if (instruction.constant >= module.constants.size())
                         report("WBC1014", "Instruction references an invalid constant id", function.id, block.id,
-                               static_cast<std::uint32_t>(index));
+                               instructionIndex);
                     if (!validString(instruction.selector) || !validString(instruction.specializationKey))
                         report("WBC1015", "Instruction references an invalid string id", function.id, block.id,
-                               static_cast<std::uint32_t>(index));
+                               instructionIndex);
+                    if (isTerminator(instruction.opcode) != (index + 1 == block.instructions.size()))
+                        report("WBC1039", "Every block must end in exactly one final terminator", function.id,
+                               block.id, instructionIndex);
+                    if (producesValue(instruction.opcode) != (instruction.result != InvalidIndex))
+                        report("WBC1040", "Instruction result shape does not match its opcode", function.id, block.id,
+                               instructionIndex);
+                    if (!producesValue(instruction.opcode) && instruction.resultType != InvalidIndex)
+                        report("WBC1041", "Non-value instruction cannot carry a result type", function.id, block.id,
+                               instructionIndex);
+                    if (!instruction.expandedOperands.empty() &&
+                        instruction.expandedOperands.size() != instruction.operands.size())
+                        report("WBC1042", "Pack expansion metadata must align with instruction operands", function.id,
+                               block.id, instructionIndex);
+                    if (instruction.callee != InvalidIndex && !validFunction(instruction.callee))
+                        report("WBC1043", "Instruction references an invalid callee", function.id, block.id,
+                               instructionIndex);
+                    if (instruction.global != InvalidIndex &&
+                        (instruction.global >= module.globals.size() ||
+                         module.globals[instruction.global].id != instruction.global))
+                        report("WBC1044", "Instruction references an invalid global", function.id, block.id,
+                               instructionIndex);
+                    for (const std::uint32_t operand : instruction.operands)
+                    {
+                        if (!valueTypes.contains(operand))
+                            report("WBC1045", "Instruction references an undefined function value", function.id,
+                                   block.id, instructionIndex);
+                    }
                     for (const StringId segment : instruction.stringSegments)
                     {
                         if (!validString(segment))
                             report("WBC1016", "Interpolation segment references an invalid string id", function.id,
-                                   block.id, static_cast<std::uint32_t>(index));
+                                   block.id, instructionIndex);
                     }
                     for (const BranchTarget& target : instruction.targets)
                     {
                         if (!blockIds.contains(target.block))
                             report("WBC1017", "Branch target references a block outside the function", function.id,
-                                   block.id, static_cast<std::uint32_t>(index));
+                                   block.id, instructionIndex);
+                        else
+                        {
+                            const Block& targetBlock = *blocksById.at(target.block);
+                            if (target.arguments.size() != targetBlock.parameters.size())
+                                report("WBC1046", "Branch argument count does not match target parameters",
+                                       function.id, block.id, instructionIndex);
+                            const std::size_t comparable =
+                                (std::min)(target.arguments.size(), targetBlock.parameters.size());
+                            for (std::size_t argumentIndex = 0; argumentIndex < comparable; ++argumentIndex)
+                            {
+                                const auto value = valueTypes.find(target.arguments[argumentIndex]);
+                                if (value == valueTypes.end() || value->second != targetBlock.parameters[argumentIndex].type)
+                                    report("WBC1047", "Branch argument type does not match target parameter",
+                                           function.id, block.id, instructionIndex);
+                            }
+                        }
                     }
+                    const bool validBranchShape =
+                        (instruction.opcode != Opcode::Jump || instruction.targets.size() == 1) &&
+                        (instruction.opcode != Opcode::CondJump ||
+                         (instruction.targets.size() == 2 && instruction.operands.size() == 1)) &&
+                        (instruction.opcode != Opcode::Return || instruction.operands.size() <= 1) &&
+                        (instruction.opcode != Opcode::Unreachable ||
+                         (instruction.operands.empty() && instruction.targets.empty()));
+                    if (!validBranchShape)
+                        report("WBC1048", "Control-flow instruction has an invalid operand or target shape",
+                               function.id, block.id, instructionIndex);
                 }
             }
         }

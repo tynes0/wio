@@ -122,4 +122,6 @@ namespace wio::bytecode
     [[nodiscard]] std::string_view sectionKindName(SectionKind kind) noexcept;
     [[nodiscard]] std::string_view opcodeName(Opcode opcode) noexcept;
     [[nodiscard]] bool isKnownOpcode(Opcode opcode) noexcept;
+    [[nodiscard]] bool isTerminator(Opcode opcode) noexcept;
+    [[nodiscard]] bool producesValue(Opcode opcode) noexcept;
 } // namespace wio::bytecode

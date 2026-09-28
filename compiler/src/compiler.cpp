@@ -36,6 +36,9 @@
 
 #include "wio/codegen/cpp_generator.h"
 #include "wio/codegen/wir_cpp_backend.h"
+#include "wio/bytecode/codec.h"
+#include "wio/bytecode/compiler.h"
+#include "wio/bytecode/verifier.h"
 #include "wio/common/exception.h"
 #include "wio/common/filesystem/filesystem.h"
 #include "wio/common/logger.h"
@@ -580,32 +583,48 @@ namespace wio
         {
             const bool emitTyped = gAppData.flags.get_EmitTypedWir();
             const bool emitLowered = gAppData.flags.get_EmitLoweredWir();
+            const bool emitBytecode = gAppData.flags.get_EmitBytecode();
             const bool emitsWir = emitTyped || emitLowered;
+            const bool emitsIntermediate = emitsWir || emitBytecode;
             const bool hasIrOutput = !gAppData.argParser.GetValuesOf<std::string>("IR-OUTPUT").empty();
+            const bool hasBytecodeOutput =
+                !gAppData.argParser.GetValuesOf<std::string>("BYTECODE-OUTPUT").empty();
 
-            if (emitTyped && emitLowered)
+            if (static_cast<unsigned>(emitTyped) + static_cast<unsigned>(emitLowered) +
+                    static_cast<unsigned>(emitBytecode) >
+                1u)
             {
-                WIO_LOG_FATAL("--emit-typed-wir and --emit-lowered-wir are mutually exclusive.");
+                WIO_LOG_FATAL("--emit-typed-wir, --emit-lowered-wir, and --emit-bytecode are mutually exclusive.");
                 return false;
             }
-            if (emitsWir && gAppData.flags.get_EmitCpp())
+            if (emitsIntermediate && gAppData.flags.get_EmitCpp())
             {
-                WIO_LOG_FATAL("WIR emission cannot be combined with --emit-cpp.");
+                WIO_LOG_FATAL("WIR/bytecode emission cannot be combined with --emit-cpp.");
                 return false;
             }
-            if (emitsWir && gAppData.flags.get_DryRun())
+            if (emitsIntermediate && gAppData.flags.get_DryRun())
             {
-                WIO_LOG_FATAL("WIR emission cannot be combined with --dry-run.");
+                WIO_LOG_FATAL("WIR/bytecode emission cannot be combined with --dry-run.");
                 return false;
             }
-            if (emitsWir && gAppData.flags.get_Run())
+            if (emitsIntermediate && gAppData.flags.get_Run())
             {
-                WIO_LOG_FATAL("WIR emission cannot be combined with --run.");
+                WIO_LOG_FATAL("WIR/bytecode emission cannot be combined with --run.");
                 return false;
             }
             if (!emitsWir && hasIrOutput)
             {
                 WIO_LOG_FATAL("--ir-output requires --emit-typed-wir or --emit-lowered-wir.");
+                return false;
+            }
+            if (!emitBytecode && hasBytecodeOutput)
+            {
+                WIO_LOG_FATAL("--bytecode-output requires --emit-bytecode.");
+                return false;
+            }
+            if (emitBytecode && hasIrOutput)
+            {
+                WIO_LOG_FATAL("--ir-output cannot be combined with --emit-bytecode; use --bytecode-output.");
                 return false;
             }
             return true;
@@ -724,6 +743,71 @@ namespace wio
             }
 
             WIO_LOG_INFO("Generated {} output: {}", outputName, outputPath.generic_string());
+            return EXIT_SUCCESS;
+        }
+
+        int emitBytecode(const Ref<Program>& program, const std::filesystem::path& sourcePath)
+        {
+            common::profiling::Scope emitScope("Bytecode.Emit");
+            const std::vector<std::string> intermediateDirs =
+                gAppData.argParser.GetValuesOf<std::string>("INTERMEDIATE-DIR");
+            const std::filesystem::path root =
+                intermediateDirs.empty()
+                    ? sourcePath.parent_path().make_preferred()
+                    : std::filesystem::absolute(std::filesystem::path(intermediateDirs.front())).make_preferred();
+            const std::vector<std::string> configuredOutputs =
+                gAppData.argParser.GetValuesOf<std::string>("BYTECODE-OUTPUT");
+            std::filesystem::path outputPath;
+            if (configuredOutputs.empty())
+            {
+                outputPath = root / sourcePath.stem();
+                outputPath += ".wiob";
+            }
+            else
+            {
+                outputPath = std::filesystem::absolute(std::filesystem::path(configuredOutputs.front()));
+            }
+            outputPath.make_preferred();
+
+            wir::typed::BuildOptions buildOptions;
+            buildOptions.logicalModuleName = outputPath.stem().generic_string();
+            buildOptions.moduleKind = Compiler::get().getBuildTarget() == BuildTarget::Executable
+                                          ? wir::ModuleKind::Program
+                                          : wir::ModuleKind::WioLibrary;
+            wir::typed::BuildResult typedResult = wir::typed::Builder{}.build(program, buildOptions);
+            reportTypedWirDiagnostics(typedResult);
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
+            wir::LoweringResult loweringResult = wir::LoweringPipeline{}.lower(typedResult.takeModule());
+            reportLoweringDiagnostics(loweringResult);
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
+
+            bytecode::CompileResult compilation = bytecode::Compiler{}.compile(loweringResult.module());
+            for (const bytecode::CompileDiagnostic& diagnostic : compilation.diagnostics())
+                WIO_LOG_ADD_ERROR(diagnostic.source.begin, "Bytecode compiler {}: {}", diagnostic.code,
+                                  diagnostic.message);
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
+            const bytecode::VerificationResult verification = bytecode::Verifier{}.verify(compilation.module());
+            for (const bytecode::VerificationDiagnostic& diagnostic : verification.diagnostics())
+                WIO_LOG_ADD_ERROR(common::Location::invalid(), "Bytecode verifier {}: {}", diagnostic.code,
+                                  diagnostic.message);
+            WIO_LOG_PROCESS_ERRORS(CompilationError);
+
+            const std::vector<std::byte> encoded = bytecode::encode(compilation.module());
+            std::error_code directoryError;
+            if (outputPath.has_parent_path())
+                std::filesystem::create_directories(outputPath.parent_path(), directoryError);
+            if (directoryError)
+            {
+                WIO_LOG_FATAL("Bytecode output directory could not be created: {}", outputPath.parent_path().string());
+                return EXIT_FAILURE;
+            }
+            const std::string binary{reinterpret_cast<const char*>(encoded.data()), encoded.size()};
+            if (!filesystem::writeFilepath(binary, outputPath))
+            {
+                WIO_LOG_FATAL("Bytecode output could not be written to: {}", outputPath.string());
+                return EXIT_FAILURE;
+            }
+            WIO_LOG_INFO("Generated bytecode output: {}", outputPath.generic_string());
             return EXIT_SUCCESS;
         }
 
@@ -2644,6 +2728,10 @@ namespace wio
                      .AddAlias("--emit-lowered-wir")
                      .Flag()
                      .SetDescription("Generates canonical Lowered WIR and stops before backend code generation."))
+            .Add(Argonaut::Argument("EMIT-BYTECODE")
+                     .AddAlias("--emit-bytecode")
+                     .Flag()
+                     .SetDescription("Generates a verified portable .wiob module and stops before native compilation."))
             .Add(Argonaut::Argument("SHOW-BACKEND-INFO")
                      .AddAlias("--show-backend-info")
                      .Flag()
@@ -2680,6 +2768,9 @@ namespace wio
             .Add(Argonaut::Argument("IR-OUTPUT")
                      .AddAlias("--ir-output")
                      .SetDescription("Overrides the output path used by --emit-typed-wir or --emit-lowered-wir."))
+            .Add(Argonaut::Argument("BYTECODE-OUTPUT")
+                     .AddAlias("--bytecode-output")
+                     .SetDescription("Overrides the .wiob output path used by --emit-bytecode."))
             .Add(Argonaut::Argument("PROFILE-COMPILER")
                      .AddAlias("--profile-compiler")
                      .SetDescription("Writes a Chrome/Perfetto compiler phase trace to the selected JSON file."))
@@ -2773,6 +2864,7 @@ namespace wio
             DEFINE_FLAG_VALUE("EMIT-CPP", EmitCpp);
             DEFINE_FLAG_VALUE("EMIT-TYPED-WIR", EmitTypedWir);
             DEFINE_FLAG_VALUE("EMIT-LOWERED-WIR", EmitLoweredWir);
+            DEFINE_FLAG_VALUE("EMIT-BYTECODE", EmitBytecode);
             DEFINE_FLAG_VALUE("SHOW-BACKEND-INFO", ShowBackendInfo);
             DEFINE_FLAG_VALUE("NO-BUILTIN", NoBuiltin);
             DEFINE_FLAG_VALUE("WARN-AS-ERROR", WarnAsError);
@@ -3003,6 +3095,12 @@ namespace wio
                 WIO_LOG_PROCESS_WARNINGS();
                 WIO_LOG_PROCESS_ERRORS(CompilationError);
                 return emitWir(program, sourcePath, wirEmitKind);
+            }
+            if (gAppData.flags.get_EmitBytecode())
+            {
+                WIO_LOG_PROCESS_WARNINGS();
+                WIO_LOG_PROCESS_ERRORS(CompilationError);
+                return emitBytecode(program, sourcePath);
             }
 
             std::filesystem::path runtimeIncludeDir;

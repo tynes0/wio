@@ -67,7 +67,9 @@ by the VM loader without changing the file ABI.
 2. The binary loader validates the header, checksum, directory, limits, and
    every variable-length record before accepting the module.
 3. The bytecode verifier checks indices, tables, function-local CFG targets,
-   and known instructions without executing code.
+   SSA definition/use identity, terminator placement, branch argument arity and
+   types, body/external consistency, and known instructions without executing
+   code.
 4. The future VM verifier will add instruction-specific type and stack/frame
    invariants before a module becomes executable.
 
@@ -80,7 +82,7 @@ produce byte-for-byte identical output.
 
 ## Pending before v1 freeze
 
-- instruction-specific typed verification;
+- execution-specific type invariants beyond the current SSA/CFG verifier;
 - debug/source-map compression and a standalone disassembler command;
-- compiler CLI output selection and atomic `.wiob` writing;
+- atomic replacement for compiler CLI `.wiob` output;
 - malformed-input and fuzz corpus coverage for every record family.
