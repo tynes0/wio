@@ -1,0 +1,48 @@
+# Wio VM Runtime
+
+Status: Sprint 19 implementation in progress.
+
+## Architecture
+
+`wio_vm` is a separately linkable runtime over the versioned `.wiob` module
+model. It does not re-run parsing, semantic analysis, or WIR lowering. A
+machine borrows one immutable bytecode module, verifies it once during load,
+and builds reusable per-function register counts and block lookup tables.
+
+During Sprint 19 the target links the compiler-owned bytecode model and codec.
+Before the VM package is installed as a public runtime, that format/loader core
+will be extracted into a small shared library so embedding the VM never pulls
+in the parser, analyzer, or native backend.
+
+Execution uses typed SSA value registers and an explicit call-frame stack.
+Branch arguments are copied to the target block parameters before control is
+transferred. This preserves canonical Lowered WIR phi semantics without a
+second language-specific control-flow model.
+
+## Implemented in Sprint 19.1
+
+- compact tagged values for null, bool, signed/unsigned integer, float, and
+  UTF-8 string values;
+- constants and scalar default values;
+- unary, binary, numeric conversion, and range-containment operations;
+- direct Wio-to-Wio calls, returns, jumps, conditional jumps, and block
+  arguments;
+- deterministic wrapping integer arithmetic without host signed-overflow UB;
+- checked integer division and shifts;
+- instruction, call-depth, and per-frame register budgets;
+- explicit rejection of unsupported operations and external/native calls;
+- stable `WVM` diagnostics carrying function, block, instruction, and source
+  span context.
+
+The VM consumes a module that must remain alive and immutable for the
+machine's lifetime. `.wiob` decoding owns its module, so embedders normally
+keep the decode result beside the machine.
+
+## Remaining Sprint 19 surface
+
+The next slices add place storage and cleanup, intrusive object handles,
+component values, strings/text/containers, indirect and virtual dispatch,
+coroutine scheduling, panic stack traces, and debugger hooks. Native functions,
+callbacks, opaque values, and foreign-thread entry are deliberately reserved
+for the Sprint 20 VM native bridge; Sprint 19 reports them as unsupported
+instead of silently changing behavior.

@@ -580,7 +580,15 @@ Rider, and CLion are defined in
    encoding, deterministic Lowered-WIR compilation, complete nominal/native/
    coroutine/module-contract metadata, bounded decoding, SSA/CFG verification,
    disassembly, compiler and self-hosted CLI emission, atomic output replacement,
-   and a libFuzzer loader target. Execution remains Sprint 19 VM work.
+   and a libFuzzer loader target. Sprint 19.1 now adds the separately linkable
+   `wio_vm` runtime, a compact tagged runtime value, load-once verification and
+   block/register indexing, bounded register call frames, direct calls,
+   constants/defaults, scalar unary/binary/conversion/range operations, SSA
+   block-argument transfer, jumps/conditional jumps/returns, source-aware
+   stable `WVM` diagnostics, and execution/call-depth/register safety budgets.
+   Heap values, places/cleanup, objects/containers, coroutines, stack traces,
+   debugger hooks, and the native bridge remain in the following Sprint 19/20
+   slices.
 
 ## P3 - Product Direction
 
