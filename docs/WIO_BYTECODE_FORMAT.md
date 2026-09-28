@@ -52,7 +52,9 @@ is declared release-compatible.
 Bytecode opcodes are explicit 16-bit values in
 `wio/bytecode/format.h`. Existing numeric values are never reordered or
 reused. Lowered WIR opcodes are converted with an exhaustive mapping rather
-than a cast. The current wide instruction encoding preserves typed SSA ids,
+than a cast. Type kinds, ownership, native ABI, async, attribute, application,
+operator, and lowering-policy enums likewise pass through exhaustive pinned
+encoders; no compiler enum ordinal crosses the file boundary. The current wide instruction encoding preserves typed SSA ids,
 places, branch arguments, generic specialization identity, ownership and
 borrow annotations, storage/escape classifications, bounds-check decisions,
 intrinsic selectors, async operations, and source spans.
@@ -83,6 +85,7 @@ produce byte-for-byte identical output.
 ## Pending before v1 freeze
 
 - execution-specific type invariants beyond the current SSA/CFG verifier;
-- debug/source-map compression and a standalone disassembler command;
-- atomic replacement for compiler CLI `.wiob` output;
-- malformed-input and fuzz corpus coverage for every record family.
+- debug/source-map compression beyond the source spans already carried by
+  wide instructions;
+- seeded malformed-input corpora for every record family (the bounded loader
+  already has a libFuzzer entry point).

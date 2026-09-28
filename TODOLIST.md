@@ -575,7 +575,12 @@ Rider, and CLion are defined in
    source maps, ownership, and observable failure behavior. Continue broadening
    long-running platform executor/exceptional cleanup and benchmark samples as
    release-hardening evidence; these no longer block the canonical C++ backend
-   pipeline milestone.
+   pipeline milestone. Sprint 18 adds the independent bytecode compiler: a
+   checksummed sectioned `.wiob` v1 container, pinned opcode and semantic-enum
+   encoding, deterministic Lowered-WIR compilation, complete nominal/native/
+   coroutine/module-contract metadata, bounded decoding, SSA/CFG verification,
+   disassembly, compiler and self-hosted CLI emission, atomic output replacement,
+   and a libFuzzer loader target. Execution remains Sprint 19 VM work.
 
 ## P3 - Product Direction
 

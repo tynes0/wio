@@ -390,4 +390,17 @@ if(WIO_BUILD_FUZZERS)
         -fsanitize=fuzzer,address,undefined
         -fno-omit-frame-pointer
     )
+
+    add_executable(wio_bytecode_loader_fuzzer
+        "${CMAKE_SOURCE_DIR}/tests/fuzz/bytecode_loader_fuzzer.cpp"
+    )
+    target_link_libraries(wio_bytecode_loader_fuzzer PRIVATE wio_compiler)
+    target_compile_options(wio_bytecode_loader_fuzzer PRIVATE
+        -fsanitize=fuzzer,address,undefined
+        -fno-omit-frame-pointer
+    )
+    target_link_options(wio_bytecode_loader_fuzzer PRIVATE
+        -fsanitize=fuzzer,address,undefined
+        -fno-omit-frame-pointer
+    )
 endif()

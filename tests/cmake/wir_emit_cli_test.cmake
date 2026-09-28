@@ -66,6 +66,20 @@ if(NOT bytecode_magic STREQUAL "57494f42430d0a1a")
 endif()
 
 execute_process(
+    COMMAND "${WIO_EXECUTABLE}" "${bytecode_output}" --disassemble-bytecode
+    RESULT_VARIABLE disassemble_result
+    OUTPUT_VARIABLE disassemble_stdout
+    ERROR_VARIABLE disassemble_stderr
+)
+if(NOT disassemble_result EQUAL 0 OR
+   NOT disassemble_stdout MATCHES "\\.wiob 1\\.0" OR
+   NOT disassemble_stdout MATCHES "fn @0")
+    message(FATAL_ERROR
+        "Bytecode disassembly failed (${disassemble_result}):\n"
+        "${disassemble_stdout}\n${disassemble_stderr}")
+endif()
+
+execute_process(
     COMMAND "${WIO_EXECUTABLE}" "${WIO_SOURCE}"
         --no-builtin --ir-output "${WIO_OUTPUT_DIR}/invalid.wir"
     RESULT_VARIABLE invalid_result
@@ -114,6 +128,17 @@ if(DEFINED WIO_CLI_EXECUTABLE AND EXISTS "${WIO_CLI_EXECUTABLE}")
         message(FATAL_ERROR
             "Self-hosted 'file bytecode' failed (${file_bytecode_result}):\n"
             "${file_bytecode_stdout}\n${file_bytecode_stderr}")
+    endif()
+    execute_process(
+        COMMAND "${WIO_CLI_EXECUTABLE}" file disassemble "${file_bytecode_output}"
+        RESULT_VARIABLE file_disassemble_result
+        OUTPUT_VARIABLE file_disassemble_stdout
+        ERROR_VARIABLE file_disassemble_stderr
+    )
+    if(NOT file_disassemble_result EQUAL 0 OR NOT file_disassemble_stdout MATCHES "fn @0")
+        message(FATAL_ERROR
+            "Self-hosted 'file disassemble' failed (${file_disassemble_result}):\n"
+            "${file_disassemble_stdout}\n${file_disassemble_stderr}")
     endif()
 
     set(project_root "${WIO_OUTPUT_DIR}/project")

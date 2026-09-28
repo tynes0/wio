@@ -15,7 +15,10 @@ namespace wio::bytecode
         class Writer final
         {
         public:
-            void u8(const std::uint8_t value) { bytes_.push_back(static_cast<std::byte>(value)); }
+            void u8(const std::uint8_t value)
+            {
+                bytes_.push_back(static_cast<std::byte>(value));
+            }
             void u16(const std::uint16_t value)
             {
                 u8(static_cast<std::uint8_t>(value));
@@ -31,7 +34,10 @@ namespace wio::bytecode
                 u32(static_cast<std::uint32_t>(value));
                 u32(static_cast<std::uint32_t>(value >> 32u));
             }
-            void raw(const std::span<const std::byte> bytes) { bytes_.insert(bytes_.end(), bytes.begin(), bytes.end()); }
+            void raw(const std::span<const std::byte> bytes)
+            {
+                bytes_.insert(bytes_.end(), bytes.begin(), bytes.end());
+            }
             void text(const std::string_view value)
             {
                 u32(static_cast<std::uint32_t>(value.size()));
@@ -42,9 +48,18 @@ namespace wio::bytecode
                 for (std::size_t i = 0; i < 8; ++i)
                     bytes_[offset + i] = static_cast<std::byte>(value >> (i * 8u));
             }
-            [[nodiscard]] std::size_t size() const noexcept { return bytes_.size(); }
-            [[nodiscard]] const std::vector<std::byte>& bytes() const noexcept { return bytes_; }
-            [[nodiscard]] std::vector<std::byte> take() noexcept { return std::move(bytes_); }
+            [[nodiscard]] std::size_t size() const noexcept
+            {
+                return bytes_.size();
+            }
+            [[nodiscard]] const std::vector<std::byte>& bytes() const noexcept
+            {
+                return bytes_;
+            }
+            [[nodiscard]] std::vector<std::byte> take() noexcept
+            {
+                return std::move(bytes_);
+            }
 
         private:
             std::vector<std::byte> bytes_;
@@ -53,7 +68,9 @@ namespace wio::bytecode
         class Reader final
         {
         public:
-            explicit Reader(const std::span<const std::byte> bytes) : bytes_(bytes) {}
+            explicit Reader(const std::span<const std::byte> bytes) : bytes_(bytes)
+            {
+            }
 
             bool u8(std::uint8_t& value)
             {
@@ -98,8 +115,14 @@ namespace wio::bytecode
                 offset_ += size;
                 return true;
             }
-            [[nodiscard]] std::size_t remaining() const noexcept { return bytes_.size() - offset_; }
-            [[nodiscard]] bool finished() const noexcept { return offset_ == bytes_.size(); }
+            [[nodiscard]] std::size_t remaining() const noexcept
+            {
+                return bytes_.size() - offset_;
+            }
+            [[nodiscard]] bool finished() const noexcept
+            {
+                return offset_ == bytes_.size();
+            }
 
         private:
             std::span<const std::byte> bytes_;
@@ -121,7 +144,7 @@ namespace wio::bytecode
             std::uint32_t count = 0;
         };
 
-        template<typename T, typename Write>
+        template <typename T, typename Write>
         void writeList(Writer& writer, const std::vector<T>& values, Write&& write)
         {
             writer.u32(static_cast<std::uint32_t>(values.size()));
@@ -129,7 +152,7 @@ namespace wio::bytecode
                 write(writer, value);
         }
 
-        template<typename T, typename Read>
+        template <typename T, typename Read>
         bool readList(Reader& reader, std::vector<T>& values, const DecodeLimits& limits, Read&& read)
         {
             std::uint32_t count = 0;
@@ -226,8 +249,7 @@ namespace wio::bytecode
 
         bool readU8List(Reader& reader, std::vector<std::uint8_t>& values, const DecodeLimits& limits)
         {
-            return readList(reader, values, limits,
-                            [](Reader& input, std::uint8_t& value) { return input.u8(value); });
+            return readList(reader, values, limits, [](Reader& input, std::uint8_t& value) { return input.u8(value); });
         }
 
         void writeU64List(Writer& writer, const std::vector<std::uint64_t>& values)
@@ -299,8 +321,7 @@ namespace wio::bytecode
             std::uint16_t opcode = 0;
             if (!reader.u16(opcode) || !reader.u32(instruction.result) || !reader.u32(instruction.resultType) ||
                 !readU32List(reader, instruction.operands, limits) ||
-                !readList(reader, instruction.targets, limits,
-                          [&](Reader& input, BranchTarget& target)
+                !readList(reader, instruction.targets, limits, [&](Reader& input, BranchTarget& target)
                           { return input.u32(target.block) && readU32List(input, target.arguments, limits); }) ||
                 !reader.u32(instruction.callee) || !reader.u32(instruction.global) ||
                 !reader.u32(instruction.constant) || !reader.u8(instruction.unaryOperator) ||
@@ -744,10 +765,10 @@ namespace wio::bytecode
 
     std::vector<std::byte> encode(const Module& module)
     {
-        std::array<Section, 8> sections{
-            makeManifestSection(module), makeStringsSection(module), makeConstantsSection(module),
-            makeTypesSection(module), makeGlobalsSection(module), makeFunctionsSection(module), makeCodeSection(module),
-            makeContractSection(module)};
+        std::array<Section, 8> sections{makeManifestSection(module),  makeStringsSection(module),
+                                        makeConstantsSection(module), makeTypesSection(module),
+                                        makeGlobalsSection(module),   makeFunctionsSection(module),
+                                        makeCodeSection(module),      makeContractSection(module)};
         const std::uint64_t directoryOffset = HeaderSize;
         std::uint64_t nextOffset = HeaderSize + SectionEntrySize * sections.size();
         for (Section& section : sections)
@@ -804,14 +825,13 @@ namespace wio::bytecode
         std::uint64_t fileSize = 0;
         std::uint64_t checksum = 0;
         if (!header.u16(major) || !header.u16(minor) || !header.u32(headerSize) || !header.u32(endian) ||
-            !header.u32(sectionCount) || !header.u64(directoryOffset) || !header.u64(fileSize) ||
-            !header.u64(checksum))
+            !header.u32(sectionCount) || !header.u64(directoryOffset) || !header.u64(fileSize) || !header.u64(checksum))
             return fail("Truncated WIOB header");
         if (major != FormatMajor || minor > FormatMinor)
             return fail("Unsupported WIOB format version");
         if (headerSize != HeaderSize || endian != LittleEndianMarker || fileSize != bytes.size())
             return fail("Invalid WIOB header values");
-        if (sectionCount == 0 || sectionCount > limits.maximumSections ||
+        if (sectionCount == 0 || sectionCount > limits.maximumSections || directoryOffset < HeaderSize ||
             directoryOffset > bytes.size() || sectionCount > (bytes.size() - directoryOffset) / SectionEntrySize)
             return fail("Invalid WIOB section directory");
         if (payloadChecksum(bytes.subspan(HeaderSize)) != checksum)
@@ -837,11 +857,11 @@ namespace wio::bytecode
             if (flags != 0 || reserved != 0 || count > limits.maximumRecords ||
                 !sectionEndValid(offset, size, bytes.size()) || offset < minimumSectionOffset)
                 return fail("Invalid WIOB section entry");
-            if (!sections.emplace(kind,
-                                  SectionView{static_cast<SectionKind>(kind),
-                                              bytes.subspan(static_cast<std::size_t>(offset),
-                                                            static_cast<std::size_t>(size)),
-                                              count})
+            if (!sections
+                     .emplace(kind, SectionView{static_cast<SectionKind>(kind),
+                                                bytes.subspan(static_cast<std::size_t>(offset),
+                                                              static_cast<std::size_t>(size)),
+                                                count})
                      .second)
                 return fail("Duplicate WIOB section");
             ranges.emplace_back(offset, offset + size);
@@ -928,8 +948,8 @@ namespace wio::bytecode
                               [](Reader& input, Type::Field& field)
                               {
                                   std::uint8_t mutableFlag = 0;
-                                  if (!input.u32(field.name) || !input.u32(field.type) ||
-                                      !input.u8(field.visibility) || !input.u8(mutableFlag) || mutableFlag > 1)
+                                  if (!input.u32(field.name) || !input.u32(field.type) || !input.u8(field.visibility) ||
+                                      !input.u8(mutableFlag) || mutableFlag > 1)
                                       return false;
                                   field.isMutable = mutableFlag != 0;
                                   return true;
@@ -939,12 +959,11 @@ namespace wio::bytecode
                               {
                                   std::uint8_t receiverMutable = 0;
                                   std::uint8_t isAbstract = 0;
-                                  if (!input.u32(method.name) ||
-                                      !readU32List(input, method.parameterTypes, limits) ||
+                                  if (!input.u32(method.name) || !readU32List(input, method.parameterTypes, limits) ||
                                       !input.u32(method.returnType) || !input.u32(method.function) ||
                                       !input.u32(method.slot) || !input.u8(method.visibility) ||
-                                      !input.u8(receiverMutable) || !input.u8(isAbstract) ||
-                                      receiverMutable > 1 || isAbstract > 1)
+                                      !input.u8(receiverMutable) || !input.u8(isAbstract) || receiverMutable > 1 ||
+                                      isAbstract > 1)
                                       return false;
                                   method.receiverMutable = receiverMutable != 0;
                                   method.isAbstract = isAbstract != 0;
@@ -959,8 +978,7 @@ namespace wio::bytecode
                               }) ||
                     !reader.u32(type.destructor) || !reader.u32(type.defaultConstructor) ||
                     !reader.u32(type.fieldInitializer) || !reader.u32(type.enumUnderlyingType) ||
-                    !readList(reader, type.enumCases, limits,
-                              [](Reader& input, Type::EnumCase& enumCase)
+                    !readList(reader, type.enumCases, limits, [](Reader& input, Type::EnumCase& enumCase)
                               { return input.u32(enumCase.name) && input.u64(enumCase.rawValue); }))
                     return fail("Malformed WIOB type entry");
                 std::uint8_t hasNativeBinding = 0;
@@ -1010,13 +1028,12 @@ namespace wio::bytecode
             {
                 Function function;
                 if (!reader.u32(function.id) || !reader.u32(function.name) ||
-                    !readList(reader, function.parameters, limits, readParameter) ||
-                    !reader.u32(function.returnType) || !reader.u32(function.callableType) ||
-                    !reader.u32(function.ownerType) || !reader.u32(function.methodSlot) ||
-                    !reader.u32(function.captureParameterCount) ||
-                    !readList(reader, function.captures, limits,
-                              [](Reader& input, Function::Capture& capture)
-                              { return input.u32(capture.name) && input.u32(capture.type) && input.u8(capture.kind); }) ||
+                    !readList(reader, function.parameters, limits, readParameter) || !reader.u32(function.returnType) ||
+                    !reader.u32(function.callableType) || !reader.u32(function.ownerType) ||
+                    !reader.u32(function.methodSlot) || !reader.u32(function.captureParameterCount) ||
+                    !readList(
+                        reader, function.captures, limits, [](Reader& input, Function::Capture& capture)
+                        { return input.u32(capture.name) && input.u32(capture.type) && input.u8(capture.kind); }) ||
                     !readU32List(reader, function.genericParameters, limits) || !reader.u32(function.genericOrigin) ||
                     !readU32List(reader, function.specializationArguments, limits) ||
                     !reader.u32(function.specializationKey) || !readSpan(reader, function.source) ||
@@ -1032,11 +1049,10 @@ namespace wio::bytecode
                     Function::NativeBinding& binding = function.nativeBinding;
                     std::uint8_t explicitTemplateArguments = 0;
                     std::uint8_t requiresAdapter = 0;
-                    if (!reader.u32(binding.symbol) || !reader.u32(binding.header) ||
-                        !reader.u32(binding.stableKey) || !reader.u32(binding.thunkSymbol) ||
-                        !reader.u8(binding.language) || !reader.u8(binding.callingConvention) ||
-                        !reader.u8(binding.exceptionBoundary) || !reader.u8(binding.thunkKind) ||
-                        !reader.u8(binding.receiver) ||
+                    if (!reader.u32(binding.symbol) || !reader.u32(binding.header) || !reader.u32(binding.stableKey) ||
+                        !reader.u32(binding.thunkSymbol) || !reader.u8(binding.language) ||
+                        !reader.u8(binding.callingConvention) || !reader.u8(binding.exceptionBoundary) ||
+                        !reader.u8(binding.thunkKind) || !reader.u8(binding.receiver) ||
                         !readList(reader, binding.parameters, limits, readNativeAbiValue) ||
                         !readNativeAbiValue(reader, binding.result) ||
                         !readU32List(reader, binding.templateArguments, limits) ||
@@ -1125,8 +1141,8 @@ namespace wio::bytecode
                                      readList(input, attribute.arguments, limits,
                                               [](Reader& nested, AttributeArgument& argument)
                                               {
-                                                  return nested.u32(argument.name) &&
-                                                         nested.u32(argument.sourceText) && nested.u32(argument.type) &&
+                                                  return nested.u32(argument.name) && nested.u32(argument.sourceText) &&
+                                                         nested.u32(argument.type) &&
                                                          readBool(nested, argument.usedDefault);
                                               }) &&
                                      readList(input, attribute.processors, limits,
@@ -1163,8 +1179,7 @@ namespace wio::bytecode
                                               [&](Reader& nested, ReflectedMethod& method)
                                               {
                                                   return nested.u64(method.stableId) && nested.u32(method.name) &&
-                                                         nested.u32(method.function) &&
-                                                         nested.u32(method.returnType) &&
+                                                         nested.u32(method.function) && nested.u32(method.returnType) &&
                                                          readU32List(nested, method.parameterTypes, limits) &&
                                                          nested.u32(method.slot) && readBool(nested, method.isAsync) &&
                                                          nested.u8(method.visibility) &&
@@ -1195,30 +1210,29 @@ namespace wio::bytecode
                     !reader.u32(application.entry) || !reader.u32(application.start) ||
                     !reader.u32(application.update) || !reader.u32(application.close) ||
                     !reader.u32(application.exit) || !readU32List(reader, application.systems, limits) ||
-                    !readList(reader, application.stages, limits,
-                              [&](Reader& input, Stage& stage)
-                              {
-                                  return input.u64(stage.stableId) && input.u32(stage.name) && input.u32(stage.after) &&
-                                         input.u64(stage.fixedHzBits) && input.u32(stage.order) && input.u8(stage.kind) &&
-                                         input.u8(stage.affinity) && readBool(input, stage.legacyExplicit) &&
-                                         readList(input, stage.runs, limits,
-                                                  [&](Reader& nested, StageRun& run)
-                                                  {
-                                                      return nested.u32(run.targetName) &&
-                                                             nested.u32(run.methodName) &&
-                                                             nested.u32(run.targetType) && nested.u32(run.function) &&
-                                                             readList(nested, run.resources, limits,
-                                                                      [](Reader& resourceInput,
-                                                                         ResourceBinding& resource)
-                                                                      {
-                                                                          return resourceInput.u32(resource.name) &&
-                                                                                 resourceInput.u32(resource.type) &&
-                                                                                 resourceInput.u8(resource.access);
-                                                                      }) &&
-                                                             readBool(nested, run.applicationTarget) &&
-                                                             readBool(nested, run.acceptsDelta);
-                                                  });
-                              }) ||
+                    !readList(
+                        reader, application.stages, limits,
+                        [&](Reader& input, Stage& stage)
+                        {
+                            return input.u64(stage.stableId) && input.u32(stage.name) && input.u32(stage.after) &&
+                                   input.u64(stage.fixedHzBits) && input.u32(stage.order) && input.u8(stage.kind) &&
+                                   input.u8(stage.affinity) && readBool(input, stage.legacyExplicit) &&
+                                   readList(input, stage.runs, limits,
+                                            [&](Reader& nested, StageRun& run)
+                                            {
+                                                return nested.u32(run.targetName) && nested.u32(run.methodName) &&
+                                                       nested.u32(run.targetType) && nested.u32(run.function) &&
+                                                       readList(nested, run.resources, limits,
+                                                                [](Reader& resourceInput, ResourceBinding& resource)
+                                                                {
+                                                                    return resourceInput.u32(resource.name) &&
+                                                                           resourceInput.u32(resource.type) &&
+                                                                           resourceInput.u8(resource.access);
+                                                                }) &&
+                                                       readBool(nested, run.applicationTarget) &&
+                                                       readBool(nested, run.acceptsDelta);
+                                            });
+                        }) ||
                     !readBool(reader, application.hostOwnsStorage) ||
                     !readBool(reader, application.nonBlockingScheduling))
                     return fail("Malformed WIOB application contract");
@@ -1230,9 +1244,9 @@ namespace wio::bytecode
                 !readU64List(reader, output.callTableEntries, limits) || !reader.finished())
                 return fail("Malformed WIOB lifecycle or call-table contract");
 
-            const std::uint64_t decodedCount =
-                output.imports.size() + output.exports.size() + output.attributes.size() + output.reflection.size() +
-                output.systems.size() + (output.hasApplication ? 1u : 0u);
+            const std::uint64_t decodedCount = output.imports.size() + output.exports.size() +
+                                               output.attributes.size() + output.reflection.size() +
+                                               output.systems.size() + (output.hasApplication ? 1u : 0u);
             if (decodedCount != contract->count)
                 return fail("WIOB module contract record count does not match its directory entry");
         }

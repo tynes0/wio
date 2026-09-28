@@ -1,4 +1,5 @@
 #include "wio/bytecode/compiler.h"
+#include "wio/bytecode/enum_encoding.h"
 
 #include "wio/wir/lowered_ir_verifier.h"
 
@@ -11,15 +12,16 @@ namespace wio::bytecode
 {
     namespace
     {
-        template<typename Id>
-        std::uint32_t rawId(const Id id)
+        template <typename Id> std::uint32_t rawId(const Id id)
         {
             return id ? id.value() : InvalidIndex;
         }
 
         Opcode mapOpcode(const wir::lowered::Opcode opcode)
         {
-#define WIO_MAP_OPCODE(name) case wir::lowered::Opcode::name: return Opcode::name
+#define WIO_MAP_OPCODE(name)                                                                                           \
+    case wir::lowered::Opcode::name:                                                                                   \
+        return Opcode::name
             switch (opcode)
             {
                 WIO_MAP_OPCODE(Constant);
@@ -100,28 +102,25 @@ namespace wio::bytecode
 
         SourceLocation compileLocation(const common::Location& source, StringTableBuilder& strings)
         {
-            return SourceLocation{
-                .file = source.file.empty() ? InvalidIndex : strings.intern(source.file),
-                .line = source.line,
-                .column = source.column};
+            return SourceLocation{.file = source.file.empty() ? InvalidIndex : strings.intern(source.file),
+                                  .line = source.line,
+                                  .column = source.column};
         }
 
         SourceSpan compileSpan(const wir::SourceSpan& source, StringTableBuilder& strings)
         {
-            return SourceSpan{
-                .begin = compileLocation(source.begin, strings),
-                .end = compileLocation(source.end, strings)};
+            return SourceSpan{.begin = compileLocation(source.begin, strings),
+                              .end = compileLocation(source.end, strings)};
         }
 
         Parameter compileParameter(const wir::lowered::Parameter& parameter, StringTableBuilder& strings)
         {
-            return Parameter{
-                .value = rawId(parameter.id),
-                .name = strings.intern(parameter.name),
-                .type = rawId(parameter.type),
-                .ownership = static_cast<std::uint8_t>(parameter.ownership),
-                .borrowLifetime = static_cast<std::uint8_t>(parameter.borrowLifetime),
-                .source = compileSpan(parameter.source, strings)};
+            return Parameter{.value = rawId(parameter.id),
+                             .name = strings.intern(parameter.name),
+                             .type = rawId(parameter.type),
+                             .ownership = encodeEnum(parameter.ownership),
+                             .borrowLifetime = encodeEnum(parameter.borrowLifetime),
+                             .source = compileSpan(parameter.source, strings)};
         }
 
         ConstantId compileConstant(const wir::typed::Literal& literal, Module& module, StringTableBuilder& strings)
@@ -183,7 +182,7 @@ namespace wio::bytecode
         Module& module = result.module_;
         StringTableBuilder strings{module};
         module.name = strings.intern(source.name);
-        module.moduleKind = static_cast<std::uint8_t>(source.contract.kind);
+        module.moduleKind = encodeEnum(source.contract.kind);
         module.stableId = source.contract.stableId;
         module.logicalName = strings.intern(source.contract.logicalName);
         module.stableKey = strings.intern(source.contract.stableKey);
@@ -198,7 +197,7 @@ namespace wio::bytecode
             import.alias = strings.intern(sourceImport.alias);
             for (const std::string& symbol : sourceImport.importedSymbols)
                 import.importedSymbols.push_back(strings.intern(symbol));
-            import.kind = static_cast<std::uint8_t>(sourceImport.kind);
+            import.kind = encodeEnum(sourceImport.kind);
             import.importAll = sourceImport.importAll;
             module.contract.imports.push_back(std::move(import));
         }
@@ -209,8 +208,8 @@ namespace wio::bytecode
             exportRecord.stableKey = strings.intern(sourceExport.stableKey);
             exportRecord.logicalName = strings.intern(sourceExport.logicalName);
             exportRecord.symbolName = strings.intern(sourceExport.symbolName);
-            exportRecord.kind = static_cast<std::uint8_t>(sourceExport.kind);
-            exportRecord.role = static_cast<std::uint8_t>(sourceExport.role);
+            exportRecord.kind = encodeEnum(sourceExport.kind);
+            exportRecord.role = encodeEnum(sourceExport.role);
             exportRecord.roleName = strings.intern(sourceExport.roleName);
             exportRecord.function = rawId(sourceExport.function);
             exportRecord.type = rawId(sourceExport.type);
@@ -230,8 +229,8 @@ namespace wio::bytecode
             attribute.canonicalName = strings.intern(sourceAttribute.canonicalName);
             attribute.originParent = strings.intern(sourceAttribute.originParent);
             attribute.selector = strings.intern(sourceAttribute.selector);
-            attribute.targetKind = static_cast<std::uint8_t>(sourceAttribute.targetKind);
-            attribute.origin = static_cast<std::uint8_t>(sourceAttribute.origin);
+            attribute.targetKind = encodeEnum(sourceAttribute.targetKind);
+            attribute.origin = encodeEnum(sourceAttribute.origin);
             attribute.targetStableId = sourceAttribute.targetStableId;
             attribute.targetType = rawId(sourceAttribute.targetType);
             attribute.targetFunction = rawId(sourceAttribute.targetFunction);
@@ -240,23 +239,22 @@ namespace wio::bytecode
             attribute.runtimeRetained = sourceAttribute.runtimeRetained;
             for (const wir::AttributeArgumentDescriptor& sourceArgument : sourceAttribute.arguments)
             {
-                attribute.arguments.push_back(AttributeArgument{
-                    .name = strings.intern(sourceArgument.name),
-                    .sourceText = strings.intern(sourceArgument.sourceText),
-                    .type = rawId(sourceArgument.type),
-                    .usedDefault = sourceArgument.usedDefault});
+                attribute.arguments.push_back(AttributeArgument{.name = strings.intern(sourceArgument.name),
+                                                                .sourceText = strings.intern(sourceArgument.sourceText),
+                                                                .type = rawId(sourceArgument.type),
+                                                                .usedDefault = sourceArgument.usedDefault});
             }
             for (const wir::AttributeProcessorDescriptor& sourceProcessor : sourceAttribute.processors)
             {
-                attribute.processors.push_back(AttributeProcessor{
-                    .stableId = sourceProcessor.stableId,
-                    .canonicalTypeName = strings.intern(sourceProcessor.canonicalTypeName),
-                    .hookName = strings.intern(sourceProcessor.hookName),
-                    .hookMode = strings.intern(sourceProcessor.hookMode),
-                    .phase = static_cast<std::uint8_t>(sourceProcessor.phase),
-                    .processorType = rawId(sourceProcessor.processorType),
-                    .hookFunction = rawId(sourceProcessor.hookFunction),
-                    .valueType = rawId(sourceProcessor.valueType)});
+                attribute.processors.push_back(
+                    AttributeProcessor{.stableId = sourceProcessor.stableId,
+                                       .canonicalTypeName = strings.intern(sourceProcessor.canonicalTypeName),
+                                       .hookName = strings.intern(sourceProcessor.hookName),
+                                       .hookMode = strings.intern(sourceProcessor.hookMode),
+                                       .phase = encodeEnum(sourceProcessor.phase),
+                                       .processorType = rawId(sourceProcessor.processorType),
+                                       .hookFunction = rawId(sourceProcessor.hookFunction),
+                                       .valueType = rawId(sourceProcessor.valueType)});
             }
             module.contract.attributes.push_back(std::move(attribute));
         }
@@ -266,7 +264,7 @@ namespace wio::bytecode
             reflection.stableTypeId = sourceReflection.stableTypeId;
             reflection.logicalName = strings.intern(sourceReflection.logicalName);
             reflection.type = rawId(sourceReflection.type);
-            reflection.nominalKind = static_cast<std::uint8_t>(sourceReflection.nominalKind);
+            reflection.nominalKind = encodeEnum(sourceReflection.nominalKind);
             reflection.isExported = sourceReflection.isExported;
             reflection.runtimeVisible = sourceReflection.runtimeVisible;
             for (const std::string& name : sourceReflection.genericParameterNames)
@@ -276,13 +274,12 @@ namespace wio::bytecode
             reflection.attributes = sourceReflection.attributes;
             for (const wir::ReflectedFieldDescriptor& sourceField : sourceReflection.fields)
             {
-                reflection.fields.push_back(ReflectedField{
-                    .stableId = sourceField.stableId,
-                    .name = strings.intern(sourceField.name),
-                    .type = rawId(sourceField.type),
-                    .visibility = static_cast<std::uint8_t>(sourceField.visibility),
-                    .isMutable = sourceField.isMutable,
-                    .attributes = sourceField.attributes});
+                reflection.fields.push_back(ReflectedField{.stableId = sourceField.stableId,
+                                                           .name = strings.intern(sourceField.name),
+                                                           .type = rawId(sourceField.type),
+                                                           .visibility = encodeEnum(sourceField.visibility),
+                                                           .isMutable = sourceField.isMutable,
+                                                           .attributes = sourceField.attributes});
             }
             for (const wir::ReflectedMethodDescriptor& sourceMethod : sourceReflection.methods)
             {
@@ -295,28 +292,26 @@ namespace wio::bytecode
                     method.parameterTypes.push_back(rawId(type));
                 method.slot = sourceMethod.slot;
                 method.isAsync = sourceMethod.isAsync;
-                method.visibility = static_cast<std::uint8_t>(sourceMethod.visibility);
+                method.visibility = encodeEnum(sourceMethod.visibility);
                 method.attributes = sourceMethod.attributes;
                 reflection.methods.push_back(std::move(method));
             }
             for (const wir::ReflectedCaseDescriptor& sourceCase : sourceReflection.cases)
             {
-                reflection.cases.push_back(ReflectedCase{
-                    .stableId = sourceCase.stableId,
-                    .name = strings.intern(sourceCase.name),
-                    .attributes = sourceCase.attributes});
+                reflection.cases.push_back(ReflectedCase{.stableId = sourceCase.stableId,
+                                                         .name = strings.intern(sourceCase.name),
+                                                         .attributes = sourceCase.attributes});
             }
             module.contract.reflection.push_back(std::move(reflection));
         }
         for (const wir::SystemDescriptor& sourceSystem : source.contract.systems)
         {
-            module.contract.systems.push_back(System{
-                .stableId = sourceSystem.stableId,
-                .logicalName = strings.intern(sourceSystem.logicalName),
-                .type = rawId(sourceSystem.type),
-                .start = rawId(sourceSystem.start),
-                .update = rawId(sourceSystem.update),
-                .close = rawId(sourceSystem.close)});
+            module.contract.systems.push_back(System{.stableId = sourceSystem.stableId,
+                                                     .logicalName = strings.intern(sourceSystem.logicalName),
+                                                     .type = rawId(sourceSystem.type),
+                                                     .start = rawId(sourceSystem.start),
+                                                     .update = rawId(sourceSystem.update),
+                                                     .close = rawId(sourceSystem.close)});
         }
         if (source.contract.application)
         {
@@ -342,8 +337,8 @@ namespace wio::bytecode
                 stage.after = strings.intern(sourceStage.after);
                 stage.fixedHzBits = std::bit_cast<std::uint64_t>(sourceStage.fixedHz);
                 stage.order = sourceStage.order;
-                stage.kind = static_cast<std::uint8_t>(sourceStage.kind);
-                stage.affinity = static_cast<std::uint8_t>(sourceStage.affinity);
+                stage.kind = encodeEnum(sourceStage.kind);
+                stage.affinity = encodeEnum(sourceStage.affinity);
                 stage.legacyExplicit = sourceStage.legacyExplicit;
                 for (const wir::ApplicationStageRun& sourceRun : sourceStage.runs)
                 {
@@ -354,10 +349,9 @@ namespace wio::bytecode
                     run.function = rawId(sourceRun.function);
                     for (const wir::ApplicationResourceBinding& sourceResource : sourceRun.resources)
                     {
-                        run.resources.push_back(ResourceBinding{
-                            .name = strings.intern(sourceResource.name),
-                            .type = rawId(sourceResource.type),
-                            .access = static_cast<std::uint8_t>(sourceResource.access)});
+                        run.resources.push_back(ResourceBinding{.name = strings.intern(sourceResource.name),
+                                                                .type = rawId(sourceResource.type),
+                                                                .access = encodeEnum(sourceResource.access)});
                     }
                     run.applicationTarget = sourceRun.applicationTarget;
                     run.acceptsDelta = sourceRun.acceptsDelta;
@@ -368,14 +362,13 @@ namespace wio::bytecode
             application.hostOwnsStorage = sourceApplication.hostOwnsStorage;
             application.nonBlockingScheduling = sourceApplication.nonBlockingScheduling;
         }
-        module.contract.lifecycle = Lifecycle{
-            .apiVersion = rawId(source.contract.lifecycle.apiVersion),
-            .load = rawId(source.contract.lifecycle.load),
-            .update = rawId(source.contract.lifecycle.update),
-            .unload = rawId(source.contract.lifecycle.unload),
-            .saveState = rawId(source.contract.lifecycle.saveState),
-            .restoreState = rawId(source.contract.lifecycle.restoreState),
-            .stateSchemaVersion = source.contract.lifecycle.stateSchemaVersion};
+        module.contract.lifecycle = Lifecycle{.apiVersion = rawId(source.contract.lifecycle.apiVersion),
+                                              .load = rawId(source.contract.lifecycle.load),
+                                              .update = rawId(source.contract.lifecycle.update),
+                                              .unload = rawId(source.contract.lifecycle.unload),
+                                              .saveState = rawId(source.contract.lifecycle.saveState),
+                                              .restoreState = rawId(source.contract.lifecycle.restoreState),
+                                              .stateSchemaVersion = source.contract.lifecycle.stateSchemaVersion};
         module.contract.callTableStableId = source.contract.callTable.stableId;
         module.contract.callTableEntries = source.contract.callTable.entries;
 
@@ -383,7 +376,7 @@ namespace wio::bytecode
         for (const wir::Type& sourceType : source.types.types())
         {
             Type type;
-            type.kind = static_cast<std::uint8_t>(sourceType.kind);
+            type.kind = encodeEnum(sourceType.kind);
             type.name = strings.intern(sourceType.name);
             type.arguments.reserve(sourceType.arguments.size());
             for (const wir::TypeId argument : sourceType.arguments)
@@ -391,11 +384,11 @@ namespace wio::bytecode
             if (sourceType.staticExtent)
                 type.staticExtent = static_cast<std::uint64_t>(*sourceType.staticExtent);
             type.extentParameter = rawId(sourceType.extentParameter);
-            type.nominalKind = static_cast<std::uint8_t>(sourceType.nominalKind);
-            type.nominalRepresentation = static_cast<std::uint8_t>(sourceType.nominalRepresentation);
-            type.nominalValueModel = static_cast<std::uint8_t>(sourceType.nominalValueModel);
-            type.ownership = static_cast<std::uint8_t>(sourceType.ownership);
-            type.cleanup = static_cast<std::uint8_t>(sourceType.cleanup);
+            type.nominalKind = encodeEnum(sourceType.nominalKind);
+            type.nominalRepresentation = encodeEnum(sourceType.nominalRepresentation);
+            type.nominalValueModel = encodeEnum(sourceType.nominalValueModel);
+            type.ownership = encodeEnum(sourceType.ownership);
+            type.cleanup = encodeEnum(sourceType.cleanup);
             type.flags = sourceType.isMutable ? 0x01u : 0u;
             type.flags |= sourceType.hasConstructor ? 0x02u : 0u;
             type.flags |= sourceType.hasDestructor ? 0x04u : 0u;
@@ -403,11 +396,10 @@ namespace wio::bytecode
                 type.baseTypes.push_back(rawId(base));
             for (const wir::FieldLayout& sourceField : sourceType.fields)
             {
-                type.fields.push_back(Type::Field{
-                    .name = strings.intern(sourceField.name),
-                    .type = rawId(sourceField.type),
-                    .visibility = static_cast<std::uint8_t>(sourceField.visibility),
-                    .isMutable = sourceField.isMutable});
+                type.fields.push_back(Type::Field{.name = strings.intern(sourceField.name),
+                                                  .type = rawId(sourceField.type),
+                                                  .visibility = encodeEnum(sourceField.visibility),
+                                                  .isMutable = sourceField.isMutable});
             }
             for (const wir::MethodLayout& sourceMethod : sourceType.methods)
             {
@@ -418,7 +410,7 @@ namespace wio::bytecode
                 method.returnType = rawId(sourceMethod.returnType);
                 method.function = rawId(sourceMethod.function);
                 method.slot = sourceMethod.slot;
-                method.visibility = static_cast<std::uint8_t>(sourceMethod.visibility);
+                method.visibility = encodeEnum(sourceMethod.visibility);
                 method.receiverMutable = sourceMethod.receiverMutable;
                 method.isAbstract = sourceMethod.isAbstract;
                 type.methods.push_back(std::move(method));
@@ -427,10 +419,10 @@ namespace wio::bytecode
                 type.castTypes.push_back(rawId(castType));
             for (const wir::DispatchEntry& sourceDispatch : sourceType.dispatchEntries)
             {
-                type.dispatchEntries.push_back(Type::DispatchEntry{
-                    .contractType = rawId(sourceDispatch.contractType),
-                    .slot = sourceDispatch.slot,
-                    .implementation = rawId(sourceDispatch.implementation)});
+                type.dispatchEntries.push_back(
+                    Type::DispatchEntry{.contractType = rawId(sourceDispatch.contractType),
+                                        .slot = sourceDispatch.slot,
+                                        .implementation = rawId(sourceDispatch.implementation)});
             }
             type.destructor = rawId(sourceType.destructor);
             type.defaultConstructor = rawId(sourceType.defaultConstructor);
@@ -441,11 +433,11 @@ namespace wio::bytecode
             if (sourceType.nativeBinding)
             {
                 type.hasNativeBinding = true;
-                type.nativeBinding = Type::NativeBinding{
-                    .cppName = strings.intern(sourceType.nativeBinding->cppName),
-                    .header = strings.intern(sourceType.nativeBinding->header),
-                    .standardLayout = sourceType.nativeBinding->standardLayout,
-                    .triviallyCopyable = sourceType.nativeBinding->triviallyCopyable};
+                type.nativeBinding =
+                    Type::NativeBinding{.cppName = strings.intern(sourceType.nativeBinding->cppName),
+                                        .header = strings.intern(sourceType.nativeBinding->header),
+                                        .standardLayout = sourceType.nativeBinding->standardLayout,
+                                        .triviallyCopyable = sourceType.nativeBinding->triviallyCopyable};
             }
             module.types.push_back(std::move(type));
         }
@@ -453,14 +445,13 @@ namespace wio::bytecode
         module.globals.reserve(source.globals.size());
         for (const wir::lowered::Global& sourceGlobal : source.globals)
         {
-            module.globals.push_back(Global{
-                .id = rawId(sourceGlobal.id),
-                .name = strings.intern(sourceGlobal.name),
-                .type = rawId(sourceGlobal.type),
-                .initializer = rawId(sourceGlobal.initializer),
-                .source = compileSpan(sourceGlobal.source, strings),
-                .flags = static_cast<std::uint8_t>((sourceGlobal.isMutable ? 0x01u : 0u) |
-                                                   (sourceGlobal.isConst ? 0x02u : 0u))});
+            module.globals.push_back(Global{.id = rawId(sourceGlobal.id),
+                                            .name = strings.intern(sourceGlobal.name),
+                                            .type = rawId(sourceGlobal.type),
+                                            .initializer = rawId(sourceGlobal.initializer),
+                                            .source = compileSpan(sourceGlobal.source, strings),
+                                            .flags = static_cast<std::uint8_t>((sourceGlobal.isMutable ? 0x01u : 0u) |
+                                                                               (sourceGlobal.isConst ? 0x02u : 0u))});
         }
 
         module.functions.reserve(source.functions.size());
@@ -477,21 +468,17 @@ namespace wio::bytecode
             function.genericOrigin = rawId(sourceFunction.genericOrigin);
             function.specializationKey = strings.intern(sourceFunction.specializationKey);
             function.source = compileSpan(sourceFunction.source, strings);
-            function.flags = static_cast<std::uint16_t>((sourceFunction.isAsync ? 0x0001u : 0u) |
-                                                        (sourceFunction.isExternal ? 0x0002u : 0u) |
-                                                        (sourceFunction.isMethod ? 0x0004u : 0u) |
-                                                        (sourceFunction.isAbstract ? 0x0008u : 0u) |
-                                                        (sourceFunction.isExtension ? 0x0010u : 0u) |
-                                                        (sourceFunction.isClosureBody ? 0x0020u : 0u) |
-                                                        (sourceFunction.nativeBinding ? 0x0040u : 0u) |
-                                                        (sourceFunction.coroutine ? 0x0080u : 0u));
+            function.flags = static_cast<std::uint16_t>(
+                (sourceFunction.isAsync ? 0x0001u : 0u) | (sourceFunction.isExternal ? 0x0002u : 0u) |
+                (sourceFunction.isMethod ? 0x0004u : 0u) | (sourceFunction.isAbstract ? 0x0008u : 0u) |
+                (sourceFunction.isExtension ? 0x0010u : 0u) | (sourceFunction.isClosureBody ? 0x0020u : 0u) |
+                (sourceFunction.nativeBinding ? 0x0040u : 0u) | (sourceFunction.coroutine ? 0x0080u : 0u));
 
             for (const wir::CaptureLayout& sourceCapture : sourceFunction.captures)
             {
-                function.captures.push_back(Function::Capture{
-                    .name = strings.intern(sourceCapture.name),
-                    .type = rawId(sourceCapture.type),
-                    .kind = static_cast<std::uint8_t>(sourceCapture.kind)});
+                function.captures.push_back(Function::Capture{.name = strings.intern(sourceCapture.name),
+                                                              .type = rawId(sourceCapture.type),
+                                                              .kind = encodeEnum(sourceCapture.kind)});
             }
             if (sourceFunction.nativeBinding)
             {
@@ -501,22 +488,19 @@ namespace wio::bytecode
                 function.nativeBinding.header = strings.intern(sourceBinding.header);
                 function.nativeBinding.stableKey = strings.intern(sourceBinding.stableKey);
                 function.nativeBinding.thunkSymbol = strings.intern(sourceBinding.thunkSymbol);
-                function.nativeBinding.language = static_cast<std::uint8_t>(sourceBinding.language);
-                function.nativeBinding.callingConvention =
-                    static_cast<std::uint8_t>(sourceBinding.callingConvention);
-                function.nativeBinding.exceptionBoundary =
-                    static_cast<std::uint8_t>(sourceBinding.exceptionBoundary);
-                function.nativeBinding.thunkKind = static_cast<std::uint8_t>(sourceBinding.thunkKind);
-                function.nativeBinding.receiver = static_cast<std::uint8_t>(sourceBinding.receiver);
+                function.nativeBinding.language = encodeEnum(sourceBinding.language);
+                function.nativeBinding.callingConvention = encodeEnum(sourceBinding.callingConvention);
+                function.nativeBinding.exceptionBoundary = encodeEnum(sourceBinding.exceptionBoundary);
+                function.nativeBinding.thunkKind = encodeEnum(sourceBinding.thunkKind);
+                function.nativeBinding.receiver = encodeEnum(sourceBinding.receiver);
                 const auto compileAbiValue = [](const wir::NativeAbiValue& value)
                 {
-                    return Function::NativeAbiValue{
-                        .type = rawId(value.type),
-                        .passing = static_cast<std::uint8_t>(value.passing),
-                        .marshalling = static_cast<std::uint8_t>(value.marshalling),
-                        .callbackLifetime = static_cast<std::uint8_t>(value.callbackLifetime),
-                        .callbackThread = static_cast<std::uint8_t>(value.callbackThread),
-                        .nullable = value.nullable};
+                    return Function::NativeAbiValue{.type = rawId(value.type),
+                                                    .passing = encodeEnum(value.passing),
+                                                    .marshalling = encodeEnum(value.marshalling),
+                                                    .callbackLifetime = encodeEnum(value.callbackLifetime),
+                                                    .callbackThread = encodeEnum(value.callbackThread),
+                                                    .nullable = value.nullable};
                 };
                 for (const wir::NativeAbiValue& parameter : sourceBinding.parameters)
                     function.nativeBinding.parameters.push_back(compileAbiValue(parameter));
@@ -533,25 +517,25 @@ namespace wio::bytecode
                 function.coroutine.resultType = rawId(sourceCoroutine.resultType);
                 for (const wir::CoroutineFrameSlot& sourceSlot : sourceCoroutine.frameSlots)
                 {
-                    function.coroutine.frameSlots.push_back(Function::CoroutineFrameSlot{
-                        .slot = sourceSlot.slot,
-                        .value = rawId(sourceSlot.value),
-                        .type = rawId(sourceSlot.type),
-                        .kind = static_cast<std::uint8_t>(sourceSlot.kind),
-                        .ownership = static_cast<std::uint8_t>(sourceSlot.ownership),
-                        .cleanup = static_cast<std::uint8_t>(sourceSlot.cleanup)});
+                    function.coroutine.frameSlots.push_back(
+                        Function::CoroutineFrameSlot{.slot = sourceSlot.slot,
+                                                     .value = rawId(sourceSlot.value),
+                                                     .type = rawId(sourceSlot.type),
+                                                     .kind = encodeEnum(sourceSlot.kind),
+                                                     .ownership = encodeEnum(sourceSlot.ownership),
+                                                     .cleanup = encodeEnum(sourceSlot.cleanup)});
                 }
                 for (const wir::CoroutineState& sourceState : sourceCoroutine.states)
                 {
-                    function.coroutine.states.push_back(Function::CoroutineState{
-                        .index = sourceState.index,
-                        .suspendBlock = rawId(sourceState.suspendBlock),
-                        .resumeBlock = rawId(sourceState.resumeBlock),
-                        .awaitedTask = rawId(sourceState.awaitedTask),
-                        .resumedValue = rawId(sourceState.resumedValue),
-                        .resultType = rawId(sourceState.resultType),
-                        .executor = static_cast<std::uint8_t>(sourceState.executor),
-                        .cancellationPoint = sourceState.cancellationPoint});
+                    function.coroutine.states.push_back(
+                        Function::CoroutineState{.index = sourceState.index,
+                                                 .suspendBlock = rawId(sourceState.suspendBlock),
+                                                 .resumeBlock = rawId(sourceState.resumeBlock),
+                                                 .awaitedTask = rawId(sourceState.awaitedTask),
+                                                 .resumedValue = rawId(sourceState.resumedValue),
+                                                 .resultType = rawId(sourceState.resultType),
+                                                 .executor = encodeEnum(sourceState.executor),
+                                                 .cancellationPoint = sourceState.cancellationPoint});
                 }
                 function.coroutine.retainedReceiver = rawId(sourceCoroutine.retainedReceiver);
                 function.coroutine.cooperativeCancellation = sourceCoroutine.cooperativeCancellation;
@@ -596,9 +580,9 @@ namespace wio::bytecode
                     instruction.callee = rawId(sourceInstruction.callee);
                     instruction.global = rawId(sourceInstruction.global);
                     instruction.constant = compileConstant(sourceInstruction.literal, module, strings);
-                    instruction.unaryOperator = static_cast<std::uint8_t>(sourceInstruction.unaryOperator);
-                    instruction.binaryOperator = static_cast<std::uint8_t>(sourceInstruction.binaryOperator);
-                    instruction.conversionKind = static_cast<std::uint8_t>(sourceInstruction.conversionKind);
+                    instruction.unaryOperator = encodeEnum(sourceInstruction.unaryOperator);
+                    instruction.binaryOperator = encodeEnum(sourceInstruction.binaryOperator);
+                    instruction.conversionKind = encodeEnum(sourceInstruction.conversionKind);
                     instruction.selector = strings.intern(sourceInstruction.selector);
                     instruction.projectionIndex = sourceInstruction.projectionIndex;
                     for (const wir::TypeId type : sourceInstruction.signatureTypes)
@@ -606,22 +590,22 @@ namespace wio::bytecode
                     for (const wir::TypeId type : sourceInstruction.genericArguments)
                         instruction.genericArguments.push_back(rawId(type));
                     for (const wir::CaptureKind capture : sourceInstruction.captureKinds)
-                        instruction.captureKinds.push_back(static_cast<std::uint8_t>(capture));
+                        instruction.captureKinds.push_back(encodeEnum(capture));
                     for (const bool expanded : sourceInstruction.expandedOperands)
                         instruction.expandedOperands.push_back(expanded ? 1u : 0u);
                     for (const std::string& segment : sourceInstruction.stringSegments)
                         instruction.stringSegments.push_back(strings.intern(segment));
                     instruction.specializationKey = strings.intern(sourceInstruction.specializationKey);
-                    instruction.intrinsicFamily = static_cast<std::uint8_t>(sourceInstruction.intrinsicFamily);
-                    instruction.asyncOperation = static_cast<std::uint8_t>(sourceInstruction.asyncOperation);
-                    instruction.asyncExecutor = static_cast<std::uint8_t>(sourceInstruction.asyncExecutor);
+                    instruction.intrinsicFamily = encodeEnum(sourceInstruction.intrinsicFamily);
+                    instruction.asyncOperation = encodeEnum(sourceInstruction.asyncOperation);
+                    instruction.asyncExecutor = encodeEnum(sourceInstruction.asyncExecutor);
                     instruction.targetType = rawId(sourceInstruction.targetType);
-                    instruction.resultOwnership = static_cast<std::uint8_t>(sourceInstruction.resultOwnership);
-                    instruction.borrowLifetime = static_cast<std::uint8_t>(sourceInstruction.borrowLifetime);
+                    instruction.resultOwnership = encodeEnum(sourceInstruction.resultOwnership);
+                    instruction.borrowLifetime = encodeEnum(sourceInstruction.borrowLifetime);
                     instruction.borrowOrigin = rawId(sourceInstruction.borrowOrigin);
-                    instruction.storageClass = static_cast<std::uint8_t>(sourceInstruction.storageClass);
-                    instruction.escapeClass = static_cast<std::uint8_t>(sourceInstruction.escapeClass);
-                    instruction.boundsCheck = static_cast<std::uint8_t>(sourceInstruction.boundsCheck);
+                    instruction.storageClass = encodeEnum(sourceInstruction.storageClass);
+                    instruction.escapeClass = encodeEnum(sourceInstruction.escapeClass);
+                    instruction.boundsCheck = encodeEnum(sourceInstruction.boundsCheck);
                     instruction.source = compileSpan(sourceInstruction.source, strings);
                     block.instructions.push_back(std::move(instruction));
                 }

@@ -6,7 +6,7 @@
 
 #define COMPILER_FLAGS(X)                                                                                              \
     X(SingleFile) X(ShowTokens) X(ShowAst) X(DryRun) X(EmitCpp) X(EmitTypedWir) X(EmitLoweredWir) X(EmitBytecode)      \
-        X(ShowBackendInfo) X(NoBuiltin) X(WarnAsError) X(Run)
+        X(DisassembleBytecode) X(ShowBackendInfo) X(NoBuiltin) X(WarnAsError) X(Run)
     DEFINE_FLAGS(CompilerFlags, COMPILER_FLAGS);
 #undef COMPILER_FLAGS
 

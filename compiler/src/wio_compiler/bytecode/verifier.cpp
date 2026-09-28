@@ -11,10 +11,7 @@ namespace wio::bytecode
         VerificationResult result;
         auto report = [&](std::string code, std::string message, const std::uint32_t function = InvalidIndex,
                           const std::uint32_t block = InvalidIndex, const std::uint32_t instruction = InvalidIndex)
-        {
-            result.diagnostics_.push_back(
-                {std::move(code), std::move(message), function, block, instruction});
-        };
+        { result.diagnostics_.push_back({std::move(code), std::move(message), function, block, instruction}); };
         auto validString = [&](const StringId id) { return id == InvalidIndex || id < module.strings.size(); };
         auto validType = [&](const std::uint32_t id) { return id == InvalidIndex || id < module.types.size(); };
         auto validFunction = [&](const std::uint32_t id)
@@ -203,8 +200,8 @@ namespace wio::bytecode
                         report("WBC1015", "Instruction references an invalid string id", function.id, block.id,
                                instructionIndex);
                     if (isTerminator(instruction.opcode) != (index + 1 == block.instructions.size()))
-                        report("WBC1039", "Every block must end in exactly one final terminator", function.id,
-                               block.id, instructionIndex);
+                        report("WBC1039", "Every block must end in exactly one final terminator", function.id, block.id,
+                               instructionIndex);
                     if (producesValue(instruction.opcode) != (instruction.result != InvalidIndex))
                         report("WBC1040", "Instruction result shape does not match its opcode", function.id, block.id,
                                instructionIndex);
@@ -244,14 +241,15 @@ namespace wio::bytecode
                         {
                             const Block& targetBlock = *blocksById.at(target.block);
                             if (target.arguments.size() != targetBlock.parameters.size())
-                                report("WBC1046", "Branch argument count does not match target parameters",
-                                       function.id, block.id, instructionIndex);
+                                report("WBC1046", "Branch argument count does not match target parameters", function.id,
+                                       block.id, instructionIndex);
                             const std::size_t comparable =
                                 (std::min)(target.arguments.size(), targetBlock.parameters.size());
                             for (std::size_t argumentIndex = 0; argumentIndex < comparable; ++argumentIndex)
                             {
                                 const auto value = valueTypes.find(target.arguments[argumentIndex]);
-                                if (value == valueTypes.end() || value->second != targetBlock.parameters[argumentIndex].type)
+                                if (value == valueTypes.end() ||
+                                    value->second != targetBlock.parameters[argumentIndex].type)
                                     report("WBC1047", "Branch argument type does not match target parameter",
                                            function.id, block.id, instructionIndex);
                             }
@@ -373,9 +371,9 @@ namespace wio::bytecode
             }
         }
         const Lifecycle& lifecycle = module.contract.lifecycle;
-        if (!validFunction(lifecycle.apiVersion) || !validFunction(lifecycle.load) || !validFunction(lifecycle.update) ||
-            !validFunction(lifecycle.unload) || !validFunction(lifecycle.saveState) ||
-            !validFunction(lifecycle.restoreState))
+        if (!validFunction(lifecycle.apiVersion) || !validFunction(lifecycle.load) ||
+            !validFunction(lifecycle.update) || !validFunction(lifecycle.unload) ||
+            !validFunction(lifecycle.saveState) || !validFunction(lifecycle.restoreState))
             report("WBC1117", "Module lifecycle references an invalid function id");
         if (module.abiDescriptorVersion == 0 || module.contract.callTableStableId == 0 ||
             module.contract.callTableEntries.size() != module.contract.exports.size())
