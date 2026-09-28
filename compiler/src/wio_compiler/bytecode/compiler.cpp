@@ -189,6 +189,196 @@ namespace wio::bytecode
         module.stableKey = strings.intern(source.contract.stableKey);
         module.abiDescriptorVersion = source.contract.callTable.descriptorVersion;
 
+        for (const wir::ModuleImport& sourceImport : source.contract.imports)
+        {
+            Import import;
+            import.stableId = sourceImport.stableId;
+            import.logicalName = strings.intern(sourceImport.logicalName);
+            import.sourcePath = strings.intern(sourceImport.sourcePath);
+            import.alias = strings.intern(sourceImport.alias);
+            for (const std::string& symbol : sourceImport.importedSymbols)
+                import.importedSymbols.push_back(strings.intern(symbol));
+            import.kind = static_cast<std::uint8_t>(sourceImport.kind);
+            import.importAll = sourceImport.importAll;
+            module.contract.imports.push_back(std::move(import));
+        }
+        for (const wir::ModuleExport& sourceExport : source.contract.exports)
+        {
+            Export exportRecord;
+            exportRecord.stableId = sourceExport.stableId;
+            exportRecord.stableKey = strings.intern(sourceExport.stableKey);
+            exportRecord.logicalName = strings.intern(sourceExport.logicalName);
+            exportRecord.symbolName = strings.intern(sourceExport.symbolName);
+            exportRecord.kind = static_cast<std::uint8_t>(sourceExport.kind);
+            exportRecord.role = static_cast<std::uint8_t>(sourceExport.role);
+            exportRecord.roleName = strings.intern(sourceExport.roleName);
+            exportRecord.function = rawId(sourceExport.function);
+            exportRecord.type = rawId(sourceExport.type);
+            for (const wir::TypeId type : sourceExport.parameterTypes)
+                exportRecord.parameterTypes.push_back(rawId(type));
+            exportRecord.returnType = rawId(sourceExport.returnType);
+            for (const wir::TypeId type : sourceExport.genericArguments)
+                exportRecord.genericArguments.push_back(rawId(type));
+            exportRecord.callTableSlot = sourceExport.callTableSlot;
+            exportRecord.isAsync = sourceExport.isAsync;
+            module.contract.exports.push_back(std::move(exportRecord));
+        }
+        for (const wir::AttributeApplicationDescriptor& sourceAttribute : source.contract.attributes)
+        {
+            AttributeApplication attribute;
+            attribute.stableId = sourceAttribute.stableId;
+            attribute.canonicalName = strings.intern(sourceAttribute.canonicalName);
+            attribute.originParent = strings.intern(sourceAttribute.originParent);
+            attribute.selector = strings.intern(sourceAttribute.selector);
+            attribute.targetKind = static_cast<std::uint8_t>(sourceAttribute.targetKind);
+            attribute.origin = static_cast<std::uint8_t>(sourceAttribute.origin);
+            attribute.targetStableId = sourceAttribute.targetStableId;
+            attribute.targetType = rawId(sourceAttribute.targetType);
+            attribute.targetFunction = rawId(sourceAttribute.targetFunction);
+            attribute.parameterIndex = sourceAttribute.parameterIndex;
+            attribute.sourceOrder = sourceAttribute.sourceOrder;
+            attribute.runtimeRetained = sourceAttribute.runtimeRetained;
+            for (const wir::AttributeArgumentDescriptor& sourceArgument : sourceAttribute.arguments)
+            {
+                attribute.arguments.push_back(AttributeArgument{
+                    .name = strings.intern(sourceArgument.name),
+                    .sourceText = strings.intern(sourceArgument.sourceText),
+                    .type = rawId(sourceArgument.type),
+                    .usedDefault = sourceArgument.usedDefault});
+            }
+            for (const wir::AttributeProcessorDescriptor& sourceProcessor : sourceAttribute.processors)
+            {
+                attribute.processors.push_back(AttributeProcessor{
+                    .stableId = sourceProcessor.stableId,
+                    .canonicalTypeName = strings.intern(sourceProcessor.canonicalTypeName),
+                    .hookName = strings.intern(sourceProcessor.hookName),
+                    .hookMode = strings.intern(sourceProcessor.hookMode),
+                    .phase = static_cast<std::uint8_t>(sourceProcessor.phase),
+                    .processorType = rawId(sourceProcessor.processorType),
+                    .hookFunction = rawId(sourceProcessor.hookFunction),
+                    .valueType = rawId(sourceProcessor.valueType)});
+            }
+            module.contract.attributes.push_back(std::move(attribute));
+        }
+        for (const wir::ReflectionDescriptor& sourceReflection : source.contract.reflection)
+        {
+            Reflection reflection;
+            reflection.stableTypeId = sourceReflection.stableTypeId;
+            reflection.logicalName = strings.intern(sourceReflection.logicalName);
+            reflection.type = rawId(sourceReflection.type);
+            reflection.nominalKind = static_cast<std::uint8_t>(sourceReflection.nominalKind);
+            reflection.isExported = sourceReflection.isExported;
+            reflection.runtimeVisible = sourceReflection.runtimeVisible;
+            for (const std::string& name : sourceReflection.genericParameterNames)
+                reflection.genericParameterNames.push_back(strings.intern(name));
+            for (const wir::TypeId type : sourceReflection.genericArguments)
+                reflection.genericArguments.push_back(rawId(type));
+            reflection.attributes = sourceReflection.attributes;
+            for (const wir::ReflectedFieldDescriptor& sourceField : sourceReflection.fields)
+            {
+                reflection.fields.push_back(ReflectedField{
+                    .stableId = sourceField.stableId,
+                    .name = strings.intern(sourceField.name),
+                    .type = rawId(sourceField.type),
+                    .visibility = static_cast<std::uint8_t>(sourceField.visibility),
+                    .isMutable = sourceField.isMutable,
+                    .attributes = sourceField.attributes});
+            }
+            for (const wir::ReflectedMethodDescriptor& sourceMethod : sourceReflection.methods)
+            {
+                ReflectedMethod method;
+                method.stableId = sourceMethod.stableId;
+                method.name = strings.intern(sourceMethod.name);
+                method.function = rawId(sourceMethod.function);
+                method.returnType = rawId(sourceMethod.returnType);
+                for (const wir::TypeId type : sourceMethod.parameterTypes)
+                    method.parameterTypes.push_back(rawId(type));
+                method.slot = sourceMethod.slot;
+                method.isAsync = sourceMethod.isAsync;
+                method.visibility = static_cast<std::uint8_t>(sourceMethod.visibility);
+                method.attributes = sourceMethod.attributes;
+                reflection.methods.push_back(std::move(method));
+            }
+            for (const wir::ReflectedCaseDescriptor& sourceCase : sourceReflection.cases)
+            {
+                reflection.cases.push_back(ReflectedCase{
+                    .stableId = sourceCase.stableId,
+                    .name = strings.intern(sourceCase.name),
+                    .attributes = sourceCase.attributes});
+            }
+            module.contract.reflection.push_back(std::move(reflection));
+        }
+        for (const wir::SystemDescriptor& sourceSystem : source.contract.systems)
+        {
+            module.contract.systems.push_back(System{
+                .stableId = sourceSystem.stableId,
+                .logicalName = strings.intern(sourceSystem.logicalName),
+                .type = rawId(sourceSystem.type),
+                .start = rawId(sourceSystem.start),
+                .update = rawId(sourceSystem.update),
+                .close = rawId(sourceSystem.close)});
+        }
+        if (source.contract.application)
+        {
+            const wir::ApplicationDescriptor& sourceApplication = *source.contract.application;
+            Application& application = module.contract.application;
+            module.contract.hasApplication = true;
+            application.stableId = sourceApplication.stableId;
+            application.logicalName = strings.intern(sourceApplication.logicalName);
+            application.type = rawId(sourceApplication.type);
+            application.construct = rawId(sourceApplication.construct);
+            application.entry = rawId(sourceApplication.entry);
+            application.start = rawId(sourceApplication.start);
+            application.update = rawId(sourceApplication.update);
+            application.close = rawId(sourceApplication.close);
+            application.exit = rawId(sourceApplication.exit);
+            for (const wir::TypeId system : sourceApplication.systems)
+                application.systems.push_back(rawId(system));
+            for (const wir::ApplicationStageDescriptor& sourceStage : sourceApplication.stages)
+            {
+                Stage stage;
+                stage.stableId = sourceStage.stableId;
+                stage.name = strings.intern(sourceStage.name);
+                stage.after = strings.intern(sourceStage.after);
+                stage.fixedHzBits = std::bit_cast<std::uint64_t>(sourceStage.fixedHz);
+                stage.order = sourceStage.order;
+                stage.kind = static_cast<std::uint8_t>(sourceStage.kind);
+                stage.affinity = static_cast<std::uint8_t>(sourceStage.affinity);
+                stage.legacyExplicit = sourceStage.legacyExplicit;
+                for (const wir::ApplicationStageRun& sourceRun : sourceStage.runs)
+                {
+                    StageRun run;
+                    run.targetName = strings.intern(sourceRun.targetName);
+                    run.methodName = strings.intern(sourceRun.methodName);
+                    run.targetType = rawId(sourceRun.targetType);
+                    run.function = rawId(sourceRun.function);
+                    for (const wir::ApplicationResourceBinding& sourceResource : sourceRun.resources)
+                    {
+                        run.resources.push_back(ResourceBinding{
+                            .name = strings.intern(sourceResource.name),
+                            .type = rawId(sourceResource.type),
+                            .access = static_cast<std::uint8_t>(sourceResource.access)});
+                    }
+                    run.applicationTarget = sourceRun.applicationTarget;
+                    run.acceptsDelta = sourceRun.acceptsDelta;
+                    stage.runs.push_back(std::move(run));
+                }
+                application.stages.push_back(std::move(stage));
+            }
+            application.hostOwnsStorage = sourceApplication.hostOwnsStorage;
+            application.nonBlockingScheduling = sourceApplication.nonBlockingScheduling;
+        }
+        module.contract.lifecycle = Lifecycle{
+            .apiVersion = rawId(source.contract.lifecycle.apiVersion),
+            .load = rawId(source.contract.lifecycle.load),
+            .update = rawId(source.contract.lifecycle.update),
+            .unload = rawId(source.contract.lifecycle.unload),
+            .saveState = rawId(source.contract.lifecycle.saveState),
+            .restoreState = rawId(source.contract.lifecycle.restoreState),
+            .stateSchemaVersion = source.contract.lifecycle.stateSchemaVersion};
+        module.contract.callTableStableId = source.contract.callTable.stableId;
+        module.contract.callTableEntries = source.contract.callTable.entries;
+
         module.types.reserve(source.types.size());
         for (const wir::Type& sourceType : source.types.types())
         {
@@ -209,6 +399,54 @@ namespace wio::bytecode
             type.flags = sourceType.isMutable ? 0x01u : 0u;
             type.flags |= sourceType.hasConstructor ? 0x02u : 0u;
             type.flags |= sourceType.hasDestructor ? 0x04u : 0u;
+            for (const wir::TypeId base : sourceType.baseTypes)
+                type.baseTypes.push_back(rawId(base));
+            for (const wir::FieldLayout& sourceField : sourceType.fields)
+            {
+                type.fields.push_back(Type::Field{
+                    .name = strings.intern(sourceField.name),
+                    .type = rawId(sourceField.type),
+                    .visibility = static_cast<std::uint8_t>(sourceField.visibility),
+                    .isMutable = sourceField.isMutable});
+            }
+            for (const wir::MethodLayout& sourceMethod : sourceType.methods)
+            {
+                Type::Method method;
+                method.name = strings.intern(sourceMethod.name);
+                for (const wir::TypeId parameter : sourceMethod.parameterTypes)
+                    method.parameterTypes.push_back(rawId(parameter));
+                method.returnType = rawId(sourceMethod.returnType);
+                method.function = rawId(sourceMethod.function);
+                method.slot = sourceMethod.slot;
+                method.visibility = static_cast<std::uint8_t>(sourceMethod.visibility);
+                method.receiverMutable = sourceMethod.receiverMutable;
+                method.isAbstract = sourceMethod.isAbstract;
+                type.methods.push_back(std::move(method));
+            }
+            for (const wir::TypeId castType : sourceType.castTypes)
+                type.castTypes.push_back(rawId(castType));
+            for (const wir::DispatchEntry& sourceDispatch : sourceType.dispatchEntries)
+            {
+                type.dispatchEntries.push_back(Type::DispatchEntry{
+                    .contractType = rawId(sourceDispatch.contractType),
+                    .slot = sourceDispatch.slot,
+                    .implementation = rawId(sourceDispatch.implementation)});
+            }
+            type.destructor = rawId(sourceType.destructor);
+            type.defaultConstructor = rawId(sourceType.defaultConstructor);
+            type.fieldInitializer = rawId(sourceType.fieldInitializer);
+            type.enumUnderlyingType = rawId(sourceType.enumUnderlyingType);
+            for (const wir::EnumCaseLayout& sourceCase : sourceType.enumCases)
+                type.enumCases.push_back(Type::EnumCase{strings.intern(sourceCase.name), sourceCase.rawValue});
+            if (sourceType.nativeBinding)
+            {
+                type.hasNativeBinding = true;
+                type.nativeBinding = Type::NativeBinding{
+                    .cppName = strings.intern(sourceType.nativeBinding->cppName),
+                    .header = strings.intern(sourceType.nativeBinding->header),
+                    .standardLayout = sourceType.nativeBinding->standardLayout,
+                    .triviallyCopyable = sourceType.nativeBinding->triviallyCopyable};
+            }
             module.types.push_back(std::move(type));
         }
 
@@ -247,6 +485,78 @@ namespace wio::bytecode
                                                         (sourceFunction.isClosureBody ? 0x0020u : 0u) |
                                                         (sourceFunction.nativeBinding ? 0x0040u : 0u) |
                                                         (sourceFunction.coroutine ? 0x0080u : 0u));
+
+            for (const wir::CaptureLayout& sourceCapture : sourceFunction.captures)
+            {
+                function.captures.push_back(Function::Capture{
+                    .name = strings.intern(sourceCapture.name),
+                    .type = rawId(sourceCapture.type),
+                    .kind = static_cast<std::uint8_t>(sourceCapture.kind)});
+            }
+            if (sourceFunction.nativeBinding)
+            {
+                const wir::NativeBinding& sourceBinding = *sourceFunction.nativeBinding;
+                function.hasNativeBinding = true;
+                function.nativeBinding.symbol = strings.intern(sourceBinding.symbol);
+                function.nativeBinding.header = strings.intern(sourceBinding.header);
+                function.nativeBinding.stableKey = strings.intern(sourceBinding.stableKey);
+                function.nativeBinding.thunkSymbol = strings.intern(sourceBinding.thunkSymbol);
+                function.nativeBinding.language = static_cast<std::uint8_t>(sourceBinding.language);
+                function.nativeBinding.callingConvention =
+                    static_cast<std::uint8_t>(sourceBinding.callingConvention);
+                function.nativeBinding.exceptionBoundary =
+                    static_cast<std::uint8_t>(sourceBinding.exceptionBoundary);
+                function.nativeBinding.thunkKind = static_cast<std::uint8_t>(sourceBinding.thunkKind);
+                function.nativeBinding.receiver = static_cast<std::uint8_t>(sourceBinding.receiver);
+                const auto compileAbiValue = [](const wir::NativeAbiValue& value)
+                {
+                    return Function::NativeAbiValue{
+                        .type = rawId(value.type),
+                        .passing = static_cast<std::uint8_t>(value.passing),
+                        .marshalling = static_cast<std::uint8_t>(value.marshalling),
+                        .callbackLifetime = static_cast<std::uint8_t>(value.callbackLifetime),
+                        .callbackThread = static_cast<std::uint8_t>(value.callbackThread),
+                        .nullable = value.nullable};
+                };
+                for (const wir::NativeAbiValue& parameter : sourceBinding.parameters)
+                    function.nativeBinding.parameters.push_back(compileAbiValue(parameter));
+                function.nativeBinding.result = compileAbiValue(sourceBinding.result);
+                for (const wir::TypeId argument : sourceBinding.templateArguments)
+                    function.nativeBinding.templateArguments.push_back(rawId(argument));
+                function.nativeBinding.explicitTemplateArguments = sourceBinding.explicitTemplateArguments;
+                function.nativeBinding.requiresAdapter = sourceBinding.requiresAdapter;
+            }
+            if (sourceFunction.coroutine)
+            {
+                const wir::CoroutineLayout& sourceCoroutine = *sourceFunction.coroutine;
+                function.hasCoroutine = true;
+                function.coroutine.resultType = rawId(sourceCoroutine.resultType);
+                for (const wir::CoroutineFrameSlot& sourceSlot : sourceCoroutine.frameSlots)
+                {
+                    function.coroutine.frameSlots.push_back(Function::CoroutineFrameSlot{
+                        .slot = sourceSlot.slot,
+                        .value = rawId(sourceSlot.value),
+                        .type = rawId(sourceSlot.type),
+                        .kind = static_cast<std::uint8_t>(sourceSlot.kind),
+                        .ownership = static_cast<std::uint8_t>(sourceSlot.ownership),
+                        .cleanup = static_cast<std::uint8_t>(sourceSlot.cleanup)});
+                }
+                for (const wir::CoroutineState& sourceState : sourceCoroutine.states)
+                {
+                    function.coroutine.states.push_back(Function::CoroutineState{
+                        .index = sourceState.index,
+                        .suspendBlock = rawId(sourceState.suspendBlock),
+                        .resumeBlock = rawId(sourceState.resumeBlock),
+                        .awaitedTask = rawId(sourceState.awaitedTask),
+                        .resumedValue = rawId(sourceState.resumedValue),
+                        .resultType = rawId(sourceState.resultType),
+                        .executor = static_cast<std::uint8_t>(sourceState.executor),
+                        .cancellationPoint = sourceState.cancellationPoint});
+                }
+                function.coroutine.retainedReceiver = rawId(sourceCoroutine.retainedReceiver);
+                function.coroutine.cooperativeCancellation = sourceCoroutine.cooperativeCancellation;
+                function.coroutine.maySwitchThreads = sourceCoroutine.maySwitchThreads;
+            }
 
             function.parameters.reserve(sourceFunction.parameters.size());
             for (const auto& parameter : sourceFunction.parameters)

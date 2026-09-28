@@ -1,5 +1,6 @@
 #pragma once
 
+#include "wio/bytecode/contract.h"
 #include "wio/bytecode/format.h"
 
 #include <compare>
@@ -118,6 +119,80 @@ namespace wio::bytecode
         std::uint32_t ownerType = InvalidIndex;
         std::uint32_t methodSlot = 0;
         std::uint32_t captureParameterCount = 0;
+        struct Capture
+        {
+            StringId name = InvalidIndex;
+            std::uint32_t type = InvalidIndex;
+            std::uint8_t kind = 0;
+
+            auto operator<=>(const Capture&) const = default;
+        };
+        struct NativeAbiValue
+        {
+            std::uint32_t type = InvalidIndex;
+            std::uint8_t passing = 0;
+            std::uint8_t marshalling = 0;
+            std::uint8_t callbackLifetime = 0;
+            std::uint8_t callbackThread = 0;
+            bool nullable = false;
+
+            auto operator<=>(const NativeAbiValue&) const = default;
+        };
+        struct NativeBinding
+        {
+            StringId symbol = InvalidIndex;
+            StringId header = InvalidIndex;
+            StringId stableKey = InvalidIndex;
+            StringId thunkSymbol = InvalidIndex;
+            std::uint8_t language = 0;
+            std::uint8_t callingConvention = 0;
+            std::uint8_t exceptionBoundary = 0;
+            std::uint8_t thunkKind = 0;
+            std::uint8_t receiver = 0;
+            std::vector<NativeAbiValue> parameters;
+            NativeAbiValue result;
+            std::vector<std::uint32_t> templateArguments;
+            bool explicitTemplateArguments = false;
+            bool requiresAdapter = false;
+
+            auto operator<=>(const NativeBinding&) const = default;
+        };
+        struct CoroutineFrameSlot
+        {
+            std::uint32_t slot = 0;
+            std::uint32_t value = InvalidIndex;
+            std::uint32_t type = InvalidIndex;
+            std::uint8_t kind = 0;
+            std::uint8_t ownership = 0;
+            std::uint8_t cleanup = 0;
+
+            auto operator<=>(const CoroutineFrameSlot&) const = default;
+        };
+        struct CoroutineState
+        {
+            std::uint32_t index = 0;
+            std::uint32_t suspendBlock = InvalidIndex;
+            std::uint32_t resumeBlock = InvalidIndex;
+            std::uint32_t awaitedTask = InvalidIndex;
+            std::uint32_t resumedValue = InvalidIndex;
+            std::uint32_t resultType = InvalidIndex;
+            std::uint8_t executor = 0;
+            bool cancellationPoint = true;
+
+            auto operator<=>(const CoroutineState&) const = default;
+        };
+        struct CoroutineLayout
+        {
+            std::uint32_t resultType = InvalidIndex;
+            std::vector<CoroutineFrameSlot> frameSlots;
+            std::vector<CoroutineState> states;
+            std::uint32_t retainedReceiver = InvalidIndex;
+            bool cooperativeCancellation = true;
+            bool maySwitchThreads = false;
+
+            auto operator<=>(const CoroutineLayout&) const = default;
+        };
+        std::vector<Capture> captures;
         std::vector<std::uint32_t> genericParameters;
         std::uint32_t genericOrigin = InvalidIndex;
         std::vector<std::uint32_t> specializationArguments;
@@ -125,6 +200,10 @@ namespace wio::bytecode
         std::vector<Block> blocks;
         SourceSpan source;
         std::uint16_t flags = 0;
+        bool hasNativeBinding = false;
+        NativeBinding nativeBinding;
+        bool hasCoroutine = false;
+        CoroutineLayout coroutine;
 
         auto operator<=>(const Function&) const = default;
     };
@@ -143,6 +222,52 @@ namespace wio::bytecode
 
     struct Type
     {
+        struct Field
+        {
+            StringId name = InvalidIndex;
+            std::uint32_t type = InvalidIndex;
+            std::uint8_t visibility = 0;
+            bool isMutable = true;
+
+            auto operator<=>(const Field&) const = default;
+        };
+        struct Method
+        {
+            StringId name = InvalidIndex;
+            std::vector<std::uint32_t> parameterTypes;
+            std::uint32_t returnType = InvalidIndex;
+            std::uint32_t function = InvalidIndex;
+            std::uint32_t slot = 0;
+            std::uint8_t visibility = 0;
+            bool receiverMutable = true;
+            bool isAbstract = false;
+
+            auto operator<=>(const Method&) const = default;
+        };
+        struct DispatchEntry
+        {
+            std::uint32_t contractType = InvalidIndex;
+            std::uint32_t slot = 0;
+            std::uint32_t implementation = InvalidIndex;
+
+            auto operator<=>(const DispatchEntry&) const = default;
+        };
+        struct EnumCase
+        {
+            StringId name = InvalidIndex;
+            std::uint64_t rawValue = 0;
+
+            auto operator<=>(const EnumCase&) const = default;
+        };
+        struct NativeBinding
+        {
+            StringId cppName = InvalidIndex;
+            StringId header = InvalidIndex;
+            bool standardLayout = true;
+            bool triviallyCopyable = true;
+
+            auto operator<=>(const NativeBinding&) const = default;
+        };
         std::uint8_t kind = 0;
         StringId name = InvalidIndex;
         std::vector<std::uint32_t> arguments;
@@ -154,6 +279,18 @@ namespace wio::bytecode
         std::uint8_t ownership = 0;
         std::uint8_t cleanup = 0;
         std::uint8_t flags = 0;
+        std::vector<std::uint32_t> baseTypes;
+        std::vector<Field> fields;
+        std::vector<Method> methods;
+        std::vector<std::uint32_t> castTypes;
+        std::vector<DispatchEntry> dispatchEntries;
+        std::uint32_t destructor = InvalidIndex;
+        std::uint32_t defaultConstructor = InvalidIndex;
+        std::uint32_t fieldInitializer = InvalidIndex;
+        std::uint32_t enumUnderlyingType = InvalidIndex;
+        std::vector<EnumCase> enumCases;
+        bool hasNativeBinding = false;
+        NativeBinding nativeBinding;
 
         auto operator<=>(const Type&) const = default;
     };
@@ -171,6 +308,7 @@ namespace wio::bytecode
         StringId logicalName = InvalidIndex;
         StringId stableKey = InvalidIndex;
         std::uint32_t abiDescriptorVersion = 0;
+        Contract contract;
 
         [[nodiscard]] std::string_view string(StringId id) const noexcept;
 

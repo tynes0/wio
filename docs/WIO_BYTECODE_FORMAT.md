@@ -40,10 +40,12 @@ offset, byte size, logical record count, and a reserved field. Readers reject
 duplicate required sections, overlap, integer overflow, out-of-file ranges,
 unsupported flags, unreasonable counts, and trailing malformed records.
 
-The initial implementation emits manifest, strings, constants, types,
-globals, functions, and code sections. Module-contract and debug sections have
-reserved stable identifiers and will be filled before format v1 is declared
-release-compatible.
+The implementation emits manifest, strings, constants, types, globals,
+functions, code, and module-contract sections. The contract section preserves
+imports/exports, SDK slots, reflection, behavioral attributes, application and
+system scheduling, lifecycle hooks, and state-transfer identities. The debug
+section has a reserved stable identifier and will be filled before format v1
+is declared release-compatible.
 
 ## Instruction set
 
@@ -78,9 +80,6 @@ produce byte-for-byte identical output.
 
 ## Pending before v1 freeze
 
-- complete nominal layout, native binding, capture, and coroutine records;
-- complete module import/export, reflection, attribute, application, SDK call
-  table, and lifecycle contract sections;
 - instruction-specific typed verification;
 - debug/source-map compression and a standalone disassembler command;
 - compiler CLI output selection and atomic `.wiob` writing;

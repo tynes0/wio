@@ -98,6 +98,117 @@ int main()
     ok &= expect(decoded.succeeded() && bytecode::Verifier{}.verify(decoded.module).succeeded(),
                  "Decoded bytecode must pass structural verification");
 
+    bytecode::Module metadataModule = module;
+    bytecode::StringTableBuilder strings{metadataModule};
+    metadataModule.types.front().hasNativeBinding = true;
+    metadataModule.types.front().nativeBinding = bytecode::Type::NativeBinding{
+        .cppName = strings.intern("NativeCounter"),
+        .header = strings.intern("counter.h"),
+        .standardLayout = true,
+        .triviallyCopyable = true};
+    metadataModule.types.front().fields.push_back(bytecode::Type::Field{
+        .name = strings.intern("value"), .type = 2, .visibility = 2, .isMutable = true});
+    bytecode::Function& metadataFunction = metadataModule.functions.front();
+    metadataFunction.captureParameterCount = 1;
+    metadataFunction.captures.push_back(
+        bytecode::Function::Capture{.name = strings.intern("offset"), .type = 2, .kind = 0});
+    metadataFunction.hasNativeBinding = true;
+    metadataFunction.nativeBinding.symbol = strings.intern("AddOneNative");
+    metadataFunction.nativeBinding.header = strings.intern("counter.h");
+    metadataFunction.nativeBinding.stableKey = strings.intern("native:AddOneNative");
+    metadataFunction.nativeBinding.thunkSymbol = strings.intern("WioThunkAddOne");
+    metadataFunction.nativeBinding.parameters.push_back(
+        bytecode::Function::NativeAbiValue{.type = 2, .marshalling = 1});
+    metadataFunction.nativeBinding.result = bytecode::Function::NativeAbiValue{.type = 2, .marshalling = 1};
+    metadataFunction.hasCoroutine = true;
+    metadataFunction.coroutine.resultType = 2;
+    metadataFunction.coroutine.frameSlots.push_back(
+        bytecode::Function::CoroutineFrameSlot{.slot = 0, .value = 0, .type = 2});
+    metadataFunction.coroutine.states.push_back(
+        bytecode::Function::CoroutineState{.index = 0, .suspendBlock = 0, .resumeBlock = 0, .resultType = 2});
+    metadataModule.contract.imports.push_back(bytecode::Import{
+        .stableId = 10,
+        .logicalName = strings.intern("std::math"),
+        .sourcePath = strings.intern("std/math.wio"),
+        .alias = strings.intern("math"),
+        .importedSymbols = {strings.intern("min")}});
+    metadataModule.contract.exports.push_back(bytecode::Export{
+        .stableId = 11,
+        .stableKey = strings.intern("export:AddOne"),
+        .logicalName = strings.intern("AddOne"),
+        .symbolName = strings.intern("WioAddOne"),
+        .function = 0,
+        .type = 2,
+        .parameterTypes = {2},
+        .returnType = 2});
+    metadataModule.contract.callTableEntries.push_back(11);
+    metadataModule.contract.attributes.push_back(bytecode::AttributeApplication{
+        .stableId = 12,
+        .canonicalName = strings.intern("Trace"),
+        .originParent = strings.intern(""),
+        .selector = strings.intern("AddOne"),
+        .targetStableId = 11,
+        .targetType = 2,
+        .targetFunction = 0,
+        .runtimeRetained = true,
+        .arguments = {bytecode::AttributeArgument{
+            .name = strings.intern("category"), .sourceText = strings.intern("math"), .type = 2}},
+        .processors = {bytecode::AttributeProcessor{
+            .stableId = 13,
+            .canonicalTypeName = strings.intern("TraceProcessor"),
+            .hookName = strings.intern("Before"),
+            .hookMode = strings.intern("pre"),
+            .processorType = 2,
+            .hookFunction = 0,
+            .valueType = 2}}});
+    metadataModule.contract.reflection.push_back(bytecode::Reflection{
+        .stableTypeId = 14,
+        .logicalName = strings.intern("Counter"),
+        .type = 2,
+        .runtimeVisible = true,
+        .fields = {bytecode::ReflectedField{
+            .stableId = 15, .name = strings.intern("value"), .type = 2, .visibility = 2}},
+        .methods = {bytecode::ReflectedMethod{
+            .stableId = 16,
+            .name = strings.intern("AddOne"),
+            .function = 0,
+            .returnType = 2,
+            .parameterTypes = {2},
+            .visibility = 2}},
+        .cases = {bytecode::ReflectedCase{.stableId = 17, .name = strings.intern("Zero")}}});
+    metadataModule.contract.systems.push_back(bytecode::System{
+        .stableId = 18, .logicalName = strings.intern("CounterSystem"), .type = 2, .start = 0, .update = 0, .close = 0});
+    metadataModule.contract.hasApplication = true;
+    metadataModule.contract.application = bytecode::Application{
+        .stableId = 19,
+        .logicalName = strings.intern("CounterApp"),
+        .type = 2,
+        .construct = 0,
+        .entry = 0,
+        .start = 0,
+        .update = 0,
+        .close = 0,
+        .exit = 0,
+        .systems = {2},
+        .stages = {bytecode::Stage{
+            .stableId = 20,
+            .name = strings.intern("Update"),
+            .after = strings.intern(""),
+            .runs = {bytecode::StageRun{
+                .targetName = strings.intern("CounterSystem"),
+                .methodName = strings.intern("Update"),
+                .targetType = 2,
+                .function = 0,
+                .resources = {bytecode::ResourceBinding{
+                    .name = strings.intern("counter"), .type = 2}}}}}}};
+    metadataModule.contract.lifecycle = bytecode::Lifecycle{
+        .apiVersion = 0, .load = 0, .update = 0, .unload = 0, .saveState = 0, .restoreState = 0};
+    const bytecode::DecodeResult metadataRoundTrip = bytecode::decode(bytecode::encode(metadataModule));
+    ok &= expect(metadataRoundTrip.succeeded() && metadataRoundTrip.module == metadataModule,
+                 "Nominal, capture, native ABI, and coroutine metadata must round trip losslessly");
+    ok &= expect(metadataRoundTrip.succeeded() && bytecode::Verifier{}.verify(metadataRoundTrip.module).succeeded(),
+                 "Decoded rich metadata must pass bytecode verification");
+
     const std::string disassembly = bytecode::Disassembler{}.disassemble(module);
     ok &= expect(disassembly.find("fn @0 \"AddOne\"") != std::string::npos &&
                      disassembly.find("Binary %v0 %v1") != std::string::npos &&
