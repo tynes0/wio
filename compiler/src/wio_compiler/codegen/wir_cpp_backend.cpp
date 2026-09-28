@@ -312,11 +312,16 @@ namespace wio::codegen
             std::unordered_set<std::uint32_t> borrowedLoads_;
             std::unordered_set<std::uint32_t> objectBorrowedLoads_;
             std::unordered_set<std::uint32_t> ownedValues_;
+            std::unordered_map<std::uint32_t, ValueId> valueAliases_;
+            std::unordered_set<const lowered::Instruction*> suppressedInstructions_;
+            std::unordered_set<std::uint32_t> directValues_;
             std::unordered_set<std::uint32_t> structuralAliases_;
             mutable std::vector<std::uint8_t> openTypeCache_;
             mutable std::vector<std::string> cppTypeCache_;
             mutable std::vector<std::uint8_t> cppTypeCacheReady_;
+            std::string lastSourceFile_;
             bool cppTypeCacheEnabled_ = false;
+            bool currentFunctionIsLinear_ = false;
 
             const std::vector<const AttributeProcessorDescriptor*>& behavioralPipeline(
                 const FunctionId function) const
@@ -1866,6 +1871,17 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 output_ << '\n';
             }
 
+            static bool isLinearFunction(const lowered::Function& function)
+            {
+                if (function.blocks.size() != 1 || !function.blocks.front().parameters.empty() ||
+                    function.blocks.front().instructions.empty())
+                    return false;
+                const lowered::Opcode terminator = function.blocks.front().instructions.back().opcode;
+                return terminator == lowered::Opcode::Return ||
+                       terminator == lowered::Opcode::CoroutineComplete ||
+                       terminator == lowered::Opcode::Unreachable;
+            }
+
             void collectValueTypes(const lowered::Function& function)
             {
                 std::size_t valueCapacity = function.parameters.size();
@@ -1879,6 +1895,13 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 objectBorrowedLoads_.reserve(valueCapacity);
                 ownedValues_.clear();
                 ownedValues_.reserve(valueCapacity);
+                valueAliases_.clear();
+                valueAliases_.reserve(valueCapacity / 4u + 1u);
+                suppressedInstructions_.clear();
+                suppressedInstructions_.reserve(valueCapacity / 4u + 1u);
+                directValues_.clear();
+                directValues_.reserve(valueCapacity);
+                currentFunctionIsLinear_ = isLinearFunction(function);
                 for (const lowered::Parameter& parameter : function.parameters)
                 {
                     valueTypes_[parameter.id.value()] = parameter.type;
@@ -1911,10 +1934,131 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                             borrowedLoads_.insert(instruction.result.value());
                     }
                 }
+
+                collectLinearPlaceAliases(function);
+
+                if (currentFunctionIsLinear_)
+                {
+                    for (const auto& [id, type] : valueTypes_)
+                    {
+                        (void)type;
+                        directValues_.insert(id);
+                    }
+                    for (const lowered::Instruction& instruction : function.blocks.front().instructions)
+                        if ((instruction.opcode == lowered::Opcode::Release ||
+                             instruction.opcode == lowered::Opcode::DropValue) &&
+                            !instruction.operands.empty())
+                            directValues_.erase(resolveValueAlias(instruction.operands.front()).value());
+                }
             }
 
-            std::string operand(const ValueId id) const
+            void collectLinearPlaceAliases(const lowered::Function& function)
             {
+                if (function.blocks.size() != 1)
+                    return;
+
+                const lowered::BasicBlock& block = function.blocks.front();
+                std::unordered_map<std::uint32_t, std::vector<const lowered::Instruction*>> uses;
+                std::unordered_map<const lowered::Instruction*, std::size_t> positions;
+                uses.reserve(valueTypes_.size());
+                positions.reserve(block.instructions.size());
+                for (std::size_t index = 0; index < block.instructions.size(); ++index)
+                {
+                    const lowered::Instruction& instruction = block.instructions[index];
+                    positions.emplace(&instruction, index);
+                    for (const ValueId operandId : instruction.operands)
+                        uses[operandId.value()].push_back(&instruction);
+                    for (const lowered::BranchTarget& target : instruction.targets)
+                        for (const ValueId argument : target.arguments)
+                            uses[argument.value()].push_back(&instruction);
+                    if (instruction.borrowOrigin)
+                        uses[instruction.borrowOrigin.value()].push_back(&instruction);
+                }
+
+                for (const lowered::Instruction& place : block.instructions)
+                {
+                    if (place.opcode != lowered::Opcode::LocalPlace || !place.result)
+                        continue;
+
+                    const lowered::Instruction* initializer = nullptr;
+                    const lowered::Instruction* load = nullptr;
+                    std::vector<const lowered::Instruction*> cleanup;
+                    bool promotable = true;
+                    for (const lowered::Instruction* use : uses[place.result.value()])
+                    {
+                        if (use->operands.empty() || use->operands.front() != place.result)
+                        {
+                            promotable = false;
+                            break;
+                        }
+                        if (use->opcode == lowered::Opcode::PlaceInit && !initializer)
+                            initializer = use;
+                        else if (use->opcode == lowered::Opcode::Load && !load && use->result &&
+                                 use->resultOwnership != typed::ValueOwnership::Borrowed)
+                            load = use;
+                        else if (use->opcode == lowered::Opcode::DropPlace ||
+                                 use->opcode == lowered::Opcode::ReleasePlace)
+                            cleanup.push_back(use);
+                        else
+                        {
+                            promotable = false;
+                            break;
+                        }
+                    }
+
+                    if (!promotable || !initializer || initializer->operands.size() != 2 || !load)
+                        continue;
+
+                    const ValueId initialValue = initializer->operands[1];
+                    const auto initialUses = uses.find(initialValue.value());
+                    if (initialUses == uses.end() || initialUses->second.size() != 1 ||
+                        initialUses->second.front() != initializer)
+                        continue;
+                    const auto initialTypeId = valueTypes_.find(initialValue.value());
+                    const Type* initialType = initialTypeId == valueTypes_.end()
+                                                  ? nullptr
+                                                  : module_.types.tryGet(initialTypeId->second);
+                    if (!initialType || requiresCleanup(*initialType) || positions.at(initializer) >= positions.at(load) ||
+                        std::ranges::any_of(cleanup, [&](const lowered::Instruction* instruction)
+                                            { return positions.at(instruction) <= positions.at(load); }))
+                        continue;
+
+                    valueAliases_.emplace(load->result.value(), initialValue);
+                    suppressedInstructions_.insert(&place);
+                    suppressedInstructions_.insert(initializer);
+                    suppressedInstructions_.insert(load);
+                    suppressedInstructions_.insert(cleanup.begin(), cleanup.end());
+                    valueTypes_.erase(place.result.value());
+                    valueTypes_.erase(load->result.value());
+                }
+            }
+
+            ValueId resolveValueAlias(ValueId id) const
+            {
+                for (std::size_t depth = 0; depth <= valueAliases_.size(); ++depth)
+                {
+                    const auto alias = valueAliases_.find(id.value());
+                    if (alias == valueAliases_.end())
+                        break;
+                    id = alias->second;
+                }
+                return id;
+            }
+
+            std::string valueStorageType(const std::uint32_t id, const TypeId type) const
+            {
+                if (objectBorrowedLoads_.contains(id))
+                    return "wio::wir_backend::ObjectBorrow<" + objectName(type) + ">";
+                if (borrowedLoads_.contains(id))
+                    return "std::reference_wrapper<" + cppType(type) + ">";
+                return cppType(type);
+            }
+
+            std::string operand(ValueId id) const
+            {
+                id = resolveValueAlias(id);
+                if (directValues_.contains(id.value()))
+                    return borrowedLoads_.contains(id.value()) ? "(" + valueName(id) + ".get())" : valueName(id);
                 return borrowedLoads_.contains(id.value()) ? "(" + valueName(id) + "->get())"
                                                            : "(*" + valueName(id) + ")";
             }
@@ -1926,7 +2070,15 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
             void emitSource(const SourceSpan& source)
             {
                 if (options_.emitLineDirectives && source.hasSourceContext())
-                    output_ << "#line " << source.begin.line << ' ' << cppString(source.begin.file) << "\n";
+                {
+                    output_ << "#line " << source.begin.line;
+                    if (source.begin.file != lastSourceFile_)
+                    {
+                        lastSourceFile_ = source.begin.file;
+                        output_ << ' ' << cppString(lastSourceFile_);
+                    }
+                    output_ << '\n';
+                }
             }
 
             std::string literal(const lowered::Instruction& instruction) const
@@ -2027,7 +2179,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 {
                     if (index != begin)
                         arguments += ", ";
-                    arguments += consume && ownedValues_.contains(instruction.operands[index].value())
+                    arguments +=
+                        consume && ownedValues_.contains(resolveValueAlias(instruction.operands[index]).value())
                                      ? movedOperand(instruction.operands[index])
                                      : operand(instruction.operands[index]);
                 }
@@ -2057,7 +2210,7 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
 
             TypeId valueType(const ValueId value) const
             {
-                const auto found = valueTypes_.find(value.value());
+                const auto found = valueTypes_.find(resolveValueAlias(value).value());
                 return found == valueTypes_.end() ? TypeId{} : found->second;
             }
 
@@ -2226,7 +2379,12 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
             void assignResult(const lowered::Instruction& instruction, const std::string& expression)
             {
                 if (instruction.result)
-                    output_ << "                " << valueName(instruction.result) << " = " << expression << ";\n";
+                {
+                    output_ << "                ";
+                    if (directValues_.contains(instruction.result.value()))
+                        output_ << valueStorageType(instruction.result.value(), instruction.resultType) << ' ';
+                    output_ << valueName(instruction.result) << " = " << expression << ";\n";
+                }
                 else
                     output_ << "                " << expression << ";\n";
             }
@@ -2248,6 +2406,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
 
             void emitInstruction(const lowered::Instruction& instruction)
             {
+                if (suppressedInstructions_.contains(&instruction))
+                    return;
                 emitSource(instruction.source);
                 if (options_.emitComments)
                     output_ << "                // " << lowered::opcodeName(instruction.opcode) << "\n";
@@ -2757,7 +2917,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     break;
                 case lowered::Opcode::Release:
                 case lowered::Opcode::DropValue:
-                    output_ << "                " << valueName(instruction.operands[0]) << ".reset();\n";
+                    output_ << "                " << valueName(resolveValueAlias(instruction.operands[0]))
+                            << ".reset();\n";
                     break;
                 case lowered::Opcode::ReleasePlace:
                 case lowered::Opcode::DropPlace:
@@ -2942,15 +3103,28 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 std::vector<std::pair<std::uint32_t, TypeId>> values(valueTypes_.begin(), valueTypes_.end());
                 std::ranges::sort(values, {}, &std::pair<std::uint32_t, TypeId>::first);
                 for (const auto& [id, type] : values)
-                    output_ << "    std::optional<"
-                            << (objectBorrowedLoads_.contains(id)
-                                    ? "wio::wir_backend::ObjectBorrow<" + objectName(type) + ">"
-                                    : (borrowedLoads_.contains(id) ? "std::reference_wrapper<" : "") + cppType(type) +
-                                          (borrowedLoads_.contains(id) ? ">" : ""))
-                            << "> _v" << id << ";\n";
+                {
+                    if (directValues_.contains(id))
+                        continue;
+                    output_ << "    std::optional<" << valueStorageType(id, type) << "> _v" << id << ";\n";
+                }
                 for (std::size_t index = 0; index < function.parameters.size(); ++index)
-                    output_ << "    " << valueName(function.parameters[index].id) << " = std::move(_p" << index
-                            << ");\n";
+                {
+                    output_ << "    ";
+                    if (directValues_.contains(function.parameters[index].id.value()))
+                        output_ << cppType(function.parameters[index].type) << ' ';
+                    output_ << valueName(function.parameters[index].id) << " = std::move(_p" << index << ");\n";
+                }
+
+                if (currentFunctionIsLinear_)
+                {
+                    currentBlock_ = &function.blocks.front();
+                    for (const lowered::Instruction& instruction : currentBlock_->instructions)
+                        emitInstruction(instruction);
+                    output_ << "}\n\n";
+                    return;
+                }
+
                 output_ << "    std::uint32_t _block = " << function.blocks.front().id.value()
                         << ";\n"
                            "    for (;;) {\n        switch (_block) {\n";

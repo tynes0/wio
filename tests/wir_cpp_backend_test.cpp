@@ -906,8 +906,8 @@ int main(int argc, char** argv)
     ok &= expect(generated.succeeded(), "valid scalar Lowered WIR should generate C++");
     ok &= expect(generated.code().find("_wio_f0") != std::string::npos,
         "generated code should use stable WIR function identities");
-    ok &= expect(generated.code().find("switch (_block)") != std::string::npos,
-        "generated code should preserve canonical CFG structure");
+    ok &= expect(generated.code().find("switch (_block)") == std::string::npos,
+        "single-block functions should bypass the CFG state machine");
     ok &= expect(generated.code().find("int main()") != std::string::npos,
         "program modules should receive an entry adapter");
     ok &= expect(compileGeneratedCode(generated.code()),
@@ -928,6 +928,8 @@ int main(int argc, char** argv)
             "enum reflection helpers should be emitted from canonical layout metadata");
         ok &= expect(languageGenerated.code().find("Result does not contain a success value") != std::string::npos,
             "Result unwrap should preserve its checked failure boundary");
+        ok &= expect(languageGenerated.code().find("switch (_block)") != std::string::npos,
+            "multi-block functions should preserve canonical CFG dispatch");
         ok &= expect(compileGeneratedCode(languageGenerated.code()),
             "generated enum/variant/Result C++ should compile with the configured host compiler");
     }

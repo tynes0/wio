@@ -31,7 +31,7 @@ namespace wio::codegen
     {
         bool emitMain = true;
         bool emitLineDirectives = true;
-        bool emitComments = true;
+        bool emitComments = false;
         bool verifyInput = true;
     };
 
