@@ -103,9 +103,9 @@ The SDK product version is available without loading a module:
 ```cpp
 static_assert(WIO_SDK_VERSION_MAJOR == 0);
 static_assert(WIO_SDK_VERSION_MINOR == 18);
-static_assert(wio::sdk::product_version.patch == 0);
+static_assert(wio::sdk::product_version.patch == 1);
 
-std::cout << wio::sdk::product_version_string; // 0.18.0
+std::cout << wio::sdk::product_version_string; // 0.18.1
 ```
 
 `WIO_MODULE_API_DESCRIPTOR_VERSION` remains an independent low-level ABI

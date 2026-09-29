@@ -166,6 +166,8 @@ namespace wio
        case TokenType::opStar: return "opStar";
        case TokenType::opSlash: return "opSlash";
        case TokenType::opPercent: return "opPercent";
+       case TokenType::opIncrement: return "opIncrement";
+       case TokenType::opDecrement: return "opDecrement";
    
        /* ===============================
           Operators – assignment
@@ -311,6 +313,8 @@ namespace wio
           type == TokenType::opBitNot ||
           type == TokenType::opPlus ||
           type == TokenType::opMinus ||
+          type == TokenType::opIncrement ||
+          type == TokenType::opDecrement ||
           type == TokenType::kwNot ||
           type == TokenType::opLogicalNot);
    }

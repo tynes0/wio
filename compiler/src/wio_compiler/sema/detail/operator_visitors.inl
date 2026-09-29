@@ -794,6 +794,25 @@
             return;
         }
 
+        if (node.op.type == TokenType::opIncrement || node.op.type == TokenType::opDecrement)
+        {
+            if (!allowsNumericSemantics(opType))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "The '{}' operator requires a numeric operand.", node.op.value);
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+            if (!isAddressableRefOperand(node.operand) || !isMutableAddressableOperand(node.operand))
+            {
+                WIO_LOG_ADD_ERROR(node.location(), "The '{}' operator requires a mutable addressable operand.",
+                                  node.op.value);
+                node.refType = Compiler::get().getTypeContext().getUnknown();
+                return;
+            }
+            node.refType = opType;
+            return;
+        }
+
         auto tryResolveUnaryOperatorOverload = [&]() -> bool
         {
             auto overloadName = common::getUnaryOperatorOverloadName(node.op.type);
@@ -1049,11 +1068,11 @@
             }
             node.refType = Compiler::get().getTypeContext().getBool();
         }
-        else if (node.op.type == TokenType::opMinus)
+        else if (node.op.type == TokenType::opPlus || node.op.type == TokenType::opMinus)
         {
             if (!allowsNumericSemantics(opType))
             {
-                WIO_LOG_ADD_ERROR(node.location(), "Unary minus (-) operator requires numeric operand.");
+                WIO_LOG_ADD_ERROR(node.location(), "Unary '{}' operator requires numeric operand.", node.op.value);
             }
             node.refType = opType;
         }
