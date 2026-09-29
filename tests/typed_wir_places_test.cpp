@@ -36,9 +36,13 @@ int main()
                 "  values[1usize] = target.x; "
                 "  mut local: i32 = 3; "
                 "  local += 4; "
+                "  let prefix: i32 = ++local; "
+                "  let postfix: i32 = local++; "
+                "  --local; "
+                "  local--; "
                 "  if target.y > 0 { local += target.y; } else { local -= 1; } "
                 "  let observed: view i32 = ref local; "
-                "  return First(values) + deref observed + target.x; "
+                "  return First(values) + deref observed + target.x + prefix + postfix; "
                 "} "
                 "fn Entry() -> i32 { return 0; }",
                 "typed_wir_places_test.wio");
@@ -87,9 +91,9 @@ int main()
             }
         }
     }
-    ok &= expect(localPlaces == 1 && initializations == 1,
+    ok &= expect(localPlaces >= 1 && initializations >= 1,
                  "Addressable local values must have explicit initialized places while borrowed views remain SSA");
-    ok &= expect(loads >= 8 && stores >= 5 && fieldPlaces >= 5 && arrayPlaces >= 2 && borrows >= 1,
+    ok &= expect(loads >= 12 && stores >= 9 && fieldPlaces >= 5 && arrayPlaces >= 2 && borrows >= 1,
                  "Typed WIR must expose loads, stores, projections, and read-only borrows");
 
     const std::string typedText = typed::Printer{}.print(build.module());

@@ -1090,7 +1090,7 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
             ${CMAKE_COMMAND}
             -DWIO_EXE=$<TARGET_FILE:wio_app>
             -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/telemetry_pipeline
-            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.18.0
+            -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.18.1
             -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
     )
     set_tests_properties(
@@ -1569,6 +1569,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
         wio_test_parser_precedence_run
         "${CMAKE_SOURCE_DIR}/tests/parser_precedence_run.wio"
         "parser-precedence-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_increment_decrement_run
+        "${CMAKE_SOURCE_DIR}/tests/increment_decrement_run.wio"
+        "increment-decrement-ok"
         --run
     )
 

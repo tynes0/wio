@@ -12,7 +12,7 @@ int main()
 {
     static_assert(WIO_SDK_VERSION_MAJOR == 0);
     static_assert(WIO_SDK_VERSION_MINOR == 18);
-    static_assert(WIO_SDK_VERSION_PATCH == 0);
+    static_assert(WIO_SDK_VERSION_PATCH == 1);
     static_assert(wio::sdk::product_version.major == WIO_SDK_VERSION_MAJOR);
     static_assert(wio::sdk::product_version.minor == WIO_SDK_VERSION_MINOR);
     static_assert(wio::sdk::product_version.patch == WIO_SDK_VERSION_PATCH);

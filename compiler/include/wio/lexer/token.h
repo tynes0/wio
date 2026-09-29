@@ -167,6 +167,8 @@ namespace wio
       opStar,            // *
       opSlash,           // /
       opPercent,         // %
+      opIncrement,       // ++
+      opDecrement,       // --
    
       /* ===============================
          Operators – assignment
@@ -381,6 +383,9 @@ namespace wio
       { "!=",  TokenType::opNotEqual },
       { "<=",  TokenType::opLessEqual },
       { ">=",  TokenType::opGreaterEqual },
+
+      { "++",  TokenType::opIncrement },
+      { "--",  TokenType::opDecrement },
    
       { "+=",  TokenType::opPlusAssign },
       { "-=",  TokenType::opMinusAssign },

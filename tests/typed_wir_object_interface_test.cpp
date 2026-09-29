@@ -37,6 +37,10 @@ int main()
         "[Default(public)] object Entity { "
         "  fn GetHp() -> i32 { return 1; } "
         "} "
+        "object ForwardCall { "
+        "  fn First() -> i32 { return Second(); } "
+        "  fn Second() -> i32 { return 2; } "
+        "} "
         "[From(Entity), From(IDamageable), Default(public)] "
         "object Boss { "
         "  hp: i32; "
@@ -136,7 +140,7 @@ int main()
 
     ok &= expect(interfaceLayout && objectLayout,
         "Object/interface WIR types must expose deterministic method slots and abstract interface entries");
-    ok &= expect(receiverMethods == 11 && fieldPlaces >= 3 && borrows >= 1,
+    ok &= expect(receiverMethods == 13 && fieldPlaces >= 3 && borrows >= 1,
         "Interface, lifecycle, and object method bodies must retain receiver and self-field semantics");
     ok &= expect(virtualCalls >= 1 && interfaceCalls >= 3 && directMethodCalls >= 1,
         "Typed WIR must distinguish object virtual dispatch from interface dispatch");
