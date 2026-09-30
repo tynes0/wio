@@ -848,6 +848,17 @@ namespace wio::vm
                     rawReceiver->kind() == Value::Kind::Place ? rawReceiver->asPlace() : nullptr;
                 const Value* receiver =
                     receiverPlace && receiverPlace->initialized ? &receiverPlace->storedValue() : rawReceiver;
+                Value* const mutableReceiver =
+                    receiverPlace && receiverPlace->initialized && receiverPlace->mutableValue
+                        ? &receiverPlace->storedValue()
+                        : nullptr;
+                const auto argument = [&](const std::size_t index) -> const Value*
+                { return index < instruction.operands.size() ? read(instruction.operands[index]) : nullptr; };
+                const auto indexArgument = [&](const std::size_t index) -> std::optional<std::size_t>
+                {
+                    const Value* value = argument(index);
+                    return value ? valueIndex(*value) : std::nullopt;
+                };
 
                 Value result;
                 if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
@@ -866,6 +877,214 @@ namespace wio::vm
                     for (std::size_t index = 0; index < receiver->elementCount(); ++index)
                         contains = contains || *receiver->element(index) == *needle;
                     result = Value::boolean(contains);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Capacity")
+                    result = Value::unsignedInteger(receiver->elementCapacity());
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "IndexOf" || selector == "LastIndexOf") && instruction.operands.size() == 2)
+                {
+                    const Value* needle = argument(1);
+                    if (!needle)
+                        return fail("WVM1094", "Array index search reads an unavailable value");
+                    std::int64_t found = -1;
+                    if (selector == "IndexOf")
+                    {
+                        for (std::size_t index = 0; index < receiver->elementCount(); ++index)
+                        {
+                            if (*receiver->element(index) == *needle)
+                            {
+                                found = static_cast<std::int64_t>(index);
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        for (std::size_t index = receiver->elementCount(); index > 0; --index)
+                        {
+                            if (*receiver->element(index - 1) == *needle)
+                            {
+                                found = static_cast<std::int64_t>(index - 1);
+                                break;
+                            }
+                        }
+                    }
+                    result = Value::signedInteger(found);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "First" || selector == "Last"))
+                {
+                    if (receiver->elementCount() == 0)
+                        return fail("WVM1095", "Array endpoint intrinsic requires a non-empty array");
+                    result = *receiver->element(selector == "First" ? 0 : receiver->elementCount() - 1);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "Get" || selector == "At") && instruction.operands.size() == 2)
+                {
+                    const std::optional<std::size_t> index = indexArgument(1);
+                    const Value* value = index ? receiver->element(*index) : nullptr;
+                    if (!value)
+                        return fail("WVM1096", "Array intrinsic index is outside the array bounds");
+                    result = *value;
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "GetOr" && instruction.operands.size() == 3)
+                {
+                    const std::optional<std::size_t> index = indexArgument(1);
+                    const Value* fallback = argument(2);
+                    if (!fallback)
+                        return fail("WVM1097", "Array GetOr reads an unavailable fallback");
+                    const Value* value = index ? receiver->element(*index) : nullptr;
+                    result = value ? *value : *fallback;
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Clone")
+                    result = receiver->cloneOwned();
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Slice" && (instruction.operands.size() == 2 || instruction.operands.size() == 3))
+                {
+                    const std::optional<std::size_t> start = indexArgument(1);
+                    const std::optional<std::size_t> count = instruction.operands.size() == 3
+                                                                 ? indexArgument(2)
+                                                                 : std::optional<std::size_t>{receiver->elementCount()};
+                    if (!start || !count)
+                        return fail("WVM1098", "Array Slice requires non-negative start and count operands");
+                    result = receiver->arraySlice(*start, *count);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "Take" || selector == "Skip") && instruction.operands.size() == 2)
+                {
+                    const std::optional<std::size_t> count = indexArgument(1);
+                    if (!count)
+                        return fail("WVM1099", "Array Take/Skip requires a non-negative count");
+                    result = selector == "Take" ? receiver->arraySlice(0, *count)
+                                                : receiver->arraySlice(*count, receiver->elementCount());
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Concat" && instruction.operands.size() == 2)
+                {
+                    const Value* other = argument(1);
+                    if (!other || other->kind() != Value::Kind::Array)
+                        return fail("WVM1100", "Array Concat requires another array");
+                    result = receiver->arrayConcat(*other);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Reversed")
+                {
+                    result = receiver->cloneOwned();
+                    result.arrayReverse();
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Join" && instruction.operands.size() == 2)
+                {
+                    const Value* separator = argument(1);
+                    if (!separator || separator->kind() != Value::Kind::String)
+                        return fail("WVM1101", "Array Join requires a string separator");
+                    std::string joined;
+                    for (std::size_t index = 0; index < receiver->elementCount(); ++index)
+                    {
+                        const Value* value = receiver->element(index);
+                        if (!value || value->kind() != Value::Kind::String)
+                            return fail("WVM1102", "Array Join requires string elements");
+                        if (index != 0)
+                            joined.append(separator->asString());
+                        joined.append(value->asString());
+                    }
+                    result = Value::string(std::move(joined));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "Push" || selector == "PushFront") && instruction.operands.size() == 2)
+                {
+                    const Value* value = argument(1);
+                    if (!mutableReceiver || !value)
+                        return fail("WVM1103", "Array Push requires a mutable receiver and available value");
+                    mutableReceiver->arrayPush(*value, selector == "PushFront");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "Pop" || selector == "PopFront"))
+                {
+                    if (!mutableReceiver || !mutableReceiver->arrayPop(result, selector == "PopFront"))
+                        return fail("WVM1104", "Array Pop requires a mutable non-empty array");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Insert" && instruction.operands.size() == 3)
+                {
+                    const std::optional<std::size_t> index = indexArgument(1);
+                    const Value* value = argument(2);
+                    if (!mutableReceiver || !index || !value || !mutableReceiver->arrayInsert(*index, *value))
+                        return fail("WVM1105", "Array Insert index is invalid or receiver is not mutable");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "RemoveAt" && instruction.operands.size() == 2)
+                {
+                    const std::optional<std::size_t> index = indexArgument(1);
+                    if (!mutableReceiver || !index || !mutableReceiver->arrayRemoveAt(*index))
+                        return fail("WVM1106", "Array RemoveAt index is invalid or receiver is not mutable");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Remove" && instruction.operands.size() == 2)
+                {
+                    const Value* value = argument(1);
+                    if (!mutableReceiver || !value)
+                        return fail("WVM1107", "Array Remove requires a mutable receiver and available value");
+                    result = Value::boolean(mutableReceiver->arrayRemove(*value));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Clear")
+                {
+                    if (!mutableReceiver)
+                        return fail("WVM1108", "Array Clear requires a mutable receiver");
+                    mutableReceiver->arrayClear();
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Extend" && instruction.operands.size() == 2)
+                {
+                    const Value* other = argument(1);
+                    if (!mutableReceiver || !other || !mutableReceiver->arrayExtend(*other))
+                        return fail("WVM1109", "Array Extend requires a mutable receiver and another array");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Reserve" && instruction.operands.size() == 2)
+                {
+                    const std::optional<std::size_t> capacity = indexArgument(1);
+                    if (!mutableReceiver || !capacity || !mutableReceiver->arrayReserve(*capacity))
+                        return fail("WVM1110", "Array Reserve requires a mutable receiver and valid capacity");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "ShrinkToFit")
+                {
+                    if (!mutableReceiver)
+                        return fail("WVM1111", "Array ShrinkToFit requires a mutable receiver");
+                    mutableReceiver->arrayShrinkToFit();
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Fill" && instruction.operands.size() == 2)
+                {
+                    const Value* value = argument(1);
+                    if (!mutableReceiver || !value)
+                        return fail("WVM1112", "Array Fill requires a mutable receiver and available value");
+                    mutableReceiver->arrayFill(*value);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Reverse")
+                {
+                    if (!mutableReceiver)
+                        return fail("WVM1113", "Array Reverse requires a mutable receiver");
+                    mutableReceiver->arrayReverse();
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Sort")
+                {
+                    if (!mutableReceiver || !mutableReceiver->arraySort())
+                        return fail("WVM1114", "Array Sort requires a mutable array of orderable values");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Sorted")
+                {
+                    result = receiver->cloneOwned();
+                    if (!result.arraySort())
+                        return fail("WVM1115", "Array Sorted requires orderable values");
                 }
                 else if (instruction.intrinsicFamily == IntrinsicDictionary &&
                          receiver->kind() == Value::Kind::Dictionary && selector == "Count")

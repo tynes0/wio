@@ -35,6 +35,9 @@ second language-specific control-flow model.
   UTF-8 conversion, concatenation, comparison, and interpolated `text`;
 - intrusive aggregate storage plus array construction, length, indexed reads,
   copy/return survival, and deterministic bounds diagnostics;
+- complete array intrinsic execution for capacity/search/endpoints, safe
+  fallback access, clone/slice/take/skip/concat/reverse/sort/join queries, and
+  place-checked push/pop/insert/remove/extend/reserve/fill/clear mutations;
 - owned ordered and unordered dictionaries with strict lookup and mutable
   places, deterministic duplicate-key construction, deep copy, merge/extend,
   key/value projection, query/mutation intrinsics, and ordered endpoint and
@@ -62,10 +65,10 @@ keep the decode result beside the machine.
 
 ## Remaining Sprint 19 surface
 
-The next slices complete the remaining string/text/array intrinsic families,
-then add function values, closures and indirect dispatch, interface slot
+The next slices complete the remaining string/text intrinsic families, then
+add function values, closures and indirect dispatch, interface slot
 validation, coroutine scheduling, panic stack traces, exceptional
-cleanup/unwind, and debugger hooks. Native functions, callbacks, opaque
-values, and foreign-thread entry are deliberately reserved for the Sprint 20
-VM native bridge; Sprint 19 reports them as unsupported instead of silently
-changing behavior.
+cleanup/unwind, and debugger hooks. Native functions, callbacks, opaque values,
+and foreign-thread entry are deliberately reserved for the Sprint 20 VM native
+bridge; Sprint 19 reports them as unsupported instead of silently changing
+behavior.

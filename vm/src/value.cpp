@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <iterator>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -299,6 +300,11 @@ namespace wio::vm
         return kind_ == Kind::Array ? scalar_.aggregate->values().size() : 0;
     }
 
+    std::size_t Value::elementCapacity() const noexcept
+    {
+        return kind_ == Kind::Array ? scalar_.aggregate->values().capacity() : 0;
+    }
+
     const Value* Value::element(const std::size_t index) const noexcept
     {
         if (kind_ != Kind::Array || index >= scalar_.aggregate->values().size())
@@ -311,6 +317,156 @@ namespace wio::vm
         if (kind_ != Kind::Array || index >= scalar_.aggregate->values().size())
             return nullptr;
         return &scalar_.aggregate->values()[index];
+    }
+
+    Value Value::arraySlice(const std::size_t start, const std::size_t count) const
+    {
+        if (kind_ != Kind::Array)
+            return {};
+        const std::vector<Value>& source = scalar_.aggregate->values();
+        const std::size_t normalizedStart = (std::min)(start, source.size());
+        const std::size_t normalizedCount = (std::min)(count, source.size() - normalizedStart);
+        std::vector<Value> values;
+        values.reserve(normalizedCount);
+        for (std::size_t index = normalizedStart; index < normalizedStart + normalizedCount; ++index)
+            values.push_back(source[index].cloneOwned());
+        return array(std::move(values));
+    }
+
+    Value Value::arrayConcat(const Value& other) const
+    {
+        if (kind_ != Kind::Array || other.kind_ != Kind::Array)
+            return {};
+        std::vector<Value> values;
+        values.reserve(elementCount() + other.elementCount());
+        for (const Value& value : scalar_.aggregate->values())
+            values.push_back(value.cloneOwned());
+        for (const Value& value : other.scalar_.aggregate->values())
+            values.push_back(value.cloneOwned());
+        return array(std::move(values));
+    }
+
+    bool Value::arrayPush(Value value, const bool front)
+    {
+        if (kind_ != Kind::Array)
+            return false;
+        std::vector<Value>& values = scalar_.aggregate->values();
+        if (front)
+            values.insert(values.begin(), std::move(value));
+        else
+            values.push_back(std::move(value));
+        return true;
+    }
+
+    bool Value::arrayPop(Value& value, const bool front)
+    {
+        if (kind_ != Kind::Array || elementCount() == 0)
+            return false;
+        std::vector<Value>& values = scalar_.aggregate->values();
+        if (front)
+        {
+            value = std::move(values.front());
+            values.erase(values.begin());
+        }
+        else
+        {
+            value = std::move(values.back());
+            values.pop_back();
+        }
+        return true;
+    }
+
+    bool Value::arrayInsert(const std::size_t index, Value value)
+    {
+        if (kind_ != Kind::Array || index > elementCount())
+            return false;
+        std::vector<Value>& values = scalar_.aggregate->values();
+        values.insert(values.begin() + static_cast<std::ptrdiff_t>(index), std::move(value));
+        return true;
+    }
+
+    bool Value::arrayRemoveAt(const std::size_t index) noexcept
+    {
+        if (kind_ != Kind::Array || index >= elementCount())
+            return false;
+        std::vector<Value>& values = scalar_.aggregate->values();
+        values.erase(values.begin() + static_cast<std::ptrdiff_t>(index));
+        return true;
+    }
+
+    bool Value::arrayRemove(const Value& value) noexcept
+    {
+        if (kind_ != Kind::Array)
+            return false;
+        std::vector<Value>& values = scalar_.aggregate->values();
+        const auto found = std::find(values.begin(), values.end(), value);
+        if (found == values.end())
+            return false;
+        values.erase(found);
+        return true;
+    }
+
+    bool Value::arrayExtend(const Value& other)
+    {
+        if (kind_ != Kind::Array || other.kind_ != Kind::Array)
+            return false;
+        std::vector<Value>& values = scalar_.aggregate->values();
+        const std::vector<Value>& appended = other.scalar_.aggregate->values();
+        std::vector<Value> copies;
+        copies.reserve(appended.size());
+        for (const Value& value : appended)
+            copies.push_back(value.cloneOwned());
+        values.reserve(values.size() + copies.size());
+        values.insert(values.end(), std::make_move_iterator(copies.begin()), std::make_move_iterator(copies.end()));
+        return true;
+    }
+
+    bool Value::arrayReserve(const std::size_t capacity)
+    {
+        if (kind_ != Kind::Array)
+            return false;
+        scalar_.aggregate->values().reserve(capacity);
+        return true;
+    }
+
+    void Value::arrayShrinkToFit()
+    {
+        if (kind_ == Kind::Array)
+            scalar_.aggregate->values().shrink_to_fit();
+    }
+
+    void Value::arrayClear() noexcept
+    {
+        if (kind_ == Kind::Array)
+            scalar_.aggregate->values().clear();
+    }
+
+    void Value::arrayFill(const Value& value)
+    {
+        if (kind_ == Kind::Array)
+        {
+            for (Value& element : scalar_.aggregate->values())
+                element = value.cloneOwned();
+        }
+    }
+
+    void Value::arrayReverse()
+    {
+        if (kind_ == Kind::Array)
+            std::reverse(scalar_.aggregate->values().begin(), scalar_.aggregate->values().end());
+    }
+
+    bool Value::arraySort()
+    {
+        if (kind_ != Kind::Array)
+            return false;
+        std::vector<Value>& values = scalar_.aggregate->values();
+        if (!std::all_of(values.begin(), values.end(),
+                         [&](const Value& value) { return values.empty() || value.kind() == values.front().kind(); }))
+            return false;
+        std::sort(values.begin(), values.end(),
+                  [](const Value& left, const Value& right) { return left.lessThan(right); });
+        return true;
     }
 
     std::size_t Value::dictionaryCount() const noexcept
@@ -522,6 +678,29 @@ namespace wio::vm
             return scalar_.place == other.scalar_.place;
         }
         return false;
+    }
+
+    bool Value::lessThan(const Value& other) const noexcept
+    {
+        if (kind_ != other.kind_)
+            return false;
+        switch (kind_)
+        {
+        case Kind::Boolean:
+            return !scalar_.boolean && other.scalar_.boolean;
+        case Kind::SignedInteger:
+            return scalar_.signedInteger < other.scalar_.signedInteger;
+        case Kind::UnsignedInteger:
+            return scalar_.unsignedInteger < other.scalar_.unsignedInteger;
+        case Kind::Float64:
+            return scalar_.floating < other.scalar_.floating;
+        case Kind::String:
+            return text_.string < other.text_.string;
+        case Kind::Text:
+            return text_.text < other.text_.text;
+        default:
+            return false;
+        }
     }
 
     void Value::destroy() noexcept

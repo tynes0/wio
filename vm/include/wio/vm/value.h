@@ -82,7 +82,22 @@ namespace wio::vm
         [[nodiscard]] std::string_view asString() const noexcept;
         [[nodiscard]] std::u32string_view asText() const noexcept;
         [[nodiscard]] std::size_t elementCount() const noexcept;
+        [[nodiscard]] std::size_t elementCapacity() const noexcept;
         [[nodiscard]] const Value* element(std::size_t index) const noexcept;
+        [[nodiscard]] Value arraySlice(std::size_t start, std::size_t count) const;
+        [[nodiscard]] Value arrayConcat(const Value& other) const;
+        bool arrayPush(Value value, bool front = false);
+        bool arrayPop(Value& value, bool front = false);
+        bool arrayInsert(std::size_t index, Value value);
+        bool arrayRemoveAt(std::size_t index) noexcept;
+        bool arrayRemove(const Value& value) noexcept;
+        bool arrayExtend(const Value& other);
+        bool arrayReserve(std::size_t capacity);
+        void arrayShrinkToFit();
+        void arrayClear() noexcept;
+        void arrayFill(const Value& value);
+        void arrayReverse();
+        bool arraySort();
         [[nodiscard]] std::size_t dictionaryCount() const noexcept;
         [[nodiscard]] bool dictionaryIsOrdered() const noexcept;
         [[nodiscard]] const Value* dictionaryKey(std::size_t index) const noexcept;
@@ -98,6 +113,7 @@ namespace wio::vm
         [[nodiscard]] const Value* field(std::size_t index) const noexcept;
 
         [[nodiscard]] bool operator==(const Value& other) const noexcept;
+        [[nodiscard]] bool lessThan(const Value& other) const noexcept;
 
     private:
         union Scalar
