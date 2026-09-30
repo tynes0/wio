@@ -10,7 +10,8 @@ namespace wio::vm
     class AggregateStorage final
     {
     public:
-        explicit AggregateStorage(std::vector<Value> values) : values_(std::move(values))
+        AggregateStorage(const Value::Kind kind, const std::uint32_t type, std::vector<Value> values)
+            : kind_(kind), type_(type), values_(std::move(values))
         {
         }
 
@@ -35,8 +36,25 @@ namespace wio::vm
             return values_;
         }
 
+        [[nodiscard]] Value::Kind kind() const noexcept
+        {
+            return kind_;
+        }
+
+        [[nodiscard]] std::uint32_t type() const noexcept
+        {
+            return type_;
+        }
+
+        [[nodiscard]] std::uint32_t referenceCount() const noexcept
+        {
+            return references_.load(std::memory_order_acquire);
+        }
+
     private:
         std::atomic<std::uint32_t> references_{1};
+        Value::Kind kind_;
+        std::uint32_t type_ = 0;
         std::vector<Value> values_;
     };
 
@@ -127,8 +145,41 @@ namespace wio::vm
     Value Value::array(std::vector<Value> values)
     {
         Value result{Kind::Array};
-        result.scalar_.aggregate = new AggregateStorage{std::move(values)};
+        result.scalar_.aggregate = new AggregateStorage{Kind::Array, 0, std::move(values)};
         return result;
+    }
+
+    Value Value::component(const std::uint32_t type, std::vector<Value> fields)
+    {
+        Value result{Kind::Component};
+        result.scalar_.aggregate = new AggregateStorage{Kind::Component, type, std::move(fields)};
+        return result;
+    }
+
+    Value Value::object(const std::uint32_t type, std::vector<Value> fields)
+    {
+        Value result{Kind::Object};
+        result.scalar_.aggregate = new AggregateStorage{Kind::Object, type, std::move(fields)};
+        return result;
+    }
+
+    Value Value::objectBorrow(AggregateStorage* const storage) noexcept
+    {
+        Value result{Kind::ObjectBorrow};
+        result.scalar_.aggregate = storage;
+        return result;
+    }
+
+    std::uint32_t Value::aggregateType() const noexcept
+    {
+        return kind_ == Kind::Array || kind_ == Kind::Component || kind_ == Kind::Object || kind_ == Kind::ObjectBorrow
+                   ? scalar_.aggregate->type()
+                   : 0;
+    }
+
+    std::uint32_t Value::strongReferenceCount() const noexcept
+    {
+        return kind_ == Kind::Object ? scalar_.aggregate->referenceCount() : 0;
     }
 
     Value Value::place(PlaceStorage* const storage) noexcept
@@ -172,6 +223,40 @@ namespace wio::vm
         return &scalar_.aggregate->values()[index];
     }
 
+    std::size_t Value::fieldCount() const noexcept
+    {
+        return kind_ == Kind::Component || kind_ == Kind::Object || kind_ == Kind::ObjectBorrow
+                   ? scalar_.aggregate->values().size()
+                   : 0;
+    }
+
+    const Value* Value::field(const std::size_t index) const noexcept
+    {
+        if ((kind_ != Kind::Component && kind_ != Kind::Object && kind_ != Kind::ObjectBorrow) ||
+            index >= scalar_.aggregate->values().size())
+            return nullptr;
+        return &scalar_.aggregate->values()[index];
+    }
+
+    Value* Value::mutableField(const std::size_t index) noexcept
+    {
+        if ((kind_ != Kind::Component && kind_ != Kind::Object && kind_ != Kind::ObjectBorrow) ||
+            index >= scalar_.aggregate->values().size())
+            return nullptr;
+        return &scalar_.aggregate->values()[index];
+    }
+
+    Value Value::cloneOwned() const
+    {
+        if (kind_ != Kind::Array && kind_ != Kind::Component)
+            return *this;
+        std::vector<Value> cloned;
+        cloned.reserve(scalar_.aggregate->values().size());
+        for (const Value& value : scalar_.aggregate->values())
+            cloned.push_back(value.cloneOwned());
+        return kind_ == Kind::Array ? array(std::move(cloned)) : component(aggregateType(), std::move(cloned));
+    }
+
     bool Value::operator==(const Value& other) const noexcept
     {
         if (kind_ != other.kind_)
@@ -195,6 +280,12 @@ namespace wio::vm
             return text_.text == other.text_.text;
         case Kind::Array:
             return scalar_.aggregate->values() == other.scalar_.aggregate->values();
+        case Kind::Component:
+            return aggregateType() == other.aggregateType() &&
+                   scalar_.aggregate->values() == other.scalar_.aggregate->values();
+        case Kind::Object:
+        case Kind::ObjectBorrow:
+            return scalar_.aggregate == other.scalar_.aggregate;
         case Kind::Place:
             return scalar_.place == other.scalar_.place;
         }
@@ -207,7 +298,7 @@ namespace wio::vm
             std::destroy_at(&text_.string);
         else if (kind_ == Kind::Text)
             std::destroy_at(&text_.text);
-        else if (kind_ == Kind::Array)
+        else if (kind_ == Kind::Array || kind_ == Kind::Component || kind_ == Kind::Object)
             scalar_.aggregate->release();
         kind_ = Kind::Empty;
         scalar_.unsignedInteger = 0;
@@ -220,7 +311,7 @@ namespace wio::vm
             std::construct_at(&text_.string, other.text_.string);
         else if (kind_ == Kind::Text)
             std::construct_at(&text_.text, other.text_.text);
-        else if (kind_ == Kind::Array)
+        else if (kind_ == Kind::Array || kind_ == Kind::Component || kind_ == Kind::Object)
         {
             scalar_.aggregate = other.scalar_.aggregate;
             scalar_.aggregate->retain();

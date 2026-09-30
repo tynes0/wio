@@ -27,6 +27,9 @@ namespace wio::vm
             String,
             Text,
             Array,
+            Component,
+            Object,
+            ObjectBorrow,
             Place
         };
 
@@ -45,6 +48,10 @@ namespace wio::vm
         [[nodiscard]] static Value string(std::string value);
         [[nodiscard]] static Value text(std::u32string value);
         [[nodiscard]] static Value array(std::vector<Value> values);
+        [[nodiscard]] static Value component(std::uint32_t type, std::vector<Value> fields);
+        [[nodiscard]] static Value object(std::uint32_t type, std::vector<Value> fields);
+        [[nodiscard]] std::uint32_t aggregateType() const noexcept;
+        [[nodiscard]] std::uint32_t strongReferenceCount() const noexcept;
 
         [[nodiscard]] Kind kind() const noexcept
         {
@@ -74,6 +81,8 @@ namespace wio::vm
         [[nodiscard]] std::u32string_view asText() const noexcept;
         [[nodiscard]] std::size_t elementCount() const noexcept;
         [[nodiscard]] const Value* element(std::size_t index) const noexcept;
+        [[nodiscard]] std::size_t fieldCount() const noexcept;
+        [[nodiscard]] const Value* field(std::size_t index) const noexcept;
 
         [[nodiscard]] bool operator==(const Value& other) const noexcept;
 
@@ -108,8 +117,11 @@ namespace wio::vm
 
         explicit Value(Kind kind) noexcept;
         [[nodiscard]] static Value place(PlaceStorage* storage) noexcept;
+        [[nodiscard]] static Value objectBorrow(AggregateStorage* storage) noexcept;
         [[nodiscard]] PlaceStorage* asPlace() const noexcept;
         [[nodiscard]] Value* mutableElement(std::size_t index) noexcept;
+        [[nodiscard]] Value* mutableField(std::size_t index) noexcept;
+        [[nodiscard]] Value cloneOwned() const;
         void destroy() noexcept;
         void copyFrom(const Value& other);
         void moveFrom(Value&& other) noexcept;

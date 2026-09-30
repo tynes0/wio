@@ -19,7 +19,7 @@ Branch arguments are copied to the target block parameters before control is
 transferred. This preserves canonical Lowered WIR phi semantics without a
 second language-specific control-flow model.
 
-## Implemented in Sprint 19.1-19.2
+## Implemented in Sprint 19.1-19.3
 
 - compact tagged values for null, bool, signed/unsigned integer, float, and
   UTF-8 string values;
@@ -35,6 +35,14 @@ second language-specific control-flow model.
   UTF-8 conversion, concatenation, comparison, and interpolated `text`;
 - intrusive aggregate storage plus array construction, length, indexed reads,
   copy/return survival, and deterministic bounds diagnostics;
+- stack-value components with explicit deep `CopyValue`, heap objects with
+  intrusive strong references, and borrowed constructor/destructor receivers;
+- recursive default field construction, field-initializer/constructor chaining,
+  nested component field places, mutable array-element places, and direct,
+  extension, method, virtual, and interface call execution;
+- `Retain`, `Release`, and `ReleasePlace` object ownership operations with the
+  Wio destructor scheduled exactly once before the final strong reference is
+  cleared;
 - deterministic wrapping integer arithmetic without host signed-overflow UB;
 - checked integer division and shifts;
 - instruction, call-depth, and per-frame register budgets;
@@ -48,12 +56,10 @@ keep the decode result beside the machine.
 
 ## Remaining Sprint 19 surface
 
-The next slices extend the aggregate core with intrusive object handles,
-component values, field/element places, dictionaries and the remaining
-string/text/container intrinsic families. They then add indirect and virtual
-dispatch, coroutine scheduling, panic stack traces, and debugger hooks.
-Reference-count release is still rejected explicitly until object destruction
-and exceptional unwind are implemented together. Native functions, callbacks,
-opaque values, and foreign-thread entry are deliberately reserved for the
-Sprint 20 VM native bridge; Sprint 19 reports them as unsupported instead of
-silently changing behavior.
+The next slices extend the aggregate core with dictionaries and the remaining
+string/text/container intrinsic families. They then add function values,
+closures and indirect dispatch, interface slot validation, coroutine
+scheduling, panic stack traces, exceptional cleanup/unwind, and debugger
+hooks. Native functions, callbacks, opaque values, and foreign-thread entry
+are deliberately reserved for the Sprint 20 VM native bridge; Sprint 19
+reports them as unsupported instead of silently changing behavior.

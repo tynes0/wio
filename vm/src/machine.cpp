@@ -21,8 +21,26 @@ namespace wio::vm
     {
     public:
         Value value;
+        Value owner;
+        Value* alias = nullptr;
         bool initialized = false;
         bool mutableValue = true;
+
+        [[nodiscard]] Value& storedValue() noexcept
+        {
+            return alias ? *alias : value;
+        }
+
+        [[nodiscard]] const Value& storedValue() const noexcept
+        {
+            return alias ? *alias : value;
+        }
+
+        void clear() noexcept
+        {
+            storedValue() = {};
+            initialized = false;
+        }
     };
 
     namespace
@@ -46,8 +64,14 @@ namespace wio::vm
         constexpr std::uint8_t TypeChar = 16;
         constexpr std::uint8_t TypeString = 17;
         constexpr std::uint8_t TypeText = 18;
+        constexpr std::uint8_t TypeNamed = 28;
+        constexpr std::uint8_t TypeReference = 29;
         constexpr std::uint8_t TypeNullable = 30;
         constexpr std::uint8_t TypeArray = 31;
+
+        constexpr std::uint8_t NominalComponent = 1;
+        constexpr std::uint8_t NominalObject = 2;
+        constexpr std::uint8_t NominalInterface = 3;
 
         constexpr std::uint8_t IntrinsicArray = 1;
         constexpr std::uint8_t IntrinsicString = 3;
@@ -80,6 +104,25 @@ namespace wio::vm
             bool initialized = false;
         };
 
+        enum class FrameCompletion : std::uint8_t
+        {
+            ReturnValue,
+            Ignore,
+            ContinueConstruction,
+            ReleaseRegister,
+            ReleasePlace
+        };
+
+        struct FrameContinuation
+        {
+            FrameCompletion completion = FrameCompletion::ReturnValue;
+            std::uint32_t callerResult = bytecode::InvalidIndex;
+            std::uint32_t cleanupRegister = bytecode::InvalidIndex;
+            PlaceStorage* cleanupPlace = nullptr;
+            std::uint32_t nextFunction = bytecode::InvalidIndex;
+            std::vector<Value> nextArguments;
+        };
+
         struct Frame
         {
             const bytecode::Function* function = nullptr;
@@ -87,7 +130,7 @@ namespace wio::vm
             std::size_t instruction = 0;
             std::vector<Register> registers;
             std::vector<std::unique_ptr<PlaceStorage>> localPlaces;
-            std::uint32_t callerResult = bytecode::InvalidIndex;
+            FrameContinuation continuation;
         };
 
         [[nodiscard]] bool isSignedType(const std::uint8_t kind) noexcept
@@ -193,8 +236,13 @@ namespace wio::vm
             return std::nullopt;
         }
 
-        [[nodiscard]] Value defaultValue(const std::uint8_t kind)
+        [[nodiscard]] Value defaultValue(const bytecode::Module& module, const std::uint32_t typeId,
+                                         const std::uint32_t depth = 0)
         {
+            if (typeId >= module.types.size() || depth > 128)
+                return {};
+            const bytecode::Type& type = module.types[typeId];
+            const std::uint8_t kind = type.kind;
             if (kind == TypeBool)
                 return Value::boolean(false);
             if (isSignedType(kind))
@@ -209,7 +257,41 @@ namespace wio::vm
                 return Value::text({});
             if (kind == TypeNullable)
                 return Value::null();
+            if (kind == TypeArray)
+            {
+                std::vector<Value> elements;
+                if (type.staticExtent != (std::numeric_limits<std::uint64_t>::max)() && !type.arguments.empty())
+                {
+                    if (type.staticExtent > (std::numeric_limits<std::size_t>::max)())
+                        return {};
+                    elements.reserve(static_cast<std::size_t>(type.staticExtent));
+                    for (std::uint64_t index = 0; index < type.staticExtent; ++index)
+                        elements.push_back(defaultValue(module, type.arguments.front(), depth + 1));
+                }
+                return Value::array(std::move(elements));
+            }
+            if (kind == TypeNamed && type.nominalKind == NominalComponent)
+            {
+                std::vector<Value> fields;
+                fields.reserve(type.fields.size());
+                for (const bytecode::Type::Field& field : type.fields)
+                    fields.push_back(defaultValue(module, field.type, depth + 1));
+                return Value::component(typeId, std::move(fields));
+            }
+            if (kind == TypeNamed && (type.nominalKind == NominalObject || type.nominalKind == NominalInterface))
+                return Value::null();
             return {};
+        }
+
+        [[nodiscard]] Value constructAggregate(const bytecode::Module& module, const std::uint32_t typeId,
+                                               const bool object)
+        {
+            const bytecode::Type& type = module.types[typeId];
+            std::vector<Value> fields;
+            fields.reserve(type.fields.size());
+            for (const bytecode::Type::Field& field : type.fields)
+                fields.push_back(defaultValue(module, field.type));
+            return object ? Value::object(typeId, std::move(fields)) : Value::component(typeId, std::move(fields));
         }
 
         [[nodiscard]] bool compareResult(const std::uint8_t operation, const bool less, const bool equal) noexcept
@@ -334,7 +416,7 @@ namespace wio::vm
         for (const bytecode::Global& global : module.globals)
         {
             auto storage = std::make_unique<PlaceStorage>();
-            storage->value = defaultValue(module.types[global.type].kind);
+            storage->value = defaultValue(module, global.type);
             storage->initialized = !storage->value.isEmpty();
             storage->mutableValue = (global.flags & 0x01u) != 0;
             program_->globals.push_back(std::move(storage));
@@ -359,7 +441,7 @@ namespace wio::vm
         std::vector<Frame> frames;
         frames.reserve(16);
         auto pushFrame = [&](const bytecode::Function& function, const std::span<const Value> values,
-                             const std::uint32_t callerResult) -> ExecutionResult
+                             FrameContinuation continuation) -> ExecutionResult
         {
             if ((function.flags & 0x0002u) != 0)
                 return ExecutionResult::failure(
@@ -377,7 +459,7 @@ namespace wio::vm
             frame.function = &function;
             frame.block = &function.blocks.front();
             frame.registers.resize(count);
-            frame.callerResult = callerResult;
+            frame.continuation = std::move(continuation);
             for (std::size_t index = 0; index < values.size(); ++index)
             {
                 const std::uint32_t id = function.parameters[index].value;
@@ -387,7 +469,7 @@ namespace wio::vm
             return ExecutionResult::success();
         };
 
-        ExecutionResult initial = pushFrame(module.functions[functionId], arguments, bytecode::InvalidIndex);
+        ExecutionResult initial = pushFrame(module.functions[functionId], arguments, {});
         if (!initial.succeeded())
             return initial;
 
@@ -438,7 +520,7 @@ namespace wio::vm
             if (instruction.opcode == bytecode::Opcode::DefaultValue)
             {
                 const std::uint8_t type = module.types[instruction.resultType].kind;
-                Value value = defaultValue(type);
+                Value value = defaultValue(module, instruction.resultType);
                 if (value.isEmpty() && type != TypeVoid)
                     return fail("WVM1010", "Default value is not implemented for this bytecode type");
                 if (!write(instruction.result, std::move(value)))
@@ -870,7 +952,7 @@ namespace wio::vm
                     return fail("WVM1041", "Place can only be initialized once");
                 if (instruction.opcode != bytecode::Opcode::PlaceInit && (!place->initialized || !place->mutableValue))
                     return fail("WVM1042", "Store requires an initialized mutable place");
-                place->value = *source;
+                place->storedValue() = *source;
                 place->initialized = true;
                 ++frame.instruction;
                 continue;
@@ -881,7 +963,63 @@ namespace wio::vm
                 PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
                 if (!place || !place->initialized)
                     return fail("WVM1043", "Load requires an initialized place");
-                write(instruction.result, place->value);
+                write(instruction.result, place->storedValue());
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::FieldPlace)
+            {
+                const Value* base = instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                if (!base)
+                    return fail("WVM1063", "Field place reads an unavailable base");
+                const Value* aggregate = base;
+                if (base->kind() == Value::Kind::Place)
+                {
+                    PlaceStorage* const basePlace = base->asPlace();
+                    aggregate = basePlace && basePlace->initialized ? &basePlace->storedValue() : nullptr;
+                }
+                if (!aggregate)
+                    return fail("WVM1064", "Field place base is not initialized");
+
+                auto storage = std::make_unique<PlaceStorage>();
+                storage->owner = *aggregate;
+                storage->alias = storage->owner.mutableField(instruction.projectionIndex);
+                storage->initialized = storage->alias && !storage->alias->isEmpty();
+                storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
+                if (!storage->alias)
+                    return fail("WVM1065", "Field projection is outside the aggregate layout");
+                PlaceStorage* const pointer = storage.get();
+                frame.localPlaces.push_back(std::move(storage));
+                write(instruction.result, Value::place(pointer));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ArrayPlace)
+            {
+                const Value* base = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* rawIndex = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                const std::optional<std::size_t> index = rawIndex ? valueIndex(*rawIndex) : std::nullopt;
+                if (!base || !index)
+                    return fail("WVM1066", "Array place requires an available base and non-negative index");
+                const Value* array = base;
+                if (base->kind() == Value::Kind::Place)
+                {
+                    PlaceStorage* const basePlace = base->asPlace();
+                    array = basePlace && basePlace->initialized ? &basePlace->storedValue() : nullptr;
+                }
+                if (!array || array->kind() != Value::Kind::Array)
+                    return fail("WVM1067", "Array place base is not an initialized array");
+
+                auto storage = std::make_unique<PlaceStorage>();
+                storage->owner = *array;
+                storage->alias = storage->owner.mutableElement(*index);
+                storage->initialized = storage->alias != nullptr;
+                storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
+                if (!storage->alias)
+                    return fail("WVM1068", "Array place index is outside the array bounds");
+                PlaceStorage* const pointer = storage.get();
+                frame.localPlaces.push_back(std::move(storage));
+                write(instruction.result, Value::place(pointer));
                 ++frame.instruction;
                 continue;
             }
@@ -894,12 +1032,79 @@ namespace wio::vm
                 ++frame.instruction;
                 continue;
             }
-            if (instruction.opcode == bytecode::Opcode::CopyValue)
+            if (instruction.opcode == bytecode::Opcode::ConstructComponent ||
+                instruction.opcode == bytecode::Opcode::ConstructObject)
+            {
+                if (instruction.resultType >= module.types.size())
+                    return fail("WVM1069", "Aggregate construction references an invalid type");
+                const bytecode::Type& type = module.types[instruction.resultType];
+                const bool object = instruction.opcode == bytecode::Opcode::ConstructObject;
+                const std::uint8_t expected = object ? NominalObject : NominalComponent;
+                if (type.kind != TypeNamed || type.nominalKind != expected)
+                    return fail("WVM1070", "Aggregate construction kind does not match its result type");
+
+                if (!write(instruction.result, constructAggregate(module, instruction.resultType, object)))
+                    return fail("WVM1009", "Aggregate result register is invalid");
+                Register& constructedRegister = frame.registers[instruction.result];
+                Value self;
+                if (object)
+                    self = Value::objectBorrow(constructedRegister.value.scalar_.aggregate);
+                else
+                {
+                    auto selfPlace = std::make_unique<PlaceStorage>();
+                    selfPlace->alias = &constructedRegister.value;
+                    selfPlace->initialized = true;
+                    selfPlace->mutableValue = true;
+                    PlaceStorage* const pointer = selfPlace.get();
+                    frame.localPlaces.push_back(std::move(selfPlace));
+                    self = Value::place(pointer);
+                }
+
+                std::vector<Value> constructorArguments;
+                constructorArguments.reserve(instruction.operands.size() + 1);
+                constructorArguments.push_back(self);
+                for (const std::uint32_t operandId : instruction.operands)
+                {
+                    const Value* operand = read(operandId);
+                    if (!operand)
+                        return fail("WVM1071", "Aggregate constructor reads an unavailable argument");
+                    constructorArguments.push_back(*operand);
+                }
+
+                const std::uint32_t initializer = type.fieldInitializer;
+                const std::uint32_t constructor = instruction.callee;
+                ++frame.instruction;
+                if (initializer != bytecode::InvalidIndex)
+                {
+                    FrameContinuation continuation{.completion = constructor != bytecode::InvalidIndex
+                                                                     ? FrameCompletion::ContinueConstruction
+                                                                     : FrameCompletion::Ignore,
+                                                   .nextFunction = constructor,
+                                                   .nextArguments = constructorArguments};
+                    const Value initializerArguments[] = {self};
+                    ExecutionResult pushed =
+                        pushFrame(module.functions[initializer], initializerArguments, std::move(continuation));
+                    if (!pushed.succeeded())
+                        return pushed;
+                    continue;
+                }
+                if (constructor != bytecode::InvalidIndex)
+                {
+                    ExecutionResult pushed = pushFrame(module.functions[constructor], constructorArguments,
+                                                       FrameContinuation{.completion = FrameCompletion::Ignore});
+                    if (!pushed.succeeded())
+                        return pushed;
+                    continue;
+                }
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::CopyValue || instruction.opcode == bytecode::Opcode::Retain)
             {
                 const Value* source = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
                 if (!source)
                     return fail("WVM1045", "Copy/retain reads an unavailable value");
-                write(instruction.result, *source);
+                write(instruction.result,
+                      instruction.opcode == bytecode::Opcode::CopyValue ? source->cloneOwned() : *source);
                 ++frame.instruction;
                 continue;
             }
@@ -909,8 +1114,71 @@ namespace wio::vm
                 PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
                 if (!place || !place->initialized)
                     return fail("WVM1046", "Move requires an initialized place");
-                write(instruction.result, std::move(place->value));
+                write(instruction.result, std::move(place->storedValue()));
                 place->initialized = false;
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Release || instruction.opcode == bytecode::Opcode::ReleasePlace)
+            {
+                Register* cleanupRegister = nullptr;
+                PlaceStorage* cleanupPlace = nullptr;
+                Value* released = nullptr;
+                if (instruction.opcode == bytecode::Opcode::Release)
+                {
+                    cleanupRegister =
+                        instruction.operands.size() == 1 ? readRegister(instruction.operands.front()) : nullptr;
+                    released = cleanupRegister ? &cleanupRegister->value : nullptr;
+                }
+                else
+                {
+                    const Value* placeValue =
+                        instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                    cleanupPlace = placeValue ? placeValue->asPlace() : nullptr;
+                    released = cleanupPlace && cleanupPlace->initialized ? &cleanupPlace->storedValue() : nullptr;
+                }
+                if (!released)
+                    return fail("WVM1072", "Reference release reads an unavailable value");
+                if (released->kind() == Value::Kind::Null)
+                {
+                    if (cleanupRegister)
+                    {
+                        cleanupRegister->value = {};
+                        cleanupRegister->initialized = false;
+                    }
+                    else
+                        cleanupPlace->clear();
+                    ++frame.instruction;
+                    continue;
+                }
+                if (released->kind() != Value::Kind::Object)
+                    return fail("WVM1073", "Reference release requires an owned object handle");
+
+                const std::uint32_t typeId = released->aggregateType();
+                const std::uint32_t destructor = module.types[typeId].destructor;
+                if (released->strongReferenceCount() == 1 && destructor != bytecode::InvalidIndex)
+                {
+                    const Value receiver = Value::objectBorrow(released->scalar_.aggregate);
+                    FrameContinuation continuation{.completion = cleanupRegister ? FrameCompletion::ReleaseRegister
+                                                                                 : FrameCompletion::ReleasePlace,
+                                                   .cleanupRegister = cleanupRegister ? instruction.operands.front()
+                                                                                      : bytecode::InvalidIndex,
+                                                   .cleanupPlace = cleanupPlace};
+                    ++frame.instruction;
+                    ExecutionResult pushed =
+                        pushFrame(module.functions[destructor], std::span{&receiver, 1}, std::move(continuation));
+                    if (!pushed.succeeded())
+                        return pushed;
+                    continue;
+                }
+
+                if (cleanupRegister)
+                {
+                    cleanupRegister->value = {};
+                    cleanupRegister->initialized = false;
+                }
+                else
+                    cleanupPlace->clear();
                 ++frame.instruction;
                 continue;
             }
@@ -931,12 +1199,14 @@ namespace wio::vm
                 PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
                 if (!place || !place->initialized)
                     return fail("WVM1048", "Place cleanup requires an initialized place");
-                place->value = {};
-                place->initialized = false;
+                place->clear();
                 ++frame.instruction;
                 continue;
             }
-            if (instruction.opcode == bytecode::Opcode::Call)
+            if (instruction.opcode == bytecode::Opcode::Call || instruction.opcode == bytecode::Opcode::ExtensionCall ||
+                instruction.opcode == bytecode::Opcode::MethodCall ||
+                instruction.opcode == bytecode::Opcode::VirtualCall ||
+                instruction.opcode == bytecode::Opcode::InterfaceCall)
             {
                 if (instruction.callee >= module.functions.size())
                     return fail("WVM1028", "Call target is outside the module");
@@ -951,7 +1221,9 @@ namespace wio::vm
                 }
                 const std::uint32_t result = instruction.result;
                 ++frame.instruction;
-                ExecutionResult pushed = pushFrame(module.functions[instruction.callee], callArguments, result);
+                ExecutionResult pushed =
+                    pushFrame(module.functions[instruction.callee], callArguments,
+                              FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result});
                 if (!pushed.succeeded())
                     return pushed;
                 continue;
@@ -997,17 +1269,46 @@ namespace wio::vm
                         return fail("WVM1033", "Return reads an unavailable value");
                     returned = *value;
                 }
-                const std::uint32_t callerResult = frame.callerResult;
+                FrameContinuation continuation = std::move(frame.continuation);
                 frames.pop_back();
                 if (frames.empty())
                     return ExecutionResult::success(std::move(returned));
-                if (callerResult != bytecode::InvalidIndex)
+
+                Frame& caller = frames.back();
+                if (continuation.completion == FrameCompletion::ReturnValue &&
+                    continuation.callerResult != bytecode::InvalidIndex)
                 {
-                    Frame& caller = frames.back();
-                    if (callerResult >= caller.registers.size())
+                    if (continuation.callerResult >= caller.registers.size())
                         return ExecutionResult::failure(
                             {"WVM1034", "Call result register is invalid", caller.function->id, caller.block->id});
-                    caller.registers[callerResult] = Register{std::move(returned), true};
+                    caller.registers[continuation.callerResult] = Register{std::move(returned), true};
+                }
+                else if (continuation.completion == FrameCompletion::ContinueConstruction)
+                {
+                    if (continuation.nextFunction >= module.functions.size())
+                        return ExecutionResult::failure({"WVM1074",
+                                                         "Construction continuation references an invalid function",
+                                                         caller.function->id, caller.block->id});
+                    ExecutionResult pushed =
+                        pushFrame(module.functions[continuation.nextFunction], continuation.nextArguments,
+                                  FrameContinuation{.completion = FrameCompletion::Ignore});
+                    if (!pushed.succeeded())
+                        return pushed;
+                }
+                else if (continuation.completion == FrameCompletion::ReleaseRegister)
+                {
+                    if (continuation.cleanupRegister >= caller.registers.size())
+                        return ExecutionResult::failure({"WVM1075",
+                                                         "Destructor continuation references an invalid register",
+                                                         caller.function->id, caller.block->id});
+                    caller.registers[continuation.cleanupRegister] = {};
+                }
+                else if (continuation.completion == FrameCompletion::ReleasePlace)
+                {
+                    if (!continuation.cleanupPlace)
+                        return ExecutionResult::failure({"WVM1076", "Destructor continuation lost its owning place",
+                                                         caller.function->id, caller.block->id});
+                    continuation.cleanupPlace->clear();
                 }
                 continue;
             }
