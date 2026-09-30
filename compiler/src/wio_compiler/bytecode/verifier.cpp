@@ -16,6 +16,12 @@ namespace wio::bytecode
         auto validType = [&](const std::uint32_t id) { return id == InvalidIndex || id < module.types.size(); };
         auto validFunction = [&](const std::uint32_t id)
         { return id == InvalidIndex || (id < module.functions.size() && module.functions[id].id == id); };
+        const auto mayOmitResult = [](const Opcode opcode)
+        {
+            return opcode == Opcode::Call || opcode == Opcode::NativeInvoke || opcode == Opcode::IndirectCall ||
+                   opcode == Opcode::ExtensionCall || opcode == Opcode::MethodCall || opcode == Opcode::VirtualCall ||
+                   opcode == Opcode::InterfaceCall || opcode == Opcode::IntrinsicCall;
+        };
 
         if (!validString(module.name) || !validString(module.logicalName) || !validString(module.stableKey))
             report("WBC1001", "Module manifest references an invalid string id");
@@ -152,7 +158,7 @@ namespace wio::bytecode
                     defineValue(parameter, block.id);
                 for (const Instruction& instruction : block.instructions)
                 {
-                    if (!producesValue(instruction.opcode))
+                    if (!producesValue(instruction.opcode) || instruction.result == InvalidIndex)
                         continue;
                     if (instruction.result == InvalidIndex || !validType(instruction.resultType) ||
                         !valueTypes.emplace(instruction.result, instruction.resultType).second)
@@ -202,10 +208,18 @@ namespace wio::bytecode
                     if (isTerminator(instruction.opcode) != (index + 1 == block.instructions.size()))
                         report("WBC1039", "Every block must end in exactly one final terminator", function.id, block.id,
                                instructionIndex);
-                    if (producesValue(instruction.opcode) != (instruction.result != InvalidIndex))
+                    const bool voidResultAnnotation =
+                        instruction.result == InvalidIndex && instruction.resultType != InvalidIndex &&
+                        instruction.resultType < module.types.size() && module.types[instruction.resultType].kind == 1;
+                    const bool omittedCallResult = instruction.result == InvalidIndex &&
+                                                   mayOmitResult(instruction.opcode) &&
+                                                   (instruction.resultType == InvalidIndex || voidResultAnnotation);
+                    if ((!producesValue(instruction.opcode) && instruction.result != InvalidIndex) ||
+                        (producesValue(instruction.opcode) && instruction.result == InvalidIndex && !omittedCallResult))
                         report("WBC1040", "Instruction result shape does not match its opcode", function.id, block.id,
                                instructionIndex);
-                    if (!producesValue(instruction.opcode) && instruction.resultType != InvalidIndex)
+                    if (instruction.result == InvalidIndex && instruction.resultType != InvalidIndex &&
+                        !voidResultAnnotation)
                         report("WBC1041", "Non-value instruction cannot carry a result type", function.id, block.id,
                                instructionIndex);
                     if (!instruction.expandedOperands.empty() &&

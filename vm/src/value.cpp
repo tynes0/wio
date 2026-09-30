@@ -1,5 +1,6 @@
 #include "wio/vm/value.h"
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 #include <utility>
@@ -10,8 +11,9 @@ namespace wio::vm
     class AggregateStorage final
     {
     public:
-        AggregateStorage(const Value::Kind kind, const std::uint32_t type, std::vector<Value> values)
-            : kind_(kind), type_(type), values_(std::move(values))
+        AggregateStorage(const Value::Kind kind, const std::uint32_t type, std::vector<Value> values,
+                         const bool ordered = false)
+            : kind_(kind), type_(type), values_(std::move(values)), ordered_(ordered)
         {
         }
 
@@ -51,12 +53,71 @@ namespace wio::vm
             return references_.load(std::memory_order_acquire);
         }
 
+        [[nodiscard]] bool ordered() const noexcept
+        {
+            return ordered_;
+        }
+
     private:
         std::atomic<std::uint32_t> references_{1};
         Value::Kind kind_;
         std::uint32_t type_ = 0;
         std::vector<Value> values_;
+        bool ordered_ = false;
     };
+
+    namespace
+    {
+        int compareDictionaryKeys(const Value& left, const Value& right) noexcept
+        {
+            if (left.kind() != right.kind())
+                return static_cast<int>(left.kind()) < static_cast<int>(right.kind()) ? -1 : 1;
+            switch (left.kind())
+            {
+            case Value::Kind::Boolean:
+                return left.asBoolean() == right.asBoolean() ? 0 : (left.asBoolean() ? 1 : -1);
+            case Value::Kind::SignedInteger:
+                return left.asSignedInteger() == right.asSignedInteger()
+                           ? 0
+                           : (left.asSignedInteger() < right.asSignedInteger() ? -1 : 1);
+            case Value::Kind::UnsignedInteger:
+                return left.asUnsignedInteger() == right.asUnsignedInteger()
+                           ? 0
+                           : (left.asUnsignedInteger() < right.asUnsignedInteger() ? -1 : 1);
+            case Value::Kind::Float64:
+                return left.asFloat64() == right.asFloat64() ? 0 : (left.asFloat64() < right.asFloat64() ? -1 : 1);
+            case Value::Kind::String:
+                return left.asString() == right.asString() ? 0 : (left.asString() < right.asString() ? -1 : 1);
+            case Value::Kind::Text:
+                return left.asText() == right.asText() ? 0 : (left.asText() < right.asText() ? -1 : 1);
+            default:
+                return left == right ? 0 : -1;
+            }
+        }
+
+        bool dictionaryValuesEqual(const Value& left, const Value& right) noexcept
+        {
+            return left == right;
+        }
+
+        void sortDictionaryEntries(std::vector<Value>& entries)
+        {
+            const std::size_t count = entries.size() / 2;
+            std::vector<std::size_t> order(count);
+            for (std::size_t index = 0; index < count; ++index)
+                order[index] = index;
+            std::stable_sort(order.begin(), order.end(), [&](const std::size_t left, const std::size_t right)
+                             { return compareDictionaryKeys(entries[left * 2], entries[right * 2]) < 0; });
+            std::vector<Value> sorted;
+            sorted.reserve(entries.size());
+            for (const std::size_t index : order)
+            {
+                sorted.push_back(std::move(entries[index * 2]));
+                sorted.push_back(std::move(entries[index * 2 + 1]));
+            }
+            entries = std::move(sorted);
+        }
+    } // namespace
 
     Value::Value(const Kind kind) noexcept : kind_(kind)
     {
@@ -149,6 +210,34 @@ namespace wio::vm
         return result;
     }
 
+    Value Value::dictionary(const std::uint32_t type, std::vector<Value> entries, const bool ordered)
+    {
+        std::vector<Value> unique;
+        unique.reserve(entries.size());
+        for (std::size_t index = 0; index + 1 < entries.size(); index += 2)
+        {
+            bool duplicate = false;
+            for (std::size_t existing = 0; existing < unique.size(); existing += 2)
+            {
+                if (unique[existing] == entries[index])
+                {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate)
+            {
+                unique.push_back(std::move(entries[index]));
+                unique.push_back(std::move(entries[index + 1]));
+            }
+        }
+        if (ordered)
+            sortDictionaryEntries(unique);
+        Value result{Kind::Dictionary};
+        result.scalar_.aggregate = new AggregateStorage{Kind::Dictionary, type, std::move(unique), ordered};
+        return result;
+    }
+
     Value Value::component(const std::uint32_t type, std::vector<Value> fields)
     {
         Value result{Kind::Component};
@@ -172,7 +261,8 @@ namespace wio::vm
 
     std::uint32_t Value::aggregateType() const noexcept
     {
-        return kind_ == Kind::Array || kind_ == Kind::Component || kind_ == Kind::Object || kind_ == Kind::ObjectBorrow
+        return kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component || kind_ == Kind::Object ||
+                       kind_ == Kind::ObjectBorrow
                    ? scalar_.aggregate->type()
                    : 0;
     }
@@ -223,6 +313,134 @@ namespace wio::vm
         return &scalar_.aggregate->values()[index];
     }
 
+    std::size_t Value::dictionaryCount() const noexcept
+    {
+        return kind_ == Kind::Dictionary ? scalar_.aggregate->values().size() / 2 : 0;
+    }
+
+    bool Value::dictionaryIsOrdered() const noexcept
+    {
+        return kind_ == Kind::Dictionary && scalar_.aggregate->ordered();
+    }
+
+    const Value* Value::dictionaryKey(const std::size_t index) const noexcept
+    {
+        if (kind_ != Kind::Dictionary || index >= dictionaryCount())
+            return nullptr;
+        return &scalar_.aggregate->values()[index * 2];
+    }
+
+    const Value* Value::dictionaryValue(const std::size_t index) const noexcept
+    {
+        if (kind_ != Kind::Dictionary || index >= dictionaryCount())
+            return nullptr;
+        return &scalar_.aggregate->values()[index * 2 + 1];
+    }
+
+    const Value* Value::dictionaryValue(const Value& key) const noexcept
+    {
+        if (kind_ != Kind::Dictionary)
+            return nullptr;
+        const std::vector<Value>& entries = scalar_.aggregate->values();
+        for (std::size_t index = 0; index < entries.size(); index += 2)
+        {
+            if (entries[index] == key)
+                return &entries[index + 1];
+        }
+        return nullptr;
+    }
+
+    Value* Value::mutableDictionaryValue(const Value& key) noexcept
+    {
+        if (kind_ != Kind::Dictionary)
+            return nullptr;
+        std::vector<Value>& entries = scalar_.aggregate->values();
+        for (std::size_t index = 0; index < entries.size(); index += 2)
+        {
+            if (entries[index] == key)
+                return &entries[index + 1];
+        }
+        return nullptr;
+    }
+
+    const Value* Value::dictionaryFloorKey(const Value& key) const noexcept
+    {
+        if (!dictionaryIsOrdered())
+            return nullptr;
+        const Value* found = nullptr;
+        for (std::size_t index = 0; index < dictionaryCount(); ++index)
+        {
+            const Value* candidate = dictionaryKey(index);
+            if (compareDictionaryKeys(*candidate, key) > 0)
+                break;
+            found = candidate;
+        }
+        return found;
+    }
+
+    const Value* Value::dictionaryCeilKey(const Value& key) const noexcept
+    {
+        if (!dictionaryIsOrdered())
+            return nullptr;
+        for (std::size_t index = 0; index < dictionaryCount(); ++index)
+        {
+            const Value* candidate = dictionaryKey(index);
+            if (compareDictionaryKeys(*candidate, key) >= 0)
+                return candidate;
+        }
+        return nullptr;
+    }
+
+    bool Value::dictionaryContainsValue(const Value& value) const noexcept
+    {
+        for (std::size_t index = 0; index < dictionaryCount(); ++index)
+        {
+            if (*dictionaryValue(index) == value)
+                return true;
+        }
+        return false;
+    }
+
+    bool Value::dictionarySet(Value key, Value value)
+    {
+        if (kind_ != Kind::Dictionary)
+            return false;
+        if (Value* existing = mutableDictionaryValue(key))
+        {
+            *existing = std::move(value);
+            return false;
+        }
+        std::vector<Value>& entries = scalar_.aggregate->values();
+        entries.push_back(std::move(key));
+        entries.push_back(std::move(value));
+        if (dictionaryIsOrdered())
+            sortDictionaryEntries(entries);
+        return true;
+    }
+
+    bool Value::dictionaryRemove(const Value& key) noexcept
+    {
+        if (kind_ != Kind::Dictionary)
+            return false;
+        std::vector<Value>& entries = scalar_.aggregate->values();
+        for (std::size_t index = 0; index < entries.size(); index += 2)
+        {
+            if (entries[index] == key)
+            {
+                entries.erase(entries.begin() + static_cast<std::ptrdiff_t>(index),
+                              entries.begin() + static_cast<std::ptrdiff_t>(index + 2));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void Value::dictionaryClear() noexcept
+    {
+        if (kind_ == Kind::Dictionary)
+            scalar_.aggregate->values().clear();
+    }
+
     std::size_t Value::fieldCount() const noexcept
     {
         return kind_ == Kind::Component || kind_ == Kind::Object || kind_ == Kind::ObjectBorrow
@@ -248,13 +466,17 @@ namespace wio::vm
 
     Value Value::cloneOwned() const
     {
-        if (kind_ != Kind::Array && kind_ != Kind::Component)
+        if (kind_ != Kind::Array && kind_ != Kind::Dictionary && kind_ != Kind::Component)
             return *this;
         std::vector<Value> cloned;
         cloned.reserve(scalar_.aggregate->values().size());
         for (const Value& value : scalar_.aggregate->values())
             cloned.push_back(value.cloneOwned());
-        return kind_ == Kind::Array ? array(std::move(cloned)) : component(aggregateType(), std::move(cloned));
+        if (kind_ == Kind::Array)
+            return array(std::move(cloned));
+        if (kind_ == Kind::Dictionary)
+            return dictionary(aggregateType(), std::move(cloned), dictionaryIsOrdered());
+        return component(aggregateType(), std::move(cloned));
     }
 
     bool Value::operator==(const Value& other) const noexcept
@@ -280,6 +502,16 @@ namespace wio::vm
             return text_.text == other.text_.text;
         case Kind::Array:
             return scalar_.aggregate->values() == other.scalar_.aggregate->values();
+        case Kind::Dictionary:
+            if (aggregateType() != other.aggregateType() || dictionaryCount() != other.dictionaryCount())
+                return false;
+            for (std::size_t index = 0; index < dictionaryCount(); ++index)
+            {
+                const Value* otherValue = other.dictionaryValue(*dictionaryKey(index));
+                if (!otherValue || !dictionaryValuesEqual(*otherValue, *dictionaryValue(index)))
+                    return false;
+            }
+            return true;
         case Kind::Component:
             return aggregateType() == other.aggregateType() &&
                    scalar_.aggregate->values() == other.scalar_.aggregate->values();
@@ -298,7 +530,7 @@ namespace wio::vm
             std::destroy_at(&text_.string);
         else if (kind_ == Kind::Text)
             std::destroy_at(&text_.text);
-        else if (kind_ == Kind::Array || kind_ == Kind::Component || kind_ == Kind::Object)
+        else if (kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component || kind_ == Kind::Object)
             scalar_.aggregate->release();
         kind_ = Kind::Empty;
         scalar_.unsignedInteger = 0;
@@ -311,7 +543,7 @@ namespace wio::vm
             std::construct_at(&text_.string, other.text_.string);
         else if (kind_ == Kind::Text)
             std::construct_at(&text_.text, other.text_.text);
-        else if (kind_ == Kind::Array || kind_ == Kind::Component || kind_ == Kind::Object)
+        else if (kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component || kind_ == Kind::Object)
         {
             scalar_.aggregate = other.scalar_.aggregate;
             scalar_.aggregate->retain();

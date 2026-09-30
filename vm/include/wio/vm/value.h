@@ -27,6 +27,7 @@ namespace wio::vm
             String,
             Text,
             Array,
+            Dictionary,
             Component,
             Object,
             ObjectBorrow,
@@ -48,6 +49,7 @@ namespace wio::vm
         [[nodiscard]] static Value string(std::string value);
         [[nodiscard]] static Value text(std::u32string value);
         [[nodiscard]] static Value array(std::vector<Value> values);
+        [[nodiscard]] static Value dictionary(std::uint32_t type, std::vector<Value> entries, bool ordered);
         [[nodiscard]] static Value component(std::uint32_t type, std::vector<Value> fields);
         [[nodiscard]] static Value object(std::uint32_t type, std::vector<Value> fields);
         [[nodiscard]] std::uint32_t aggregateType() const noexcept;
@@ -81,6 +83,17 @@ namespace wio::vm
         [[nodiscard]] std::u32string_view asText() const noexcept;
         [[nodiscard]] std::size_t elementCount() const noexcept;
         [[nodiscard]] const Value* element(std::size_t index) const noexcept;
+        [[nodiscard]] std::size_t dictionaryCount() const noexcept;
+        [[nodiscard]] bool dictionaryIsOrdered() const noexcept;
+        [[nodiscard]] const Value* dictionaryKey(std::size_t index) const noexcept;
+        [[nodiscard]] const Value* dictionaryValue(std::size_t index) const noexcept;
+        [[nodiscard]] const Value* dictionaryValue(const Value& key) const noexcept;
+        [[nodiscard]] const Value* dictionaryFloorKey(const Value& key) const noexcept;
+        [[nodiscard]] const Value* dictionaryCeilKey(const Value& key) const noexcept;
+        [[nodiscard]] bool dictionaryContainsValue(const Value& value) const noexcept;
+        bool dictionarySet(Value key, Value value);
+        bool dictionaryRemove(const Value& key) noexcept;
+        void dictionaryClear() noexcept;
         [[nodiscard]] std::size_t fieldCount() const noexcept;
         [[nodiscard]] const Value* field(std::size_t index) const noexcept;
 
@@ -120,6 +133,7 @@ namespace wio::vm
         [[nodiscard]] static Value objectBorrow(AggregateStorage* storage) noexcept;
         [[nodiscard]] PlaceStorage* asPlace() const noexcept;
         [[nodiscard]] Value* mutableElement(std::size_t index) noexcept;
+        [[nodiscard]] Value* mutableDictionaryValue(const Value& key) noexcept;
         [[nodiscard]] Value* mutableField(std::size_t index) noexcept;
         [[nodiscard]] Value cloneOwned() const;
         void destroy() noexcept;

@@ -68,12 +68,14 @@ namespace wio::vm
         constexpr std::uint8_t TypeReference = 29;
         constexpr std::uint8_t TypeNullable = 30;
         constexpr std::uint8_t TypeArray = 31;
+        constexpr std::uint8_t TypeDictionary = 32;
 
         constexpr std::uint8_t NominalComponent = 1;
         constexpr std::uint8_t NominalObject = 2;
         constexpr std::uint8_t NominalInterface = 3;
 
         constexpr std::uint8_t IntrinsicArray = 1;
+        constexpr std::uint8_t IntrinsicDictionary = 2;
         constexpr std::uint8_t IntrinsicString = 3;
         constexpr std::uint8_t IntrinsicText = 4;
 
@@ -270,6 +272,8 @@ namespace wio::vm
                 }
                 return Value::array(std::move(elements));
             }
+            if (kind == TypeDictionary)
+                return Value::dictionary(typeId, {}, module.string(type.name) == "ordered");
             if (kind == TypeNamed && type.nominalKind == NominalComponent)
             {
                 std::vector<Value> fields;
@@ -741,6 +745,64 @@ namespace wio::vm
                 ++frame.instruction;
                 continue;
             }
+            if (instruction.opcode == bytecode::Opcode::DictionaryCreate)
+            {
+                if (module.types[instruction.resultType].kind != TypeDictionary || instruction.operands.size() % 2 != 0)
+                    return fail("WVM1078", "Dictionary creation has an invalid result type or entry shape");
+                std::vector<Value> entries;
+                entries.reserve(instruction.operands.size());
+                for (const std::uint32_t operandId : instruction.operands)
+                {
+                    const Value* operand = read(operandId);
+                    if (!operand)
+                        return fail("WVM1079", "Dictionary creation reads an unavailable key or value");
+                    entries.push_back(*operand);
+                }
+                const bool ordered = module.string(instruction.selector) == "ordered";
+                if (!write(instruction.result, Value::dictionary(instruction.resultType, std::move(entries), ordered)))
+                    return fail("WVM1009", "Dictionary result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::DictionaryGet)
+            {
+                const Value* dictionary = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* key = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                const Value* value = dictionary && key ? dictionary->dictionaryValue(*key) : nullptr;
+                if (!value)
+                    return fail("WVM1080", "Dictionary key was not found");
+                write(instruction.result, *value);
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::DictionaryPlace)
+            {
+                const Value* base = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* key = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                if (!base || !key)
+                    return fail("WVM1081", "Dictionary place requires an available base and key");
+                const Value* dictionary = base;
+                if (base->kind() == Value::Kind::Place)
+                {
+                    PlaceStorage* const basePlace = base->asPlace();
+                    dictionary = basePlace && basePlace->initialized ? &basePlace->storedValue() : nullptr;
+                }
+                if (!dictionary || dictionary->kind() != Value::Kind::Dictionary)
+                    return fail("WVM1082", "Dictionary place base is not an initialized dictionary");
+
+                auto storage = std::make_unique<PlaceStorage>();
+                storage->owner = *dictionary;
+                storage->alias = storage->owner.mutableDictionaryValue(*key);
+                storage->initialized = storage->alias != nullptr;
+                storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
+                if (!storage->alias)
+                    return fail("WVM1080", "Dictionary key was not found");
+                PlaceStorage* const pointer = storage.get();
+                frame.localPlaces.push_back(std::move(storage));
+                write(instruction.result, Value::place(pointer));
+                ++frame.instruction;
+                continue;
+            }
             if (instruction.opcode == bytecode::Opcode::Interpolate)
             {
                 if (instruction.stringSegments.size() != instruction.operands.size() + 1)
@@ -775,13 +837,17 @@ namespace wio::vm
                 continue;
             }
             if (instruction.opcode == bytecode::Opcode::IntrinsicCall &&
-                (instruction.intrinsicFamily == IntrinsicArray || instruction.intrinsicFamily == IntrinsicString ||
-                 instruction.intrinsicFamily == IntrinsicText))
+                (instruction.intrinsicFamily == IntrinsicArray || instruction.intrinsicFamily == IntrinsicDictionary ||
+                 instruction.intrinsicFamily == IntrinsicString || instruction.intrinsicFamily == IntrinsicText))
             {
-                const Value* receiver = instruction.operands.empty() ? nullptr : read(instruction.operands.front());
+                const Value* rawReceiver = instruction.operands.empty() ? nullptr : read(instruction.operands.front());
                 const std::string_view selector = module.string(instruction.selector);
-                if (!receiver)
+                if (!rawReceiver)
                     return fail("WVM1058", "Intrinsic call has no available receiver");
+                PlaceStorage* const receiverPlace =
+                    rawReceiver->kind() == Value::Kind::Place ? rawReceiver->asPlace() : nullptr;
+                const Value* receiver =
+                    receiverPlace && receiverPlace->initialized ? &receiverPlace->storedValue() : rawReceiver;
 
                 Value result;
                 if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
@@ -790,6 +856,173 @@ namespace wio::vm
                 else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
                          selector == "Empty")
                     result = Value::boolean(receiver->elementCount() == 0);
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Contains" && instruction.operands.size() == 2)
+                {
+                    const Value* needle = read(instruction.operands[1]);
+                    if (!needle)
+                        return fail("WVM1083", "Array Contains reads an unavailable value");
+                    bool contains = false;
+                    for (std::size_t index = 0; index < receiver->elementCount(); ++index)
+                        contains = contains || *receiver->element(index) == *needle;
+                    result = Value::boolean(contains);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Count")
+                    result = Value::unsignedInteger(receiver->dictionaryCount());
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Empty")
+                    result = Value::boolean(receiver->dictionaryCount() == 0);
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "ContainsKey" &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    result = Value::boolean(key && receiver->dictionaryValue(*key));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "ContainsValue" &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* value = read(instruction.operands[1]);
+                    result = Value::boolean(value && receiver->dictionaryContainsValue(*value));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && (selector == "Get" || selector == "At") &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* value = key ? receiver->dictionaryValue(*key) : nullptr;
+                    if (!value)
+                        return fail("WVM1080", "Dictionary key was not found");
+                    result = *value;
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "GetOr" &&
+                         instruction.operands.size() == 3)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* fallback = read(instruction.operands[2]);
+                    if (!key || !fallback)
+                        return fail("WVM1084", "Dictionary GetOr reads unavailable operands");
+                    const Value* value = receiver->dictionaryValue(*key);
+                    result = value ? *value : *fallback;
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "TryGet" &&
+                         instruction.operands.size() == 3)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* out = read(instruction.operands[2]);
+                    PlaceStorage* const outPlace = out ? out->asPlace() : nullptr;
+                    if (!key || !outPlace || !outPlace->initialized || !outPlace->mutableValue)
+                        return fail("WVM1085", "Dictionary TryGet requires a mutable initialized output place");
+                    const Value* value = receiver->dictionaryValue(*key);
+                    if (value)
+                        outPlace->storedValue() = *value;
+                    result = Value::boolean(value != nullptr);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Set" &&
+                         instruction.operands.size() == 3)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* value = read(instruction.operands[2]);
+                    if (!receiverPlace || !receiverPlace->mutableValue || !key || !value)
+                        return fail("WVM1086", "Dictionary Set requires a mutable receiver and available operands");
+                    receiverPlace->storedValue().dictionarySet(*key, *value);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "GetOrAdd" &&
+                         instruction.operands.size() == 3)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* fallback = read(instruction.operands[2]);
+                    if (!receiverPlace || !receiverPlace->mutableValue || !key || !fallback)
+                        return fail("WVM1087", "Dictionary GetOrAdd requires a mutable receiver and operands");
+                    if (const Value* existing = receiver->dictionaryValue(*key))
+                        result = *existing;
+                    else
+                    {
+                        receiverPlace->storedValue().dictionarySet(*key, *fallback);
+                        result = *fallback;
+                    }
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && (selector == "Keys" || selector == "Values"))
+                {
+                    std::vector<Value> values;
+                    values.reserve(receiver->dictionaryCount());
+                    for (std::size_t index = 0; index < receiver->dictionaryCount(); ++index)
+                        values.push_back(selector == "Keys" ? *receiver->dictionaryKey(index)
+                                                            : *receiver->dictionaryValue(index));
+                    result = Value::array(std::move(values));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Clone")
+                    result = receiver->cloneOwned();
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Merge" &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* other = read(instruction.operands[1]);
+                    if (!other || other->kind() != Value::Kind::Dictionary)
+                        return fail("WVM1088", "Dictionary Merge requires another dictionary");
+                    result = receiver->cloneOwned();
+                    for (std::size_t index = 0; index < other->dictionaryCount(); ++index)
+                        result.dictionarySet(*other->dictionaryKey(index), *other->dictionaryValue(index));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Extend" &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* other = read(instruction.operands[1]);
+                    if (!receiverPlace || !receiverPlace->mutableValue || !other ||
+                        other->kind() != Value::Kind::Dictionary)
+                        return fail("WVM1089", "Dictionary Extend requires a mutable receiver and dictionary");
+                    for (std::size_t index = 0; index < other->dictionaryCount(); ++index)
+                        receiverPlace->storedValue().dictionarySet(*other->dictionaryKey(index),
+                                                                   *other->dictionaryValue(index));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Clear")
+                {
+                    if (!receiverPlace || !receiverPlace->mutableValue)
+                        return fail("WVM1090", "Dictionary Clear requires a mutable receiver");
+                    receiverPlace->storedValue().dictionaryClear();
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Remove" &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    if (!receiverPlace || !receiverPlace->mutableValue || !key)
+                        return fail("WVM1091", "Dictionary Remove requires a mutable receiver and key");
+                    result = Value::boolean(receiverPlace->storedValue().dictionaryRemove(*key));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary &&
+                         (selector == "FirstKey" || selector == "FirstValue" || selector == "LastKey" ||
+                          selector == "LastValue"))
+                {
+                    if (!receiver->dictionaryIsOrdered() || receiver->dictionaryCount() == 0)
+                        return fail("WVM1092", "Ordered dictionary endpoint requires a non-empty ordered dictionary");
+                    const std::size_t index = selector.starts_with("First") ? 0 : receiver->dictionaryCount() - 1;
+                    result =
+                        selector.ends_with("Key") ? *receiver->dictionaryKey(index) : *receiver->dictionaryValue(index);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary &&
+                         (selector == "FloorKeyOr" || selector == "CeilKeyOr") && instruction.operands.size() == 3)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* fallback = read(instruction.operands[2]);
+                    if (!key || !fallback || !receiver->dictionaryIsOrdered())
+                        return fail("WVM1093", "Ordered dictionary bound lookup has invalid operands");
+                    const Value* found = selector == "FloorKeyOr" ? receiver->dictionaryFloorKey(*key)
+                                                                  : receiver->dictionaryCeilKey(*key);
+                    result = found ? *found : *fallback;
+                }
                 else if (instruction.intrinsicFamily == IntrinsicString && receiver->kind() == Value::Kind::String &&
                          selector == "Count")
                     result = Value::unsignedInteger(receiver->asString().size());
@@ -830,9 +1063,9 @@ namespace wio::vm
                     result = Value::text(std::u32string{receiver->asText().substr(*start, *count)});
                 }
                 else
-                    return fail("WVM1061",
-                                "String, text, or array intrinsic is not implemented: " + std::string{selector});
-                write(instruction.result, std::move(result));
+                    return fail("WVM1061", "Container or text intrinsic is not implemented: " + std::string{selector});
+                if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(result)))
+                    return fail("WVM1009", "Intrinsic result register is invalid");
                 ++frame.instruction;
                 continue;
             }
