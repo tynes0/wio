@@ -51,4 +51,10 @@ if(BUILD_TESTING)
     )
     target_link_libraries(wio_vm_array_intrinsic_execution_test PRIVATE wio_vm)
     add_test(NAME wio_vm_array_intrinsic_execution COMMAND wio_vm_array_intrinsic_execution_test)
+
+    add_executable(wio_vm_string_intrinsic_execution_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_string_intrinsic_execution_test.cpp"
+    )
+    target_link_libraries(wio_vm_string_intrinsic_execution_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_string_intrinsic_execution COMMAND wio_vm_string_intrinsic_execution_test)
 endif()

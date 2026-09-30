@@ -4,6 +4,8 @@
 #include "wio/bytecode/verifier.h"
 #include "wio/vm/unicode.h"
 
+#include "string_intrinsics.h"
+
 #include <algorithm>
 #include <bit>
 #include <charconv>
@@ -860,6 +862,28 @@ namespace wio::vm
                     return value ? valueIndex(*value) : std::nullopt;
                 };
 
+                if (instruction.intrinsicFamily == IntrinsicString)
+                {
+                    std::vector<const Value*> intrinsicArguments;
+                    intrinsicArguments.reserve(instruction.operands.size() - 1);
+                    for (std::size_t index = 1; index < instruction.operands.size(); ++index)
+                        intrinsicArguments.push_back(read(instruction.operands[index]));
+                    const std::uint8_t resultType = instruction.resultType < module.types.size()
+                                                        ? module.types[instruction.resultType].kind
+                                                        : TypeVoid;
+                    detail::StringIntrinsicResult intrinsicResult = detail::executeStringIntrinsic(
+                        selector, *receiver, mutableReceiver, intrinsicArguments, resultType);
+                    if (!intrinsicResult.recognized)
+                        return fail("WVM1061", "String intrinsic is not implemented: " + std::string{selector});
+                    if (!intrinsicResult.succeeded)
+                        return fail(std::move(intrinsicResult.code), std::move(intrinsicResult.message));
+                    if (instruction.result != bytecode::InvalidIndex &&
+                        !write(instruction.result, std::move(intrinsicResult.value)))
+                        return fail("WVM1009", "Intrinsic result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+
                 Value result;
                 if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
                     selector == "Count")
@@ -1242,12 +1266,6 @@ namespace wio::vm
                                                                   : receiver->dictionaryCeilKey(*key);
                     result = found ? *found : *fallback;
                 }
-                else if (instruction.intrinsicFamily == IntrinsicString && receiver->kind() == Value::Kind::String &&
-                         selector == "Count")
-                    result = Value::unsignedInteger(receiver->asString().size());
-                else if (instruction.intrinsicFamily == IntrinsicString && receiver->kind() == Value::Kind::String &&
-                         selector == "Empty")
-                    result = Value::boolean(receiver->asString().empty());
                 else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
                          selector == "Count")
                     result = Value::unsignedInteger(receiver->asText().size());
