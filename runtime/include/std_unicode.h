@@ -362,6 +362,7 @@ namespace wio::runtime::std_unicode
     inline std::vector<std::size_t> GraphemeBoundaries(const std::string_view input) noexcept
     {
         std::vector<std::size_t> boundaries{0};
+        if (input.empty()) return boundaries;
         std::size_t offset = 0;
         std::uint32_t previous = 0;
         std::size_t regionalRun = 0;

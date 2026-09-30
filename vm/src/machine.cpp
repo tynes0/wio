@@ -5,6 +5,7 @@
 #include "wio/vm/unicode.h"
 
 #include "string_intrinsics.h"
+#include "text_intrinsics.h"
 
 #include <algorithm>
 #include <bit>
@@ -883,6 +884,24 @@ namespace wio::vm
                     ++frame.instruction;
                     continue;
                 }
+                if (instruction.intrinsicFamily == IntrinsicText)
+                {
+                    std::vector<const Value*> intrinsicArguments;
+                    intrinsicArguments.reserve(instruction.operands.size() - 1);
+                    for (std::size_t index = 1; index < instruction.operands.size(); ++index)
+                        intrinsicArguments.push_back(read(instruction.operands[index]));
+                    detail::TextIntrinsicResult intrinsicResult =
+                        detail::executeTextIntrinsic(selector, *receiver, intrinsicArguments);
+                    if (!intrinsicResult.recognized)
+                        return fail("WVM1061", "Text intrinsic is not implemented: " + std::string{selector});
+                    if (!intrinsicResult.succeeded)
+                        return fail(std::move(intrinsicResult.code), std::move(intrinsicResult.message));
+                    if (instruction.result != bytecode::InvalidIndex &&
+                        !write(instruction.result, std::move(intrinsicResult.value)))
+                        return fail("WVM1009", "Intrinsic result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
 
                 Value result;
                 if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
@@ -1265,39 +1284,6 @@ namespace wio::vm
                     const Value* found = selector == "FloorKeyOr" ? receiver->dictionaryFloorKey(*key)
                                                                   : receiver->dictionaryCeilKey(*key);
                     result = found ? *found : *fallback;
-                }
-                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
-                         selector == "Count")
-                    result = Value::unsignedInteger(receiver->asText().size());
-                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
-                         selector == "ByteCount")
-                    result = Value::unsignedInteger(encodeUtf8(receiver->asText()).size());
-                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
-                         selector == "Empty")
-                    result = Value::boolean(receiver->asText().empty());
-                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
-                         (selector == "ToString" || selector == "Utf8"))
-                    result = Value::string(encodeUtf8(receiver->asText()));
-                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
-                         (selector == "Get" || selector == "At") && instruction.operands.size() == 2)
-                {
-                    const Value* rawIndex = read(instruction.operands[1]);
-                    const std::optional<std::size_t> index = rawIndex ? valueIndex(*rawIndex) : std::nullopt;
-                    if (!index || *index >= receiver->asText().size())
-                        return fail("WVM1059", "Unicode text index is outside the scalar bounds");
-                    result = Value::unsignedInteger(receiver->asText()[*index]);
-                }
-                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
-                         selector == "Slice" && instruction.operands.size() == 3)
-                {
-                    const Value* rawStart = read(instruction.operands[1]);
-                    const Value* rawCount = read(instruction.operands[2]);
-                    const std::optional<std::size_t> start = rawStart ? valueIndex(*rawStart) : std::nullopt;
-                    const std::optional<std::size_t> count = rawCount ? valueIndex(*rawCount) : std::nullopt;
-                    if (!start || !count || *start > receiver->asText().size() ||
-                        *count > receiver->asText().size() - *start)
-                        return fail("WVM1060", "Unicode text slice is outside the scalar bounds");
-                    result = Value::text(std::u32string{receiver->asText().substr(*start, *count)});
                 }
                 else
                     return fail("WVM1061", "Container or text intrinsic is not implemented: " + std::string{selector});

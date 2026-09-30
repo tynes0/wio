@@ -41,6 +41,9 @@ second language-specific control-flow model.
 - complete byte-string intrinsic execution for byte indexing/search/slicing,
   trim/case/replace/repeat/split/lines/padding transformations, checked numeric
   and boolean parsing, and place-checked in-place mutations;
+- complete Unicode `text` intrinsic execution for scalar slicing and search,
+  UTF-8 conversion, code-point projection, grapheme segmentation/slicing,
+  display width, case folding, and grapheme arrays;
 - owned ordered and unordered dictionaries with strict lookup and mutable
   places, deterministic duplicate-key construction, deep copy, merge/extend,
   key/value projection, query/mutation intrinsics, and ordered endpoint and
@@ -68,10 +71,9 @@ keep the decode result beside the machine.
 
 ## Remaining Sprint 19 surface
 
-The next slice completes the remaining Unicode `text` intrinsic family, then
-adds function values, closures and indirect dispatch, interface slot
-validation, coroutine scheduling, panic stack traces, exceptional cleanup and
-unwind, and debugger hooks. Native functions, callbacks, opaque values, and
+The next slices add function values, closures and indirect dispatch, interface
+slot validation, coroutine scheduling, panic stack traces, exceptional cleanup
+and unwind, and debugger hooks. Native functions, callbacks, opaque values, and
 foreign-thread entry are deliberately reserved for the Sprint 20 VM native
 bridge; Sprint 19 reports them as unsupported instead of silently changing
 behavior.

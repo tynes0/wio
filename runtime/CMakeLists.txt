@@ -381,6 +381,14 @@ install(FILES "${WIO_BACKEND_RUNTIME_LIB}"
 )
 
 if(BUILD_TESTING)
+    add_executable(wio_runtime_unicode_grapheme_test
+        "${CMAKE_SOURCE_DIR}/tests/runtime_unicode_grapheme_test.cpp"
+    )
+    target_include_directories(wio_runtime_unicode_grapheme_test PRIVATE
+        "${WIO_RUNTIME_INCLUDE_DIR}"
+    )
+    add_test(NAME wio_runtime_unicode_grapheme COMMAND wio_runtime_unicode_grapheme_test)
+
     add_executable(wio_async_runtime_stress
         "${CMAKE_SOURCE_DIR}/tests/async_runtime_stress.cpp"
     )
