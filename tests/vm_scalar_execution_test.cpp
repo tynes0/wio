@@ -165,10 +165,10 @@ namespace
         unsupported.returnType = I32;
         bytecode::Block unsupportedEntry;
         unsupportedEntry.id = 0;
-        bytecode::Instruction array = instruction(bytecode::Opcode::ArrayCreate);
-        array.result = 0;
-        array.resultType = I32;
-        unsupportedEntry.instructions = {std::move(array), returnValue(0)};
+        bytecode::Instruction dictionary = instruction(bytecode::Opcode::DictionaryCreate);
+        dictionary.result = 0;
+        dictionary.resultType = I32;
+        unsupportedEntry.instructions = {std::move(dictionary), returnValue(0)};
         unsupported.blocks.push_back(std::move(unsupportedEntry));
         module.functions.push_back(std::move(unsupported));
 

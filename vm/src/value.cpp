@@ -1,10 +1,45 @@
 #include "wio/vm/value.h"
 
+#include <atomic>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace wio::vm
 {
+    class AggregateStorage final
+    {
+    public:
+        explicit AggregateStorage(std::vector<Value> values) : values_(std::move(values))
+        {
+        }
+
+        void retain() noexcept
+        {
+            references_.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        void release() noexcept
+        {
+            if (references_.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                delete this;
+        }
+
+        [[nodiscard]] std::vector<Value>& values() noexcept
+        {
+            return values_;
+        }
+
+        [[nodiscard]] const std::vector<Value>& values() const noexcept
+        {
+            return values_;
+        }
+
+    private:
+        std::atomic<std::uint32_t> references_{1};
+        std::vector<Value> values_;
+    };
+
     Value::Value(const Kind kind) noexcept : kind_(kind)
     {
     }
@@ -82,6 +117,20 @@ namespace wio::vm
         return result;
     }
 
+    Value Value::text(std::u32string value)
+    {
+        Value result{Kind::Text};
+        std::construct_at(&result.text_.text, std::move(value));
+        return result;
+    }
+
+    Value Value::array(std::vector<Value> values)
+    {
+        Value result{Kind::Array};
+        result.scalar_.aggregate = new AggregateStorage{std::move(values)};
+        return result;
+    }
+
     Value Value::place(PlaceStorage* const storage) noexcept
     {
         Value result{Kind::Place};
@@ -97,6 +146,30 @@ namespace wio::vm
     std::string_view Value::asString() const noexcept
     {
         return kind_ == Kind::String ? std::string_view{text_.string} : std::string_view{};
+    }
+
+    std::u32string_view Value::asText() const noexcept
+    {
+        return kind_ == Kind::Text ? std::u32string_view{text_.text} : std::u32string_view{};
+    }
+
+    std::size_t Value::elementCount() const noexcept
+    {
+        return kind_ == Kind::Array ? scalar_.aggregate->values().size() : 0;
+    }
+
+    const Value* Value::element(const std::size_t index) const noexcept
+    {
+        if (kind_ != Kind::Array || index >= scalar_.aggregate->values().size())
+            return nullptr;
+        return &scalar_.aggregate->values()[index];
+    }
+
+    Value* Value::mutableElement(const std::size_t index) noexcept
+    {
+        if (kind_ != Kind::Array || index >= scalar_.aggregate->values().size())
+            return nullptr;
+        return &scalar_.aggregate->values()[index];
     }
 
     bool Value::operator==(const Value& other) const noexcept
@@ -118,6 +191,10 @@ namespace wio::vm
             return scalar_.floating == other.scalar_.floating;
         case Kind::String:
             return text_.string == other.text_.string;
+        case Kind::Text:
+            return text_.text == other.text_.text;
+        case Kind::Array:
+            return scalar_.aggregate->values() == other.scalar_.aggregate->values();
         case Kind::Place:
             return scalar_.place == other.scalar_.place;
         }
@@ -128,6 +205,10 @@ namespace wio::vm
     {
         if (kind_ == Kind::String)
             std::destroy_at(&text_.string);
+        else if (kind_ == Kind::Text)
+            std::destroy_at(&text_.text);
+        else if (kind_ == Kind::Array)
+            scalar_.aggregate->release();
         kind_ = Kind::Empty;
         scalar_.unsignedInteger = 0;
     }
@@ -137,6 +218,13 @@ namespace wio::vm
         kind_ = other.kind_;
         if (kind_ == Kind::String)
             std::construct_at(&text_.string, other.text_.string);
+        else if (kind_ == Kind::Text)
+            std::construct_at(&text_.text, other.text_.text);
+        else if (kind_ == Kind::Array)
+        {
+            scalar_.aggregate = other.scalar_.aggregate;
+            scalar_.aggregate->retain();
+        }
         else
             scalar_ = other.scalar_;
     }
@@ -148,6 +236,11 @@ namespace wio::vm
         {
             std::construct_at(&text_.string, std::move(other.text_.string));
             std::destroy_at(&other.text_.string);
+        }
+        else if (kind_ == Kind::Text)
+        {
+            std::construct_at(&text_.text, std::move(other.text_.text));
+            std::destroy_at(&other.text_.text);
         }
         else
             scalar_ = other.scalar_;

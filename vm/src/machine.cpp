@@ -2,11 +2,14 @@
 
 #include "wio/bytecode/format.h"
 #include "wio/bytecode/verifier.h"
+#include "wio/vm/unicode.h"
 
 #include <algorithm>
 #include <bit>
+#include <charconv>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -44,6 +47,11 @@ namespace wio::vm
         constexpr std::uint8_t TypeString = 17;
         constexpr std::uint8_t TypeText = 18;
         constexpr std::uint8_t TypeNullable = 30;
+        constexpr std::uint8_t TypeArray = 31;
+
+        constexpr std::uint8_t IntrinsicArray = 1;
+        constexpr std::uint8_t IntrinsicString = 3;
+        constexpr std::uint8_t IntrinsicText = 4;
 
         constexpr std::uint8_t UnaryNegate = 0;
         constexpr std::uint8_t UnaryLogicalNot = 1;
@@ -155,7 +163,8 @@ namespace wio::vm
             return found && maximum != (std::numeric_limits<std::uint32_t>::max)() ? maximum + 1 : 0;
         }
 
-        [[nodiscard]] Value constantValue(const bytecode::Constant& constant, const bytecode::Module& module)
+        [[nodiscard]] std::optional<Value> constantValue(const bytecode::Constant& constant,
+                                                         const bytecode::Module& module, const std::uint8_t resultType)
         {
             switch (constant.kind)
             {
@@ -172,9 +181,16 @@ namespace wio::vm
             case bytecode::ConstantKind::Float64:
                 return Value::floating(std::bit_cast<double>(constant.bits));
             case bytecode::ConstantKind::String:
+                if (resultType == TypeText)
+                {
+                    Utf8DecodeResult decoded = decodeUtf8(module.string(constant.string));
+                    if (!decoded.succeeded())
+                        return std::nullopt;
+                    return Value::text(std::move(decoded.value));
+                }
                 return Value::string(std::string{module.string(constant.string)});
             }
-            return {};
+            return std::nullopt;
         }
 
         [[nodiscard]] Value defaultValue(const std::uint8_t kind)
@@ -187,8 +203,10 @@ namespace wio::vm
                 return Value::unsignedInteger(0);
             if (isFloatType(kind))
                 return Value::floating(0.0);
-            if (kind == TypeString || kind == TypeText)
+            if (kind == TypeString)
                 return Value::string({});
+            if (kind == TypeText)
+                return Value::text({});
             if (kind == TypeNullable)
                 return Value::null();
             return {};
@@ -218,6 +236,44 @@ namespace wio::vm
         [[nodiscard]] bool isComparison(const std::uint8_t operation) noexcept
         {
             return operation >= BinaryEqual && operation <= BinaryGreaterEqual;
+        }
+
+        [[nodiscard]] std::optional<std::size_t> valueIndex(const Value& value) noexcept
+        {
+            if (value.kind() == Value::Kind::UnsignedInteger &&
+                value.asUnsignedInteger() <= (std::numeric_limits<std::size_t>::max)())
+                return static_cast<std::size_t>(value.asUnsignedInteger());
+            if (value.kind() == Value::Kind::SignedInteger && value.asSignedInteger() >= 0 &&
+                static_cast<std::uint64_t>(value.asSignedInteger()) <=
+                    static_cast<std::uint64_t>((std::numeric_limits<std::size_t>::max)()))
+                return static_cast<std::size_t>(value.asSignedInteger());
+            return std::nullopt;
+        }
+
+        [[nodiscard]] std::optional<std::string> formatUtf8(const Value& value)
+        {
+            if (value.kind() == Value::Kind::String)
+                return std::string{value.asString()};
+            if (value.kind() == Value::Kind::Text)
+                return encodeUtf8(value.asText());
+            if (value.kind() == Value::Kind::Null)
+                return "null";
+            if (value.kind() == Value::Kind::Boolean)
+                return value.asBoolean() ? "true" : "false";
+
+            char buffer[128]{};
+            std::to_chars_result converted{};
+            if (value.kind() == Value::Kind::SignedInteger)
+                converted = std::to_chars(std::begin(buffer), std::end(buffer), value.asSignedInteger());
+            else if (value.kind() == Value::Kind::UnsignedInteger)
+                converted = std::to_chars(std::begin(buffer), std::end(buffer), value.asUnsignedInteger());
+            else if (value.kind() == Value::Kind::Float64)
+                converted = std::to_chars(std::begin(buffer), std::end(buffer), value.asFloat64());
+            else
+                return std::nullopt;
+            if (converted.ec != std::errc{})
+                return std::nullopt;
+            return std::string{buffer, converted.ptr};
         }
     } // namespace
 
@@ -370,7 +426,11 @@ namespace wio::vm
 
             if (instruction.opcode == bytecode::Opcode::Constant)
             {
-                if (!write(instruction.result, constantValue(module.constants[instruction.constant], module)))
+                std::optional<Value> value = constantValue(module.constants[instruction.constant], module,
+                                                           module.types[instruction.resultType].kind);
+                if (!value)
+                    return fail("WVM1049", "Unicode text constant is not valid UTF-8");
+                if (!write(instruction.result, std::move(*value)))
                     return fail("WVM1009", "Constant result register is invalid");
                 ++frame.instruction;
                 continue;
@@ -539,8 +599,157 @@ namespace wio::vm
                     else
                         return fail("WVM1020", "String binary operator is not implemented");
                 }
+                else if (left->kind() == Value::Kind::Text)
+                {
+                    if (operation == BinaryAdd)
+                    {
+                        std::u32string combined{left->asText()};
+                        combined.append(right->asText());
+                        result = Value::text(std::move(combined));
+                    }
+                    else if (isComparison(operation))
+                        result = Value::boolean(compareResult(operation, left->asText() < right->asText(),
+                                                              left->asText() == right->asText()));
+                    else
+                        return fail("WVM1050", "Unicode text binary operator is not implemented");
+                }
                 else
                     return fail("WVM1021", "Binary operator is invalid for the runtime value kind");
+                write(instruction.result, std::move(result));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ArrayCreate)
+            {
+                if (module.types[instruction.resultType].kind != TypeArray)
+                    return fail("WVM1051", "Array creation result type is not an array");
+                std::vector<Value> values;
+                values.reserve(instruction.operands.size());
+                for (const std::uint32_t operandId : instruction.operands)
+                {
+                    const Value* operand = read(operandId);
+                    if (!operand)
+                        return fail("WVM1052", "Array creation reads an unavailable element");
+                    values.push_back(*operand);
+                }
+                if (!write(instruction.result, Value::array(std::move(values))))
+                    return fail("WVM1009", "Array result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ArrayLength)
+            {
+                const Value* array = instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                if (!array || array->kind() != Value::Kind::Array)
+                    return fail("WVM1053", "Array length requires an available array");
+                write(instruction.result, Value::unsignedInteger(array->elementCount()));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ArrayGet ||
+                instruction.opcode == bytecode::Opcode::ArrayElement)
+            {
+                const Value* array = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* rawIndex = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                const std::optional<std::size_t> index = rawIndex ? valueIndex(*rawIndex) : std::nullopt;
+                const Value* element = array && index ? array->element(*index) : nullptr;
+                if (!element)
+                    return fail("WVM1054", "Array index is invalid or outside the array bounds");
+                write(instruction.result, *element);
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Interpolate)
+            {
+                if (instruction.stringSegments.size() != instruction.operands.size() + 1)
+                    return fail("WVM1055", "Interpolation segment shape is invalid");
+                std::string utf8;
+                for (std::size_t index = 0; index < instruction.stringSegments.size(); ++index)
+                {
+                    utf8.append(module.string(instruction.stringSegments[index]));
+                    if (index < instruction.operands.size())
+                    {
+                        const Value* operand = read(instruction.operands[index]);
+                        if (!operand)
+                            return fail("WVM1056", "Interpolation reads an unavailable value");
+                        const std::optional<std::string> formatted = formatUtf8(*operand);
+                        if (!formatted)
+                            return fail("WVM1062", "Interpolation value has no VM string representation");
+                        utf8.append(*formatted);
+                    }
+                }
+                Value result;
+                if (module.types[instruction.resultType].kind == TypeText)
+                {
+                    Utf8DecodeResult decoded = decodeUtf8(utf8);
+                    if (!decoded.succeeded())
+                        return fail("WVM1057", "Unicode interpolation produced invalid UTF-8");
+                    result = Value::text(std::move(decoded.value));
+                }
+                else
+                    result = Value::string(std::move(utf8));
+                write(instruction.result, std::move(result));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IntrinsicCall &&
+                (instruction.intrinsicFamily == IntrinsicArray || instruction.intrinsicFamily == IntrinsicString ||
+                 instruction.intrinsicFamily == IntrinsicText))
+            {
+                const Value* receiver = instruction.operands.empty() ? nullptr : read(instruction.operands.front());
+                const std::string_view selector = module.string(instruction.selector);
+                if (!receiver)
+                    return fail("WVM1058", "Intrinsic call has no available receiver");
+
+                Value result;
+                if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                    selector == "Count")
+                    result = Value::unsignedInteger(receiver->elementCount());
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Empty")
+                    result = Value::boolean(receiver->elementCount() == 0);
+                else if (instruction.intrinsicFamily == IntrinsicString && receiver->kind() == Value::Kind::String &&
+                         selector == "Count")
+                    result = Value::unsignedInteger(receiver->asString().size());
+                else if (instruction.intrinsicFamily == IntrinsicString && receiver->kind() == Value::Kind::String &&
+                         selector == "Empty")
+                    result = Value::boolean(receiver->asString().empty());
+                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
+                         selector == "Count")
+                    result = Value::unsignedInteger(receiver->asText().size());
+                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
+                         selector == "ByteCount")
+                    result = Value::unsignedInteger(encodeUtf8(receiver->asText()).size());
+                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
+                         selector == "Empty")
+                    result = Value::boolean(receiver->asText().empty());
+                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
+                         (selector == "ToString" || selector == "Utf8"))
+                    result = Value::string(encodeUtf8(receiver->asText()));
+                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
+                         (selector == "Get" || selector == "At") && instruction.operands.size() == 2)
+                {
+                    const Value* rawIndex = read(instruction.operands[1]);
+                    const std::optional<std::size_t> index = rawIndex ? valueIndex(*rawIndex) : std::nullopt;
+                    if (!index || *index >= receiver->asText().size())
+                        return fail("WVM1059", "Unicode text index is outside the scalar bounds");
+                    result = Value::unsignedInteger(receiver->asText()[*index]);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicText && receiver->kind() == Value::Kind::Text &&
+                         selector == "Slice" && instruction.operands.size() == 3)
+                {
+                    const Value* rawStart = read(instruction.operands[1]);
+                    const Value* rawCount = read(instruction.operands[2]);
+                    const std::optional<std::size_t> start = rawStart ? valueIndex(*rawStart) : std::nullopt;
+                    const std::optional<std::size_t> count = rawCount ? valueIndex(*rawCount) : std::nullopt;
+                    if (!start || !count || *start > receiver->asText().size() ||
+                        *count > receiver->asText().size() - *start)
+                        return fail("WVM1060", "Unicode text slice is outside the scalar bounds");
+                    result = Value::text(std::u32string{receiver->asText().substr(*start, *count)});
+                }
+                else
+                    return fail("WVM1061",
+                                "String, text, or array intrinsic is not implemented: " + std::string{selector});
                 write(instruction.result, std::move(result));
                 ++frame.instruction;
                 continue;

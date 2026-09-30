@@ -1,14 +1,17 @@
 #pragma once
 
 #include <compare>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace wio::vm
 {
     class Machine;
     class PlaceStorage;
+    class AggregateStorage;
 
     class Value final
     {
@@ -22,6 +25,8 @@ namespace wio::vm
             UnsignedInteger,
             Float64,
             String,
+            Text,
+            Array,
             Place
         };
 
@@ -38,6 +43,8 @@ namespace wio::vm
         [[nodiscard]] static Value unsignedInteger(std::uint64_t value) noexcept;
         [[nodiscard]] static Value floating(double value) noexcept;
         [[nodiscard]] static Value string(std::string value);
+        [[nodiscard]] static Value text(std::u32string value);
+        [[nodiscard]] static Value array(std::vector<Value> values);
 
         [[nodiscard]] Kind kind() const noexcept
         {
@@ -64,6 +71,9 @@ namespace wio::vm
             return scalar_.floating;
         }
         [[nodiscard]] std::string_view asString() const noexcept;
+        [[nodiscard]] std::u32string_view asText() const noexcept;
+        [[nodiscard]] std::size_t elementCount() const noexcept;
+        [[nodiscard]] const Value* element(std::size_t index) const noexcept;
 
         [[nodiscard]] bool operator==(const Value& other) const noexcept;
 
@@ -75,6 +85,7 @@ namespace wio::vm
             std::uint64_t unsignedInteger;
             double floating;
             PlaceStorage* place;
+            AggregateStorage* aggregate;
 
             constexpr Scalar() noexcept : unsignedInteger(0)
             {
@@ -92,11 +103,13 @@ namespace wio::vm
 
             char empty;
             std::string string;
+            std::u32string text;
         } text_;
 
         explicit Value(Kind kind) noexcept;
         [[nodiscard]] static Value place(PlaceStorage* storage) noexcept;
         [[nodiscard]] PlaceStorage* asPlace() const noexcept;
+        [[nodiscard]] Value* mutableElement(std::size_t index) noexcept;
         void destroy() noexcept;
         void copyFrom(const Value& other);
         void moveFrom(Value&& other) noexcept;
