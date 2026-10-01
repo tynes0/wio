@@ -67,8 +67,15 @@ namespace wio::vm
         Machine& operator=(const Machine&) = delete;
 
         [[nodiscard]] ExecutionResult invoke(std::uint32_t function, std::span<const Value> arguments = {});
+        [[nodiscard]] ExecutionResult wait(const Value& task);
+        bool cancel(const Value& task) noexcept;
 
     private:
+        [[nodiscard]] ExecutionResult execute(std::uint32_t function, std::span<const Value> arguments,
+                                              const Value* activeTask);
+        [[nodiscard]] Value startTask(std::uint32_t function, std::span<const Value> arguments);
+        [[nodiscard]] ExecutionResult driveTask(const Value& task);
+
         struct Program;
         std::unique_ptr<Program> program_;
         MachineOptions options_;

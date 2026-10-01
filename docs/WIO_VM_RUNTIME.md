@@ -19,7 +19,7 @@ Branch arguments are copied to the target block parameters before control is
 transferred. This preserves canonical Lowered WIR phi semantics without a
 second language-specific control-flow model.
 
-## Implemented in Sprint 19.1-19.5
+## Implemented in Sprint 19.1-19.6
 
 - compact tagged values for null, bool, signed/unsigned integer, float, and
   UTF-8 string values;
@@ -75,6 +75,19 @@ second language-specific control-flow model.
 - intrusive closure environments whose value captures are snapshots, reference
   captures preserve their borrow, and retained `self` captures keep an object
   alive after its creator frame or original handle is gone;
+- intrusive async-task handles with explicit pending, running, ready,
+  cancelled, and faulted states;
+- native-compatible eager async start, synchronous `Machine::wait(...)`, and
+  stable cancellation/fault observation through shared task handles;
+- canonical coroutine `CancellationCheck`, `CoroutineSuspend`,
+  `CoroutineResume`, and `CoroutineComplete` execution, including awaited
+  result transfer into the resume block;
+- executor-switch suspension as a cooperative continuation boundary. The
+  executor identity is preserved by bytecode, while this slice resumes on the
+  calling VM thread until worker queues are introduced;
+- bytecode verification for async result types, dense coroutine frames and
+  states, resume payloads, suspension operands, cancellation checks, and
+  completion values;
 - deterministic wrapping integer arithmetic without host signed-overflow UB;
 - checked integer division and shifts;
 - instruction, call-depth, and per-frame register budgets;
@@ -88,8 +101,9 @@ keep the decode result beside the machine.
 
 ## Remaining Sprint 19 surface
 
-The next slices add coroutine scheduling, panic stack traces, exceptional
-cleanup and unwind, and debugger hooks. Native functions, callbacks, opaque
-values, and foreign-thread entry are deliberately reserved for the Sprint 20
-VM native bridge; Sprint 19 reports them as unsupported instead of silently
-changing behavior.
+The next slices add real main/worker/blocking/I/O executor queues, externally
+completed native tasks and timers, panic stack traces, exceptional cleanup and
+unwind, and debugger hooks. Native functions, callbacks, opaque values, and
+foreign-thread entry are deliberately reserved for the Sprint 20 VM native
+bridge; Sprint 19 reports them as unsupported instead of silently changing
+behavior.

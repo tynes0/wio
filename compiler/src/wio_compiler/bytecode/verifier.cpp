@@ -197,20 +197,35 @@ namespace wio::bytecode
             }
             if (function.hasCoroutine)
             {
-                if (!validType(function.coroutine.resultType))
-                    report("WBC1031", "Coroutine layout references an invalid result type", function.id);
-                for (const Function::CoroutineFrameSlot& slot : function.coroutine.frameSlots)
+                const bool async = (function.flags & 0x0001u) != 0;
+                const Type* taskType =
+                    function.returnType < module.types.size() ? &module.types[function.returnType] : nullptr;
+                if (!async || !taskType || taskType->kind != 34 || taskType->arguments.size() != 1 ||
+                    function.coroutine.resultType >= module.types.size() ||
+                    taskType->arguments.front() != function.coroutine.resultType)
+                    report("WBC1031", "Coroutine layout does not match its async task return type", function.id);
+                std::unordered_set<std::uint32_t> frameValues;
+                for (std::size_t index = 0; index < function.coroutine.frameSlots.size(); ++index)
                 {
-                    if (!validType(slot.type))
-                        report("WBC1032", "Coroutine frame slot references an invalid type", function.id);
+                    const Function::CoroutineFrameSlot& slot = function.coroutine.frameSlots[index];
+                    const auto value = valueTypes.find(slot.value);
+                    if (slot.slot != index || slot.type >= module.types.size() || value == valueTypes.end() ||
+                        value->second != slot.type || !frameValues.insert(slot.value).second)
+                        report("WBC1032", "Coroutine frame slot is not dense or does not match a live typed value",
+                               function.id);
                 }
-                for (const Function::CoroutineState& state : function.coroutine.states)
+                for (std::size_t index = 0; index < function.coroutine.states.size(); ++index)
                 {
+                    const Function::CoroutineState& state = function.coroutine.states[index];
                     if (!blockIds.contains(state.suspendBlock) || !blockIds.contains(state.resumeBlock) ||
-                        !validType(state.resultType))
+                        state.index != index || state.resultType >= module.types.size() ||
+                        (state.awaitedTask != InvalidIndex && !valueTypes.contains(state.awaitedTask)) ||
+                        (state.resumedValue != InvalidIndex && !valueTypes.contains(state.resumedValue)))
                         report("WBC1033", "Coroutine state references invalid block or type metadata", function.id);
                 }
             }
+            else if ((function.flags & 0x0001u) != 0)
+                report("WBC1058", "Async bytecode function is missing its coroutine layout", function.id);
             for (const Block& block : function.blocks)
             {
                 if (block.instructions.empty())
@@ -455,6 +470,72 @@ namespace wio::bytecode
                         if (!valid)
                             report("WBC1057", "Object identity comparison has invalid operand or operator metadata",
                                    function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::CancellationCheck)
+                    {
+                        const bool followedBySuspend =
+                            index + 1 < block.instructions.size() &&
+                            block.instructions[index + 1].opcode == Opcode::CoroutineSuspend &&
+                            block.instructions[index + 1].projectionIndex == instruction.projectionIndex;
+                        if (!function.hasCoroutine || !instruction.operands.empty() || !followedBySuspend)
+                            report("WBC1059", "Cancellation check must precede its matching coroutine suspension",
+                                   function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::CoroutineSuspend)
+                    {
+                        const Function::CoroutineState* state =
+                            function.hasCoroutine && instruction.projectionIndex < function.coroutine.states.size()
+                                ? &function.coroutine.states[instruction.projectionIndex]
+                                : nullptr;
+                        const bool precededByCheck =
+                            index > 0 && block.instructions[index - 1].opcode == Opcode::CancellationCheck &&
+                            block.instructions[index - 1].projectionIndex == instruction.projectionIndex;
+                        bool operationValid = false;
+                        if (state && instruction.asyncOperation == 1 && instruction.operands.size() == 1)
+                        {
+                            const std::uint32_t taskId = valueType(instruction.operands.front());
+                            const Type* task = taskId < module.types.size() ? &module.types[taskId] : nullptr;
+                            operationValid = task && task->kind == 34 && task->arguments.size() == 1 &&
+                                             task->arguments.front() == state->resultType &&
+                                             state->awaitedTask == instruction.operands.front();
+                        }
+                        else if (state && instruction.asyncOperation == 2 && instruction.operands.empty())
+                        {
+                            operationValid = instruction.asyncExecutor >= 1 && instruction.asyncExecutor <= 4 &&
+                                             state->awaitedTask == InvalidIndex &&
+                                             state->resultType < module.types.size() &&
+                                             module.types[state->resultType].kind == 1;
+                        }
+                        if (!state || state->suspendBlock != block.id || instruction.targets.size() != 1 ||
+                            instruction.targets.front().block != state->resumeBlock ||
+                            state->executor != instruction.asyncExecutor || !state->cancellationPoint ||
+                            !precededByCheck || !operationValid)
+                            report("WBC1060", "Coroutine suspension does not match its canonical state and resume edge",
+                                   function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::CoroutineResume)
+                    {
+                        const Function::CoroutineState* state =
+                            function.hasCoroutine && instruction.projectionIndex < function.coroutine.states.size()
+                                ? &function.coroutine.states[instruction.projectionIndex]
+                                : nullptr;
+                        if (!state || state->resumeBlock != block.id || !instruction.operands.empty() ||
+                            instruction.result != state->resumedValue || instruction.resultType != state->resultType)
+                            report("WBC1061", "Coroutine resume does not materialize its canonical state payload",
+                                   function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::CoroutineComplete)
+                    {
+                        const std::uint32_t resultType =
+                            function.hasCoroutine ? function.coroutine.resultType : InvalidIndex;
+                        const bool returnsVoid = resultType < module.types.size() && module.types[resultType].kind == 1;
+                        const bool valid = function.hasCoroutine && resultType < module.types.size() &&
+                                           (returnsVoid ? instruction.operands.empty()
+                                                        : instruction.operands.size() == 1 &&
+                                                              valueType(instruction.operands.front()) == resultType);
+                        if (!valid)
+                            report("WBC1062", "Coroutine completion does not match its async payload type", function.id,
+                                   block.id, instructionIndex);
                     }
                 }
             }

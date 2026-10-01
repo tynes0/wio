@@ -59,12 +59,66 @@ namespace wio::vm
             return ordered_;
         }
 
+        [[nodiscard]] AsyncTaskState taskState() const noexcept
+        {
+            return taskState_.load(std::memory_order_acquire);
+        }
+
+        bool beginTask() noexcept
+        {
+            AsyncTaskState expected = AsyncTaskState::Pending;
+            return taskState_.compare_exchange_strong(expected, AsyncTaskState::Running, std::memory_order_acq_rel);
+        }
+
+        bool cancelTask() noexcept
+        {
+            AsyncTaskState state = taskState();
+            while (state == AsyncTaskState::Pending || state == AsyncTaskState::Running)
+            {
+                if (taskState_.compare_exchange_weak(state, AsyncTaskState::Cancelled, std::memory_order_acq_rel))
+                    return true;
+            }
+            return false;
+        }
+
+        void completeTask(Value result)
+        {
+            taskResult_ = std::move(result);
+            taskState_.store(AsyncTaskState::Ready, std::memory_order_release);
+        }
+
+        void failTask(std::string code, std::string message)
+        {
+            taskErrorCode_ = std::move(code);
+            taskErrorMessage_ = std::move(message);
+            taskState_.store(AsyncTaskState::Faulted, std::memory_order_release);
+        }
+
+        [[nodiscard]] const Value& taskResult() const noexcept
+        {
+            return taskResult_;
+        }
+
+        [[nodiscard]] std::string_view taskErrorCode() const noexcept
+        {
+            return taskErrorCode_;
+        }
+
+        [[nodiscard]] std::string_view taskErrorMessage() const noexcept
+        {
+            return taskErrorMessage_;
+        }
+
     private:
         std::atomic<std::uint32_t> references_{1};
         Value::Kind kind_;
         std::uint32_t type_ = 0;
         std::vector<Value> values_;
         bool ordered_ = false;
+        std::atomic<AsyncTaskState> taskState_{AsyncTaskState::Pending};
+        Value taskResult_;
+        std::string taskErrorCode_;
+        std::string taskErrorMessage_;
     };
 
     namespace
@@ -260,6 +314,13 @@ namespace wio::vm
         return result;
     }
 
+    Value Value::asyncTask(const std::uint32_t function, std::vector<Value> arguments)
+    {
+        Value result{Kind::AsyncTask};
+        result.scalar_.aggregate = new AggregateStorage{Kind::AsyncTask, function, std::move(arguments)};
+        return result;
+    }
+
     Value Value::objectBorrow(AggregateStorage* const storage) noexcept
     {
         Value result{Kind::ObjectBorrow};
@@ -295,6 +356,43 @@ namespace wio::vm
         if (kind_ != Kind::Callable || index >= scalar_.aggregate->values().size())
             return nullptr;
         return &scalar_.aggregate->values()[index];
+    }
+
+    AsyncTaskState Value::taskState() const noexcept
+    {
+        return kind_ == Kind::AsyncTask ? scalar_.aggregate->taskState() : AsyncTaskState::Faulted;
+    }
+
+    std::uint32_t Value::taskFunction() const noexcept
+    {
+        return kind_ == Kind::AsyncTask ? scalar_.aggregate->type() : 0;
+    }
+
+    std::size_t Value::taskArgumentCount() const noexcept
+    {
+        return kind_ == Kind::AsyncTask ? scalar_.aggregate->values().size() : 0;
+    }
+
+    const Value* Value::taskArgument(const std::size_t index) const noexcept
+    {
+        if (kind_ != Kind::AsyncTask || index >= scalar_.aggregate->values().size())
+            return nullptr;
+        return &scalar_.aggregate->values()[index];
+    }
+
+    Value Value::taskResult() const
+    {
+        return kind_ == Kind::AsyncTask ? scalar_.aggregate->taskResult() : Value{};
+    }
+
+    std::string_view Value::taskErrorCode() const noexcept
+    {
+        return kind_ == Kind::AsyncTask ? scalar_.aggregate->taskErrorCode() : std::string_view{};
+    }
+
+    std::string_view Value::taskErrorMessage() const noexcept
+    {
+        return kind_ == Kind::AsyncTask ? scalar_.aggregate->taskErrorMessage() : std::string_view{};
     }
 
     Value Value::place(PlaceStorage* const storage) noexcept
@@ -669,6 +767,28 @@ namespace wio::vm
         return result;
     }
 
+    bool Value::beginTask() const noexcept
+    {
+        return kind_ == Kind::AsyncTask && scalar_.aggregate->beginTask();
+    }
+
+    bool Value::cancelTask() const noexcept
+    {
+        return kind_ == Kind::AsyncTask && scalar_.aggregate->cancelTask();
+    }
+
+    void Value::completeTask(Value result) const
+    {
+        if (kind_ == Kind::AsyncTask)
+            scalar_.aggregate->completeTask(std::move(result));
+    }
+
+    void Value::failTask(std::string code, std::string message) const
+    {
+        if (kind_ == Kind::AsyncTask)
+            scalar_.aggregate->failTask(std::move(code), std::move(message));
+    }
+
     bool Value::operator==(const Value& other) const noexcept
     {
         if (kind_ != other.kind_)
@@ -708,6 +828,7 @@ namespace wio::vm
         case Kind::Object:
         case Kind::ObjectBorrow:
         case Kind::Callable:
+        case Kind::AsyncTask:
             return scalar_.aggregate == other.scalar_.aggregate;
         case Kind::Place:
             return scalar_.place == other.scalar_.place;
@@ -745,7 +866,7 @@ namespace wio::vm
         else if (kind_ == Kind::Text)
             std::destroy_at(&text_.text);
         else if (kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component ||
-                 kind_ == Kind::Object || kind_ == Kind::Callable)
+                 kind_ == Kind::Object || kind_ == Kind::Callable || kind_ == Kind::AsyncTask)
             scalar_.aggregate->release();
         kind_ = Kind::Empty;
         scalar_.unsignedInteger = 0;
@@ -759,7 +880,7 @@ namespace wio::vm
         else if (kind_ == Kind::Text)
             std::construct_at(&text_.text, other.text_.text);
         else if (kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component ||
-                 kind_ == Kind::Object || kind_ == Kind::Callable)
+                 kind_ == Kind::Object || kind_ == Kind::Callable || kind_ == Kind::AsyncTask)
         {
             scalar_.aggregate = other.scalar_.aggregate;
             scalar_.aggregate->retain();

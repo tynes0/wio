@@ -111,6 +111,8 @@ int main()
                                       .triviallyCopyable = true};
     metadataModule.types.front().fields.push_back(
         bytecode::Type::Field{.name = strings.intern("value"), .type = 2, .visibility = 2, .isMutable = true});
+    const std::uint32_t taskType = static_cast<std::uint32_t>(metadataModule.types.size());
+    metadataModule.types.push_back(bytecode::Type{.kind = 34, .arguments = {2}});
     bytecode::Function& metadataFunction = metadataModule.functions.front();
     metadataFunction.captureParameterCount = 1;
     metadataFunction.captures.push_back(
@@ -123,6 +125,8 @@ int main()
     metadataFunction.nativeBinding.parameters.push_back(
         bytecode::Function::NativeAbiValue{.type = 2, .marshalling = 1});
     metadataFunction.nativeBinding.result = bytecode::Function::NativeAbiValue{.type = 2, .marshalling = 1};
+    metadataFunction.flags |= 0x0001u;
+    metadataFunction.returnType = taskType;
     metadataFunction.hasCoroutine = true;
     metadataFunction.coroutine.resultType = 2;
     metadataFunction.coroutine.frameSlots.push_back(

@@ -1,0 +1,299 @@
+#include "wio/bytecode/codec.h"
+#include "wio/bytecode/verifier.h"
+#include "wio/vm/machine.h"
+
+#include <algorithm>
+#include <cstddef>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <ranges>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace
+{
+    namespace bytecode = wio::bytecode;
+    namespace vm = wio::vm;
+
+    constexpr std::uint32_t Void = 0;
+    constexpr std::uint32_t I32 = 1;
+    constexpr std::uint32_t TaskI32 = 2;
+
+    bool expect(const bool condition, const std::string_view message)
+    {
+        if (condition)
+            return true;
+        std::cerr << message << '\n';
+        return false;
+    }
+
+    bytecode::Instruction instruction(const bytecode::Opcode opcode)
+    {
+        bytecode::Instruction result;
+        result.opcode = opcode;
+        result.constant = 0;
+        return result;
+    }
+
+    bytecode::Instruction constant(const std::uint32_t result, const bytecode::ConstantId value)
+    {
+        bytecode::Instruction output = instruction(bytecode::Opcode::Constant);
+        output.result = result;
+        output.resultType = I32;
+        output.constant = value;
+        return output;
+    }
+
+    bytecode::Instruction call(const std::uint32_t result, const std::uint32_t callee,
+                               std::vector<std::uint32_t> operands = {})
+    {
+        bytecode::Instruction output = instruction(bytecode::Opcode::Call);
+        output.result = result;
+        output.resultType = TaskI32;
+        output.operands = std::move(operands);
+        output.callee = callee;
+        return output;
+    }
+
+    bytecode::Instruction complete(const std::uint32_t value)
+    {
+        bytecode::Instruction output = instruction(bytecode::Opcode::CoroutineComplete);
+        output.operands = {value};
+        return output;
+    }
+
+    bytecode::Instruction returnValue(const std::uint32_t value)
+    {
+        bytecode::Instruction output = instruction(bytecode::Opcode::Return);
+        output.operands = {value};
+        return output;
+    }
+
+    bytecode::Function function(const std::uint32_t id, const std::uint32_t returnType,
+                                std::vector<bytecode::Parameter> parameters, std::vector<bytecode::Block> blocks)
+    {
+        bytecode::Function output;
+        output.id = id;
+        output.returnType = returnType;
+        output.parameters = std::move(parameters);
+        output.blocks = std::move(blocks);
+        return output;
+    }
+
+    bytecode::Block block(const std::uint32_t id, std::vector<bytecode::Instruction> instructions)
+    {
+        bytecode::Block output;
+        output.id = id;
+        output.instructions = std::move(instructions);
+        return output;
+    }
+
+    void addFrameSlot(bytecode::Function& function, const std::uint32_t value, const std::uint32_t type,
+                      const std::uint8_t kind = 3)
+    {
+        function.coroutine.frameSlots.push_back(bytecode::Function::CoroutineFrameSlot{
+            .slot = static_cast<std::uint32_t>(function.coroutine.frameSlots.size()),
+            .value = value,
+            .type = type,
+            .kind = kind,
+        });
+    }
+
+    void makeAsync(bytecode::Function& function)
+    {
+        function.flags = 0x0081u;
+        function.hasCoroutine = true;
+        function.coroutine.resultType = I32;
+    }
+
+    bytecode::Module makeModule()
+    {
+        bytecode::Module module;
+        module.abiDescriptorVersion = 1;
+        module.contract.callTableStableId = 1;
+        module.constants = {
+            bytecode::Constant{},
+            bytecode::Constant{.kind = bytecode::ConstantKind::SignedInteger, .bits = 1},
+            bytecode::Constant{.kind = bytecode::ConstantKind::SignedInteger, .bits = 2},
+            bytecode::Constant{.kind = bytecode::ConstantKind::SignedInteger, .bits = 3},
+            bytecode::Constant{.kind = bytecode::ConstantKind::SignedInteger, .bits = 9},
+            bytecode::Constant{.kind = bytecode::ConstantKind::SignedInteger, .bits = 0},
+        };
+        module.types = {
+            bytecode::Type{.kind = 1},
+            bytecode::Type{.kind = 5},
+            bytecode::Type{.kind = 34, .arguments = {I32}},
+        };
+
+        bytecode::Instruction addOne = instruction(bytecode::Opcode::Binary);
+        addOne.result = 2;
+        addOne.resultType = I32;
+        addOne.operands = {0, 1};
+        addOne.binaryOperator = 0;
+        bytecode::Function immediate = function(0, TaskI32, {bytecode::Parameter{.value = 0, .type = I32}},
+                                                {block(0, {constant(1, 1), addOne, complete(2)})});
+        makeAsync(immediate);
+        addFrameSlot(immediate, 0, I32, 0);
+        addFrameSlot(immediate, 1, I32);
+        addFrameSlot(immediate, 2, I32);
+        module.functions.push_back(std::move(immediate));
+
+        bytecode::Instruction cancellation = instruction(bytecode::Opcode::CancellationCheck);
+        cancellation.projectionIndex = 0;
+        cancellation.asyncOperation = 1;
+        bytecode::Instruction suspend = instruction(bytecode::Opcode::CoroutineSuspend);
+        suspend.operands = {1};
+        suspend.targets = {bytecode::BranchTarget{.block = 1}};
+        suspend.projectionIndex = 0;
+        suspend.asyncOperation = 1;
+        bytecode::Instruction resume = instruction(bytecode::Opcode::CoroutineResume);
+        resume.result = 2;
+        resume.resultType = I32;
+        resume.projectionIndex = 0;
+        resume.asyncOperation = 1;
+        bytecode::Instruction addTwo = instruction(bytecode::Opcode::Binary);
+        addTwo.result = 4;
+        addTwo.resultType = I32;
+        addTwo.operands = {2, 3};
+        addTwo.binaryOperator = 0;
+        bytecode::Instruction releaseChild = instruction(bytecode::Opcode::Release);
+        releaseChild.operands = {1};
+        bytecode::Function compose = function(1, TaskI32, {},
+                                              {block(0, {constant(0, 3), call(1, 0, {0}), cancellation, suspend}),
+                                               block(1, {resume, releaseChild, constant(3, 2), addTwo, complete(4)})});
+        makeAsync(compose);
+        addFrameSlot(compose, 0, I32);
+        addFrameSlot(compose, 1, TaskI32, 2);
+        addFrameSlot(compose, 2, I32);
+        addFrameSlot(compose, 3, I32);
+        addFrameSlot(compose, 4, I32);
+        compose.coroutine.states.push_back(bytecode::Function::CoroutineState{
+            .index = 0,
+            .suspendBlock = 0,
+            .resumeBlock = 1,
+            .awaitedTask = 1,
+            .resumedValue = 2,
+            .resultType = I32,
+            .executor = 0,
+            .cancellationPoint = true,
+        });
+        module.functions.push_back(std::move(compose));
+
+        module.functions.push_back(function(2, TaskI32, {}, {block(0, {call(0, 1), returnValue(0)})}));
+
+        bytecode::Instruction switchCheck = instruction(bytecode::Opcode::CancellationCheck);
+        switchCheck.projectionIndex = 0;
+        switchCheck.asyncOperation = 2;
+        switchCheck.asyncExecutor = 2;
+        bytecode::Instruction switchExecutor = instruction(bytecode::Opcode::CoroutineSuspend);
+        switchExecutor.targets = {bytecode::BranchTarget{.block = 1}};
+        switchExecutor.projectionIndex = 0;
+        switchExecutor.asyncOperation = 2;
+        switchExecutor.asyncExecutor = 2;
+        bytecode::Function switched = function(
+            3, TaskI32, {}, {block(0, {switchCheck, switchExecutor}), block(1, {constant(0, 4), complete(0)})});
+        makeAsync(switched);
+        addFrameSlot(switched, 0, I32);
+        switched.coroutine.states.push_back(bytecode::Function::CoroutineState{
+            .index = 0,
+            .suspendBlock = 0,
+            .resumeBlock = 1,
+            .resultType = Void,
+            .executor = 2,
+            .cancellationPoint = true,
+        });
+        switched.coroutine.maySwitchThreads = true;
+        module.functions.push_back(std::move(switched));
+
+        bytecode::Instruction divide = instruction(bytecode::Opcode::Binary);
+        divide.result = 2;
+        divide.resultType = I32;
+        divide.operands = {0, 1};
+        divide.binaryOperator = 3;
+        bytecode::Function faulted =
+            function(4, TaskI32, {}, {block(0, {constant(0, 3), constant(1, 5), divide, complete(2)})});
+        makeAsync(faulted);
+        addFrameSlot(faulted, 0, I32);
+        addFrameSlot(faulted, 1, I32);
+        addFrameSlot(faulted, 2, I32);
+        module.functions.push_back(std::move(faulted));
+        return module;
+    }
+} // namespace
+
+int main(const int argc, const char* const* argv)
+{
+    bool ok = true;
+    const bytecode::DecodeResult decoded = bytecode::decode(bytecode::encode(makeModule()));
+    ok &= expect(decoded.succeeded(), "Coroutine VM fixture must survive the real .wiob codec");
+    if (!decoded.succeeded())
+        return 1;
+
+    vm::Machine machine{decoded.module};
+    const vm::ExecutionResult started = machine.invoke(2);
+    ok &= expect(started.succeeded() && started.value().kind() == vm::Value::Kind::AsyncTask,
+                 "A synchronous function must receive an async task handle without replacing its return type");
+    ok &= expect(started.value().taskState() == vm::AsyncTaskState::Ready,
+                 "Wio async tasks must start eagerly like the native runtime");
+    const vm::ExecutionResult composed = machine.wait(started.value());
+    ok &= expect(composed.succeeded() && composed.value().asSignedInteger() == 6,
+                 "Await suspend/resume must transfer the child task payload into its coroutine frame");
+
+    const vm::ExecutionResult switchedTask = machine.invoke(3);
+    const vm::ExecutionResult switched = switchedTask.succeeded() ? machine.wait(switchedTask.value()) : switchedTask;
+    ok &= expect(switched.succeeded() && switched.value().asSignedInteger() == 9,
+                 "Executor-switch suspension must resume on its canonical continuation block");
+
+    const vm::ExecutionResult faultedTask = machine.invoke(4);
+    const vm::ExecutionResult faulted = faultedTask.succeeded() ? machine.wait(faultedTask.value()) : faultedTask;
+    ok &= expect(!faulted.succeeded() && faulted.error().code == "WVM1014",
+                 "Coroutine execution failures must remain observable through the task handle");
+
+    const vm::Value cancelledTask = vm::Value::asyncTask(3, {});
+    ok &= expect(machine.cancel(cancelledTask), "A pending VM task must accept cooperative cancellation");
+    const vm::ExecutionResult cancelled = machine.wait(cancelledTask);
+    ok &= expect(!cancelled.succeeded() && cancelled.error().code == "WVM1165",
+                 "Waiting a cancelled task must produce a stable cancellation diagnostic");
+
+    bytecode::Module malformed = decoded.module;
+    malformed.functions[1].coroutine.states[0].resumeBlock = 99;
+    const bytecode::VerificationResult malformedVerification = bytecode::Verifier{}.verify(malformed);
+    ok &= expect(std::ranges::any_of(malformedVerification.diagnostics(),
+                                     [](const auto& diagnostic) { return diagnostic.code == "WBC1033"; }),
+                 "The bytecode verifier must reject a coroutine state with an invalid resume block");
+
+    if (argc == 2)
+    {
+        std::ifstream stream{argv[1], std::ios::binary};
+        const std::vector<char> raw{std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
+        std::vector<std::byte> bytes;
+        bytes.reserve(raw.size());
+        for (const char value : raw)
+            bytes.push_back(static_cast<std::byte>(static_cast<unsigned char>(value)));
+        const bytecode::DecodeResult realSource = bytecode::decode(bytes);
+        ok &= expect(realSource.succeeded(), "Real-source coroutine bytecode must decode");
+        if (realSource.succeeded())
+        {
+            const auto start = std::ranges::find_if(realSource.module.functions,
+                                                    [&](const bytecode::Function& function)
+                                                    {
+                                                        return function.name < realSource.module.strings.size() &&
+                                                               realSource.module.strings[function.name] == "StartTask";
+                                                    });
+            ok &= expect(start != realSource.module.functions.end(), "Real-source bytecode must contain StartTask");
+            if (start != realSource.module.functions.end())
+            {
+                vm::Machine realMachine{realSource.module};
+                const vm::ExecutionResult task = realMachine.invoke(start->id);
+                const vm::ExecutionResult result = task.succeeded() ? realMachine.wait(task.value()) : task;
+                if (!result.succeeded())
+                    std::cerr << result.error().code << ": " << result.error().message << '\n';
+                ok &= expect(result.succeeded() && result.value().asSignedInteger() == 6,
+                             "Compiler-produced async/await state machines must execute in the VM");
+            }
+        }
+    }
+    return ok ? 0 : 1;
+}

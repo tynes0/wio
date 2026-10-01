@@ -87,6 +87,9 @@ namespace wio::vm
         constexpr std::uint8_t CaptureReference = 1;
         constexpr std::uint8_t CaptureRetainedSelf = 2;
 
+        constexpr std::uint8_t AsyncAwaitTask = 1;
+        constexpr std::uint8_t AsyncSwitchExecutor = 2;
+
         constexpr std::uint8_t UnaryNegate = 0;
         constexpr std::uint8_t UnaryLogicalNot = 1;
         constexpr std::uint8_t UnaryBitwiseNot = 2;
@@ -141,6 +144,9 @@ namespace wio::vm
             std::vector<Register> registers;
             std::vector<std::unique_ptr<PlaceStorage>> localPlaces;
             FrameContinuation continuation;
+            Value resumedValue;
+            std::uint32_t resumedState = bytecode::InvalidIndex;
+            bool hasResumedValue = false;
         };
 
         [[nodiscard]] bool isSignedType(const std::uint8_t kind) noexcept
@@ -441,6 +447,86 @@ namespace wio::vm
     Machine& Machine::operator=(Machine&&) noexcept = default;
 
     ExecutionResult Machine::invoke(const std::uint32_t functionId, const std::span<const Value> arguments)
+    {
+        if (!program_ || !program_->module)
+            return ExecutionResult::failure({"WVM1000", "The virtual machine has no loaded module"});
+        if (!program_->valid)
+            return ExecutionResult::failure(program_->loadError);
+        if (functionId >= program_->module->functions.size())
+            return ExecutionResult::failure({"WVM1002", "Entry function id is outside the module"});
+        if ((program_->module->functions[functionId].flags & 0x0001u) != 0)
+            return ExecutionResult::success(startTask(functionId, arguments));
+        return execute(functionId, arguments, nullptr);
+    }
+
+    ExecutionResult Machine::wait(const Value& task)
+    {
+        return driveTask(task);
+    }
+
+    bool Machine::cancel(const Value& task) noexcept
+    {
+        return task.cancelTask();
+    }
+
+    Value Machine::startTask(const std::uint32_t functionId, const std::span<const Value> arguments)
+    {
+        std::vector<Value> captured;
+        captured.reserve(arguments.size());
+        const bytecode::Function& function = program_->module->functions[functionId];
+        for (std::size_t index = 0; index < arguments.size(); ++index)
+        {
+            const bool retainedReceiver = function.hasCoroutine && index < function.parameters.size() &&
+                                          function.coroutine.retainedReceiver == function.parameters[index].value;
+            if (retainedReceiver && arguments[index].kind() == Value::Kind::ObjectBorrow)
+                captured.push_back(arguments[index].retainObject());
+            else
+                captured.push_back(arguments[index]);
+        }
+        Value task = Value::asyncTask(functionId, std::move(captured));
+        (void)driveTask(task);
+        return task;
+    }
+
+    ExecutionResult Machine::driveTask(const Value& task)
+    {
+        if (task.kind() != Value::Kind::AsyncTask)
+            return ExecutionResult::failure({"WVM1164", "Wait requires an async task value"});
+        if (task.taskState() == AsyncTaskState::Ready)
+            return ExecutionResult::success(task.taskResult());
+        if (task.taskState() == AsyncTaskState::Cancelled)
+            return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+        if (task.taskState() == AsyncTaskState::Faulted)
+            return ExecutionResult::failure({std::string{task.taskErrorCode()}, std::string{task.taskErrorMessage()}});
+        if (!task.beginTask())
+            return ExecutionResult::failure({"WVM1166", "Async task is already running or has an invalid state"});
+
+        std::vector<Value> arguments;
+        arguments.reserve(task.taskArgumentCount());
+        for (std::size_t index = 0; index < task.taskArgumentCount(); ++index)
+        {
+            const Value* argument = task.taskArgument(index);
+            if (!argument)
+            {
+                task.failTask("WVM1167", "Async task lost a captured argument");
+                return ExecutionResult::failure({"WVM1167", "Async task lost a captured argument"});
+            }
+            arguments.push_back(*argument);
+        }
+
+        ExecutionResult result = execute(task.taskFunction(), arguments, &task);
+        if (!result.succeeded())
+        {
+            if (task.taskState() != AsyncTaskState::Cancelled)
+                task.failTask(result.error().code, result.error().message);
+            return result;
+        }
+        task.completeTask(result.value());
+        return ExecutionResult::success(task.taskResult());
+    }
+
+    ExecutionResult Machine::execute(const std::uint32_t functionId, const std::span<const Value> arguments,
+                                     const Value* activeTask)
     {
         if (!program_ || !program_->module)
             return ExecutionResult::failure({"WVM1000", "The virtual machine has no loaded module"});
@@ -1677,7 +1763,7 @@ namespace wio::vm
                     ++frame.instruction;
                     continue;
                 }
-                if (released->kind() == Value::Kind::Callable)
+                if (released->kind() == Value::Kind::Callable || released->kind() == Value::Kind::AsyncTask)
                 {
                     if (cleanupRegister)
                     {
@@ -1828,6 +1914,13 @@ namespace wio::vm
                 }
 
                 const std::uint32_t result = instruction.result;
+                if ((module.functions[target].flags & 0x0001u) != 0)
+                {
+                    if (!write(result, startTask(target, callArguments)))
+                        return fail("WVM1168", "Async indirect-call result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
                 ++frame.instruction;
                 ExecutionResult pushed =
                     pushFrame(module.functions[target], callArguments,
@@ -1911,6 +2004,13 @@ namespace wio::vm
                     callArguments.push_back(*operand);
                 }
                 const std::uint32_t result = instruction.result;
+                if ((module.functions[instruction.callee].flags & 0x0001u) != 0)
+                {
+                    if (!write(result, startTask(instruction.callee, callArguments)))
+                        return fail("WVM1169", "Async call result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
                 ++frame.instruction;
                 ExecutionResult pushed =
                     pushFrame(module.functions[instruction.callee], callArguments,
@@ -1943,12 +2043,74 @@ namespace wio::vm
                     callArguments.push_back(*operand);
                 }
                 const std::uint32_t result = instruction.result;
+                if ((module.functions[target].flags & 0x0001u) != 0)
+                {
+                    if (!write(result, startTask(target, callArguments)))
+                        return fail("WVM1170", "Async dynamic-call result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
                 ++frame.instruction;
                 ExecutionResult pushed =
                     pushFrame(module.functions[target], callArguments,
                               FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result});
                 if (!pushed.succeeded())
                     return pushed;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::CancellationCheck)
+            {
+                if (activeTask && activeTask->taskState() == AsyncTaskState::Cancelled)
+                    return fail("WVM1165", "Async task was cancelled at a cooperative suspension point");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::CoroutineSuspend)
+            {
+                if (!frame.function->hasCoroutine ||
+                    instruction.projectionIndex >= frame.function->coroutine.states.size() ||
+                    instruction.targets.size() != 1)
+                    return fail("WVM1171", "Coroutine suspension does not match its function state table");
+                const bytecode::Function::CoroutineState& state =
+                    frame.function->coroutine.states[instruction.projectionIndex];
+                if (state.suspendBlock != frame.block->id || state.resumeBlock != instruction.targets.front().block)
+                    return fail("WVM1172", "Coroutine suspension state does not match its resume edge");
+
+                frame.resumedValue = {};
+                frame.hasResumedValue = false;
+                if (instruction.asyncOperation == AsyncAwaitTask)
+                {
+                    const Value* awaited =
+                        instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                    if (!awaited || awaited->kind() != Value::Kind::AsyncTask)
+                        return fail("WVM1173", "Coroutine await requires an async task operand");
+                    ExecutionResult awaitedResult = driveTask(*awaited);
+                    if (!awaitedResult.succeeded())
+                        return awaitedResult;
+                    frame.resumedValue = awaitedResult.value();
+                    frame.hasResumedValue = true;
+                }
+                else if (instruction.asyncOperation != AsyncSwitchExecutor || !instruction.operands.empty())
+                    return fail("WVM1174", "Coroutine suspension carries an unsupported async operation");
+
+                const auto resume = program_->functions[frame.function->id].blocks.find(state.resumeBlock);
+                if (resume == program_->functions[frame.function->id].blocks.end())
+                    return fail("WVM1175", "Coroutine resume block does not exist");
+                frame.resumedState = instruction.projectionIndex;
+                frame.block = resume->second;
+                frame.instruction = 0;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::CoroutineResume)
+            {
+                if (!frame.function->hasCoroutine || frame.resumedState != instruction.projectionIndex ||
+                    !frame.hasResumedValue)
+                    return fail("WVM1176", "Coroutine resume has no matching suspended payload");
+                if (!write(instruction.result, std::move(frame.resumedValue)))
+                    return fail("WVM1177", "Coroutine resume result register is invalid");
+                frame.resumedState = bytecode::InvalidIndex;
+                frame.hasResumedValue = false;
+                ++frame.instruction;
                 continue;
             }
             if (instruction.opcode == bytecode::Opcode::Jump || instruction.opcode == bytecode::Opcode::CondJump)
@@ -1982,7 +2144,8 @@ namespace wio::vm
                 frame.instruction = 0;
                 continue;
             }
-            if (instruction.opcode == bytecode::Opcode::Return)
+            if (instruction.opcode == bytecode::Opcode::Return ||
+                instruction.opcode == bytecode::Opcode::CoroutineComplete)
             {
                 Value returned;
                 if (!instruction.operands.empty())
