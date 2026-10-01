@@ -1,0 +1,35 @@
+schemaVersion = 1
+name = "WioPlayground"
+template = "wio-native-app"
+
+[toolchain]
+buildDir = "build"
+config = "Debug"
+
+[wio]
+entry = "wio/main.wio"
+target = "exe"
+sourceRoots = ["wio"]
+includeDirs = ["native/include"]
+linkDirs = []
+linkLibraries = []
+nativeSources = ["native/src/playground_native.cpp"]
+backendArgs = []
+
+[host]
+enabled = false
+
+[build]
+buildDir = ".wio-build"
+config = "Debug"
+
+[outputs]
+directory = ".wio-build/interop"
+baseName = "wio_playground"
+wioName = "wio_playground"
+hostName = "wio_playground.host"
+
+[run]
+passLibraryPath = false
+args = []
+workingDirectory = "."

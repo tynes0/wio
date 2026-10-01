@@ -1,5 +1,3 @@
-file(GLOB_RECURSE WIO_TEST_FILES "${CMAKE_SOURCE_DIR}/tests/*.wio")
-file(GLOB_RECURSE WIO_STD_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/std/*.wio")
 set(WIO_SELFHOST_CLI_SOURCE "${CMAKE_SOURCE_DIR}/cli/main.wio")
 set(WIO_SELFHOST_PROJECT_NEW_SOURCE "${CMAKE_SOURCE_DIR}/cli/project_new.wio")
 set(WIO_SELFHOST_PROJECT_MANIFEST_SOURCE "${CMAKE_SOURCE_DIR}/cli/project_manifest.wio")
@@ -15,13 +13,8 @@ set(WIO_SELFHOST_PERF_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/perf_commands.wio
 set(WIO_SELFHOST_MIGRATE_COMMANDS_SOURCE "${CMAKE_SOURCE_DIR}/cli/migrate_commands.wio")
 set(WIO_SELFHOST_ARGONAUT_SOURCE "${CMAKE_SOURCE_DIR}/cli/vendor/argonaut.wio")
 
-source_group("tests" FILES ${WIO_TEST_FILES})
-source_group("std" FILES ${WIO_STD_FILES})
-
 add_executable(wio_app
     main.cpp
-    ${WIO_STD_FILES}
-    ${WIO_TEST_FILES}
 )
 
 set_target_properties(wio_app PROPERTIES
@@ -193,25 +186,6 @@ if(BUILD_TESTING)
     )
 endif()
 
-function(add_wio_dev_target target_name source_file)
-    add_custom_target(
-        ${target_name}
-        COMMAND ${CMAKE_COMMAND} -E env
-            "WIO_ROOT=${CMAKE_SOURCE_DIR}"
-            $<TARGET_FILE:wio_app> "${source_file}" ${ARGN}
-        DEPENDS wio_app
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        USES_TERMINAL
-        VERBATIM
-    )
-endfunction()
-
-function(make_wio_target_suffix input_name output_var)
-    string(MAKE_C_IDENTIFIER "${input_name}" sanitized_name)
-    string(TOLOWER "${sanitized_name}" sanitized_name)
-    set(${output_var} "${sanitized_name}" PARENT_SCOPE)
-endfunction()
-
 set(wio_ctest_config_args)
 if (CMAKE_CONFIGURATION_TYPES)
     set(wio_ctest_config_args -C $<CONFIG>)
@@ -334,54 +308,35 @@ add_custom_target(
 )
 
 set(WIO_PLAYGROUND_DIR "${CMAKE_SOURCE_DIR}/playground")
-set(WIO_PLAYGROUND_MAIN "${WIO_PLAYGROUND_DIR}/main.wio")
+set(WIO_PLAYGROUND_MANIFEST "${WIO_PLAYGROUND_DIR}/wio.makewio")
 
-if (EXISTS "${WIO_PLAYGROUND_MAIN}")
-    add_wio_dev_target(
-        wio_playground_check
-        "${WIO_PLAYGROUND_MAIN}"
-        --dry-run
+if(EXISTS "${WIO_PLAYGROUND_MANIFEST}")
+    file(GLOB_RECURSE WIO_PLAYGROUND_SOURCES CONFIGURE_DEPENDS LIST_DIRECTORIES false
+        "${WIO_PLAYGROUND_DIR}/*"
     )
+    list(FILTER WIO_PLAYGROUND_SOURCES EXCLUDE REGEX "[/\\\\](build|build-[^/\\\\]*|\\.wio-build)[/\\\\]")
+    list(FILTER WIO_PLAYGROUND_SOURCES EXCLUDE REGEX "\\.wio\\.cpp$")
+    list(FILTER WIO_PLAYGROUND_SOURCES EXCLUDE REGEX "\\.(exe|dll|lib|a|so|dylib|obj|o|pdb)$")
+    set_source_files_properties(${WIO_PLAYGROUND_SOURCES} PROPERTIES HEADER_FILE_ONLY TRUE)
+    file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}" WIO_PLAYGROUND_SOURCE_ROOT)
+    file(TO_CMAKE_PATH "${WIO_PLAYGROUND_MANIFEST}" WIO_PLAYGROUND_MANIFEST_PATH)
 
-    add_wio_dev_target(
-        wio_playground_run
-        "${WIO_PLAYGROUND_MAIN}"
-        --run
+    add_executable(wio_playground
+        "${CMAKE_SOURCE_DIR}/tools/wio_playground_launcher.cpp"
+        ${WIO_PLAYGROUND_SOURCES}
     )
-
-    add_wio_dev_target(
-        wio_playground_tokens
-        "${WIO_PLAYGROUND_MAIN}"
-        --show-tokens
-        --dry-run
+    add_dependencies(wio_playground wio_app wio_runtime_backend)
+    target_compile_definitions(wio_playground PRIVATE
+        WIO_PLAYGROUND_COMPILER_PATH="$<TARGET_FILE:wio_app>"
+        WIO_PLAYGROUND_MANIFEST_PATH="${WIO_PLAYGROUND_MANIFEST_PATH}"
+        WIO_PLAYGROUND_SOURCE_ROOT="${WIO_PLAYGROUND_SOURCE_ROOT}"
     )
-
-    add_wio_dev_target(
-        wio_playground_ast
-        "${WIO_PLAYGROUND_MAIN}"
-        --show-ast
-        --dry-run
+    source_group(TREE "${WIO_PLAYGROUND_DIR}" PREFIX "Project" FILES ${WIO_PLAYGROUND_SOURCES})
+    source_group("Launcher" FILES "${CMAKE_SOURCE_DIR}/tools/wio_playground_launcher.cpp")
+    set_target_properties(wio_playground PROPERTIES
+        VS_DEBUGGER_WORKING_DIRECTORY "${WIO_PLAYGROUND_DIR}"
     )
 endif()
-
-file(GLOB WIO_PLAYGROUND_FILES CONFIGURE_DEPENDS "${WIO_PLAYGROUND_DIR}/*.wio")
-
-foreach (wio_playground_file IN LISTS WIO_PLAYGROUND_FILES)
-    get_filename_component(wio_playground_name "${wio_playground_file}" NAME_WE)
-    make_wio_target_suffix("${wio_playground_name}" wio_playground_suffix)
-
-    add_wio_dev_target(
-        "wio_file_${wio_playground_suffix}_check"
-        "${wio_playground_file}"
-        --dry-run
-    )
-
-    add_wio_dev_target(
-        "wio_file_${wio_playground_suffix}_run"
-        "${wio_playground_file}"
-        --run
-    )
-endforeach()
 
 if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     function(add_wio_success_test test_name source_file)

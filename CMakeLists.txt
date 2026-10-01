@@ -8,6 +8,13 @@ project(wio_lang
 include(CTest)
 include(GNUInstallDirs)
 
+set(WIO_TOP_LEVEL_BUILD OFF)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(WIO_TOP_LEVEL_BUILD ON)
+    include(cmake/WioSolutionLayout.cmake)
+    wio_enable_solution_folders()
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -103,4 +110,9 @@ if (WIO_BUILD_APP)
         USES_TERMINAL
         VERBATIM
     )
+endif()
+
+if(WIO_TOP_LEVEL_BUILD)
+    wio_add_solution_catalogs()
+    wio_apply_solution_layout()
 endif()
