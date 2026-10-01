@@ -58,6 +58,14 @@ second language-specific control-flow model.
 - `Retain`, `Release`, and `ReleasePlace` object ownership operations with the
   Wio destructor scheduled exactly once before the final strong reference is
   cleared;
+- named function values, closure creation, and indirect calls with verified
+  callable signatures;
+- deterministic dense function/global identity remapping at the bytecode
+  boundary, so optimizer-pruned WIR modules remain loadable and dispatch every
+  metadata and instruction reference to the intended target;
+- intrusive closure environments whose value captures are snapshots, reference
+  captures preserve their borrow, and retained `self` captures keep an object
+  alive after its creator frame or original handle is gone;
 - deterministic wrapping integer arithmetic without host signed-overflow UB;
 - checked integer division and shifts;
 - instruction, call-depth, and per-frame register budgets;
@@ -71,9 +79,8 @@ keep the decode result beside the machine.
 
 ## Remaining Sprint 19 surface
 
-The next slices add function values, closures and indirect dispatch, interface
-slot validation, coroutine scheduling, panic stack traces, exceptional cleanup
-and unwind, and debugger hooks. Native functions, callbacks, opaque values, and
-foreign-thread entry are deliberately reserved for the Sprint 20 VM native
-bridge; Sprint 19 reports them as unsupported instead of silently changing
-behavior.
+The next slices add interface slot validation, coroutine scheduling, panic
+stack traces, exceptional cleanup and unwind, and debugger hooks. Native
+functions, callbacks, opaque values, and foreign-thread entry are deliberately
+reserved for the Sprint 20 VM native bridge; Sprint 19 reports them as
+unsupported instead of silently changing behavior.

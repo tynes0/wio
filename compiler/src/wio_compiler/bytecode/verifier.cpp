@@ -106,7 +106,7 @@ namespace wio::bytecode
                 report("WBC1026", "Function capture count does not match its capture table", function.id);
             for (const Function::Capture& capture : function.captures)
             {
-                if (!validString(capture.name) || !validType(capture.type))
+                if (!validString(capture.name) || !validType(capture.type) || capture.kind > 2)
                     report("WBC1027", "Closure capture references invalid string or type metadata", function.id);
             }
             if (function.hasNativeBinding)
@@ -279,6 +279,87 @@ namespace wio::bytecode
                     if (!validBranchShape)
                         report("WBC1048", "Control-flow instruction has an invalid operand or target shape",
                                function.id, block.id, instructionIndex);
+
+                    const auto valueType = [&](const std::uint32_t value)
+                    {
+                        const auto found = valueTypes.find(value);
+                        return found == valueTypes.end() ? InvalidIndex : found->second;
+                    };
+                    if (instruction.opcode == Opcode::FunctionReference)
+                    {
+                        const bool validCallee =
+                            instruction.callee != InvalidIndex && validFunction(instruction.callee);
+                        const Function* callee = validCallee ? &module.functions[instruction.callee] : nullptr;
+                        const bool validCallable = instruction.resultType < module.types.size() &&
+                                                   module.types[instruction.resultType].kind == 33;
+                        if (!callee || !validCallable || !instruction.operands.empty() ||
+                            (!callee->genericParameters.empty() ? instruction.specializationKey == InvalidIndex
+                                                                : callee->callableType != instruction.resultType))
+                            report("WBC1049", "Function reference does not match a known callable declaration",
+                                   function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::ClosureCreate)
+                    {
+                        const bool validCallee =
+                            instruction.callee != InvalidIndex && validFunction(instruction.callee);
+                        const Function* callee = validCallee ? &module.functions[instruction.callee] : nullptr;
+                        bool valid = callee && instruction.resultType < module.types.size() &&
+                                     module.types[instruction.resultType].kind == 33 &&
+                                     callee->callableType == instruction.resultType &&
+                                     instruction.operands.size() == instruction.signatureTypes.size() &&
+                                     instruction.operands.size() == instruction.captureKinds.size() &&
+                                     instruction.operands.size() == callee->captureParameterCount &&
+                                     instruction.operands.size() == callee->captures.size();
+                        if (valid)
+                        {
+                            for (std::size_t captureIndex = 0; captureIndex < instruction.operands.size();
+                                 ++captureIndex)
+                            {
+                                valid =
+                                    valid && instruction.captureKinds[captureIndex] <= 2 &&
+                                    instruction.captureKinds[captureIndex] == callee->captures[captureIndex].kind &&
+                                    instruction.signatureTypes[captureIndex] == callee->captures[captureIndex].type &&
+                                    valueType(instruction.operands[captureIndex]) ==
+                                        instruction.signatureTypes[captureIndex];
+                            }
+                        }
+                        if (!valid)
+                            report("WBC1050", "Closure creation does not match its callable capture layout",
+                                   function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::IndirectCall)
+                    {
+                        const std::uint32_t callableType =
+                            instruction.operands.empty() ? InvalidIndex : valueType(instruction.operands.front());
+                        const Type* callable =
+                            callableType < module.types.size() ? &module.types[callableType] : nullptr;
+                        bool valid = callable && callable->kind == 33 && !callable->arguments.empty() &&
+                                     callable->arguments.size() == instruction.operands.size() &&
+                                     instruction.signatureTypes.size() == instruction.operands.size() &&
+                                     instruction.signatureTypes.front() == callableType;
+                        if (valid)
+                        {
+                            for (std::size_t argumentIndex = 1; argumentIndex < instruction.operands.size();
+                                 ++argumentIndex)
+                            {
+                                valid =
+                                    valid &&
+                                    valueType(instruction.operands[argumentIndex]) ==
+                                        instruction.signatureTypes[argumentIndex] &&
+                                    instruction.signatureTypes[argumentIndex] == callable->arguments[argumentIndex - 1];
+                            }
+                            const std::uint32_t returnType = callable->arguments.back();
+                            valid =
+                                valid && returnType < module.types.size() &&
+                                (module.types[returnType].kind == 1
+                                     ? instruction.result == InvalidIndex && (instruction.resultType == InvalidIndex ||
+                                                                              instruction.resultType == returnType)
+                                     : instruction.result != InvalidIndex && instruction.resultType == returnType);
+                        }
+                        if (!valid)
+                            report("WBC1051", "Indirect call does not match its function value signature", function.id,
+                                   block.id, instructionIndex);
+                    }
                 }
             }
         }

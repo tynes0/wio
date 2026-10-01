@@ -72,6 +72,7 @@ namespace wio::vm
         constexpr std::uint8_t TypeNullable = 30;
         constexpr std::uint8_t TypeArray = 31;
         constexpr std::uint8_t TypeDictionary = 32;
+        constexpr std::uint8_t TypeFunction = 33;
 
         constexpr std::uint8_t NominalComponent = 1;
         constexpr std::uint8_t NominalObject = 2;
@@ -81,6 +82,10 @@ namespace wio::vm
         constexpr std::uint8_t IntrinsicDictionary = 2;
         constexpr std::uint8_t IntrinsicString = 3;
         constexpr std::uint8_t IntrinsicText = 4;
+
+        constexpr std::uint8_t CaptureValue = 0;
+        constexpr std::uint8_t CaptureReference = 1;
+        constexpr std::uint8_t CaptureRetainedSelf = 2;
 
         constexpr std::uint8_t UnaryNegate = 0;
         constexpr std::uint8_t UnaryLogicalNot = 1;
@@ -470,7 +475,19 @@ namespace wio::vm
             for (std::size_t index = 0; index < values.size(); ++index)
             {
                 const std::uint32_t id = function.parameters[index].value;
-                frame.registers[id] = Register{values[index], true};
+                if (index < function.captureParameterCount && index < function.captures.size() &&
+                    function.captures[index].kind == CaptureValue)
+                {
+                    auto capture = std::make_unique<PlaceStorage>();
+                    capture->value = values[index].cloneOwned();
+                    capture->initialized = true;
+                    capture->mutableValue = true;
+                    PlaceStorage* const pointer = capture.get();
+                    frame.localPlaces.push_back(std::move(capture));
+                    frame.registers[id] = Register{Value::place(pointer), true};
+                }
+                else
+                    frame.registers[id] = Register{values[index], true};
             }
             frames.push_back(std::move(frame));
             return ExecutionResult::success();
@@ -1607,8 +1624,20 @@ namespace wio::vm
                     ++frame.instruction;
                     continue;
                 }
+                if (released->kind() == Value::Kind::Callable)
+                {
+                    if (cleanupRegister)
+                    {
+                        cleanupRegister->value = {};
+                        cleanupRegister->initialized = false;
+                    }
+                    else
+                        cleanupPlace->clear();
+                    ++frame.instruction;
+                    continue;
+                }
                 if (released->kind() != Value::Kind::Object)
-                    return fail("WVM1073", "Reference release requires an owned object handle");
+                    return fail("WVM1073", "Reference release requires an owned object or callable handle");
 
                 const std::uint32_t typeId = released->aggregateType();
                 const std::uint32_t destructor = module.types[typeId].destructor;
@@ -1657,6 +1686,101 @@ namespace wio::vm
                     return fail("WVM1048", "Place cleanup requires an initialized place");
                 place->clear();
                 ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::FunctionReference)
+            {
+                if (instruction.callee >= module.functions.size() || instruction.resultType >= module.types.size() ||
+                    module.types[instruction.resultType].kind != TypeFunction)
+                    return fail("WVM1139", "Function reference requires a known function and callable type");
+                if (!write(instruction.result, Value::callable(instruction.callee, {})))
+                    return fail("WVM1140", "Function reference result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ClosureCreate)
+            {
+                if (instruction.callee >= module.functions.size() || instruction.resultType >= module.types.size() ||
+                    module.types[instruction.resultType].kind != TypeFunction ||
+                    instruction.operands.size() != instruction.captureKinds.size())
+                    return fail("WVM1141", "Closure creation does not match a known callable capture layout");
+
+                std::vector<Value> captures;
+                captures.reserve(instruction.operands.size());
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    const Value* source = read(instruction.operands[index]);
+                    if (!source)
+                        return fail("WVM1142", "Closure creation reads an unavailable capture value");
+
+                    switch (instruction.captureKinds[index])
+                    {
+                    case CaptureValue:
+                        captures.push_back(source->cloneOwned());
+                        break;
+                    case CaptureReference:
+                        if (source->kind() != Value::Kind::Place)
+                            return fail("WVM1143", "Reference capture requires a live borrowed place");
+                        captures.push_back(*source);
+                        break;
+                    case CaptureRetainedSelf:
+                    {
+                        Value retained;
+                        if (source->kind() == Value::Kind::Place)
+                        {
+                            PlaceStorage* const place = source->asPlace();
+                            if (place && place->initialized)
+                                retained = place->storedValue().cloneOwned();
+                        }
+                        else
+                            retained = source->retainObject();
+                        if (retained.isEmpty())
+                            return fail("WVM1144", "Retained-self capture requires a live component or object");
+                        captures.push_back(std::move(retained));
+                        break;
+                    }
+                    default:
+                        return fail("WVM1145", "Closure creation contains an unknown capture kind");
+                    }
+                }
+                if (!write(instruction.result, Value::callable(instruction.callee, std::move(captures))))
+                    return fail("WVM1146", "Closure result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IndirectCall)
+            {
+                const Value* callable = instruction.operands.empty() ? nullptr : read(instruction.operands.front());
+                if (!callable || callable->kind() != Value::Kind::Callable)
+                    return fail("WVM1147", "Indirect call requires an available function value");
+                const std::uint32_t target = callable->callableFunction();
+                if (target >= module.functions.size())
+                    return fail("WVM1148", "Indirect call target is outside the module");
+
+                std::vector<Value> callArguments;
+                callArguments.reserve(callable->captureCount() + instruction.operands.size() - 1);
+                for (std::size_t index = 0; index < callable->captureCount(); ++index)
+                {
+                    const Value* capture = callable->capture(index);
+                    if (!capture)
+                        return fail("WVM1149", "Indirect call lost a closure capture");
+                    callArguments.push_back(*capture);
+                }
+                for (std::size_t index = 1; index < instruction.operands.size(); ++index)
+                {
+                    const Value* argument = read(instruction.operands[index]);
+                    if (!argument)
+                        return fail("WVM1150", "Indirect call reads an unavailable argument value");
+                    callArguments.push_back(*argument);
+                }
+
+                const std::uint32_t result = instruction.result;
+                ++frame.instruction;
+                ExecutionResult pushed =
+                    pushFrame(module.functions[target], callArguments,
+                              FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result});
+                if (!pushed.succeeded())
+                    return pushed;
                 continue;
             }
             if (instruction.opcode == bytecode::Opcode::Call || instruction.opcode == bytecode::Opcode::ExtensionCall ||

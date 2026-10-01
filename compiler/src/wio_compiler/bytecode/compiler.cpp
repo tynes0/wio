@@ -6,6 +6,7 @@
 #include <bit>
 #include <limits>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 
 namespace wio::bytecode
@@ -181,6 +182,28 @@ namespace wio::bytecode
 
         Module& module = result.module_;
         StringTableBuilder strings{module};
+        std::unordered_map<std::uint32_t, std::uint32_t> functionIds;
+        functionIds.reserve(source.functions.size());
+        for (std::size_t index = 0; index < source.functions.size(); ++index)
+            functionIds.emplace(rawId(source.functions[index].id), static_cast<std::uint32_t>(index));
+        const auto functionId = [&](const wir::FunctionId id)
+        {
+            if (!id)
+                return InvalidIndex;
+            const auto found = functionIds.find(id.value());
+            return found == functionIds.end() ? InvalidIndex : found->second;
+        };
+        std::unordered_map<std::uint32_t, std::uint32_t> globalIds;
+        globalIds.reserve(source.globals.size());
+        for (std::size_t index = 0; index < source.globals.size(); ++index)
+            globalIds.emplace(rawId(source.globals[index].id), static_cast<std::uint32_t>(index));
+        const auto globalId = [&](const wir::GlobalId id)
+        {
+            if (!id)
+                return InvalidIndex;
+            const auto found = globalIds.find(id.value());
+            return found == globalIds.end() ? InvalidIndex : found->second;
+        };
         module.name = strings.intern(source.name);
         module.moduleKind = encodeEnum(source.contract.kind);
         module.stableId = source.contract.stableId;
@@ -211,7 +234,7 @@ namespace wio::bytecode
             exportRecord.kind = encodeEnum(sourceExport.kind);
             exportRecord.role = encodeEnum(sourceExport.role);
             exportRecord.roleName = strings.intern(sourceExport.roleName);
-            exportRecord.function = rawId(sourceExport.function);
+            exportRecord.function = functionId(sourceExport.function);
             exportRecord.type = rawId(sourceExport.type);
             for (const wir::TypeId type : sourceExport.parameterTypes)
                 exportRecord.parameterTypes.push_back(rawId(type));
@@ -233,7 +256,7 @@ namespace wio::bytecode
             attribute.origin = encodeEnum(sourceAttribute.origin);
             attribute.targetStableId = sourceAttribute.targetStableId;
             attribute.targetType = rawId(sourceAttribute.targetType);
-            attribute.targetFunction = rawId(sourceAttribute.targetFunction);
+            attribute.targetFunction = functionId(sourceAttribute.targetFunction);
             attribute.parameterIndex = sourceAttribute.parameterIndex;
             attribute.sourceOrder = sourceAttribute.sourceOrder;
             attribute.runtimeRetained = sourceAttribute.runtimeRetained;
@@ -253,7 +276,7 @@ namespace wio::bytecode
                                        .hookMode = strings.intern(sourceProcessor.hookMode),
                                        .phase = encodeEnum(sourceProcessor.phase),
                                        .processorType = rawId(sourceProcessor.processorType),
-                                       .hookFunction = rawId(sourceProcessor.hookFunction),
+                                       .hookFunction = functionId(sourceProcessor.hookFunction),
                                        .valueType = rawId(sourceProcessor.valueType)});
             }
             module.contract.attributes.push_back(std::move(attribute));
@@ -286,7 +309,7 @@ namespace wio::bytecode
                 ReflectedMethod method;
                 method.stableId = sourceMethod.stableId;
                 method.name = strings.intern(sourceMethod.name);
-                method.function = rawId(sourceMethod.function);
+                method.function = functionId(sourceMethod.function);
                 method.returnType = rawId(sourceMethod.returnType);
                 for (const wir::TypeId type : sourceMethod.parameterTypes)
                     method.parameterTypes.push_back(rawId(type));
@@ -309,9 +332,9 @@ namespace wio::bytecode
             module.contract.systems.push_back(System{.stableId = sourceSystem.stableId,
                                                      .logicalName = strings.intern(sourceSystem.logicalName),
                                                      .type = rawId(sourceSystem.type),
-                                                     .start = rawId(sourceSystem.start),
-                                                     .update = rawId(sourceSystem.update),
-                                                     .close = rawId(sourceSystem.close)});
+                                                     .start = functionId(sourceSystem.start),
+                                                     .update = functionId(sourceSystem.update),
+                                                     .close = functionId(sourceSystem.close)});
         }
         if (source.contract.application)
         {
@@ -321,12 +344,12 @@ namespace wio::bytecode
             application.stableId = sourceApplication.stableId;
             application.logicalName = strings.intern(sourceApplication.logicalName);
             application.type = rawId(sourceApplication.type);
-            application.construct = rawId(sourceApplication.construct);
-            application.entry = rawId(sourceApplication.entry);
-            application.start = rawId(sourceApplication.start);
-            application.update = rawId(sourceApplication.update);
-            application.close = rawId(sourceApplication.close);
-            application.exit = rawId(sourceApplication.exit);
+            application.construct = functionId(sourceApplication.construct);
+            application.entry = functionId(sourceApplication.entry);
+            application.start = functionId(sourceApplication.start);
+            application.update = functionId(sourceApplication.update);
+            application.close = functionId(sourceApplication.close);
+            application.exit = functionId(sourceApplication.exit);
             for (const wir::TypeId system : sourceApplication.systems)
                 application.systems.push_back(rawId(system));
             for (const wir::ApplicationStageDescriptor& sourceStage : sourceApplication.stages)
@@ -346,7 +369,7 @@ namespace wio::bytecode
                     run.targetName = strings.intern(sourceRun.targetName);
                     run.methodName = strings.intern(sourceRun.methodName);
                     run.targetType = rawId(sourceRun.targetType);
-                    run.function = rawId(sourceRun.function);
+                    run.function = functionId(sourceRun.function);
                     for (const wir::ApplicationResourceBinding& sourceResource : sourceRun.resources)
                     {
                         run.resources.push_back(ResourceBinding{.name = strings.intern(sourceResource.name),
@@ -362,12 +385,12 @@ namespace wio::bytecode
             application.hostOwnsStorage = sourceApplication.hostOwnsStorage;
             application.nonBlockingScheduling = sourceApplication.nonBlockingScheduling;
         }
-        module.contract.lifecycle = Lifecycle{.apiVersion = rawId(source.contract.lifecycle.apiVersion),
-                                              .load = rawId(source.contract.lifecycle.load),
-                                              .update = rawId(source.contract.lifecycle.update),
-                                              .unload = rawId(source.contract.lifecycle.unload),
-                                              .saveState = rawId(source.contract.lifecycle.saveState),
-                                              .restoreState = rawId(source.contract.lifecycle.restoreState),
+        module.contract.lifecycle = Lifecycle{.apiVersion = functionId(source.contract.lifecycle.apiVersion),
+                                              .load = functionId(source.contract.lifecycle.load),
+                                              .update = functionId(source.contract.lifecycle.update),
+                                              .unload = functionId(source.contract.lifecycle.unload),
+                                              .saveState = functionId(source.contract.lifecycle.saveState),
+                                              .restoreState = functionId(source.contract.lifecycle.restoreState),
                                               .stateSchemaVersion = source.contract.lifecycle.stateSchemaVersion};
         module.contract.callTableStableId = source.contract.callTable.stableId;
         module.contract.callTableEntries = source.contract.callTable.entries;
@@ -408,7 +431,7 @@ namespace wio::bytecode
                 for (const wir::TypeId parameter : sourceMethod.parameterTypes)
                     method.parameterTypes.push_back(rawId(parameter));
                 method.returnType = rawId(sourceMethod.returnType);
-                method.function = rawId(sourceMethod.function);
+                method.function = functionId(sourceMethod.function);
                 method.slot = sourceMethod.slot;
                 method.visibility = encodeEnum(sourceMethod.visibility);
                 method.receiverMutable = sourceMethod.receiverMutable;
@@ -422,11 +445,11 @@ namespace wio::bytecode
                 type.dispatchEntries.push_back(
                     Type::DispatchEntry{.contractType = rawId(sourceDispatch.contractType),
                                         .slot = sourceDispatch.slot,
-                                        .implementation = rawId(sourceDispatch.implementation)});
+                                        .implementation = functionId(sourceDispatch.implementation)});
             }
-            type.destructor = rawId(sourceType.destructor);
-            type.defaultConstructor = rawId(sourceType.defaultConstructor);
-            type.fieldInitializer = rawId(sourceType.fieldInitializer);
+            type.destructor = functionId(sourceType.destructor);
+            type.defaultConstructor = functionId(sourceType.defaultConstructor);
+            type.fieldInitializer = functionId(sourceType.fieldInitializer);
             type.enumUnderlyingType = rawId(sourceType.enumUnderlyingType);
             for (const wir::EnumCaseLayout& sourceCase : sourceType.enumCases)
                 type.enumCases.push_back(Type::EnumCase{strings.intern(sourceCase.name), sourceCase.rawValue});
@@ -445,10 +468,10 @@ namespace wio::bytecode
         module.globals.reserve(source.globals.size());
         for (const wir::lowered::Global& sourceGlobal : source.globals)
         {
-            module.globals.push_back(Global{.id = rawId(sourceGlobal.id),
+            module.globals.push_back(Global{.id = globalId(sourceGlobal.id),
                                             .name = strings.intern(sourceGlobal.name),
                                             .type = rawId(sourceGlobal.type),
-                                            .initializer = rawId(sourceGlobal.initializer),
+                                            .initializer = functionId(sourceGlobal.initializer),
                                             .source = compileSpan(sourceGlobal.source, strings),
                                             .flags = static_cast<std::uint8_t>((sourceGlobal.isMutable ? 0x01u : 0u) |
                                                                                (sourceGlobal.isConst ? 0x02u : 0u))});
@@ -458,14 +481,14 @@ namespace wio::bytecode
         for (const wir::lowered::Function& sourceFunction : source.functions)
         {
             Function function;
-            function.id = rawId(sourceFunction.id);
+            function.id = functionId(sourceFunction.id);
             function.name = strings.intern(sourceFunction.name);
             function.returnType = rawId(sourceFunction.returnType);
             function.callableType = rawId(sourceFunction.callableType);
             function.ownerType = rawId(sourceFunction.ownerType);
             function.methodSlot = sourceFunction.methodSlot;
             function.captureParameterCount = sourceFunction.captureParameterCount;
-            function.genericOrigin = rawId(sourceFunction.genericOrigin);
+            function.genericOrigin = functionId(sourceFunction.genericOrigin);
             function.specializationKey = strings.intern(sourceFunction.specializationKey);
             function.source = compileSpan(sourceFunction.source, strings);
             function.flags = static_cast<std::uint16_t>(
@@ -577,8 +600,8 @@ namespace wio::bytecode
                             target.arguments.push_back(rawId(argument));
                         instruction.targets.push_back(std::move(target));
                     }
-                    instruction.callee = rawId(sourceInstruction.callee);
-                    instruction.global = rawId(sourceInstruction.global);
+                    instruction.callee = functionId(sourceInstruction.callee);
+                    instruction.global = globalId(sourceInstruction.global);
                     instruction.constant = compileConstant(sourceInstruction.literal, module, strings);
                     instruction.unaryOperator = encodeEnum(sourceInstruction.unaryOperator);
                     instruction.binaryOperator = encodeEnum(sourceInstruction.binaryOperator);

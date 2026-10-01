@@ -31,6 +31,7 @@ namespace wio::vm
             Component,
             Object,
             ObjectBorrow,
+            Callable,
             Place
         };
 
@@ -52,8 +53,12 @@ namespace wio::vm
         [[nodiscard]] static Value dictionary(std::uint32_t type, std::vector<Value> entries, bool ordered);
         [[nodiscard]] static Value component(std::uint32_t type, std::vector<Value> fields);
         [[nodiscard]] static Value object(std::uint32_t type, std::vector<Value> fields);
+        [[nodiscard]] static Value callable(std::uint32_t function, std::vector<Value> captures);
         [[nodiscard]] std::uint32_t aggregateType() const noexcept;
         [[nodiscard]] std::uint32_t strongReferenceCount() const noexcept;
+        [[nodiscard]] std::uint32_t callableFunction() const noexcept;
+        [[nodiscard]] std::size_t captureCount() const noexcept;
+        [[nodiscard]] const Value* capture(std::size_t index) const noexcept;
 
         [[nodiscard]] Kind kind() const noexcept
         {
@@ -152,6 +157,7 @@ namespace wio::vm
         [[nodiscard]] Value* mutableDictionaryValue(const Value& key) noexcept;
         [[nodiscard]] Value* mutableField(std::size_t index) noexcept;
         [[nodiscard]] Value cloneOwned() const;
+        [[nodiscard]] Value retainObject() const noexcept;
         void destroy() noexcept;
         void copyFrom(const Value& other);
         void moveFrom(Value&& other) noexcept;

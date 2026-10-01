@@ -253,6 +253,13 @@ namespace wio::vm
         return result;
     }
 
+    Value Value::callable(const std::uint32_t function, std::vector<Value> captures)
+    {
+        Value result{Kind::Callable};
+        result.scalar_.aggregate = new AggregateStorage{Kind::Callable, function, std::move(captures)};
+        return result;
+    }
+
     Value Value::objectBorrow(AggregateStorage* const storage) noexcept
     {
         Value result{Kind::ObjectBorrow};
@@ -271,6 +278,23 @@ namespace wio::vm
     std::uint32_t Value::strongReferenceCount() const noexcept
     {
         return kind_ == Kind::Object ? scalar_.aggregate->referenceCount() : 0;
+    }
+
+    std::uint32_t Value::callableFunction() const noexcept
+    {
+        return kind_ == Kind::Callable ? scalar_.aggregate->type() : 0;
+    }
+
+    std::size_t Value::captureCount() const noexcept
+    {
+        return kind_ == Kind::Callable ? scalar_.aggregate->values().size() : 0;
+    }
+
+    const Value* Value::capture(const std::size_t index) const noexcept
+    {
+        if (kind_ != Kind::Callable || index >= scalar_.aggregate->values().size())
+            return nullptr;
+        return &scalar_.aggregate->values()[index];
     }
 
     Value Value::place(PlaceStorage* const storage) noexcept
@@ -635,6 +659,16 @@ namespace wio::vm
         return component(aggregateType(), std::move(cloned));
     }
 
+    Value Value::retainObject() const noexcept
+    {
+        if (kind_ != Kind::Object && kind_ != Kind::ObjectBorrow)
+            return {};
+        Value result{Kind::Object};
+        result.scalar_.aggregate = scalar_.aggregate;
+        result.scalar_.aggregate->retain();
+        return result;
+    }
+
     bool Value::operator==(const Value& other) const noexcept
     {
         if (kind_ != other.kind_)
@@ -673,6 +707,7 @@ namespace wio::vm
                    scalar_.aggregate->values() == other.scalar_.aggregate->values();
         case Kind::Object:
         case Kind::ObjectBorrow:
+        case Kind::Callable:
             return scalar_.aggregate == other.scalar_.aggregate;
         case Kind::Place:
             return scalar_.place == other.scalar_.place;
@@ -709,7 +744,8 @@ namespace wio::vm
             std::destroy_at(&text_.string);
         else if (kind_ == Kind::Text)
             std::destroy_at(&text_.text);
-        else if (kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component || kind_ == Kind::Object)
+        else if (kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component ||
+                 kind_ == Kind::Object || kind_ == Kind::Callable)
             scalar_.aggregate->release();
         kind_ = Kind::Empty;
         scalar_.unsignedInteger = 0;
@@ -722,7 +758,8 @@ namespace wio::vm
             std::construct_at(&text_.string, other.text_.string);
         else if (kind_ == Kind::Text)
             std::construct_at(&text_.text, other.text_.text);
-        else if (kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component || kind_ == Kind::Object)
+        else if (kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component ||
+                 kind_ == Kind::Object || kind_ == Kind::Callable)
         {
             scalar_.aggregate = other.scalar_.aggregate;
             scalar_.aggregate->retain();
