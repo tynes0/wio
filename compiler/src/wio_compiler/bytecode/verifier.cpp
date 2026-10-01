@@ -16,6 +16,19 @@ namespace wio::bytecode
         auto validType = [&](const std::uint32_t id) { return id == InvalidIndex || id < module.types.size(); };
         auto validFunction = [&](const std::uint32_t id)
         { return id == InvalidIndex || (id < module.functions.size() && module.functions[id].id == id); };
+        const auto nominalType = [&](std::uint32_t id)
+        {
+            for (std::uint32_t depth = 0; id < module.types.size() && depth < 32; ++depth)
+            {
+                const Type& type = module.types[id];
+                if (type.kind == 28)
+                    return id;
+                if ((type.kind != 29 && type.kind != 30) || type.arguments.empty())
+                    break;
+                id = type.arguments.front();
+            }
+            return InvalidIndex;
+        };
         const auto mayOmitResult = [](const Opcode opcode)
         {
             return opcode == Opcode::Call || opcode == Opcode::NativeInvoke || opcode == Opcode::IndirectCall ||
@@ -67,8 +80,24 @@ namespace wio::bytecode
             }
             for (const Type::DispatchEntry& dispatch : type.dispatchEntries)
             {
-                if (!validType(dispatch.contractType) || !validFunction(dispatch.implementation))
-                    report("WBC1022", "Dispatch entry references invalid type or function metadata");
+                if (dispatch.contractType >= module.types.size() || dispatch.implementation >= module.functions.size())
+                {
+                    report("WBC1022", "Dispatch entry on type #" + std::to_string(i) +
+                                          " references invalid contract #" + std::to_string(dispatch.contractType) +
+                                          " or implementation #" + std::to_string(dispatch.implementation));
+                    continue;
+                }
+                const Type& contract = module.types[dispatch.contractType];
+                const auto method = std::find_if(contract.methods.begin(), contract.methods.end(),
+                                                 [&](const auto& item) { return item.slot == dispatch.slot; });
+                if (contract.kind != 28 || (contract.nominalKind != 2 && contract.nominalKind != 3) ||
+                    method == contract.methods.end())
+                    report("WBC1052", "Dispatch entry does not match an object/interface contract method slot");
+            }
+            for (const std::uint32_t castType : type.castTypes)
+            {
+                if (castType >= module.types.size() || module.types[castType].kind != 28)
+                    report("WBC1054", "Object cast table references a non-nominal or invalid type");
             }
             if (!validFunction(type.destructor) || !validFunction(type.defaultConstructor) ||
                 !validFunction(type.fieldInitializer) || !validType(type.enumUnderlyingType))
@@ -359,6 +388,73 @@ namespace wio::bytecode
                         if (!valid)
                             report("WBC1051", "Indirect call does not match its function value signature", function.id,
                                    block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::VirtualCall || instruction.opcode == Opcode::InterfaceCall)
+                    {
+                        const std::uint32_t target = nominalType(instruction.targetType);
+                        const Type* contract = target < module.types.size() ? &module.types[target] : nullptr;
+                        const std::uint8_t expectedKind = instruction.opcode == Opcode::VirtualCall ? 2 : 3;
+                        const Type::Method* method = nullptr;
+                        if (contract)
+                        {
+                            const auto found =
+                                std::find_if(contract->methods.begin(), contract->methods.end(), [&](const auto& item)
+                                             { return item.slot == instruction.projectionIndex; });
+                            if (found != contract->methods.end())
+                                method = &*found;
+                        }
+                        const Function* callee = instruction.callee < module.functions.size()
+                                                     ? &module.functions[instruction.callee]
+                                                     : nullptr;
+                        const std::uint32_t receiver = instruction.operands.empty()
+                                                           ? InvalidIndex
+                                                           : nominalType(valueType(instruction.operands.front()));
+                        const bool receiverCompatible =
+                            receiver < module.types.size() &&
+                            (receiver == target ||
+                             std::find(module.types[receiver].castTypes.begin(), module.types[receiver].castTypes.end(),
+                                       target) != module.types[receiver].castTypes.end());
+                        const bool declarationMatches =
+                            method && callee &&
+                            (method->function == instruction.callee || callee->genericOrigin == method->function);
+                        const bool signatureMatches =
+                            instruction.signatureTypes.empty() ||
+                            (instruction.signatureTypes.size() == instruction.operands.size() &&
+                             std::all_of(instruction.signatureTypes.begin(), instruction.signatureTypes.end(),
+                                         [&](const auto type) { return type < module.types.size(); }));
+                        if (!contract || contract->kind != 28 || contract->nominalKind != expectedKind || !method ||
+                            !receiverCompatible || !declarationMatches || !signatureMatches)
+                            report("WBC1055",
+                                   "Dynamic call does not match its receiver, contract, slot, or declaration",
+                                   function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::Upcast || instruction.opcode == Opcode::CheckedCast ||
+                             instruction.opcode == Opcode::TypeTest)
+                    {
+                        const std::uint32_t source = instruction.operands.size() == 1
+                                                         ? nominalType(valueType(instruction.operands.front()))
+                                                         : InvalidIndex;
+                        const std::uint32_t target = nominalType(instruction.targetType);
+                        const bool targetKnown = target < module.types.size() && module.types[target].kind == 28;
+                        const bool staticallyCompatible =
+                            instruction.opcode != Opcode::Upcast ||
+                            (source < module.types.size() && targetKnown &&
+                             (source == target ||
+                              std::find(module.types[source].castTypes.begin(), module.types[source].castTypes.end(),
+                                        target) != module.types[source].castTypes.end()));
+                        if (source >= module.types.size() || !targetKnown || !staticallyCompatible)
+                            report("WBC1056", "Object cast or type-test has invalid source or target metadata",
+                                   function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::IdentityEqual)
+                    {
+                        const bool valid = instruction.operands.size() == 2 &&
+                                           nominalType(valueType(instruction.operands[0])) < module.types.size() &&
+                                           nominalType(valueType(instruction.operands[1])) < module.types.size() &&
+                                           (instruction.binaryOperator == 5 || instruction.binaryOperator == 6);
+                        if (!valid)
+                            report("WBC1057", "Object identity comparison has invalid operand or operator metadata",
+                                   function.id, block.id, instructionIndex);
                     }
                 }
             }

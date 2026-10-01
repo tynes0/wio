@@ -123,12 +123,17 @@ namespace
             bytecode::Type{
                 .kind = 28, .nominalKind = 1, .ownership = 1, .fields = {bytecode::Type::Field{.type = I32}}},
             bytecode::Type{.kind = 29, .arguments = {Stats}, .flags = 0x01u},
-            bytecode::Type{.kind = 28,
-                           .nominalKind = 2,
-                           .ownership = 2,
-                           .cleanup = 2,
-                           .fields = {bytecode::Type::Field{.type = Stats}},
-                           .destructor = 3},
+            bytecode::Type{
+                .kind = 28,
+                .nominalKind = 2,
+                .ownership = 2,
+                .cleanup = 2,
+                .fields = {bytecode::Type::Field{.type = Stats}},
+                .methods = {bytecode::Type::Method{.parameterTypes = {}, .returnType = I32, .function = 2, .slot = 0}},
+                .castTypes = {Enemy},
+                .dispatchEntries = {bytecode::Type::DispatchEntry{
+                    .contractType = Enemy, .slot = 0, .implementation = 2}},
+                .destructor = 3},
             bytecode::Type{.kind = 29, .arguments = {Enemy}, .flags = 0x01u},
             bytecode::Type{.kind = 31, .arguments = {I32}},
             bytecode::Type{.kind = 29, .arguments = {I32Array}, .flags = 0x01u},
@@ -152,6 +157,8 @@ namespace
         module.functions.push_back(function(2, I32, {parameter(0, RefEnemy)},
                                             {fieldPlace(1, RefStats, 0, Enemy, 0), fieldPlace(2, RefI32, 1, Stats, 0),
                                              load(3, I32, 2), returnValue(3)}));
+        module.functions.back().ownerType = Enemy;
+        module.functions.back().methodSlot = 0;
 
         bytecode::Instruction global = instruction(bytecode::Opcode::GlobalPlace);
         global.result = 1;
@@ -180,6 +187,9 @@ namespace
         getter.resultType = I32;
         getter.operands = {2};
         getter.callee = 2;
+        getter.targetType = Enemy;
+        getter.projectionIndex = 0;
+        getter.signatureTypes = {RefEnemy};
         bytecode::Instruction releaseRetained = instruction(bytecode::Opcode::Release);
         releaseRetained.operands = {2};
         bytecode::Instruction releaseOriginal = instruction(bytecode::Opcode::Release);

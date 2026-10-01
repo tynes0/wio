@@ -529,6 +529,54 @@ namespace wio::vm
                 frame.registers[id] = Register{std::move(value), true};
                 return true;
             };
+            const auto storedValue = [](const Value* value) -> const Value*
+            {
+                if (!value || value->kind() != Value::Kind::Place)
+                    return value;
+                PlaceStorage* const place = value->asPlace();
+                return place && place->initialized ? &place->storedValue() : nullptr;
+            };
+            const auto objectValue = [&](const Value* value) -> const Value*
+            {
+                value = storedValue(value);
+                return value && (value->kind() == Value::Kind::Object || value->kind() == Value::Kind::ObjectBorrow)
+                           ? value
+                           : nullptr;
+            };
+            const auto nominalType = [&](std::uint32_t typeId)
+            {
+                for (std::uint32_t depth = 0; typeId < module.types.size() && depth < 32; ++depth)
+                {
+                    const bytecode::Type& type = module.types[typeId];
+                    if (type.kind == TypeNamed)
+                        return typeId;
+                    if ((type.kind != TypeReference && type.kind != TypeNullable) || type.arguments.empty())
+                        break;
+                    typeId = type.arguments.front();
+                }
+                return bytecode::InvalidIndex;
+            };
+            const auto isObjectType = [&](const std::uint32_t concreteType, const std::uint32_t targetType)
+            {
+                const std::uint32_t target = nominalType(targetType);
+                if (concreteType >= module.types.size() || target == bytecode::InvalidIndex)
+                    return false;
+                const bytecode::Type& concrete = module.types[concreteType];
+                return concreteType == target || std::find(concrete.castTypes.begin(), concrete.castTypes.end(),
+                                                           target) != concrete.castTypes.end();
+            };
+            const auto dispatchTarget =
+                [&](const Value& receiver, const std::uint32_t contractType, const std::uint32_t slot)
+            {
+                const std::uint32_t concreteType = receiver.aggregateType();
+                const std::uint32_t contract = nominalType(contractType);
+                if (!isObjectType(concreteType, contract))
+                    return bytecode::InvalidIndex;
+                const auto& entries = module.types[concreteType].dispatchEntries;
+                const auto found = std::find_if(entries.begin(), entries.end(), [&](const auto& entry)
+                                                { return entry.contractType == contract && entry.slot == slot; });
+                return found == entries.end() ? bytecode::InvalidIndex : found->implementation;
+            };
 
             if (instruction.opcode == bytecode::Opcode::Constant)
             {
@@ -1498,10 +1546,15 @@ namespace wio::vm
             }
             if (instruction.opcode == bytecode::Opcode::Borrow)
             {
-                const Value* place = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
-                if (!place || place->kind() != Value::Kind::Place)
-                    return fail("WVM1044", "Borrow requires an available place value");
-                write(instruction.result, *place);
+                const Value* source = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                if (!source)
+                    return fail("WVM1044", "Borrow requires an available place or object value");
+                if (source->kind() == Value::Kind::Place)
+                    write(instruction.result, *source);
+                else if (const Value* object = objectValue(source))
+                    write(instruction.result, Value::objectBorrow(object->scalar_.aggregate));
+                else
+                    return fail("WVM1044", "Borrow requires an available place or object value");
                 ++frame.instruction;
                 continue;
             }
@@ -1783,10 +1836,68 @@ namespace wio::vm
                     return pushed;
                 continue;
             }
+            if (instruction.opcode == bytecode::Opcode::Upcast || instruction.opcode == bytecode::Opcode::CheckedCast)
+            {
+                const Value* source = instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                const Value* object = objectValue(source);
+                if (!object)
+                    return fail("WVM1151", "Object cast requires a live object value");
+                if (!isObjectType(object->aggregateType(), instruction.targetType))
+                    return fail(instruction.opcode == bytecode::Opcode::Upcast ? "WVM1152" : "WVM1153",
+                                instruction.opcode == bytecode::Opcode::Upcast
+                                    ? "Upcast target is incompatible with the concrete object type"
+                                    : "Checked object cast failed for the concrete object type");
+
+                Value result;
+                if (instruction.resultType < module.types.size() &&
+                    module.types[instruction.resultType].kind == TypeReference)
+                    result = Value::objectBorrow(object->scalar_.aggregate);
+                else
+                    result = object->retainObject();
+                if (result.isEmpty() || !write(instruction.result, std::move(result)))
+                    return fail("WVM1154", "Object cast result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::TypeTest)
+            {
+                const Value* source = instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                const Value* object = objectValue(source);
+                const bool matches = object && isObjectType(object->aggregateType(), instruction.targetType);
+                if (!write(instruction.result, Value::boolean(matches)))
+                    return fail("WVM1155", "Object type-test result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IdentityEqual)
+            {
+                if (instruction.operands.size() != 2)
+                    return fail("WVM1156", "Object identity comparison requires two operands");
+                const Value* left = storedValue(read(instruction.operands[0]));
+                const Value* right = storedValue(read(instruction.operands[1]));
+                if (!left || !right)
+                    return fail("WVM1157", "Object identity comparison reads an unavailable value");
+
+                const bool leftNull = left->kind() == Value::Kind::Null;
+                const bool rightNull = right->kind() == Value::Kind::Null;
+                const Value* leftObject = objectValue(left);
+                const Value* rightObject = objectValue(right);
+                if ((!leftNull && !leftObject) || (!rightNull && !rightObject))
+                    return fail("WVM1158", "Object identity comparison requires object or null operands");
+                bool equal = leftNull && rightNull;
+                if (leftObject && rightObject)
+                    equal = leftObject->scalar_.aggregate == rightObject->scalar_.aggregate;
+                if (instruction.binaryOperator == BinaryNotEqual)
+                    equal = !equal;
+                else if (instruction.binaryOperator != BinaryEqual)
+                    return fail("WVM1159", "Object identity comparison has an invalid comparison operator");
+                if (!write(instruction.result, Value::boolean(equal)))
+                    return fail("WVM1160", "Object identity comparison result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
             if (instruction.opcode == bytecode::Opcode::Call || instruction.opcode == bytecode::Opcode::ExtensionCall ||
-                instruction.opcode == bytecode::Opcode::MethodCall ||
-                instruction.opcode == bytecode::Opcode::VirtualCall ||
-                instruction.opcode == bytecode::Opcode::InterfaceCall)
+                instruction.opcode == bytecode::Opcode::MethodCall)
             {
                 if (instruction.callee >= module.functions.size())
                     return fail("WVM1028", "Call target is outside the module");
@@ -1803,6 +1914,38 @@ namespace wio::vm
                 ++frame.instruction;
                 ExecutionResult pushed =
                     pushFrame(module.functions[instruction.callee], callArguments,
+                              FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result});
+                if (!pushed.succeeded())
+                    return pushed;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::VirtualCall ||
+                instruction.opcode == bytecode::Opcode::InterfaceCall)
+            {
+                const Value* receiver =
+                    instruction.operands.empty() ? nullptr : objectValue(read(instruction.operands.front()));
+                if (!receiver)
+                    return fail("WVM1161", "Dynamic dispatch requires a live object receiver");
+                const std::uint32_t target =
+                    dispatchTarget(*receiver, instruction.targetType, instruction.projectionIndex);
+                if (target == bytecode::InvalidIndex)
+                    return fail("WVM1162", "Concrete object type has no implementation for the requested method slot");
+                if (target >= module.functions.size())
+                    return fail("WVM1163", "Dynamic dispatch resolved outside the module function table");
+
+                std::vector<Value> callArguments;
+                callArguments.reserve(instruction.operands.size());
+                for (const std::uint32_t operandId : instruction.operands)
+                {
+                    const Value* operand = read(operandId);
+                    if (!operand)
+                        return fail("WVM1029", "Dynamic call reads an unavailable argument value");
+                    callArguments.push_back(*operand);
+                }
+                const std::uint32_t result = instruction.result;
+                ++frame.instruction;
+                ExecutionResult pushed =
+                    pushFrame(module.functions[target], callArguments,
                               FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result});
                 if (!pushed.succeeded())
                     return pushed;

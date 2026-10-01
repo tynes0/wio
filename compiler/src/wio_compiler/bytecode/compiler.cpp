@@ -442,10 +442,12 @@ namespace wio::bytecode
                 type.castTypes.push_back(rawId(castType));
             for (const wir::DispatchEntry& sourceDispatch : sourceType.dispatchEntries)
             {
-                type.dispatchEntries.push_back(
-                    Type::DispatchEntry{.contractType = rawId(sourceDispatch.contractType),
-                                        .slot = sourceDispatch.slot,
-                                        .implementation = functionId(sourceDispatch.implementation)});
+                const std::uint32_t implementation = functionId(sourceDispatch.implementation);
+                if (implementation == InvalidIndex)
+                    continue;
+                type.dispatchEntries.push_back(Type::DispatchEntry{.contractType = rawId(sourceDispatch.contractType),
+                                                                   .slot = sourceDispatch.slot,
+                                                                   .implementation = implementation});
             }
             type.destructor = functionId(sourceType.destructor);
             type.defaultConstructor = functionId(sourceType.defaultConstructor);
