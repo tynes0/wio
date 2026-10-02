@@ -19,7 +19,7 @@ Branch arguments are copied to the target block parameters before control is
 transferred. This preserves canonical Lowered WIR phi semantics without a
 second language-specific control-flow model.
 
-## Implemented in Sprint 19.1-19.6
+## Implemented in Sprint 19.1-19.7
 
 - compact tagged values for null, bool, signed/unsigned integer, float, and
   UTF-8 string values;
@@ -88,6 +88,25 @@ second language-specific control-flow model.
 - bytecode verification for async result types, dense coroutine frames and
   states, resume payloads, suspension operands, cancellation checks, and
   completion values;
+- enum and flagset constants plus `Name`, `Value`, `IsValid`, `Has`, `HasAny`,
+  `With`, `Without`, `Toggle`, and `Clear` intrinsic execution over their
+  pinned underlying bit patterns;
+- type-preserving `any` boxes with checked casts and runtime type tests,
+  including concrete object/interface compatibility through VM cast tables;
+- zero-overhead nullable representation (`null` for absent, the payload value
+  for present) with deterministic checked-unwrapping failures;
+- Option/Result variant tests and payload projections over the canonical
+  nominal field layout, checked Result unwrap, and early Result error
+  propagation across differing success payload types;
+- stateful range, array, and dictionary iterators with typed positive/negative
+  range steps, overflow-safe termination, array index/value projection,
+  component destructuring, dictionary key/value projection, and live
+  `ref`/`view` element places rather than snapshots;
+- executable-bytecode rejection of unresolved const-generic values; generic
+  specialization must turn every `GenericConstant` into a concrete constant
+  before `.wiob` emission;
+- instruction-specific bytecode validation for the enum, any, nullable,
+  variant, iterator, and Result operation families before machine load;
 - deterministic wrapping integer arithmetic without host signed-overflow UB;
 - checked integer division and shifts;
 - instruction, call-depth, and per-frame register budgets;

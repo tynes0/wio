@@ -67,21 +67,27 @@ namespace wio::vm
         constexpr std::uint8_t TypeChar = 16;
         constexpr std::uint8_t TypeString = 17;
         constexpr std::uint8_t TypeText = 18;
+        constexpr std::uint8_t TypeAny = 19;
         constexpr std::uint8_t TypeNamed = 28;
         constexpr std::uint8_t TypeReference = 29;
         constexpr std::uint8_t TypeNullable = 30;
         constexpr std::uint8_t TypeArray = 31;
         constexpr std::uint8_t TypeDictionary = 32;
         constexpr std::uint8_t TypeFunction = 33;
+        constexpr std::uint8_t TypeIterator = 35;
 
         constexpr std::uint8_t NominalComponent = 1;
         constexpr std::uint8_t NominalObject = 2;
         constexpr std::uint8_t NominalInterface = 3;
+        constexpr std::uint8_t NominalEnum = 4;
+        constexpr std::uint8_t NominalFlagset = 5;
 
         constexpr std::uint8_t IntrinsicArray = 1;
         constexpr std::uint8_t IntrinsicDictionary = 2;
         constexpr std::uint8_t IntrinsicString = 3;
         constexpr std::uint8_t IntrinsicText = 4;
+        constexpr std::uint8_t IntrinsicEnum = 5;
+        constexpr std::uint8_t IntrinsicFlagset = 6;
 
         constexpr std::uint8_t CaptureValue = 0;
         constexpr std::uint8_t CaptureReference = 1;
@@ -583,6 +589,52 @@ namespace wio::vm
         if (!initial.succeeded())
             return initial;
 
+        const auto completeFrame = [&](Value returned) -> std::optional<ExecutionResult>
+        {
+            FrameContinuation continuation = std::move(frames.back().continuation);
+            frames.pop_back();
+            if (frames.empty())
+                return ExecutionResult::success(std::move(returned));
+
+            Frame& caller = frames.back();
+            if (continuation.completion == FrameCompletion::ReturnValue &&
+                continuation.callerResult != bytecode::InvalidIndex)
+            {
+                if (continuation.callerResult >= caller.registers.size())
+                    return ExecutionResult::failure(
+                        {"WVM1034", "Call result register is invalid", caller.function->id, caller.block->id});
+                caller.registers[continuation.callerResult] = Register{std::move(returned), true};
+            }
+            else if (continuation.completion == FrameCompletion::ContinueConstruction)
+            {
+                if (continuation.nextFunction >= module.functions.size())
+                    return ExecutionResult::failure({"WVM1074",
+                                                     "Construction continuation references an invalid function",
+                                                     caller.function->id, caller.block->id});
+                ExecutionResult pushed =
+                    pushFrame(module.functions[continuation.nextFunction], continuation.nextArguments,
+                              FrameContinuation{.completion = FrameCompletion::Ignore});
+                if (!pushed.succeeded())
+                    return pushed;
+            }
+            else if (continuation.completion == FrameCompletion::ReleaseRegister)
+            {
+                if (continuation.cleanupRegister >= caller.registers.size())
+                    return ExecutionResult::failure({"WVM1075",
+                                                     "Destructor continuation references an invalid register",
+                                                     caller.function->id, caller.block->id});
+                caller.registers[continuation.cleanupRegister] = {};
+            }
+            else if (continuation.completion == FrameCompletion::ReleasePlace)
+            {
+                if (!continuation.cleanupPlace)
+                    return ExecutionResult::failure({"WVM1076", "Destructor continuation lost its owning place",
+                                                     caller.function->id, caller.block->id});
+                continuation.cleanupPlace->clear();
+            }
+            return std::nullopt;
+        };
+
         std::uint64_t executed = 0;
         while (!frames.empty())
         {
@@ -987,6 +1039,110 @@ namespace wio::vm
                 else
                     result = Value::string(std::move(utf8));
                 write(instruction.result, std::move(result));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::EnumConstant)
+            {
+                const bytecode::Type& enumType = module.types[instruction.targetType];
+                const std::string_view selector = module.string(instruction.selector);
+                const auto enumCase = std::find_if(enumType.enumCases.begin(), enumType.enumCases.end(),
+                                                   [&](const bytecode::Type::EnumCase& candidate)
+                                                   { return module.string(candidate.name) == selector; });
+                if (enumCase == enumType.enumCases.end() || enumType.enumUnderlyingType >= module.types.size())
+                    return fail("WVM1178", "Enum constant does not match its canonical type metadata");
+                const std::uint8_t underlying = module.types[enumType.enumUnderlyingType].kind;
+                Value result = isSignedType(underlying)
+                                   ? Value::signedInteger(signExtend(enumCase->rawValue, integerWidth(underlying)))
+                                   : Value::unsignedInteger(lowBits(enumCase->rawValue, integerWidth(underlying)));
+                if (!write(instruction.result, std::move(result)))
+                    return fail("WVM1009", "Enum constant result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IntrinsicCall &&
+                (instruction.intrinsicFamily == IntrinsicEnum || instruction.intrinsicFamily == IntrinsicFlagset))
+            {
+                const Value* receiver =
+                    instruction.operands.empty() ? nullptr : storedValue(read(instruction.operands[0]));
+                if (!receiver || instruction.targetType >= module.types.size())
+                    return fail("WVM1179", "Enum intrinsic has no available receiver or target type");
+                const bytecode::Type& enumType = module.types[instruction.targetType];
+                if (enumType.kind != TypeNamed ||
+                    (enumType.nominalKind != NominalEnum && enumType.nominalKind != NominalFlagset) ||
+                    enumType.enumUnderlyingType >= module.types.size())
+                    return fail("WVM1179", "Enum intrinsic target metadata is invalid");
+
+                const auto rawValue = [&](const Value& value) -> std::optional<std::uint64_t>
+                {
+                    if (value.kind() == Value::Kind::SignedInteger)
+                        return std::bit_cast<std::uint64_t>(value.asSignedInteger());
+                    if (value.kind() == Value::Kind::UnsignedInteger)
+                        return value.asUnsignedInteger();
+                    return std::nullopt;
+                };
+                const std::optional<std::uint64_t> receiverBits = rawValue(*receiver);
+                if (!receiverBits)
+                    return fail("WVM1179", "Enum intrinsic receiver is not an integer value");
+                const std::uint8_t underlying = module.types[enumType.enumUnderlyingType].kind;
+                const std::uint32_t width = integerWidth(underlying);
+                const std::uint64_t rawReceiver = lowBits(*receiverBits, width);
+                const std::string_view selector = module.string(instruction.selector);
+                Value result;
+                if (selector == "Name")
+                {
+                    const auto enumCase = std::find_if(enumType.enumCases.begin(), enumType.enumCases.end(),
+                                                       [&](const bytecode::Type::EnumCase& candidate)
+                                                       { return lowBits(candidate.rawValue, width) == rawReceiver; });
+                    result = Value::string(enumCase == enumType.enumCases.end()
+                                               ? std::string{}
+                                               : std::string{module.string(enumCase->name)});
+                }
+                else if (selector == "Value")
+                {
+                    result = isSignedType(underlying) ? Value::signedInteger(signExtend(rawReceiver, width))
+                                                      : Value::unsignedInteger(rawReceiver);
+                }
+                else if (selector == "IsValid")
+                {
+                    const bool valid =
+                        std::ranges::any_of(enumType.enumCases, [&](const auto& candidate)
+                                            { return lowBits(candidate.rawValue, width) == rawReceiver; });
+                    result = Value::boolean(valid);
+                }
+                else if (selector == "Clear")
+                    result = isSignedType(underlying) ? Value::signedInteger(0) : Value::unsignedInteger(0);
+                else
+                {
+                    const Value* mask =
+                        instruction.operands.size() == 2 ? storedValue(read(instruction.operands[1])) : nullptr;
+                    const std::optional<std::uint64_t> maskBits = mask ? rawValue(*mask) : std::nullopt;
+                    if (!maskBits)
+                        return fail("WVM1180", "Flagset intrinsic requires an integer mask operand");
+                    const std::uint64_t rawMask = lowBits(*maskBits, width);
+                    if (selector == "Has")
+                        result = Value::boolean((rawReceiver & rawMask) == rawMask);
+                    else if (selector == "HasAny")
+                        result = Value::boolean((rawReceiver & rawMask) != 0);
+                    else
+                    {
+                        std::uint64_t bits = 0;
+                        if (selector == "With")
+                            bits = rawReceiver | rawMask;
+                        else if (selector == "Without")
+                            bits = rawReceiver & ~rawMask;
+                        else if (selector == "Toggle")
+                            bits = rawReceiver ^ rawMask;
+                        else
+                            return fail("WVM1181",
+                                        "Enum or flagset intrinsic is not implemented: " + std::string{selector});
+                        bits = lowBits(bits, width);
+                        result = isSignedType(underlying) ? Value::signedInteger(signExtend(bits, width))
+                                                          : Value::unsignedInteger(bits);
+                    }
+                }
+                if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(result)))
+                    return fail("WVM1009", "Enum intrinsic result register is invalid");
                 ++frame.instruction;
                 continue;
             }
@@ -1443,6 +1599,388 @@ namespace wio::vm
                 ++frame.instruction;
                 continue;
             }
+            if (instruction.opcode == bytecode::Opcode::AnyBox)
+            {
+                const Value* payload =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                if (!payload)
+                    return fail("WVM1182", "Any boxing requires an available payload");
+                if (!write(instruction.result, Value::any(instruction.targetType, payload->cloneOwned())))
+                    return fail("WVM1009", "Any box result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::AnyTypeTest ||
+                instruction.opcode == bytecode::Opcode::AnyCheckedCast)
+            {
+                const Value* boxed =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                const Value* payload = boxed ? boxed->anyPayload() : nullptr;
+                if (!boxed || boxed->kind() != Value::Kind::Any || !payload)
+                    return fail("WVM1183", "Any test or cast requires a live boxed value");
+
+                bool matches = boxed->anyType() == instruction.targetType;
+                const std::uint32_t targetNominal = nominalType(instruction.targetType);
+                if (const Value* object = objectValue(payload); object && targetNominal != bytecode::InvalidIndex)
+                    matches = isObjectType(object->aggregateType(), targetNominal);
+                if (instruction.opcode == bytecode::Opcode::AnyTypeTest)
+                {
+                    if (!write(instruction.result, Value::boolean(matches)))
+                        return fail("WVM1009", "Any type-test result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+                if (!matches)
+                    return fail("WVM1184", "Checked any cast failed for the requested target type");
+
+                Value result = payload->cloneOwned();
+                if (instruction.resultType < module.types.size() &&
+                    module.types[instruction.resultType].kind == TypeReference)
+                {
+                    const Value* object = objectValue(payload);
+                    if (!object)
+                        return fail("WVM1184", "Checked any cast cannot borrow a non-object payload");
+                    result = Value::objectBorrow(object->scalar_.aggregate);
+                }
+                if (!write(instruction.result, std::move(result)))
+                    return fail("WVM1009", "Any checked-cast result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::NullableWrap)
+            {
+                const Value* payload =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                if (!payload)
+                    return fail("WVM1185", "Nullable wrapping requires an available payload");
+                if (!write(instruction.result, payload->cloneOwned()))
+                    return fail("WVM1009", "Nullable wrap result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::NullableUnwrap)
+            {
+                const Value* nullable =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                if (!nullable)
+                    return fail("WVM1186", "Nullable unwrap requires an available value");
+                if (nullable->kind() == Value::Kind::Null)
+                    return fail("WVM1187", "Nullable value does not contain a payload");
+                if (!write(instruction.result, nullable->cloneOwned()))
+                    return fail("WVM1009", "Nullable unwrap result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::VariantTest ||
+                instruction.opcode == bytecode::Opcode::VariantPayload ||
+                instruction.opcode == bytecode::Opcode::ResultIsError ||
+                instruction.opcode == bytecode::Opcode::ResultValue ||
+                instruction.opcode == bytecode::Opcode::ResultUnwrap)
+            {
+                const Value* variant =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                const Value* present = variant ? variant->field(0) : nullptr;
+                if (!variant || !present || present->kind() != Value::Kind::Boolean)
+                    return fail("WVM1188", "Variant operation requires canonical option/result storage");
+                const bool hasValue = present->asBoolean();
+                if (instruction.opcode == bytecode::Opcode::VariantTest)
+                {
+                    const std::string_view selector = module.string(instruction.selector);
+                    const bool positive = selector == "Some" || selector == "Ok";
+                    if (!write(instruction.result, Value::boolean(positive ? hasValue : !hasValue)))
+                        return fail("WVM1009", "Variant-test result register is invalid");
+                }
+                else if (instruction.opcode == bytecode::Opcode::ResultIsError)
+                {
+                    if (!write(instruction.result, Value::boolean(!hasValue)))
+                        return fail("WVM1009", "Result error-test register is invalid");
+                }
+                else
+                {
+                    const bool errorPayload = instruction.opcode == bytecode::Opcode::VariantPayload &&
+                                              module.string(instruction.selector) == "Err";
+                    if (instruction.opcode == bytecode::Opcode::ResultUnwrap && !hasValue)
+                        return fail("WVM1189", "Result does not contain a success value");
+                    const Value* payload = variant->field(errorPayload ? 2 : 1);
+                    if (!payload)
+                        return fail("WVM1190", "Variant payload is outside its canonical field layout");
+                    if (!write(instruction.result, payload->cloneOwned()))
+                        return fail("WVM1009", "Variant payload result register is invalid");
+                }
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IteratorCreate)
+            {
+                const std::string_view selector = module.string(instruction.selector);
+                if (instruction.resultType >= module.types.size() ||
+                    module.types[instruction.resultType].kind != TypeIterator)
+                    return fail("WVM1191", "Iterator creation result type is not an iterator");
+                if (selector == "range.inclusive" || selector == "range.exclusive")
+                {
+                    const Value* start = instruction.operands.size() == 3 ? read(instruction.operands[0]) : nullptr;
+                    const Value* end = instruction.operands.size() == 3 ? read(instruction.operands[1]) : nullptr;
+                    const Value* step = instruction.operands.size() == 3 ? read(instruction.operands[2]) : nullptr;
+                    if (!start || !end || !step || start->kind() != end->kind() || start->kind() != step->kind() ||
+                        (start->kind() != Value::Kind::SignedInteger && start->kind() != Value::Kind::UnsignedInteger))
+                        return fail("WVM1192", "Range iterator requires three compatible integer values");
+                    const bool zero = step->kind() == Value::Kind::SignedInteger ? step->asSignedInteger() == 0
+                                                                                 : step->asUnsignedInteger() == 0;
+                    if (zero)
+                        return fail("WVM1193", "Range iterator step cannot be zero");
+                    if (!write(instruction.result, Value::rangeIterator(instruction.resultType, *start, *end, *step,
+                                                                        selector == "range.inclusive")))
+                        return fail("WVM1009", "Range iterator result register is invalid");
+                }
+                else if (selector == "array" || selector == "dictionary")
+                {
+                    const Value* source = instruction.operands.empty() ? nullptr : read(instruction.operands[0]);
+                    const Value* container = storedValue(source);
+                    if (!source || !container || (selector == "array" && container->kind() != Value::Kind::Array) ||
+                        (selector == "dictionary" && container->kind() != Value::Kind::Dictionary))
+                        return fail("WVM1194", "Container iterator source does not match its selector");
+                    std::size_t step = 1;
+                    if (instruction.operands.size() == 2)
+                    {
+                        const Value* stepValue = read(instruction.operands[1]);
+                        const std::optional<std::size_t> converted = stepValue ? valueIndex(*stepValue) : std::nullopt;
+                        if (!converted || *converted == 0)
+                            return fail("WVM1195", "Container iterator step must be a positive integer");
+                        step = *converted;
+                    }
+                    else if (instruction.operands.size() != 1)
+                        return fail("WVM1194", "Container iterator has an invalid operand shape");
+                    if (!write(instruction.result, Value::containerIterator(instruction.resultType, *source, step)))
+                        return fail("WVM1009", "Container iterator result register is invalid");
+                }
+                else
+                    return fail("WVM1196", "Iterator selector is not implemented: " + std::string{selector});
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IteratorHasNext ||
+                instruction.opcode == bytecode::Opcode::IteratorValue ||
+                instruction.opcode == bytecode::Opcode::IteratorAdvance)
+            {
+                Register* iteratorRegister =
+                    instruction.operands.size() == 1 ? readRegister(instruction.operands.front()) : nullptr;
+                Value* iterator = iteratorRegister ? &iteratorRegister->value : nullptr;
+                if (!iterator || iterator->kind() != Value::Kind::Iterator)
+                    return fail("WVM1197", "Iterator operation requires a live iterator value");
+
+                const auto containerSource = [&]() -> Value*
+                {
+                    Value* source = iterator->mutableIteratorState(0);
+                    if (!source || source->kind() != Value::Kind::Place)
+                        return source;
+                    PlaceStorage* place = source->asPlace();
+                    return place && place->initialized ? &place->storedValue() : nullptr;
+                };
+                const auto rangeHasNext = [&]() -> std::optional<bool>
+                {
+                    if (iterator->iteratorFinished())
+                        return false;
+                    const Value* current = iterator->iteratorState(0);
+                    const Value* end = iterator->iteratorState(1);
+                    const Value* step = iterator->iteratorState(2);
+                    if (!current || !end || !step || current->kind() != end->kind() || current->kind() != step->kind())
+                        return std::nullopt;
+                    if (current->kind() == Value::Kind::SignedInteger)
+                    {
+                        const std::int64_t value = current->asSignedInteger();
+                        const std::int64_t limit = end->asSignedInteger();
+                        return step->asSignedInteger() > 0
+                                   ? (iterator->iteratorInclusive() ? value <= limit : value < limit)
+                                   : (iterator->iteratorInclusive() ? value >= limit : value > limit);
+                    }
+                    if (current->kind() == Value::Kind::UnsignedInteger)
+                    {
+                        const std::uint64_t value = current->asUnsignedInteger();
+                        const std::uint64_t limit = end->asUnsignedInteger();
+                        return iterator->iteratorInclusive() ? value <= limit : value < limit;
+                    }
+                    return std::nullopt;
+                };
+                const auto containerCount = [&]() -> std::optional<std::size_t>
+                {
+                    const Value* source = containerSource();
+                    if (!source)
+                        return std::nullopt;
+                    if (source->kind() == Value::Kind::Array)
+                        return source->elementCount();
+                    if (source->kind() == Value::Kind::Dictionary)
+                        return source->dictionaryCount();
+                    return std::nullopt;
+                };
+
+                if (instruction.opcode == bytecode::Opcode::IteratorHasNext)
+                {
+                    std::optional<bool> hasNext;
+                    if (iterator->iteratorIsRange())
+                        hasNext = rangeHasNext();
+                    else if (const std::optional<std::size_t> count = containerCount())
+                        hasNext = !iterator->iteratorFinished() && iterator->iteratorPosition() < *count;
+                    if (!hasNext)
+                        return fail("WVM1198", "Iterator state is incompatible with its source");
+                    if (!write(instruction.result, Value::boolean(*hasNext)))
+                        return fail("WVM1009", "Iterator has-next result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+
+                if (instruction.opcode == bytecode::Opcode::IteratorValue)
+                {
+                    Value* selected = nullptr;
+                    bool mutableSelection = false;
+                    if (iterator->iteratorIsRange())
+                    {
+                        const std::optional<bool> hasNext = rangeHasNext();
+                        if (!hasNext || !*hasNext)
+                            return fail("WVM1199", "Range iterator has no current value");
+                        selected = iterator->mutableIteratorState(0);
+                    }
+                    else
+                    {
+                        Value* source = containerSource();
+                        const std::optional<std::size_t> count = containerCount();
+                        const std::size_t position = iterator->iteratorPosition();
+                        if (!source || !count || position >= *count)
+                            return fail("WVM1199", "Container iterator has no current value");
+                        const std::string_view selector = module.string(instruction.selector);
+                        if (selector == "__index__")
+                        {
+                            if (!write(instruction.result, Value::unsignedInteger(position)))
+                                return fail("WVM1009", "Iterator index result register is invalid");
+                            ++frame.instruction;
+                            continue;
+                        }
+                        if (source->kind() == Value::Kind::Array)
+                        {
+                            selected = source->mutableElement(position);
+                            mutableSelection = true;
+                            if (selector != "__value__")
+                            {
+                                const bytecode::Type& iteratorType = module.types[iterator->aggregateType()];
+                                const bytecode::Type* arrayType =
+                                    !iteratorType.arguments.empty() &&
+                                            iteratorType.arguments.front() < module.types.size()
+                                        ? &module.types[iteratorType.arguments.front()]
+                                        : nullptr;
+                                const bytecode::Type* itemType =
+                                    arrayType && !arrayType->arguments.empty() &&
+                                            arrayType->arguments.front() < module.types.size()
+                                        ? &module.types[arrayType->arguments.front()]
+                                        : nullptr;
+                                if (!itemType || !selected)
+                                    return fail("WVM1200", "Array iterator field projection is invalid");
+                                const auto field = std::find_if(itemType->fields.begin(), itemType->fields.end(),
+                                                                [&](const bytecode::Type::Field& candidate)
+                                                                { return module.string(candidate.name) == selector; });
+                                if (field == itemType->fields.end())
+                                    return fail("WVM1200", "Array iterator field projection is invalid");
+                                const std::size_t fieldIndex =
+                                    static_cast<std::size_t>(std::distance(itemType->fields.begin(), field));
+                                selected = selected->mutableField(fieldIndex);
+                            }
+                        }
+                        else
+                        {
+                            if (selector == "first")
+                            {
+                                selected = const_cast<Value*>(source->dictionaryKey(position));
+                                mutableSelection = false;
+                            }
+                            else if (selector == "second")
+                            {
+                                selected = const_cast<Value*>(source->dictionaryValue(position));
+                                mutableSelection = true;
+                            }
+                            else
+                                return fail("WVM1201", "Dictionary iterator projection is invalid");
+                        }
+                    }
+                    if (!selected)
+                        return fail("WVM1199", "Iterator current value is unavailable");
+
+                    if (instruction.resultType < module.types.size() &&
+                        module.types[instruction.resultType].kind == TypeReference)
+                    {
+                        auto place = std::make_unique<PlaceStorage>();
+                        place->alias = selected;
+                        if (Value* source = containerSource())
+                            place->owner = *source;
+                        place->initialized = true;
+                        place->mutableValue =
+                            mutableSelection && (module.types[instruction.resultType].flags & 0x01u) != 0;
+                        PlaceStorage* pointer = place.get();
+                        frame.localPlaces.push_back(std::move(place));
+                        if (!write(instruction.result, Value::place(pointer)))
+                            return fail("WVM1009", "Iterator reference result register is invalid");
+                    }
+                    else if (!write(instruction.result, selected->cloneOwned()))
+                        return fail("WVM1009", "Iterator value result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+
+                if (iterator->iteratorIsRange())
+                {
+                    Value* current = iterator->mutableIteratorState(0);
+                    const Value* step = iterator->iteratorState(2);
+                    const bytecode::Type& iteratorType = module.types[iterator->aggregateType()];
+                    const std::uint32_t sourceType =
+                        iteratorType.arguments.empty() ? bytecode::InvalidIndex : iteratorType.arguments.front();
+                    const std::uint8_t sourceKind =
+                        sourceType < module.types.size() ? module.types[sourceType].kind : TypeVoid;
+                    const std::uint32_t width = integerWidth(sourceKind);
+                    if (!current || !step)
+                        return fail("WVM1198", "Range iterator state is incomplete");
+                    if (current->kind() == Value::Kind::SignedInteger && step->kind() == Value::Kind::SignedInteger)
+                    {
+                        const std::int64_t value = current->asSignedInteger();
+                        const std::int64_t amount = step->asSignedInteger();
+                        const std::int64_t maximum = width == 64 ? (std::numeric_limits<std::int64_t>::max)()
+                                                                 : (std::int64_t{1} << (width - 1)) - 1;
+                        const std::int64_t minimum = width == 64 ? (std::numeric_limits<std::int64_t>::min)()
+                                                                 : -(std::int64_t{1} << (width - 1));
+                        if ((amount > 0 && value > maximum - amount) || (amount < 0 && value < minimum - amount))
+                            iterator->finishIterator();
+                        else
+                            *current = Value::signedInteger(value + amount);
+                    }
+                    else if (current->kind() == Value::Kind::UnsignedInteger &&
+                             step->kind() == Value::Kind::UnsignedInteger)
+                    {
+                        const std::uint64_t value = current->asUnsignedInteger();
+                        const std::uint64_t amount = step->asUnsignedInteger();
+                        const std::uint64_t maximum =
+                            width == 64 ? (std::numeric_limits<std::uint64_t>::max)() : (std::uint64_t{1} << width) - 1;
+                        if (value > maximum - amount)
+                            iterator->finishIterator();
+                        else
+                            *current = Value::unsignedInteger(value + amount);
+                    }
+                    else
+                        return fail("WVM1198", "Range iterator state is not integer-compatible");
+                }
+                else
+                {
+                    const std::optional<std::size_t> count = containerCount();
+                    if (!count)
+                        return fail("WVM1198", "Container iterator source is unavailable");
+                    if (iterator->iteratorStep() >
+                        (std::numeric_limits<std::size_t>::max)() - iterator->iteratorPosition())
+                        iterator->finishIterator();
+                    else
+                    {
+                        iterator->advanceIteratorPosition();
+                        if (iterator->iteratorPosition() >= *count)
+                            iterator->finishIterator();
+                    }
+                }
+                ++frame.instruction;
+                continue;
+            }
             if (instruction.opcode == bytecode::Opcode::RangeContains)
             {
                 if (instruction.operands.size() != 3)
@@ -1763,7 +2301,8 @@ namespace wio::vm
                     ++frame.instruction;
                     continue;
                 }
-                if (released->kind() == Value::Kind::Callable || released->kind() == Value::Kind::AsyncTask)
+                if (released->kind() == Value::Kind::Callable || released->kind() == Value::Kind::AsyncTask ||
+                    released->kind() == Value::Kind::Any || released->kind() == Value::Kind::Iterator)
                 {
                     if (cleanupRegister)
                     {
@@ -1989,6 +2528,8 @@ namespace wio::vm
                 ++frame.instruction;
                 continue;
             }
+            if (instruction.opcode == bytecode::Opcode::NativeInvoke)
+                return fail("WVM1203", "Native invocation requires the Sprint 20 VM bridge");
             if (instruction.opcode == bytecode::Opcode::Call || instruction.opcode == bytecode::Opcode::ExtensionCall ||
                 instruction.opcode == bytecode::Opcode::MethodCall)
             {
@@ -2113,6 +2654,31 @@ namespace wio::vm
                 ++frame.instruction;
                 continue;
             }
+            if (instruction.opcode == bytecode::Opcode::ResultPropagate)
+            {
+                const Value* source =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                const Value* present = source ? source->field(0) : nullptr;
+                const Value* error = source ? source->field(2) : nullptr;
+                if (!source || !present || present->kind() != Value::Kind::Boolean || present->asBoolean() || !error ||
+                    instruction.targetType >= module.types.size())
+                    return fail("WVM1202", "Result propagation requires a canonical error payload and target type");
+                const bytecode::Type& target = module.types[instruction.targetType];
+                const bool object = target.nominalKind == NominalObject;
+                if (target.kind != TypeNamed || (!object && target.nominalKind != NominalComponent) ||
+                    target.fields.size() < 3)
+                    return fail("WVM1202", "Result propagation target has no canonical result layout");
+                Value propagated = constructAggregate(module, instruction.targetType, object);
+                Value* targetPresent = propagated.mutableField(0);
+                Value* targetError = propagated.mutableField(2);
+                if (!targetPresent || !targetError)
+                    return fail("WVM1202", "Result propagation target fields are unavailable");
+                *targetPresent = Value::boolean(false);
+                *targetError = error->cloneOwned();
+                if (std::optional<ExecutionResult> completion = completeFrame(std::move(propagated)))
+                    return std::move(*completion);
+                continue;
+            }
             if (instruction.opcode == bytecode::Opcode::Jump || instruction.opcode == bytecode::Opcode::CondJump)
             {
                 std::size_t targetIndex = 0;
@@ -2155,47 +2721,8 @@ namespace wio::vm
                         return fail("WVM1033", "Return reads an unavailable value");
                     returned = *value;
                 }
-                FrameContinuation continuation = std::move(frame.continuation);
-                frames.pop_back();
-                if (frames.empty())
-                    return ExecutionResult::success(std::move(returned));
-
-                Frame& caller = frames.back();
-                if (continuation.completion == FrameCompletion::ReturnValue &&
-                    continuation.callerResult != bytecode::InvalidIndex)
-                {
-                    if (continuation.callerResult >= caller.registers.size())
-                        return ExecutionResult::failure(
-                            {"WVM1034", "Call result register is invalid", caller.function->id, caller.block->id});
-                    caller.registers[continuation.callerResult] = Register{std::move(returned), true};
-                }
-                else if (continuation.completion == FrameCompletion::ContinueConstruction)
-                {
-                    if (continuation.nextFunction >= module.functions.size())
-                        return ExecutionResult::failure({"WVM1074",
-                                                         "Construction continuation references an invalid function",
-                                                         caller.function->id, caller.block->id});
-                    ExecutionResult pushed =
-                        pushFrame(module.functions[continuation.nextFunction], continuation.nextArguments,
-                                  FrameContinuation{.completion = FrameCompletion::Ignore});
-                    if (!pushed.succeeded())
-                        return pushed;
-                }
-                else if (continuation.completion == FrameCompletion::ReleaseRegister)
-                {
-                    if (continuation.cleanupRegister >= caller.registers.size())
-                        return ExecutionResult::failure({"WVM1075",
-                                                         "Destructor continuation references an invalid register",
-                                                         caller.function->id, caller.block->id});
-                    caller.registers[continuation.cleanupRegister] = {};
-                }
-                else if (continuation.completion == FrameCompletion::ReleasePlace)
-                {
-                    if (!continuation.cleanupPlace)
-                        return ExecutionResult::failure({"WVM1076", "Destructor continuation lost its owning place",
-                                                         caller.function->id, caller.block->id});
-                    continuation.cleanupPlace->clear();
-                }
+                if (std::optional<ExecutionResult> completion = completeFrame(std::move(returned)))
+                    return std::move(*completion);
                 continue;
             }
             if (instruction.opcode == bytecode::Opcode::Unreachable)

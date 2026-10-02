@@ -42,6 +42,8 @@ namespace wio::vm
             ObjectBorrow,
             Callable,
             AsyncTask,
+            Any,
+            Iterator,
             Place
         };
 
@@ -65,6 +67,7 @@ namespace wio::vm
         [[nodiscard]] static Value object(std::uint32_t type, std::vector<Value> fields);
         [[nodiscard]] static Value callable(std::uint32_t function, std::vector<Value> captures);
         [[nodiscard]] static Value asyncTask(std::uint32_t function, std::vector<Value> arguments);
+        [[nodiscard]] static Value any(std::uint32_t type, Value payload);
         [[nodiscard]] std::uint32_t aggregateType() const noexcept;
         [[nodiscard]] std::uint32_t strongReferenceCount() const noexcept;
         [[nodiscard]] std::uint32_t callableFunction() const noexcept;
@@ -170,7 +173,21 @@ namespace wio::vm
         explicit Value(Kind kind) noexcept;
         [[nodiscard]] static Value place(PlaceStorage* storage) noexcept;
         [[nodiscard]] static Value objectBorrow(AggregateStorage* storage) noexcept;
+        [[nodiscard]] static Value rangeIterator(std::uint32_t type, Value start, Value end, Value step,
+                                                 bool inclusive);
+        [[nodiscard]] static Value containerIterator(std::uint32_t type, Value source, std::size_t step);
         [[nodiscard]] PlaceStorage* asPlace() const noexcept;
+        [[nodiscard]] std::uint32_t anyType() const noexcept;
+        [[nodiscard]] const Value* anyPayload() const noexcept;
+        [[nodiscard]] bool iteratorIsRange() const noexcept;
+        [[nodiscard]] bool iteratorInclusive() const noexcept;
+        [[nodiscard]] bool iteratorFinished() const noexcept;
+        void finishIterator() noexcept;
+        [[nodiscard]] std::size_t iteratorPosition() const noexcept;
+        [[nodiscard]] std::size_t iteratorStep() const noexcept;
+        void advanceIteratorPosition() noexcept;
+        [[nodiscard]] const Value* iteratorState(std::size_t index) const noexcept;
+        [[nodiscard]] Value* mutableIteratorState(std::size_t index) noexcept;
         [[nodiscard]] Value* mutableElement(std::size_t index) noexcept;
         [[nodiscard]] Value* mutableDictionaryValue(const Value& key) noexcept;
         [[nodiscard]] Value* mutableField(std::size_t index) noexcept;

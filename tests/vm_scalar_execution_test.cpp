@@ -165,10 +165,10 @@ namespace
         unsupported.returnType = I32;
         bytecode::Block unsupportedEntry;
         unsupportedEntry.id = 0;
-        bytecode::Instruction dictionary = instruction(bytecode::Opcode::DictionaryCreate);
-        dictionary.result = 0;
-        dictionary.resultType = I32;
-        unsupportedEntry.instructions = {std::move(dictionary), returnValue(0)};
+        bytecode::Instruction nativeCall = instruction(bytecode::Opcode::NativeInvoke);
+        nativeCall.result = 0;
+        nativeCall.resultType = I32;
+        unsupportedEntry.instructions = {std::move(nativeCall), returnValue(0)};
         unsupported.blocks.push_back(std::move(unsupportedEntry));
         module.functions.push_back(std::move(unsupported));
 
@@ -285,8 +285,8 @@ int main()
                  "Integer division by zero must return a stable VM diagnostic");
 
     const vm::ExecutionResult unsupported = machine.invoke(4);
-    ok &= expect(!unsupported.succeeded() && unsupported.error().code == "WVM1036",
-                 "Unsupported opcodes must fail explicitly instead of silently misexecuting");
+    ok &= expect(!unsupported.succeeded() && unsupported.error().code == "WVM1203",
+                 "Native bridge opcodes must fail explicitly instead of silently misexecuting");
 
     vm::Machine bounded{decoded.module, vm::MachineOptions{.instructionLimit = 8}};
     const vm::ExecutionResult endless = bounded.invoke(5);

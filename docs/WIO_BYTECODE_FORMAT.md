@@ -70,10 +70,12 @@ by the VM loader without changing the file ABI.
    every variable-length record before accepting the module.
 3. The bytecode verifier checks indices, tables, function-local CFG targets,
    SSA definition/use identity, terminator placement, branch argument arity and
-   types, body/external consistency, and known instructions without executing
-   code.
-4. The future VM verifier will add instruction-specific type and stack/frame
-   invariants before a module becomes executable.
+   types, body/external consistency, known instructions, callable and coroutine
+   layouts, object dispatch/cast contracts, and the executable value-model
+   invariants for enum, any, nullable, variant, iterator, and Result operations.
+4. The VM refuses to load a module that fails this verification. Runtime-only
+   state invariants (for example, a checked unwrap receiving an absent value)
+   fail with stable `WVM` diagnostics at the executing instruction.
 
 ## Determinism
 
@@ -84,7 +86,8 @@ produce byte-for-byte identical output.
 
 ## Pending before v1 freeze
 
-- execution-specific type invariants beyond the current SSA/CFG verifier;
+- execution-specific invariants for the remaining scheduler, unwind, debugger,
+  and native-bridge instruction families;
 - debug/source-map compression beyond the source spans already carried by
   wide instructions;
 - seeded malformed-input corpora for every record family (the bounded loader

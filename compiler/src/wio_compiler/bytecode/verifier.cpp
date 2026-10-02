@@ -35,6 +35,13 @@ namespace wio::bytecode
                    opcode == Opcode::ExtensionCall || opcode == Opcode::MethodCall || opcode == Opcode::VirtualCall ||
                    opcode == Opcode::InterfaceCall || opcode == Opcode::IntrinsicCall;
         };
+        const auto integerType = [&](const std::uint32_t id)
+        {
+            if (id >= module.types.size())
+                return false;
+            const std::uint8_t kind = module.types[id].kind;
+            return (kind >= 3 && kind <= 12) || kind == 15 || kind == 16;
+        };
 
         if (!validString(module.name) || !validString(module.logicalName) || !validString(module.stableKey))
             report("WBC1001", "Module manifest references an invalid string id");
@@ -329,7 +336,191 @@ namespace wio::bytecode
                         const auto found = valueTypes.find(value);
                         return found == valueTypes.end() ? InvalidIndex : found->second;
                     };
-                    if (instruction.opcode == Opcode::FunctionReference)
+                    if (instruction.opcode == Opcode::GenericConstant)
+                    {
+                        report("WBC1063", "Executable bytecode cannot contain an unresolved generic constant",
+                               function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::EnumConstant)
+                    {
+                        const Type* target = instruction.targetType < module.types.size()
+                                                 ? &module.types[instruction.targetType]
+                                                 : nullptr;
+                        const std::string_view selector = module.string(instruction.selector);
+                        const bool knownCase =
+                            target && std::any_of(target->enumCases.begin(), target->enumCases.end(),
+                                                  [&](const Type::EnumCase& candidate)
+                                                  { return module.string(candidate.name) == selector; });
+                        if (!target || target->kind != 28 || (target->nominalKind != 4 && target->nominalKind != 5) ||
+                            instruction.resultType != instruction.targetType || !instruction.operands.empty() ||
+                            !knownCase)
+                            report("WBC1064", "Enum constant does not match a declared enum/flagset case", function.id,
+                                   block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::AnyBox)
+                    {
+                        const bool valid =
+                            instruction.operands.size() == 1 && instruction.resultType < module.types.size() &&
+                            module.types[instruction.resultType].kind == 19 &&
+                            instruction.targetType == valueType(instruction.operands.front()) &&
+                            instruction.signatureTypes == std::vector<std::uint32_t>{instruction.targetType};
+                        if (!valid)
+                            report("WBC1065", "Any box does not preserve its concrete source type", function.id,
+                                   block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::AnyCheckedCast || instruction.opcode == Opcode::AnyTypeTest)
+                    {
+                        const std::uint32_t source =
+                            instruction.operands.size() == 1 ? valueType(instruction.operands.front()) : InvalidIndex;
+                        const bool validResult = instruction.opcode == Opcode::AnyTypeTest
+                                                     ? instruction.resultType < module.types.size() &&
+                                                           module.types[instruction.resultType].kind == 2
+                                                     : instruction.resultType == instruction.targetType;
+                        if (source >= module.types.size() || module.types[source].kind != 19 ||
+                            instruction.targetType >= module.types.size() || !validResult)
+                            report("WBC1066", "Any test/cast has invalid source, target, or result metadata",
+                                   function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::NullableWrap)
+                    {
+                        const Type* resultType = instruction.resultType < module.types.size()
+                                                     ? &module.types[instruction.resultType]
+                                                     : nullptr;
+                        const bool valid = instruction.operands.size() == 1 && resultType && resultType->kind == 30 &&
+                                           resultType->arguments.size() == 1 &&
+                                           resultType->arguments.front() == valueType(instruction.operands.front()) &&
+                                           instruction.targetType == instruction.resultType;
+                        if (!valid)
+                            report("WBC1067", "Nullable wrap does not match its payload type", function.id, block.id,
+                                   instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::NullableUnwrap)
+                    {
+                        const std::uint32_t source =
+                            instruction.operands.size() == 1 ? valueType(instruction.operands.front()) : InvalidIndex;
+                        const Type* nullable = source < module.types.size() ? &module.types[source] : nullptr;
+                        if (!nullable || nullable->kind != 30 || nullable->arguments.size() != 1 ||
+                            nullable->arguments.front() != instruction.resultType ||
+                            instruction.targetType != instruction.resultType)
+                            report("WBC1068", "Nullable unwrap does not match its payload result type", function.id,
+                                   block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::VariantTest || instruction.opcode == Opcode::VariantPayload)
+                    {
+                        const std::uint32_t source =
+                            instruction.operands.size() == 1 ? valueType(instruction.operands.front()) : InvalidIndex;
+                        const Type* variant = source < module.types.size() ? &module.types[source] : nullptr;
+                        const std::string_view selector = module.string(instruction.selector);
+                        const bool optionSelector = selector == "Some" || selector == "None";
+                        const bool resultSelector = selector == "Ok" || selector == "Err";
+                        bool valid = variant && variant->kind == 28 && variant->fields.size() >= 2 &&
+                                     ((variant->nominalValueModel == 3 && optionSelector) ||
+                                      (variant->nominalValueModel == 4 && resultSelector));
+                        if (valid && instruction.opcode == Opcode::VariantTest)
+                            valid = instruction.resultType < module.types.size() &&
+                                    module.types[instruction.resultType].kind == 2;
+                        else if (valid)
+                        {
+                            const std::size_t field = selector == "Err" ? 2 : 1;
+                            valid =
+                                field < variant->fields.size() && instruction.resultType == variant->fields[field].type;
+                        }
+                        if (!valid)
+                            report("WBC1069", "Variant operation does not match its option/result layout", function.id,
+                                   block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::IteratorCreate)
+                    {
+                        const Type* iterator = instruction.resultType < module.types.size()
+                                                   ? &module.types[instruction.resultType]
+                                                   : nullptr;
+                        const std::string_view selector = module.string(instruction.selector);
+                        const bool range = selector == "range.inclusive" || selector == "range.exclusive";
+                        const bool container = selector == "array" || selector == "dictionary";
+                        bool valid = iterator && iterator->kind == 35 && iterator->arguments.size() == 1 &&
+                                     (range || container) &&
+                                     instruction.signatureTypes.size() == instruction.operands.size();
+                        for (std::size_t operand = 0; valid && operand < instruction.operands.size(); ++operand)
+                            valid = valueType(instruction.operands[operand]) == instruction.signatureTypes[operand];
+                        if (valid && range)
+                            valid = instruction.operands.size() == 3 && integerType(iterator->arguments.front()) &&
+                                    std::all_of(instruction.operands.begin(), instruction.operands.end(),
+                                                [&](const std::uint32_t value)
+                                                { return valueType(value) == iterator->arguments.front(); });
+                        if (valid && container)
+                        {
+                            const std::uint32_t source =
+                                instruction.operands.empty() ? InvalidIndex : valueType(instruction.operands.front());
+                            const std::uint32_t directSource = source < module.types.size() &&
+                                                                       module.types[source].kind == 29 &&
+                                                                       module.types[source].arguments.size() == 1
+                                                                   ? module.types[source].arguments.front()
+                                                                   : source;
+                            const std::uint8_t expected = selector == "array" ? 31 : 32;
+                            const bool validShape = selector == "array" ? instruction.operands.size() == 1 ||
+                                                                              instruction.operands.size() == 2
+                                                                        : instruction.operands.size() == 1;
+                            valid = validShape && directSource < module.types.size() &&
+                                    module.types[directSource].kind == expected &&
+                                    directSource == iterator->arguments.front();
+                            if (valid && instruction.operands.size() == 2)
+                                valid = integerType(valueType(instruction.operands[1]));
+                        }
+                        if (!valid)
+                            report("WBC1070", "Iterator creation has invalid source or signature metadata", function.id,
+                                   block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::IteratorHasNext ||
+                             instruction.opcode == Opcode::IteratorValue ||
+                             instruction.opcode == Opcode::IteratorAdvance)
+                    {
+                        const std::uint32_t source =
+                            instruction.operands.size() == 1 ? valueType(instruction.operands.front()) : InvalidIndex;
+                        const Type* iterator = source < module.types.size() ? &module.types[source] : nullptr;
+                        bool valid = iterator && iterator->kind == 35;
+                        if (instruction.opcode == Opcode::IteratorHasNext)
+                            valid = valid && instruction.resultType < module.types.size() &&
+                                    module.types[instruction.resultType].kind == 2;
+                        else if (instruction.opcode == Opcode::IteratorAdvance)
+                            valid = valid && instruction.result == InvalidIndex;
+                        else
+                            valid = valid && instruction.result != InvalidIndex &&
+                                    instruction.selector != InvalidIndex &&
+                                    !module.string(instruction.selector).empty();
+                        if (!valid)
+                            report("WBC1071", "Iterator operation has invalid cursor or result metadata", function.id,
+                                   block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::ResultIsError || instruction.opcode == Opcode::ResultValue ||
+                             instruction.opcode == Opcode::ResultUnwrap ||
+                             instruction.opcode == Opcode::ResultPropagate)
+                    {
+                        const std::uint32_t source =
+                            instruction.operands.size() == 1 ? valueType(instruction.operands.front()) : InvalidIndex;
+                        const Type* resultType = source < module.types.size() ? &module.types[source] : nullptr;
+                        bool valid = resultType && resultType->kind == 28 && resultType->nominalValueModel == 4 &&
+                                     !resultType->arguments.empty() && resultType->fields.size() >= 3;
+                        if (valid && instruction.opcode == Opcode::ResultIsError)
+                            valid = instruction.resultType < module.types.size() &&
+                                    module.types[instruction.resultType].kind == 2;
+                        else if (valid && (instruction.opcode == Opcode::ResultValue ||
+                                           instruction.opcode == Opcode::ResultUnwrap))
+                            valid = instruction.resultType == resultType->arguments.front();
+                        else if (valid)
+                        {
+                            const std::uint32_t functionResult =
+                                function.hasCoroutine ? function.coroutine.resultType : function.returnType;
+                            const Type* target = instruction.targetType < module.types.size()
+                                                     ? &module.types[instruction.targetType]
+                                                     : nullptr;
+                            valid = instruction.result == InvalidIndex && instruction.targetType == functionResult &&
+                                    target && target->kind == 28 && target->nominalValueModel == 4;
+                        }
+                        if (!valid)
+                            report("WBC1072", "Result operation does not match its canonical result layout",
+                                   function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::FunctionReference)
                     {
                         const bool validCallee =
                             instruction.callee != InvalidIndex && validFunction(instruction.callee);

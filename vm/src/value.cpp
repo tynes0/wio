@@ -59,6 +59,36 @@ namespace wio::vm
             return ordered_;
         }
 
+        [[nodiscard]] std::size_t cursor() const noexcept
+        {
+            return cursor_;
+        }
+
+        [[nodiscard]] std::size_t step() const noexcept
+        {
+            return step_;
+        }
+
+        void advanceCursor() noexcept
+        {
+            cursor_ += step_;
+        }
+
+        [[nodiscard]] bool finished() const noexcept
+        {
+            return finished_;
+        }
+
+        void finish() noexcept
+        {
+            finished_ = true;
+        }
+
+        void configureIterator(const std::size_t step) noexcept
+        {
+            step_ = step;
+        }
+
         [[nodiscard]] AsyncTaskState taskState() const noexcept
         {
             return taskState_.load(std::memory_order_acquire);
@@ -115,6 +145,9 @@ namespace wio::vm
         std::uint32_t type_ = 0;
         std::vector<Value> values_;
         bool ordered_ = false;
+        std::size_t cursor_ = 0;
+        std::size_t step_ = 1;
+        bool finished_ = false;
         std::atomic<AsyncTaskState> taskState_{AsyncTaskState::Pending};
         Value taskResult_;
         std::string taskErrorCode_;
@@ -321,6 +354,37 @@ namespace wio::vm
         return result;
     }
 
+    Value Value::any(const std::uint32_t type, Value payload)
+    {
+        Value result{Kind::Any};
+        std::vector<Value> values;
+        values.push_back(std::move(payload));
+        result.scalar_.aggregate = new AggregateStorage{Kind::Any, type, std::move(values)};
+        return result;
+    }
+
+    Value Value::rangeIterator(const std::uint32_t type, Value start, Value end, Value step, const bool inclusive)
+    {
+        Value result{Kind::Iterator};
+        std::vector<Value> state;
+        state.reserve(3);
+        state.push_back(std::move(start));
+        state.push_back(std::move(end));
+        state.push_back(std::move(step));
+        result.scalar_.aggregate = new AggregateStorage{Kind::Iterator, type, std::move(state), inclusive};
+        return result;
+    }
+
+    Value Value::containerIterator(const std::uint32_t type, Value source, const std::size_t step)
+    {
+        Value result{Kind::Iterator};
+        std::vector<Value> state;
+        state.push_back(std::move(source));
+        result.scalar_.aggregate = new AggregateStorage{Kind::Iterator, type, std::move(state)};
+        result.scalar_.aggregate->configureIterator(step);
+        return result;
+    }
+
     Value Value::objectBorrow(AggregateStorage* const storage) noexcept
     {
         Value result{Kind::ObjectBorrow};
@@ -331,9 +395,71 @@ namespace wio::vm
     std::uint32_t Value::aggregateType() const noexcept
     {
         return kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component || kind_ == Kind::Object ||
-                       kind_ == Kind::ObjectBorrow
+                       kind_ == Kind::ObjectBorrow || kind_ == Kind::Any || kind_ == Kind::Iterator
                    ? scalar_.aggregate->type()
                    : 0;
+    }
+
+    std::uint32_t Value::anyType() const noexcept
+    {
+        return kind_ == Kind::Any ? scalar_.aggregate->type() : 0;
+    }
+
+    const Value* Value::anyPayload() const noexcept
+    {
+        return kind_ == Kind::Any && !scalar_.aggregate->values().empty() ? &scalar_.aggregate->values().front()
+                                                                          : nullptr;
+    }
+
+    bool Value::iteratorIsRange() const noexcept
+    {
+        return kind_ == Kind::Iterator && scalar_.aggregate->values().size() == 3;
+    }
+
+    bool Value::iteratorInclusive() const noexcept
+    {
+        return kind_ == Kind::Iterator && scalar_.aggregate->ordered();
+    }
+
+    bool Value::iteratorFinished() const noexcept
+    {
+        return kind_ != Kind::Iterator || scalar_.aggregate->finished();
+    }
+
+    void Value::finishIterator() noexcept
+    {
+        if (kind_ == Kind::Iterator)
+            scalar_.aggregate->finish();
+    }
+
+    std::size_t Value::iteratorPosition() const noexcept
+    {
+        return kind_ == Kind::Iterator ? scalar_.aggregate->cursor() : 0;
+    }
+
+    std::size_t Value::iteratorStep() const noexcept
+    {
+        return kind_ == Kind::Iterator ? scalar_.aggregate->step() : 0;
+    }
+
+    void Value::advanceIteratorPosition() noexcept
+    {
+        if (kind_ == Kind::Iterator)
+            scalar_.aggregate->advanceCursor();
+    }
+
+    const Value* Value::iteratorState(const std::size_t index) const noexcept
+    {
+        if (kind_ != Kind::Iterator || index >= scalar_.aggregate->values().size())
+            return nullptr;
+        return &scalar_.aggregate->values()[index];
+    }
+
+    Value* Value::mutableIteratorState(const std::size_t index) noexcept
+    {
+        if (kind_ != Kind::Iterator || index >= scalar_.aggregate->values().size())
+            return nullptr;
+        return &scalar_.aggregate->values()[index];
     }
 
     std::uint32_t Value::strongReferenceCount() const noexcept
@@ -829,6 +955,8 @@ namespace wio::vm
         case Kind::ObjectBorrow:
         case Kind::Callable:
         case Kind::AsyncTask:
+        case Kind::Any:
+        case Kind::Iterator:
             return scalar_.aggregate == other.scalar_.aggregate;
         case Kind::Place:
             return scalar_.place == other.scalar_.place;
@@ -866,7 +994,8 @@ namespace wio::vm
         else if (kind_ == Kind::Text)
             std::destroy_at(&text_.text);
         else if (kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component ||
-                 kind_ == Kind::Object || kind_ == Kind::Callable || kind_ == Kind::AsyncTask)
+                 kind_ == Kind::Object || kind_ == Kind::Callable || kind_ == Kind::AsyncTask || kind_ == Kind::Any ||
+                 kind_ == Kind::Iterator)
             scalar_.aggregate->release();
         kind_ = Kind::Empty;
         scalar_.unsignedInteger = 0;
@@ -880,7 +1009,8 @@ namespace wio::vm
         else if (kind_ == Kind::Text)
             std::construct_at(&text_.text, other.text_.text);
         else if (kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component ||
-                 kind_ == Kind::Object || kind_ == Kind::Callable || kind_ == Kind::AsyncTask)
+                 kind_ == Kind::Object || kind_ == Kind::Callable || kind_ == Kind::AsyncTask || kind_ == Kind::Any ||
+                 kind_ == Kind::Iterator)
         {
             scalar_.aggregate = other.scalar_.aggregate;
             scalar_.aggregate->retain();
