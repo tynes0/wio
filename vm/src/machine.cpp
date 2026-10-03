@@ -612,7 +612,7 @@ namespace wio::vm
 
     bool Machine::fail(const Value& task, std::string code, std::string message)
     {
-        if (!task.failTask(std::move(code), std::move(message)))
+        if (!task.failTask({std::move(code), std::move(message)}))
             return false;
         if (program_)
         {
@@ -628,7 +628,7 @@ namespace wio::vm
         Value task = Value::externalTask();
         if (!program_ || !program_->valid)
         {
-            task.failTask("WVM1000", "Timer scheduling requires a loaded VM program");
+            (void)task.failTask({"WVM1000", "Timer scheduling requires a loaded VM program"});
             return task;
         }
         if (duration <= std::chrono::nanoseconds::zero())
@@ -678,7 +678,7 @@ namespace wio::vm
         if (task.taskState() == AsyncTaskState::Cancelled)
             return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
         if (task.taskState() == AsyncTaskState::Faulted)
-            return ExecutionResult::failure({std::string{task.taskErrorCode()}, std::string{task.taskErrorMessage()}});
+            return ExecutionResult::failure(task.taskError());
         if (task.taskFunction() == bytecode::InvalidIndex)
         {
             task.waitTask();
@@ -686,7 +686,7 @@ namespace wio::vm
                 return ExecutionResult::success(task.taskResult());
             if (task.taskState() == AsyncTaskState::Cancelled)
                 return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
-            return ExecutionResult::failure({std::string{task.taskErrorCode()}, std::string{task.taskErrorMessage()}});
+            return ExecutionResult::failure(task.taskError());
         }
         if (!task.beginTask())
             return ExecutionResult::failure({"WVM1166", "Async task is already running or has an invalid state"});
@@ -698,7 +698,7 @@ namespace wio::vm
             const Value* argument = task.taskArgument(index);
             if (!argument)
             {
-                (void)task.failTask("WVM1167", "Async task lost a captured argument");
+                (void)task.failTask({"WVM1167", "Async task lost a captured argument"});
                 return ExecutionResult::failure({"WVM1167", "Async task lost a captured argument"});
             }
             arguments.push_back(*argument);
@@ -709,7 +709,7 @@ namespace wio::vm
         {
             if (task.taskState() == AsyncTaskState::Cancelled)
                 return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
-            if (task.failTask(result.error().code, result.error().message))
+            if (task.failTask(result.error()))
                 return result;
             if (task.taskState() == AsyncTaskState::Cancelled)
                 return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
@@ -737,20 +737,38 @@ namespace wio::vm
 
         std::vector<Frame> frames;
         frames.reserve(16);
+        const auto failWithStack = [&](ExecutionError error)
+        {
+            error.stack.reserve(frames.size());
+            bool leaf = true;
+            for (auto frame = frames.rbegin(); frame != frames.rend(); ++frame)
+            {
+                std::size_t instructionIndex = frame->instruction;
+                if (!leaf && instructionIndex > 0)
+                    --instructionIndex;
+                const bytecode::SourceSpan source = instructionIndex < frame->block->instructions.size()
+                                                        ? frame->block->instructions[instructionIndex].source
+                                                        : frame->block->source;
+                error.stack.push_back(
+                    {frame->function->id, frame->block->id, static_cast<std::uint32_t>(instructionIndex), source});
+                leaf = false;
+            }
+            return ExecutionResult::failure(std::move(error));
+        };
         auto pushFrame = [&](const bytecode::Function& function, const std::span<const Value> values,
                              FrameContinuation continuation) -> ExecutionResult
         {
             if ((function.flags & 0x0002u) != 0)
-                return ExecutionResult::failure(
+                return failWithStack(
                     {"WVM1003", "External function requires the Sprint 20 native bridge", function.id});
             if (values.size() != function.parameters.size())
-                return ExecutionResult::failure(
+                return failWithStack(
                     {"WVM1004", "Call argument count does not match the function signature", function.id});
             if (frames.size() >= options_.callDepthLimit)
-                return ExecutionResult::failure({"WVM1005", "VM call depth limit exceeded", function.id});
+                return failWithStack({"WVM1005", "VM call depth limit exceeded", function.id});
             const std::uint32_t count = program_->functions[function.id].registerCount;
             if (count > options_.registerLimitPerFrame)
-                return ExecutionResult::failure({"WVM1006", "Function register limit exceeded", function.id});
+                return failWithStack({"WVM1006", "Function register limit exceeded", function.id});
 
             Frame frame;
             frame.function = &function;
@@ -794,16 +812,15 @@ namespace wio::vm
                 continuation.callerResult != bytecode::InvalidIndex)
             {
                 if (continuation.callerResult >= caller.registers.size())
-                    return ExecutionResult::failure(
+                    return failWithStack(
                         {"WVM1034", "Call result register is invalid", caller.function->id, caller.block->id});
                 caller.registers[continuation.callerResult] = Register{std::move(returned), true};
             }
             else if (continuation.completion == FrameCompletion::ContinueConstruction)
             {
                 if (continuation.nextFunction >= module.functions.size())
-                    return ExecutionResult::failure({"WVM1074",
-                                                     "Construction continuation references an invalid function",
-                                                     caller.function->id, caller.block->id});
+                    return failWithStack({"WVM1074", "Construction continuation references an invalid function",
+                                          caller.function->id, caller.block->id});
                 ExecutionResult pushed =
                     pushFrame(module.functions[continuation.nextFunction], continuation.nextArguments,
                               FrameContinuation{.completion = FrameCompletion::Ignore});
@@ -813,16 +830,15 @@ namespace wio::vm
             else if (continuation.completion == FrameCompletion::ReleaseRegister)
             {
                 if (continuation.cleanupRegister >= caller.registers.size())
-                    return ExecutionResult::failure({"WVM1075",
-                                                     "Destructor continuation references an invalid register",
-                                                     caller.function->id, caller.block->id});
+                    return failWithStack({"WVM1075", "Destructor continuation references an invalid register",
+                                          caller.function->id, caller.block->id});
                 caller.registers[continuation.cleanupRegister] = {};
             }
             else if (continuation.completion == FrameCompletion::ReleasePlace)
             {
                 if (!continuation.cleanupPlace)
-                    return ExecutionResult::failure({"WVM1076", "Destructor continuation lost its owning place",
-                                                     caller.function->id, caller.block->id});
+                    return failWithStack({"WVM1076", "Destructor continuation lost its owning place",
+                                          caller.function->id, caller.block->id});
                 continuation.cleanupPlace->clear();
             }
             return std::nullopt;
@@ -833,18 +849,37 @@ namespace wio::vm
         {
             Frame& frame = frames.back();
             if (frame.instruction >= frame.block->instructions.size())
-                return ExecutionResult::failure(
+                return failWithStack(
                     {"WVM1007", "Instruction cursor escaped its basic block", frame.function->id, frame.block->id});
             if (executed++ >= options_.instructionLimit)
-                return ExecutionResult::failure({"WVM1008", "VM instruction limit exceeded", frame.function->id,
-                                                 frame.block->id, static_cast<std::uint32_t>(frame.instruction)});
+                return failWithStack({"WVM1008", "VM instruction limit exceeded", frame.function->id, frame.block->id,
+                                      static_cast<std::uint32_t>(frame.instruction)});
 
             const bytecode::Instruction& instruction = frame.block->instructions[frame.instruction];
+            if (options_.debugObserver)
+            {
+                DebugAction action = DebugAction::Abort;
+                try
+                {
+                    action = options_.debugObserver->onInstruction(
+                        {frame.function->id, frame.block->id, static_cast<std::uint32_t>(frame.instruction),
+                         instruction.opcode, instruction.source, static_cast<std::uint32_t>(frames.size())});
+                }
+                catch (...)
+                {
+                    return failWithStack({"WVM1206", "VM debug observer threw across the runtime boundary",
+                                          frame.function->id, frame.block->id,
+                                          static_cast<std::uint32_t>(frame.instruction), instruction.source});
+                }
+                if (action == DebugAction::Abort)
+                    return failWithStack({"WVM1205", "VM execution was aborted by the debug observer",
+                                          frame.function->id, frame.block->id,
+                                          static_cast<std::uint32_t>(frame.instruction), instruction.source});
+            }
             const auto fail = [&](std::string code, std::string message)
             {
-                return ExecutionResult::failure({std::move(code), std::move(message), frame.function->id,
-                                                 frame.block->id, static_cast<std::uint32_t>(frame.instruction),
-                                                 instruction.source});
+                return failWithStack({std::move(code), std::move(message), frame.function->id, frame.block->id,
+                                      static_cast<std::uint32_t>(frame.instruction), instruction.source});
             };
             const auto read = [&](const std::uint32_t id) -> const Value*
             {
@@ -2924,6 +2959,6 @@ namespace wio::vm
             return fail("WVM1036", "Opcode is not implemented by this VM runtime slice: " +
                                        std::string{bytecode::opcodeName(instruction.opcode)});
         }
-        return ExecutionResult::failure({"WVM1037", "VM exited without producing a result"});
+        return failWithStack({"WVM1037", "VM exited without producing a result"});
     }
 } // namespace wio::vm

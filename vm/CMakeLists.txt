@@ -93,4 +93,10 @@ if(BUILD_TESTING)
     )
     target_link_libraries(wio_vm_async_services_test PRIVATE wio_vm)
     add_test(NAME wio_vm_async_services COMMAND wio_vm_async_services_test)
+
+    add_executable(wio_vm_debug_diagnostics_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_debug_diagnostics_test.cpp"
+    )
+    target_link_libraries(wio_vm_debug_diagnostics_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_debug_diagnostics COMMAND wio_vm_debug_diagnostics_test)
 endif()

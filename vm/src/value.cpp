@@ -127,14 +127,13 @@ namespace wio::vm
             return true;
         }
 
-        bool failTask(std::string code, std::string message)
+        bool failTask(ExecutionError error)
         {
             std::scoped_lock lock{taskMutex_};
             const AsyncTaskState state = taskState();
             if (state != AsyncTaskState::Pending && state != AsyncTaskState::Running)
                 return false;
-            taskErrorCode_ = std::move(code);
-            taskErrorMessage_ = std::move(message);
+            taskError_ = std::move(error);
             taskState_.store(AsyncTaskState::Faulted, std::memory_order_release);
             taskChanged_.notify_all();
             return true;
@@ -159,12 +158,17 @@ namespace wio::vm
 
         [[nodiscard]] std::string_view taskErrorCode() const noexcept
         {
-            return taskErrorCode_;
+            return taskError_.code;
         }
 
         [[nodiscard]] std::string_view taskErrorMessage() const noexcept
         {
-            return taskErrorMessage_;
+            return taskError_.message;
+        }
+
+        [[nodiscard]] ExecutionError taskError() const
+        {
+            return taskError_;
         }
 
     private:
@@ -180,8 +184,7 @@ namespace wio::vm
         mutable std::mutex taskMutex_;
         mutable std::condition_variable taskChanged_;
         Value taskResult_;
-        std::string taskErrorCode_;
-        std::string taskErrorMessage_;
+        ExecutionError taskError_;
     };
 
     namespace
@@ -943,9 +946,14 @@ namespace wio::vm
         return kind_ == Kind::AsyncTask && scalar_.aggregate->completeTask(std::move(result));
     }
 
-    bool Value::failTask(std::string code, std::string message) const
+    bool Value::failTask(ExecutionError error) const
     {
-        return kind_ == Kind::AsyncTask && scalar_.aggregate->failTask(std::move(code), std::move(message));
+        return kind_ == Kind::AsyncTask && scalar_.aggregate->failTask(std::move(error));
+    }
+
+    ExecutionError Value::taskError() const
+    {
+        return kind_ == Kind::AsyncTask ? scalar_.aggregate->taskError() : ExecutionError{};
     }
 
     void Value::waitTask() const

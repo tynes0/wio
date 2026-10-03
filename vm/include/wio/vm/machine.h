@@ -1,6 +1,7 @@
 #pragma once
 
 #include "wio/bytecode/module.h"
+#include "wio/vm/diagnostic.h"
 #include "wio/vm/value.h"
 
 #include <chrono>
@@ -12,21 +13,38 @@
 
 namespace wio::vm
 {
+    enum class DebugAction : std::uint8_t
+    {
+        Continue,
+        Abort
+    };
+
+    struct DebugEvent
+    {
+        std::uint32_t function = bytecode::InvalidIndex;
+        std::uint32_t block = bytecode::InvalidIndex;
+        std::uint32_t instruction = bytecode::InvalidIndex;
+        bytecode::Opcode opcode = bytecode::Opcode::Unreachable;
+        bytecode::SourceSpan source;
+        std::uint32_t callDepth = 0;
+    };
+
+    class DebugObserver
+    {
+    public:
+        virtual ~DebugObserver() = default;
+
+        // Called synchronously before an instruction executes. Implementations
+        // must not throw or re-enter the machine. The observer must outlive it.
+        [[nodiscard]] virtual DebugAction onInstruction(const DebugEvent& event) = 0;
+    };
+
     struct MachineOptions
     {
         std::uint64_t instructionLimit = 10'000'000;
         std::uint32_t callDepthLimit = 1'024;
         std::uint32_t registerLimitPerFrame = 1'000'000;
-    };
-
-    struct ExecutionError
-    {
-        std::string code;
-        std::string message;
-        std::uint32_t function = bytecode::InvalidIndex;
-        std::uint32_t block = bytecode::InvalidIndex;
-        std::uint32_t instruction = bytecode::InvalidIndex;
-        bytecode::SourceSpan source;
+        DebugObserver* debugObserver = nullptr;
     };
 
     class ExecutionResult final

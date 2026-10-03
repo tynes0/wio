@@ -1,5 +1,7 @@
 #pragma once
 
+#include "wio/vm/diagnostic.h"
+
 #include <compare>
 #include <cstddef>
 #include <cstdint>
@@ -197,7 +199,8 @@ namespace wio::vm
         bool beginTask() const noexcept;
         bool cancelTask() const noexcept;
         bool completeTask(Value result) const;
-        bool failTask(std::string code, std::string message) const;
+        bool failTask(ExecutionError error) const;
+        [[nodiscard]] ExecutionError taskError() const;
         void waitTask() const;
         void destroy() noexcept;
         void copyFrom(const Value& other);
