@@ -19,7 +19,7 @@ Branch arguments are copied to the target block parameters before control is
 transferred. This preserves canonical Lowered WIR phi semantics without a
 second language-specific control-flow model.
 
-## Implemented in Sprint 19.1-19.7
+## Implemented in Sprint 19.1-19.8.1
 
 - compact tagged values for null, bool, signed/unsigned integer, float, and
   UTF-8 string values;
@@ -107,6 +107,14 @@ second language-specific control-flow model.
   before `.wiob` emission;
 - instruction-specific bytecode validation for the enum, any, nullable,
   variant, iterator, and Result operation families before machine load;
+- thread-safe externally completed task handles with exactly-once ready,
+  fault, or cancellation publication and blocking `Machine::wait(...)`
+  wake-up. This is the runtime completion gate the Sprint 20 native bridge
+  will use without exposing VM internals to foreign threads;
+- lazy per-machine timer scheduling through one deadline-ordered queue and one
+  timer worker rather than one detached thread per timer. Equal deadlines keep
+  insertion order, cancellation removes distant work immediately, and machine
+  shutdown cancels all pending timers without waiting for their deadlines;
 - deterministic wrapping integer arithmetic without host signed-overflow UB;
 - checked integer division and shifts;
 - instruction, call-depth, and per-frame register budgets;
@@ -120,9 +128,9 @@ keep the decode result beside the machine.
 
 ## Remaining Sprint 19 surface
 
-The next slices add real main/worker/blocking/I/O executor queues, externally
-completed native tasks and timers, panic stack traces, exceptional cleanup and
-unwind, and debugger hooks. Native functions, callbacks, opaque values, and
-foreign-thread entry are deliberately reserved for the Sprint 20 VM native
-bridge; Sprint 19 reports them as unsupported instead of silently changing
-behavior.
+The next slices add resumable main/worker/blocking/I/O executor queues, panic
+stack traces, exceptional cleanup and unwind, and debugger hooks. Native
+symbol registration, callbacks, opaque values, and foreign-thread VM entry are
+deliberately reserved for the Sprint 20 VM native bridge; Sprint 19 exposes
+only its thread-safe task-completion gate and reports native invocation as
+unsupported instead of silently changing behavior.

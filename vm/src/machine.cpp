@@ -10,10 +10,15 @@
 #include <algorithm>
 #include <bit>
 #include <charconv>
+#include <condition_variable>
 #include <cmath>
+#include <functional>
 #include <limits>
+#include <map>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -381,6 +386,108 @@ namespace wio::vm
                 return std::nullopt;
             return std::string{buffer, converted.ptr};
         }
+
+        class TimerScheduler final
+        {
+        public:
+            using Callback = std::function<void()>;
+
+            TimerScheduler() : worker_([this] { run(); })
+            {
+            }
+
+            ~TimerScheduler()
+            {
+                {
+                    std::scoped_lock lock{mutex_};
+                    stopping_ = true;
+                }
+                changed_.notify_all();
+                if (worker_.joinable())
+                    worker_.join();
+            }
+
+            TimerScheduler(const TimerScheduler&) = delete;
+            TimerScheduler& operator=(const TimerScheduler&) = delete;
+
+            void schedule(Value task, const std::chrono::steady_clock::time_point deadline, Callback fire,
+                          Callback cancel)
+            {
+                {
+                    std::scoped_lock lock{mutex_};
+                    if (!stopping_)
+                    {
+                        timers_.emplace(std::make_pair(deadline, nextSequence_++),
+                                        Timer{std::move(task), std::move(fire), std::move(cancel)});
+                        changed_.notify_all();
+                        return;
+                    }
+                }
+                cancel();
+            }
+
+            bool remove(const Value& task)
+            {
+                std::scoped_lock lock{mutex_};
+                const auto timer = std::find_if(timers_.begin(), timers_.end(),
+                                                [&](const auto& entry) { return entry.second.task == task; });
+                if (timer == timers_.end())
+                    return false;
+                timers_.erase(timer);
+                changed_.notify_all();
+                return true;
+            }
+
+        private:
+            struct Timer
+            {
+                Value task;
+                Callback fire;
+                Callback cancel;
+            };
+
+            void run()
+            {
+                std::unique_lock lock{mutex_};
+                while (!stopping_)
+                {
+                    if (timers_.empty())
+                    {
+                        changed_.wait(lock, [&] { return stopping_ || !timers_.empty(); });
+                        continue;
+                    }
+
+                    const auto deadline = timers_.begin()->first.first;
+                    if (std::chrono::steady_clock::now() < deadline)
+                    {
+                        changed_.wait_until(lock, deadline);
+                        continue;
+                    }
+
+                    Callback fire = std::move(timers_.begin()->second.fire);
+                    timers_.erase(timers_.begin());
+                    lock.unlock();
+                    fire();
+                    lock.lock();
+                }
+
+                std::vector<Callback> cancellations;
+                cancellations.reserve(timers_.size());
+                for (auto& entry : timers_)
+                    cancellations.push_back(std::move(entry.second.cancel));
+                timers_.clear();
+                lock.unlock();
+                for (Callback& cancel : cancellations)
+                    cancel();
+            }
+
+            std::mutex mutex_;
+            std::condition_variable changed_;
+            std::map<std::pair<std::chrono::steady_clock::time_point, std::uint64_t>, Timer> timers_;
+            std::uint64_t nextSequence_ = 0;
+            bool stopping_ = false;
+            std::thread worker_;
+        };
     } // namespace
 
     struct Machine::Program
@@ -395,6 +502,8 @@ namespace wio::vm
         ExecutionError loadError;
         std::vector<FunctionPlan> functions;
         std::vector<std::unique_ptr<PlaceStorage>> globals;
+        std::mutex timerMutex;
+        std::unique_ptr<TimerScheduler> timers;
         bool valid = false;
     };
 
@@ -470,9 +579,75 @@ namespace wio::vm
         return driveTask(task);
     }
 
-    bool Machine::cancel(const Value& task) noexcept
+    bool Machine::cancel(const Value& task)
     {
-        return task.cancelTask();
+        if (!task.cancelTask())
+            return false;
+        if (program_)
+        {
+            std::scoped_lock lock{program_->timerMutex};
+            if (program_->timers)
+                (void)program_->timers->remove(task);
+        }
+        return true;
+    }
+
+    Value Machine::makeExternalTask()
+    {
+        return Value::externalTask();
+    }
+
+    bool Machine::complete(const Value& task, Value result)
+    {
+        if (!task.completeTask(std::move(result)))
+            return false;
+        if (program_)
+        {
+            std::scoped_lock lock{program_->timerMutex};
+            if (program_->timers)
+                (void)program_->timers->remove(task);
+        }
+        return true;
+    }
+
+    bool Machine::fail(const Value& task, std::string code, std::string message)
+    {
+        if (!task.failTask(std::move(code), std::move(message)))
+            return false;
+        if (program_)
+        {
+            std::scoped_lock lock{program_->timerMutex};
+            if (program_->timers)
+                (void)program_->timers->remove(task);
+        }
+        return true;
+    }
+
+    Value Machine::sleepFor(const std::chrono::nanoseconds duration)
+    {
+        Value task = Value::externalTask();
+        if (!program_ || !program_->valid)
+        {
+            task.failTask("WVM1000", "Timer scheduling requires a loaded VM program");
+            return task;
+        }
+        if (duration <= std::chrono::nanoseconds::zero())
+        {
+            task.completeTask({});
+            return task;
+        }
+
+        TimerScheduler* scheduler = nullptr;
+        {
+            std::scoped_lock lock{program_->timerMutex};
+            if (!program_->timers)
+                program_->timers = std::make_unique<TimerScheduler>();
+            scheduler = program_->timers.get();
+        }
+        scheduler->schedule(
+            task, std::chrono::steady_clock::now() + duration, [task] { task.completeTask({}); },
+            [task] { task.cancelTask(); });
+        return task;
     }
 
     Value Machine::startTask(const std::uint32_t functionId, const std::span<const Value> arguments)
@@ -504,6 +679,15 @@ namespace wio::vm
             return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
         if (task.taskState() == AsyncTaskState::Faulted)
             return ExecutionResult::failure({std::string{task.taskErrorCode()}, std::string{task.taskErrorMessage()}});
+        if (task.taskFunction() == bytecode::InvalidIndex)
+        {
+            task.waitTask();
+            if (task.taskState() == AsyncTaskState::Ready)
+                return ExecutionResult::success(task.taskResult());
+            if (task.taskState() == AsyncTaskState::Cancelled)
+                return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            return ExecutionResult::failure({std::string{task.taskErrorCode()}, std::string{task.taskErrorMessage()}});
+        }
         if (!task.beginTask())
             return ExecutionResult::failure({"WVM1166", "Async task is already running or has an invalid state"});
 
@@ -514,7 +698,7 @@ namespace wio::vm
             const Value* argument = task.taskArgument(index);
             if (!argument)
             {
-                task.failTask("WVM1167", "Async task lost a captured argument");
+                (void)task.failTask("WVM1167", "Async task lost a captured argument");
                 return ExecutionResult::failure({"WVM1167", "Async task lost a captured argument"});
             }
             arguments.push_back(*argument);
@@ -523,11 +707,20 @@ namespace wio::vm
         ExecutionResult result = execute(task.taskFunction(), arguments, &task);
         if (!result.succeeded())
         {
-            if (task.taskState() != AsyncTaskState::Cancelled)
-                task.failTask(result.error().code, result.error().message);
-            return result;
+            if (task.taskState() == AsyncTaskState::Cancelled)
+                return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            if (task.failTask(result.error().code, result.error().message))
+                return result;
+            if (task.taskState() == AsyncTaskState::Cancelled)
+                return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            return ExecutionResult::failure({"WVM1204", "Async task failure lost its terminal-state race"});
         }
-        task.completeTask(result.value());
+        if (!task.completeTask(result.value()))
+        {
+            if (task.taskState() == AsyncTaskState::Cancelled)
+                return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            return ExecutionResult::failure({"WVM1204", "Async task completion lost its terminal-state race"});
+        }
         return ExecutionResult::success(task.taskResult());
     }
 

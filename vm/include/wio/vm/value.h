@@ -173,6 +173,7 @@ namespace wio::vm
         explicit Value(Kind kind) noexcept;
         [[nodiscard]] static Value place(PlaceStorage* storage) noexcept;
         [[nodiscard]] static Value objectBorrow(AggregateStorage* storage) noexcept;
+        [[nodiscard]] static Value externalTask();
         [[nodiscard]] static Value rangeIterator(std::uint32_t type, Value start, Value end, Value step,
                                                  bool inclusive);
         [[nodiscard]] static Value containerIterator(std::uint32_t type, Value source, std::size_t step);
@@ -195,8 +196,9 @@ namespace wio::vm
         [[nodiscard]] Value retainObject() const noexcept;
         bool beginTask() const noexcept;
         bool cancelTask() const noexcept;
-        void completeTask(Value result) const;
-        void failTask(std::string code, std::string message) const;
+        bool completeTask(Value result) const;
+        bool failTask(std::string code, std::string message) const;
+        void waitTask() const;
         void destroy() noexcept;
         void copyFrom(const Value& other);
         void moveFrom(Value&& other) noexcept;

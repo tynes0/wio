@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <atomic>
+#include <condition_variable>
 #include <iterator>
+#include <limits>
 #include <memory>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -96,32 +99,57 @@ namespace wio::vm
 
         bool beginTask() noexcept
         {
+            std::scoped_lock lock{taskMutex_};
             AsyncTaskState expected = AsyncTaskState::Pending;
             return taskState_.compare_exchange_strong(expected, AsyncTaskState::Running, std::memory_order_acq_rel);
         }
 
         bool cancelTask() noexcept
         {
-            AsyncTaskState state = taskState();
-            while (state == AsyncTaskState::Pending || state == AsyncTaskState::Running)
-            {
-                if (taskState_.compare_exchange_weak(state, AsyncTaskState::Cancelled, std::memory_order_acq_rel))
-                    return true;
-            }
-            return false;
+            std::scoped_lock lock{taskMutex_};
+            const AsyncTaskState state = taskState();
+            if (state != AsyncTaskState::Pending && state != AsyncTaskState::Running)
+                return false;
+            taskState_.store(AsyncTaskState::Cancelled, std::memory_order_release);
+            taskChanged_.notify_all();
+            return true;
         }
 
-        void completeTask(Value result)
+        bool completeTask(Value result)
         {
+            std::scoped_lock lock{taskMutex_};
+            const AsyncTaskState state = taskState();
+            if (state != AsyncTaskState::Pending && state != AsyncTaskState::Running)
+                return false;
             taskResult_ = std::move(result);
             taskState_.store(AsyncTaskState::Ready, std::memory_order_release);
+            taskChanged_.notify_all();
+            return true;
         }
 
-        void failTask(std::string code, std::string message)
+        bool failTask(std::string code, std::string message)
         {
+            std::scoped_lock lock{taskMutex_};
+            const AsyncTaskState state = taskState();
+            if (state != AsyncTaskState::Pending && state != AsyncTaskState::Running)
+                return false;
             taskErrorCode_ = std::move(code);
             taskErrorMessage_ = std::move(message);
             taskState_.store(AsyncTaskState::Faulted, std::memory_order_release);
+            taskChanged_.notify_all();
+            return true;
+        }
+
+        void waitTask() const
+        {
+            std::unique_lock lock{taskMutex_};
+            taskChanged_.wait(lock,
+                              [&]
+                              {
+                                  const AsyncTaskState state = taskState();
+                                  return state == AsyncTaskState::Ready || state == AsyncTaskState::Cancelled ||
+                                         state == AsyncTaskState::Faulted;
+                              });
         }
 
         [[nodiscard]] const Value& taskResult() const noexcept
@@ -149,6 +177,8 @@ namespace wio::vm
         std::size_t step_ = 1;
         bool finished_ = false;
         std::atomic<AsyncTaskState> taskState_{AsyncTaskState::Pending};
+        mutable std::mutex taskMutex_;
+        mutable std::condition_variable taskChanged_;
         Value taskResult_;
         std::string taskErrorCode_;
         std::string taskErrorMessage_;
@@ -352,6 +382,11 @@ namespace wio::vm
         Value result{Kind::AsyncTask};
         result.scalar_.aggregate = new AggregateStorage{Kind::AsyncTask, function, std::move(arguments)};
         return result;
+    }
+
+    Value Value::externalTask()
+    {
+        return asyncTask((std::numeric_limits<std::uint32_t>::max)(), {});
     }
 
     Value Value::any(const std::uint32_t type, Value payload)
@@ -903,16 +938,20 @@ namespace wio::vm
         return kind_ == Kind::AsyncTask && scalar_.aggregate->cancelTask();
     }
 
-    void Value::completeTask(Value result) const
+    bool Value::completeTask(Value result) const
     {
-        if (kind_ == Kind::AsyncTask)
-            scalar_.aggregate->completeTask(std::move(result));
+        return kind_ == Kind::AsyncTask && scalar_.aggregate->completeTask(std::move(result));
     }
 
-    void Value::failTask(std::string code, std::string message) const
+    bool Value::failTask(std::string code, std::string message) const
+    {
+        return kind_ == Kind::AsyncTask && scalar_.aggregate->failTask(std::move(code), std::move(message));
+    }
+
+    void Value::waitTask() const
     {
         if (kind_ == Kind::AsyncTask)
-            scalar_.aggregate->failTask(std::move(code), std::move(message));
+            scalar_.aggregate->waitTask();
     }
 
     bool Value::operator==(const Value& other) const noexcept

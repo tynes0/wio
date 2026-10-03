@@ -3,6 +3,7 @@
 #include "wio/bytecode/module.h"
 #include "wio/vm/value.h"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -68,7 +69,17 @@ namespace wio::vm
 
         [[nodiscard]] ExecutionResult invoke(std::uint32_t function, std::span<const Value> arguments = {});
         [[nodiscard]] ExecutionResult wait(const Value& task);
-        bool cancel(const Value& task) noexcept;
+        bool cancel(const Value& task);
+
+        // External tasks are the runtime half of the future Sprint 20 native
+        // bridge. Completion is exactly-once and may arrive from any thread.
+        [[nodiscard]] Value makeExternalTask();
+        bool complete(const Value& task, Value result = {});
+        bool fail(const Value& task, std::string code, std::string message);
+
+        // Timers share one ordered queue and one worker per machine rather
+        // than creating a detached thread for every wait.
+        [[nodiscard]] Value sleepFor(std::chrono::nanoseconds duration);
 
     private:
         [[nodiscard]] ExecutionResult execute(std::uint32_t function, std::span<const Value> arguments,
