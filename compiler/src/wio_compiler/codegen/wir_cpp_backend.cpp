@@ -54,6 +54,9 @@ namespace wio::codegen
                 case '\\':
                     output += "\\\\";
                     break;
+                case '\0':
+                    output += "\\000";
+                    break;
                 case '"':
                     output += "\\\"";
                     break;

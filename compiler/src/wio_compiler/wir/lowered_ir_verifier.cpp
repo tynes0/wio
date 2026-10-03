@@ -23,7 +23,8 @@ namespace wio::wir::lowered
         {
             return kind == TypeKind::I8 || kind == TypeKind::I16 || kind == TypeKind::I32 || kind == TypeKind::I64 ||
                    kind == TypeKind::ISize || kind == TypeKind::U8 || kind == TypeKind::U16 || kind == TypeKind::U32 ||
-                   kind == TypeKind::U64 || kind == TypeKind::USize || kind == TypeKind::F32 || kind == TypeKind::F64;
+                   kind == TypeKind::U64 || kind == TypeKind::USize || kind == TypeKind::F32 || kind == TypeKind::F64 ||
+                   kind == TypeKind::Char;
         }
 
         bool isInteger(const TypeKind kind)

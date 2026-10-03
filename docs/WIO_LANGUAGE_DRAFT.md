@@ -472,6 +472,7 @@ Supported escape sequences currently include:
 - `\\`
 - `\"`
 - `\'`
+- `\0`
 - `\n`
 - `\r`
 - `\a`
@@ -623,9 +624,22 @@ Character literals use single quotes:
 let a = 'x';
 let b = '\n';
 let c = '\\';
+let nul = '\0';
 ```
 
 A character literal must contain exactly one character after escape processing.
+`char` is the byte-oriented character primitive and participates in integral
+conversions. It widens implicitly when the destination can represent it; use
+`fit` for an explicit conversion in either direction. An unsuffixed integer
+literal may initialize `char` directly when its value fits.
+
+```wio
+let letter: char = 'A';
+let code: i32 = letter;
+let byteCode: u8 = letter fit u8;
+let restored: char = 65 fit char;
+let contextual: char = 66;
+```
 
 ### 4.9 Byte Literals
 

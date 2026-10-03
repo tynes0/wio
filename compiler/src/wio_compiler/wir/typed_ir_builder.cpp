@@ -7211,6 +7211,7 @@ namespace wio::wir::typed
                 return IntegerType::isize;
             case TypeKind::U8:
             case TypeKind::Byte:
+            case TypeKind::Char:
                 return IntegerType::u8;
             case TypeKind::U16:
                 return IntegerType::u16;
@@ -7261,6 +7262,7 @@ namespace wio::wir::typed
                 return NumericTypeInfo{64, true, false};
             case TypeKind::U8:
             case TypeKind::Byte:
+            case TypeKind::Char:
                 return NumericTypeInfo{8, false, false};
             case TypeKind::U16:
                 return NumericTypeInfo{16, false, false};

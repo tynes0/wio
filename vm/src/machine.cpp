@@ -270,13 +270,13 @@ namespace wio::vm
             case TypeI8:
             case TypeU8:
             case TypeByte:
+            case TypeChar:
                 return 8;
             case TypeI16:
             case TypeU16:
                 return 16;
             case TypeI32:
             case TypeU32:
-            case TypeChar:
                 return 32;
             default:
                 return 64;

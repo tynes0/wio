@@ -90,6 +90,7 @@ namespace wio::sema
         return p->name == "i8" || p->name == "i16" || p->name == "i32" || p->name == "i64" ||
                p->name == "u8" || p->name == "u16" || p->name == "u32" || p->name == "u64" ||
                p->name == "isize" || p->name == "usize" ||
+               p->name == "char" ||
                p->name == "f32" || p->name == "f64";
     }
 
@@ -260,6 +261,7 @@ namespace wio::sema
                     if (!destIsFloat && !srcIsFloat)
                     {
                         auto getSize = [](const std::string& s) -> int {
+                            if (s == "char") return 1;
                             if (s.ends_with("8")) return 1;
                             if (s.ends_with("16")) return 2;
                             if (s.ends_with("32")) return 4;

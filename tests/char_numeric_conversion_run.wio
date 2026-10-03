@@ -1,0 +1,35 @@
+use std::console as console;
+
+fn Entry() -> i32 {
+    let nul: char = '\0';
+    let nulCode: u32 = nul;
+    if (nulCode != 0u32) {
+        return 1;
+    }
+
+    let letter: char = 'A';
+    let implicitCode: i32 = letter;
+    if (implicitCode != 65) {
+        return 2;
+    }
+
+    let fittedCode: u8 = letter fit u8;
+    if (fittedCode != 65u8) {
+        return 3;
+    }
+
+    let fittedCharacter: char = 66 fit char;
+    let widenedCode: u16 = fittedCharacter;
+    if (widenedCode != 66u16) {
+        return 4;
+    }
+
+    let contextualCharacter: char = 67;
+    let contextualCode: u32 = contextualCharacter;
+    if (contextualCode != 67u32) {
+        return 5;
+    }
+
+    console::PrintLine("char-numeric-conversion-ok");
+    return 0;
+}

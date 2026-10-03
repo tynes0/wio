@@ -1507,6 +1507,21 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_char_numeric_conversion_run
+        "${CMAKE_SOURCE_DIR}/tests/char_numeric_conversion_run.wio"
+        "char-numeric-conversion-ok"
+        --run
+    )
+
+    add_wio_output_test(
+        wio_test_char_numeric_conversion_legacy_run
+        "${CMAKE_SOURCE_DIR}/tests/char_numeric_conversion_run.wio"
+        "char-numeric-conversion-ok"
+        --run
+        --cpp-backend legacy
+    )
+
+    add_wio_output_test(
         wio_test_integer_literal_abi_run
         "${CMAKE_SOURCE_DIR}/tests/integer_literal_abi_run.wio"
         "integer-literal-abi-ok"
