@@ -123,6 +123,10 @@ second language-specific control-flow model.
   instruction, opcode, source span, and call depth. It can continue or abort
   execution deterministically; observer exceptions are caught at the runtime
   boundary instead of escaping through the VM;
+- debugger-controlled pause/resume at stable instruction boundaries. A paused
+  segment publishes its exact debug event, can be awaited with a timeout, and
+  can be resumed or aborted safely from another thread without discarding its
+  frames, registers, cleanup state, source location, or executor identity;
 - preserved coroutine execution frames across real executor boundaries. An
   eager task runs on its caller until the first switch, then resumes the same
   registers, local places, call stack, instruction budget, and task identity;
@@ -170,13 +174,15 @@ The VM consumes a module that must remain alive and immutable for the
 machine's lifetime. `.wiob` decoding owns its module, so embedders normally
 keep the decode result beside the machine.
 
-## Remaining Sprint 19 surface
+## Sprint 19 closure
 
-The next slice adds pause/resume debugger control over the instruction
-observer. Execution segments are intentionally serialized while VM globals
-remain mutable; safe parallel global access will require the explicit
-synchronization model rather than accidental data races. Native symbol
-registration, callbacks, opaque values, and foreign-thread VM entry are
-deliberately reserved for the Sprint 20 VM native bridge; Sprint 19 exposes
-only its thread-safe task-completion gate and reports native invocation as
+Execution segments remain intentionally serialized while VM globals are
+mutable; safe parallel global access requires an explicit synchronization
+model rather than accidental data races. The observer and debugger-control
+surface now provide the instruction-boundary, pause/resume/abort, stack,
+source, and executor hooks required by the VM runtime milestone.
+
+Native symbol registration, callbacks, opaque values, and foreign-thread VM
+entry are deliberately reserved for the Sprint 20 VM native bridge. Sprint 19
+exposes its thread-safe task-completion gate and reports native invocation as
 unsupported instead of silently changing behavior.

@@ -1063,3 +1063,8 @@ here as historical evidence rather than active work:
       lambdas, match destructuring places, fixed-array projection, runtime field
       attribute reflection, concrete native-generic thunk identities, and
       explicit retained/any-thread native callback contracts.
+- [x] Sprint 19 VM runtime closure adds debugger-controlled pause/resume/abort at
+      stable instruction boundaries. A controller can wait with a timeout,
+      inspect the exact function/block/instruction/source/executor event, and
+      resume or abort from another thread without losing frames, registers,
+      cleanup state, or the existing source-aware diagnostic contract.

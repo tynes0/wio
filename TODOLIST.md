@@ -606,9 +606,10 @@ Rider, and CLion are defined in
    block-argument transfer, jumps/conditional jumps/returns, source-aware
    stable `WVM` diagnostics, execution/call-depth/register safety budgets, and
    mutable local/persistent-global places with init/load/store/replace/borrow/
-   move/copy/drop semantics. Heap values, field/element places, intrusive
-   objects/containers, coroutines, stack traces, debugger hooks, and the native
-   bridge remain in the following Sprint 19/20 slices.
+   move/copy/drop semantics. Sprint 19 is now closed with intrusive aggregate,
+   object/container, coroutine/executor, exceptional-cleanup, stack-trace, and
+   instruction-observer execution plus thread-safe debugger pause/resume/abort
+   control. The Sprint 20 native bridge remains the next backend slice.
 
 9. [ ] Close generated-native cost and build scalability before v1.
    Treat the native C++ path as a product backend with enforced size, compile

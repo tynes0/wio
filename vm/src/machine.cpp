@@ -740,6 +740,13 @@ namespace wio::vm
 
     struct Machine::Program
     {
+        enum class DebugCommand : std::uint8_t
+        {
+            None,
+            Resume,
+            Abort
+        };
+
         struct FunctionPlan
         {
             std::uint32_t registerCount = 0;
@@ -807,6 +814,32 @@ namespace wio::vm
             return result;
         }
 
+        [[nodiscard]] DebugCommand pauseForDebugger(const DebugEvent& event)
+        {
+            std::unique_lock lock{debugMutex};
+            if (debugStopping)
+                return DebugCommand::Abort;
+            debugCommand = DebugCommand::None;
+            debugPause = event;
+            debugChanged.notify_all();
+            debugChanged.wait(lock, [&] { return debugStopping || debugCommand != DebugCommand::None; });
+            const DebugCommand result = debugStopping ? DebugCommand::Abort : debugCommand;
+            debugPause.reset();
+            debugCommand = DebugCommand::None;
+            debugChanged.notify_all();
+            return result;
+        }
+
+        void stopDebugControl()
+        {
+            {
+                std::scoped_lock lock{debugMutex};
+                debugStopping = true;
+                debugCommand = DebugCommand::Abort;
+            }
+            debugChanged.notify_all();
+        }
+
         std::mutex ownerMutex;
         std::condition_variable ownerChanged;
         Machine* owner = nullptr;
@@ -820,6 +853,11 @@ namespace wio::vm
         std::mutex continuationMutex;
         std::vector<std::pair<Value, std::shared_ptr<void>>> continuations;
         std::recursive_mutex executionMutex;
+        mutable std::mutex debugMutex;
+        mutable std::condition_variable debugChanged;
+        std::optional<DebugEvent> debugPause;
+        DebugCommand debugCommand = DebugCommand::None;
+        bool debugStopping = false;
         std::unique_ptr<ExecutorScheduler> executors;
         bool valid = false;
     };
@@ -1032,6 +1070,7 @@ namespace wio::vm
     {
         if (program_)
         {
+            program_->stopDebugControl();
             program_->detachOwner(this);
             cancelAndUnwindContinuations();
             cleanupGlobals();
@@ -1056,6 +1095,7 @@ namespace wio::vm
             return *this;
         if (program_)
         {
+            program_->stopDebugControl();
             program_->detachOwner(this);
             cancelAndUnwindContinuations();
             cleanupGlobals();
@@ -1133,6 +1173,60 @@ namespace wio::vm
             if (program_->timers)
                 (void)program_->timers->remove(task);
         }
+        return true;
+    }
+
+    bool Machine::isDebugPaused() const
+    {
+        if (!program_)
+            return false;
+        std::scoped_lock lock{program_->debugMutex};
+        return program_->debugPause.has_value();
+    }
+
+    bool Machine::waitForDebugPause(const std::chrono::milliseconds timeout) const
+    {
+        if (!program_)
+            return false;
+        std::unique_lock lock{program_->debugMutex};
+        return program_->debugChanged.wait_for(
+            lock, timeout, [&] { return program_->debugStopping || program_->debugPause.has_value(); }) &&
+               program_->debugPause.has_value();
+    }
+
+    std::optional<DebugEvent> Machine::pausedDebugEvent() const
+    {
+        if (!program_)
+            return std::nullopt;
+        std::scoped_lock lock{program_->debugMutex};
+        return program_->debugPause;
+    }
+
+    bool Machine::resumeDebugExecution()
+    {
+        if (!program_)
+            return false;
+        {
+            std::scoped_lock lock{program_->debugMutex};
+            if (!program_->debugPause || program_->debugStopping)
+                return false;
+            program_->debugCommand = Program::DebugCommand::Resume;
+        }
+        program_->debugChanged.notify_all();
+        return true;
+    }
+
+    bool Machine::abortDebugExecution()
+    {
+        if (!program_)
+            return false;
+        {
+            std::scoped_lock lock{program_->debugMutex};
+            if (!program_->debugPause || program_->debugStopping)
+                return false;
+            program_->debugCommand = Program::DebugCommand::Abort;
+        }
+        program_->debugChanged.notify_all();
         return true;
     }
 
@@ -1613,12 +1707,13 @@ namespace wio::vm
             if (options_.debugObserver)
             {
                 DebugAction action = DebugAction::Abort;
+                const DebugEvent event{
+                    frame.function->id, frame.block->id, static_cast<std::uint32_t>(frame.instruction),
+                    instruction.opcode, instruction.source, static_cast<std::uint32_t>(frames.size()),
+                    state->executor};
                 try
                 {
-                    action = options_.debugObserver->onInstruction(
-                        {frame.function->id, frame.block->id, static_cast<std::uint32_t>(frame.instruction),
-                         instruction.opcode, instruction.source, static_cast<std::uint32_t>(frames.size()),
-                         state->executor});
+                    action = options_.debugObserver->onInstruction(event);
                 }
                 catch (...)
                 {
@@ -1626,6 +1721,9 @@ namespace wio::vm
                                           frame.function->id, frame.block->id,
                                           static_cast<std::uint32_t>(frame.instruction), instruction.source});
                 }
+                if (action == DebugAction::Pause &&
+                    program_->pauseForDebugger(event) == Program::DebugCommand::Abort)
+                    action = DebugAction::Abort;
                 if (action == DebugAction::Abort)
                     return failWithStack({"WVM1205", "VM execution was aborted by the debug observer",
                                           frame.function->id, frame.block->id,

@@ -1,8 +1,10 @@
 #include "wio/bytecode/codec.h"
 #include "wio/vm/machine.h"
 
+#include <chrono>
 #include <iostream>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace
@@ -141,6 +143,26 @@ namespace
             throw 42;
         }
     };
+
+    class PausingObserver final : public vm::DebugObserver
+    {
+    public:
+        vm::DebugAction onInstruction(const vm::DebugEvent& event) override
+        {
+            events.push_back(event);
+            if (!paused_)
+            {
+                paused_ = true;
+                return vm::DebugAction::Pause;
+            }
+            return vm::DebugAction::Continue;
+        }
+
+        std::vector<vm::DebugEvent> events;
+
+    private:
+        bool paused_ = false;
+    };
 } // namespace
 
 int main()
@@ -181,5 +203,38 @@ int main()
     const vm::ExecutionResult guarded = guardedMachine.invoke(1);
     ok &= expect(!guarded.succeeded() && guarded.error().code == "WVM1206",
                  "Debugger exceptions must never escape across the VM runtime boundary");
+
+    PausingObserver pausing;
+    vm::Machine pausedMachine{decoded.module, vm::MachineOptions{.debugObserver = &pausing}};
+    vm::ExecutionResult resumedResult;
+    std::thread resumedThread([&] { resumedResult = pausedMachine.invoke(1); });
+    ok &= expect(pausedMachine.waitForDebugPause(std::chrono::seconds{2}),
+                 "A debugger must be able to wait for a stable paused instruction boundary");
+    const std::optional<vm::DebugEvent> pausedEvent = pausedMachine.pausedDebugEvent();
+    ok &= expect(pausedMachine.isDebugPaused() && pausedEvent && pausedEvent->function == 1 &&
+                     pausedEvent->opcode == bytecode::Opcode::Call,
+                 "A paused machine must publish the exact observer event that stopped execution");
+    ok &= expect(pausedMachine.resumeDebugExecution(),
+                 "A debugger must be able to resume the serialized execution segment from another thread");
+    resumedThread.join();
+    ok &= expect(!pausedMachine.isDebugPaused() && !pausedMachine.pausedDebugEvent() &&
+                     !resumedResult.succeeded() && resumedResult.error().code == "WVM1014" &&
+                     pausing.events.size() > 1,
+                 "Resumed execution must continue after the paused instruction without losing VM state");
+    ok &= expect(!pausedMachine.resumeDebugExecution(),
+                 "Resuming a machine that is not paused must be rejected deterministically");
+
+    PausingObserver abortPausing;
+    vm::Machine pauseAbortedMachine{decoded.module, vm::MachineOptions{.debugObserver = &abortPausing}};
+    vm::ExecutionResult pauseAbortedResult;
+    std::thread abortedThread([&] { pauseAbortedResult = pauseAbortedMachine.invoke(1); });
+    ok &= expect(pauseAbortedMachine.waitForDebugPause(std::chrono::seconds{2}),
+                 "The debugger abort fixture must reach a paused instruction boundary");
+    ok &= expect(pauseAbortedMachine.abortDebugExecution(),
+                 "A debugger must be able to abort execution while the VM is paused");
+    abortedThread.join();
+    ok &= expect(!pauseAbortedResult.succeeded() && pauseAbortedResult.error().code == "WVM1205" &&
+                     pauseAbortedResult.error().stack.size() == 1,
+                 "Aborting a paused execution must preserve the observer-abort diagnostic contract");
     return ok ? 0 : 1;
 }

@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 
@@ -25,7 +26,8 @@ namespace wio::vm
     enum class DebugAction : std::uint8_t
     {
         Continue,
-        Abort
+        Abort,
+        Pause
     };
 
     struct DebugEvent
@@ -110,6 +112,16 @@ namespace wio::vm
         [[nodiscard]] ExecutionResult invoke(std::uint32_t function, std::span<const Value> arguments = {});
         [[nodiscard]] ExecutionResult wait(const Value& task);
         bool cancel(const Value& task);
+
+        // A debug observer may pause execution at the instruction boundary it
+        // is currently observing. Debug control is thread-safe: an editor or
+        // debugger thread can wait for the pause, inspect its stable location,
+        // and then resume or abort the serialized execution segment.
+        [[nodiscard]] bool isDebugPaused() const;
+        [[nodiscard]] bool waitForDebugPause(std::chrono::milliseconds timeout) const;
+        [[nodiscard]] std::optional<DebugEvent> pausedDebugEvent() const;
+        bool resumeDebugExecution();
+        bool abortDebugExecution();
 
         // Main-executor continuations run only on the bound thread. wait()
         // pumps this queue automatically when called by that thread.
