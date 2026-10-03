@@ -447,7 +447,14 @@ Rider, and CLion are defined in
    Build `wio-vs` for Visual Studio and one shared IntelliJ Platform plugin for
    Rider and CLion. Both must use the compiler-owned language service, share
    conformance fixtures with `wio-vscode`, and pass packaged install, upgrade,
-   compatibility, and daily command-flow gates by `v0.18.0`.
+   compatibility, and daily command-flow gates before v1. Do not defer basic
+   editor readability until the full language service is complete: immediately
+   after the dual-backend runtime/bridge core closes, ship a Rider-first
+   `wio-jetbrains` preview with `.wio` recognition, lexical syntax coloring,
+   comments/strings/numbers/attributes, braces, folding, indentation, manifest
+   discovery, and build/run/check/test commands. Reuse the same plugin core for
+   CLion, then deliver the Visual Studio preview. Replace lexical fallbacks with
+   compiler semantic tokens and language-service results as those stabilize.
 
 8. [ ] Unify compiler, tooling, and runtime diagnostics after the C++ backend,
    Unicode, VM, and SDK milestones are complete. Introduce one structured
@@ -468,13 +475,25 @@ Rider, and CLion are defined in
    applications. Track regressions per commit and release.
 
 2. [ ] Reduce generated-C++ size and compile time.
-   Audit template duplication, generic instantiation, headers, reflection
-   metadata, source directives, unity/PCH/module strategies, and dead code.
+   This is now a pre-v1 backend closure gate, not an optional later
+   optimization. Move emitted runtime/helper templates into precompiled runtime
+   artifacts, make includes and metadata capability-driven, precompile stable
+   std/runtime packages, and partition Lowered WIR into cacheable C++
+   translation-unit shards instead of blindly mirroring source files. Add a
+   runtime PCH only after include minimization, and measure PCH, unity, and
+   sharded modes rather than assuming one policy fits every project. Audit
+   template duplication, reachable generic instantiation, reflection/export
+   metadata, source directives, native object caching, and dead code.
 
 3. [ ] Optimize runtime ownership costs.
    Measure and improve reference counting, Box/any allocations, component
    copies, string/container growth, bounds checks, temporary materialization,
-   and native wrapper overhead without weakening semantics.
+   and native wrapper overhead without weakening semantics. Scalarize ordinary
+   local/field/index places so they do not allocate `shared_ptr<optional<T>>`
+   or carry `std::function` readers/writers, separate source `Option<T>` and
+   nullable values from compiler initialization state, use niche layouts where
+   legal, and emit concrete closure/callback types instead of type erasure on
+   hot paths.
 
 4. [~] Add sanitizers and dynamic analysis.
    Ubuntu CI runs the async native runtime stress test under ASan/UBSan and the
@@ -590,6 +609,22 @@ Rider, and CLion are defined in
    move/copy/drop semantics. Heap values, field/element places, intrusive
    objects/containers, coroutines, stack traces, debugger hooks, and the native
    bridge remain in the following Sprint 19/20 slices.
+
+9. [ ] Close generated-native cost and build scalability before v1.
+   Treat the native C++ path as a product backend with enforced size, compile
+   time, memory, runtime, and binary-size budgets. A trivial program must not
+   emit unused async/reflection/native infrastructure or thousands of lines of
+   duplicated support code; ordinary locals must not require `std::optional`,
+   `std::function`, or heap ownership. Add capability-driven emission,
+   precompiled std/runtime artifacts, Lowered-WIR dependency/SCC sharding,
+   parallel compilation, content-addressed object reuse, debug/release build
+   policies, retain/release elision, and generated-code regression dashboards.
+   Keep source-file boundaries out of backend semantics: shard by canonical
+   dependency and cost while preserving stable IDs and source maps. The v1 gate
+   compares generated native code with equivalent hand-written C++ and rejects
+   material regressions. JIT compilation remains post-v1, but the canonical
+   calling convention, source maps, profiling counters, and backend-neutral
+   intrinsics must leave a clean JIT insertion point.
 
 ## P3 - Product Direction
 

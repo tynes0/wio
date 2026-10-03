@@ -54,6 +54,9 @@ The following are mandatory before `v1.0.0`:
 - reproducible Windows, Linux, and macOS release artifacts and install flows;
 - stable CLI behavior, machine-readable diagnostics, formatter support, and a
   compiler-owned language-service baseline;
+- bounded generated-C++ size, native compile time, and runtime overhead, with
+  trivial programs free of duplicated backend helpers and unnecessary dynamic
+  place/optional/callable machinery;
 - version alignment across compiler, runtime, std, CLI, SDK, VS Code extension,
   Visual Studio extension, Rider/CLion plugin, documentation, and release
   metadata;
@@ -63,7 +66,9 @@ The following are mandatory before `v1.0.0`:
 
 Broad surface expansion is not a v1 gate. A debugger, advanced refactoring,
 large official package catalog, async streams, payload enums, full HTTP stack,
-and an independent backend can ship after v1.
+and JIT compilation can ship after v1. The already-adopted native C++ and
+bytecode/VM backends, their shared semantics, and their production cost budgets
+must close before v1.
 
 ---
 
@@ -328,7 +333,7 @@ v1 core and a post-v1 expansion:
 | Editor 1, 3, 5 | baseline in `v0.19` | advanced language-service and templates |
 | Editor 2, 4, 6 | not a v1 gate | debugger, package intelligence, advanced refactors |
 | Performance 1, 4, 5-7 | release baselines and supported-platform safety pre-v1 | deeper optimization and broader matrices |
-| Performance 2, 3, 8 | not a v1 gate | compile/runtime optimization and independent backend research |
+| Performance 2, 3, 8-9 | dual-backend parity plus bounded generated-code, native compile-time, and runtime costs are pre-v1 gates | JIT, deeper tiering, and optimization beyond the frozen budgets |
 | Product 1-5 | compatibility, site integration, governance minimum, and validation portfolio pre-v1 | package portal depth and long-term governance evolution |
 
 The detailed post-v1 destinations are in
