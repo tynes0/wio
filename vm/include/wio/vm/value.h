@@ -2,6 +2,7 @@
 
 #include "wio/vm/diagnostic.h"
 
+#include <chrono>
 #include <compare>
 #include <cstddef>
 #include <cstdint>
@@ -202,6 +203,7 @@ namespace wio::vm
         bool failTask(ExecutionError error) const;
         [[nodiscard]] ExecutionError taskError() const;
         void waitTask() const;
+        bool waitTaskFor(std::chrono::milliseconds duration) const;
         void destroy() noexcept;
         void copyFrom(const Value& other);
         void moveFrom(Value&& other) noexcept;

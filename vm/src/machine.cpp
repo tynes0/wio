@@ -12,6 +12,7 @@
 #include <charconv>
 #include <condition_variable>
 #include <cmath>
+#include <deque>
 #include <functional>
 #include <limits>
 #include <map>
@@ -121,6 +122,8 @@ namespace wio::vm
         constexpr std::uint8_t BinaryBitwiseXor = 13;
         constexpr std::uint8_t BinaryShiftLeft = 14;
         constexpr std::uint8_t BinaryShiftRight = 15;
+
+        thread_local ExecutorKind activeExecutor = ExecutorKind::Inherit;
 
         struct Register
         {
@@ -349,6 +352,14 @@ namespace wio::vm
             return operation >= BinaryEqual && operation <= BinaryGreaterEqual;
         }
 
+        [[nodiscard]] std::optional<ExecutorKind> executorKind(const std::uint8_t value) noexcept
+        {
+            if (value < static_cast<std::uint8_t>(ExecutorKind::Main) ||
+                value > static_cast<std::uint8_t>(ExecutorKind::Io))
+                return std::nullopt;
+            return static_cast<ExecutorKind>(value);
+        }
+
         [[nodiscard]] std::optional<std::size_t> valueIndex(const Value& value) noexcept
         {
             if (value.kind() == Value::Kind::UnsignedInteger &&
@@ -488,6 +499,227 @@ namespace wio::vm
             bool stopping_ = false;
             std::thread worker_;
         };
+
+        class ExecutorQueue final
+        {
+        public:
+            using Callback = std::function<void()>;
+
+            struct Work
+            {
+                Callback run;
+                Callback cancel;
+            };
+
+            ExecutorQueue(const ExecutorKind kind, const std::uint32_t threadCount) : kind_(kind)
+            {
+                workers_.reserve(threadCount);
+                for (std::uint32_t index = 0; index < threadCount; ++index)
+                    workers_.emplace_back([this] { workerLoop(); });
+            }
+
+            ~ExecutorQueue()
+            {
+                std::deque<Work> cancelled;
+                {
+                    std::scoped_lock lock{mutex_};
+                    stopping_ = true;
+                    cancelled.swap(queue_);
+                }
+                changed_.notify_all();
+                for (std::thread& worker : workers_)
+                    if (worker.joinable())
+                        worker.join();
+                for (Work& work : cancelled)
+                    if (work.cancel)
+                        work.cancel();
+            }
+
+            ExecutorQueue(const ExecutorQueue&) = delete;
+            ExecutorQueue& operator=(const ExecutorQueue&) = delete;
+
+            bool schedule(Work work)
+            {
+                {
+                    std::scoped_lock lock{mutex_};
+                    if (stopping_)
+                        return false;
+                    queue_.push_back(std::move(work));
+                }
+                changed_.notify_one();
+                return true;
+            }
+
+        private:
+            void workerLoop()
+            {
+                const ExecutorKind previous = activeExecutor;
+                activeExecutor = kind_;
+                for (;;)
+                {
+                    Work work;
+                    {
+                        std::unique_lock lock{mutex_};
+                        changed_.wait(lock, [&] { return stopping_ || !queue_.empty(); });
+                        if (stopping_)
+                            break;
+                        work = std::move(queue_.front());
+                        queue_.pop_front();
+                    }
+                    try
+                    {
+                        work.run();
+                    }
+                    catch (...)
+                    {
+                        if (work.cancel)
+                            work.cancel();
+                    }
+                }
+                activeExecutor = previous;
+            }
+
+            ExecutorKind kind_;
+            std::mutex mutex_;
+            std::condition_variable changed_;
+            std::deque<Work> queue_;
+            std::vector<std::thread> workers_;
+            bool stopping_ = false;
+        };
+
+        class ExecutorScheduler final
+        {
+        public:
+            using Work = ExecutorQueue::Work;
+
+            ExecutorScheduler(std::uint32_t workerThreads, const std::uint32_t blockingThreads,
+                              const std::uint32_t ioThreads)
+                : workerThreads_(workerThreads == 0 ? defaultWorkerCount() : workerThreads),
+                  blockingThreads_((std::max)(std::uint32_t{1}, blockingThreads)),
+                  ioThreads_((std::max)(std::uint32_t{1}, ioThreads)), mainThread_(std::this_thread::get_id())
+            {
+            }
+
+            ~ExecutorScheduler()
+            {
+                std::deque<Work> cancelled;
+                {
+                    std::scoped_lock lock{mutex_};
+                    stopping_ = true;
+                    cancelled.swap(mainQueue_);
+                }
+                for (Work& work : cancelled)
+                    if (work.cancel)
+                        work.cancel();
+            }
+
+            ExecutorScheduler(const ExecutorScheduler&) = delete;
+            ExecutorScheduler& operator=(const ExecutorScheduler&) = delete;
+
+            void bindMain()
+            {
+                std::scoped_lock lock{mutex_};
+                mainThread_ = std::this_thread::get_id();
+            }
+
+            [[nodiscard]] bool isMainThread() const
+            {
+                std::scoped_lock lock{mutex_};
+                return mainThread_ == std::this_thread::get_id();
+            }
+
+            bool schedule(const ExecutorKind kind, Work work)
+            {
+                if (kind == ExecutorKind::Main)
+                {
+                    std::scoped_lock lock{mutex_};
+                    if (stopping_)
+                        return false;
+                    mainQueue_.push_back(std::move(work));
+                    return true;
+                }
+
+                ExecutorQueue* queue = nullptr;
+                {
+                    std::scoped_lock lock{mutex_};
+                    if (stopping_)
+                        return false;
+                    std::unique_ptr<ExecutorQueue>* target = nullptr;
+                    std::uint32_t count = 1;
+                    if (kind == ExecutorKind::Worker)
+                    {
+                        target = &worker_;
+                        count = workerThreads_;
+                    }
+                    else if (kind == ExecutorKind::Blocking)
+                    {
+                        target = &blocking_;
+                        count = blockingThreads_;
+                    }
+                    else if (kind == ExecutorKind::Io)
+                    {
+                        target = &io_;
+                        count = ioThreads_;
+                    }
+                    if (!target)
+                        return false;
+                    if (!*target)
+                        *target = std::make_unique<ExecutorQueue>(kind, count);
+                    queue = target->get();
+                }
+                return queue->schedule(std::move(work));
+            }
+
+            std::uint64_t drainMain()
+            {
+                if (!isMainThread())
+                    return 0;
+                const ExecutorKind previous = activeExecutor;
+                activeExecutor = ExecutorKind::Main;
+                std::uint64_t count = 0;
+                for (;;)
+                {
+                    Work work;
+                    {
+                        std::scoped_lock lock{mutex_};
+                        if (mainQueue_.empty())
+                            break;
+                        work = std::move(mainQueue_.front());
+                        mainQueue_.pop_front();
+                    }
+                    try
+                    {
+                        work.run();
+                    }
+                    catch (...)
+                    {
+                        if (work.cancel)
+                            work.cancel();
+                    }
+                    ++count;
+                }
+                activeExecutor = previous;
+                return count;
+            }
+
+        private:
+            [[nodiscard]] static std::uint32_t defaultWorkerCount() noexcept
+            {
+                const std::uint32_t hardware = std::thread::hardware_concurrency();
+                return hardware > 1 ? hardware - 1 : 1;
+            }
+
+            mutable std::mutex mutex_;
+            std::deque<Work> mainQueue_;
+            std::unique_ptr<ExecutorQueue> worker_;
+            std::unique_ptr<ExecutorQueue> blocking_;
+            std::unique_ptr<ExecutorQueue> io_;
+            std::uint32_t workerThreads_;
+            std::uint32_t blockingThreads_;
+            std::uint32_t ioThreads_;
+            std::thread::id mainThread_;
+            bool stopping_ = false;
+        };
     } // namespace
 
     struct Machine::Program
@@ -498,13 +730,24 @@ namespace wio::vm
             std::unordered_map<std::uint32_t, const bytecode::Block*> blocks;
         };
 
+        Machine* owner = nullptr;
         const bytecode::Module* module = nullptr;
         ExecutionError loadError;
         std::vector<FunctionPlan> functions;
         std::vector<std::unique_ptr<PlaceStorage>> globals;
         std::mutex timerMutex;
         std::unique_ptr<TimerScheduler> timers;
+        std::recursive_mutex executionMutex;
+        std::unique_ptr<ExecutorScheduler> executors;
         bool valid = false;
+    };
+
+    struct Machine::ExecutionState
+    {
+        std::vector<Frame> frames;
+        Value activeTask;
+        ExecutorKind executor = ExecutorKind::Inherit;
+        std::uint64_t executed = 0;
     };
 
     ExecutionResult ExecutionResult::success(Value value)
@@ -522,10 +765,20 @@ namespace wio::vm
         return result;
     }
 
+    ExecutionResult ExecutionResult::suspended()
+    {
+        ExecutionResult result;
+        result.suspended_ = true;
+        return result;
+    }
+
     Machine::Machine(const bytecode::Module& module, const MachineOptions options)
         : program_(std::make_unique<Program>()), options_(options)
     {
+        program_->owner = this;
         program_->module = &module;
+        program_->executors = std::make_unique<ExecutorScheduler>(options.workerThreadCount,
+                                                                  options.blockingThreadCount, options.ioThreadCount);
         const bytecode::VerificationResult verification = bytecode::Verifier{}.verify(module);
         if (!verification.succeeded())
         {
@@ -558,8 +811,24 @@ namespace wio::vm
     }
 
     Machine::~Machine() = default;
-    Machine::Machine(Machine&&) noexcept = default;
-    Machine& Machine::operator=(Machine&&) noexcept = default;
+
+    Machine::Machine(Machine&& other) noexcept
+        : program_(std::move(other.program_)), options_(std::move(other.options_))
+    {
+        if (program_)
+            program_->owner = this;
+    }
+
+    Machine& Machine::operator=(Machine&& other) noexcept
+    {
+        if (this == &other)
+            return *this;
+        program_ = std::move(other.program_);
+        options_ = std::move(other.options_);
+        if (program_)
+            program_->owner = this;
+        return *this;
+    }
 
     ExecutionResult Machine::invoke(const std::uint32_t functionId, const std::span<const Value> arguments)
     {
@@ -576,7 +845,32 @@ namespace wio::vm
 
     ExecutionResult Machine::wait(const Value& task)
     {
-        return driveTask(task);
+        ExecutionResult result = driveTask(task);
+        if (!result.isSuspended())
+            return result;
+
+        while (task.taskState() == AsyncTaskState::Pending || task.taskState() == AsyncTaskState::Running)
+        {
+            const std::uint64_t drained = program_ && program_->executors ? program_->executors->drainMain() : 0;
+            if (drained == 0)
+                (void)task.waitTaskFor(std::chrono::milliseconds{1});
+        }
+        if (task.taskState() == AsyncTaskState::Ready)
+            return ExecutionResult::success(task.taskResult());
+        if (task.taskState() == AsyncTaskState::Cancelled)
+            return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+        return ExecutionResult::failure(task.taskError());
+    }
+
+    void Machine::bindMainExecutor()
+    {
+        if (program_ && program_->executors)
+            program_->executors->bindMain();
+    }
+
+    std::uint64_t Machine::drainMainExecutor()
+    {
+        return program_ && program_->executors ? program_->executors->drainMain() : 0;
     }
 
     bool Machine::cancel(const Value& task)
@@ -679,6 +973,8 @@ namespace wio::vm
             return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
         if (task.taskState() == AsyncTaskState::Faulted)
             return ExecutionResult::failure(task.taskError());
+        if (task.taskState() == AsyncTaskState::Running)
+            return ExecutionResult::suspended();
         if (task.taskFunction() == bytecode::InvalidIndex)
         {
             task.waitTask();
@@ -705,6 +1001,8 @@ namespace wio::vm
         }
 
         ExecutionResult result = execute(task.taskFunction(), arguments, &task);
+        if (result.isSuspended())
+            return result;
         if (!result.succeeded())
         {
             if (task.taskState() == AsyncTaskState::Cancelled)
@@ -724,19 +1022,57 @@ namespace wio::vm
         return ExecutionResult::success(task.taskResult());
     }
 
+    void Machine::resumeTask(std::shared_ptr<ExecutionState> state)
+    {
+        if (state->activeTask.taskState() == AsyncTaskState::Cancelled)
+            return;
+        try
+        {
+            ExecutionResult result = execute(bytecode::InvalidIndex, {}, nullptr, state);
+            if (result.isSuspended())
+                return;
+
+            const Value& task = state->activeTask;
+            if (!result.succeeded())
+            {
+                if (task.taskState() != AsyncTaskState::Cancelled)
+                    (void)task.failTask(result.error());
+                return;
+            }
+            if (task.taskState() != AsyncTaskState::Cancelled)
+                (void)task.completeTask(result.value());
+        }
+        catch (...)
+        {
+            if (state->activeTask.taskState() != AsyncTaskState::Cancelled)
+                (void)state->activeTask.failTask(
+                    {"WVM1207", "VM executor continuation threw across the runtime boundary"});
+        }
+    }
+
     ExecutionResult Machine::execute(const std::uint32_t functionId, const std::span<const Value> arguments,
-                                     const Value* activeTask)
+                                     const Value* activeTask, std::shared_ptr<ExecutionState> resumedState)
     {
         if (!program_ || !program_->module)
             return ExecutionResult::failure({"WVM1000", "The virtual machine has no loaded module"});
         if (!program_->valid)
             return ExecutionResult::failure(program_->loadError);
+        std::unique_lock executionLock{program_->executionMutex};
         const bytecode::Module& module = *program_->module;
-        if (functionId >= module.functions.size())
+        if (!resumedState && functionId >= module.functions.size())
             return ExecutionResult::failure({"WVM1002", "Entry function id is outside the module"});
 
-        std::vector<Frame> frames;
-        frames.reserve(16);
+        const bool resuming = static_cast<bool>(resumedState);
+        std::shared_ptr<ExecutionState> state = resuming ? std::move(resumedState) : std::make_shared<ExecutionState>();
+        if (!resuming)
+        {
+            state->frames.reserve(16);
+            if (activeTask)
+                state->activeTask = *activeTask;
+            state->executor = activeExecutor;
+        }
+        std::vector<Frame>& frames = state->frames;
+        const Value* stateTask = state->activeTask.kind() == Value::Kind::AsyncTask ? &state->activeTask : nullptr;
         const auto failWithStack = [&](ExecutionError error)
         {
             error.stack.reserve(frames.size());
@@ -796,9 +1132,12 @@ namespace wio::vm
             return ExecutionResult::success();
         };
 
-        ExecutionResult initial = pushFrame(module.functions[functionId], arguments, {});
-        if (!initial.succeeded())
-            return initial;
+        if (!resuming)
+        {
+            ExecutionResult initial = pushFrame(module.functions[functionId], arguments, {});
+            if (!initial.succeeded())
+                return initial;
+        }
 
         const auto completeFrame = [&](Value returned) -> std::optional<ExecutionResult>
         {
@@ -844,7 +1183,7 @@ namespace wio::vm
             return std::nullopt;
         };
 
-        std::uint64_t executed = 0;
+        std::uint64_t& executed = state->executed;
         while (!frames.empty())
         {
             Frame& frame = frames.back();
@@ -863,7 +1202,8 @@ namespace wio::vm
                 {
                     action = options_.debugObserver->onInstruction(
                         {frame.function->id, frame.block->id, static_cast<std::uint32_t>(frame.instruction),
-                         instruction.opcode, instruction.source, static_cast<std::uint32_t>(frames.size())});
+                         instruction.opcode, instruction.source, static_cast<std::uint32_t>(frames.size()),
+                         state->executor});
                 }
                 catch (...)
                 {
@@ -2829,7 +3169,7 @@ namespace wio::vm
             }
             if (instruction.opcode == bytecode::Opcode::CancellationCheck)
             {
-                if (activeTask && activeTask->taskState() == AsyncTaskState::Cancelled)
+                if (stateTask && stateTask->taskState() == AsyncTaskState::Cancelled)
                     return fail("WVM1165", "Async task was cancelled at a cooperative suspension point");
                 ++frame.instruction;
                 continue;
@@ -2840,9 +3180,10 @@ namespace wio::vm
                     instruction.projectionIndex >= frame.function->coroutine.states.size() ||
                     instruction.targets.size() != 1)
                     return fail("WVM1171", "Coroutine suspension does not match its function state table");
-                const bytecode::Function::CoroutineState& state =
+                const bytecode::Function::CoroutineState& coroutineState =
                     frame.function->coroutine.states[instruction.projectionIndex];
-                if (state.suspendBlock != frame.block->id || state.resumeBlock != instruction.targets.front().block)
+                if (coroutineState.suspendBlock != frame.block->id ||
+                    coroutineState.resumeBlock != instruction.targets.front().block)
                     return fail("WVM1172", "Coroutine suspension state does not match its resume edge");
 
                 frame.resumedValue = {};
@@ -2853,7 +3194,9 @@ namespace wio::vm
                         instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
                     if (!awaited || awaited->kind() != Value::Kind::AsyncTask)
                         return fail("WVM1173", "Coroutine await requires an async task operand");
-                    ExecutionResult awaitedResult = driveTask(*awaited);
+                    executionLock.unlock();
+                    ExecutionResult awaitedResult = wait(*awaited);
+                    executionLock.lock();
                     if (!awaitedResult.succeeded())
                         return awaitedResult;
                     frame.resumedValue = awaitedResult.value();
@@ -2862,12 +3205,31 @@ namespace wio::vm
                 else if (instruction.asyncOperation != AsyncSwitchExecutor || !instruction.operands.empty())
                     return fail("WVM1174", "Coroutine suspension carries an unsupported async operation");
 
-                const auto resume = program_->functions[frame.function->id].blocks.find(state.resumeBlock);
+                const auto resume = program_->functions[frame.function->id].blocks.find(coroutineState.resumeBlock);
                 if (resume == program_->functions[frame.function->id].blocks.end())
                     return fail("WVM1175", "Coroutine resume block does not exist");
                 frame.resumedState = instruction.projectionIndex;
                 frame.block = resume->second;
                 frame.instruction = 0;
+
+                if (instruction.asyncOperation == AsyncSwitchExecutor)
+                {
+                    const std::optional<ExecutorKind> target = executorKind(instruction.asyncExecutor);
+                    if (!target || !stateTask || !program_->executors)
+                        return fail("WVM1208", "Coroutine executor switch has no runnable target");
+                    state->executor = *target;
+                    const Value task = *stateTask;
+                    executionLock.unlock();
+                    Program* const program = program_.get();
+                    const bool scheduled = program->executors->schedule(
+                        *target, ExecutorQueue::Work{.run = [program, state] { program->owner->resumeTask(state); },
+                                                     .cancel = [task] { (void)task.cancelTask(); }});
+                    if (!scheduled)
+                        return failWithStack({"WVM1208", "Coroutine executor queue rejected its continuation",
+                                              frame.function->id, frame.block->id,
+                                              static_cast<std::uint32_t>(frame.instruction), instruction.source});
+                    return ExecutionResult::suspended();
+                }
                 continue;
             }
             if (instruction.opcode == bytecode::Opcode::CoroutineResume)

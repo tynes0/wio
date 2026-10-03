@@ -3,12 +3,14 @@
 #include "wio/vm/machine.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <ranges>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -20,6 +22,45 @@ namespace
     constexpr std::uint32_t Void = 0;
     constexpr std::uint32_t I32 = 1;
     constexpr std::uint32_t TaskI32 = 2;
+
+    class ExecutorObserver final : public vm::DebugObserver
+    {
+    public:
+        explicit ExecutorObserver(const std::thread::id callingThread) : callingThread_(callingThread)
+        {
+        }
+
+        vm::DebugAction onInstruction(const vm::DebugEvent& event) override
+        {
+            if (event.function == 3 && event.block == 0 && event.executor == vm::ExecutorKind::Inherit &&
+                std::this_thread::get_id() == callingThread_)
+                initialOnCallingThread.store(true, std::memory_order_relaxed);
+            if ((event.function == 3 && event.block == 1) || (event.function == 5 && event.block == 1))
+            {
+                if (event.executor == vm::ExecutorKind::Worker && std::this_thread::get_id() != callingThread_)
+                    resumedOnWorker.store(true, std::memory_order_relaxed);
+            }
+            if (event.function == 5 && event.block == 2 && event.executor == vm::ExecutorKind::Blocking &&
+                std::this_thread::get_id() != callingThread_)
+                resumedOnBlocking.store(true, std::memory_order_relaxed);
+            if (event.function == 5 && event.block == 3 && event.executor == vm::ExecutorKind::Io &&
+                std::this_thread::get_id() != callingThread_)
+                resumedOnIo.store(true, std::memory_order_relaxed);
+            if (event.function == 5 && event.block == 4 && event.executor == vm::ExecutorKind::Main &&
+                std::this_thread::get_id() == callingThread_)
+                resumedOnMain.store(true, std::memory_order_relaxed);
+            return vm::DebugAction::Continue;
+        }
+
+        std::atomic_bool initialOnCallingThread = false;
+        std::atomic_bool resumedOnWorker = false;
+        std::atomic_bool resumedOnBlocking = false;
+        std::atomic_bool resumedOnIo = false;
+        std::atomic_bool resumedOnMain = false;
+
+    private:
+        std::thread::id callingThread_;
+    };
 
     bool expect(const bool condition, const std::string_view message)
     {
@@ -219,6 +260,150 @@ namespace
         addFrameSlot(faulted, 1, I32);
         addFrameSlot(faulted, 2, I32);
         module.functions.push_back(std::move(faulted));
+
+        bytecode::Instruction switchWorkerCheck = instruction(bytecode::Opcode::CancellationCheck);
+        switchWorkerCheck.projectionIndex = 0;
+        switchWorkerCheck.asyncOperation = 2;
+        switchWorkerCheck.asyncExecutor = 2;
+        bytecode::Instruction switchWorker = instruction(bytecode::Opcode::CoroutineSuspend);
+        switchWorker.targets = {bytecode::BranchTarget{.block = 1}};
+        switchWorker.projectionIndex = 0;
+        switchWorker.asyncOperation = 2;
+        switchWorker.asyncExecutor = 2;
+        bytecode::Instruction switchBlockingCheck = instruction(bytecode::Opcode::CancellationCheck);
+        switchBlockingCheck.projectionIndex = 1;
+        switchBlockingCheck.asyncOperation = 2;
+        switchBlockingCheck.asyncExecutor = 3;
+        bytecode::Instruction switchBlocking = instruction(bytecode::Opcode::CoroutineSuspend);
+        switchBlocking.targets = {bytecode::BranchTarget{.block = 2}};
+        switchBlocking.projectionIndex = 1;
+        switchBlocking.asyncOperation = 2;
+        switchBlocking.asyncExecutor = 3;
+        bytecode::Instruction switchIoCheck = instruction(bytecode::Opcode::CancellationCheck);
+        switchIoCheck.projectionIndex = 2;
+        switchIoCheck.asyncOperation = 2;
+        switchIoCheck.asyncExecutor = 4;
+        bytecode::Instruction switchIo = instruction(bytecode::Opcode::CoroutineSuspend);
+        switchIo.targets = {bytecode::BranchTarget{.block = 3}};
+        switchIo.projectionIndex = 2;
+        switchIo.asyncOperation = 2;
+        switchIo.asyncExecutor = 4;
+        bytecode::Instruction switchMainCheck = instruction(bytecode::Opcode::CancellationCheck);
+        switchMainCheck.projectionIndex = 3;
+        switchMainCheck.asyncOperation = 2;
+        switchMainCheck.asyncExecutor = 1;
+        bytecode::Instruction switchMain = instruction(bytecode::Opcode::CoroutineSuspend);
+        switchMain.targets = {bytecode::BranchTarget{.block = 4}};
+        switchMain.projectionIndex = 3;
+        switchMain.asyncOperation = 2;
+        switchMain.asyncExecutor = 1;
+        bytecode::Function roundTrip =
+            function(5, TaskI32, {},
+                     {block(0, {switchWorkerCheck, switchWorker}), block(1, {switchBlockingCheck, switchBlocking}),
+                      block(2, {switchIoCheck, switchIo}), block(3, {switchMainCheck, switchMain}),
+                      block(4, {constant(0, 4), complete(0)})});
+        makeAsync(roundTrip);
+        addFrameSlot(roundTrip, 0, I32);
+        roundTrip.coroutine.states.push_back(bytecode::Function::CoroutineState{
+            .index = 0,
+            .suspendBlock = 0,
+            .resumeBlock = 1,
+            .resultType = Void,
+            .executor = 2,
+            .cancellationPoint = true,
+        });
+        roundTrip.coroutine.states.push_back(bytecode::Function::CoroutineState{
+            .index = 1,
+            .suspendBlock = 1,
+            .resumeBlock = 2,
+            .resultType = Void,
+            .executor = 3,
+            .cancellationPoint = true,
+        });
+        roundTrip.coroutine.states.push_back(bytecode::Function::CoroutineState{
+            .index = 2,
+            .suspendBlock = 2,
+            .resumeBlock = 3,
+            .resultType = Void,
+            .executor = 4,
+            .cancellationPoint = true,
+        });
+        roundTrip.coroutine.states.push_back(bytecode::Function::CoroutineState{
+            .index = 3,
+            .suspendBlock = 3,
+            .resumeBlock = 4,
+            .resultType = Void,
+            .executor = 1,
+            .cancellationPoint = true,
+        });
+        roundTrip.coroutine.maySwitchThreads = true;
+        module.functions.push_back(std::move(roundTrip));
+
+        bytecode::Instruction awaitSwitchedCheck = instruction(bytecode::Opcode::CancellationCheck);
+        awaitSwitchedCheck.projectionIndex = 0;
+        awaitSwitchedCheck.asyncOperation = 1;
+        bytecode::Instruction awaitSwitched = instruction(bytecode::Opcode::CoroutineSuspend);
+        awaitSwitched.operands = {0};
+        awaitSwitched.targets = {bytecode::BranchTarget{.block = 1}};
+        awaitSwitched.projectionIndex = 0;
+        awaitSwitched.asyncOperation = 1;
+        bytecode::Instruction resumeSwitched = instruction(bytecode::Opcode::CoroutineResume);
+        resumeSwitched.result = 1;
+        resumeSwitched.resultType = I32;
+        resumeSwitched.projectionIndex = 0;
+        resumeSwitched.asyncOperation = 1;
+        bytecode::Instruction releaseSwitched = instruction(bytecode::Opcode::Release);
+        releaseSwitched.operands = {0};
+        bytecode::Function awaitWorker = function(6, TaskI32, {},
+                                                  {block(0, {call(0, 3), awaitSwitchedCheck, awaitSwitched}),
+                                                   block(1, {resumeSwitched, releaseSwitched, complete(1)})});
+        makeAsync(awaitWorker);
+        addFrameSlot(awaitWorker, 0, TaskI32, 2);
+        addFrameSlot(awaitWorker, 1, I32);
+        awaitWorker.coroutine.states.push_back(bytecode::Function::CoroutineState{
+            .index = 0,
+            .suspendBlock = 0,
+            .resumeBlock = 1,
+            .awaitedTask = 0,
+            .resumedValue = 1,
+            .resultType = I32,
+            .executor = 0,
+            .cancellationPoint = true,
+        });
+        module.functions.push_back(std::move(awaitWorker));
+
+        bytecode::Instruction faultSwitchCheck = instruction(bytecode::Opcode::CancellationCheck);
+        faultSwitchCheck.projectionIndex = 0;
+        faultSwitchCheck.asyncOperation = 2;
+        faultSwitchCheck.asyncExecutor = 2;
+        bytecode::Instruction faultSwitch = instruction(bytecode::Opcode::CoroutineSuspend);
+        faultSwitch.targets = {bytecode::BranchTarget{.block = 1}};
+        faultSwitch.projectionIndex = 0;
+        faultSwitch.asyncOperation = 2;
+        faultSwitch.asyncExecutor = 2;
+        bytecode::Instruction divideAfterSwitch = instruction(bytecode::Opcode::Binary);
+        divideAfterSwitch.result = 2;
+        divideAfterSwitch.resultType = I32;
+        divideAfterSwitch.operands = {0, 1};
+        divideAfterSwitch.binaryOperator = 3;
+        bytecode::Function switchedFault =
+            function(7, TaskI32, {},
+                     {block(0, {faultSwitchCheck, faultSwitch}),
+                      block(1, {constant(0, 3), constant(1, 5), divideAfterSwitch, complete(2)})});
+        makeAsync(switchedFault);
+        addFrameSlot(switchedFault, 0, I32);
+        addFrameSlot(switchedFault, 1, I32);
+        addFrameSlot(switchedFault, 2, I32);
+        switchedFault.coroutine.states.push_back(bytecode::Function::CoroutineState{
+            .index = 0,
+            .suspendBlock = 0,
+            .resumeBlock = 1,
+            .resultType = Void,
+            .executor = 2,
+            .cancellationPoint = true,
+        });
+        switchedFault.coroutine.maySwitchThreads = true;
+        module.functions.push_back(std::move(switchedFault));
         return module;
     }
 } // namespace
@@ -231,7 +416,8 @@ int main(const int argc, const char* const* argv)
     if (!decoded.succeeded())
         return 1;
 
-    vm::Machine machine{decoded.module};
+    ExecutorObserver observer{std::this_thread::get_id()};
+    vm::Machine machine{decoded.module, vm::MachineOptions{.debugObserver = &observer, .workerThreadCount = 1}};
     const vm::ExecutionResult started = machine.invoke(2);
     ok &= expect(started.succeeded() && started.value().kind() == vm::Value::Kind::AsyncTask,
                  "A synchronous function must receive an async task handle without replacing its return type");
@@ -245,6 +431,36 @@ int main(const int argc, const char* const* argv)
     const vm::ExecutionResult switched = switchedTask.succeeded() ? machine.wait(switchedTask.value()) : switchedTask;
     ok &= expect(switched.succeeded() && switched.value().asSignedInteger() == 9,
                  "Executor-switch suspension must resume on its canonical continuation block");
+    ok &= expect(observer.initialOnCallingThread.load(std::memory_order_relaxed),
+                 "An eager task must execute up to its first suspension on the calling thread");
+    ok &= expect(observer.resumedOnWorker.load(std::memory_order_relaxed),
+                 "A worker switch must resume the preserved VM frame on a worker thread");
+
+    const vm::ExecutionResult roundTripTask = machine.invoke(5);
+    const vm::ExecutionResult roundTrip =
+        roundTripTask.succeeded() ? machine.wait(roundTripTask.value()) : roundTripTask;
+    ok &= expect(roundTrip.succeeded() && roundTrip.value().asSignedInteger() == 9,
+                 "A worker-to-main executor round trip must preserve its result");
+    ok &= expect(observer.resumedOnMain.load(std::memory_order_relaxed),
+                 "Machine::wait must pump main-executor continuations on the bound calling thread");
+    ok &= expect(observer.resumedOnBlocking.load(std::memory_order_relaxed),
+                 "A blocking switch must resume on the dedicated blocking executor");
+    ok &= expect(observer.resumedOnIo.load(std::memory_order_relaxed),
+                 "An I/O switch must resume on the dedicated I/O executor");
+
+    const vm::ExecutionResult awaitWorkerTask = machine.invoke(6);
+    const vm::ExecutionResult awaitWorker =
+        awaitWorkerTask.succeeded() ? machine.wait(awaitWorkerTask.value()) : awaitWorkerTask;
+    ok &= expect(awaitWorker.succeeded() && awaitWorker.value().asSignedInteger() == 9,
+                 "Awaiting a task that switches executors must not deadlock the serialized VM");
+
+    const vm::ExecutionResult switchedFaultTask = machine.invoke(7);
+    const vm::ExecutionResult switchedFault =
+        switchedFaultTask.succeeded() ? machine.wait(switchedFaultTask.value()) : switchedFaultTask;
+    ok &= expect(!switchedFault.succeeded() && switchedFault.error().code == "WVM1014" &&
+                     !switchedFault.error().stack.empty() && switchedFault.error().stack.front().function == 7 &&
+                     switchedFault.error().stack.front().block == 1,
+                 "A fault after an executor switch must preserve its resumed VM stack trace");
 
     const vm::ExecutionResult faultedTask = machine.invoke(4);
     const vm::ExecutionResult faulted = faultedTask.succeeded() ? machine.wait(faultedTask.value()) : faultedTask;

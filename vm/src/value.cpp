@@ -151,6 +151,19 @@ namespace wio::vm
                               });
         }
 
+        bool waitTaskFor(const std::chrono::milliseconds duration) const
+        {
+            std::unique_lock lock{taskMutex_};
+            return taskChanged_.wait_for(lock, duration,
+                                         [&]
+                                         {
+                                             const AsyncTaskState state = taskState();
+                                             return state == AsyncTaskState::Ready ||
+                                                    state == AsyncTaskState::Cancelled ||
+                                                    state == AsyncTaskState::Faulted;
+                                         });
+        }
+
         [[nodiscard]] const Value& taskResult() const noexcept
         {
             return taskResult_;
@@ -960,6 +973,11 @@ namespace wio::vm
     {
         if (kind_ == Kind::AsyncTask)
             scalar_.aggregate->waitTask();
+    }
+
+    bool Value::waitTaskFor(const std::chrono::milliseconds duration) const
+    {
+        return kind_ == Kind::AsyncTask && scalar_.aggregate->waitTaskFor(duration);
     }
 
     bool Value::operator==(const Value& other) const noexcept

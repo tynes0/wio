@@ -13,6 +13,15 @@
 
 namespace wio::vm
 {
+    enum class ExecutorKind : std::uint8_t
+    {
+        Inherit,
+        Main,
+        Worker,
+        Blocking,
+        Io
+    };
+
     enum class DebugAction : std::uint8_t
     {
         Continue,
@@ -27,6 +36,7 @@ namespace wio::vm
         bytecode::Opcode opcode = bytecode::Opcode::Unreachable;
         bytecode::SourceSpan source;
         std::uint32_t callDepth = 0;
+        ExecutorKind executor = ExecutorKind::Inherit;
     };
 
     class DebugObserver
@@ -45,6 +55,9 @@ namespace wio::vm
         std::uint32_t callDepthLimit = 1'024;
         std::uint32_t registerLimitPerFrame = 1'000'000;
         DebugObserver* debugObserver = nullptr;
+        std::uint32_t workerThreadCount = 0;
+        std::uint32_t blockingThreadCount = 1;
+        std::uint32_t ioThreadCount = 1;
     };
 
     class ExecutionResult final
@@ -67,9 +80,18 @@ namespace wio::vm
         }
 
     private:
+        [[nodiscard]] static ExecutionResult suspended();
+        [[nodiscard]] bool isSuspended() const noexcept
+        {
+            return suspended_;
+        }
+
         bool succeeded_ = false;
+        bool suspended_ = false;
         Value value_;
         ExecutionError error_;
+
+        friend class Machine;
     };
 
     class Machine final
@@ -89,6 +111,11 @@ namespace wio::vm
         [[nodiscard]] ExecutionResult wait(const Value& task);
         bool cancel(const Value& task);
 
+        // Main-executor continuations run only on the bound thread. wait()
+        // pumps this queue automatically when called by that thread.
+        void bindMainExecutor();
+        [[nodiscard]] std::uint64_t drainMainExecutor();
+
         // External tasks are the runtime half of the future Sprint 20 native
         // bridge. Completion is exactly-once and may arrive from any thread.
         [[nodiscard]] Value makeExternalTask();
@@ -100,8 +127,12 @@ namespace wio::vm
         [[nodiscard]] Value sleepFor(std::chrono::nanoseconds duration);
 
     private:
+        struct ExecutionState;
+
         [[nodiscard]] ExecutionResult execute(std::uint32_t function, std::span<const Value> arguments,
-                                              const Value* activeTask);
+                                              const Value* activeTask,
+                                              std::shared_ptr<ExecutionState> resumedState = {});
+        void resumeTask(std::shared_ptr<ExecutionState> state);
         [[nodiscard]] Value startTask(std::uint32_t function, std::span<const Value> arguments);
         [[nodiscard]] ExecutionResult driveTask(const Value& task);
 
