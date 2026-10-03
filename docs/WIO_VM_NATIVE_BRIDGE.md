@@ -64,10 +64,29 @@ handle for the duration of the synchronous thunk without transferring
 ownership. Owned results are retained before the native frame releases its
 wire value.
 
+## Sprint 20.3 callback entry
+
+Scalar Wio function values can now cross a native parameter as wire-v2
+callbacks. A callback invocation decodes its scalar arguments, re-enters the
+owning machine through the callable's function and captures, and converts the
+scalar/void result back to the wire contract. VM errors and conversion failures
+are contained at the callback boundary instead of unwinding through native
+code.
+
+The bytecode verifier pins callback parameters to function types and validates
+the `call`/`retained` lifetime and `caller`/`any` thread enums. Call-scoped
+callbacks expire immediately after the native thunk returns, even if native
+code incorrectly retained the descriptor. Retained callbacks keep their VM
+callable alive, but return `WIO_NATIVE_ABI_STALE_HANDLE` after the owning
+machine is gone. Caller-thread callbacks reject foreign entry before trying to
+lock or execute the VM; any-thread callbacks serialize entry through the
+machine execution lock. The callback ops flags carry this affinity into the
+shared C++ wire codec as well.
+
 ## Remaining Sprint 20 surface
 
-The next slices add VM-backed callbacks with call/retained lifetime and
-caller/any-thread enforcement,
-foreign-thread entry and completion scheduling, native async-task adaptation,
-library loading/registry discovery, CLI/project integration, and the full
-C++-backend-versus-VM native differential gate.
+The next slices add foreign-thread completion scheduling, native async-task
+adaptation, library loading/registry discovery, CLI/project integration, and
+the full C++-backend-versus-VM native differential gate. Non-scalar callback
+signatures remain intentionally rejected until owned callback-result storage
+is part of the wire contract.

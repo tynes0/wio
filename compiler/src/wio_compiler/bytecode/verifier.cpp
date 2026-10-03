@@ -173,13 +173,22 @@ namespace wio::bytecode
                 {
                     if (!validType(parameter.type))
                         report("WBC1029", "Native parameter references an invalid type id", function.id);
-                    if (parameter.passing > 4 || parameter.marshalling > 9 ||
+                    const std::uint32_t parameterType = directType(parameter.type);
+                    const bool callbackShape = parameter.marshalling != 7
+                                                   ? parameter.callbackLifetime == 0 && parameter.callbackThread == 0
+                                                   : parameter.passing == 0 && parameter.callbackLifetime <= 1 &&
+                                                         parameter.callbackThread <= 1 &&
+                                                         parameterType < module.types.size() &&
+                                                         module.types[parameterType].kind == 33 &&
+                                                         !module.types[parameterType].arguments.empty();
+                    if (parameter.passing > 4 || parameter.marshalling > 9 || !callbackShape ||
                         ((parameter.marshalling == 4 || parameter.marshalling == 6 || parameter.marshalling == 8) &&
                          !hasStableAbiType(parameter.type)))
                         report("WBC1074", "Native parameter has an invalid ABI mode or no stable type identity",
                                function.id);
                 }
-                if (binding.result.passing > 4 || binding.result.marshalling > 9 ||
+                if (binding.result.passing > 4 || binding.result.marshalling > 9 || binding.result.marshalling == 7 ||
+                    binding.result.callbackLifetime != 0 || binding.result.callbackThread != 0 ||
                     ((binding.result.marshalling == 4 || binding.result.marshalling == 6 ||
                       binding.result.marshalling == 8) &&
                      !hasStableAbiType(binding.result.type)))

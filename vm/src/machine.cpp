@@ -9,6 +9,7 @@
 #include "text_intrinsics.h"
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <charconv>
 #include <condition_variable>
@@ -126,6 +127,73 @@ namespace wio::vm
         constexpr std::uint8_t BinaryShiftRight = 15;
 
         thread_local ExecutorKind activeExecutor = ExecutorKind::Inherit;
+
+        struct NativeCallbackState final
+        {
+            std::atomic_uint32_t references{1};
+            std::atomic_bool active{true};
+            std::thread::id callerThread;
+            bool anyThread = false;
+            std::function<WioNativeAbiStatus(const WioNativeAbiValue*, std::uint64_t, WioNativeAbiValue*,
+                                             WioNativeAbiFailure*)>
+                invoke;
+        };
+
+        void retainNativeCallback(void* const userdata) noexcept
+        {
+            if (userdata)
+                static_cast<NativeCallbackState*>(userdata)->references.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        void releaseNativeCallback(void* const userdata) noexcept
+        {
+            auto* state = static_cast<NativeCallbackState*>(userdata);
+            if (state && state->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                delete state;
+        }
+
+        WioNativeAbiStatus invokeNativeCallback(void* const userdata, const WioNativeAbiValue* arguments,
+                                                const std::uint64_t argumentCount, WioNativeAbiValue* result,
+                                                WioNativeAbiFailure* failure) noexcept
+        {
+            auto* state = static_cast<NativeCallbackState*>(userdata);
+            if (!state || !result || (argumentCount != 0 && !arguments))
+                return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            *result = {};
+            if (!state->active.load(std::memory_order_acquire))
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            if (!state->anyThread && state->callerThread != std::this_thread::get_id())
+                return WIO_NATIVE_ABI_WRONG_THREAD;
+            try
+            {
+                return state->invoke(arguments, argumentCount, result, failure);
+            }
+            catch (...)
+            {
+                return WIO_NATIVE_ABI_EXCEPTION;
+            }
+        }
+
+        const WioNativeAbiCallbackOps CallerThreadCallbackOps{
+            WIO_NATIVE_ABI_VERSION, WIO_NATIVE_ABI_CALLBACK_CALLER_THREAD, &retainNativeCallback,
+            &releaseNativeCallback, &invokeNativeCallback};
+        const WioNativeAbiCallbackOps AnyThreadCallbackOps{WIO_NATIVE_ABI_VERSION, WIO_NATIVE_ABI_CALLBACK_ANY_THREAD,
+                                                           &retainNativeCallback, &releaseNativeCallback,
+                                                           &invokeNativeCallback};
+
+        void setCallbackFailure(WioNativeAbiFailure* const failure, const WioNativeAbiStatus status,
+                                const std::string_view message) noexcept
+        {
+            if (!failure)
+                return;
+            thread_local std::string storedMessage;
+            static constexpr char Category[] = "wio.vm.callback";
+            storedMessage = message;
+            *failure = {status,
+                        0,
+                        {Category, sizeof(Category) - 1},
+                        {storedMessage.data(), static_cast<std::uint64_t>(storedMessage.size())}};
+        }
 
         struct Register
         {
@@ -1768,13 +1836,10 @@ namespace wio::vm
             if (options_.debugObserver)
             {
                 DebugAction action = DebugAction::Abort;
-                const DebugEvent event{frame.function->id,
-                                       frame.block->id,
-                                       static_cast<std::uint32_t>(frame.instruction),
-                                       instruction.opcode,
-                                       instruction.source,
-                                       static_cast<std::uint32_t>(frames.size()),
-                                       state->executor};
+                const DebugEvent event{
+                    frame.function->id, frame.block->id,    static_cast<std::uint32_t>(frame.instruction),
+                    instruction.opcode, instruction.source, static_cast<std::uint32_t>(frames.size()),
+                    state->executor};
                 try
                 {
                     action = options_.debugObserver->onInstruction(event);
@@ -3681,12 +3746,31 @@ namespace wio::vm
                 };
                 struct NativeFrame
                 {
+                    struct CallbackLease
+                    {
+                        NativeCallbackState* state = nullptr;
+                        bool retained = false;
+                    };
+
                     std::vector<NativeToken> tokens;
                     std::vector<WioNativeAbiValue> arguments;
+                    std::vector<CallbackLease> callbacks;
                     WioNativeAbiValue result;
+
+                    void expireCallCallbacks() noexcept
+                    {
+                        for (const CallbackLease& callback : callbacks)
+                        {
+                            if (callback.state && !callback.retained)
+                                callback.state->active.store(false, std::memory_order_release);
+                        }
+                    }
 
                     ~NativeFrame()
                     {
+                        expireCallCallbacks();
+                        for (WioNativeAbiValue& argument : arguments)
+                            WioNativeAbiReleaseValue(&argument);
                         for (NativeToken& token : tokens)
                             WioNativeAbiReleaseValue(&token.wire);
                         WioNativeAbiReleaseValue(&result);
@@ -3752,6 +3836,110 @@ namespace wio::vm
                     const Value* direct = storedValue(operand);
                     if (!direct)
                         return fail("WVM1223", "Native value argument references unavailable storage");
+                    if (abi.marshalling == 7)
+                    {
+                        if (direct->kind() != Value::Kind::Callable || abi.type >= module.types.size() ||
+                            module.types[abi.type].kind != TypeFunction || module.types[abi.type].arguments.empty() ||
+                            abi.callbackLifetime > 1 || abi.callbackThread > 1)
+                            return fail("WVM1223", "Native callback argument has an invalid callable ABI shape");
+
+                        const bytecode::Type& callbackType = module.types[abi.type];
+                        for (const std::uint32_t callbackValueType : callbackType.arguments)
+                        {
+                            std::uint8_t ignored = 0;
+                            if (!detail::callbackScalarMarshalling(module, callbackValueType, ignored))
+                                return fail("WVM1225", "Native callbacks currently require scalar or void signatures");
+                        }
+
+                        auto* callbackState = new NativeCallbackState;
+                        callbackState->callerThread = std::this_thread::get_id();
+                        callbackState->anyThread = abi.callbackThread == 1;
+                        const std::shared_ptr<Program> callbackProgram = program_;
+                        const Value callable = *direct;
+                        const std::vector<std::uint32_t> signature = callbackType.arguments;
+                        callbackState->invoke = [callbackProgram, callable,
+                                                 signature](const WioNativeAbiValue* callbackArguments,
+                                                            const std::uint64_t callbackArgumentCount,
+                                                            WioNativeAbiValue* callbackResult,
+                                                            WioNativeAbiFailure* callbackFailure) -> WioNativeAbiStatus
+                        {
+                            if (callbackArgumentCount + 1 != signature.size())
+                            {
+                                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_INVALID_ARGUMENT,
+                                                   "callback argument count does not match its Wio signature");
+                                return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                            }
+                            Machine* const owner = callbackProgram->acquireOwner();
+                            if (!owner)
+                            {
+                                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_STALE_HANDLE,
+                                                   "callback owner machine is no longer alive");
+                                return WIO_NATIVE_ABI_STALE_HANDLE;
+                            }
+                            const auto releaseOwner = [callbackProgram](Machine*) { callbackProgram->releaseOwner(); };
+                            const std::unique_ptr<Machine, decltype(releaseOwner)> ownerGuard{owner, releaseOwner};
+                            const bytecode::Module& callbackModule = *callbackProgram->module;
+
+                            std::vector<Value> values;
+                            values.reserve(callable.captureCount() + callbackArgumentCount);
+                            for (std::size_t captureIndex = 0; captureIndex < callable.captureCount(); ++captureIndex)
+                            {
+                                const Value* capture = callable.capture(captureIndex);
+                                if (!capture)
+                                {
+                                    setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_STALE_HANDLE,
+                                                       "callback lost one of its captured values");
+                                    return WIO_NATIVE_ABI_STALE_HANDLE;
+                                }
+                                values.push_back(*capture);
+                            }
+                            for (std::size_t argumentIndex = 0; argumentIndex < callbackArgumentCount; ++argumentIndex)
+                            {
+                                std::uint8_t callbackMarshalling = 0;
+                                if (!detail::callbackScalarMarshalling(callbackModule, signature[argumentIndex],
+                                                                       callbackMarshalling))
+                                    return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                                detail::NativeValueResult converted =
+                                    detail::decodeNativeValue(callbackModule, callbackArguments[argumentIndex],
+                                                              signature[argumentIndex], callbackMarshalling);
+                                if (!converted.succeeded())
+                                {
+                                    setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, converted.error);
+                                    return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                                }
+                                values.push_back(std::move(converted.value));
+                            }
+
+                            const ExecutionResult execution = owner->invoke(callable.callableFunction(), values);
+                            if (!execution.succeeded())
+                            {
+                                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_PANIC,
+                                                   execution.error().code + ": " + execution.error().message);
+                                return WIO_NATIVE_ABI_PANIC;
+                            }
+                            std::uint8_t resultMarshalling = 0;
+                            const std::uint32_t resultType = signature.back();
+                            if (!detail::callbackScalarMarshalling(callbackModule, resultType, resultMarshalling))
+                                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                            std::string conversionError;
+                            if (!detail::encodeNativeValue(callbackModule, execution.value(), resultType,
+                                                           resultMarshalling, *callbackResult, conversionError))
+                            {
+                                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, conversionError);
+                                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                            }
+                            return WIO_NATIVE_ABI_OK;
+                        };
+
+                        WioNativeAbiValue wire;
+                        wire.kind = WIO_NATIVE_ABI_CALLBACK;
+                        wire.flags = WIO_NATIVE_ABI_VALUE_OWNED;
+                        wire.payload.callback = {callbackState, callbackState->anyThread ? &AnyThreadCallbackOps
+                                                                                         : &CallerThreadCallbackOps};
+                        nativeFrame.callbacks.push_back({callbackState, abi.callbackLifetime == 1});
+                        nativeFrame.arguments.push_back(wire);
+                        continue;
+                    }
                     WioNativeAbiValue wire;
                     std::string conversionError;
                     if (!detail::encodeNativeValue(module, *direct, abi.type, abi.marshalling, wire, conversionError))
@@ -3760,9 +3948,18 @@ namespace wio::vm
                 }
 
                 WioNativeAbiFailure nativeFailure;
+                const bool permitsForeignThreadCallback =
+                    std::any_of(nativeFrame.callbacks.begin(), nativeFrame.callbacks.end(),
+                                [](const NativeFrame::CallbackLease& callback)
+                                { return callback.state && callback.state->anyThread; });
+                if (permitsForeignThreadCallback)
+                    executionLock.unlock();
                 const WioNativeAbiStatus status =
                     native.thunk(nativeFrame.arguments.empty() ? nullptr : nativeFrame.arguments.data(),
                                  nativeFrame.arguments.size(), &nativeFrame.result, &nativeFailure);
+                if (permitsForeignThreadCallback)
+                    executionLock.lock();
+                nativeFrame.expireCallCallbacks();
 
                 std::string copyBackError;
                 std::vector<Value> replacements;

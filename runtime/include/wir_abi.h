@@ -207,8 +207,9 @@ template<class R, class... A, std::uint64_t Id> struct Codec<std::function<R(A..
             owner=std::shared_ptr<void>(callback.userdata,[ops=callback.ops](void* p) { ops->release(p); });
         }
         const auto thread = std::this_thread::get_id();
-        return [callback, thread, owner](A... args) -> R {
-            require(thread == std::this_thread::get_id(), WIO_NATIVE_ABI_WRONG_THREAD);
+        const bool anyThread = (callback.ops->flags & WIO_NATIVE_ABI_CALLBACK_ANY_THREAD) != 0;
+        return [callback, thread, owner, anyThread](A... args) -> R {
+            require(anyThread || thread == std::this_thread::get_id(), WIO_NATIVE_ABI_WRONG_THREAD);
             std::vector<WioNativeAbiValue> arguments{Codec<A, 0>::write(args)...};
             struct Guard { std::vector<WioNativeAbiValue>& values; ~Guard() { for (auto& v : values) WioNativeAbiReleaseValue(&v); } } guard{arguments};
             WioNativeAbiValue result; WioNativeAbiFailure failure;

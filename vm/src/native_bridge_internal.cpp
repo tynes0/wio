@@ -340,6 +340,22 @@ namespace wio::vm::detail
         }
     }
 
+    bool callbackScalarMarshalling(const bytecode::Module& module, const std::uint32_t declaredType,
+                                   std::uint8_t& marshalling) noexcept
+    {
+        const std::uint32_t type = scalarType(module, declaredType);
+        if (type >= module.types.size())
+            return false;
+        const std::uint8_t kind = module.types[type].kind;
+        if (kind == TypeVoid)
+            marshalling = 0;
+        else if (kind == TypeBool || (kind >= TypeI8 && kind <= TypeF64) || kind == TypeByte || kind == TypeChar)
+            marshalling = 1;
+        else
+            return false;
+        return true;
+    }
+
     std::string nativeFailureMessage(const WioNativeAbiFailure& failure)
     {
         std::string message = sliceString(failure.message);

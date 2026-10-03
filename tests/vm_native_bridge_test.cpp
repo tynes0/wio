@@ -12,6 +12,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace
@@ -28,6 +29,7 @@ namespace
     constexpr std::uint32_t Pod = 6;
     constexpr std::uint32_t ForeignObject = 7;
     constexpr std::uint32_t RuntimeValue = 8;
+    constexpr std::uint32_t Callback = 9;
     constexpr std::uint64_t PodTypeId = 0x11'22'33'44u;
     constexpr std::uint64_t ObjectTypeId = 0x22'33'44'55u;
     constexpr std::uint64_t RuntimeTypeId = 0x33'44'55'66u;
@@ -110,10 +112,25 @@ namespace
         bytecode::Module module;
         module.abiDescriptorVersion = 1;
         module.contract.callTableStableId = 1;
-        module.strings = {"native:add",         "native:bump",       "native:fail",         "native:text",
-                          "native:string",      "native:bad-result", "native:opaque",       "native:pod",
-                          "native:make-object", "native:object",     "native:make-runtime", "native:runtime",
-                          "fixture.Pod",        "fixture.Object",    "fixture.Runtime"};
+        module.strings = {"native:add",
+                          "native:bump",
+                          "native:fail",
+                          "native:text",
+                          "native:string",
+                          "native:bad-result",
+                          "native:opaque",
+                          "native:pod",
+                          "native:make-object",
+                          "native:object",
+                          "native:make-runtime",
+                          "native:runtime",
+                          "fixture.Pod",
+                          "fixture.Object",
+                          "fixture.Runtime",
+                          "native:callback-now",
+                          "native:callback-call",
+                          "native:callback-retained",
+                          "native:callback-wrong-thread"};
         module.constants = {bytecode::Constant{}};
         module.types = {
             bytecode::Type{.kind = 1},
@@ -125,6 +142,7 @@ namespace
             bytecode::Type{.kind = 28, .nominalRepresentation = 1, .hasNativeBinding = true},
             bytecode::Type{.kind = 28},
             bytecode::Type{.kind = 28},
+            bytecode::Type{.kind = 33, .arguments = {I32, I32}},
         };
         module.contract.reflection = {
             bytecode::Reflection{.stableTypeId = PodTypeId, .logicalName = 12, .type = Pod},
@@ -204,6 +222,37 @@ namespace
         module.functions.push_back(caller(23, {}, RuntimeValue, {nativeCall(17, 0, RuntimeValue, {}), returnValue(0)}));
         module.functions.push_back(caller(24, {parameter(0, RuntimeValue)}, RuntimeValue,
                                           {nativeCall(18, 1, RuntimeValue, {0}), returnValue(1)}));
+        module.functions.push_back(nativeFunction(
+            25, 15, {parameter(0, Callback)}, I32,
+            {bytecode::Function::NativeAbiValue{
+                .type = Callback, .passing = 0, .marshalling = 7, .callbackLifetime = 0, .callbackThread = 0}},
+            abi(I32, 4, 1)));
+        module.functions.push_back(nativeFunction(
+            26, 16, {parameter(0, Callback)}, Void,
+            {bytecode::Function::NativeAbiValue{
+                .type = Callback, .passing = 0, .marshalling = 7, .callbackLifetime = 0, .callbackThread = 0}},
+            abi(Void, 4, 0)));
+        module.functions.push_back(nativeFunction(
+            27, 17, {parameter(0, Callback)}, Void,
+            {bytecode::Function::NativeAbiValue{
+                .type = Callback, .passing = 0, .marshalling = 7, .callbackLifetime = 1, .callbackThread = 1}},
+            abi(Void, 4, 0)));
+        module.functions.push_back(nativeFunction(
+            28, 18, {parameter(0, Callback)}, I32,
+            {bytecode::Function::NativeAbiValue{
+                .type = Callback, .passing = 0, .marshalling = 7, .callbackLifetime = 0, .callbackThread = 0}},
+            abi(I32, 4, 1)));
+        module.functions.push_back(caller(29, {parameter(0, I32)}, I32, {returnValue(0)}));
+        module.functions.push_back(
+            caller(30, {parameter(0, Callback)}, I32, {nativeCall(25, 1, I32, {0}), returnValue(1)}));
+        module.functions.push_back(
+            caller(31, {parameter(0, Callback)}, Void,
+                   {nativeCall(26, bytecode::InvalidIndex, Void, {0}), instruction(bytecode::Opcode::Return)}));
+        module.functions.push_back(
+            caller(32, {parameter(0, Callback)}, Void,
+                   {nativeCall(27, bytecode::InvalidIndex, Void, {0}), instruction(bytecode::Opcode::Return)}));
+        module.functions.push_back(
+            caller(33, {parameter(0, Callback)}, I32, {nativeCall(28, 1, I32, {0}), returnValue(1)}));
         return module;
     }
 
@@ -261,6 +310,81 @@ namespace
     {
         return count == 0 ? makeOwnedHandle(RuntimeTypeId, WIO_NATIVE_ABI_RUNTIME_VALUE, result)
                           : WIO_NATIVE_ABI_INVALID_ARGUMENT;
+    }
+
+    WioNativeAbiCallback storedCallback{};
+    std::atomic_int retainedEntryStatus{WIO_NATIVE_ABI_INVALID_ARGUMENT};
+    std::atomic_int64_t retainedEntryResult{0};
+
+    void releaseStoredCallback()
+    {
+        if (storedCallback.userdata && storedCallback.ops && storedCallback.ops->release)
+            storedCallback.ops->release(storedCallback.userdata);
+        storedCallback = {};
+    }
+
+    WioNativeAbiStatus invokeCallback(const WioNativeAbiValue* arguments, const std::uint64_t count,
+                                      WioNativeAbiValue* result, WioNativeAbiFailure* failure) noexcept
+    {
+        if (!arguments || count != 1 || !result || arguments[0].kind != WIO_NATIVE_ABI_CALLBACK ||
+            !arguments[0].payload.callback.ops || !arguments[0].payload.callback.ops->invoke)
+            return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+        WioNativeAbiValue callbackArgument;
+        callbackArgument.kind = WIO_NATIVE_ABI_I64;
+        callbackArgument.payload.signedInteger = 41;
+        return arguments[0].payload.callback.ops->invoke(arguments[0].payload.callback.userdata, &callbackArgument, 1,
+                                                         result, failure);
+    }
+
+    WioNativeAbiStatus storeCallback(const WioNativeAbiValue* arguments, const std::uint64_t count,
+                                     WioNativeAbiValue* result, WioNativeAbiFailure*) noexcept
+    {
+        if (!arguments || count != 1 || !result || arguments[0].kind != WIO_NATIVE_ABI_CALLBACK ||
+            !arguments[0].payload.callback.ops || !arguments[0].payload.callback.ops->retain)
+            return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+        releaseStoredCallback();
+        storedCallback = arguments[0].payload.callback;
+        storedCallback.ops->retain(storedCallback.userdata);
+        if ((storedCallback.ops->flags & WIO_NATIVE_ABI_CALLBACK_ANY_THREAD) != 0)
+        {
+            std::thread worker{[]
+                               {
+                                   WioNativeAbiValue callbackArgument;
+                                   callbackArgument.kind = WIO_NATIVE_ABI_I64;
+                                   callbackArgument.payload.signedInteger = 9;
+                                   WioNativeAbiValue callbackResult;
+                                   const WioNativeAbiStatus status = storedCallback.ops->invoke(
+                                       storedCallback.userdata, &callbackArgument, 1, &callbackResult, nullptr);
+                                   retainedEntryStatus.store(status, std::memory_order_relaxed);
+                                   if (status == WIO_NATIVE_ABI_OK && callbackResult.kind == WIO_NATIVE_ABI_I64)
+                                       retainedEntryResult.store(callbackResult.payload.signedInteger,
+                                                                 std::memory_order_relaxed);
+                                   WioNativeAbiReleaseValue(&callbackResult);
+                               }};
+            worker.join();
+        }
+        *result = {};
+        return WIO_NATIVE_ABI_OK;
+    }
+
+    WioNativeAbiStatus invokeCallbackFromWrongThread(const WioNativeAbiValue* arguments, const std::uint64_t count,
+                                                     WioNativeAbiValue* result, WioNativeAbiFailure*) noexcept
+    {
+        if (!arguments || count != 1 || !result || arguments[0].kind != WIO_NATIVE_ABI_CALLBACK ||
+            !arguments[0].payload.callback.ops || !arguments[0].payload.callback.ops->invoke)
+            return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+        WioNativeAbiStatus callbackStatus = WIO_NATIVE_ABI_OK;
+        std::thread worker{[&]
+                           {
+                               WioNativeAbiValue callbackResult;
+                               callbackStatus = arguments[0].payload.callback.ops->invoke(
+                                   arguments[0].payload.callback.userdata, nullptr, 0, &callbackResult, nullptr);
+                               WioNativeAbiReleaseValue(&callbackResult);
+                           }};
+        worker.join();
+        result->kind = WIO_NATIVE_ABI_I64;
+        result->payload.signedInteger = callbackStatus;
+        return WIO_NATIVE_ABI_OK;
     }
 
     WioNativeAbiStatus add(const WioNativeAbiValue* arguments, const std::uint64_t count, WioNativeAbiValue* result,
@@ -384,6 +508,15 @@ int main()
                                        "makeRuntime", &makeRuntimeValue},
         WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 12, "native:runtime", "EchoRuntime", "runtime",
                                        &echo},
+        WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 13, "native:callback-now", "InvokeCallback",
+                                       "invokeCallback", &invokeCallback},
+        WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 14, "native:callback-call", "StoreCallback",
+                                       "storeCallback", &storeCallback},
+        WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 15, "native:callback-retained", "StoreCallback",
+                                       "storeCallback", &storeCallback},
+        WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 16, "native:callback-wrong-thread",
+                                       "InvokeCallbackFromWrongThread", "invokeCallbackFromWrongThread",
+                                       &invokeCallbackFromWrongThread},
     };
     const WioNativeAbiRegistry registry{WIO_NATIVE_ABI_VERSION, static_cast<std::uint32_t>(descriptors.size()),
                                         descriptors.data()};
@@ -467,6 +600,64 @@ int main()
     }
     ok &= expect(destroyedHandles.load(std::memory_order_relaxed) == destroyedBeforeRuntime + 1,
                  "The producer release operation must destroy an owned runtime value exactly once");
+
+    const vm::Value callback = vm::Value::callable(29, {});
+    const vm::ExecutionResult callbackResult = machine.invoke(30, std::span{&callback, 1});
+    ok &= expect(callbackResult.succeeded() && callbackResult.value().kind() == vm::Value::Kind::SignedInteger &&
+                     callbackResult.value().asSignedInteger() == 41,
+                 "A native thunk must be able to synchronously call a scalar Wio callable");
+
+    const vm::ExecutionResult wrongThread = machine.invoke(33, std::span{&callback, 1});
+    ok &= expect(wrongThread.succeeded() && wrongThread.value().asSignedInteger() == WIO_NATIVE_ABI_WRONG_THREAD,
+                 "Caller-thread callbacks must reject entry from a foreign thread before VM execution");
+
+    const vm::ExecutionResult storedCallScoped = machine.invoke(31, std::span{&callback, 1});
+    WioNativeAbiValue callbackArgument;
+    callbackArgument.kind = WIO_NATIVE_ABI_I64;
+    callbackArgument.payload.signedInteger = 7;
+    WioNativeAbiValue lateCallResult;
+    const WioNativeAbiStatus lateCallStatus =
+        storedCallback.ops->invoke(storedCallback.userdata, &callbackArgument, 1, &lateCallResult, nullptr);
+    WioNativeAbiReleaseValue(&lateCallResult);
+    ok &= expect(storedCallScoped.succeeded() && lateCallStatus == WIO_NATIVE_ABI_STALE_HANDLE,
+                 "Call-scoped callbacks must expire as soon as the native invocation returns");
+    releaseStoredCallback();
+
+    const vm::ExecutionResult storedRetained = machine.invoke(32, std::span{&callback, 1});
+    ok &=
+        expect(storedRetained.succeeded() && retainedEntryStatus.load(std::memory_order_relaxed) == WIO_NATIVE_ABI_OK &&
+                   retainedEntryResult.load(std::memory_order_relaxed) == 9,
+               "Any-thread callbacks must re-enter while the native caller is still active without deadlocking");
+    WioNativeAbiStatus retainedStatus = WIO_NATIVE_ABI_INVALID_ARGUMENT;
+    std::int64_t retainedResult = 0;
+    std::thread retainedWorker{[&]
+                               {
+                                   WioNativeAbiValue result;
+                                   retainedStatus = storedCallback.ops->invoke(storedCallback.userdata,
+                                                                               &callbackArgument, 1, &result, nullptr);
+                                   if (retainedStatus == WIO_NATIVE_ABI_OK && result.kind == WIO_NATIVE_ABI_I64)
+                                       retainedResult = result.payload.signedInteger;
+                                   WioNativeAbiReleaseValue(&result);
+                               }};
+    retainedWorker.join();
+    ok &= expect(retainedStatus == WIO_NATIVE_ABI_OK && retainedResult == 7,
+                 "Retained any-thread callbacks must stay callable after return and enter the serialized VM safely");
+    releaseStoredCallback();
+
+    {
+        vm::Machine transientMachine{decoded.module};
+        ok &= expect(transientMachine.registerNativeRegistry(registry),
+                     "A transient callback owner must accept the shared native registry");
+        const vm::ExecutionResult retainedByNative = transientMachine.invoke(32, std::span{&callback, 1});
+        ok &= expect(retainedByNative.succeeded(), "A retained callback must be created before owner teardown");
+    }
+    WioNativeAbiValue afterOwnerResult;
+    const WioNativeAbiStatus afterOwnerStatus =
+        storedCallback.ops->invoke(storedCallback.userdata, &callbackArgument, 1, &afterOwnerResult, nullptr);
+    WioNativeAbiReleaseValue(&afterOwnerResult);
+    ok &= expect(afterOwnerStatus == WIO_NATIVE_ABI_STALE_HANDLE,
+                 "Retained callbacks must fail safely after their owning VM machine is destroyed");
+    releaseStoredCallback();
 
     const WioNativeAbiFunctionDescriptor conflict{WIO_NATIVE_ABI_VERSION, 0, 1, "native:add", "Other", "other",
                                                   &conflictingAdd};

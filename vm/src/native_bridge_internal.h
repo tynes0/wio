@@ -25,5 +25,7 @@ namespace wio::vm::detail
                                          std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error);
     [[nodiscard]] NativeValueResult decodeNativeValue(const bytecode::Module& module, const WioNativeAbiValue& value,
                                                       std::uint32_t declaredType, std::uint8_t marshalling);
+    [[nodiscard]] bool callbackScalarMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
+                                                 std::uint8_t& marshalling) noexcept;
     [[nodiscard]] std::string nativeFailureMessage(const WioNativeAbiFailure& failure);
 } // namespace wio::vm::detail

@@ -93,6 +93,12 @@ struct WioNativeAbiCallbackOps
         struct WioNativeAbiFailure* failure) noexcept = nullptr;
 };
 
+enum WioNativeAbiCallbackFlag : std::uint32_t
+{
+    WIO_NATIVE_ABI_CALLBACK_CALLER_THREAD = 0u,
+    WIO_NATIVE_ABI_CALLBACK_ANY_THREAD = 1u << 0u
+};
+
 struct WioNativeAbiCallback
 {
     void* userdata = nullptr;
