@@ -42,6 +42,24 @@ namespace wio::bytecode
             const std::uint8_t kind = module.types[id].kind;
             return (kind >= 3 && kind <= 12) || kind == 15 || kind == 16;
         };
+        const auto directType = [&](std::uint32_t id)
+        {
+            for (std::uint32_t depth = 0; id < module.types.size() && depth < 32; ++depth)
+            {
+                const Type& type = module.types[id];
+                if ((type.kind != 29 && type.kind != 30) || type.arguments.empty())
+                    return id;
+                id = type.arguments.front();
+            }
+            return InvalidIndex;
+        };
+        const auto hasStableAbiType = [&](const std::uint32_t id)
+        {
+            const std::uint32_t direct = directType(id);
+            return std::any_of(module.contract.reflection.begin(), module.contract.reflection.end(),
+                               [&](const Reflection& reflection)
+                               { return reflection.type == direct && reflection.stableTypeId != 0; });
+        };
 
         if (!validString(module.name) || !validString(module.logicalName) || !validString(module.stableKey))
             report("WBC1001", "Module manifest references an invalid string id");
@@ -155,7 +173,17 @@ namespace wio::bytecode
                 {
                     if (!validType(parameter.type))
                         report("WBC1029", "Native parameter references an invalid type id", function.id);
+                    if (parameter.passing > 4 || parameter.marshalling > 9 ||
+                        ((parameter.marshalling == 4 || parameter.marshalling == 6 || parameter.marshalling == 8) &&
+                         !hasStableAbiType(parameter.type)))
+                        report("WBC1074", "Native parameter has an invalid ABI mode or no stable type identity",
+                               function.id);
                 }
+                if (binding.result.passing > 4 || binding.result.marshalling > 9 ||
+                    ((binding.result.marshalling == 4 || binding.result.marshalling == 6 ||
+                      binding.result.marshalling == 8) &&
+                     !hasStableAbiType(binding.result.type)))
+                    report("WBC1074", "Native result has an invalid ABI mode or no stable type identity", function.id);
                 for (const std::uint32_t argument : binding.templateArguments)
                 {
                     if (!validType(argument))

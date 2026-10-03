@@ -2,11 +2,14 @@
 
 #include "wio/vm/diagnostic.h"
 
+#include <wio_native_abi.h>
+
 #include <chrono>
 #include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -16,6 +19,7 @@ namespace wio::vm
     class Machine;
     class PlaceStorage;
     class AggregateStorage;
+    class ForeignStorage;
 
     enum class AsyncTaskState : std::uint8_t
     {
@@ -48,6 +52,10 @@ namespace wio::vm
             AsyncTask,
             Any,
             Iterator,
+            NativePod,
+            Opaque,
+            ForeignObject,
+            RuntimeValue,
             Place
         };
 
@@ -72,6 +80,14 @@ namespace wio::vm
         [[nodiscard]] static Value callable(std::uint32_t function, std::vector<Value> captures);
         [[nodiscard]] static Value asyncTask(std::uint32_t function, std::vector<Value> arguments);
         [[nodiscard]] static Value any(std::uint32_t type, Value payload);
+        [[nodiscard]] static Value nativePod(std::uint32_t type, std::uint64_t stableTypeId,
+                                             std::span<const std::byte> bytes);
+        [[nodiscard]] static Value opaque(std::uint32_t type, std::uint64_t stableTypeId, void* pointer,
+                                          WioNativeAbiHandle owner = {});
+        [[nodiscard]] static Value foreignObject(std::uint32_t type, std::uint64_t stableTypeId,
+                                                 WioNativeAbiHandle handle);
+        [[nodiscard]] static Value runtimeValue(std::uint32_t type, std::uint64_t stableTypeId,
+                                                WioNativeAbiHandle handle);
         [[nodiscard]] std::uint32_t aggregateType() const noexcept;
         [[nodiscard]] std::uint32_t strongReferenceCount() const noexcept;
         [[nodiscard]] std::uint32_t callableFunction() const noexcept;
@@ -141,6 +157,10 @@ namespace wio::vm
         void dictionaryClear() noexcept;
         [[nodiscard]] std::size_t fieldCount() const noexcept;
         [[nodiscard]] const Value* field(std::size_t index) const noexcept;
+        [[nodiscard]] std::uint64_t foreignTypeId() const noexcept;
+        [[nodiscard]] std::span<const std::byte> nativePodBytes() const noexcept;
+        [[nodiscard]] void* opaquePointer() const noexcept;
+        [[nodiscard]] WioNativeAbiHandle foreignHandle() const noexcept;
 
         [[nodiscard]] bool operator==(const Value& other) const noexcept;
         [[nodiscard]] bool lessThan(const Value& other) const noexcept;
@@ -156,6 +176,7 @@ namespace wio::vm
             double floating;
             PlaceStorage* place;
             AggregateStorage* aggregate;
+            ForeignStorage* foreign;
 
             constexpr Scalar() noexcept : unsignedInteger(0)
             {

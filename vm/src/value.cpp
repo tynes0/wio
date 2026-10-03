@@ -12,6 +12,78 @@
 
 namespace wio::vm
 {
+    class ForeignStorage final
+    {
+    public:
+        ForeignStorage(const Value::Kind kind, const std::uint32_t type, const std::uint64_t stableTypeId,
+                       std::vector<std::byte> bytes, void* const opaque, const WioNativeAbiHandle handle)
+            : kind_(kind), type_(type), stableTypeId_(stableTypeId), bytes_(std::move(bytes)), opaque_(opaque),
+              handle_(handle)
+        {
+            WioNativeAbiRetain(handle_);
+        }
+
+        ~ForeignStorage()
+        {
+            WioNativeAbiRelease(&handle_);
+        }
+
+        void retain() noexcept
+        {
+            references_.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        void release() noexcept
+        {
+            if (references_.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                delete this;
+        }
+
+        [[nodiscard]] std::uint32_t referenceCount() const noexcept
+        {
+            return references_.load(std::memory_order_acquire);
+        }
+
+        [[nodiscard]] Value::Kind kind() const noexcept
+        {
+            return kind_;
+        }
+
+        [[nodiscard]] std::uint32_t type() const noexcept
+        {
+            return type_;
+        }
+
+        [[nodiscard]] std::uint64_t stableTypeId() const noexcept
+        {
+            return stableTypeId_;
+        }
+
+        [[nodiscard]] std::span<const std::byte> bytes() const noexcept
+        {
+            return bytes_;
+        }
+
+        [[nodiscard]] void* opaque() const noexcept
+        {
+            return opaque_;
+        }
+
+        [[nodiscard]] WioNativeAbiHandle handle() const noexcept
+        {
+            return handle_;
+        }
+
+    private:
+        std::atomic_uint32_t references_{1};
+        Value::Kind kind_ = Value::Kind::Empty;
+        std::uint32_t type_ = 0;
+        std::uint64_t stableTypeId_ = 0;
+        std::vector<std::byte> bytes_;
+        void* opaque_ = nullptr;
+        WioNativeAbiHandle handle_{};
+    };
+
     class AggregateStorage final
     {
     public:
@@ -477,6 +549,39 @@ namespace wio::vm
         return result;
     }
 
+    Value Value::nativePod(const std::uint32_t type, const std::uint64_t stableTypeId,
+                           const std::span<const std::byte> bytes)
+    {
+        Value result{Kind::NativePod};
+        result.scalar_.foreign = new ForeignStorage{
+            Kind::NativePod, type, stableTypeId, std::vector<std::byte>{bytes.begin(), bytes.end()}, nullptr, {}};
+        return result;
+    }
+
+    Value Value::opaque(const std::uint32_t type, const std::uint64_t stableTypeId, void* const pointer,
+                        const WioNativeAbiHandle owner)
+    {
+        Value result{Kind::Opaque};
+        result.scalar_.foreign = new ForeignStorage{Kind::Opaque, type, stableTypeId, {}, pointer, owner};
+        return result;
+    }
+
+    Value Value::foreignObject(const std::uint32_t type, const std::uint64_t stableTypeId,
+                               const WioNativeAbiHandle handle)
+    {
+        Value result{Kind::ForeignObject};
+        result.scalar_.foreign = new ForeignStorage{Kind::ForeignObject, type, stableTypeId, {}, nullptr, handle};
+        return result;
+    }
+
+    Value Value::runtimeValue(const std::uint32_t type, const std::uint64_t stableTypeId,
+                              const WioNativeAbiHandle handle)
+    {
+        Value result{Kind::RuntimeValue};
+        result.scalar_.foreign = new ForeignStorage{Kind::RuntimeValue, type, stableTypeId, {}, nullptr, handle};
+        return result;
+    }
+
     Value Value::rangeIterator(const std::uint32_t type, Value start, Value end, Value step, const bool inclusive)
     {
         Value result{Kind::Iterator};
@@ -508,6 +613,9 @@ namespace wio::vm
 
     std::uint32_t Value::aggregateType() const noexcept
     {
+        if (kind_ == Kind::NativePod || kind_ == Kind::Opaque || kind_ == Kind::ForeignObject ||
+            kind_ == Kind::RuntimeValue)
+            return scalar_.foreign->type();
         return kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component || kind_ == Kind::Object ||
                        kind_ == Kind::ObjectBorrow || kind_ == Kind::Any || kind_ == Kind::Iterator
                    ? scalar_.aggregate->type()
@@ -578,6 +686,9 @@ namespace wio::vm
 
     std::uint32_t Value::strongReferenceCount() const noexcept
     {
+        if (kind_ == Kind::NativePod || kind_ == Kind::Opaque || kind_ == Kind::ForeignObject ||
+            kind_ == Kind::RuntimeValue)
+            return scalar_.foreign->referenceCount();
         return kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component || kind_ == Kind::Object ||
                        kind_ == Kind::Callable || kind_ == Kind::AsyncTask || kind_ == Kind::Any ||
                        kind_ == Kind::Iterator
@@ -978,6 +1089,30 @@ namespace wio::vm
         return &scalar_.aggregate->values()[index];
     }
 
+    std::uint64_t Value::foreignTypeId() const noexcept
+    {
+        return kind_ == Kind::NativePod || kind_ == Kind::Opaque || kind_ == Kind::ForeignObject ||
+                       kind_ == Kind::RuntimeValue
+                   ? scalar_.foreign->stableTypeId()
+                   : 0;
+    }
+
+    std::span<const std::byte> Value::nativePodBytes() const noexcept
+    {
+        return kind_ == Kind::NativePod ? scalar_.foreign->bytes() : std::span<const std::byte>{};
+    }
+
+    void* Value::opaquePointer() const noexcept
+    {
+        return kind_ == Kind::Opaque ? scalar_.foreign->opaque() : nullptr;
+    }
+
+    WioNativeAbiHandle Value::foreignHandle() const noexcept
+    {
+        return kind_ == Kind::ForeignObject || kind_ == Kind::RuntimeValue ? scalar_.foreign->handle()
+                                                                           : WioNativeAbiHandle{};
+    }
+
     Value* Value::mutableField(const std::size_t index) noexcept
     {
         if ((kind_ != Kind::Component && kind_ != Kind::Object && kind_ != Kind::ObjectBorrow) ||
@@ -1113,6 +1248,21 @@ namespace wio::vm
         case Kind::Any:
         case Kind::Iterator:
             return scalar_.aggregate == other.scalar_.aggregate;
+        case Kind::NativePod:
+            return aggregateType() == other.aggregateType() && foreignTypeId() == other.foreignTypeId() &&
+                   nativePodBytes().size() == other.nativePodBytes().size() &&
+                   std::equal(nativePodBytes().begin(), nativePodBytes().end(), other.nativePodBytes().begin());
+        case Kind::Opaque:
+            return aggregateType() == other.aggregateType() && foreignTypeId() == other.foreignTypeId() &&
+                   opaquePointer() == other.opaquePointer();
+        case Kind::ForeignObject:
+        case Kind::RuntimeValue:
+        {
+            const WioNativeAbiHandle left = foreignHandle();
+            const WioNativeAbiHandle right = other.foreignHandle();
+            return foreignTypeId() == other.foreignTypeId() && left.state == right.state && left.ops == right.ops &&
+                   left.generation == right.generation;
+        }
         case Kind::Place:
             return scalar_.place == other.scalar_.place;
         }
@@ -1152,6 +1302,9 @@ namespace wio::vm
                  kind_ == Kind::Object || kind_ == Kind::Callable || kind_ == Kind::AsyncTask || kind_ == Kind::Any ||
                  kind_ == Kind::Iterator)
             scalar_.aggregate->release();
+        else if (kind_ == Kind::NativePod || kind_ == Kind::Opaque || kind_ == Kind::ForeignObject ||
+                 kind_ == Kind::RuntimeValue)
+            scalar_.foreign->release();
         kind_ = Kind::Empty;
         scalar_.unsignedInteger = 0;
     }
@@ -1169,6 +1322,12 @@ namespace wio::vm
         {
             scalar_.aggregate = other.scalar_.aggregate;
             scalar_.aggregate->retain();
+        }
+        else if (kind_ == Kind::NativePod || kind_ == Kind::Opaque || kind_ == Kind::ForeignObject ||
+                 kind_ == Kind::RuntimeValue)
+        {
+            scalar_.foreign = other.scalar_.foreign;
+            scalar_.foreign->retain();
         }
         else
             scalar_ = other.scalar_;

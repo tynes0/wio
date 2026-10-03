@@ -43,10 +43,31 @@ Current stable diagnostics are:
 - `WVM1225`: the requested marshalling/passing mode belongs to a later bridge
   slice.
 
+## Sprint 20.2 foreign storage and ownership
+
+The VM now has explicit value kinds for native POD bytes, opaque pointers,
+foreign objects, and foreign runtime values. Native POD results are copied into
+VM-owned byte storage. The other kinds retain the producer-supplied wire-v2
+handle operations and release them when the last VM `Value` storage reference
+dies. The VM never directly deletes memory created by a native library.
+
+POD, object, and runtime-value ABI plans require reflection metadata with a
+non-zero stable type id. The bytecode verifier rejects a missing identity as
+`WBC1074`; the bridge checks both the wire value's id and the producer handle's
+`typeId` operation before admitting it. Opaque pointers remain pointer-shaped
+and may optionally carry a producer owner handle.
+
+Copying a VM `Value` only increments the VM storage reference count. One
+producer retain is held by that shared storage, so the final VM copy performs
+exactly one matching producer release. Borrowed arguments expose the stored
+handle for the duration of the synchronous thunk without transferring
+ownership. Owned results are retained before the native frame releases its
+wire value.
+
 ## Remaining Sprint 20 surface
 
-The next slices add opaque handles and owned runtime/object values, VM-backed
-callbacks with call/retained lifetime and caller/any-thread enforcement,
+The next slices add VM-backed callbacks with call/retained lifetime and
+caller/any-thread enforcement,
 foreign-thread entry and completion scheduling, native async-task adaptation,
 library loading/registry discovery, CLI/project integration, and the full
 C++-backend-versus-VM native differential gate.

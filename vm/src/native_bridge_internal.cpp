@@ -21,6 +21,7 @@ namespace wio::vm::detail
         constexpr std::uint8_t TypeChar = 16;
         constexpr std::uint8_t TypeString = 17;
         constexpr std::uint8_t TypeText = 18;
+        constexpr std::uint8_t TypeOpaque = 20;
         constexpr std::uint8_t TypeNamed = 28;
         constexpr std::uint8_t TypeReference = 29;
         constexpr std::uint8_t TypeNullable = 30;
@@ -63,6 +64,41 @@ namespace wio::vm::detail
             const auto size = static_cast<std::size_t>(
                 (std::min)(slice.size, static_cast<std::uint64_t>((std::numeric_limits<std::size_t>::max)())));
             return std::string{static_cast<const char*>(slice.data), size};
+        }
+
+        [[nodiscard]] std::uint64_t stableTypeId(const bytecode::Module& module,
+                                                 const std::uint32_t declaredType) noexcept
+        {
+            const std::uint32_t type = directType(module, declaredType);
+            for (const bytecode::Reflection& reflection : module.contract.reflection)
+            {
+                if (reflection.type == type)
+                    return reflection.stableTypeId;
+            }
+            return 0;
+        }
+
+        [[nodiscard]] bool validHandle(const WioNativeAbiHandle handle) noexcept
+        {
+            return handle.state != nullptr && handle.ops != nullptr &&
+                   handle.ops->abiVersion == WIO_NATIVE_ABI_VERSION && handle.ops->retain != nullptr &&
+                   handle.ops->release != nullptr && handle.ops->typeId != nullptr;
+        }
+
+        [[nodiscard]] bool validateWireType(const WioNativeAbiValue& value, const std::uint64_t expected,
+                                            std::string& error)
+        {
+            if (expected == 0)
+            {
+                error = "native value type has no stable ABI type identity";
+                return false;
+            }
+            if (value.typeId != expected)
+            {
+                error = "native value stable type identity does not match its Wio declaration";
+                return false;
+            }
+            return true;
         }
     } // namespace
 
@@ -144,6 +180,61 @@ namespace wio::vm::detail
             }
             error = "VM value is not Unicode text required by the native ABI";
             return false;
+        case 4:
+        {
+            const std::uint64_t expected = stableTypeId(module, declaredType);
+            if (value.kind() != Value::Kind::NativePod || value.aggregateType() != type ||
+                value.foreignTypeId() != expected || expected == 0)
+            {
+                error = "VM value is not the native POD required by the ABI declaration";
+                return false;
+            }
+            const std::span bytes = value.nativePodBytes();
+            output.kind = WIO_NATIVE_ABI_POD;
+            output.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+            output.typeId = expected;
+            output.payload.slice = {bytes.data(), bytes.size()};
+            return true;
+        }
+        case 5:
+        {
+            const std::uint64_t expected = stableTypeId(module, declaredType);
+            if (kind != TypeOpaque || value.kind() != Value::Kind::Opaque || value.aggregateType() != type ||
+                (expected != 0 && value.foreignTypeId() != expected))
+            {
+                error = "VM value is not the opaque handle required by the ABI declaration";
+                return false;
+            }
+            output.kind = WIO_NATIVE_ABI_OPAQUE;
+            output.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+            output.typeId = expected;
+            output.payload.opaque = value.opaquePointer();
+            return true;
+        }
+        case 6:
+        case 8:
+        {
+            const bool object = marshalling == 6;
+            const std::uint64_t expected = stableTypeId(module, declaredType);
+            if (value.kind() != (object ? Value::Kind::ForeignObject : Value::Kind::RuntimeValue) ||
+                value.aggregateType() != type || value.foreignTypeId() != expected || expected == 0)
+            {
+                error = object ? "VM value is not the foreign object required by the ABI declaration"
+                               : "VM value is not the runtime value required by the ABI declaration";
+                return false;
+            }
+            const WioNativeAbiHandle handle = value.foreignHandle();
+            if (!validHandle(handle) || handle.ops->typeId(handle.state) != expected)
+            {
+                error = "VM foreign handle has invalid producer operations or type identity";
+                return false;
+            }
+            output.kind = object ? WIO_NATIVE_ABI_OBJECT : WIO_NATIVE_ABI_RUNTIME_VALUE;
+            output.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+            output.typeId = expected;
+            output.payload.handle = handle;
+            return true;
+        }
         default:
             error = "native marshalling kind is not implemented by this VM bridge slice";
             return false;
@@ -201,6 +292,48 @@ namespace wio::vm::detail
                     return {{}, "native Unicode text result contains an invalid scalar"};
             }
             return {Value::text(std::move(text)), {}};
+        }
+        case 4:
+        {
+            std::string typeError;
+            const std::uint64_t expected = stableTypeId(module, declaredType);
+            if (value.kind != WIO_NATIVE_ABI_POD || !validateWireType(value, expected, typeError) ||
+                (!value.payload.slice.data && value.payload.slice.size != 0) ||
+                value.payload.slice.size > static_cast<std::uint64_t>((std::numeric_limits<std::size_t>::max)()))
+                return {{}, typeError.empty() ? "native POD result has an invalid wire shape" : std::move(typeError)};
+            const auto* data = static_cast<const std::byte*>(value.payload.slice.data);
+            return {
+                Value::nativePod(type, expected,
+                                 std::span<const std::byte>{data, static_cast<std::size_t>(value.payload.slice.size)}),
+                {}};
+        }
+        case 5:
+        {
+            std::string typeError;
+            const std::uint64_t expected = stableTypeId(module, declaredType);
+            if (kind != TypeOpaque || (expected != 0 && !validateWireType(value, expected, typeError)) ||
+                value.kind != WIO_NATIVE_ABI_OPAQUE)
+                return {{},
+                        typeError.empty() ? "native opaque result has an invalid wire shape" : std::move(typeError)};
+            if (value.owner.state != nullptr && !validHandle(value.owner))
+                return {{}, "native opaque result has invalid producer ownership operations"};
+            return {Value::opaque(type, expected, value.payload.opaque, value.owner), {}};
+        }
+        case 6:
+        case 8:
+        {
+            const bool object = marshalling == 6;
+            std::string typeError;
+            const std::uint64_t expected = stableTypeId(module, declaredType);
+            if (value.kind != (object ? WIO_NATIVE_ABI_OBJECT : WIO_NATIVE_ABI_RUNTIME_VALUE) ||
+                !validateWireType(value, expected, typeError))
+                return {{}, typeError.empty() ? "native handle result has an invalid wire kind" : std::move(typeError)};
+            if (!validHandle(value.payload.handle) ||
+                value.payload.handle.ops->typeId(value.payload.handle.state) != expected)
+                return {{}, "native handle result has invalid producer operations or type identity"};
+            return {object ? Value::foreignObject(type, expected, value.payload.handle)
+                           : Value::runtimeValue(type, expected, value.payload.handle),
+                    {}};
         }
         default:
             return {{}, "native result marshalling kind is not implemented by this VM bridge slice"};

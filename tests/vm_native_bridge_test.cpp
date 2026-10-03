@@ -3,7 +3,11 @@
 
 #include <wio_native_abi.h>
 
+#include <algorithm>
 #include <array>
+#include <atomic>
+#include <cstddef>
+#include <cstring>
 #include <iostream>
 #include <span>
 #include <string>
@@ -20,6 +24,13 @@ namespace
     constexpr std::uint32_t String = 2;
     constexpr std::uint32_t Text = 3;
     constexpr std::uint32_t RefI32 = 4;
+    constexpr std::uint32_t Opaque = 5;
+    constexpr std::uint32_t Pod = 6;
+    constexpr std::uint32_t ForeignObject = 7;
+    constexpr std::uint32_t RuntimeValue = 8;
+    constexpr std::uint64_t PodTypeId = 0x11'22'33'44u;
+    constexpr std::uint64_t ObjectTypeId = 0x22'33'44'55u;
+    constexpr std::uint64_t RuntimeTypeId = 0x33'44'55'66u;
 
     bool expect(const bool condition, const std::string_view message)
     {
@@ -99,8 +110,10 @@ namespace
         bytecode::Module module;
         module.abiDescriptorVersion = 1;
         module.contract.callTableStableId = 1;
-        module.strings = {"native:add",  "native:bump",   "native:fail",
-                          "native:text", "native:string", "native:bad-result"};
+        module.strings = {"native:add",         "native:bump",       "native:fail",         "native:text",
+                          "native:string",      "native:bad-result", "native:opaque",       "native:pod",
+                          "native:make-object", "native:object",     "native:make-runtime", "native:runtime",
+                          "fixture.Pod",        "fixture.Object",    "fixture.Runtime"};
         module.constants = {bytecode::Constant{}};
         module.types = {
             bytecode::Type{.kind = 1},
@@ -108,6 +121,15 @@ namespace
             bytecode::Type{.kind = 17},
             bytecode::Type{.kind = 18},
             bytecode::Type{.kind = 29, .arguments = {I32}, .flags = 0x01u},
+            bytecode::Type{.kind = 20},
+            bytecode::Type{.kind = 28, .nominalRepresentation = 1, .hasNativeBinding = true},
+            bytecode::Type{.kind = 28},
+            bytecode::Type{.kind = 28},
+        };
+        module.contract.reflection = {
+            bytecode::Reflection{.stableTypeId = PodTypeId, .logicalName = 12, .type = Pod},
+            bytecode::Reflection{.stableTypeId = ObjectTypeId, .logicalName = 13, .type = ForeignObject},
+            bytecode::Reflection{.stableTypeId = RuntimeTypeId, .logicalName = 14, .type = RuntimeValue},
         };
         module.globals = {bytecode::Global{.id = 0, .type = I32, .flags = 0x01u}};
 
@@ -162,7 +184,83 @@ namespace
         loadGlobal.resultType = I32;
         loadGlobal.operands = {0};
         module.functions.push_back(caller(12, {}, I32, {std::move(readGlobal), std::move(loadGlobal), returnValue(1)}));
+
+        module.functions.push_back(
+            nativeFunction(13, 6, {parameter(0, Opaque)}, Opaque, {abi(Opaque, 0, 5)}, abi(Opaque, 4, 5)));
+        module.functions.push_back(nativeFunction(14, 7, {parameter(0, Pod)}, Pod, {abi(Pod, 0, 4)}, abi(Pod, 4, 4)));
+        module.functions.push_back(nativeFunction(15, 8, {}, ForeignObject, {}, abi(ForeignObject, 4, 6)));
+        module.functions.push_back(nativeFunction(16, 9, {parameter(0, ForeignObject)}, ForeignObject,
+                                                  {abi(ForeignObject, 0, 6)}, abi(ForeignObject, 4, 6)));
+        module.functions.push_back(nativeFunction(17, 10, {}, RuntimeValue, {}, abi(RuntimeValue, 4, 8)));
+        module.functions.push_back(nativeFunction(18, 11, {parameter(0, RuntimeValue)}, RuntimeValue,
+                                                  {abi(RuntimeValue, 0, 8)}, abi(RuntimeValue, 4, 8)));
+        module.functions.push_back(
+            caller(19, {parameter(0, Opaque)}, Opaque, {nativeCall(13, 1, Opaque, {0}), returnValue(1)}));
+        module.functions.push_back(caller(20, {parameter(0, Pod)}, Pod, {nativeCall(14, 1, Pod, {0}), returnValue(1)}));
+        module.functions.push_back(
+            caller(21, {}, ForeignObject, {nativeCall(15, 0, ForeignObject, {}), returnValue(0)}));
+        module.functions.push_back(caller(22, {parameter(0, ForeignObject)}, ForeignObject,
+                                          {nativeCall(16, 1, ForeignObject, {0}), returnValue(1)}));
+        module.functions.push_back(caller(23, {}, RuntimeValue, {nativeCall(17, 0, RuntimeValue, {}), returnValue(0)}));
+        module.functions.push_back(caller(24, {parameter(0, RuntimeValue)}, RuntimeValue,
+                                          {nativeCall(18, 1, RuntimeValue, {0}), returnValue(1)}));
         return module;
+    }
+
+    struct TrackedHandle
+    {
+        std::atomic_uint32_t references{1};
+        std::uint64_t typeId = 0;
+    };
+
+    std::atomic_uint32_t destroyedHandles{0};
+
+    void retainHandle(void* const state) noexcept
+    {
+        static_cast<TrackedHandle*>(state)->references.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    void releaseHandle(void* const state) noexcept
+    {
+        auto* handle = static_cast<TrackedHandle*>(state);
+        if (handle->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
+        {
+            destroyedHandles.fetch_add(1, std::memory_order_relaxed);
+            delete handle;
+        }
+    }
+
+    std::uint64_t handleTypeId(const void* const state) noexcept
+    {
+        return static_cast<const TrackedHandle*>(state)->typeId;
+    }
+
+    constexpr WioNativeAbiHandleOps HandleOps{WIO_NATIVE_ABI_VERSION, 0, &retainHandle, &releaseHandle, &handleTypeId};
+
+    WioNativeAbiStatus makeOwnedHandle(const std::uint64_t typeId, const WioNativeAbiValueKind kind,
+                                       WioNativeAbiValue* const result) noexcept
+    {
+        if (!result)
+            return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+        result->kind = kind;
+        result->flags = WIO_NATIVE_ABI_VALUE_OWNED;
+        result->typeId = typeId;
+        result->payload.handle = {new TrackedHandle{.typeId = typeId}, &HandleOps, 1};
+        return WIO_NATIVE_ABI_OK;
+    }
+
+    WioNativeAbiStatus makeObject(const WioNativeAbiValue*, const std::uint64_t count, WioNativeAbiValue* result,
+                                  WioNativeAbiFailure*) noexcept
+    {
+        return count == 0 ? makeOwnedHandle(ObjectTypeId, WIO_NATIVE_ABI_OBJECT, result)
+                          : WIO_NATIVE_ABI_INVALID_ARGUMENT;
+    }
+
+    WioNativeAbiStatus makeRuntimeValue(const WioNativeAbiValue*, const std::uint64_t count, WioNativeAbiValue* result,
+                                        WioNativeAbiFailure*) noexcept
+    {
+        return count == 0 ? makeOwnedHandle(RuntimeTypeId, WIO_NATIVE_ABI_RUNTIME_VALUE, result)
+                          : WIO_NATIVE_ABI_INVALID_ARGUMENT;
     }
 
     WioNativeAbiStatus add(const WioNativeAbiValue* arguments, const std::uint64_t count, WioNativeAbiValue* result,
@@ -242,6 +340,16 @@ int main()
                      malformedResult.error().message.find("WBC1073") != std::string::npos,
                  "The bytecode verifier must reject NativeInvoke metadata that disagrees with its ABI declaration");
 
+    bytecode::Module missingTypeIdentity = makeModule();
+    missingTypeIdentity.contract.reflection.clear();
+    const bytecode::DecodeResult missingTypeIdentityDecoded = bytecode::decode(bytecode::encode(missingTypeIdentity));
+    vm::Machine missingTypeIdentityMachine{missingTypeIdentityDecoded.module};
+    const vm::ExecutionResult missingTypeIdentityResult = missingTypeIdentityMachine.invoke(21);
+    ok &= expect(missingTypeIdentityDecoded.succeeded() && !missingTypeIdentityResult.succeeded() &&
+                     missingTypeIdentityResult.error().code == "WVM1001" &&
+                     missingTypeIdentityResult.error().message.find("WBC1074") != std::string::npos,
+                 "The bytecode verifier must require stable type identity for POD and owned handle marshalling");
+
     const bytecode::DecodeResult decoded = bytecode::decode(bytecode::encode(makeModule()));
     ok &= expect(decoded.succeeded(), "Native bridge fixture must survive the real .wiob codec");
     if (!decoded.succeeded())
@@ -267,6 +375,15 @@ int main()
         WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 4, "native:text", "EchoText", "text", &echo},
         WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 5, "native:string", "EchoString", "string", &echo},
         WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 6, "native:bad-result", "Bad", "bad", &badResult},
+        WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 7, "native:opaque", "EchoOpaque", "opaque", &echo},
+        WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 8, "native:pod", "EchoPod", "pod", &echo},
+        WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 9, "native:make-object", "MakeObject", "makeObject",
+                                       &makeObject},
+        WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 10, "native:object", "EchoObject", "object", &echo},
+        WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 11, "native:make-runtime", "MakeRuntime",
+                                       "makeRuntime", &makeRuntimeValue},
+        WioNativeAbiFunctionDescriptor{WIO_NATIVE_ABI_VERSION, 0, 12, "native:runtime", "EchoRuntime", "runtime",
+                                       &echo},
     };
     const WioNativeAbiRegistry registry{WIO_NATIVE_ABI_VERSION, static_cast<std::uint32_t>(descriptors.size()),
                                         descriptors.data()};
@@ -306,6 +423,50 @@ int main()
     const vm::ExecutionResult mismatch = machine.invoke(10);
     ok &= expect(!mismatch.succeeded() && mismatch.error().code == "WVM1224",
                  "A native thunk returning the wrong wire kind must fail at the VM boundary");
+
+    std::uint64_t opaqueState = 0x1234u;
+    const vm::Value opaque = vm::Value::opaque(Opaque, 0, &opaqueState);
+    const vm::ExecutionResult echoedOpaque = machine.invoke(19, std::span{&opaque, 1});
+    ok &= expect(echoedOpaque.succeeded() && echoedOpaque.value().kind() == vm::Value::Kind::Opaque &&
+                     echoedOpaque.value().opaquePointer() == &opaqueState,
+                 "Opaque pointers must cross the VM bridge without reinterpretation or foreign deletion");
+
+    const std::array podBytes{std::byte{0x10}, std::byte{0x20}, std::byte{0x30}, std::byte{0x40}};
+    const vm::Value pod = vm::Value::nativePod(Pod, PodTypeId, podBytes);
+    const vm::ExecutionResult echoedPod = machine.invoke(20, std::span{&pod, 1});
+    ok &= expect(echoedPod.succeeded() && echoedPod.value().kind() == vm::Value::Kind::NativePod &&
+                     echoedPod.value().foreignTypeId() == PodTypeId &&
+                     std::equal(echoedPod.value().nativePodBytes().begin(), echoedPod.value().nativePodBytes().end(),
+                                podBytes.begin(), podBytes.end()),
+                 "Native POD values must be copied into VM-owned bytes and retain their stable type identity");
+
+    const std::uint32_t destroyedBeforeObject = destroyedHandles.load(std::memory_order_relaxed);
+    {
+        const vm::ExecutionResult object = machine.invoke(21);
+        ok &= expect(object.succeeded() && object.value().kind() == vm::Value::Kind::ForeignObject &&
+                         object.value().foreignTypeId() == ObjectTypeId,
+                     "Owned native object results must become producer-managed VM handles");
+        const vm::Value objectArgument = object.value();
+        const vm::ExecutionResult echoedObject = machine.invoke(22, std::span{&objectArgument, 1});
+        ok &= expect(echoedObject.succeeded() && echoedObject.value() == object.value(),
+                     "Foreign object identity must survive a borrowed native round-trip");
+    }
+    ok &= expect(destroyedHandles.load(std::memory_order_relaxed) == destroyedBeforeObject + 1,
+                 "The producer release operation must destroy an owned object exactly once");
+
+    const std::uint32_t destroyedBeforeRuntime = destroyedHandles.load(std::memory_order_relaxed);
+    {
+        const vm::ExecutionResult runtime = machine.invoke(23);
+        ok &= expect(runtime.succeeded() && runtime.value().kind() == vm::Value::Kind::RuntimeValue &&
+                         runtime.value().foreignTypeId() == RuntimeTypeId,
+                     "Owned native runtime values must preserve their producer operations");
+        const vm::Value runtimeArgument = runtime.value();
+        const vm::ExecutionResult echoedRuntime = machine.invoke(24, std::span{&runtimeArgument, 1});
+        ok &= expect(echoedRuntime.succeeded() && echoedRuntime.value() == runtime.value(),
+                     "Runtime handles must round-trip through the VM without changing ownership domains");
+    }
+    ok &= expect(destroyedHandles.load(std::memory_order_relaxed) == destroyedBeforeRuntime + 1,
+                 "The producer release operation must destroy an owned runtime value exactly once");
 
     const WioNativeAbiFunctionDescriptor conflict{WIO_NATIVE_ABI_VERSION, 0, 1, "native:add", "Other", "other",
                                                   &conflictingAdd};
