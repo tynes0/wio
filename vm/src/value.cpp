@@ -238,6 +238,14 @@ namespace wio::vm
             return taskError_;
         }
 
+        [[nodiscard]] std::vector<Value> takeTaskArguments()
+        {
+            std::scoped_lock lock{taskMutex_};
+            std::vector<Value> arguments;
+            arguments.swap(values_);
+            return arguments;
+        }
+
     private:
         std::atomic<std::uint32_t> references_{1};
         Value::Kind kind_;
@@ -570,7 +578,11 @@ namespace wio::vm
 
     std::uint32_t Value::strongReferenceCount() const noexcept
     {
-        return kind_ == Kind::Object ? scalar_.aggregate->referenceCount() : 0;
+        return kind_ == Kind::Array || kind_ == Kind::Dictionary || kind_ == Kind::Component || kind_ == Kind::Object ||
+                       kind_ == Kind::Callable || kind_ == Kind::AsyncTask || kind_ == Kind::Any ||
+                       kind_ == Kind::Iterator
+                   ? scalar_.aggregate->referenceCount()
+                   : 0;
     }
 
     std::uint32_t Value::callableFunction() const noexcept
@@ -997,6 +1009,24 @@ namespace wio::vm
         result.scalar_.aggregate = scalar_.aggregate;
         result.scalar_.aggregate->retain();
         return result;
+    }
+
+    std::vector<Value> Value::takeOwnedChildrenForCleanup()
+    {
+        if (strongReferenceCount() != 1 || kind_ == Kind::AsyncTask)
+            return {};
+        if (kind_ != Kind::Array && kind_ != Kind::Dictionary && kind_ != Kind::Component && kind_ != Kind::Object &&
+            kind_ != Kind::Callable && kind_ != Kind::Any && kind_ != Kind::Iterator)
+            return {};
+
+        std::vector<Value> children;
+        children.swap(scalar_.aggregate->values());
+        return children;
+    }
+
+    std::vector<Value> Value::takeTaskArgumentsForCleanup() const
+    {
+        return kind_ == Kind::AsyncTask ? scalar_.aggregate->takeTaskArguments() : std::vector<Value>{};
     }
 
     bool Value::beginTask() const noexcept

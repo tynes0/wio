@@ -132,6 +132,10 @@ namespace wio::vm
         [[nodiscard]] ExecutionResult execute(std::uint32_t function, std::span<const Value> arguments,
                                               const Value* activeTask,
                                               std::shared_ptr<ExecutionState> resumedState = {});
+        void cleanupValue(Value& value, ExecutionError& primaryError);
+        void cleanupTaskArguments(const Value& task, ExecutionError& primaryError);
+        [[nodiscard]] ExecutionError unwind(ExecutionState& state, ExecutionError error);
+        void cancelAndUnwindContinuations();
         [[nodiscard]] bool scheduleTask(const std::shared_ptr<ExecutionState>& state, ExecutorKind executor);
         void wakeTask(std::weak_ptr<ExecutionState> state, AsyncTaskState terminalState, const Value& result,
                       const ExecutionError& error);

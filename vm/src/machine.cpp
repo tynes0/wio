@@ -13,6 +13,7 @@
 #include <condition_variable>
 #include <cmath>
 #include <deque>
+#include <exception>
 #include <functional>
 #include <limits>
 #include <map>
@@ -135,17 +136,13 @@ namespace wio::vm
         {
             ReturnValue,
             Ignore,
-            ContinueConstruction,
-            ReleaseRegister,
-            ReleasePlace
+            ContinueConstruction
         };
 
         struct FrameContinuation
         {
             FrameCompletion completion = FrameCompletion::ReturnValue;
             std::uint32_t callerResult = bytecode::InvalidIndex;
-            std::uint32_t cleanupRegister = bytecode::InvalidIndex;
-            PlaceStorage* cleanupPlace = nullptr;
             std::uint32_t nextFunction = bytecode::InvalidIndex;
             std::vector<Value> nextArguments;
         };
@@ -790,18 +787,24 @@ namespace wio::vm
             std::erase_if(continuations, [&](const auto& entry) { return entry.first == task; });
         }
 
-        void cancelContinuations()
+        [[nodiscard]] std::shared_ptr<void> takeContinuation(const Value& task)
         {
-            std::vector<Value> tasks;
-            {
-                std::scoped_lock lock{continuationMutex};
-                tasks.reserve(continuations.size());
-                for (const auto& entry : continuations)
-                    tasks.push_back(entry.first);
-                continuations.clear();
-            }
-            for (const Value& task : tasks)
-                (void)task.cancelTask();
+            std::scoped_lock lock{continuationMutex};
+            const auto found = std::find_if(continuations.begin(), continuations.end(),
+                                            [&](const auto& entry) { return entry.first == task; });
+            if (found == continuations.end())
+                return {};
+            std::shared_ptr<void> continuation = std::move(found->second);
+            continuations.erase(found);
+            return continuation;
+        }
+
+        [[nodiscard]] std::vector<std::pair<Value, std::shared_ptr<void>>> takeContinuations()
+        {
+            std::scoped_lock lock{continuationMutex};
+            std::vector<std::pair<Value, std::shared_ptr<void>>> result;
+            result.swap(continuations);
+            return result;
         }
 
         std::mutex ownerMutex;
@@ -853,6 +856,125 @@ namespace wio::vm
         return result;
     }
 
+    void Machine::cleanupValue(Value& value, ExecutionError& primaryError)
+    {
+        if (value.isEmpty() || value.kind() == Value::Kind::Null || value.kind() == Value::Kind::Place ||
+            value.kind() == Value::Kind::ObjectBorrow)
+        {
+            value = {};
+            return;
+        }
+
+        const bool uniqueStorage = value.strongReferenceCount() == 1;
+        if (program_ && program_->module && uniqueStorage &&
+            (value.kind() == Value::Kind::Object || value.kind() == Value::Kind::Component))
+        {
+            const bytecode::Module& module = *program_->module;
+            const std::uint32_t type = value.aggregateType();
+            const std::uint32_t destructor =
+                type < module.types.size() ? module.types[type].destructor : bytecode::InvalidIndex;
+            if (destructor != bytecode::InvalidIndex && destructor < module.functions.size())
+            {
+                try
+                {
+                    Value receiver;
+                    std::unique_ptr<PlaceStorage> componentPlace;
+                    if (value.kind() == Value::Kind::Object)
+                        receiver = Value::objectBorrow(value.scalar_.aggregate);
+                    else
+                    {
+                        componentPlace = std::make_unique<PlaceStorage>();
+                        componentPlace->alias = &value;
+                        componentPlace->initialized = true;
+                        componentPlace->mutableValue = true;
+                        receiver = Value::place(componentPlace.get());
+                    }
+
+                    const ExecutionResult destroyed = execute(destructor, std::span{&receiver, 1}, nullptr);
+                    if (!destroyed.succeeded())
+                    {
+                        primaryError.cleanupFailures.push_back(
+                            {destroyed.error().code, destroyed.error().message, destroyed.error().stack});
+                        primaryError.cleanupFailures.insert(primaryError.cleanupFailures.end(),
+                                                            destroyed.error().cleanupFailures.begin(),
+                                                            destroyed.error().cleanupFailures.end());
+                    }
+                }
+                catch (const std::exception& error)
+                {
+                    primaryError.cleanupFailures.push_back(
+                        {"WVM1210", std::string{"VM destructor threw while unwinding: "} + error.what(), {}});
+                }
+                catch (...)
+                {
+                    primaryError.cleanupFailures.push_back(
+                        {"WVM1210", "VM destructor threw a non-standard exception while unwinding", {}});
+                }
+            }
+        }
+
+        std::vector<Value> children = value.takeOwnedChildrenForCleanup();
+        for (auto child = children.rbegin(); child != children.rend(); ++child)
+            cleanupValue(*child, primaryError);
+        value = {};
+    }
+
+    void Machine::cleanupTaskArguments(const Value& task, ExecutionError& primaryError)
+    {
+        std::vector<Value> arguments = task.takeTaskArgumentsForCleanup();
+        for (auto argument = arguments.rbegin(); argument != arguments.rend(); ++argument)
+            cleanupValue(*argument, primaryError);
+    }
+
+    ExecutionError Machine::unwind(ExecutionState& state, ExecutionError error)
+    {
+        error = withStack(std::move(error), state.frames);
+        for (auto frame = state.frames.rbegin(); frame != state.frames.rend(); ++frame)
+        {
+            cleanupValue(frame->resumedValue, error);
+            for (auto argument = frame->continuation.nextArguments.rbegin();
+                 argument != frame->continuation.nextArguments.rend(); ++argument)
+                cleanupValue(*argument, error);
+            for (auto place = frame->localPlaces.rbegin(); place != frame->localPlaces.rend(); ++place)
+            {
+                PlaceStorage& storage = **place;
+                if (!storage.alias && storage.initialized)
+                {
+                    cleanupValue(storage.value, error);
+                    storage.initialized = false;
+                }
+                cleanupValue(storage.owner, error);
+            }
+            for (auto registerValue = frame->registers.rbegin(); registerValue != frame->registers.rend();
+                 ++registerValue)
+            {
+                if (!registerValue->initialized)
+                    continue;
+                cleanupValue(registerValue->value, error);
+                registerValue->initialized = false;
+            }
+        }
+        state.frames.clear();
+        return error;
+    }
+
+    void Machine::cancelAndUnwindContinuations()
+    {
+        if (!program_)
+            return;
+        std::vector<std::pair<Value, std::shared_ptr<void>>> continuations = program_->takeContinuations();
+        std::scoped_lock executionLock{program_->executionMutex};
+        for (auto& [task, erased] : continuations)
+        {
+            (void)task.cancelTask();
+            auto state = std::static_pointer_cast<ExecutionState>(std::move(erased));
+            if (state)
+                (void)unwind(*state, {"WVM1165", "Async task was cancelled during machine shutdown"});
+            ExecutionError cleanupError;
+            cleanupTaskArguments(task, cleanupError);
+        }
+    }
+
     Machine::Machine(const bytecode::Module& module, const MachineOptions options)
         : program_(std::make_shared<Program>()), options_(options)
     {
@@ -896,7 +1018,7 @@ namespace wio::vm
         if (program_)
         {
             program_->detachOwner(this);
-            program_->cancelContinuations();
+            cancelAndUnwindContinuations();
         }
         program_.reset();
     }
@@ -919,7 +1041,7 @@ namespace wio::vm
         if (program_)
         {
             program_->detachOwner(this);
-            program_->cancelContinuations();
+            cancelAndUnwindContinuations();
         }
         program_.reset();
         program_ = std::move(other.program_);
@@ -982,7 +1104,14 @@ namespace wio::vm
             return false;
         if (program_)
         {
-            program_->releaseContinuation(task);
+            auto state = std::static_pointer_cast<ExecutionState>(program_->takeContinuation(task));
+            if (state)
+            {
+                std::scoped_lock executionLock{program_->executionMutex};
+                (void)unwind(*state, {"WVM1165", "Async task was cancelled"});
+            }
+            ExecutionError cleanupError;
+            cleanupTaskArguments(task, cleanupError);
             std::scoped_lock lock{program_->timerMutex};
             if (program_->timers)
                 (void)program_->timers->remove(task);
@@ -1001,6 +1130,8 @@ namespace wio::vm
             return false;
         if (program_)
         {
+            ExecutionError cleanupError;
+            cleanupTaskArguments(task, cleanupError);
             program_->releaseContinuation(task);
             std::scoped_lock lock{program_->timerMutex};
             if (program_->timers)
@@ -1015,6 +1146,8 @@ namespace wio::vm
             return false;
         if (program_)
         {
+            ExecutionError cleanupError;
+            cleanupTaskArguments(task, cleanupError);
             program_->releaseContinuation(task);
             std::scoped_lock lock{program_->timerMutex};
             if (program_->timers)
@@ -1124,6 +1257,7 @@ namespace wio::vm
         ExecutionResult result = execute(task.taskFunction(), arguments, &task);
         if (result.isSuspended())
             return result;
+        arguments.clear();
         if (!result.succeeded())
         {
             if (task.taskState() == AsyncTaskState::Cancelled)
@@ -1131,10 +1265,12 @@ namespace wio::vm
                 releaseContinuation();
                 return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
             }
-            if (task.failTask(result.error()))
+            ExecutionError failure = result.error();
+            cleanupTaskArguments(task, failure);
+            if (task.failTask(failure))
             {
                 releaseContinuation();
-                return result;
+                return ExecutionResult::failure(std::move(failure));
             }
             if (task.taskState() == AsyncTaskState::Cancelled)
             {
@@ -1143,6 +1279,16 @@ namespace wio::vm
             }
             releaseContinuation();
             return ExecutionResult::failure({"WVM1204", "Async task failure lost its terminal-state race"});
+        }
+        ExecutionError cleanupError;
+        cleanupTaskArguments(task, cleanupError);
+        if (!cleanupError.cleanupFailures.empty())
+        {
+            ExecutionError failure{"WVM1212", "Async argument cleanup failed while running a destructor"};
+            failure.cleanupFailures = std::move(cleanupError.cleanupFailures);
+            (void)task.failTask(failure);
+            releaseContinuation();
+            return ExecutionResult::failure(std::move(failure));
         }
         if (!task.completeTask(result.value()))
         {
@@ -1170,7 +1316,7 @@ namespace wio::vm
         program_->retainContinuation(state->activeTask, state);
         const std::weak_ptr<Program> weakProgram = program_;
         const Value task = state->activeTask;
-        return program_->executors->schedule(
+        const bool scheduled = program_->executors->schedule(
             executor, ExecutorQueue::Work{.run =
                                               [weakProgram, state]
                                           {
@@ -1198,6 +1344,9 @@ namespace wio::vm
                                               }
                                           },
                                           .cancel = [task] { (void)task.cancelTask(); }});
+        if (!scheduled)
+            program_->releaseContinuation(state->activeTask);
+        return scheduled;
     }
 
     void Machine::wakeTask(const std::weak_ptr<ExecutionState> weakState, const AsyncTaskState terminalState,
@@ -1214,9 +1363,10 @@ namespace wio::vm
                                             : error;
             {
                 std::scoped_lock lock{program_->executionMutex};
-                propagated = withStack(std::move(propagated), state->frames);
+                propagated = unwind(*state, std::move(propagated));
             }
             program_->releaseContinuation(state->activeTask);
+            cleanupTaskArguments(state->activeTask, propagated);
             (void)state->activeTask.failTask(std::move(propagated));
             return;
         }
@@ -1226,17 +1376,20 @@ namespace wio::vm
             std::scoped_lock lock{program_->executionMutex};
             if (state->frames.empty())
             {
+                ExecutionError failure{"WVM1209", "Await continuation lost its VM frame"};
                 program_->releaseContinuation(state->activeTask);
-                (void)state->activeTask.failTask({"WVM1209", "Await continuation lost its VM frame"});
+                cleanupTaskArguments(state->activeTask, failure);
+                (void)state->activeTask.failTask(std::move(failure));
                 return;
             }
             Frame& frame = state->frames.back();
             const auto resume = program_->functions[frame.function->id].blocks.find(state->awaitedResumeBlock);
             if (resume == program_->functions[frame.function->id].blocks.end())
             {
+                ExecutionError failure = unwind(*state, {"WVM1175", "Coroutine resume block does not exist"});
                 program_->releaseContinuation(state->activeTask);
-                (void)state->activeTask.failTask(
-                    withStack({"WVM1175", "Coroutine resume block does not exist"}, state->frames));
+                cleanupTaskArguments(state->activeTask, failure);
+                (void)state->activeTask.failTask(std::move(failure));
                 return;
             }
             frame.resumedValue = result;
@@ -1250,8 +1403,14 @@ namespace wio::vm
         }
         if (!scheduleTask(state, executor))
         {
+            ExecutionError failure;
+            {
+                std::scoped_lock lock{program_->executionMutex};
+                failure = unwind(*state, {"WVM1208", "Await continuation executor rejected the resumed VM frame"});
+            }
             program_->releaseContinuation(state->activeTask);
-            (void)state->activeTask.failTask({"WVM1208", "Await continuation executor rejected the resumed VM frame"});
+            cleanupTaskArguments(state->activeTask, failure);
+            (void)state->activeTask.failTask(std::move(failure));
         }
     }
 
@@ -1260,7 +1419,13 @@ namespace wio::vm
         if (state->activeTask.taskState() == AsyncTaskState::Cancelled)
         {
             if (program_)
+            {
+                std::scoped_lock lock{program_->executionMutex};
+                (void)unwind(*state, {"WVM1165", "Async task was cancelled before its continuation resumed"});
                 program_->releaseContinuation(state->activeTask);
+                ExecutionError cleanupError;
+                cleanupTaskArguments(state->activeTask, cleanupError);
+            }
             return;
         }
         try
@@ -1274,20 +1439,42 @@ namespace wio::vm
             {
                 program_->releaseContinuation(task);
                 if (task.taskState() != AsyncTaskState::Cancelled)
-                    (void)task.failTask(result.error());
+                {
+                    ExecutionError failure = result.error();
+                    cleanupTaskArguments(task, failure);
+                    (void)task.failTask(std::move(failure));
+                }
                 return;
             }
             program_->releaseContinuation(task);
             if (task.taskState() != AsyncTaskState::Cancelled)
-                (void)task.completeTask(result.value());
+            {
+                ExecutionError cleanupError;
+                cleanupTaskArguments(task, cleanupError);
+                if (cleanupError.cleanupFailures.empty())
+                    (void)task.completeTask(result.value());
+                else
+                {
+                    ExecutionError failure{"WVM1212", "Async argument cleanup failed while running a destructor"};
+                    failure.cleanupFailures = std::move(cleanupError.cleanupFailures);
+                    (void)task.failTask(std::move(failure));
+                }
+            }
         }
         catch (...)
         {
             if (program_)
+            {
+                std::scoped_lock lock{program_->executionMutex};
+                (void)unwind(*state, {"WVM1207", "VM executor continuation threw across the runtime boundary"});
                 program_->releaseContinuation(state->activeTask);
+            }
             if (state->activeTask.taskState() != AsyncTaskState::Cancelled)
-                (void)state->activeTask.failTask(
-                    {"WVM1207", "VM executor continuation threw across the runtime boundary"});
+            {
+                ExecutionError failure{"WVM1207", "VM executor continuation threw across the runtime boundary"};
+                cleanupTaskArguments(state->activeTask, failure);
+                (void)state->activeTask.failTask(std::move(failure));
+            }
         }
     }
 
@@ -1315,7 +1502,7 @@ namespace wio::vm
         std::vector<Frame>& frames = state->frames;
         const Value* stateTask = state->activeTask.kind() == Value::Kind::AsyncTask ? &state->activeTask : nullptr;
         const auto failWithStack = [&](ExecutionError error)
-        { return ExecutionResult::failure(withStack(std::move(error), frames)); };
+        { return ExecutionResult::failure(unwind(*state, std::move(error))); };
         auto pushFrame = [&](const bytecode::Function& function, const std::span<const Value> values,
                              FrameContinuation continuation) -> ExecutionResult
         {
@@ -1390,20 +1577,6 @@ namespace wio::vm
                               FrameContinuation{.completion = FrameCompletion::Ignore});
                 if (!pushed.succeeded())
                     return pushed;
-            }
-            else if (continuation.completion == FrameCompletion::ReleaseRegister)
-            {
-                if (continuation.cleanupRegister >= caller.registers.size())
-                    return failWithStack({"WVM1075", "Destructor continuation references an invalid register",
-                                          caller.function->id, caller.block->id});
-                caller.registers[continuation.cleanupRegister] = {};
-            }
-            else if (continuation.completion == FrameCompletion::ReleasePlace)
-            {
-                if (!continuation.cleanupPlace)
-                    return failWithStack({"WVM1076", "Destructor continuation lost its owning place",
-                                          caller.function->id, caller.block->id});
-                continuation.cleanupPlace->clear();
             }
             return std::nullopt;
         };
@@ -3082,59 +3255,23 @@ namespace wio::vm
                 }
                 if (!released)
                     return fail("WVM1072", "Reference release reads an unavailable value");
-                if (released->kind() == Value::Kind::Null)
-                {
-                    if (cleanupRegister)
-                    {
-                        cleanupRegister->value = {};
-                        cleanupRegister->initialized = false;
-                    }
-                    else
-                        cleanupPlace->clear();
-                    ++frame.instruction;
-                    continue;
-                }
-                if (released->kind() == Value::Kind::Callable || released->kind() == Value::Kind::AsyncTask ||
-                    released->kind() == Value::Kind::Any || released->kind() == Value::Kind::Iterator)
-                {
-                    if (cleanupRegister)
-                    {
-                        cleanupRegister->value = {};
-                        cleanupRegister->initialized = false;
-                    }
-                    else
-                        cleanupPlace->clear();
-                    ++frame.instruction;
-                    continue;
-                }
-                if (released->kind() != Value::Kind::Object)
+                if (released->kind() != Value::Kind::Null && released->kind() != Value::Kind::Object &&
+                    released->kind() != Value::Kind::Callable && released->kind() != Value::Kind::AsyncTask &&
+                    released->kind() != Value::Kind::Any && released->kind() != Value::Kind::Iterator)
                     return fail("WVM1073", "Reference release requires an owned object or callable handle");
 
-                const std::uint32_t typeId = released->aggregateType();
-                const std::uint32_t destructor = module.types[typeId].destructor;
-                if (released->strongReferenceCount() == 1 && destructor != bytecode::InvalidIndex)
+                ExecutionError cleanupError;
+                cleanupValue(*released, cleanupError);
+                if (!cleanupError.cleanupFailures.empty())
                 {
-                    const Value receiver = Value::objectBorrow(released->scalar_.aggregate);
-                    FrameContinuation continuation{.completion = cleanupRegister ? FrameCompletion::ReleaseRegister
-                                                                                 : FrameCompletion::ReleasePlace,
-                                                   .cleanupRegister = cleanupRegister ? instruction.operands.front()
-                                                                                      : bytecode::InvalidIndex,
-                                                   .cleanupPlace = cleanupPlace};
-                    ++frame.instruction;
-                    ExecutionResult pushed =
-                        pushFrame(module.functions[destructor], std::span{&receiver, 1}, std::move(continuation));
-                    if (!pushed.succeeded())
-                        return pushed;
-                    continue;
+                    ExecutionError error{"WVM1211", "Reference cleanup failed while running a destructor"};
+                    error.cleanupFailures = std::move(cleanupError.cleanupFailures);
+                    return failWithStack(std::move(error));
                 }
-
                 if (cleanupRegister)
-                {
-                    cleanupRegister->value = {};
                     cleanupRegister->initialized = false;
-                }
                 else
-                    cleanupPlace->clear();
+                    cleanupPlace->initialized = false;
                 ++frame.instruction;
                 continue;
             }
@@ -3144,7 +3281,14 @@ namespace wio::vm
                     instruction.operands.size() == 1 ? readRegister(instruction.operands[0]) : nullptr;
                 if (!source)
                     return fail("WVM1047", "Value cleanup reads an unavailable value");
-                source->value = {};
+                ExecutionError cleanupError;
+                cleanupValue(source->value, cleanupError);
+                if (!cleanupError.cleanupFailures.empty())
+                {
+                    ExecutionError error{"WVM1211", "Value cleanup failed while running a destructor"};
+                    error.cleanupFailures = std::move(cleanupError.cleanupFailures);
+                    return failWithStack(std::move(error));
+                }
                 source->initialized = false;
                 ++frame.instruction;
                 continue;
@@ -3155,7 +3299,15 @@ namespace wio::vm
                 PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
                 if (!place || !place->initialized)
                     return fail("WVM1048", "Place cleanup requires an initialized place");
-                place->clear();
+                ExecutionError cleanupError;
+                cleanupValue(place->storedValue(), cleanupError);
+                place->initialized = false;
+                if (!cleanupError.cleanupFailures.empty())
+                {
+                    ExecutionError error{"WVM1211", "Place cleanup failed while running a destructor"};
+                    error.cleanupFailures = std::move(cleanupError.cleanupFailures);
+                    return failWithStack(std::move(error));
+                }
                 ++frame.instruction;
                 continue;
             }

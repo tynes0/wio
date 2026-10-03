@@ -200,6 +200,8 @@ namespace wio::vm
         [[nodiscard]] Value* mutableField(std::size_t index) noexcept;
         [[nodiscard]] Value cloneOwned() const;
         [[nodiscard]] Value retainObject() const noexcept;
+        [[nodiscard]] std::vector<Value> takeOwnedChildrenForCleanup();
+        [[nodiscard]] std::vector<Value> takeTaskArgumentsForCleanup() const;
         bool beginTask() const noexcept;
         bool cancelTask() const noexcept;
         bool completeTask(Value result) const;

@@ -17,6 +17,13 @@ namespace wio::vm
         bytecode::SourceSpan source;
     };
 
+    struct CleanupFailure
+    {
+        std::string code;
+        std::string message;
+        std::vector<StackFrame> stack;
+    };
+
     struct ExecutionError
     {
         ExecutionError() = default;
@@ -38,5 +45,8 @@ namespace wio::vm
         std::uint32_t instruction = bytecode::InvalidIndex;
         bytecode::SourceSpan source;
         std::vector<StackFrame> stack;
+        // Cleanup failures never replace the primary execution error. They
+        // are collected while the remaining frames continue to unwind.
+        std::vector<CleanupFailure> cleanupFailures;
     };
 } // namespace wio::vm
