@@ -19,7 +19,7 @@ Branch arguments are copied to the target block parameters before control is
 transferred. This preserves canonical Lowered WIR phi semantics without a
 second language-specific control-flow model.
 
-## Implemented in Sprint 19.1-19.8.3
+## Implemented in Sprint 19.1-19.8.4
 
 - compact tagged values for null, bool, signed/unsigned integer, float, and
   UTF-8 string values;
@@ -133,6 +133,17 @@ second language-specific control-flow model.
   automatically pumping main continuations when called on the bound thread;
 - executor identity in debug events, allowing hosts and tests to verify thread
   affinity without exposing scheduler implementation details;
+- non-blocking coroutine await through exactly-once terminal waiter
+  registration. Pending Wio, timer, and externally completed tasks release the
+  current executor thread and enqueue the preserved continuation only when the
+  awaited task becomes ready, faulted, or cancelled;
+- cancellation-safe suspended-frame ownership: the machine continuation
+  registry owns each live frame, task termination releases that ownership, and
+  stale waiter callbacks carry only weak references. Machine shutdown cancels
+  every still-suspended parent task before releasing the registry;
+- executor-affine await wake-up and cross-task diagnostic chaining. Successful
+  awaits resume on the inherited executor, while child failures retain their
+  original stack and append the parent await frames;
 - deterministic wrapping integer arithmetic without host signed-overflow UB;
 - checked integer division and shifts;
 - instruction, call-depth, and per-frame register budgets;
@@ -146,13 +157,11 @@ keep the decode result beside the machine.
 
 ## Remaining Sprint 19 surface
 
-The next slices replace blocking task waits inside a coroutine with waiter
-registration and continuation wake-up, then add exceptional cleanup/unwind and
-pause/resume debugger control over the instruction observer. Execution
-segments are intentionally serialized while VM globals remain mutable; safe
-parallel global access will require the explicit synchronization model rather
-than accidental data races. Native symbol registration, callbacks, opaque
-values, and foreign-thread VM entry are deliberately reserved for the Sprint
-20 VM native bridge; Sprint 19 exposes only its thread-safe task-completion
-gate and reports native invocation as unsupported instead of silently changing
-behavior.
+The next slices add exceptional cleanup/unwind and pause/resume debugger
+control over the instruction observer. Execution segments are intentionally
+serialized while VM globals remain mutable; safe parallel global access will
+require the explicit synchronization model rather than accidental data races.
+Native symbol registration, callbacks, opaque values, and foreign-thread VM
+entry are deliberately reserved for the Sprint 20 VM native bridge; Sprint 19
+exposes only its thread-safe task-completion gate and reports native invocation
+as unsupported instead of silently changing behavior.

@@ -132,12 +132,15 @@ namespace wio::vm
         [[nodiscard]] ExecutionResult execute(std::uint32_t function, std::span<const Value> arguments,
                                               const Value* activeTask,
                                               std::shared_ptr<ExecutionState> resumedState = {});
+        [[nodiscard]] bool scheduleTask(const std::shared_ptr<ExecutionState>& state, ExecutorKind executor);
+        void wakeTask(std::weak_ptr<ExecutionState> state, AsyncTaskState terminalState, const Value& result,
+                      const ExecutionError& error);
         void resumeTask(std::shared_ptr<ExecutionState> state);
         [[nodiscard]] Value startTask(std::uint32_t function, std::span<const Value> arguments);
         [[nodiscard]] ExecutionResult driveTask(const Value& task);
 
         struct Program;
-        std::unique_ptr<Program> program_;
+        std::shared_ptr<Program> program_;
         MachineOptions options_;
     };
 } // namespace wio::vm

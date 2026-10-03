@@ -6,6 +6,7 @@
 #include <compare>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -145,6 +146,8 @@ namespace wio::vm
         [[nodiscard]] bool lessThan(const Value& other) const noexcept;
 
     private:
+        using TaskWaiter = std::function<void(AsyncTaskState, const Value&, const ExecutionError&)>;
+
         union Scalar
         {
             bool boolean;
@@ -204,6 +207,7 @@ namespace wio::vm
         [[nodiscard]] ExecutionError taskError() const;
         void waitTask() const;
         bool waitTaskFor(std::chrono::milliseconds duration) const;
+        bool registerTaskWaiter(TaskWaiter waiter) const;
         void destroy() noexcept;
         void copyFrom(const Value& other);
         void moveFrom(Value&& other) noexcept;

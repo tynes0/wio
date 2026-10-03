@@ -163,6 +163,25 @@ namespace wio::vm
             bool hasResumedValue = false;
         };
 
+        [[nodiscard]] ExecutionError withStack(ExecutionError error, const std::vector<Frame>& frames)
+        {
+            error.stack.reserve(error.stack.size() + frames.size());
+            bool leaf = true;
+            for (auto frame = frames.rbegin(); frame != frames.rend(); ++frame)
+            {
+                std::size_t instructionIndex = frame->instruction;
+                if (!leaf && instructionIndex > 0)
+                    --instructionIndex;
+                const bytecode::SourceSpan source = instructionIndex < frame->block->instructions.size()
+                                                        ? frame->block->instructions[instructionIndex].source
+                                                        : frame->block->source;
+                error.stack.push_back(
+                    {frame->function->id, frame->block->id, static_cast<std::uint32_t>(instructionIndex), source});
+                leaf = false;
+            }
+            return error;
+        }
+
         [[nodiscard]] bool isSignedType(const std::uint8_t kind) noexcept
         {
             return kind >= TypeI8 && kind <= TypeISize;
@@ -730,13 +749,73 @@ namespace wio::vm
             std::unordered_map<std::uint32_t, const bytecode::Block*> blocks;
         };
 
+        [[nodiscard]] Machine* acquireOwner()
+        {
+            std::scoped_lock lock{ownerMutex};
+            if (!owner)
+                return nullptr;
+            ++activeOwnerCalls;
+            return owner;
+        }
+
+        void releaseOwner() noexcept
+        {
+            std::scoped_lock lock{ownerMutex};
+            if (--activeOwnerCalls == 0)
+                ownerChanged.notify_all();
+        }
+
+        void detachOwner(Machine* expected)
+        {
+            std::unique_lock lock{ownerMutex};
+            if (owner == expected)
+                owner = nullptr;
+            ownerChanged.wait(lock, [&] { return activeOwnerCalls == 0; });
+        }
+
+        void retainContinuation(const Value& task, std::shared_ptr<void> continuation)
+        {
+            std::scoped_lock lock{continuationMutex};
+            const auto existing = std::find_if(continuations.begin(), continuations.end(),
+                                               [&](const auto& entry) { return entry.first == task; });
+            if (existing != continuations.end())
+                existing->second = std::move(continuation);
+            else
+                continuations.emplace_back(task, std::move(continuation));
+        }
+
+        void releaseContinuation(const Value& task)
+        {
+            std::scoped_lock lock{continuationMutex};
+            std::erase_if(continuations, [&](const auto& entry) { return entry.first == task; });
+        }
+
+        void cancelContinuations()
+        {
+            std::vector<Value> tasks;
+            {
+                std::scoped_lock lock{continuationMutex};
+                tasks.reserve(continuations.size());
+                for (const auto& entry : continuations)
+                    tasks.push_back(entry.first);
+                continuations.clear();
+            }
+            for (const Value& task : tasks)
+                (void)task.cancelTask();
+        }
+
+        std::mutex ownerMutex;
+        std::condition_variable ownerChanged;
         Machine* owner = nullptr;
+        std::size_t activeOwnerCalls = 0;
         const bytecode::Module* module = nullptr;
         ExecutionError loadError;
         std::vector<FunctionPlan> functions;
         std::vector<std::unique_ptr<PlaceStorage>> globals;
         std::mutex timerMutex;
         std::unique_ptr<TimerScheduler> timers;
+        std::mutex continuationMutex;
+        std::vector<std::pair<Value, std::shared_ptr<void>>> continuations;
         std::recursive_mutex executionMutex;
         std::unique_ptr<ExecutorScheduler> executors;
         bool valid = false;
@@ -748,6 +827,8 @@ namespace wio::vm
         Value activeTask;
         ExecutorKind executor = ExecutorKind::Inherit;
         std::uint64_t executed = 0;
+        std::uint32_t awaitedState = bytecode::InvalidIndex;
+        std::uint32_t awaitedResumeBlock = bytecode::InvalidIndex;
     };
 
     ExecutionResult ExecutionResult::success(Value value)
@@ -773,7 +854,7 @@ namespace wio::vm
     }
 
     Machine::Machine(const bytecode::Module& module, const MachineOptions options)
-        : program_(std::make_unique<Program>()), options_(options)
+        : program_(std::make_shared<Program>()), options_(options)
     {
         program_->owner = this;
         program_->module = &module;
@@ -810,23 +891,45 @@ namespace wio::vm
         program_->valid = true;
     }
 
-    Machine::~Machine() = default;
+    Machine::~Machine()
+    {
+        if (program_)
+        {
+            program_->detachOwner(this);
+            program_->cancelContinuations();
+        }
+        program_.reset();
+    }
 
     Machine::Machine(Machine&& other) noexcept
         : program_(std::move(other.program_)), options_(std::move(other.options_))
     {
         if (program_)
+        {
+            program_->detachOwner(&other);
+            std::scoped_lock lock{program_->ownerMutex};
             program_->owner = this;
+        }
     }
 
     Machine& Machine::operator=(Machine&& other) noexcept
     {
         if (this == &other)
             return *this;
+        if (program_)
+        {
+            program_->detachOwner(this);
+            program_->cancelContinuations();
+        }
+        program_.reset();
         program_ = std::move(other.program_);
         options_ = std::move(other.options_);
         if (program_)
+        {
+            program_->detachOwner(&other);
+            std::scoped_lock lock{program_->ownerMutex};
             program_->owner = this;
+        }
         return *this;
     }
 
@@ -879,6 +982,7 @@ namespace wio::vm
             return false;
         if (program_)
         {
+            program_->releaseContinuation(task);
             std::scoped_lock lock{program_->timerMutex};
             if (program_->timers)
                 (void)program_->timers->remove(task);
@@ -897,6 +1001,7 @@ namespace wio::vm
             return false;
         if (program_)
         {
+            program_->releaseContinuation(task);
             std::scoped_lock lock{program_->timerMutex};
             if (program_->timers)
                 (void)program_->timers->remove(task);
@@ -910,6 +1015,7 @@ namespace wio::vm
             return false;
         if (program_)
         {
+            program_->releaseContinuation(task);
             std::scoped_lock lock{program_->timerMutex};
             if (program_->timers)
                 (void)program_->timers->remove(task);
@@ -967,12 +1073,26 @@ namespace wio::vm
     {
         if (task.kind() != Value::Kind::AsyncTask)
             return ExecutionResult::failure({"WVM1164", "Wait requires an async task value"});
+        const auto releaseContinuation = [&]
+        {
+            if (program_)
+                program_->releaseContinuation(task);
+        };
         if (task.taskState() == AsyncTaskState::Ready)
+        {
+            releaseContinuation();
             return ExecutionResult::success(task.taskResult());
+        }
         if (task.taskState() == AsyncTaskState::Cancelled)
+        {
+            releaseContinuation();
             return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+        }
         if (task.taskState() == AsyncTaskState::Faulted)
+        {
+            releaseContinuation();
             return ExecutionResult::failure(task.taskError());
+        }
         if (task.taskState() == AsyncTaskState::Running)
             return ExecutionResult::suspended();
         if (task.taskFunction() == bytecode::InvalidIndex)
@@ -995,6 +1115,7 @@ namespace wio::vm
             if (!argument)
             {
                 (void)task.failTask({"WVM1167", "Async task lost a captured argument"});
+                releaseContinuation();
                 return ExecutionResult::failure({"WVM1167", "Async task lost a captured argument"});
             }
             arguments.push_back(*argument);
@@ -1006,26 +1127,142 @@ namespace wio::vm
         if (!result.succeeded())
         {
             if (task.taskState() == AsyncTaskState::Cancelled)
+            {
+                releaseContinuation();
                 return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            }
             if (task.failTask(result.error()))
+            {
+                releaseContinuation();
                 return result;
+            }
             if (task.taskState() == AsyncTaskState::Cancelled)
+            {
+                releaseContinuation();
                 return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            }
+            releaseContinuation();
             return ExecutionResult::failure({"WVM1204", "Async task failure lost its terminal-state race"});
         }
         if (!task.completeTask(result.value()))
         {
             if (task.taskState() == AsyncTaskState::Cancelled)
+            {
+                releaseContinuation();
                 return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            }
+            releaseContinuation();
             return ExecutionResult::failure({"WVM1204", "Async task completion lost its terminal-state race"});
         }
+        releaseContinuation();
         return ExecutionResult::success(task.taskResult());
+    }
+
+    bool Machine::scheduleTask(const std::shared_ptr<ExecutionState>& state, ExecutorKind executor)
+    {
+        if (!program_ || !program_->executors)
+            return false;
+        if (executor == ExecutorKind::Inherit)
+            executor = activeExecutor != ExecutorKind::Inherit
+                           ? activeExecutor
+                           : (program_->executors->isMainThread() ? ExecutorKind::Main : ExecutorKind::Worker);
+        state->executor = executor;
+        program_->retainContinuation(state->activeTask, state);
+        const std::weak_ptr<Program> weakProgram = program_;
+        const Value task = state->activeTask;
+        return program_->executors->schedule(
+            executor, ExecutorQueue::Work{.run =
+                                              [weakProgram, state]
+                                          {
+                                              if (const std::shared_ptr<Program> program = weakProgram.lock())
+                                              {
+                                                  Machine* const owner = program->acquireOwner();
+                                                  if (!owner)
+                                                      return;
+                                                  try
+                                                  {
+                                                      owner->resumeTask(state);
+                                                  }
+                                                  catch (...)
+                                                  {
+                                                      try
+                                                      {
+                                                          (void)state->activeTask.failTask(
+                                                              {"WVM1207", "VM executor owner dispatch failed"});
+                                                      }
+                                                      catch (...)
+                                                      {
+                                                      }
+                                                  }
+                                                  program->releaseOwner();
+                                              }
+                                          },
+                                          .cancel = [task] { (void)task.cancelTask(); }});
+    }
+
+    void Machine::wakeTask(const std::weak_ptr<ExecutionState> weakState, const AsyncTaskState terminalState,
+                           const Value& result, const ExecutionError& error)
+    {
+        const std::shared_ptr<ExecutionState> state = weakState.lock();
+        if (!state || state->activeTask.taskState() == AsyncTaskState::Cancelled || !program_)
+            return;
+
+        if (terminalState != AsyncTaskState::Ready)
+        {
+            ExecutionError propagated = terminalState == AsyncTaskState::Cancelled
+                                            ? ExecutionError{"WVM1165", "Awaited async task was cancelled"}
+                                            : error;
+            {
+                std::scoped_lock lock{program_->executionMutex};
+                propagated = withStack(std::move(propagated), state->frames);
+            }
+            program_->releaseContinuation(state->activeTask);
+            (void)state->activeTask.failTask(std::move(propagated));
+            return;
+        }
+
+        ExecutorKind executor = ExecutorKind::Inherit;
+        {
+            std::scoped_lock lock{program_->executionMutex};
+            if (state->frames.empty())
+            {
+                program_->releaseContinuation(state->activeTask);
+                (void)state->activeTask.failTask({"WVM1209", "Await continuation lost its VM frame"});
+                return;
+            }
+            Frame& frame = state->frames.back();
+            const auto resume = program_->functions[frame.function->id].blocks.find(state->awaitedResumeBlock);
+            if (resume == program_->functions[frame.function->id].blocks.end())
+            {
+                program_->releaseContinuation(state->activeTask);
+                (void)state->activeTask.failTask(
+                    withStack({"WVM1175", "Coroutine resume block does not exist"}, state->frames));
+                return;
+            }
+            frame.resumedValue = result;
+            frame.hasResumedValue = true;
+            frame.resumedState = state->awaitedState;
+            frame.block = resume->second;
+            frame.instruction = 0;
+            state->awaitedState = bytecode::InvalidIndex;
+            state->awaitedResumeBlock = bytecode::InvalidIndex;
+            executor = state->executor;
+        }
+        if (!scheduleTask(state, executor))
+        {
+            program_->releaseContinuation(state->activeTask);
+            (void)state->activeTask.failTask({"WVM1208", "Await continuation executor rejected the resumed VM frame"});
+        }
     }
 
     void Machine::resumeTask(std::shared_ptr<ExecutionState> state)
     {
         if (state->activeTask.taskState() == AsyncTaskState::Cancelled)
+        {
+            if (program_)
+                program_->releaseContinuation(state->activeTask);
             return;
+        }
         try
         {
             ExecutionResult result = execute(bytecode::InvalidIndex, {}, nullptr, state);
@@ -1035,15 +1272,19 @@ namespace wio::vm
             const Value& task = state->activeTask;
             if (!result.succeeded())
             {
+                program_->releaseContinuation(task);
                 if (task.taskState() != AsyncTaskState::Cancelled)
                     (void)task.failTask(result.error());
                 return;
             }
+            program_->releaseContinuation(task);
             if (task.taskState() != AsyncTaskState::Cancelled)
                 (void)task.completeTask(result.value());
         }
         catch (...)
         {
+            if (program_)
+                program_->releaseContinuation(state->activeTask);
             if (state->activeTask.taskState() != AsyncTaskState::Cancelled)
                 (void)state->activeTask.failTask(
                     {"WVM1207", "VM executor continuation threw across the runtime boundary"});
@@ -1074,23 +1315,7 @@ namespace wio::vm
         std::vector<Frame>& frames = state->frames;
         const Value* stateTask = state->activeTask.kind() == Value::Kind::AsyncTask ? &state->activeTask : nullptr;
         const auto failWithStack = [&](ExecutionError error)
-        {
-            error.stack.reserve(frames.size());
-            bool leaf = true;
-            for (auto frame = frames.rbegin(); frame != frames.rend(); ++frame)
-            {
-                std::size_t instructionIndex = frame->instruction;
-                if (!leaf && instructionIndex > 0)
-                    --instructionIndex;
-                const bytecode::SourceSpan source = instructionIndex < frame->block->instructions.size()
-                                                        ? frame->block->instructions[instructionIndex].source
-                                                        : frame->block->source;
-                error.stack.push_back(
-                    {frame->function->id, frame->block->id, static_cast<std::uint32_t>(instructionIndex), source});
-                leaf = false;
-            }
-            return ExecutionResult::failure(std::move(error));
-        };
+        { return ExecutionResult::failure(withStack(std::move(error), frames)); };
         auto pushFrame = [&](const bytecode::Function& function, const std::span<const Value> values,
                              FrameContinuation continuation) -> ExecutionResult
         {
@@ -3194,13 +3419,79 @@ namespace wio::vm
                         instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
                     if (!awaited || awaited->kind() != Value::Kind::AsyncTask)
                         return fail("WVM1173", "Coroutine await requires an async task operand");
-                    executionLock.unlock();
-                    ExecutionResult awaitedResult = wait(*awaited);
-                    executionLock.lock();
-                    if (!awaitedResult.succeeded())
-                        return awaitedResult;
-                    frame.resumedValue = awaitedResult.value();
-                    frame.hasResumedValue = true;
+                    const Value awaitedTask = *awaited;
+                    bool attemptedStart = false;
+                    for (;;)
+                    {
+                        const AsyncTaskState awaitedState = awaitedTask.taskState();
+                        if (awaitedState == AsyncTaskState::Ready)
+                        {
+                            frame.resumedValue = awaitedTask.taskResult();
+                            frame.hasResumedValue = true;
+                            break;
+                        }
+                        if (awaitedState == AsyncTaskState::Cancelled)
+                            return failWithStack({"WVM1165", "Awaited async task was cancelled"});
+                        if (awaitedState == AsyncTaskState::Faulted)
+                            return failWithStack(awaitedTask.taskError());
+
+                        if (!attemptedStart && awaitedState == AsyncTaskState::Pending &&
+                            awaitedTask.taskFunction() != bytecode::InvalidIndex)
+                        {
+                            attemptedStart = true;
+                            ExecutionResult started = driveTask(awaitedTask);
+                            if (!started.succeeded() && !started.isSuspended())
+                                return failWithStack(started.error());
+                            continue;
+                        }
+
+                        if (!stateTask)
+                            return fail("WVM1209", "Coroutine await has no owning async task");
+                        state->awaitedState = instruction.projectionIndex;
+                        state->awaitedResumeBlock = coroutineState.resumeBlock;
+                        if (state->executor == ExecutorKind::Inherit)
+                            state->executor =
+                                activeExecutor != ExecutorKind::Inherit
+                                    ? activeExecutor
+                                    : (program_->executors->isMainThread() ? ExecutorKind::Main : ExecutorKind::Worker);
+                        program_->retainContinuation(*stateTask, state);
+                        const std::weak_ptr<ExecutionState> weakState = state;
+                        const std::weak_ptr<Program> weakProgram = program_;
+                        const bool registered = awaitedTask.registerTaskWaiter(
+                            [weakProgram, weakState](const AsyncTaskState terminalState, const Value& result,
+                                                     const ExecutionError& error)
+                            {
+                                if (const std::shared_ptr<Program> program = weakProgram.lock())
+                                {
+                                    Machine* const owner = program->acquireOwner();
+                                    if (!owner)
+                                        return;
+                                    try
+                                    {
+                                        owner->wakeTask(weakState, terminalState, result, error);
+                                    }
+                                    catch (...)
+                                    {
+                                        try
+                                        {
+                                            if (const std::shared_ptr<ExecutionState> state = weakState.lock())
+                                                (void)state->activeTask.failTask(
+                                                    {"WVM1210", "VM await continuation dispatch failed"});
+                                        }
+                                        catch (...)
+                                        {
+                                        }
+                                    }
+                                    program->releaseOwner();
+                                }
+                            });
+                        if (registered)
+                        {
+                            executionLock.unlock();
+                            return ExecutionResult::suspended();
+                        }
+                        program_->releaseContinuation(*stateTask);
+                    }
                 }
                 else if (instruction.asyncOperation != AsyncSwitchExecutor || !instruction.operands.empty())
                     return fail("WVM1174", "Coroutine suspension carries an unsupported async operation");
@@ -3217,13 +3508,8 @@ namespace wio::vm
                     const std::optional<ExecutorKind> target = executorKind(instruction.asyncExecutor);
                     if (!target || !stateTask || !program_->executors)
                         return fail("WVM1208", "Coroutine executor switch has no runnable target");
-                    state->executor = *target;
-                    const Value task = *stateTask;
                     executionLock.unlock();
-                    Program* const program = program_.get();
-                    const bool scheduled = program->executors->schedule(
-                        *target, ExecutorQueue::Work{.run = [program, state] { program->owner->resumeTask(state); },
-                                                     .cancel = [task] { (void)task.cancelTask(); }});
+                    const bool scheduled = scheduleTask(state, *target);
                     if (!scheduled)
                         return failWithStack({"WVM1208", "Coroutine executor queue rejected its continuation",
                                               frame.function->id, frame.block->id,

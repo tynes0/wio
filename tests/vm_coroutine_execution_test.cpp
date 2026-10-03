@@ -3,7 +3,9 @@
 #include "wio/vm/machine.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <fstream>
 #include <iostream>
@@ -49,6 +51,9 @@ namespace
             if (event.function == 5 && event.block == 4 && event.executor == vm::ExecutorKind::Main &&
                 std::this_thread::get_id() == callingThread_)
                 resumedOnMain.store(true, std::memory_order_relaxed);
+            if (event.function == 8 && event.block == 1 && event.opcode == bytecode::Opcode::CoroutineSuspend &&
+                event.executor == vm::ExecutorKind::Worker)
+                waitingOnWorker.store(true, std::memory_order_release);
             return vm::DebugAction::Continue;
         }
 
@@ -57,6 +62,7 @@ namespace
         std::atomic_bool resumedOnBlocking = false;
         std::atomic_bool resumedOnIo = false;
         std::atomic_bool resumedOnMain = false;
+        std::atomic_bool waitingOnWorker = false;
 
     private:
         std::thread::id callingThread_;
@@ -404,6 +410,56 @@ namespace
         });
         switchedFault.coroutine.maySwitchThreads = true;
         module.functions.push_back(std::move(switchedFault));
+
+        bytecode::Instruction externalSwitchCheck = instruction(bytecode::Opcode::CancellationCheck);
+        externalSwitchCheck.projectionIndex = 0;
+        externalSwitchCheck.asyncOperation = 2;
+        externalSwitchCheck.asyncExecutor = 2;
+        bytecode::Instruction externalSwitch = instruction(bytecode::Opcode::CoroutineSuspend);
+        externalSwitch.targets = {bytecode::BranchTarget{.block = 1}};
+        externalSwitch.projectionIndex = 0;
+        externalSwitch.asyncOperation = 2;
+        externalSwitch.asyncExecutor = 2;
+        bytecode::Instruction externalAwaitCheck = instruction(bytecode::Opcode::CancellationCheck);
+        externalAwaitCheck.projectionIndex = 1;
+        externalAwaitCheck.asyncOperation = 1;
+        bytecode::Instruction externalAwait = instruction(bytecode::Opcode::CoroutineSuspend);
+        externalAwait.operands = {0};
+        externalAwait.targets = {bytecode::BranchTarget{.block = 2}};
+        externalAwait.projectionIndex = 1;
+        externalAwait.asyncOperation = 1;
+        bytecode::Instruction externalResume = instruction(bytecode::Opcode::CoroutineResume);
+        externalResume.result = 1;
+        externalResume.resultType = I32;
+        externalResume.projectionIndex = 1;
+        externalResume.asyncOperation = 1;
+        bytecode::Function awaitExternal =
+            function(8, TaskI32, {bytecode::Parameter{.value = 0, .type = TaskI32}},
+                     {block(0, {externalSwitchCheck, externalSwitch}), block(1, {externalAwaitCheck, externalAwait}),
+                      block(2, {externalResume, complete(1)})});
+        makeAsync(awaitExternal);
+        addFrameSlot(awaitExternal, 0, TaskI32, 2);
+        addFrameSlot(awaitExternal, 1, I32);
+        awaitExternal.coroutine.states.push_back(bytecode::Function::CoroutineState{
+            .index = 0,
+            .suspendBlock = 0,
+            .resumeBlock = 1,
+            .resultType = Void,
+            .executor = 2,
+            .cancellationPoint = true,
+        });
+        awaitExternal.coroutine.states.push_back(bytecode::Function::CoroutineState{
+            .index = 1,
+            .suspendBlock = 1,
+            .resumeBlock = 2,
+            .awaitedTask = 0,
+            .resumedValue = 1,
+            .resultType = I32,
+            .executor = 0,
+            .cancellationPoint = true,
+        });
+        awaitExternal.coroutine.maySwitchThreads = true;
+        module.functions.push_back(std::move(awaitExternal));
         return module;
     }
 } // namespace
@@ -461,6 +517,82 @@ int main(const int argc, const char* const* argv)
                      !switchedFault.error().stack.empty() && switchedFault.error().stack.front().function == 7 &&
                      switchedFault.error().stack.front().block == 1,
                  "A fault after an executor switch must preserve its resumed VM stack trace");
+
+    const vm::Value external = machine.makeExternalTask();
+    const std::array<vm::Value, 1> externalArguments = {external};
+    const vm::ExecutionResult externalParent = machine.invoke(8, externalArguments);
+    const auto workerWaitDeadline = std::chrono::steady_clock::now() + std::chrono::seconds{1};
+    while (!observer.waitingOnWorker.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < workerWaitDeadline)
+        std::this_thread::yield();
+    ok &= expect(observer.waitingOnWorker.load(std::memory_order_acquire),
+                 "The external await fixture must reach its worker suspension point");
+    const vm::ExecutionResult workerProbeTask = machine.invoke(3);
+    const vm::ExecutionResult workerProbe =
+        workerProbeTask.succeeded() ? machine.wait(workerProbeTask.value()) : workerProbeTask;
+    ok &= expect(workerProbe.succeeded() && workerProbe.value().asSignedInteger() == 9,
+                 "A pending await must release the only worker instead of blocking its executor thread");
+    ok &= expect(machine.complete(external, vm::Value::signedInteger(7)),
+                 "External completion must publish the awaited payload exactly once");
+    const vm::ExecutionResult externalResult =
+        externalParent.succeeded() ? machine.wait(externalParent.value()) : externalParent;
+    ok &= expect(externalResult.succeeded() && externalResult.value().asSignedInteger() == 7,
+                 "External task completion must wake and resume its suspended VM continuation");
+
+    observer.waitingOnWorker.store(false, std::memory_order_release);
+    const vm::Value failedExternal = machine.makeExternalTask();
+    const std::array<vm::Value, 1> failedArguments = {failedExternal};
+    const vm::ExecutionResult failedParent = machine.invoke(8, failedArguments);
+    const auto failedWaitDeadline = std::chrono::steady_clock::now() + std::chrono::seconds{1};
+    while (!observer.waitingOnWorker.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < failedWaitDeadline)
+        std::this_thread::yield();
+    ok &= expect(observer.waitingOnWorker.load(std::memory_order_acquire),
+                 "The failed external task must reach its worker await point");
+    ok &= expect(machine.fail(failedExternal, "EXT001", "external failure"),
+                 "External failure must win the awaited task terminal race");
+    const vm::ExecutionResult propagatedFailure =
+        failedParent.succeeded() ? machine.wait(failedParent.value()) : failedParent;
+    ok &= expect(!propagatedFailure.succeeded() && propagatedFailure.error().code == "EXT001" &&
+                     !propagatedFailure.error().stack.empty() && propagatedFailure.error().stack.back().function == 8,
+                 "Await failure must append the parent coroutine frame to the child diagnostic");
+
+    observer.waitingOnWorker.store(false, std::memory_order_release);
+    const vm::Value cancelledExternal = machine.makeExternalTask();
+    const std::array<vm::Value, 1> cancelledArguments = {cancelledExternal};
+    const vm::ExecutionResult cancelledParent = machine.invoke(8, cancelledArguments);
+    const auto cancelledWaitDeadline = std::chrono::steady_clock::now() + std::chrono::seconds{1};
+    while (!observer.waitingOnWorker.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < cancelledWaitDeadline)
+        std::this_thread::yield();
+    ok &= expect(observer.waitingOnWorker.load(std::memory_order_acquire),
+                 "The cancelled external task must reach its worker await point");
+    ok &= expect(cancelledParent.succeeded() && machine.cancel(cancelledParent.value()),
+                 "Cancelling a suspended parent must release its continuation ownership");
+    const vm::ExecutionResult cancelledAwait = machine.wait(cancelledParent.value());
+    ok &= expect(!cancelledAwait.succeeded() && cancelledAwait.error().code == "WVM1165",
+                 "A cancelled suspended parent must remain observably cancelled");
+    ok &= expect(machine.complete(cancelledExternal, vm::Value::signedInteger(11)),
+                 "Completing an orphaned awaited task must remain safe after parent cancellation");
+
+    ExecutorObserver shutdownObserver{std::this_thread::get_id()};
+    vm::Value shutdownParent;
+    {
+        vm::Machine shutdownMachine{decoded.module,
+                                    vm::MachineOptions{.debugObserver = &shutdownObserver, .workerThreadCount = 1}};
+        const vm::Value neverCompleted = shutdownMachine.makeExternalTask();
+        const std::array<vm::Value, 1> shutdownArguments = {neverCompleted};
+        const vm::ExecutionResult startedShutdown = shutdownMachine.invoke(8, shutdownArguments);
+        if (startedShutdown.succeeded())
+            shutdownParent = startedShutdown.value();
+        const auto shutdownDeadline = std::chrono::steady_clock::now() + std::chrono::seconds{1};
+        while (!shutdownObserver.waitingOnWorker.load(std::memory_order_acquire) &&
+               std::chrono::steady_clock::now() < shutdownDeadline)
+            std::this_thread::yield();
+    }
+    ok &= expect(shutdownParent.kind() == vm::Value::Kind::AsyncTask &&
+                     shutdownParent.taskState() == vm::AsyncTaskState::Cancelled,
+                 "Machine shutdown must cancel suspended continuations instead of leaking running tasks");
 
     const vm::ExecutionResult faultedTask = machine.invoke(4);
     const vm::ExecutionResult faulted = faultedTask.succeeded() ? machine.wait(faultedTask.value()) : faultedTask;

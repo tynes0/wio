@@ -15,6 +15,8 @@ namespace wio::vm
     class AggregateStorage final
     {
     public:
+        using TaskWaiter = std::function<void(AsyncTaskState, const Value&, const ExecutionError&)>;
+
         AggregateStorage(const Value::Kind kind, const std::uint32_t type, std::vector<Value> values,
                          const bool ordered = false)
             : kind_(kind), type_(type), values_(std::move(values)), ordered_(ordered)
@@ -106,36 +108,88 @@ namespace wio::vm
 
         bool cancelTask() noexcept
         {
-            std::scoped_lock lock{taskMutex_};
-            const AsyncTaskState state = taskState();
-            if (state != AsyncTaskState::Pending && state != AsyncTaskState::Running)
-                return false;
-            taskState_.store(AsyncTaskState::Cancelled, std::memory_order_release);
+            std::vector<TaskWaiter> waiters;
+            {
+                std::scoped_lock lock{taskMutex_};
+                const AsyncTaskState state = taskState();
+                if (state != AsyncTaskState::Pending && state != AsyncTaskState::Running)
+                    return false;
+                waiters.swap(taskWaiters_);
+                taskState_.store(AsyncTaskState::Cancelled, std::memory_order_release);
+            }
             taskChanged_.notify_all();
+            for (TaskWaiter& waiter : waiters)
+            {
+                try
+                {
+                    waiter(AsyncTaskState::Cancelled, taskResult_, taskError_);
+                }
+                catch (...)
+                {
+                }
+            }
             return true;
         }
 
         bool completeTask(Value result)
         {
-            std::scoped_lock lock{taskMutex_};
-            const AsyncTaskState state = taskState();
-            if (state != AsyncTaskState::Pending && state != AsyncTaskState::Running)
-                return false;
-            taskResult_ = std::move(result);
-            taskState_.store(AsyncTaskState::Ready, std::memory_order_release);
+            std::vector<TaskWaiter> waiters;
+            {
+                std::scoped_lock lock{taskMutex_};
+                const AsyncTaskState state = taskState();
+                if (state != AsyncTaskState::Pending && state != AsyncTaskState::Running)
+                    return false;
+                taskResult_ = std::move(result);
+                waiters.swap(taskWaiters_);
+                taskState_.store(AsyncTaskState::Ready, std::memory_order_release);
+            }
             taskChanged_.notify_all();
+            for (TaskWaiter& waiter : waiters)
+            {
+                try
+                {
+                    waiter(AsyncTaskState::Ready, taskResult_, taskError_);
+                }
+                catch (...)
+                {
+                }
+            }
             return true;
         }
 
         bool failTask(ExecutionError error)
         {
+            std::vector<TaskWaiter> waiters;
+            {
+                std::scoped_lock lock{taskMutex_};
+                const AsyncTaskState state = taskState();
+                if (state != AsyncTaskState::Pending && state != AsyncTaskState::Running)
+                    return false;
+                taskError_ = std::move(error);
+                waiters.swap(taskWaiters_);
+                taskState_.store(AsyncTaskState::Faulted, std::memory_order_release);
+            }
+            taskChanged_.notify_all();
+            for (TaskWaiter& waiter : waiters)
+            {
+                try
+                {
+                    waiter(AsyncTaskState::Faulted, taskResult_, taskError_);
+                }
+                catch (...)
+                {
+                }
+            }
+            return true;
+        }
+
+        bool registerTaskWaiter(TaskWaiter waiter)
+        {
             std::scoped_lock lock{taskMutex_};
             const AsyncTaskState state = taskState();
             if (state != AsyncTaskState::Pending && state != AsyncTaskState::Running)
                 return false;
-            taskError_ = std::move(error);
-            taskState_.store(AsyncTaskState::Faulted, std::memory_order_release);
-            taskChanged_.notify_all();
+            taskWaiters_.push_back(std::move(waiter));
             return true;
         }
 
@@ -198,6 +252,7 @@ namespace wio::vm
         mutable std::condition_variable taskChanged_;
         Value taskResult_;
         ExecutionError taskError_;
+        std::vector<TaskWaiter> taskWaiters_;
     };
 
     namespace
@@ -978,6 +1033,11 @@ namespace wio::vm
     bool Value::waitTaskFor(const std::chrono::milliseconds duration) const
     {
         return kind_ == Kind::AsyncTask && scalar_.aggregate->waitTaskFor(duration);
+    }
+
+    bool Value::registerTaskWaiter(TaskWaiter waiter) const
+    {
+        return kind_ == Kind::AsyncTask && scalar_.aggregate->registerTaskWaiter(std::move(waiter));
     }
 
     bool Value::operator==(const Value& other) const noexcept
