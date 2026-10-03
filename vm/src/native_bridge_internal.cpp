@@ -1,0 +1,222 @@
+#include "native_bridge_internal.h"
+
+#include <algorithm>
+#include <cstring>
+#include <limits>
+#include <string_view>
+
+namespace wio::vm::detail
+{
+    namespace
+    {
+        constexpr std::uint8_t TypeVoid = 1;
+        constexpr std::uint8_t TypeBool = 2;
+        constexpr std::uint8_t TypeI8 = 3;
+        constexpr std::uint8_t TypeISize = 7;
+        constexpr std::uint8_t TypeU8 = 8;
+        constexpr std::uint8_t TypeUSize = 12;
+        constexpr std::uint8_t TypeF32 = 13;
+        constexpr std::uint8_t TypeF64 = 14;
+        constexpr std::uint8_t TypeByte = 15;
+        constexpr std::uint8_t TypeChar = 16;
+        constexpr std::uint8_t TypeString = 17;
+        constexpr std::uint8_t TypeText = 18;
+        constexpr std::uint8_t TypeNamed = 28;
+        constexpr std::uint8_t TypeReference = 29;
+        constexpr std::uint8_t TypeNullable = 30;
+        constexpr std::uint8_t NominalEnum = 4;
+        constexpr std::uint8_t NominalFlagset = 5;
+
+        [[nodiscard]] std::uint32_t directType(const bytecode::Module& module, std::uint32_t type) noexcept
+        {
+            for (std::uint32_t depth = 0; type < module.types.size() && depth < 32; ++depth)
+            {
+                const bytecode::Type& candidate = module.types[type];
+                if ((candidate.kind != TypeReference && candidate.kind != TypeNullable) || candidate.arguments.empty())
+                    return type;
+                type = candidate.arguments.front();
+            }
+            return bytecode::InvalidIndex;
+        }
+
+        [[nodiscard]] std::uint32_t scalarType(const bytecode::Module& module, std::uint32_t type) noexcept
+        {
+            type = directType(module, type);
+            if (type >= module.types.size())
+                return bytecode::InvalidIndex;
+            const bytecode::Type& candidate = module.types[type];
+            if (candidate.kind == TypeNamed &&
+                (candidate.nominalKind == NominalEnum || candidate.nominalKind == NominalFlagset))
+                return directType(module, candidate.enumUnderlyingType);
+            return type;
+        }
+
+        [[nodiscard]] bool isUnicodeScalar(const char32_t scalar) noexcept
+        {
+            return scalar <= 0x10ffff && (scalar < 0xd800 || scalar > 0xdfff);
+        }
+
+        [[nodiscard]] std::string sliceString(const WioNativeAbiSlice slice)
+        {
+            if (!slice.data || slice.size == 0)
+                return {};
+            const auto size = static_cast<std::size_t>(
+                (std::min)(slice.size, static_cast<std::uint64_t>((std::numeric_limits<std::size_t>::max)())));
+            return std::string{static_cast<const char*>(slice.data), size};
+        }
+    } // namespace
+
+    bool encodeNativeValue(const bytecode::Module& module, const Value& value, const std::uint32_t declaredType,
+                           const std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error)
+    {
+        output = {};
+        if (value.kind() == Value::Kind::Null)
+        {
+            if (declaredType >= module.types.size() || module.types[declaredType].kind != TypeNullable)
+            {
+                error = "null VM value does not match a nullable native ABI declaration";
+                return false;
+            }
+            output.kind = WIO_NATIVE_ABI_VOID;
+            output.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+            return true;
+        }
+
+        const std::uint32_t type = scalarType(module, declaredType);
+        if (type >= module.types.size())
+        {
+            error = "native value references an invalid bytecode type";
+            return false;
+        }
+        const std::uint8_t kind = module.types[type].kind;
+        switch (marshalling)
+        {
+        case 0:
+            if (kind == TypeVoid && value.isEmpty())
+                return true;
+            error = "non-void VM value cannot use void native marshalling";
+            return false;
+        case 1:
+            if (kind == TypeBool && value.kind() == Value::Kind::Boolean)
+            {
+                output.kind = WIO_NATIVE_ABI_BOOL;
+                output.payload.boolean = value.asBoolean();
+                return true;
+            }
+            if (kind >= TypeI8 && kind <= TypeISize && value.kind() == Value::Kind::SignedInteger)
+            {
+                output.kind = WIO_NATIVE_ABI_I64;
+                output.payload.signedInteger = value.asSignedInteger();
+                return true;
+            }
+            if (((kind >= TypeU8 && kind <= TypeUSize) || kind == TypeByte || kind == TypeChar) &&
+                value.kind() == Value::Kind::UnsignedInteger)
+            {
+                output.kind = WIO_NATIVE_ABI_U64;
+                output.payload.unsignedInteger = value.asUnsignedInteger();
+                return true;
+            }
+            if ((kind == TypeF32 || kind == TypeF64) && value.kind() == Value::Kind::Float64)
+            {
+                output.kind = WIO_NATIVE_ABI_F64;
+                output.payload.floatingPoint = value.asFloat64();
+                return true;
+            }
+            error = "VM scalar kind does not match the native ABI declaration";
+            return false;
+        case 2:
+            if (kind == TypeString && value.kind() == Value::Kind::String)
+            {
+                output.kind = WIO_NATIVE_ABI_BYTES;
+                output.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+                output.payload.slice = {value.asString().data(), value.asString().size()};
+                return true;
+            }
+            error = "VM value is not a UTF-8 string required by the native ABI";
+            return false;
+        case 3:
+            if (kind == TypeText && value.kind() == Value::Kind::Text)
+            {
+                output.kind = WIO_NATIVE_ABI_TEXT_UTF32;
+                output.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+                output.payload.slice = {value.asText().data(), value.asText().size() * sizeof(char32_t)};
+                return true;
+            }
+            error = "VM value is not Unicode text required by the native ABI";
+            return false;
+        default:
+            error = "native marshalling kind is not implemented by this VM bridge slice";
+            return false;
+        }
+    }
+
+    NativeValueResult decodeNativeValue(const bytecode::Module& module, const WioNativeAbiValue& value,
+                                        const std::uint32_t declaredType, const std::uint8_t marshalling)
+    {
+        const bool nullable = declaredType < module.types.size() && module.types[declaredType].kind == TypeNullable;
+        if (value.kind == WIO_NATIVE_ABI_VOID && nullable)
+            return {Value::null(), {}};
+
+        const std::uint32_t type = scalarType(module, declaredType);
+        if (type >= module.types.size())
+            return {{}, "native result references an invalid bytecode type"};
+        const std::uint8_t kind = module.types[type].kind;
+        switch (marshalling)
+        {
+        case 0:
+            return value.kind == WIO_NATIVE_ABI_VOID ? NativeValueResult{}
+                                                     : NativeValueResult{{}, "native result is not void"};
+        case 1:
+            if (kind == TypeBool && value.kind == WIO_NATIVE_ABI_BOOL)
+                return {Value::boolean(value.payload.boolean), {}};
+            if (kind >= TypeI8 && kind <= TypeISize && value.kind == WIO_NATIVE_ABI_I64)
+                return {Value::signedInteger(value.payload.signedInteger), {}};
+            if (((kind >= TypeU8 && kind <= TypeUSize) || kind == TypeByte || kind == TypeChar) &&
+                value.kind == WIO_NATIVE_ABI_U64)
+                return {Value::unsignedInteger(value.payload.unsignedInteger), {}};
+            if ((kind == TypeF32 || kind == TypeF64) && value.kind == WIO_NATIVE_ABI_F64)
+                return {Value::floating(value.payload.floatingPoint), {}};
+            return {{}, "native scalar result does not match the Wio result type"};
+        case 2:
+            if (kind != TypeString || value.kind != WIO_NATIVE_ABI_BYTES ||
+                (!value.payload.slice.data && value.payload.slice.size != 0) ||
+                value.payload.slice.size > static_cast<std::uint64_t>((std::numeric_limits<std::size_t>::max)()))
+                return {{}, "native UTF-8 string result has an invalid wire shape"};
+            return {Value::string(sliceString(value.payload.slice)), {}};
+        case 3:
+        {
+            if (kind != TypeText || value.kind != WIO_NATIVE_ABI_TEXT_UTF32 ||
+                value.payload.slice.size % sizeof(char32_t) != 0 ||
+                (!value.payload.slice.data && value.payload.slice.size != 0) ||
+                value.payload.slice.size / sizeof(char32_t) >
+                    static_cast<std::uint64_t>((std::numeric_limits<std::size_t>::max)()))
+                return {{}, "native Unicode text result has an invalid wire shape"};
+            const std::size_t count = static_cast<std::size_t>(value.payload.slice.size / sizeof(char32_t));
+            std::u32string text(count, U'\0');
+            if (count != 0)
+                std::memcpy(text.data(), value.payload.slice.data, count * sizeof(char32_t));
+            for (const char32_t scalar : text)
+            {
+                if (!isUnicodeScalar(scalar))
+                    return {{}, "native Unicode text result contains an invalid scalar"};
+            }
+            return {Value::text(std::move(text)), {}};
+        }
+        default:
+            return {{}, "native result marshalling kind is not implemented by this VM bridge slice"};
+        }
+    }
+
+    std::string nativeFailureMessage(const WioNativeAbiFailure& failure)
+    {
+        std::string message = sliceString(failure.message);
+        if (message.empty())
+            message = "native thunk returned ABI status " + std::to_string(static_cast<std::int32_t>(failure.status));
+        const std::string category = sliceString(failure.category);
+        if (!category.empty())
+            message = category + ": " + message;
+        if (failure.nativeCode != 0)
+            message += " (native code " + std::to_string(failure.nativeCode) + ")";
+        return message;
+    }
+} // namespace wio::vm::detail

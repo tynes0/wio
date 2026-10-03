@@ -12,6 +12,8 @@
 #include <span>
 #include <string>
 
+struct WioNativeAbiRegistry;
+
 namespace wio::vm
 {
     enum class ExecutorKind : std::uint8_t
@@ -122,6 +124,11 @@ namespace wio::vm
         [[nodiscard]] std::optional<DebugEvent> pausedDebugEvent() const;
         bool resumeDebugExecution();
         bool abortDebugExecution();
+
+        // Registry descriptors are copied; the registry array may be released
+        // after this call. Native thunk code and its containing library must
+        // remain loaded while the machine can execute registered functions.
+        [[nodiscard]] bool registerNativeRegistry(const WioNativeAbiRegistry& registry, std::string* error = nullptr);
 
         // Main-executor continuations run only on the bound thread. wait()
         // pumps this queue automatically when called by that thread.

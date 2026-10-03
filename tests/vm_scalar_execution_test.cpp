@@ -70,6 +70,7 @@ namespace
         bytecode::Module module;
         module.abiDescriptorVersion = 1;
         module.contract.callTableStableId = 1;
+        module.strings = {"native:missing"};
         module.constants = {bytecode::Constant{},
                             bytecode::Constant{.kind = bytecode::ConstantKind::SignedInteger, .bits = 0},
                             bytecode::Constant{.kind = bytecode::ConstantKind::SignedInteger, .bits = 1}};
@@ -168,6 +169,7 @@ namespace
         bytecode::Instruction nativeCall = instruction(bytecode::Opcode::NativeInvoke);
         nativeCall.result = 0;
         nativeCall.resultType = I32;
+        nativeCall.callee = 9;
         unsupportedEntry.instructions = {std::move(nativeCall), returnValue(0)};
         unsupported.blocks.push_back(std::move(unsupportedEntry));
         module.functions.push_back(std::move(unsupported));
@@ -257,6 +259,15 @@ namespace
         globalEntry.instructions.push_back(returnValue(4));
         incrementGlobal.blocks.push_back(std::move(globalEntry));
         module.functions.push_back(std::move(incrementGlobal));
+
+        bytecode::Function missingNative;
+        missingNative.id = 9;
+        missingNative.returnType = I32;
+        missingNative.flags = 0x0042u;
+        missingNative.hasNativeBinding = true;
+        missingNative.nativeBinding.stableKey = 0;
+        missingNative.nativeBinding.result = {.type = I32, .marshalling = 1};
+        module.functions.push_back(std::move(missingNative));
         return module;
     }
 } // namespace
@@ -285,8 +296,8 @@ int main()
                  "Integer division by zero must return a stable VM diagnostic");
 
     const vm::ExecutionResult unsupported = machine.invoke(4);
-    ok &= expect(!unsupported.succeeded() && unsupported.error().code == "WVM1203",
-                 "Native bridge opcodes must fail explicitly instead of silently misexecuting");
+    ok &= expect(!unsupported.succeeded() && unsupported.error().code == "WVM1220",
+                 "Unregistered native bridge functions must fail explicitly instead of silently misexecuting");
 
     vm::Machine bounded{decoded.module, vm::MachineOptions{.instructionLimit = 8}};
     const vm::ExecutionResult endless = bounded.invoke(5);

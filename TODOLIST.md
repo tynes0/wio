@@ -609,7 +609,11 @@ Rider, and CLion are defined in
    move/copy/drop semantics. Sprint 19 is now closed with intrusive aggregate,
    object/container, coroutine/executor, exceptional-cleanup, stack-trace, and
    instruction-observer execution plus thread-safe debugger pause/resume/abort
-   control. The Sprint 20 native bridge remains the next backend slice.
+   control. Sprint 20.1 now loads the shared wire-v2 native registry and
+   executes scalar/string/text/nullable/ref/view thunks with alias-preserving
+   mutable copy-back and translated failures. Opaque/object/runtime handles,
+   callbacks, foreign-thread entry, native async adaptation, library discovery,
+   CLI integration, and native differential qualification remain.
 
 9. [ ] Close generated-native cost and build scalability before v1.
    Treat the native C++ path as a product backend with enforced size, compile

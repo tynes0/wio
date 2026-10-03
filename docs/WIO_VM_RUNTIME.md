@@ -182,7 +182,9 @@ model rather than accidental data races. The observer and debugger-control
 surface now provide the instruction-boundary, pause/resume/abort, stack,
 source, and executor hooks required by the VM runtime milestone.
 
-Native symbol registration, callbacks, opaque values, and foreign-thread VM
-entry are deliberately reserved for the Sprint 20 VM native bridge. Sprint 19
-exposes its thread-safe task-completion gate and reports native invocation as
-unsupported instead of silently changing behavior.
+Sprint 20.1 now consumes the shared wire-v2 native registry and executes
+registered scalar, UTF-8 string, Unicode text, nullable, and ref/view thunks
+with checked mutable copy-back and translated failures. Opaque/object/runtime
+handles, callbacks, foreign-thread entry, native async adaptation, library
+discovery, and product integration remain in the following bridge slices. See
+[`WIO_VM_NATIVE_BRIDGE.md`](./WIO_VM_NATIVE_BRIDGE.md).

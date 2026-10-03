@@ -336,7 +336,36 @@ namespace wio::bytecode
                         const auto found = valueTypes.find(value);
                         return found == valueTypes.end() ? InvalidIndex : found->second;
                     };
-                    if (instruction.opcode == Opcode::GenericConstant)
+                    if (instruction.opcode == Opcode::NativeInvoke)
+                    {
+                        const Function* declaration = instruction.callee < module.functions.size()
+                                                          ? &module.functions[instruction.callee]
+                                                          : nullptr;
+                        bool valid = declaration && (declaration->flags & 0x0002u) != 0 &&
+                                     declaration->hasNativeBinding &&
+                                     instruction.operands.size() == declaration->nativeBinding.parameters.size() &&
+                                     declaration->parameters.size() == declaration->nativeBinding.parameters.size() &&
+                                     declaration->nativeBinding.result.type == declaration->returnType;
+                        for (std::size_t argument = 0; valid && argument < instruction.operands.size(); ++argument)
+                        {
+                            valid =
+                                valueType(instruction.operands[argument]) == declaration->parameters[argument].type &&
+                                declaration->parameters[argument].type ==
+                                    declaration->nativeBinding.parameters[argument].type;
+                        }
+                        if (valid && declaration->returnType < module.types.size() &&
+                            module.types[declaration->returnType].kind == 1)
+                            valid = instruction.result == InvalidIndex &&
+                                    (instruction.resultType == InvalidIndex ||
+                                     instruction.resultType == declaration->returnType);
+                        else if (valid)
+                            valid =
+                                instruction.result != InvalidIndex && instruction.resultType == declaration->returnType;
+                        if (!valid)
+                            report("WBC1073", "Native invocation does not match its external ABI declaration",
+                                   function.id, block.id, instructionIndex);
+                    }
+                    else if (instruction.opcode == Opcode::GenericConstant)
                     {
                         report("WBC1063", "Executable bytecode cannot contain an unresolved generic constant",
                                function.id, block.id, instructionIndex);

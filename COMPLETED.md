@@ -1068,3 +1068,8 @@ here as historical evidence rather than active work:
       inspect the exact function/block/instruction/source/executor event, and
       resume or abort from another thread without losing frames, registers,
       cleanup state, or the existing source-aware diagnostic contract.
+- [x] Sprint 20.1 connects VM `NativeInvoke` to the shared wire-v2 native
+      registry by stable key. Scalar, embedded-zero UTF-8 string, Unicode text,
+      nullable and ref/view values cross checked thunks; mutable aliases copy
+      back even on native failure, and malformed ABI versions, registrations,
+      arguments, failures, and results produce stable `WVM122x` diagnostics.

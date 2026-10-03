@@ -14,7 +14,7 @@ add_library(wio_vm STATIC
 add_library(wio-vm ALIAS wio_vm)
 
 target_include_directories(wio_vm PUBLIC include)
-target_link_libraries(wio_vm PUBLIC wio_compiler)
+target_link_libraries(wio_vm PUBLIC wio_compiler wio_sdk)
 
 target_compile_options(wio_vm PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
@@ -105,4 +105,10 @@ if(BUILD_TESTING)
     )
     target_link_libraries(wio_vm_exceptional_cleanup_test PRIVATE wio_vm)
     add_test(NAME wio_vm_exceptional_cleanup COMMAND wio_vm_exceptional_cleanup_test)
+
+    add_executable(wio_vm_native_bridge_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_native_bridge_test.cpp"
+    )
+    target_link_libraries(wio_vm_native_bridge_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_native_bridge COMMAND wio_vm_native_bridge_test)
 endif()

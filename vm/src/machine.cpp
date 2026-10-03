@@ -4,6 +4,7 @@
 #include "wio/bytecode/verifier.h"
 #include "wio/vm/unicode.h"
 
+#include "native_bridge_internal.h"
 #include "string_intrinsics.h"
 #include "text_intrinsics.h"
 
@@ -753,6 +754,16 @@ namespace wio::vm
             std::unordered_map<std::uint32_t, const bytecode::Block*> blocks;
         };
 
+        struct NativeFunction
+        {
+            std::uint64_t stableId = 0;
+            std::uint32_t flags = 0;
+            std::string stableKey;
+            std::string nativeSymbol;
+            std::string thunkSymbol;
+            WioNativeAbiThunk thunk = nullptr;
+        };
+
         [[nodiscard]] Machine* acquireOwner()
         {
             std::scoped_lock lock{ownerMutex};
@@ -853,6 +864,8 @@ namespace wio::vm
         std::mutex continuationMutex;
         std::vector<std::pair<Value, std::shared_ptr<void>>> continuations;
         std::recursive_mutex executionMutex;
+        std::mutex nativeMutex;
+        std::unordered_map<std::string, NativeFunction> nativeFunctions;
         mutable std::mutex debugMutex;
         mutable std::condition_variable debugChanged;
         std::optional<DebugEvent> debugPause;
@@ -1190,7 +1203,7 @@ namespace wio::vm
             return false;
         std::unique_lock lock{program_->debugMutex};
         return program_->debugChanged.wait_for(
-            lock, timeout, [&] { return program_->debugStopping || program_->debugPause.has_value(); }) &&
+                   lock, timeout, [&] { return program_->debugStopping || program_->debugPause.has_value(); }) &&
                program_->debugPause.has_value();
     }
 
@@ -1227,6 +1240,54 @@ namespace wio::vm
             program_->debugCommand = Program::DebugCommand::Abort;
         }
         program_->debugChanged.notify_all();
+        return true;
+    }
+
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, std::string* error)
+    {
+        const auto reject = [&](std::string message)
+        {
+            if (error)
+                *error = std::move(message);
+            return false;
+        };
+        if (!program_)
+            return reject("native registry requires a live VM machine");
+        if (registry.abiVersion != WIO_NATIVE_ABI_VERSION)
+            return reject("native registry ABI version does not match the VM wire ABI");
+        if (registry.functionCount != 0 && !registry.functions)
+            return reject("native registry has a non-zero function count and no descriptor array");
+
+        std::vector<Program::NativeFunction> additions;
+        additions.reserve(registry.functionCount);
+        std::unordered_map<std::string, WioNativeAbiThunk> incoming;
+        for (std::uint32_t index = 0; index < registry.functionCount; ++index)
+        {
+            const WioNativeAbiFunctionDescriptor& descriptor = registry.functions[index];
+            if (descriptor.abiVersion != WIO_NATIVE_ABI_VERSION)
+                return reject("native function descriptor ABI version does not match the VM wire ABI");
+            if (!descriptor.stableKey || descriptor.stableKey[0] == '\0' || !descriptor.thunk)
+                return reject("native function descriptor requires a stable key and thunk");
+            const auto [found, inserted] = incoming.emplace(descriptor.stableKey, descriptor.thunk);
+            if (!inserted && found->second != descriptor.thunk)
+                return reject("native registry contains conflicting descriptors for one stable key");
+            additions.push_back(Program::NativeFunction{descriptor.stableId, descriptor.flags, descriptor.stableKey,
+                                                        descriptor.nativeSymbol ? descriptor.nativeSymbol : "",
+                                                        descriptor.thunkSymbol ? descriptor.thunkSymbol : "",
+                                                        descriptor.thunk});
+        }
+
+        std::scoped_lock lock{program_->nativeMutex};
+        for (const Program::NativeFunction& addition : additions)
+        {
+            const auto existing = program_->nativeFunctions.find(addition.stableKey);
+            if (existing != program_->nativeFunctions.end() && existing->second.thunk != addition.thunk)
+                return reject("native function stable key is already registered with a different thunk");
+        }
+        for (Program::NativeFunction& addition : additions)
+            program_->nativeFunctions.insert_or_assign(addition.stableKey, std::move(addition));
+        if (error)
+            error->clear();
         return true;
     }
 
@@ -1707,10 +1768,13 @@ namespace wio::vm
             if (options_.debugObserver)
             {
                 DebugAction action = DebugAction::Abort;
-                const DebugEvent event{
-                    frame.function->id, frame.block->id, static_cast<std::uint32_t>(frame.instruction),
-                    instruction.opcode, instruction.source, static_cast<std::uint32_t>(frames.size()),
-                    state->executor};
+                const DebugEvent event{frame.function->id,
+                                       frame.block->id,
+                                       static_cast<std::uint32_t>(frame.instruction),
+                                       instruction.opcode,
+                                       instruction.source,
+                                       static_cast<std::uint32_t>(frames.size()),
+                                       state->executor};
                 try
                 {
                     action = options_.debugObserver->onInstruction(event);
@@ -1721,8 +1785,7 @@ namespace wio::vm
                                           frame.function->id, frame.block->id,
                                           static_cast<std::uint32_t>(frame.instruction), instruction.source});
                 }
-                if (action == DebugAction::Pause &&
-                    program_->pauseForDebugger(event) == Program::DebugCommand::Abort)
+                if (action == DebugAction::Pause && program_->pauseForDebugger(event) == Program::DebugCommand::Abort)
                     action = DebugAction::Abort;
                 if (action == DebugAction::Abort)
                     return failWithStack({"WVM1205", "VM execution was aborted by the debug observer",
@@ -3589,7 +3652,166 @@ namespace wio::vm
                 continue;
             }
             if (instruction.opcode == bytecode::Opcode::NativeInvoke)
-                return fail("WVM1203", "Native invocation requires the Sprint 20 VM bridge");
+            {
+                if (instruction.callee >= module.functions.size())
+                    return fail("WVM1220", "Native invocation references an invalid function declaration");
+                const bytecode::Function& declaration = module.functions[instruction.callee];
+                if (!declaration.hasNativeBinding)
+                    return fail("WVM1220", "Native invocation target has no native binding metadata");
+                if (instruction.operands.size() != declaration.nativeBinding.parameters.size())
+                    return fail("WVM1221", "Native invocation argument count does not match its ABI plan");
+
+                Program::NativeFunction native;
+                const std::string stableKey{module.string(declaration.nativeBinding.stableKey)};
+                {
+                    std::scoped_lock lock{program_->nativeMutex};
+                    const auto registered = program_->nativeFunctions.find(stableKey);
+                    if (registered == program_->nativeFunctions.end())
+                        return fail("WVM1220", "Native function is not registered: " + stableKey);
+                    native = registered->second;
+                }
+
+                struct NativeToken
+                {
+                    PlaceStorage* place = nullptr;
+                    std::uint32_t type = bytecode::InvalidIndex;
+                    std::uint8_t marshalling = 0;
+                    bool mutableValue = false;
+                    WioNativeAbiValue wire;
+                };
+                struct NativeFrame
+                {
+                    std::vector<NativeToken> tokens;
+                    std::vector<WioNativeAbiValue> arguments;
+                    WioNativeAbiValue result;
+
+                    ~NativeFrame()
+                    {
+                        for (NativeToken& token : tokens)
+                            WioNativeAbiReleaseValue(&token.wire);
+                        WioNativeAbiReleaseValue(&result);
+                    }
+                } nativeFrame;
+                nativeFrame.tokens.reserve(instruction.operands.size());
+                nativeFrame.arguments.reserve(instruction.operands.size());
+                std::unordered_map<PlaceStorage*, std::size_t> aliases;
+
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    const bytecode::Function::NativeAbiValue& abi = declaration.nativeBinding.parameters[index];
+                    const Value* operand = read(instruction.operands[index]);
+                    if (!operand)
+                        return fail("WVM1223", "Native invocation reads an unavailable argument value");
+                    if (abi.passing == 3)
+                        return fail("WVM1225", "Consumed native arguments are not implemented by this VM bridge slice");
+
+                    if (abi.passing == 1 || abi.passing == 2)
+                    {
+                        if (operand->kind() != Value::Kind::Place)
+                            return fail("WVM1223", "Native ref/view argument does not reference a VM place");
+                        PlaceStorage* const place = operand->asPlace();
+                        if (!place || !place->initialized || (abi.passing == 2 && !place->mutableValue))
+                            return fail("WVM1223",
+                                        "Native ref/view argument references unavailable or immutable storage");
+
+                        std::size_t tokenIndex = 0;
+                        const auto alias = aliases.find(place);
+                        if (alias == aliases.end())
+                        {
+                            tokenIndex = nativeFrame.tokens.size();
+                            NativeToken token{.place = place,
+                                              .type = abi.type,
+                                              .marshalling = abi.marshalling,
+                                              .mutableValue = abi.passing == 2};
+                            std::string conversionError;
+                            if (!detail::encodeNativeValue(module, place->storedValue(), abi.type, abi.marshalling,
+                                                           token.wire, conversionError))
+                                return fail("WVM1223", "Native argument conversion failed: " + conversionError);
+                            nativeFrame.tokens.push_back(std::move(token));
+                            aliases.emplace(place, tokenIndex);
+                        }
+                        else
+                        {
+                            tokenIndex = alias->second;
+                            NativeToken& token = nativeFrame.tokens[tokenIndex];
+                            if (token.type != abi.type || token.marshalling != abi.marshalling)
+                                return fail("WVM1223", "Aliased native references disagree on their ABI value type");
+                            token.mutableValue = token.mutableValue || abi.passing == 2;
+                        }
+
+                        WioNativeAbiValue reference;
+                        reference.kind = WIO_NATIVE_ABI_REFERENCE;
+                        reference.flags =
+                            WIO_NATIVE_ABI_VALUE_BORROWED | (abi.passing == 2 ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
+                        reference.payload.mutableSlice = {&nativeFrame.tokens[tokenIndex].wire,
+                                                          sizeof(WioNativeAbiValue)};
+                        nativeFrame.arguments.push_back(reference);
+                        continue;
+                    }
+
+                    const Value* direct = storedValue(operand);
+                    if (!direct)
+                        return fail("WVM1223", "Native value argument references unavailable storage");
+                    WioNativeAbiValue wire;
+                    std::string conversionError;
+                    if (!detail::encodeNativeValue(module, *direct, abi.type, abi.marshalling, wire, conversionError))
+                        return fail("WVM1223", "Native argument conversion failed: " + conversionError);
+                    nativeFrame.arguments.push_back(wire);
+                }
+
+                WioNativeAbiFailure nativeFailure;
+                const WioNativeAbiStatus status =
+                    native.thunk(nativeFrame.arguments.empty() ? nullptr : nativeFrame.arguments.data(),
+                                 nativeFrame.arguments.size(), &nativeFrame.result, &nativeFailure);
+
+                std::string copyBackError;
+                std::vector<Value> replacements;
+                replacements.reserve(nativeFrame.tokens.size());
+                for (NativeToken& token : nativeFrame.tokens)
+                {
+                    if (!token.mutableValue)
+                    {
+                        replacements.push_back({});
+                        continue;
+                    }
+                    detail::NativeValueResult replacement =
+                        detail::decodeNativeValue(module, token.wire, token.type, token.marshalling);
+                    if (!replacement.succeeded())
+                    {
+                        if (copyBackError.empty())
+                            copyBackError = replacement.error;
+                        replacements.push_back({});
+                    }
+                    else
+                        replacements.push_back(std::move(replacement.value));
+                }
+                if (copyBackError.empty())
+                {
+                    for (std::size_t index = 0; index < nativeFrame.tokens.size(); ++index)
+                    {
+                        if (nativeFrame.tokens[index].mutableValue)
+                            nativeFrame.tokens[index].place->storedValue() = std::move(replacements[index]);
+                    }
+                }
+
+                if (status != WIO_NATIVE_ABI_OK)
+                {
+                    nativeFailure.status = status;
+                    return fail("WVM1222", "Native invocation failed: " + detail::nativeFailureMessage(nativeFailure));
+                }
+                if (!copyBackError.empty())
+                    return fail("WVM1224", "Native mutable-reference copy-back failed: " + copyBackError);
+
+                detail::NativeValueResult result =
+                    detail::decodeNativeValue(module, nativeFrame.result, declaration.nativeBinding.result.type,
+                                              declaration.nativeBinding.result.marshalling);
+                if (!result.succeeded())
+                    return fail("WVM1224", "Native result conversion failed: " + result.error);
+                if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(result.value)))
+                    return fail("WVM1224", "Native result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
             if (instruction.opcode == bytecode::Opcode::Call || instruction.opcode == bytecode::Opcode::ExtensionCall ||
                 instruction.opcode == bytecode::Opcode::MethodCall)
             {
