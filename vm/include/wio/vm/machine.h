@@ -136,6 +136,7 @@ namespace wio::vm
         void cleanupTaskArguments(const Value& task, ExecutionError& primaryError);
         [[nodiscard]] ExecutionError unwind(ExecutionState& state, ExecutionError error);
         void cancelAndUnwindContinuations();
+        void cleanupGlobals();
         [[nodiscard]] bool scheduleTask(const std::shared_ptr<ExecutionState>& state, ExecutorKind executor);
         void wakeTask(std::weak_ptr<ExecutionState> state, AsyncTaskState terminalState, const Value& result,
                       const ExecutionError& error);

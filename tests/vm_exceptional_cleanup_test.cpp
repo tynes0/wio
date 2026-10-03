@@ -22,6 +22,19 @@ namespace
     constexpr std::uint32_t RefFailingResource = 8;
     constexpr std::uint32_t TaskI32 = 9;
 
+    class DestructorObserver final : public vm::DebugObserver
+    {
+    public:
+        vm::DebugAction onInstruction(const vm::DebugEvent& event) override
+        {
+            if (event.function == 1 && event.instruction == 0)
+                ++entries;
+            return vm::DebugAction::Continue;
+        }
+
+        std::uint32_t entries = 0;
+    };
+
     bool expect(const bool condition, const std::string_view message)
     {
         if (condition)
@@ -139,6 +152,7 @@ namespace
         module.globals = {
             bytecode::Global{.id = 0, .type = I32, .flags = 0x01u},
             bytecode::Global{.id = 1, .type = I32, .flags = 0x01u},
+            bytecode::Global{.id = 2, .type = Resource, .flags = 0x01u},
         };
 
         module.functions.push_back(incrementGlobal(0, RefGuard, 0));
@@ -266,6 +280,19 @@ namespace
             function(10, TaskI32, {parameter(0, TaskI32)},
                      {construct(bytecode::Opcode::ConstructObject, 1, Resource), std::move(startCaptured),
                       std::move(releaseCaptured), std::move(returnCaptured)}));
+
+        bytecode::Instruction globalResource = instruction(bytecode::Opcode::GlobalPlace);
+        globalResource.result = 1;
+        globalResource.resultType = RefResource;
+        globalResource.global = 2;
+        bytecode::Instruction storeResource = instruction(bytecode::Opcode::Store);
+        storeResource.operands = {1, 0};
+        bytecode::Instruction releaseResource = instruction(bytecode::Opcode::Release);
+        releaseResource.operands = {0};
+        module.functions.push_back(
+            function(11, Void, {},
+                     {construct(bytecode::Opcode::ConstructObject, 0, Resource), std::move(globalResource),
+                      std::move(storeResource), std::move(releaseResource), instruction(bytecode::Opcode::Return)}));
         return module;
     }
 } // namespace
@@ -313,5 +340,15 @@ int main()
     const vm::ExecutionResult capturedObjectCount = machine.invoke(7);
     ok &= expect(capturedObjectCount.succeeded() && capturedObjectCount.value().asSignedInteger() == 4,
                  "Terminal task cleanup must release captured arguments after its frame unwinds");
+
+    DestructorObserver shutdownObserver;
+    {
+        vm::Machine shutdownMachine{module, vm::MachineOptions{.debugObserver = &shutdownObserver}};
+        ok &= expect(shutdownMachine.invoke(11).succeeded(),
+                     "Shutdown cleanup fixture must store its final object in module-global storage");
+        ok &= expect(shutdownObserver.entries == 0, "A live module global must retain its object until shutdown");
+    }
+    ok &= expect(shutdownObserver.entries == 1,
+                 "Machine shutdown must run the final module-global destructor exactly once");
     return ok ? 0 : 1;
 }

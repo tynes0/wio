@@ -152,6 +152,8 @@ second language-specific control-flow model.
   cancellation, scheduler rejection, and machine shutdown, so keeping a task
   handle alive cannot accidentally keep its completed coroutine resources
   alive as well;
+- machine shutdown destroys initialized module globals in reverse declaration
+  order after suspended continuations are cancelled and unwound;
 - component and object destructors now run exactly once on both normal
   `DropValue`/`DropPlace`/`Release` and exceptional cleanup paths. A failing
   destructor cannot mask the primary execution error or stop older values

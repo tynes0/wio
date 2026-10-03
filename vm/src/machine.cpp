@@ -975,6 +975,21 @@ namespace wio::vm
         }
     }
 
+    void Machine::cleanupGlobals()
+    {
+        if (!program_)
+            return;
+        std::scoped_lock executionLock{program_->executionMutex};
+        ExecutionError cleanupError;
+        for (auto global = program_->globals.rbegin(); global != program_->globals.rend(); ++global)
+        {
+            if (!(*global)->initialized)
+                continue;
+            cleanupValue((*global)->value, cleanupError);
+            (*global)->initialized = false;
+        }
+    }
+
     Machine::Machine(const bytecode::Module& module, const MachineOptions options)
         : program_(std::make_shared<Program>()), options_(options)
     {
@@ -1019,6 +1034,7 @@ namespace wio::vm
         {
             program_->detachOwner(this);
             cancelAndUnwindContinuations();
+            cleanupGlobals();
         }
         program_.reset();
     }
@@ -1042,6 +1058,7 @@ namespace wio::vm
         {
             program_->detachOwner(this);
             cancelAndUnwindContinuations();
+            cleanupGlobals();
         }
         program_.reset();
         program_ = std::move(other.program_);
