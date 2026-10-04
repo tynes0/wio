@@ -4,6 +4,8 @@ This document gives the practical `v1` cost model for the parts of Wio that
 users are most likely to care about.
 
 It is not a benchmark report. The goal is to make the broad rules visible.
+For the controlled local Mandelbrot comparison and its limitations, see
+[`WIO_MANDELBROT_PERFORMANCE_AUDIT.md`](./WIO_MANDELBROT_PERFORMANCE_AUDIT.md).
 
 For quick local measurements, the CLI now provides:
 
@@ -183,8 +185,9 @@ Typed WIR currently represents compound assignment as load, binary addition,
 and replace/store; the C++ backend emits string addition as `+`, rather than a
 dedicated in-place append. This is not an optimized builder contract. Audit
 full-prefix copies, temporary allocations, capacity growth, and final-output
-copies. Repeated full-prefix copies could make construction quadratic; the
-contribution to the reported multi-minute run is not yet measured.
+copies. The local Mandelbrot audit confirms full-prefix addition in generated
+`AppendLine` code, making accumulated copying quadratic for this workload;
+the exact contribution relative to other runtime overhead still needs profiling.
 
 Require an amortized-linear builder with reusable capacity, reserve/clear
 behavior, direct append/append-line, and numeric formatting into its buffer.
