@@ -187,11 +187,14 @@ namespace wio::bytecode
                         report("WBC1074", "Native parameter has an invalid ABI mode or no stable type identity",
                                function.id);
                 }
+                const std::uint32_t nativeResultType = directType(binding.result.type);
+                const bool nativeTaskResult =
+                    nativeResultType < module.types.size() && module.types[nativeResultType].kind == 34;
                 if (binding.result.passing > 4 || binding.result.marshalling > 9 || binding.result.marshalling == 7 ||
                     binding.result.callbackLifetime != 0 || binding.result.callbackThread != 0 ||
                     ((binding.result.marshalling == 4 || binding.result.marshalling == 6 ||
                       binding.result.marshalling == 8) &&
-                     !hasStableAbiType(binding.result.type)))
+                     !nativeTaskResult && !hasStableAbiType(binding.result.type)))
                     report("WBC1074", "Native result has an invalid ABI mode or no stable type identity", function.id);
                 for (const std::uint32_t argument : binding.templateArguments)
                 {

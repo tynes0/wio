@@ -83,6 +83,7 @@ namespace wio::vm
         constexpr std::uint8_t TypeArray = 31;
         constexpr std::uint8_t TypeDictionary = 32;
         constexpr std::uint8_t TypeFunction = 33;
+        constexpr std::uint8_t TypeAsyncTask = 34;
         constexpr std::uint8_t TypeIterator = 35;
 
         constexpr std::uint8_t NominalComponent = 1;
@@ -807,7 +808,7 @@ namespace wio::vm
         };
     } // namespace
 
-    struct Machine::Program
+    struct Machine::Program : std::enable_shared_from_this<Machine::Program>
     {
         enum class DebugCommand : std::uint8_t
         {
@@ -824,13 +825,54 @@ namespace wio::vm
 
         struct NativeFunction
         {
+            struct TaskBridge
+            {
+                WioNativeAbiStatus (*ready)(const WioNativeAbiValue*, bool*) noexcept = nullptr;
+                WioNativeAbiStatus (*cancel)(const WioNativeAbiValue*) noexcept = nullptr;
+                WioNativeAbiStatus (*read)(const WioNativeAbiValue*, WioNativeAbiValue*,
+                                           WioNativeAbiFailure*) noexcept = nullptr;
+                void (*bindMain)() noexcept = nullptr;
+                std::uint64_t (*pumpMain)() noexcept = nullptr;
+                WioNativeAbiStatus (*onComplete)(const WioNativeAbiValue*, WioNativeTaskCompletionFn,
+                                                 void*) noexcept = nullptr;
+
+                [[nodiscard]] bool operator==(const TaskBridge&) const noexcept = default;
+            };
+
             std::uint64_t stableId = 0;
             std::uint32_t flags = 0;
             std::string stableKey;
             std::string nativeSymbol;
             std::string thunkSymbol;
             WioNativeAbiThunk thunk = nullptr;
+            std::optional<TaskBridge> tasks;
         };
+
+        struct NativeTaskAdapter
+        {
+            std::weak_ptr<Program> program;
+            Value task;
+            WioNativeAbiValue nativeTask;
+            NativeFunction::TaskBridge bridge;
+            std::uint32_t payloadType = bytecode::InvalidIndex;
+            std::uint8_t payloadMarshalling = 0;
+            std::atomic_bool settled = false;
+
+            ~NativeTaskAdapter()
+            {
+                WioNativeAbiReleaseValue(&nativeTask);
+            }
+        };
+
+        [[nodiscard]] Value adaptNativeTask(const NativeFunction& function, WioNativeAbiValue nativeTask,
+                                            std::uint32_t payloadType, std::uint8_t payloadMarshalling);
+        [[nodiscard]] bool cancelNativeTask(const Value& task);
+        void cancelNativeTasks();
+        void bindNativeMainExecutors();
+        [[nodiscard]] std::uint64_t drainNativeMainExecutors();
+        void removeNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter);
+        static void completeNativeTask(void* userData, WioNativeAbiStatus status) noexcept;
+        static void finishNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter, WioNativeAbiStatus status);
 
         [[nodiscard]] Machine* acquireOwner()
         {
@@ -934,6 +976,9 @@ namespace wio::vm
         std::recursive_mutex executionMutex;
         std::mutex nativeMutex;
         std::unordered_map<std::string, NativeFunction> nativeFunctions;
+        std::vector<NativeFunction::TaskBridge> nativeTaskApis;
+        std::mutex nativeTaskMutex;
+        std::vector<std::shared_ptr<NativeTaskAdapter>> nativeTasks;
         mutable std::mutex debugMutex;
         mutable std::condition_variable debugChanged;
         std::optional<DebugEvent> debugPause;
@@ -942,6 +987,200 @@ namespace wio::vm
         std::unique_ptr<ExecutorScheduler> executors;
         bool valid = false;
     };
+
+    Value Machine::Program::adaptNativeTask(const NativeFunction& function, WioNativeAbiValue nativeTask,
+                                            const std::uint32_t payloadType, const std::uint8_t payloadMarshalling)
+    {
+        Value task = Value::externalTask();
+        if (!function.tasks)
+        {
+            WioNativeAbiReleaseValue(&nativeTask);
+            (void)task.failTask({"WVM1225", "Native async result has no registered task bridge"});
+            return task;
+        }
+
+        auto adapter = std::make_shared<NativeTaskAdapter>();
+        adapter->program = shared_from_this();
+        adapter->task = task;
+        adapter->nativeTask = nativeTask;
+        adapter->bridge = *function.tasks;
+        adapter->payloadType = payloadType;
+        adapter->payloadMarshalling = payloadMarshalling;
+        {
+            std::scoped_lock lock{nativeTaskMutex};
+            nativeTasks.push_back(adapter);
+        }
+
+        auto* subscription = new std::shared_ptr<NativeTaskAdapter>{adapter};
+        const WioNativeAbiStatus status =
+            adapter->bridge.onComplete(&adapter->nativeTask, &Program::completeNativeTask, subscription);
+        if (status != WIO_NATIVE_ABI_OK)
+        {
+            delete subscription;
+            if (!adapter->settled.exchange(true, std::memory_order_acq_rel))
+            {
+                (void)task.failTask({"WVM1226", "Native task completion subscription failed with ABI status " +
+                                                    std::to_string(static_cast<std::int32_t>(status))});
+                removeNativeTask(adapter);
+            }
+        }
+        return task;
+    }
+
+    void Machine::Program::completeNativeTask(void* const userData, const WioNativeAbiStatus status) noexcept
+    {
+        std::unique_ptr<std::shared_ptr<NativeTaskAdapter>> subscription{
+            static_cast<std::shared_ptr<NativeTaskAdapter>*>(userData)};
+        if (!subscription || !*subscription)
+            return;
+        const std::shared_ptr<NativeTaskAdapter> adapter = std::move(*subscription);
+        try
+        {
+            finishNativeTask(adapter, status);
+        }
+        catch (...)
+        {
+            try
+            {
+                (void)adapter->task.failTask({"WVM1226", "Native task completion raised an internal bridge failure"});
+                if (const std::shared_ptr<Program> program = adapter->program.lock())
+                    program->removeNativeTask(adapter);
+            }
+            catch (...)
+            {
+            }
+        }
+    }
+
+    void Machine::Program::finishNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter,
+                                            const WioNativeAbiStatus status)
+    {
+        if (adapter->settled.exchange(true, std::memory_order_acq_rel))
+            return;
+        const std::shared_ptr<Program> program = adapter->program.lock();
+        if (!program)
+        {
+            (void)adapter->task.cancelTask();
+            return;
+        }
+
+        Machine* const owner = program->acquireOwner();
+        if (!owner)
+        {
+            (void)adapter->task.cancelTask();
+            program->removeNativeTask(adapter);
+            return;
+        }
+        const auto releaseOwner = [program](Machine*) { program->releaseOwner(); };
+        const std::unique_ptr<Machine, decltype(releaseOwner)> ownerGuard{owner, releaseOwner};
+
+        if (status == WIO_NATIVE_ABI_CANCELLED)
+            (void)adapter->task.cancelTask();
+        else if (status != WIO_NATIVE_ABI_OK)
+            (void)owner->fail(adapter->task, "WVM1226",
+                              "Native task completion failed with ABI status " +
+                                  std::to_string(static_cast<std::int32_t>(status)));
+        else
+        {
+            WioNativeAbiValue result{};
+            struct ResultGuard
+            {
+                WioNativeAbiValue& value;
+                ~ResultGuard()
+                {
+                    WioNativeAbiReleaseValue(&value);
+                }
+            } resultGuard{result};
+            WioNativeAbiFailure failure{};
+            const WioNativeAbiStatus readStatus = adapter->bridge.read(&adapter->nativeTask, &result, &failure);
+            if (readStatus != WIO_NATIVE_ABI_OK)
+            {
+                failure.status = readStatus;
+                (void)owner->fail(adapter->task, "WVM1226",
+                                  "Native task result failed: " + detail::nativeFailureMessage(failure));
+            }
+            else
+            {
+                detail::NativeValueResult converted = detail::decodeNativeValue(
+                    *program->module, result, adapter->payloadType, adapter->payloadMarshalling);
+                if (!converted.succeeded())
+                    (void)owner->fail(adapter->task, "WVM1226",
+                                      "Native task result conversion failed: " + converted.error);
+                else
+                    (void)owner->complete(adapter->task, std::move(converted.value));
+            }
+        }
+        program->removeNativeTask(adapter);
+    }
+
+    void Machine::Program::removeNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter)
+    {
+        std::scoped_lock lock{nativeTaskMutex};
+        std::erase(nativeTasks, adapter);
+    }
+
+    bool Machine::Program::cancelNativeTask(const Value& task)
+    {
+        std::shared_ptr<NativeTaskAdapter> adapter;
+        {
+            std::scoped_lock lock{nativeTaskMutex};
+            const auto found = std::find_if(nativeTasks.begin(), nativeTasks.end(),
+                                            [&](const auto& candidate) { return candidate->task == task; });
+            if (found == nativeTasks.end())
+                return false;
+            adapter = *found;
+            nativeTasks.erase(found);
+        }
+        if (adapter->settled.exchange(true, std::memory_order_acq_rel))
+            return false;
+        const WioNativeAbiStatus status = adapter->bridge.cancel(&adapter->nativeTask);
+        if (status == WIO_NATIVE_ABI_OK || status == WIO_NATIVE_ABI_CANCELLED)
+            (void)task.cancelTask();
+        else
+            (void)task.failTask({"WVM1226", "Native task cancellation failed with ABI status " +
+                                                std::to_string(static_cast<std::int32_t>(status))});
+        return true;
+    }
+
+    void Machine::Program::cancelNativeTasks()
+    {
+        std::vector<std::shared_ptr<NativeTaskAdapter>> pending;
+        {
+            std::scoped_lock lock{nativeTaskMutex};
+            pending.swap(nativeTasks);
+        }
+        for (const auto& adapter : pending)
+        {
+            if (adapter->settled.exchange(true, std::memory_order_acq_rel))
+                continue;
+            (void)adapter->bridge.cancel(&adapter->nativeTask);
+            (void)adapter->task.cancelTask();
+        }
+    }
+
+    void Machine::Program::bindNativeMainExecutors()
+    {
+        std::vector<NativeFunction::TaskBridge> bridges;
+        {
+            std::scoped_lock lock{nativeMutex};
+            bridges = nativeTaskApis;
+        }
+        for (const NativeFunction::TaskBridge& bridge : bridges)
+            bridge.bindMain();
+    }
+
+    std::uint64_t Machine::Program::drainNativeMainExecutors()
+    {
+        std::vector<NativeFunction::TaskBridge> bridges;
+        {
+            std::scoped_lock lock{nativeMutex};
+            bridges = nativeTaskApis;
+        }
+        std::uint64_t count = 0;
+        for (const NativeFunction::TaskBridge& bridge : bridges)
+            count += bridge.pumpMain();
+        return count;
+    }
 
     struct Machine::ExecutionState
     {
@@ -1153,6 +1392,7 @@ namespace wio::vm
         {
             program_->stopDebugControl();
             program_->detachOwner(this);
+            program_->cancelNativeTasks();
             cancelAndUnwindContinuations();
             cleanupGlobals();
         }
@@ -1178,6 +1418,7 @@ namespace wio::vm
         {
             program_->stopDebugControl();
             program_->detachOwner(this);
+            program_->cancelNativeTasks();
             cancelAndUnwindContinuations();
             cleanupGlobals();
         }
@@ -1214,7 +1455,7 @@ namespace wio::vm
 
         while (task.taskState() == AsyncTaskState::Pending || task.taskState() == AsyncTaskState::Running)
         {
-            const std::uint64_t drained = program_ && program_->executors ? program_->executors->drainMain() : 0;
+            const std::uint64_t drained = drainMainExecutor();
             if (drained == 0)
                 (void)task.waitTaskFor(std::chrono::milliseconds{1});
         }
@@ -1229,16 +1470,22 @@ namespace wio::vm
     {
         if (program_ && program_->executors)
             program_->executors->bindMain();
+        if (program_)
+            program_->bindNativeMainExecutors();
     }
 
     std::uint64_t Machine::drainMainExecutor()
     {
-        return program_ && program_->executors ? program_->executors->drainMain() : 0;
+        if (!program_)
+            return 0;
+        const std::uint64_t native = program_->drainNativeMainExecutors();
+        return native + (program_->executors ? program_->executors->drainMain() : 0);
     }
 
     bool Machine::cancel(const Value& task)
     {
-        if (!task.cancelTask())
+        const bool native = program_ && program_->cancelNativeTask(task);
+        if (!native && !task.cancelTask())
             return false;
         if (program_)
         {
@@ -1313,6 +1560,18 @@ namespace wio::vm
 
     bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, std::string* error)
     {
+        return registerNativeRegistryImpl(registry, nullptr, nullptr, error);
+    }
+
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativeTaskApi& tasks,
+                                         const WioNativeTaskCompletionApi& completions, std::string* error)
+    {
+        return registerNativeRegistryImpl(registry, &tasks, &completions, error);
+    }
+
+    bool Machine::registerNativeRegistryImpl(const WioNativeAbiRegistry& registry, const WioNativeTaskApi* tasks,
+                                             const WioNativeTaskCompletionApi* completions, std::string* error)
+    {
         const auto reject = [&](std::string message)
         {
             if (error)
@@ -1325,6 +1584,20 @@ namespace wio::vm
             return reject("native registry ABI version does not match the VM wire ABI");
         if (registry.functionCount != 0 && !registry.functions)
             return reject("native registry has a non-zero function count and no descriptor array");
+        if ((tasks == nullptr) != (completions == nullptr))
+            return reject("native task and completion APIs must be registered together");
+
+        std::optional<Program::NativeFunction::TaskBridge> taskBridge;
+        if (tasks)
+        {
+            if (tasks->abiVersion != WIO_NATIVE_ABI_VERSION || !tasks->ready || !tasks->cancel || !tasks->read ||
+                !tasks->bindMain || !tasks->pumpMain)
+                return reject("native task API is incompatible or incomplete");
+            if (completions->abiVersion != WIO_NATIVE_ABI_VERSION || !completions->onComplete)
+                return reject("native task completion API is incompatible or incomplete");
+            taskBridge = Program::NativeFunction::TaskBridge{tasks->ready,    tasks->cancel,   tasks->read,
+                                                             tasks->bindMain, tasks->pumpMain, completions->onComplete};
+        }
 
         std::vector<Program::NativeFunction> additions;
         additions.reserve(registry.functionCount);
@@ -1342,18 +1615,26 @@ namespace wio::vm
             additions.push_back(Program::NativeFunction{descriptor.stableId, descriptor.flags, descriptor.stableKey,
                                                         descriptor.nativeSymbol ? descriptor.nativeSymbol : "",
                                                         descriptor.thunkSymbol ? descriptor.thunkSymbol : "",
-                                                        descriptor.thunk});
+                                                        descriptor.thunk, taskBridge});
         }
 
         std::scoped_lock lock{program_->nativeMutex};
-        for (const Program::NativeFunction& addition : additions)
+        for (Program::NativeFunction& addition : additions)
         {
             const auto existing = program_->nativeFunctions.find(addition.stableKey);
             if (existing != program_->nativeFunctions.end() && existing->second.thunk != addition.thunk)
                 return reject("native function stable key is already registered with a different thunk");
+            if (existing != program_->nativeFunctions.end() && existing->second.tasks && addition.tasks &&
+                existing->second.tasks != addition.tasks)
+                return reject("native function stable key is already registered with a different task bridge");
+            if (existing != program_->nativeFunctions.end() && existing->second.tasks && !addition.tasks)
+                addition.tasks = existing->second.tasks;
         }
         for (Program::NativeFunction& addition : additions)
             program_->nativeFunctions.insert_or_assign(addition.stableKey, std::move(addition));
+        if (taskBridge && std::find(program_->nativeTaskApis.begin(), program_->nativeTaskApis.end(), *taskBridge) ==
+                              program_->nativeTaskApis.end())
+            program_->nativeTaskApis.push_back(*taskBridge);
         if (error)
             error->clear();
         return true;
@@ -3998,6 +4279,28 @@ namespace wio::vm
                 }
                 if (!copyBackError.empty())
                     return fail("WVM1224", "Native mutable-reference copy-back failed: " + copyBackError);
+
+                const std::uint32_t nativeResultType = declaration.nativeBinding.result.type;
+                if (nativeResultType < module.types.size() && module.types[nativeResultType].kind == TypeAsyncTask)
+                {
+                    const bytecode::Type& taskType = module.types[nativeResultType];
+                    if (!native.tasks || declaration.nativeBinding.result.marshalling != 8 ||
+                        taskType.arguments.size() != 1)
+                        return fail("WVM1225", "Native async result requires a registered task bridge and one payload");
+                    std::uint8_t payloadMarshalling = 0;
+                    if (!detail::nativeValueMarshalling(module, taskType.arguments.front(), payloadMarshalling) ||
+                        payloadMarshalling == 7)
+                        return fail("WVM1225", "Native async payload cannot be represented by the VM ABI bridge");
+
+                    WioNativeAbiValue ownedTask = nativeFrame.result;
+                    nativeFrame.result = {};
+                    Value task =
+                        program_->adaptNativeTask(native, ownedTask, taskType.arguments.front(), payloadMarshalling);
+                    if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(task)))
+                        return fail("WVM1224", "Native async result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
 
                 detail::NativeValueResult result =
                     detail::decodeNativeValue(module, nativeFrame.result, declaration.nativeBinding.result.type,

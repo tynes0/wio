@@ -27,5 +27,7 @@ namespace wio::vm::detail
                                                       std::uint32_t declaredType, std::uint8_t marshalling);
     [[nodiscard]] bool callbackScalarMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                                  std::uint8_t& marshalling) noexcept;
+    [[nodiscard]] bool nativeValueMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
+                                              std::uint8_t& marshalling) noexcept;
     [[nodiscard]] std::string nativeFailureMessage(const WioNativeAbiFailure& failure);
 } // namespace wio::vm::detail

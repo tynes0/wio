@@ -182,9 +182,11 @@ model rather than accidental data races. The observer and debugger-control
 surface now provide the instruction-boundary, pause/resume/abort, stack,
 source, and executor hooks required by the VM runtime milestone.
 
-Sprint 20.1 now consumes the shared wire-v2 native registry and executes
-registered scalar, UTF-8 string, Unicode text, nullable, and ref/view thunks
-with checked mutable copy-back and translated failures. Opaque/object/runtime
-handles, callbacks, foreign-thread entry, native async adaptation, library
-discovery, and product integration remain in the following bridge slices. See
+Sprint 20.1-20.4 now consume the shared wire-v2 native registry and execute
+registered scalar, UTF-8 string, Unicode text, nullable, ref/view,
+POD/opaque/object/runtime-handle, callback, and async-task thunks with checked
+mutable copy-back and translated failures. Native task completions may enter
+from foreign threads, but coroutine resumption is scheduled through the VM's
+recorded executor. Library discovery, CLI/project integration, and full native
+differential qualification remain in the following bridge slices. See
 [`WIO_VM_NATIVE_BRIDGE.md`](./WIO_VM_NATIVE_BRIDGE.md).

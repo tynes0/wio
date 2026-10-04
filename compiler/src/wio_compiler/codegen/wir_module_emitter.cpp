@@ -362,6 +362,22 @@ namespace wio::codegen
                 << (action == "read" ? "error" : "nullptr")
                 << ",WIO_NATIVE_ABI_EXCEPTION,e.what()); } catch (...) { return WIO_NATIVE_ABI_EXCEPTION; } }\n";
         }
+        out << "static WioNativeAbiStatus _task_on_complete(const WioNativeAbiValue* task,"
+               "WioNativeTaskCompletionFn callback,void* userData) noexcept {\n"
+               " if (!task || !callback) return WIO_NATIVE_ABI_INVALID_ARGUMENT;\n try {\n";
+        for (auto id : taskTypes)
+        {
+            out << " if (task->typeId==" << wireId(id) << "ULL) { auto value=" << codec(id)
+                << "::read(*task); value.SharedState()->AddCompletionCallback([value,callback,userData]() mutable { "
+                   "WioNativeAbiStatus status=WIO_NATIVE_ABI_OK; try { if (value.IsCancelled()) "
+                   "status=WIO_NATIVE_ABI_CANCELLED; } catch (...) { status=WIO_NATIVE_ABI_EXCEPTION; } "
+                   "callback(userData,status); }); return WIO_NATIVE_ABI_OK; }\n";
+        }
+        out << " return WIO_NATIVE_ABI_TYPE_MISMATCH;\n } catch (...) { return WIO_NATIVE_ABI_EXCEPTION; } }\n"
+               "static const WioNativeTaskCompletionApi _task_completion_api{WIO_NATIVE_ABI_VERSION,"
+               "&_task_on_complete};\n"
+               "extern \"C\" WIO_WIR_EXPORT const WioNativeTaskCompletionApi* "
+               "WioGetNativeTaskCompletionApi() noexcept { return &_task_completion_api; }\n";
         out << "static const WioNativeTaskApi _task_api{WIO_NATIVE_ABI_VERSION,&_task_ready,&_task_cancel,&_task_read,"
                "+[]() noexcept { try { wio::runtime::BindAsyncMainExecutor(); } catch (...) {} },"
                "+[]() noexcept -> std::uint64_t { try { return wio::runtime::DrainAsyncMainExecutor(); } catch (...) { "

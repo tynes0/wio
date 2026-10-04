@@ -18,7 +18,8 @@ enum WioNativeAbiStatus : std::int32_t
     WIO_NATIVE_ABI_PANIC = 4,
     WIO_NATIVE_ABI_WRONG_THREAD = 5,
     WIO_NATIVE_ABI_STALE_HANDLE = 6,
-    WIO_NATIVE_ABI_NOT_READY = 7
+    WIO_NATIVE_ABI_NOT_READY = 7,
+    WIO_NATIVE_ABI_CANCELLED = 8
 };
 
 enum WioNativeAbiValueKind : std::uint32_t
@@ -170,6 +171,17 @@ struct WioNativeTaskApi {
     void (*shutdown)() noexcept;
 };
 using WioGetNativeTaskApiFn = const WioNativeTaskApi*(*)();
+
+// Completion registration is a separate additive sidecar so wire-v2 modules
+// built before native task adaptation keep the original WioNativeTaskApi
+// layout. A successful subscription owns one exactly-once callback delivery;
+// delivery may happen synchronously or from any foreign thread.
+using WioNativeTaskCompletionFn = void(*)(void*, WioNativeAbiStatus) noexcept;
+struct WioNativeTaskCompletionApi {
+    std::uint32_t abiVersion;
+    WioNativeAbiStatus (*onComplete)(const WioNativeAbiValue*, WioNativeTaskCompletionFn, void*) noexcept;
+};
+using WioGetNativeTaskCompletionApiFn = const WioNativeTaskCompletionApi*(*)();
 
 inline void WioNativeAbiRetain(WioNativeAbiHandle handle) noexcept
 {

@@ -1073,3 +1073,18 @@ here as historical evidence rather than active work:
       nullable and ref/view values cross checked thunks; mutable aliases copy
       back even on native failure, and malformed ABI versions, registrations,
       arguments, failures, and results produce stable `WVM122x` diagnostics.
+- [x] Sprint 20.2 gives the VM checked native POD, opaque, foreign-object, and
+      runtime-value storage. Stable type identities are verified at the
+      bytecode and runtime boundaries, producer handle operations preserve
+      intrusive ownership, and the final VM copy performs exactly one foreign
+      release.
+- [x] Sprint 20.3 admits call-scoped and retained scalar callbacks with pinned
+      lifetime/thread contracts. Caller-thread violations and stale machines
+      are rejected before VM entry; any-thread callbacks serialize execution,
+      preserve captures, and contain Wio/native failures at the ABI boundary.
+- [x] Sprint 20.4 adapts canonical native `coroutine<T>` handles into ordinary
+      VM tasks through an additive completion sidecar. Foreign-thread
+      completion resumes awaits on their recorded executor, faults and
+      cancellation retain stable VM behavior, main queues are pumped together,
+      teardown cancels pending producers, and settlement/releases are
+      exactly-once under completion/cancellation races.

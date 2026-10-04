@@ -143,6 +143,7 @@ class NativeModule {
         const WioSdkModuleContract* contract{};
         const WioModuleApi* legacy{};
         const WioNativeTaskApi* tasks{};
+        const WioNativeTaskCompletionApi* taskCompletions{};
         const WioNativeAbiRegistry* natives{};
         const WioNativeReflectionApi* reflection{};
         std::shared_ptr<detail::BindingState> binding = std::make_shared<detail::BindingState>();
@@ -196,6 +197,14 @@ public:
                 !api->bindMain || !api->pumpMain || !api->shutdown)
                 throw std::runtime_error("unsupported task ABI");
             state->tasks = api;
+        }
+        auto taskCompletions =
+            detail::loadSymbol<WioGetNativeTaskCompletionApiFn>(state->handle, "WioGetNativeTaskCompletionApi");
+        if (taskCompletions) {
+            const auto* api = taskCompletions();
+            if (!api || api->abiVersion != WIO_NATIVE_ABI_VERSION || !api->onComplete)
+                throw std::runtime_error("unsupported task completion ABI");
+            state->taskCompletions = api;
         }
         auto reflect = detail::loadSymbol<WioGetNativeReflectionApiFn>(state->handle, "WioGetNativeReflectionApi");
         if (reflect) {

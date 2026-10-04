@@ -13,6 +13,8 @@
 #include <string>
 
 struct WioNativeAbiRegistry;
+struct WioNativeTaskApi;
+struct WioNativeTaskCompletionApi;
 
 namespace wio::vm
 {
@@ -129,14 +131,17 @@ namespace wio::vm
         // after this call. Native thunk code and its containing library must
         // remain loaded while the machine can execute registered functions.
         [[nodiscard]] bool registerNativeRegistry(const WioNativeAbiRegistry& registry, std::string* error = nullptr);
+        [[nodiscard]] bool registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativeTaskApi& tasks,
+                                                  const WioNativeTaskCompletionApi& completions,
+                                                  std::string* error = nullptr);
 
         // Main-executor continuations run only on the bound thread. wait()
         // pumps this queue automatically when called by that thread.
         void bindMainExecutor();
         [[nodiscard]] std::uint64_t drainMainExecutor();
 
-        // External tasks are the runtime half of the future Sprint 20 native
-        // bridge. Completion is exactly-once and may arrive from any thread.
+        // External tasks are shared by embedders and the native async bridge.
+        // Completion is exactly-once and may arrive from any thread.
         [[nodiscard]] Value makeExternalTask();
         bool complete(const Value& task, Value result = {});
         bool fail(const Value& task, std::string code, std::string message);
@@ -162,6 +167,10 @@ namespace wio::vm
         void resumeTask(std::shared_ptr<ExecutionState> state);
         [[nodiscard]] Value startTask(std::uint32_t function, std::span<const Value> arguments);
         [[nodiscard]] ExecutionResult driveTask(const Value& task);
+        [[nodiscard]] bool registerNativeRegistryImpl(const WioNativeAbiRegistry& registry,
+                                                      const WioNativeTaskApi* tasks,
+                                                      const WioNativeTaskCompletionApi* completions,
+                                                      std::string* error);
 
         struct Program;
         std::shared_ptr<Program> program_;

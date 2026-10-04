@@ -83,10 +83,40 @@ lock or execute the VM; any-thread callbacks serialize entry through the
 machine execution lock. The callback ops flags carry this affinity into the
 shared C++ wire codec as well.
 
+## Sprint 20.4 native async adaptation
+
+A native function may now return the canonical wire representation of
+`coroutine<T>`. Registering its registry together with `WioNativeTaskApi` and
+the additive `WioNativeTaskCompletionApi` makes `NativeInvoke` create a normal
+VM task rather than exposing a foreign runtime handle. The VM subscribes once,
+reads and converts `T` only after terminal completion, and releases the
+producer-owned task handle exactly once.
+
+Completion callbacks may arrive synchronously or on any foreign thread. The
+callback completes the external VM task; existing VM await machinery then
+schedules the suspended Wio coroutine on the executor recorded in its
+coroutine state. Native code therefore never resumes a Wio frame directly on
+its callback thread. Faults cross as `WVM1226`, and native cancellation maps to
+the existing `WVM1165` VM cancellation contract.
+
+Cancellation is bidirectional at the ownership boundary: cancelling an
+adapted VM task invokes the producer's task API, while machine teardown
+cancels all outstanding foreign tasks before dropping their handles. The
+exactly-once settlement guard resolves completion/cancellation races without
+double reads or releases. `bindMainExecutor()`, `drainMainExecutor()`, and
+`wait()` also bind and pump every registered native task runtime, so tasks
+whose producer targets its main executor make progress without a separate host
+loop.
+
+`WioNativeTaskCompletionApi` is a separate wire-v2 sidecar instead of an
+in-place extension of `WioNativeTaskApi`; modules built before this slice keep
+their original binary layout. Such modules can still be loaded and polled by
+the SDK, but the VM deterministically rejects async adaptation without the
+completion sidecar as `WVM1225`.
+
 ## Remaining Sprint 20 surface
 
-The next slices add foreign-thread completion scheduling, native async-task
-adaptation, library loading/registry discovery, CLI/project integration, and
-the full C++-backend-versus-VM native differential gate. Non-scalar callback
-signatures remain intentionally rejected until owned callback-result storage
-is part of the wire contract.
+The next slices add library loading/registry discovery, CLI/project
+integration, and the full C++-backend-versus-VM native differential gate.
+Non-scalar callback signatures remain intentionally rejected until owned
+callback-result storage is part of the wire contract.

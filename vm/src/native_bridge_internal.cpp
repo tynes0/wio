@@ -21,12 +21,20 @@ namespace wio::vm::detail
         constexpr std::uint8_t TypeChar = 16;
         constexpr std::uint8_t TypeString = 17;
         constexpr std::uint8_t TypeText = 18;
+        constexpr std::uint8_t TypeAny = 19;
         constexpr std::uint8_t TypeOpaque = 20;
         constexpr std::uint8_t TypeNamed = 28;
         constexpr std::uint8_t TypeReference = 29;
         constexpr std::uint8_t TypeNullable = 30;
+        constexpr std::uint8_t TypeArray = 31;
+        constexpr std::uint8_t TypeDictionary = 32;
+        constexpr std::uint8_t TypeFunction = 33;
+        constexpr std::uint8_t TypeAsyncTask = 34;
+        constexpr std::uint8_t NominalObject = 2;
+        constexpr std::uint8_t NominalInterface = 3;
         constexpr std::uint8_t NominalEnum = 4;
         constexpr std::uint8_t NominalFlagset = 5;
+        constexpr std::uint8_t RepresentationNativePod = 1;
 
         [[nodiscard]] std::uint32_t directType(const bytecode::Module& module, std::uint32_t type) noexcept
         {
@@ -351,6 +359,40 @@ namespace wio::vm::detail
             marshalling = 0;
         else if (kind == TypeBool || (kind >= TypeI8 && kind <= TypeF64) || kind == TypeByte || kind == TypeChar)
             marshalling = 1;
+        else
+            return false;
+        return true;
+    }
+
+    bool nativeValueMarshalling(const bytecode::Module& module, const std::uint32_t declaredType,
+                                std::uint8_t& marshalling) noexcept
+    {
+        const std::uint32_t type = scalarType(module, declaredType);
+        if (type >= module.types.size())
+            return false;
+        const bytecode::Type& value = module.types[type];
+        if (value.kind == TypeVoid)
+            marshalling = 0;
+        else if (value.kind == TypeBool || (value.kind >= TypeI8 && value.kind <= TypeF64) || value.kind == TypeByte ||
+                 value.kind == TypeChar ||
+                 (value.kind == TypeNamed && (value.nominalKind == NominalEnum || value.nominalKind == NominalFlagset)))
+            marshalling = 1;
+        else if (value.kind == TypeString)
+            marshalling = 2;
+        else if (value.kind == TypeText)
+            marshalling = 3;
+        else if (value.kind == TypeNamed && value.nominalRepresentation == RepresentationNativePod)
+            marshalling = 4;
+        else if (value.kind == TypeOpaque)
+            marshalling = 5;
+        else if (value.kind == TypeNamed &&
+                 (value.nominalKind == NominalObject || value.nominalKind == NominalInterface))
+            marshalling = 6;
+        else if (value.kind == TypeFunction)
+            marshalling = 7;
+        else if (value.kind == TypeAny || value.kind == TypeArray || value.kind == TypeDictionary ||
+                 value.kind == TypeAsyncTask || value.kind == TypeNamed)
+            marshalling = 8;
         else
             return false;
         return true;
