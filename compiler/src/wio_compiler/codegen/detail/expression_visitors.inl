@@ -2461,14 +2461,14 @@
                 }
             }
 
-            if (producesValue && matchCase.body->is<ExpressionStatement>())
+            if (producesValue && matchCase.body && matchCase.body->is<ExpressionStatement>())
             {
                 EMIT_TABS();
                 emit("return ");
                 matchCase.body->as<ExpressionStatement>()->expression->accept(*this);
                 emit(";\n");
             }
-            else
+            else if (matchCase.body)
             {
                 matchCase.body->accept(*this);
             }

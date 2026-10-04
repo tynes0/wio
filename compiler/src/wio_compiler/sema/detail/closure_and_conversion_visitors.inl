@@ -844,6 +844,7 @@
 
     void SemanticAnalyzer::visit(MatchExpression& node)
     {
+        const bool resultIsDiscarded = discardedExpression_ == &node;
         node.value->accept(*this);
 
         Ref<Type> matchValueType = node.value->refType.Lock();
@@ -904,6 +905,24 @@
             {
                 WIO_LOG_ADD_ERROR(matchCase.guard->location(), "Match guards must have type 'bool'.");
             }
+        };
+
+        auto analyzeMatchBody = [&](MatchCase& matchCase)
+        {
+            if (!matchCase.body)
+                return;
+
+            if (auto* expressionStatement = matchCase.body->as<ExpressionStatement>())
+            {
+                const Expression* previousDiscardedExpression = discardedExpression_;
+                if (resultIsDiscarded)
+                    discardedExpression_ = expressionStatement->expression.Get();
+                expressionStatement->expression->accept(*this);
+                discardedExpression_ = previousDiscardedExpression;
+                return;
+            }
+
+            matchCase.body->accept(*this);
         };
 
         for (size_t caseIndex = 0; caseIndex < node.cases.size(); ++caseIndex)
@@ -1094,8 +1113,7 @@
                 }
 
                 analyzeMatchGuard(matchCase);
-
-                matchCase.body->accept(*this);
+                analyzeMatchBody(matchCase);
                 exitScope();
             }
             else
@@ -1110,15 +1128,18 @@
                 {
                     analyzeMatchGuard(matchCase);
                 }
-                matchCase.body->accept(*this);
+                analyzeMatchBody(matchCase);
             }
 
-            if (!matchCase.body->is<ExpressionStatement>())
+            if (resultIsDiscarded)
+                continue;
+
+            if (!matchCase.body || !matchCase.body->is<ExpressionStatement>())
             {
                 allBodiesAreExpressionStatements = false;
             }
 
-            if (matchCase.body->is<ExpressionStatement>())
+            if (matchCase.body && matchCase.body->is<ExpressionStatement>())
             {
                 auto exprStmt = matchCase.body->as<ExpressionStatement>();
                 auto bodyType = exprStmt->expression->refType.Lock();
@@ -1146,6 +1167,12 @@
                 if (!commonReturnType->isCompatibleWith(bodyType) && bodyType->isCompatibleWith(commonReturnType))
                     commonReturnType = bodyType;
             }
+        }
+
+        if (resultIsDiscarded)
+        {
+            node.refType = Compiler::get().getTypeContext().getVoid();
+            return;
         }
 
         if (allBodiesAreExpressionStatements)

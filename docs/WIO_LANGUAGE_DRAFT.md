@@ -2535,6 +2535,11 @@ match (x) {
 - `assumed` must be the last match arm.
 - `assumed` cannot have a guard because there would be no later arm to receive
   the value when that guard is false.
+- `assumed` is optional when the `match` result is discarded. If no arm matches,
+  execution continues after the statement match.
+- `pattern:;` declares an intentionally empty statement arm.
+- A value-producing `match` must remain exhaustive, either through `assumed` or
+  through one of the statically exhaustive enum/variant forms.
 
 ### 14.6 Guards and Destructuring
 

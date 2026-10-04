@@ -126,6 +126,17 @@ true:
 Repeated unguarded enum members are unreachable. A non-exhaustive enum value
 match must include a final `assumed` arm.
 
+A match whose result is discarded is a statement match. Statement matches may
+omit `assumed`; an unmatched value simply continues after the match. A bare
+semicolon is also a valid empty statement arm:
+
+```wio
+match (command) {
+    "run": Start();
+    "ignored":;
+}
+```
+
 ## 5. Textual const generics
 
 Const generic parameters may use an integer type, `string`, or `text`.

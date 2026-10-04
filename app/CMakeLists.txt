@@ -1465,6 +1465,13 @@ if (BUILD_TESTING AND EXISTS "${CMAKE_SOURCE_DIR}/tests")
     )
 
     add_wio_output_test(
+        wio_test_match_statement_non_exhaustive_run
+        "${CMAKE_SOURCE_DIR}/tests/match_statement_non_exhaustive.wio"
+        "Non-exhaustive statement match: 11"
+        --run
+    )
+
+    add_wio_output_test(
         wio_test_when_guard_fallback_value_run
         "${CMAKE_SOURCE_DIR}/tests/when_guard_fallback_value.wio"
         "When guard: 7 / 0"

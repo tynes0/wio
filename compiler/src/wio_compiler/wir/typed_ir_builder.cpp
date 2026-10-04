@@ -5952,10 +5952,12 @@ namespace wio::wir::typed
             caseBodyIndices.reserve(expression.cases.size());
             for (std::size_t index = 0; index < expression.cases.size(); ++index)
             {
+                const MatchCase& matchCase = expression.cases[index];
                 caseEntryIndices.push_back(createBlock(state, "match.case." + std::to_string(index) + ".test",
                                                        SourceSpan::at(expression.location())));
                 caseBodyIndices.push_back(createBlock(state, "match.case." + std::to_string(index) + ".body",
-                                                      SourceSpan::at(expression.cases[index].body->location())));
+                                                      SourceSpan::at(matchCase.body ? matchCase.body->location()
+                                                                                  : expression.location())));
             }
             const std::size_t unmatchedBlockIndex =
                 createBlock(state, "match.unmatched", SourceSpan::at(expression.location()));
@@ -6011,6 +6013,9 @@ namespace wio::wir::typed
                                              : currentBlockAt(state, unmatchedBlockIndex).id;
                 const bool destructuring = !matchCase.variantName.empty();
                 const bool assumed = matchCase.matchValues.empty() && !destructuring;
+                const ASTNode* caseSource = matchCase.body
+                    ? static_cast<const ASTNode*>(matchCase.body.Get())
+                    : static_cast<const ASTNode*>(&expression);
                 std::unordered_map<const sema::Symbol*, ValueId> caseBindings;
 
                 FunctionState testState = state;
@@ -6022,7 +6027,7 @@ namespace wio::wir::typed
                     currentBlock(testState).instructions.push_back(
                         Instruction{.opcode = Opcode::Branch,
                                     .targets = {bodyBlock},
-                                    .source = SourceSpan::at(matchCase.body->location())});
+                                    .source = SourceSpan::at(caseSource->location())});
                 }
                 else
                 {
@@ -6037,14 +6042,14 @@ namespace wio::wir::typed
                     if (destructuring)
                     {
                         const ValueId matched =
-                            buildDestructuringMatchTest(matchCase, subject, *matchCase.body.Get(), testState);
+                            buildDestructuringMatchTest(matchCase, subject, *caseSource, testState);
                         if (!matched)
                             return {};
                         currentBlock(testState).instructions.push_back(
                             Instruction{.opcode = Opcode::CondBranch,
                                         .operands = {matched},
                                         .targets = {successTarget, nextCase},
-                                        .source = SourceSpan::at(matchCase.body->location())});
+                                        .source = SourceSpan::at(caseSource->location())});
                     }
                     else
                     {
