@@ -388,10 +388,19 @@ namespace wio::bytecode
                                      declaration->nativeBinding.result.type == declaration->returnType;
                         for (std::size_t argument = 0; valid && argument < instruction.operands.size(); ++argument)
                         {
-                            valid =
-                                valueType(instruction.operands[argument]) == declaration->parameters[argument].type &&
-                                declaration->parameters[argument].type ==
-                                    declaration->nativeBinding.parameters[argument].type;
+                            const std::uint32_t actual = valueType(instruction.operands[argument]);
+                            const std::uint32_t expected = declaration->parameters[argument].type;
+                            const auto& abi = declaration->nativeBinding.parameters[argument];
+                            // Semantic flow narrowing can borrow a nullable place
+                            // as a non-null view after a null guard. Native decoding
+                            // still rejects a null value at entry; mutable copy-back
+                            // must always keep its exact declared reference type.
+                            const bool compatibleView =
+                                abi.passing == 1 && actual < module.types.size() && expected < module.types.size() &&
+                                module.types[actual].kind == 29 && module.types[expected].kind == 29 &&
+                                (module.types[expected].flags & 1u) == 0 &&
+                                directType(actual) == directType(expected) && directType(actual) != InvalidIndex;
+                            valid = (actual == expected || compatibleView) && expected == abi.type;
                         }
                         if (valid && declaration->returnType < module.types.size() &&
                             module.types[declaration->returnType].kind == 1)

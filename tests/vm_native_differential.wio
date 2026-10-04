@@ -1,0 +1,108 @@
+using cpp::header("vm_differential_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_differential::Point)]
+component Point { public x: f32; public y: f32; }
+[Native, CppName(vm_differential::Cell)]
+component Cell<T> { public value: T; }
+
+enum Mode { Idle = 0, Ready = 7 };
+flagset Permission { Read = 1u32, Write = 2u32 };
+
+extension PointInterop for Point {
+    [Native, CppName(vm_differential::Scale)] public ref fn Scale(factor: f32);
+    [Native, CppName(vm_differential::Sum)] public view fn Sum() -> f32;
+}
+
+[Native, CppName(vm_differential::MakePoint)] fn MakePoint() -> Point;
+[Native, CppName(vm_differential::CallPoint)] fn CallPoint(callback: fn() -> Point) -> f32;
+[Native, CppName(vm_differential::Identity), instantiate(i32), instantiate(string), instantiate(Mode), instantiate(Permission)] fn Identity<T>(value: T) -> T;
+[Native, CppName(vm_differential::MakeCell), instantiate(i32)] fn MakeCell<T>(value: T) -> Cell<T>;
+[Native, CppName(vm_differential::ReadCell), instantiate(i32)] fn ReadCell<T>(value: view Cell<T>) -> T;
+[Native, CppName(vm_differential::Aliased)] fn Aliased(left: ref i32, right: ref i32);
+[Native, CppName(vm_differential::ObserveAlias)] fn ObserveAlias(left: ref i32, right: view i32) -> i32;
+[Native, CppName(vm_differential::Append)] fn Append(value: ref string);
+[Native, CppName(vm_differential::Label)] fn Label() -> string;
+[Native, CppName(vm_differential::EchoI8)] fn EchoI8(value: i8) -> i8;
+[Native, CppName(vm_differential::EchoU64)] fn EchoU64(value: u64) -> u64;
+[Native, CppName(vm_differential::EchoF32)] fn EchoF32(value: f32) -> f32;
+[Native, CppName(vm_differential::Call)] fn Call(callback: fn(i32) -> i32) -> i32;
+[Native, CppName(vm_differential::CallString)] fn CallString(callback: fn(string) -> string) -> string;
+[Native, CppName(vm_differential::CallText)] fn CallText(callback: fn(text) -> text) -> text;
+[Native, CppName(vm_differential::StoreText)]
+fn StoreText([attribute::NativeCallback("retained", "any")] callback: fn(string) -> string);
+[Native, CppName(vm_differential::RunStoredText)] fn RunStoredText() -> string;
+[Native, CppName(vm_differential::Store)] fn Store(callback: fn(i32) -> i32);
+[Native, CppName(vm_differential::Expired)] fn Expired() -> bool;
+[Native, CppName(vm_differential::WrongThread)] fn WrongThread(callback: fn(i32) -> i32) -> bool;
+[Native, CppName(vm_differential::MakeAny)] fn MakeAny() -> any;
+[Native, CppName(vm_differential::ReadAny)] fn ReadAny(value: view any) -> i32;
+[Native, CppName(vm_differential::ReplaceAny)] fn ReplaceAny(value: ref any);
+[Native, CppName(vm_differential::Context)] fn Context() -> opaque;
+[Native, CppName(vm_differential::ReadContext)] fn ReadContext(value: view opaque) -> i32;
+[Native, CppName(vm_differential::ReplaceContext)] fn ReplaceContext(target: ref opaque?, value: opaque);
+[Native, CppName(vm_differential::Delayed)] fn Delayed(value: i32) -> coroutine<i32>;
+[Native, CppName(vm_differential::DelayedAny)] fn DelayedAny() -> coroutine<any>;
+[Native, CppName(vm_differential::Fail)] fn Fail(value: ref i32) -> i32;
+[Native, CppName(vm_differential::Print)] fn Print(value: string);
+
+async fn Entry(args: string[]) -> i32 {
+    if (args.Count() != 2usize) { return 90; }
+    if (args[1usize] == "throw") {
+        mut value = 0;
+        return Fail(ref value);
+    }
+    if (args[1usize] == "local-pod") {
+        let point = Point(3.0f32, 4.0f32);
+        return point.Sum() == 7.0f32 ? 0 : 92;
+    }
+    if (args[1usize] == "local-any") {
+        let boxed: any = 42;
+        return ReadAny(ref boxed) == 42 ? 0 : 93;
+    }
+    if (args[1usize] == "pod-callback") {
+        return CallPoint(() => MakePoint()) == 5.0f32 ? 0 : 94;
+    }
+    if (args[1usize] != "two words") { return 91; }
+
+    mut aliased = 1;
+    Aliased(ref aliased, ref aliased);
+    if (aliased != 20) { return 1; }
+    if (ObserveAlias(ref aliased, ref aliased) != 9 or aliased != 9) { return 20; }
+    mut label = "wio";
+    Append(ref label);
+    if (label != "wio-native" or Label() != "borrowed") { return 2; }
+    if (EchoI8(-128i8) != -128i8 or EchoU64(18446744073709551615u64) != 18446744073709551615u64) { return 3; }
+    if (EchoF32(1.25f32) != 1.25f32) { return 4; }
+    if (Identity(13) != 13 or Identity("template") != "template") { return 5; }
+    if (Identity(Mode::Ready) != Mode::Ready) { return 18; }
+    if (Identity(Permission::Read | Permission::Write) != (Permission::Read | Permission::Write)) { return 19; }
+    mut point = MakePoint();
+    point.Scale(4.0f32);
+    if (point.Sum() != 20.0f32) { return 6; }
+    let cell = MakeCell<i32>(9);
+    if (ReadCell<i32>(ref cell) != 9) { return 7; }
+
+    let captured = 3;
+    if (Call((value) => value + captured) != 7) { return 8; }
+    if (CallString((value) => value + "!") != "a\0b!") { return 9; }
+    if (CallText((value) => value + u"\0!") != u"Merhaba 🌍\0!") { return 10; }
+    Store((value) => value + captured);
+    if (not Expired() or not WrongThread((value) => value + captured)) { return 11; }
+    StoreText((value) => value + "!");
+    if (RunStoredText() != "worker!") { return 17; }
+
+    mut boxed = MakeAny();
+    if (ReadAny(ref boxed) != 42) { return 12; }
+    ReplaceAny(ref boxed);
+    if (ReadAny(ref boxed) != 43) { return 13; }
+    mut context: opaque? = null;
+    ReplaceContext(ref context, Context());
+    if (context == null) { return 14; }
+    if (ReadContext(ref context) != 9) { return 15; }
+    if (await Delayed(42) != 42) { return 16; }
+    let asyncBoxed = await DelayedAny();
+    if (ReadAny(ref asyncBoxed) != 42) { return 21; }
+    Print("native-differential-ok:scalar/ref/alias/pod/generic/opaque/any/callback/string/text/async");
+    return 0;
+}

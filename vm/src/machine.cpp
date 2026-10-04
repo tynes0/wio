@@ -136,9 +136,16 @@ namespace wio::vm
             std::atomic_bool active{true};
             std::thread::id callerThread;
             bool anyThread = false;
+            std::function<void()> onDestroy;
             std::function<WioNativeAbiStatus(const WioNativeAbiValue*, std::uint64_t, WioNativeAbiValue*,
                                              WioNativeAbiFailure*)>
                 invoke;
+
+            ~NativeCallbackState()
+            {
+                if (onDestroy)
+                    onDestroy();
+            }
         };
 
         void retainNativeCallback(void* const userdata) noexcept
@@ -994,6 +1001,7 @@ namespace wio::vm
         std::mutex continuationMutex;
         std::vector<std::pair<Value, std::shared_ptr<void>>> continuations;
         std::recursive_mutex executionMutex;
+        std::atomic_uint32_t retainedForeignCallbacks{0};
         std::mutex nativeMutex;
         std::unordered_map<std::string, NativeFunction> nativeFunctions;
         std::vector<NativeFunction::TaskBridge> nativeTaskApis;
@@ -2346,10 +2354,19 @@ namespace wio::vm
             {
                 const Value* left = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
                 const Value* right = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                const std::uint8_t operation = instruction.binaryOperator;
+                if (left && right && (operation == BinaryEqual || operation == BinaryNotEqual) &&
+                    (left->kind() == Value::Kind::Null || right->kind() == Value::Kind::Null ||
+                     (left->kind() == Value::Kind::Opaque && right->kind() == Value::Kind::Opaque)))
+                {
+                    const bool equal = *left == *right;
+                    write(instruction.result, Value::boolean(operation == BinaryEqual ? equal : !equal));
+                    ++frame.instruction;
+                    continue;
+                }
                 if (!left || !right || left->kind() != right->kind())
                     return fail("WVM1013", "Binary instruction requires two available values of the same kind");
 
-                const std::uint8_t operation = instruction.binaryOperator;
                 Value result;
                 if (left->kind() == Value::Kind::SignedInteger)
                 {
@@ -4149,6 +4166,7 @@ namespace wio::vm
                 } nativeFrame;
                 nativeFrame.tokens.reserve(instruction.operands.size());
                 nativeFrame.arguments.reserve(instruction.operands.size());
+                nativeFrame.callbacks.reserve(instruction.operands.size());
                 std::unordered_map<PlaceStorage*, std::size_t> aliases;
 
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
@@ -4189,7 +4207,15 @@ namespace wio::vm
                         {
                             tokenIndex = alias->second;
                             NativeToken& token = nativeFrame.tokens[tokenIndex];
-                            if (token.type != abi.type || token.marshalling != abi.marshalling)
+                            const auto referenceBase = [&](const std::uint32_t type)
+                            {
+                                return type < module.types.size() && module.types[type].kind == TypeReference &&
+                                               !module.types[type].arguments.empty()
+                                           ? module.types[type].arguments.front()
+                                           : type;
+                            };
+                            if (referenceBase(token.type) != referenceBase(abi.type) ||
+                                token.marshalling != abi.marshalling)
                                 return fail("WVM1223", "Aliased native references disagree on their ABI value type");
                             token.mutableValue = token.mutableValue || abi.passing == 2;
                         }
@@ -4218,14 +4244,22 @@ namespace wio::vm
                         for (const std::uint32_t callbackValueType : callbackType.arguments)
                         {
                             std::uint8_t ignored = 0;
-                            if (!detail::callbackScalarMarshalling(module, callbackValueType, ignored))
-                                return fail("WVM1225", "Native callbacks currently require scalar or void signatures");
+                            if (!detail::callbackValueMarshalling(module, callbackValueType, ignored))
+                                return fail("WVM1225",
+                                            "Native callbacks require scalar, string, text or void signatures");
                         }
 
-                        auto* callbackState = new NativeCallbackState;
+                        auto callbackStateOwner = std::make_unique<NativeCallbackState>();
+                        auto* callbackState = callbackStateOwner.get();
                         callbackState->callerThread = std::this_thread::get_id();
                         callbackState->anyThread = abi.callbackThread == 1;
                         const std::shared_ptr<Program> callbackProgram = program_;
+                        if (callbackState->anyThread && abi.callbackLifetime == 1)
+                        {
+                            callbackState->onDestroy = [callbackProgram]
+                            { callbackProgram->retainedForeignCallbacks.fetch_sub(1, std::memory_order_release); };
+                            callbackProgram->retainedForeignCallbacks.fetch_add(1, std::memory_order_relaxed);
+                        }
                         const Value callable = *direct;
                         const std::vector<std::uint32_t> signature = callbackType.arguments;
                         callbackState->invoke = [callbackProgram, callable,
@@ -4267,7 +4301,7 @@ namespace wio::vm
                             for (std::size_t argumentIndex = 0; argumentIndex < callbackArgumentCount; ++argumentIndex)
                             {
                                 std::uint8_t callbackMarshalling = 0;
-                                if (!detail::callbackScalarMarshalling(callbackModule, signature[argumentIndex],
+                                if (!detail::callbackValueMarshalling(callbackModule, signature[argumentIndex],
                                                                        callbackMarshalling))
                                     return WIO_NATIVE_ABI_TYPE_MISMATCH;
                                 detail::NativeValueResult converted =
@@ -4290,11 +4324,11 @@ namespace wio::vm
                             }
                             std::uint8_t resultMarshalling = 0;
                             const std::uint32_t resultType = signature.back();
-                            if (!detail::callbackScalarMarshalling(callbackModule, resultType, resultMarshalling))
+                            if (!detail::callbackValueMarshalling(callbackModule, resultType, resultMarshalling))
                                 return WIO_NATIVE_ABI_TYPE_MISMATCH;
                             std::string conversionError;
-                            if (!detail::encodeNativeValue(callbackModule, execution.value(), resultType,
-                                                           resultMarshalling, *callbackResult, conversionError))
+                            if (!detail::encodeOwnedNativeValue(callbackModule, execution.value(), resultType,
+                                                                resultMarshalling, *callbackResult, conversionError))
                             {
                                 setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, conversionError);
                                 return WIO_NATIVE_ABI_TYPE_MISMATCH;
@@ -4309,6 +4343,7 @@ namespace wio::vm
                                                                                          : &CallerThreadCallbackOps};
                         nativeFrame.callbacks.push_back({callbackState, abi.callbackLifetime == 1});
                         nativeFrame.arguments.push_back(wire);
+                        (void)callbackStateOwner.release();
                         continue;
                     }
                     WioNativeAbiValue wire;
@@ -4320,6 +4355,7 @@ namespace wio::vm
 
                 WioNativeAbiFailure nativeFailure;
                 const bool permitsForeignThreadCallback =
+                    program_->retainedForeignCallbacks.load(std::memory_order_acquire) != 0 ||
                     std::any_of(nativeFrame.callbacks.begin(), nativeFrame.callbacks.end(),
                                 [](const NativeFrame::CallbackLease& callback)
                                 { return callback.state && callback.state->anyThread; });
@@ -4368,7 +4404,8 @@ namespace wio::vm
                 if (status != WIO_NATIVE_ABI_OK)
                 {
                     nativeFailure.status = status;
-                    return fail("WVM1222", "Native invocation failed: " + detail::nativeFailureMessage(nativeFailure));
+                    return fail("WVM1222", "Native invocation '" + std::string(module.string(declaration.name)) +
+                                               "' failed: " + detail::nativeFailureMessage(nativeFailure));
                 }
                 if (!copyBackError.empty())
                     return fail("WVM1224", "Native mutable-reference copy-back failed: " + copyBackError);

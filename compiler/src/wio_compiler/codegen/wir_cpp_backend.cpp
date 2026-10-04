@@ -2113,6 +2113,13 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 if (const auto* value = std::get_if<std::string>(&instruction.literal))
                 {
                     const Type* resultType = module_.types.tryGet(instruction.resultType);
+                    if (value->find('\0') != std::string::npos)
+                    {
+                        const std::string bytes = cppString(*value) + ", " + std::to_string(value->size());
+                        return resultType && resultType->kind == TypeKind::Text
+                                   ? "wio::runtime::Text::FromUtf8(std::string_view{" + bytes + "})"
+                                   : "std::string{" + bytes + "}";
+                    }
                     return resultType && resultType->kind == TypeKind::Text
                                ? "wio::runtime::Text::FromUtf8(" + cppString(*value) + ")"
                                : cppString(*value);

@@ -1096,6 +1096,24 @@ here as historical evidence rather than active work:
       `--backend vm`; both artifacts and their source/header dependencies
       participate in incremental reuse.
 
+## Sprint 20.6 Native Differential Qualification
+
+- [x] A real generated-thunk C++/VM differential gate checks independent success
+      oracles, exact successful outputs, native failure payload/effects, mixed
+      ref/view aliases, POD/generic round-trips, enum/flagset scalars, opaque and
+      foreign-any ownership, string/text callbacks, retained worker entry, and
+      native async scalar/runtime-value results.
+- [x] Wire-v2 owned callback slices survive temporary VM frames; malformed scalar
+      widths, Unicode slices, nullable references, and mutable-reference type
+      mismatches have focused boundary regressions.
+- [x] Fixed non-nominal native ABI identity emission, nullable opaque conversion
+      and comparison, retained worker callback locking, ref/view alias matching,
+      enum/flagset wire encoding, and embedded-zero C++ string/text literals.
+- [x] Both new tests are labeled `native-differential;release-gate` and selected
+      by the Windows/Linux CI matrix. Local Windows qualification passes; Linux
+      remains CI verification. Known local-POD/local-any/structured-callback
+      parity boundaries are executable negative cases and remain in the backlog.
+
 ## Build and Test Registration Maintenance
 
 - [x] The app CMake file is limited to application/self-host/playground targets

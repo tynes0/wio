@@ -78,6 +78,11 @@ jobs:
           ctest --test-dir build --output-on-failure
           -R "^wio_vm_native_(library_discovery|project_cli)$"
 
+      - name: Validate C++ and VM native behavioral parity
+        run: >
+          ctest --test-dir build --output-on-failure
+          -L "^native-differential$"
+
   sanitizers:
     runs-on: ubuntu-latest
 

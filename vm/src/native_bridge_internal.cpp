@@ -1,8 +1,10 @@
 #include "native_bridge_internal.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <string_view>
 
 namespace wio::vm::detail
@@ -36,6 +38,47 @@ namespace wio::vm::detail
         constexpr std::uint8_t NominalFlagset = 5;
         constexpr std::uint8_t RepresentationNativePod = 1;
 
+        struct OwnedCallbackValue final
+        {
+            std::atomic<std::uint32_t> references{1};
+            Value value;
+
+            explicit OwnedCallbackValue(const Value& input) : value(input)
+            {
+            }
+
+            static const WioNativeAbiHandleOps Operations;
+        };
+
+        const WioNativeAbiHandleOps OwnedCallbackValue::Operations{
+            WIO_NATIVE_ABI_VERSION, 0, [](void* storage) noexcept
+            { static_cast<OwnedCallbackValue*>(storage)->references.fetch_add(1, std::memory_order_relaxed); },
+            [](void* storage) noexcept
+            {
+                auto* owner = static_cast<OwnedCallbackValue*>(storage);
+                if (owner->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                    delete owner;
+            },
+            [](const void*) noexcept { return std::uint64_t{0}; }};
+
+        [[nodiscard]] bool signedScalarFits(const std::uint8_t kind, const std::int64_t value) noexcept
+        {
+            const unsigned bits = kind == TypeISize ? sizeof(std::intptr_t) * 8u : 8u << (kind - TypeI8);
+            if (bits == 64)
+                return true;
+            const auto maximum = (std::int64_t{1} << (bits - 1)) - 1;
+            return value >= -maximum - 1 && value <= maximum;
+        }
+
+        [[nodiscard]] bool unsignedScalarFits(const std::uint8_t kind, const std::uint64_t value) noexcept
+        {
+            const unsigned bits = kind == TypeByte    ? 8u
+                                  : kind == TypeChar  ? 32u
+                                  : kind == TypeUSize ? sizeof(std::uintptr_t) * 8u
+                                                      : 8u << (kind - TypeU8);
+            return bits == 64 || value <= (std::uint64_t{1} << bits) - 1;
+        }
+
         [[nodiscard]] std::uint32_t directType(const bytecode::Module& module, std::uint32_t type) noexcept
         {
             for (std::uint32_t depth = 0; type < module.types.size() && depth < 32; ++depth)
@@ -58,6 +101,18 @@ namespace wio::vm::detail
                 (candidate.nominalKind == NominalEnum || candidate.nominalKind == NominalFlagset))
                 return directType(module, candidate.enumUnderlyingType);
             return type;
+        }
+
+        [[nodiscard]] bool isNullable(const bytecode::Module& module, std::uint32_t type) noexcept
+        {
+            for (unsigned depth = 0; type < module.types.size() && depth < 32; ++depth)
+            {
+                const auto& candidate = module.types[type];
+                if (candidate.kind != TypeReference || candidate.arguments.empty())
+                    return candidate.kind == TypeNullable;
+                type = candidate.arguments.front();
+            }
+            return false;
         }
 
         [[nodiscard]] bool isUnicodeScalar(const char32_t scalar) noexcept
@@ -116,7 +171,7 @@ namespace wio::vm::detail
         output = {};
         if (value.kind() == Value::Kind::Null)
         {
-            if (declaredType >= module.types.size() || module.types[declaredType].kind != TypeNullable)
+            if (!isNullable(module, declaredType))
             {
                 error = "null VM value does not match a nullable native ABI declaration";
                 return false;
@@ -149,6 +204,11 @@ namespace wio::vm::detail
             }
             if (kind >= TypeI8 && kind <= TypeISize && value.kind() == Value::Kind::SignedInteger)
             {
+                if (!signedScalarFits(kind, value.asSignedInteger()))
+                {
+                    error = "VM signed scalar is outside the native ABI declaration's range";
+                    return false;
+                }
                 output.kind = WIO_NATIVE_ABI_I64;
                 output.payload.signedInteger = value.asSignedInteger();
                 return true;
@@ -156,6 +216,11 @@ namespace wio::vm::detail
             if (((kind >= TypeU8 && kind <= TypeUSize) || kind == TypeByte || kind == TypeChar) &&
                 value.kind() == Value::Kind::UnsignedInteger)
             {
+                if (!unsignedScalarFits(kind, value.asUnsignedInteger()))
+                {
+                    error = "VM unsigned scalar is outside the native ABI declaration's range";
+                    return false;
+                }
                 output.kind = WIO_NATIVE_ABI_U64;
                 output.payload.unsignedInteger = value.asUnsignedInteger();
                 return true;
@@ -163,7 +228,8 @@ namespace wio::vm::detail
             if ((kind == TypeF32 || kind == TypeF64) && value.kind() == Value::Kind::Float64)
             {
                 output.kind = WIO_NATIVE_ABI_F64;
-                output.payload.floatingPoint = value.asFloat64();
+                output.payload.floatingPoint =
+                    kind == TypeF32 ? static_cast<float>(value.asFloat64()) : value.asFloat64();
                 return true;
             }
             error = "VM scalar kind does not match the native ABI declaration";
@@ -181,6 +247,14 @@ namespace wio::vm::detail
         case 3:
             if (kind == TypeText && value.kind() == Value::Kind::Text)
             {
+                for (const char32_t scalar : value.asText())
+                {
+                    if (!isUnicodeScalar(scalar))
+                    {
+                        error = "VM Unicode text contains an invalid scalar";
+                        return false;
+                    }
+                }
                 output.kind = WIO_NATIVE_ABI_TEXT_UTF32;
                 output.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
                 output.payload.slice = {value.asText().data(), value.asText().size() * sizeof(char32_t)};
@@ -249,10 +323,27 @@ namespace wio::vm::detail
         }
     }
 
+    bool encodeOwnedNativeValue(const bytecode::Module& module, const Value& value, const std::uint32_t declaredType,
+                                const std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error)
+    {
+        if (!encodeNativeValue(module, value, declaredType, marshalling, output, error))
+            return false;
+        if (output.kind != WIO_NATIVE_ABI_BYTES && output.kind != WIO_NATIVE_ABI_TEXT_UTF32)
+            return true;
+
+        auto owner = std::make_unique<OwnedCallbackValue>(value);
+        // Encode from the owned copy: no slice may refer to temporary frame storage.
+        if (!encodeNativeValue(module, owner->value, declaredType, marshalling, output, error))
+            return false;
+        output.flags = WIO_NATIVE_ABI_VALUE_OWNED;
+        output.owner = {owner.release(), &OwnedCallbackValue::Operations, 1};
+        return true;
+    }
+
     NativeValueResult decodeNativeValue(const bytecode::Module& module, const WioNativeAbiValue& value,
                                         const std::uint32_t declaredType, const std::uint8_t marshalling)
     {
-        const bool nullable = declaredType < module.types.size() && module.types[declaredType].kind == TypeNullable;
+        const bool nullable = isNullable(module, declaredType);
         if (value.kind == WIO_NATIVE_ABI_VOID && nullable)
             return {Value::null(), {}};
 
@@ -269,12 +360,22 @@ namespace wio::vm::detail
             if (kind == TypeBool && value.kind == WIO_NATIVE_ABI_BOOL)
                 return {Value::boolean(value.payload.boolean), {}};
             if (kind >= TypeI8 && kind <= TypeISize && value.kind == WIO_NATIVE_ABI_I64)
+            {
+                if (!signedScalarFits(kind, value.payload.signedInteger))
+                    return {{}, "native signed scalar result is outside the Wio result type's range"};
                 return {Value::signedInteger(value.payload.signedInteger), {}};
+            }
             if (((kind >= TypeU8 && kind <= TypeUSize) || kind == TypeByte || kind == TypeChar) &&
                 value.kind == WIO_NATIVE_ABI_U64)
+            {
+                if (!unsignedScalarFits(kind, value.payload.unsignedInteger))
+                    return {{}, "native unsigned scalar result is outside the Wio result type's range"};
                 return {Value::unsignedInteger(value.payload.unsignedInteger), {}};
+            }
             if ((kind == TypeF32 || kind == TypeF64) && value.kind == WIO_NATIVE_ABI_F64)
-                return {Value::floating(value.payload.floatingPoint), {}};
+                return {Value::floating(kind == TypeF32 ? static_cast<float>(value.payload.floatingPoint)
+                                                        : value.payload.floatingPoint),
+                        {}};
             return {{}, "native scalar result does not match the Wio result type"};
         case 2:
             if (kind != TypeString || value.kind != WIO_NATIVE_ABI_BYTES ||
@@ -325,6 +426,8 @@ namespace wio::vm::detail
                         typeError.empty() ? "native opaque result has an invalid wire shape" : std::move(typeError)};
             if (value.owner.state != nullptr && !validHandle(value.owner))
                 return {{}, "native opaque result has invalid producer ownership operations"};
+            if (nullable && value.payload.opaque == nullptr)
+                return {Value::null(), {}};
             return {Value::opaque(type, expected, value.payload.opaque, value.owner), {}};
         }
         case 6:
@@ -348,9 +451,14 @@ namespace wio::vm::detail
         }
     }
 
-    bool callbackScalarMarshalling(const bytecode::Module& module, const std::uint32_t declaredType,
-                                   std::uint8_t& marshalling) noexcept
+    bool callbackValueMarshalling(const bytecode::Module& module, const std::uint32_t declaredType,
+                                  std::uint8_t& marshalling) noexcept
     {
+        // Callback borrows need explicit reference tokens and copy-back, not a
+        // by-value slice. Do not silently classify them as their pointee type.
+        if (declaredType < module.types.size() &&
+            (module.types[declaredType].kind == TypeReference || module.types[declaredType].kind == TypeNullable))
+            return false;
         const std::uint32_t type = scalarType(module, declaredType);
         if (type >= module.types.size())
             return false;
@@ -359,6 +467,10 @@ namespace wio::vm::detail
             marshalling = 0;
         else if (kind == TypeBool || (kind >= TypeI8 && kind <= TypeF64) || kind == TypeByte || kind == TypeChar)
             marshalling = 1;
+        else if (kind == TypeString)
+            marshalling = 2;
+        else if (kind == TypeText)
+            marshalling = 3;
         else
             return false;
         return true;

@@ -57,59 +57,142 @@ template<class T, std::uint64_t Id> struct Box {
     T value;
     explicit Box(T input) : value(std::move(input)) {}
     inline static const WioNativeAbiHandleOps ops{WIO_NATIVE_ABI_VERSION, 0,
-        [](void* p) noexcept { ++static_cast<Box*>(p)->refs; },
-        [](void* p) noexcept { auto* b = static_cast<Box*>(p); if (--b->refs == 0) delete b; },
-        [](const void*) noexcept { return Id; }};
+                                                  [](void* p) noexcept { ++static_cast<Box*>(p)->refs; },
+                                                  [](void* p) noexcept
+                                                  {
+                                                      auto* b = static_cast<Box*>(p);
+                                                      if (--b->refs == 0)
+                                                          delete b;
+                                                  },
+                                                  [](const void*) noexcept { return Id; }};
 };
-template<class T, std::uint64_t Id> struct Codec {
-    static T read(const WioNativeAbiValue& v) {
-        if constexpr (std::is_same_v<T, bool>) { require(v.kind == WIO_NATIVE_ABI_BOOL); return v.payload.boolean; }
-        else if constexpr (std::is_integral_v<T>) {
-            if constexpr (std::is_signed_v<T>) {
-                require(v.kind == WIO_NATIVE_ABI_I64 && v.payload.signedInteger >= std::numeric_limits<T>::min() && v.payload.signedInteger <= std::numeric_limits<T>::max());
+template <class T, std::uint64_t Id> struct Codec
+{
+    static T read(const WioNativeAbiValue& v)
+    {
+        if constexpr (std::is_enum_v<T>)
+        {
+            return static_cast<T>(Codec<std::underlying_type_t<T>, Id>::read(v));
+        }
+        else if constexpr (std::is_same_v<T, bool>)
+        {
+            require(v.kind == WIO_NATIVE_ABI_BOOL);
+            return v.payload.boolean;
+        }
+        else if constexpr (std::is_integral_v<T>)
+        {
+            if constexpr (std::is_signed_v<T>)
+            {
+                require(v.kind == WIO_NATIVE_ABI_I64 && v.payload.signedInteger >= std::numeric_limits<T>::min() &&
+                        v.payload.signedInteger <= std::numeric_limits<T>::max());
                 return static_cast<T>(v.payload.signedInteger);
-            } else {
+            }
+            else
+            {
                 require(v.kind == WIO_NATIVE_ABI_U64 && v.payload.unsignedInteger <= std::numeric_limits<T>::max());
                 return static_cast<T>(v.payload.unsignedInteger);
             }
-        } else if constexpr (std::is_floating_point_v<T>) { require(v.kind == WIO_NATIVE_ABI_F64); return static_cast<T>(v.payload.floatingPoint); }
-        else if constexpr (std::is_same_v<T, void*>) { require(v.kind == WIO_NATIVE_ABI_OPAQUE); return v.payload.opaque; }
-        else if constexpr (std::is_same_v<T, std::string>) {
+        }
+        else if constexpr (std::is_floating_point_v<T>)
+        {
+            require(v.kind == WIO_NATIVE_ABI_F64);
+            return static_cast<T>(v.payload.floatingPoint);
+        }
+        else if constexpr (std::is_same_v<T, void*>)
+        {
+            if (v.kind == WIO_NATIVE_ABI_VOID && (v.flags & WIO_NATIVE_ABI_VALUE_NULLABLE))
+                return nullptr;
+            require(v.kind == WIO_NATIVE_ABI_OPAQUE);
+            return v.payload.opaque;
+        }
+        else if constexpr (std::is_same_v<T, std::string>)
+        {
             require(v.kind == WIO_NATIVE_ABI_BYTES && (v.payload.slice.data || v.payload.slice.size == 0));
-            return v.payload.slice.size ? std::string(static_cast<const char*>(v.payload.slice.data), static_cast<std::size_t>(v.payload.slice.size)) : std::string{};
-        } else if constexpr (std::is_trivially_copyable_v<T>) {
-            require(v.kind == WIO_NATIVE_ABI_POD && v.typeId == Id && v.payload.slice.data && v.payload.slice.size == sizeof(T));
-            T result; std::memcpy(&result, v.payload.slice.data, sizeof(T)); return result;
-        } else {
-            require(v.kind == WIO_NATIVE_ABI_RUNTIME_VALUE && v.typeId == Id && v.payload.handle.state && v.payload.handle.ops == &Box<T, Id>::ops);
+            return v.payload.slice.size ? std::string(static_cast<const char*>(v.payload.slice.data),
+                                                      static_cast<std::size_t>(v.payload.slice.size))
+                                        : std::string{};
+        }
+        else if constexpr (std::is_trivially_copyable_v<T>)
+        {
+            require(v.kind == WIO_NATIVE_ABI_POD && v.typeId == Id && v.payload.slice.data &&
+                    v.payload.slice.size == sizeof(T));
+            T result;
+            std::memcpy(&result, v.payload.slice.data, sizeof(T));
+            return result;
+        }
+        else
+        {
+            require(v.kind == WIO_NATIVE_ABI_RUNTIME_VALUE && v.typeId == Id && v.payload.handle.state &&
+                    v.payload.handle.ops == &Box<T, Id>::ops);
             return static_cast<Box<T, Id>*>(v.payload.handle.state)->value;
         }
     }
-    static WioNativeAbiValue write(T input) {
-        WioNativeAbiValue v; v.typeId = Id;
-        if constexpr (std::is_same_v<T, bool>) { v.kind = WIO_NATIVE_ABI_BOOL; v.payload.boolean = input; }
-        else if constexpr (std::is_integral_v<T> && std::is_signed_v<T>) { v.kind = WIO_NATIVE_ABI_I64; v.payload.signedInteger = input; }
-        else if constexpr (std::is_integral_v<T>) { v.kind = WIO_NATIVE_ABI_U64; v.payload.unsignedInteger = input; }
-        else if constexpr (std::is_floating_point_v<T>) { v.kind = WIO_NATIVE_ABI_F64; v.payload.floatingPoint = input; }
-        else if constexpr (std::is_same_v<T, void*>) { v.kind = WIO_NATIVE_ABI_OPAQUE; v.payload.opaque = input; }
-        else {
+    static WioNativeAbiValue write(T input)
+    {
+        WioNativeAbiValue v;
+        v.typeId = Id;
+        if constexpr (std::is_enum_v<T>)
+        {
+            return Codec<std::underlying_type_t<T>, Id>::write(static_cast<std::underlying_type_t<T>>(input));
+        }
+        else if constexpr (std::is_same_v<T, bool>)
+        {
+            v.kind = WIO_NATIVE_ABI_BOOL;
+            v.payload.boolean = input;
+        }
+        else if constexpr (std::is_integral_v<T> && std::is_signed_v<T>)
+        {
+            v.kind = WIO_NATIVE_ABI_I64;
+            v.payload.signedInteger = input;
+        }
+        else if constexpr (std::is_integral_v<T>)
+        {
+            v.kind = WIO_NATIVE_ABI_U64;
+            v.payload.unsignedInteger = input;
+        }
+        else if constexpr (std::is_floating_point_v<T>)
+        {
+            v.kind = WIO_NATIVE_ABI_F64;
+            v.payload.floatingPoint = input;
+        }
+        else if constexpr (std::is_same_v<T, void*>)
+        {
+            v.kind = WIO_NATIVE_ABI_OPAQUE;
+            v.payload.opaque = input;
+        }
+        else
+        {
             auto* box = new Box<T, Id>(std::move(input));
             v.flags = WIO_NATIVE_ABI_VALUE_OWNED;
             WioNativeAbiHandle owner{box, &Box<T, Id>::ops, 1};
-            if constexpr (std::is_same_v<T, std::string>) {
-                v.kind = WIO_NATIVE_ABI_BYTES; v.payload.slice = {box->value.data(), box->value.size()}; v.owner = owner;
-            } else if constexpr (std::is_trivially_copyable_v<T>) {
-                v.kind = WIO_NATIVE_ABI_POD; v.payload.slice = {&box->value, sizeof(T)}; v.owner = owner;
-            } else { v.kind = WIO_NATIVE_ABI_RUNTIME_VALUE; v.payload.handle = owner; }
+            if constexpr (std::is_same_v<T, std::string>)
+            {
+                v.kind = WIO_NATIVE_ABI_BYTES;
+                v.payload.slice = {box->value.data(), box->value.size()};
+                v.owner = owner;
+            }
+            else if constexpr (std::is_trivially_copyable_v<T>)
+            {
+                v.kind = WIO_NATIVE_ABI_POD;
+                v.payload.slice = {&box->value, sizeof(T)};
+                v.owner = owner;
+            }
+            else
+            {
+                v.kind = WIO_NATIVE_ABI_RUNTIME_VALUE;
+                v.payload.handle = owner;
+            }
         }
         return v;
     }
 };
 // UTF-32 slices use byte counts and contain Unicode scalar values, not wchar_t.
-template<std::uint64_t Id> struct Codec<runtime::Text, Id> {
-    static runtime::Text read(const WioNativeAbiValue& v) {
+template <std::uint64_t Id> struct Codec<runtime::Text, Id>
+{
+    static runtime::Text read(const WioNativeAbiValue& v)
+    {
         require(v.kind == WIO_NATIVE_ABI_TEXT_UTF32 && v.payload.slice.size % sizeof(std::uint32_t) == 0 &&
-            (v.payload.slice.data || v.payload.slice.size == 0));
+                (v.payload.slice.data || v.payload.slice.size == 0));
         std::vector<std::uint32_t> points(v.payload.slice.size / sizeof(std::uint32_t));
         if (!points.empty()) std::memcpy(points.data(), v.payload.slice.data, v.payload.slice.size);
         std::string utf8; std::size_t error = 0;

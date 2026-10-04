@@ -2,6 +2,7 @@
 #include "wio/bytecode/enum_encoding.h"
 
 #include "wio/wir/lowered_ir_verifier.h"
+#include "wio/wir/native_abi_types.h"
 
 #include <bit>
 #include <limits>
@@ -326,6 +327,51 @@ namespace wio::bytecode
                                                          .attributes = sourceCase.attributes});
             }
             module.contract.reflection.push_back(std::move(reflection));
+        }
+        // Nominal reflection already carries its source-language identity.
+        // Non-nominal native runtime values (any/arrays/dictionaries) use the
+        // same structural wire id as WirModuleEmitter, not a module-local id.
+        // Record that identity explicitly so the VM never has to reconstruct
+        // compiler type spellings, and producer handles are still validated.
+        const auto addRuntimeAbiIdentity = [&](const wir::NativeAbiValue& abi)
+        {
+            if (abi.marshalling != wir::NativeMarshallingKind::RuntimeValue)
+                return;
+            wir::TypeId typeId = abi.type;
+            const wir::Type* type = source.types.tryGet(typeId);
+            for (unsigned depth = 0;
+                 type && depth < 32 &&
+                 (type->kind == wir::TypeKind::Reference || type->kind == wir::TypeKind::Nullable) &&
+                 !type->arguments.empty();
+                 ++depth)
+            {
+                typeId = type->arguments.front();
+                type = source.types.tryGet(typeId);
+            }
+            if (type && type->kind == wir::TypeKind::AsyncTask && type->arguments.size() == 1)
+            {
+                typeId = type->arguments.front();
+                type = source.types.tryGet(typeId);
+                if (wir::nativeAbiMarshalling(source.types, typeId) != wir::NativeMarshallingKind::RuntimeValue)
+                    return;
+            }
+            if (!type || type->kind == wir::TypeKind::Named || type->kind == wir::TypeKind::AsyncTask)
+                return;
+            const auto raw = rawId(typeId);
+            for (const Reflection& existing : module.contract.reflection)
+                if (existing.type == raw)
+                    return;
+            const std::string key = wir::nativeAbiTypeKey(source.types, typeId);
+            module.contract.reflection.push_back(Reflection{
+                .stableTypeId = wir::stableModuleHash(key), .logicalName = strings.intern(key), .type = raw});
+        };
+        for (const wir::lowered::Function& function : source.functions)
+        {
+            if (!function.nativeBinding)
+                continue;
+            for (const wir::NativeAbiValue& parameter : function.nativeBinding->parameters)
+                addRuntimeAbiIdentity(parameter);
+            addRuntimeAbiIdentity(function.nativeBinding->result);
         }
         for (const wir::SystemDescriptor& sourceSystem : source.contract.systems)
         {

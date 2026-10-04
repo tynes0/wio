@@ -176,8 +176,66 @@ The internal runner protocol is
 `wio --vm-run-bytecode FILE [--native-library PATH]... -- [args...]`.
 Normal users should use the project commands above.
 
-## Remaining Sprint 20 surface
+## Sprint 20.6 native differential qualification
 
-The next slice closes the C++-backend-versus-VM native differential gate.
-Non-scalar callback signatures remain intentionally rejected until owned
-callback-result storage is part of the wire contract.
+`wio_vm_native_differential` compiles one Wio program as a native executable
+and as paired bytecode/shared-bridge artifacts. It executes both with the same
+arguments and requires a successful, independently checked result: two equal
+failures cannot pass. Successful stdout/stderr must match exactly. Native
+exceptions must fail on both backends with the original message and matching
+pre-failure effects; the VM additionally preserves `WVM1222`. Diagnostic
+wrappers currently use different output channels, so those are not compared
+as application stdout.
+
+The qualified paths include integer limits and floating values, enum/flagset
+values, templates, native-produced POD and generic POD round-trips, extension
+`ref`/`view` dispatch, mutable and mixed mutable/read-only aliases, embedded-zero
+strings, borrowed native string results, nullable opaque copy-back and null
+tests, native-produced `any` handles and mutation, captured callbacks,
+call-scoped expiration, caller-thread rejection, retained any-thread callback
+entry from a later native call, and native async scalar/runtime-value results.
+
+String/text callback parameters and results now use the existing wire-v2
+slice contract. VM results transfer an owned storage handle, not a pointer
+into the callback's temporary execution frame. Empty strings, embedded zeros,
+supplementary Unicode scalars, retain/release, frame destruction, and repeated
+release are covered by `wio_vm_native_value_contract`. Scalar callbacks keep
+their allocation-free result path. Width checks reject malformed narrow
+integer values; `f32` crossing rounds as the C++ codec does. Native enum and
+flagset codecs use their underlying scalar rather than accidental POD encoding.
+
+The bytecode compiler records structural ABI identities for non-nominal
+runtime values, including async payloads, using exactly the C++ emitter's
+identity rule. No ABI or bytecode format version change is required.
+
+Both new tests carry `native-differential` and `release-gate` labels. The
+Windows/Linux validation workflow selects the gate by label:
+
+```powershell
+ctest --test-dir build -C Debug -L "^native-differential$" --output-on-failure
+```
+
+Local qualification was performed on Windows. Linux execution is delegated
+to the existing CI matrix; a local Windows pass is not a Linux pass claim.
+
+## Remaining VM/native parity and artifact work
+
+This gate qualifies the implemented bridge; it does **not** assert that every
+native C++ operation is supported by the VM. Three known boundaries have
+executable negative cases in the differential fixture:
+
+- Locally constructed VM components cannot yet be marshalled as native POD.
+  Native-produced POD storage can round-trip, but VM field access/construction
+  needs producer layout/field adapters. The current boundary is `WVM1223`.
+- VM-created `any`/containers/objects are not interchangeable with foreign
+  runtime/object handles. Native factories and their foreign values work;
+  structural VM-to-producer materialization still needs adapters (`WVM1223`).
+- POD/object/container callback signatures, nullable callback signatures, and
+  callback `ref`/`view` parameters need signature-specific type identities and
+  borrow/copy-back plans. Scalar, enum/flagset, string, text, and void callbacks
+  are implemented; the other shapes remain `WVM1225`.
+
+Consumed native argument passing remains explicitly rejected as `WVM1225`.
+Native-only bridge pruning, hybrid VM SDK hosts, and VM executable/shared/static
+artifact packaging remain separate work. These boundaries must be removed or
+explicitly qualified before advertising full native-language parity.

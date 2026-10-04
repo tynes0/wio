@@ -25,8 +25,13 @@ namespace wio::vm::detail
                                          std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error);
     [[nodiscard]] NativeValueResult decodeNativeValue(const bytecode::Module& module, const WioNativeAbiValue& value,
                                                       std::uint32_t declaredType, std::uint8_t marshalling);
-    [[nodiscard]] bool callbackScalarMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
-                                                 std::uint8_t& marshalling) noexcept;
+    // Slice results must outlive the callback's ExecutionResult. This transfers
+    // one producer-owned storage claim to the native caller (wire-v2 owner).
+    [[nodiscard]] bool encodeOwnedNativeValue(const bytecode::Module& module, const Value& value,
+                                              std::uint32_t declaredType, std::uint8_t marshalling,
+                                              WioNativeAbiValue& output, std::string& error);
+    [[nodiscard]] bool callbackValueMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
+                                                std::uint8_t& marshalling) noexcept;
     [[nodiscard]] bool nativeValueMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                               std::uint8_t& marshalling) noexcept;
     [[nodiscard]] std::string nativeFailureMessage(const WioNativeAbiFailure& failure);
