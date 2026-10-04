@@ -237,6 +237,7 @@ wio project build --emit-cpp
 wio project build --cpp-backend wir --emit-cpp
 wio project build --emit-typed-wir
 wio project build --emit-lowered-wir --ir-output .\.wio-build\main.lowered.wir
+wio project build --backend vm
 ```
 
 Wio uses up-to-date checks so repeated builds can become very cheap when the
@@ -261,6 +262,13 @@ default, consumes only verified optimized Lowered WIR, and fails with
 compatibility oracle for the first default-WIR release line. See
 [the Lowered WIR C++ backend contract](./WIO_CPP_BACKEND.md).
 
+`--backend native|vm` selects project execution artifacts; `native` remains
+the default. `vm` emits `.wiob` bytecode and a native registry bridge from the
+same Lowered WIR. It currently requires an executable Wio target without a
+C++ host, rejects `--cpp-backend legacy` and explicit emission modes, and checks
+both artifacts for incremental reuse. See
+[the VM native bridge contract](./WIO_VM_NATIVE_BRIDGE.md).
+
 ### 5.4 `project run`
 
 ```powershell
@@ -268,6 +276,7 @@ wio project run --project C:\Projects\MyGame
 cd C:\Projects\MyGame
 wio project run
 wio project run -- "two words" --verbose
+wio project run --backend vm -- "two words" --verbose
 ```
 
 Use this when you want the project-aware run path rather than single-file
@@ -286,6 +295,8 @@ Useful run options:
 - `--no-manifest-args` omits `[run].args`
 - `--cwd DIR` overrides the manifest working directory
 - `--print-command` prints the resolved working directory and launch command
+- `--backend vm` runs bytecode with manifest-resolved native registries;
+  `--no-build` requires both the bytecode and bridge to exist
 
 The child program's exit code is returned unchanged by Wio.
 

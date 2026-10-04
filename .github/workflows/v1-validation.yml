@@ -73,6 +73,11 @@ jobs:
           ctest --test-dir build --verbose
           -R "^wio_wir_cpp_(backend|backend_cli|generics|objects|async|native|sdk|application|reflection|packs_differential|behavioral_differential|project_differential)$"
 
+      - name: Validate VM native discovery and project execution
+        run: >
+          ctest --test-dir build --output-on-failure
+          -R "^wio_vm_native_(library_discovery|project_cli)$"
+
   sanitizers:
     runs-on: ubuntu-latest
 

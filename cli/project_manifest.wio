@@ -30,6 +30,9 @@ realm SelfHostedProject {
         wioNativeSources: string[];
         wioLinkLibraries: string[];
         wioBackendArgs: string[];
+        vmBytecodeOutput: string;
+        vmBridgeOutput: string;
+        vmNativeLibraries: string[];
         hostEnabled: bool;
         hostCompiler: string;
         hostSourceFiles: string[];
@@ -241,6 +244,7 @@ realm SelfHostedProject {
     fn OptionValue(args: string[], option: string, fallback: string) -> string {
         mut index = 3usize;
         while (index + 1usize < args.Count()) {
+            if (args[index] == "--") { break; }
             if (args[index] == option) {
                 return args[index + 1usize];
             }
@@ -262,7 +266,8 @@ realm SelfHostedProject {
             }
             if (value == "--config" or value == "--build-dir" or value == "--cwd" or
                 value == "--working-directory" or value == "--arg" or value == "--filter" or
-                value == "--output-dir") {
+                value == "--output-dir" or value == "--backend" or value == "--cpp-backend" or
+                value == "--ir-output" or value == "--bytecode-output") {
                 index += 2usize;
                 continue;
             }
@@ -359,6 +364,19 @@ realm SelfHostedProject {
         }
         info.wioLinkLibraries = ManifestArray(manifest, "wio.linkLibraries");
         info.wioBackendArgs = ManifestArray(manifest, "wio.backendArgs");
+        info.vmBytecodeOutput = path::AbsoluteFromRaw(
+            info.projectRoot,
+            ManifestValue(manifest, "vm.bytecodeOutput", path::Join(info.outputDirectory, wioName + ".wiob"))
+        );
+        info.vmBridgeOutput = path::AbsoluteFromRaw(
+            info.projectRoot,
+            ManifestValue(
+                manifest,
+                "vm.bridgeOutput",
+                path::Join(info.outputDirectory, wioName + ".vm-native" + process::SharedLibrarySuffix())
+            )
+        );
+        info.vmNativeLibraries = ResolvePaths(info.projectRoot, ManifestArray(manifest, "vm.nativeLibraries"));
 
         info.hostEnabled = ManifestBool(manifest, "host.enabled", info.templateName == "hybrid-module");
         if (info.wioTarget == "exe" and info.hostEnabled) {
@@ -445,6 +463,8 @@ realm SelfHostedProject {
         description += "  \"wio\": {\"entry\": " + serialization::QuoteJson(info.wioEntry);
         description += ", \"target\": " + serialization::QuoteJson(info.wioTarget);
         description += ", \"output\": " + serialization::QuoteJson(info.wioOutput) + "},\n";
+        description += "  \"vm\": {\"bytecode\": " + serialization::QuoteJson(info.vmBytecodeOutput);
+        description += ", \"bridge\": " + serialization::QuoteJson(info.vmBridgeOutput) + "},\n";
         description += "  \"host\": {\"enabled\": " + hostEnabled;
         description += ", \"output\": " + serialization::QuoteJson(info.hostOutput) + "},\n";
         description += "  \"run\": {\"workingDirectory\": ";

@@ -197,7 +197,8 @@ namespace wio::codegen
             std::optional<std::string> constValue;
         };
     } // namespace
-    std::string WirModuleEmitter::emit(const wir::lowered::Module& module, const TypeSpelling& type)
+    std::string WirModuleEmitter::emit(const wir::lowered::Module& module, const TypeSpelling& type,
+                                       const bool nativeTaskSidecars)
     {
         std::ostringstream out;
         std::map<FunctionId, const lowered::Function*> functions;
@@ -321,7 +322,7 @@ namespace wio::codegen
                "&_native_registry; }\n";
         out << WirApplicationEmitter::emit(module, type);
         out << WirReflectionEmitter::emit(module, type, thunk);
-        if (module.contract.kind != ModuleKind::WioLibrary)
+        if (module.contract.kind != ModuleKind::WioLibrary && !nativeTaskSidecars)
             return out.str();
         std::set<TypeId> taskTypes;
         for (const auto& f : module.functions)
@@ -386,6 +387,8 @@ namespace wio::codegen
                "extern \"C\" WIO_WIR_EXPORT const WioNativeTaskApi* WioGetNativeTaskApi() noexcept { return "
                "&_task_api; "
                "}\n";
+        if (module.contract.kind != ModuleKind::WioLibrary)
+            return out.str();
         const auto& exports = module.contract.exports;
         std::set<std::uint64_t> directExports;
         for (const auto& entry : exports)

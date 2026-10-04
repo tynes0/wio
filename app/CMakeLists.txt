@@ -15,6 +15,8 @@ set(WIO_SELFHOST_ARGONAUT_SOURCE "${CMAKE_SOURCE_DIR}/cli/vendor/argonaut.wio")
 
 add_executable(wio_app
     main.cpp
+    vm_runner.cpp
+    vm_runner.h
 )
 
 set_target_properties(wio_app PROPERTIES
@@ -25,11 +27,13 @@ target_link_libraries(wio_app
     PRIVATE
         wio_compiler
         wio_runtime_host
+        wio_vm
 )
 
 target_include_directories(wio_app
     PRIVATE
         ${CMAKE_SOURCE_DIR}/compiler/include
+        ${CMAKE_SOURCE_DIR}/vm/include
 )
 
 file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}" WIO_APP_DEFAULT_ROOT_DIR)
@@ -106,6 +110,16 @@ if(TARGET wio_selfhost_cli)
 endif()
 
 if(BUILD_TESTING)
+    add_test(
+        NAME wio_vm_native_project_cli
+        COMMAND ${CMAKE_COMMAND}
+            "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+            "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-project-cli-test"
+            -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_project_cli_test.cmake"
+    )
+    set_tests_properties(wio_vm_native_project_cli PROPERTIES LABELS "vm;native;project;cli" TIMEOUT 180)
+
     add_test(
         NAME wio_wir_emit_cli
         COMMAND

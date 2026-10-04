@@ -10,6 +10,7 @@ use std::serialization as serialization;
 realm SelfHostedProject {
     fn HasFlag(args: string[], name: string) -> bool {
         for value in args {
+            if (value == "--") { break; }
             if (value == name) { return true; }
         }
         return false;
@@ -89,10 +90,11 @@ realm SelfHostedProject {
 
     fn OutputUpToDate(output: string, inputs: string[]) -> bool {
         let outputTime = fs::LastWriteTimeRaw(output);
-        if (outputTime < 0i64) { return false; }
+        // GNU file-clock timestamps can be negative. Only -1 means failure.
+        if (outputTime == -1i64) { return false; }
         for input in inputs {
             let inputTime = fs::LastWriteTimeRaw(input);
-            if (inputTime < 0i64 or inputTime > outputTime) { return false; }
+            if (inputTime == -1i64 or inputTime > outputTime) { return false; }
         }
         return true;
     }
@@ -107,6 +109,12 @@ realm SelfHostedProject {
         for value in info.wioSourceRoots { inputs.Push(value); }
         for value in info.wioIncludeDirs { inputs.Push(value); }
         for value in info.wioNativeSources { inputs.Push(value); }
+        // LastWriteTimeRaw already scans directory contents recursively.
+        for value in info.wioLinkLibraries {
+            let candidate = path::AbsoluteFromRaw(info.projectRoot, value);
+            if (fs::IsFile(candidate)) { inputs.Push(candidate); }
+        }
+        if (info.runtimeStaticLibrary != "") { inputs.Push(info.runtimeStaticLibrary); }
         return inputs;
     }
 
@@ -116,7 +124,8 @@ realm SelfHostedProject {
         emitMode: string,
         irOutput: string,
         noBuiltin: bool,
-        cppBackend: string
+        cppBackend: string,
+        backend: string
     ) -> std::Result<i32> {
         if (not fs::IsFile(info.wioEntry)) {
             return Failure<i32>($"Wio entry file was not found: ${info.wioEntry}");
@@ -124,14 +133,35 @@ realm SelfHostedProject {
         if (not fs::TryEnsureDirectory(info.outputDirectory)) {
             return Failure<i32>($"Could not create project output directory: ${info.outputDirectory}");
         }
+        if (backend != "native" and backend != "vm") {
+            return Failure<i32>($"Unknown project backend '${backend}'. Expected native or vm.");
+        }
+        if (backend == "vm" and emitMode != "") {
+            return Failure<i32>("--backend vm cannot be combined with an explicit emit mode.");
+        }
+        if (backend == "vm" and cppBackend == "legacy") {
+            return Failure<i32>("The VM backend requires canonical Lowered WIR; --cpp-backend legacy is unsupported.");
+        }
+        if (backend == "vm" and info.hostEnabled) {
+            return Failure<i32>("The VM project backend currently runs Wio program targets directly; host.enabled is unsupported.");
+        }
+        if (backend == "vm" and info.wioTarget != "exe") {
+            return Failure<i32>("The VM project backend requires wio.target = 'exe'.");
+        }
+        let compileTarget = backend == "vm" ? "shared" : info.wioTarget;
+        let compileOutput = backend == "vm" ? info.vmBridgeOutput : info.wioOutput;
         mut compileArgs: string[] = [
-            info.wioEntry, "--target", info.wioTarget, "--output", info.wioOutput
+            info.wioEntry, "--target", compileTarget, "--output", compileOutput
         ];
         AppendCompilerArguments(ref compileArgs, info, "");
         if (noBuiltin) { compileArgs.Push("--no-builtin"); }
         if (cppBackend != "") {
             compileArgs.Push("--cpp-backend");
             compileArgs.Push(cppBackend);
+        }
+        if (backend == "vm") {
+            compileArgs.Push("--bytecode-sidecar");
+            compileArgs.Push(info.vmBytecodeOutput);
         }
         if (emitMode != "") {
             compileArgs.Push("--intermediate-dir");
@@ -146,7 +176,13 @@ realm SelfHostedProject {
                 compileArgs.Push(path::AbsoluteFromRaw(info.projectRoot, irOutput));
             }
         }
-        if (emitMode != "" or cppBackend != "" or forceRebuild or not OutputUpToDate(info.wioOutput, ProjectCompilerInputs(info, info.wioEntry))) {
+        let compilerInputs = ProjectCompilerInputs(info, info.wioEntry);
+        mut outputCurrent = OutputUpToDate(info.wioOutput, compilerInputs);
+        if (backend == "vm") {
+            outputCurrent = OutputUpToDate(info.vmBytecodeOutput, compilerInputs) and
+                OutputUpToDate(info.vmBridgeOutput, compilerInputs);
+        }
+        if (emitMode != "" or cppBackend != "" or noBuiltin or forceRebuild or not outputCurrent) {
             let compileResult = RunProcess?(info.nativeCore, compileArgs, info.projectRoot);
             if (compileResult != 0) { return std::Ok<i32>(compileResult); }
         }
@@ -230,7 +266,8 @@ realm SelfHostedProject {
             emitMode,
             emitBytecode ? bytecodeOutput : irOutput,
             HasFlag(args, "--no-builtin") or HasFlag(args, "-B"),
-            OptionValue(args, "--cpp-backend", "")
+            OptionValue(args, "--cpp-backend", ""),
+            OptionValue(args, "--backend", "native")
         );
     }
 
@@ -249,6 +286,13 @@ realm SelfHostedProject {
 
     fn Run(args: string[]) -> std::Result<i32> {
         let info = ResolveInfo?(args);
+        let backend = OptionValue(args, "--backend", "native");
+        if (backend != "native" and backend != "vm") {
+            return Failure<i32>($"Unknown project backend '${backend}'. Expected native or vm.");
+        }
+        if (backend == "vm" and (info.hostEnabled or info.wioTarget != "exe")) {
+            return Failure<i32>("The VM runner requires wio.target = 'exe' and host.enabled = false.");
+        }
         let noBuild = HasFlag(args, "--no-build");
         if (noBuild and (HasFlag(args, "--rebuild") or HasFlag(args, "--configure"))) {
             return Failure<i32>("--no-build cannot be combined with --rebuild or --configure.");
@@ -260,14 +304,30 @@ realm SelfHostedProject {
                 "",
                 "",
                 false,
-                OptionValue(args, "--cpp-backend", "")
+                OptionValue(args, "--cpp-backend", ""),
+                backend
             );
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }
         }
 
         mut executable = "";
         mut runArgs: string[] = [];
-        if (info.hostEnabled) {
+        if (backend == "vm") {
+            if (info.wioTarget != "exe") {
+                return Failure<i32>("The VM runner requires wio.target = 'exe'.");
+            }
+            executable = info.nativeCore;
+            runArgs.Push("--vm-run-bytecode");
+            runArgs.Push(info.vmBytecodeOutput);
+            runArgs.Push("--native-library");
+            runArgs.Push(info.vmBridgeOutput);
+            for library in info.vmNativeLibraries {
+                runArgs.Push("--native-library");
+                runArgs.Push(library);
+            }
+            runArgs.Push("--");
+        }
+        else if (info.hostEnabled) {
             executable = info.hostOutput;
             if (info.passLibraryPath and info.wioTarget == "shared") { runArgs.Push(info.wioOutput); }
         }
@@ -277,6 +337,9 @@ realm SelfHostedProject {
         if (executable == "") { return Failure<i32>("This project does not define a runnable executable."); }
         if (not fs::IsFile(executable)) {
             return Failure<i32>($"Expected project executable does not exist: ${executable}");
+        }
+        if (backend == "vm" and (not fs::IsFile(info.vmBytecodeOutput) or not fs::IsFile(info.vmBridgeOutput))) {
+            return Failure<i32>("Expected VM bytecode or native bridge output does not exist; run without --no-build.");
         }
         if (not HasFlag(args, "--no-manifest-args")) {
             for argument in info.runArgs { runArgs.Push(argument); }
@@ -397,7 +460,8 @@ realm SelfHostedProject {
                 "",
                 "",
                 false,
-                OptionValue(args, "--cpp-backend", "")
+                OptionValue(args, "--cpp-backend", ""),
+                "native"
             );
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }
         }

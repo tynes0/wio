@@ -114,9 +114,70 @@ their original binary layout. Such modules can still be loaded and polled by
 the SDK, but the VM deterministically rejects async adaptation without the
 completion sidecar as `WVM1225`.
 
+## Sprint 20.5 discovery, lifetime, and project execution
+
+`Machine::loadNativeLibrary(path, &error)` loads a shared library and discovers
+`WioGetNativeAbiRegistry` plus its optional task/completion sidecars. Paths are
+resolved canonically; loading the same module into one machine is idempotent.
+Machines share a process-wide library lease. Missing modules, missing registry
+exports, incompatible wire versions, and invalid sidecars fail before execution.
+Old wire-v2 modules without completion sidecars remain usable for synchronous
+calls; async adaptation still requires both task APIs.
+
+Foreign object, runtime-value, and owned opaque storage pins producer code
+until its final foreign release. Pending native task adapters also pin their
+producer. Destroying a machine therefore cannot unload a DLL underneath an
+escaped native value or an outstanding completion callback. The final machine
+registration shuts down the producer task runtime on the host teardown
+thread while its code lease is still held. Escaped value leases may keep the
+DLL loaded longer. Shutdown is not deferred to the final completion callback,
+which could otherwise try to unload its own producer's return address.
+
+Program projects can now select the VM explicitly:
+
+```powershell
+wio project build --backend vm
+wio project run --backend vm -- "two words" --verbose
+wio project run --backend vm --no-build
+```
+
+The default backend remains `native`. VM builds produce `<baseName>.wiob` and
+`<baseName>.vm-native.dll` (`.so`/`.dylib` on other platforms). The bytecode and
+native bridge are generated from the same analyzed and lowered program, using
+the compiler's `--bytecode-sidecar` output. A failed native compilation does
+not publish its staged bytecode. Both outputs participate in incremental
+checks, including Wio modules, native sources/headers, the manifest, and the
+compiler/runtime inputs. Manifest run arguments, repeated `--arg`, and values
+after `--` keep their existing order and are delivered to `main(string[])` or
+`Entry(string[])`; async entries are awaited with both main queues pumped.
+
+Additional wire registries and output paths can be configured in the manifest:
+
+```ini
+[vm]
+bytecodeOutput = ".wio-build/interop/demo.wiob"
+bridgeOutput = ".wio-build/interop/demo.vm-native.dll"
+nativeLibraries = ["native/lib/plugin.dll"]
+```
+
+Paths are relative to the project root. The runner loads the generated bridge
+and then the additional libraries before binding the main executor. Native
+archive dependencies continue to use `[wio].linkLibraries`; `nativeLibraries`
+is only for dynamic modules exporting the Wio wire registry.
+
+This slice deliberately requires `wio.target = "exe"` and
+`host.enabled = false`. Hybrid SDK hosts and VM executable/shared/static
+packaging are separate artifact work. The generated bridge currently uses the
+canonical C++ backend for the full program with main emission disabled; it is
+not yet a native-only pruned translation unit, so a cold VM project build still
+incurs native C++ compilation. Incremental runs reuse both outputs.
+
+The internal runner protocol is
+`wio --vm-run-bytecode FILE [--native-library PATH]... -- [args...]`.
+Normal users should use the project commands above.
+
 ## Remaining Sprint 20 surface
 
-The next slices add library loading/registry discovery, CLI/project
-integration, and the full C++-backend-versus-VM native differential gate.
+The next slice closes the C++-backend-versus-VM native differential gate.
 Non-scalar callback signatures remain intentionally rejected until owned
 callback-result storage is part of the wire contract.

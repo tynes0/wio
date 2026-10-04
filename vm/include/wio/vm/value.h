@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -234,6 +235,7 @@ namespace wio::vm
         void destroy() noexcept;
         void copyFrom(const Value& other);
         void moveFrom(Value&& other) noexcept;
+        void pinNativeLibrary(std::shared_ptr<void> library);
 
         Kind kind_ = Kind::Empty;
 

@@ -74,6 +74,12 @@ namespace wio::vm
             return handle_;
         }
 
+        void pinLibrary(std::shared_ptr<void> library)
+        {
+            if (std::ranges::find(libraries_, library) == libraries_.end())
+                libraries_.push_back(std::move(library));
+        }
+
     private:
         std::atomic_uint32_t references_{1};
         Value::Kind kind_ = Value::Kind::Empty;
@@ -82,6 +88,7 @@ namespace wio::vm
         std::vector<std::byte> bytes_;
         void* opaque_ = nullptr;
         WioNativeAbiHandle handle_{};
+        std::vector<std::shared_ptr<void>> libraries_;
     };
 
     class AggregateStorage final
@@ -556,6 +563,12 @@ namespace wio::vm
         result.scalar_.foreign = new ForeignStorage{
             Kind::NativePod, type, stableTypeId, std::vector<std::byte>{bytes.begin(), bytes.end()}, nullptr, {}};
         return result;
+    }
+
+    void Value::pinNativeLibrary(std::shared_ptr<void> library)
+    {
+        if (library && (kind_ == Kind::Opaque || kind_ == Kind::ForeignObject || kind_ == Kind::RuntimeValue))
+            scalar_.foreign->pinLibrary(std::move(library));
     }
 
     Value Value::opaque(const std::uint32_t type, const std::uint64_t stableTypeId, void* const pointer,

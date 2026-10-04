@@ -289,7 +289,8 @@ namespace wio::codegen
                 }
                 {
                     common::profiling::Scope scope("Backend.Cpp.EmitModule");
-                    output_ << WirModuleEmitter::emit(module_, [this](TypeId id) { return cppType(id); });
+                    output_ << WirModuleEmitter::emit(module_, [this](TypeId id) { return cppType(id); },
+                                                      options_.emitNativeTaskSidecars);
                 }
                 {
                     common::profiling::Scope scope("Backend.Cpp.EmitMain");

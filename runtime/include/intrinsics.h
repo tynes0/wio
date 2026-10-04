@@ -141,11 +141,6 @@ namespace wio::intrinsics
             return Value;
         }
 
-        operator std::string() const
-        {
-            return Value;
-        }
-
         const std::string& Value;
     };
 

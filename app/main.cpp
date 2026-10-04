@@ -1,6 +1,7 @@
 #include "compiler.h"
 #include "entry_args.h"
 #include "std_process.h"
+#include "vm_runner.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -139,6 +140,19 @@ int main(int argc, char* argv[])
     {
         std::cout << WIO_VERSION << '\n';
         return 0;
+    }
+
+    if (argc >= 2 && argv[1] != nullptr && std::string_view(argv[1]) == "--vm-run-bytecode")
+    {
+        try
+        {
+            return wio::app::runVmBytecode(argc, argv);
+        }
+        catch (const std::exception& error)
+        {
+            std::cerr << "VM runner: " << error.what() << '\n';
+            return EXIT_FAILURE;
+        }
     }
 
     if (shouldUseSelfHostedCli(argc, argv))

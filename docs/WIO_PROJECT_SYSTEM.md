@@ -491,6 +491,27 @@ Default output names:
 - Wio static library: `<baseName>.a`
 - host executable: `<baseName>.host.exe` on Windows, `<baseName>.host` on Unix
 
+For `wio project build/run --backend vm`, the default artifacts are
+`<baseName>.wiob` and `<baseName>.vm-native.dll` (`.so`/`.dylib` on POSIX).
+The default backend is still `native`. VM project execution currently requires
+`wio.target = "exe"` and `host.enabled = false`; native include/source/link
+settings still build the wire registry bridge.
+
+Optional VM configuration:
+
+```ini
+[vm]
+bytecodeOutput = ".wio-build/interop/app.wiob"
+bridgeOutput = ".wio-build/interop/app.vm-native.dll"
+nativeLibraries = ["native/lib/extra-registry.dll"]
+```
+
+These paths are relative to the project root. Additional libraries must export
+`WioGetNativeAbiRegistry`; they are not replacements for ordinary C/C++ linker
+inputs. The generated bridge is loaded first. See
+[VM discovery and lifetime](./WIO_VM_NATIVE_BRIDGE.md) for current scope and
+cold-build cost.
+
 ### 4.10 Explicit Empty Arrays
 
 If you set an array field to `[]`, you are explicitly turning off auto-discovery for that field.

@@ -1,0 +1,23 @@
+using cpp::header("fixture.h");
+
+[Native, CppName(vm_fixture::Add)]
+fn Add(left: i32, right: i32) -> i32;
+
+[Native, CppName(vm_fixture::Delayed)]
+fn Delayed(value: i32) -> coroutine<i32>;
+
+[Native, CppName(vm_fixture::Print)]
+fn Print(value: string);
+
+async fn main(args: string[]) -> i32 {
+    if (args.Count() != 4usize) { return 11; }
+    if (args[1usize] != "manifest-arg") { return 12; }
+    if (args[2usize] != "two words") { return 13; }
+    if (args[3usize] != "--literal") { return 14; }
+
+    let total = Add(20, 22);
+    let delayed = await Delayed(total);
+    Print($"vm-native:${delayed}");
+    let unfinished = Delayed(99);
+    return delayed == 42 ? 0 : 15;
+}

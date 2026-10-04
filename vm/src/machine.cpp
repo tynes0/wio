@@ -5,6 +5,7 @@
 #include "wio/vm/unicode.h"
 
 #include "native_bridge_internal.h"
+#include "native_library.h"
 #include "string_intrinsics.h"
 #include "text_intrinsics.h"
 
@@ -850,6 +851,7 @@ namespace wio::vm
 
         struct NativeTaskAdapter
         {
+            std::vector<std::shared_ptr<detail::NativeLibrary>> libraries;
             std::weak_ptr<Program> program;
             Value task;
             WioNativeAbiValue nativeTask;
@@ -873,6 +875,22 @@ namespace wio::vm
         void removeNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter);
         static void completeNativeTask(void* userData, WioNativeAbiStatus status) noexcept;
         static void finishNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter, WioNativeAbiStatus status);
+
+        void pinNativeLibraries(Value& value)
+        {
+            if (value.kind() != Value::Kind::Opaque && value.kind() != Value::Kind::ForeignObject &&
+                value.kind() != Value::Kind::RuntimeValue)
+                return;
+            std::scoped_lock lock{nativeMutex};
+            for (const auto& library : nativeLibraries)
+                value.pinNativeLibrary(library);
+        }
+
+        void releaseNativeLibraryMachines()
+        {
+            for (const auto& library : nativeLibraries)
+                library->releaseMachine();
+        }
 
         [[nodiscard]] Machine* acquireOwner()
         {
@@ -961,6 +979,8 @@ namespace wio::vm
             debugChanged.notify_all();
         }
 
+        // Destroy last, after globals, native tasks and executor queues.
+        std::vector<std::shared_ptr<detail::NativeLibrary>> nativeLibraries;
         std::mutex ownerMutex;
         std::condition_variable ownerChanged;
         Machine* owner = nullptr;
@@ -1006,6 +1026,10 @@ namespace wio::vm
         adapter->bridge = *function.tasks;
         adapter->payloadType = payloadType;
         adapter->payloadMarshalling = payloadMarshalling;
+        {
+            std::scoped_lock lock{nativeMutex};
+            adapter->libraries = nativeLibraries;
+        }
         {
             std::scoped_lock lock{nativeTaskMutex};
             nativeTasks.push_back(adapter);
@@ -1107,7 +1131,10 @@ namespace wio::vm
                     (void)owner->fail(adapter->task, "WVM1226",
                                       "Native task result conversion failed: " + converted.error);
                 else
+                {
+                    program->pinNativeLibraries(converted.value);
                     (void)owner->complete(adapter->task, std::move(converted.value));
+                }
             }
         }
         program->removeNativeTask(adapter);
@@ -1395,6 +1422,7 @@ namespace wio::vm
             program_->cancelNativeTasks();
             cancelAndUnwindContinuations();
             cleanupGlobals();
+            program_->releaseNativeLibraryMachines();
         }
         program_.reset();
     }
@@ -1421,6 +1449,7 @@ namespace wio::vm
             program_->cancelNativeTasks();
             cancelAndUnwindContinuations();
             cleanupGlobals();
+            program_->releaseNativeLibraryMachines();
         }
         program_.reset();
         program_ = std::move(other.program_);
@@ -1567,6 +1596,67 @@ namespace wio::vm
                                          const WioNativeTaskCompletionApi& completions, std::string* error)
     {
         return registerNativeRegistryImpl(registry, &tasks, &completions, error);
+    }
+
+    bool Machine::loadNativeLibrary(const std::filesystem::path& path, std::string* error)
+    {
+        const auto reject = [&](std::string message)
+        {
+            if (error)
+                *error = std::move(message);
+            return false;
+        };
+        if (!program_)
+            return reject("native library loading requires a live VM machine");
+        std::scoped_lock executionLock{program_->executionMutex};
+
+        std::error_code pathError;
+        std::filesystem::path canonical = std::filesystem::weakly_canonical(std::filesystem::absolute(path), pathError);
+        if (pathError)
+            canonical = std::filesystem::absolute(path).make_preferred();
+        else
+            canonical.make_preferred();
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            const auto loaded = std::ranges::find_if(program_->nativeLibraries, [&](const auto& candidate)
+                                                     { return candidate->path() == canonical; });
+            if (loaded != program_->nativeLibraries.end())
+            {
+                if (error)
+                    error->clear();
+                return true;
+            }
+            program_->nativeLibraries.reserve(program_->nativeLibraries.size() + 1);
+        }
+
+        std::string libraryError;
+        std::shared_ptr<detail::NativeLibrary> library = detail::NativeLibrary::open(canonical, libraryError);
+        if (!library)
+            return reject(std::move(libraryError));
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            const auto loaded = std::ranges::find_if(program_->nativeLibraries, [&](const auto& candidate)
+                                                     { return candidate->path() == library->path(); });
+            if (loaded != program_->nativeLibraries.end())
+            {
+                if (error)
+                    error->clear();
+                return true;
+            }
+        }
+        if (!library->registerWith(*this, libraryError))
+            return reject("could not register native VM module '" + library->path().string() + "': " + libraryError);
+
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            const auto loaded = std::ranges::find_if(program_->nativeLibraries, [&](const auto& candidate)
+                                                     { return candidate->path() == library->path(); });
+            if (loaded == program_->nativeLibraries.end())
+                program_->nativeLibraries.push_back(std::move(library));
+        }
+        if (error)
+            error->clear();
+        return true;
     }
 
     bool Machine::registerNativeRegistryImpl(const WioNativeAbiRegistry& registry, const WioNativeTaskApi* tasks,
@@ -4261,7 +4351,10 @@ namespace wio::vm
                         replacements.push_back({});
                     }
                     else
+                    {
+                        program_->pinNativeLibraries(replacement.value);
                         replacements.push_back(std::move(replacement.value));
+                    }
                 }
                 if (copyBackError.empty())
                 {
@@ -4307,6 +4400,7 @@ namespace wio::vm
                                               declaration.nativeBinding.result.marshalling);
                 if (!result.succeeded())
                     return fail("WVM1224", "Native result conversion failed: " + result.error);
+                program_->pinNativeLibraries(result.value);
                 if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(result.value)))
                     return fail("WVM1224", "Native result register is invalid");
                 ++frame.instruction;

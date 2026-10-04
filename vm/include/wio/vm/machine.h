@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <span>
@@ -134,6 +135,11 @@ namespace wio::vm
         [[nodiscard]] bool registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativeTaskApi& tasks,
                                                   const WioNativeTaskCompletionApi& completions,
                                                   std::string* error = nullptr);
+
+        // Loads a generated native thunk module, discovers its registry and
+        // optional async sidecars, and pins the dynamic library until this
+        // machine has cancelled tasks and released all foreign values.
+        [[nodiscard]] bool loadNativeLibrary(const std::filesystem::path& path, std::string* error = nullptr);
 
         // Main-executor continuations run only on the bound thread. wait()
         // pumps this queue automatically when called by that thread.

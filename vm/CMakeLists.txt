@@ -4,6 +4,7 @@ file(GLOB_RECURSE WIO_VM_SOURCES CONFIGURE_DEPENDS
 
 file(GLOB_RECURSE WIO_VM_HEADERS CONFIGURE_DEPENDS
     "include/*.h"
+    "src/*.h"
 )
 
 add_library(wio_vm STATIC
@@ -14,7 +15,7 @@ add_library(wio_vm STATIC
 add_library(wio-vm ALIAS wio_vm)
 
 target_include_directories(wio_vm PUBLIC include)
-target_link_libraries(wio_vm PUBLIC wio_compiler wio_sdk)
+target_link_libraries(wio_vm PUBLIC wio_compiler wio_sdk PRIVATE ${CMAKE_DL_LIBS})
 
 target_compile_options(wio_vm PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
@@ -122,4 +123,31 @@ if(BUILD_TESTING)
         WIO_TEST_SDK_INCLUDE="${CMAKE_SOURCE_DIR}/sdk/include"
     )
     add_test(NAME wio_vm_native_async_bridge COMMAND wio_vm_native_async_bridge_test)
+
+    add_library(wio_vm_native_discovery_module SHARED
+        "${CMAKE_SOURCE_DIR}/tests/native/vm_discovery_module.cpp"
+    )
+    target_include_directories(wio_vm_native_discovery_module PRIVATE "${CMAKE_SOURCE_DIR}/sdk/include")
+
+    foreach(mode IN ITEMS 1 2 3)
+        add_library(wio_vm_native_invalid_module_${mode} SHARED
+            "${CMAKE_SOURCE_DIR}/tests/native/vm_discovery_invalid_module.cpp"
+        )
+        target_include_directories(wio_vm_native_invalid_module_${mode} PRIVATE "${CMAKE_SOURCE_DIR}/sdk/include")
+        target_compile_definitions(wio_vm_native_invalid_module_${mode} PRIVATE WIO_TEST_MODULE_MODE=${mode})
+    endforeach()
+
+    add_executable(wio_vm_native_library_discovery_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_native_library_discovery_test.cpp"
+    )
+    target_link_libraries(wio_vm_native_library_discovery_test PRIVATE wio_vm)
+    target_compile_definitions(wio_vm_native_library_discovery_test PRIVATE
+        WIO_TEST_NATIVE_LIBRARY="$<TARGET_FILE:wio_vm_native_discovery_module>"
+        WIO_TEST_MISSING_REGISTRY_LIBRARY="$<TARGET_FILE:wio_vm_native_invalid_module_1>"
+        WIO_TEST_INVALID_ABI_LIBRARY="$<TARGET_FILE:wio_vm_native_invalid_module_2>"
+        WIO_TEST_INVALID_SIDECAR_LIBRARY="$<TARGET_FILE:wio_vm_native_invalid_module_3>"
+    )
+    add_dependencies(wio_vm_native_library_discovery_test wio_vm_native_discovery_module
+        wio_vm_native_invalid_module_1 wio_vm_native_invalid_module_2 wio_vm_native_invalid_module_3)
+    add_test(NAME wio_vm_native_library_discovery COMMAND wio_vm_native_library_discovery_test)
 endif()

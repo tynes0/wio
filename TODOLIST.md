@@ -609,13 +609,15 @@ Rider, and CLion are defined in
    move/copy/drop semantics. Sprint 19 is now closed with intrusive aggregate,
    object/container, coroutine/executor, exceptional-cleanup, stack-trace, and
    instruction-observer execution plus thread-safe debugger pause/resume/abort
-   control. Sprint 20.1-20.4 now load the shared wire-v2 native registry and
+   control. Sprint 20.1-20.5 now load the shared wire-v2 native registry and
    execute scalar/string/text/nullable/ref/view/POD/opaque/object/runtime
    thunks, retained callbacks, and adapted native async tasks. Foreign-thread
    completion is rescheduled through the VM executor, cancellation propagates
-   to the producer, and teardown releases each task once. Library discovery,
-   CLI integration, non-scalar callback results, and native differential
-   qualification remain.
+   to the producer, and teardown releases each task once. Dynamic library
+   discovery pins producer code across escaped values and tasks, and project
+   build/run can select the VM with paired bytecode/native-bridge outputs.
+   Non-scalar callback results, native differential qualification, native-only
+   bridge pruning, and VM host/artifact packaging remain.
 
 9. [ ] Close generated-native cost and build scalability before v1.
    Treat the native C++ path as a product backend with enforced size, compile

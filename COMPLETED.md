@@ -1088,3 +1088,10 @@ here as historical evidence rather than active work:
       cancellation retain stable VM behavior, main queues are pumped together,
       teardown cancels pending producers, and settlement/releases are
       exactly-once under completion/cancellation races.
+- [x] Sprint 20.5 adds canonical-path native DLL/shared-library discovery,
+      registry and async-sidecar validation, shared library leases, and producer
+      code pinning for escaped foreign values and task adapters. The self-hosted
+      project CLI builds paired bytecode/native-bridge outputs from one Lowered
+      WIR and runs them with manifest and application arguments through
+      `--backend vm`; both artifacts and their source/header dependencies
+      participate in incremental reuse.
