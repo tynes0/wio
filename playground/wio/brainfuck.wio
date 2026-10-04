@@ -1,0 +1,114 @@
+﻿use std::console as Console;
+
+[default(public)]
+object BrainFuck {
+    private data: [u8; 30000];
+    private pointer: usize;
+    private instruction: usize;
+    private code: string;
+
+    fn PIncr() {
+        if (pointer + 1usize >= 30000usize) {
+            std::Panic("Brainfuck data pointer exceeded the tape boundary.");
+        }
+
+        pointer++;
+    }
+
+    fn PDecr() {
+        if (pointer == 0usize) {
+            std::Panic("Brainfuck data pointer moved before the tape start.");
+        }
+
+        pointer--;
+    }
+
+    fn BIncr() {
+        data[pointer]++;
+    }
+
+    fn BDecr() {
+        data[pointer]--;
+    }
+
+    fn Puts() {
+        Console::Print!(data[pointer] fit char);
+    }
+
+    fn Gets() {
+        let input = Console::InputChar(false);
+        if (input.IsOk()) {
+            data[pointer] = input.Value() fit u8;
+        }
+    }
+
+    fn BrOpen() {
+        if (data[pointer] != 0u8) {
+            return;
+        }
+
+        mut balance = 1;
+        while (balance != 0) {
+            instruction++;
+            if (instruction >= code.Count()) {
+                std::Panic("Brainfuck source contains an unmatched '['.");
+            }
+
+            let command = code[instruction];
+            if (command == '[') {
+                balance++;
+            }
+            else if (command == ']') {
+                balance--;
+            }
+        }
+    }
+
+    fn BrClose() {
+        if (data[pointer] == 0u8) {
+            return;
+        }
+
+        mut balance = 1;
+        while (balance != 0) {
+            if (instruction == 0usize) {
+                std::Panic("Brainfuck source contains an unmatched ']'.");
+            }
+
+            instruction--;
+            let command = code[instruction];
+            if (command == ']') {
+                balance++;
+            }
+            else if (command == '[') {
+                balance--;
+            }
+        }
+    }
+
+    fn Interpret(source: string) {
+        code = source;
+        pointer = 0usize;
+        instruction = 0usize;
+
+        for mut i in 0..<30000 {
+            data[i] = 0u8;
+        }
+
+        while (instruction < code.Count()) {
+            let command = code[instruction];
+            match (command) {
+                '>': PIncr();
+                '<': PDecr();
+                '+': BIncr();
+                '-': BDecr();
+                '.': Puts();
+                ',': Gets();
+                '[': BrOpen();
+                ']': BrClose();
+            }
+
+            instruction++;
+        }
+    }
+}
