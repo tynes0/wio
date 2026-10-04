@@ -658,6 +658,12 @@ Rider, and CLion are defined in
   Replace the string-wrapper-only builder implementation with amortized-linear
   capacity reuse, direct append/numeric formatting, and explicit finalization
   costs; qualify ordinary string `+=` and aliased/self-append correctness too.
+  The compute-only Mandelbrot audit also finds a 35.03x native `-O2` kernel gap
+  versus equivalent C++ and heap-backed storage for inner-loop scalar `xtemp`.
+  Prioritize non-escaping scalar stack/SSA promotion, plain temporaries, direct
+  CFG emission, and proven-load/conversion simplification. Reuse the versioned
+  `tests/performance/mandelbrot_compute` checksum-qualified benchmark; see
+  `docs/WIO_MANDELBROT_PERFORMANCE_AUDIT.md` for baseline measurements and limits.
   Establish and enforce numeric performance budgets without weakening language
   semantics or ownership correctness. See `docs/WIO_PERFORMANCE.md`, section 8.
 

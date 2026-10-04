@@ -92,3 +92,94 @@ PPM P3 is valid textual output. PPM P6 instead stores RGB channels as bytes:
 per-channel decimal formatting and shrinks this image's output. It does not
 change the Mandelbrot arithmetic. A P6 benchmark must be compared with P6
 implementations, not substituted into the P3 timing table.
+
+## Compute-Only Follow-up
+
+Versioned fixtures and a manual runner are now in
+[`../tests/performance/mandelbrot_compute`](../tests/performance/mandelbrot_compute/README.md).
+No compiler/runtime/std optimization was implemented for this measurement.
+
+The kernel contains only coordinate calculation, the Mandelbrot recurrence,
+escape/iteration tests, and scalar checksum accumulation. There is no RGB
+generation, pixel array, string append, formatting, or file output in the timed
+region. Wio makes two native clock calls outside the kernel; the result is
+reported only after the end timestamp. It is compiled with `--no-builtin`, so
+unrelated std imports and the StringBuilder implementation are absent.
+
+All 30 timed runs (five repetitions of six configurations) agree on:
+
+```text
+iterations = 11613930
+weighted   = 3721766287256
+interior   = 94440
+```
+
+The weighted checksum binds iteration counts to pixel positions, improving on
+a simple total-only check. Inputs, precision, escape condition, and strict
+floating-point compiler flags match the earlier audit. C# warms its optimized,
+non-inlined kernel with a distinct 32 x 32 input before timing; its JIT/warm-up
+is excluded from kernel time but included in external wall time. CPython is
+unmodified; C++/Wio use the same GCC 15.2.0. Wio uses the existing compiler
+binary and repository runtime/SDK headers, with no imported std code in this
+kernel. Platform/hardware are unchanged.
+
+| Implementation | Kernel median | Min-max | External wall median | Average ns/iteration step |
+| --- | ---: | ---: | ---: | ---: |
+| C++ `-O0` | 0.0623434 s | 0.0617522-0.0656070 s | 0.0931950 s | 5.37 |
+| C++ `-O2` | 0.0284052 s | 0.0280724-0.0295256 s | 0.0575240 s | 2.45 |
+| Wio generated C++ `-O0` | 17.1884799 s | 16.7829572-17.3193699 s | 17.2878985 s | 1479.99 |
+| Wio generated C++ `-O2` | 0.9950739 s | 0.9200873-1.0078457 s | 1.0318850 s | 85.68 |
+| C# Release | 0.0295856 s | 0.0289085-0.0342737 s | 0.1134376 s | 2.55 |
+| CPython | 1.3480412 s | 1.2983682-1.4409177 s | 1.4304436 s | 116.07 |
+
+Wio `-O2` is 35.03 times the equivalent C++ `-O2` kernel time. Even at matching
+`-O0`, Wio is 275.71 times the C++ kernel time. These ratios apply to this
+workload, not all Wio programs. The average per-step metric includes setup,
+branching, and checksum overhead; it is not an isolated single-operation or
+loop-control latency. It also is not valid to subtract these results from the
+earlier full-output timeouts to claim an exact StringBuilder time: the harness
+and emitted module shape differ, and full-output runs did not finish.
+
+### Confirmed Scalar Storage Defects And Next Optimization Targets
+
+This import-free Wio fixture still emits 37,446 bytes / 932 lines of C++.
+Inspection finds:
+
+- non-escaping scalar locals use `Place<T>::local`, whose general implementation
+  owns `std::make_shared<std::optional<T>>` storage;
+- the inner-loop `let xtemp` emits a new local `Place<double>` on every iteration,
+  even though its value is read immediately and never escapes;
+- arithmetic/control-flow temporaries use `std::optional<double>` and other
+  optional scalar slots across blocks;
+- CFG execution uses a `_block`/`switch` dispatcher and repeated place
+  read/write paths rather than a direct scalar loop representation.
+
+Disassembly of the optimized `_wio_f2` compute function confirms that `operator
+new` calls remain in the emitted machine code; GCC has not eliminated all this
+storage machinery. This confirms an optimization target, not a measured
+percentage attribution to each construct. Optional wrappers alone should not
+be assumed expensive when the native optimizer can remove them.
+
+Prioritize subsequent implementation in this order:
+
+1. Scalar promotion and escape-sensitive stack/SSA storage: no per-iteration heap
+   allocation for ordinary non-escaping `f64`/integer locals.
+2. Plain scalar temporary/phi storage and direct CFG/loop emission; reserve
+   optional/dynamic lifetime machinery for values that genuinely need it.
+3. Proven initialized reads, checked-conversion simplification, safe loop-invariant
+   motion, and repeated-load elimination without weakening Wio semantics.
+4. Re-run these exact checksum-qualified fixtures, inspect generated assembly,
+   and publish before/after kernel and allocation profiles before extending the
+   optimization to ownership-bearing values or other workloads.
+
+Raw samples and computed summaries are in
+`build/mandelbrot-compute-audit/measurements.json` and `summary.json`. These local
+files are build outputs; the versioned runner regenerates them. Performance
+budgets remain to be agreed separately. No VM speed claim is made by this audit.
+
+After adding explicit golden-checksum guards, a separate one-repetition rebuild
+also passes all six configurations. Those validation results are in
+`build/mandelbrot-compute-validation` and are not mixed into the five-sample
+baseline above. Its absolute times vary (Wio `-O2`: 1.2033 s, C++ `-O2`: 0.03627 s),
+while the optimized gap remains about 33x. This reinforces the need for controlled
+hardware/load conditions before setting formal numeric budgets.
