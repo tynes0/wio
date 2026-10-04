@@ -94,6 +94,7 @@ if(BUILD_TESTING)
     )
     target_link_libraries(wio_vm_async_services_test PRIVATE wio_vm)
     add_test(NAME wio_vm_async_services COMMAND wio_vm_async_services_test)
+    set_property(TEST wio_vm_async_services APPEND PROPERTY LABELS freeze)
 
     add_executable(wio_vm_debug_diagnostics_test
         "${CMAKE_SOURCE_DIR}/tests/vm_debug_diagnostics_test.cpp"
@@ -123,6 +124,7 @@ if(BUILD_TESTING)
         WIO_TEST_SDK_INCLUDE="${CMAKE_SOURCE_DIR}/sdk/include"
     )
     add_test(NAME wio_vm_native_async_bridge COMMAND wio_vm_native_async_bridge_test)
+    set_property(TEST wio_vm_native_async_bridge APPEND PROPERTY LABELS freeze)
 
     add_library(wio_vm_native_discovery_module SHARED
         "${CMAKE_SOURCE_DIR}/tests/native/vm_discovery_module.cpp"

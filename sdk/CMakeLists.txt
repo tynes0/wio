@@ -35,6 +35,7 @@ if(BUILD_TESTING)
         NAME wio_sdk_013_value_surface
         COMMAND wio_sdk_013_value_surface_test
     )
+    set_property(TEST wio_sdk_013_value_surface APPEND PROPERTY LABELS traceability)
 
     add_executable(wio_sdk_014_abi_markers_test
         "${CMAKE_SOURCE_DIR}/tests/sdk_014_abi_markers_test.cpp"

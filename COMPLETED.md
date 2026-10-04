@@ -1095,3 +1095,15 @@ here as historical evidence rather than active work:
       WIR and runs them with manifest and application arguments through
       `--backend vm`; both artifacts and their source/header dependencies
       participate in incremental reuse.
+
+## Build and Test Registration Maintenance
+
+- [x] The app CMake file is limited to application/self-host/playground targets
+      and guarded test-module includes. Language, invalid, runtime, interop,
+      and CLI registrations live under `tests/cmake/`, with shared helpers and
+      CTest convenience targets separated from the app build definition.
+- [x] Traceability, freeze, and coherence membership is explicit additive
+      labeling instead of test-name regexes. The freeze target runs the union
+      once; test names, commands, environments, timeouts, and resource locks
+      are preserved. A CMake catalog fixture checks label preservation,
+      deduplication, renamed cases, and `BUILD_TESTING` on/off behavior.

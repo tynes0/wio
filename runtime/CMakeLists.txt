@@ -399,6 +399,7 @@ if(BUILD_TESTING)
         target_link_libraries(wio_async_runtime_stress PRIVATE pthread)
     endif()
     add_test(NAME wio_async_runtime_stress COMMAND wio_async_runtime_stress)
+    set_property(TEST wio_async_runtime_stress APPEND PROPERTY LABELS freeze)
     set_tests_properties(wio_async_runtime_stress PROPERTIES
         TIMEOUT 30
         LABELS "async;runtime;freeze"
@@ -414,6 +415,7 @@ if(BUILD_TESTING)
         target_link_libraries(wio_async_main_runtime_stress PRIVATE pthread)
     endif()
     add_test(NAME wio_async_main_runtime_stress COMMAND wio_async_main_runtime_stress)
+    set_property(TEST wio_async_main_runtime_stress APPEND PROPERTY LABELS freeze)
     set_tests_properties(wio_async_main_runtime_stress PROPERTIES
         TIMEOUT 30
         LABELS "async;runtime;main;freeze"
@@ -432,7 +434,7 @@ if(BUILD_TESTING)
     add_test(NAME wio_async_scheduler_config COMMAND wio_async_scheduler_config_test)
     set_tests_properties(wio_async_scheduler_config PROPERTIES
         TIMEOUT 15
-        LABELS "async;runtime;configuration"
+        LABELS "async;runtime;configuration;freeze"
     )
 
     add_executable(wio_async_scope_runtime_stress
@@ -447,7 +449,7 @@ if(BUILD_TESTING)
     add_test(NAME wio_async_scope_runtime_stress COMMAND wio_async_scope_runtime_stress)
     set_tests_properties(wio_async_scope_runtime_stress PROPERTIES
         TIMEOUT 30
-        LABELS "async;runtime;structure"
+        LABELS "async;runtime;structure;freeze"
     )
 
     add_executable(wio_process_runtime_stress

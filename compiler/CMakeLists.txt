@@ -102,6 +102,7 @@ if(BUILD_TESTING)
         NAME wio_lowered_wir_pipeline
         COMMAND wio_lowered_wir_pipeline_test
     )
+    set_property(TEST wio_lowered_wir_pipeline APPEND PROPERTY LABELS freeze)
 
     add_executable(wio_typed_wir_control_flow_test
         "${CMAKE_SOURCE_DIR}/tests/typed_wir_control_flow_test.cpp"
@@ -174,6 +175,7 @@ if(BUILD_TESTING)
         NAME wio_typed_wir_match
         COMMAND wio_typed_wir_match_test
     )
+    set_property(TEST wio_typed_wir_match APPEND PROPERTY LABELS freeze)
 
     add_executable(wio_typed_wir_data_match_test
         "${CMAKE_SOURCE_DIR}/tests/typed_wir_data_match_test.cpp"
@@ -183,6 +185,7 @@ if(BUILD_TESTING)
         NAME wio_typed_wir_data_match
         COMMAND wio_typed_wir_data_match_test
     )
+    set_property(TEST wio_typed_wir_data_match APPEND PROPERTY LABELS freeze)
 
     add_executable(wio_typed_wir_nominal_types_test
         "${CMAKE_SOURCE_DIR}/tests/typed_wir_nominal_types_test.cpp"
@@ -285,6 +288,7 @@ if(BUILD_TESTING)
         NAME wio_typed_wir_async_lowering
         COMMAND wio_typed_wir_async_lowering_test
     )
+    set_property(TEST wio_typed_wir_async_lowering APPEND PROPERTY LABELS freeze)
 
     add_executable(wio_typed_wir_application_metadata_test
         "${CMAKE_SOURCE_DIR}/tests/typed_wir_application_metadata_test.cpp"
@@ -294,6 +298,7 @@ if(BUILD_TESTING)
         NAME wio_typed_wir_application_metadata
         COMMAND wio_typed_wir_application_metadata_test
     )
+    set_property(TEST wio_typed_wir_application_metadata APPEND PROPERTY LABELS freeze)
 
     add_executable(wio_typed_wir_language_surface_test
         "${CMAKE_SOURCE_DIR}/tests/typed_wir_language_surface_test.cpp"
@@ -336,9 +341,11 @@ if(BUILD_TESTING)
     add_test(NAME wio_wir_cpp_generics COMMAND wio_wir_cpp_backend_test --generics-only)
     add_test(NAME wio_wir_cpp_objects COMMAND wio_wir_cpp_backend_test --objects-only)
     add_test(NAME wio_wir_cpp_async COMMAND wio_wir_cpp_backend_test --async-only)
+    set_property(TEST wio_wir_cpp_async APPEND PROPERTY LABELS freeze)
     add_test(NAME wio_wir_cpp_native COMMAND wio_wir_cpp_backend_test --native-only)
     add_test(NAME wio_wir_cpp_sdk COMMAND wio_wir_cpp_backend_test --sdk-only)
     add_test(NAME wio_wir_cpp_application COMMAND wio_wir_cpp_backend_test --application-only)
+    set_property(TEST wio_wir_cpp_application APPEND PROPERTY LABELS freeze)
     add_test(NAME wio_wir_cpp_reflection COMMAND wio_wir_cpp_backend_test --reflection-only)
     set_tests_properties(wio_wir_cpp_reflection PROPERTIES TIMEOUT 120)
     set_tests_properties(wio_wir_cpp_application PROPERTIES TIMEOUT 120)
