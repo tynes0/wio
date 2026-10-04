@@ -641,6 +641,26 @@ Rider, and CLion are defined in
    calling convention, source maps, profiling counters, and backend-neutral
    intrinsics must leave a clean JIT insertion point.
 
+### Final Pre-v1 Optimization And Performance Acceptance
+
+- [ ] Run a dedicated heavy optimization stage after backend closure and the
+  IDE/tooling/v1 correctness gates, before beta/RC. Keep the nine backend
+  closure items and twelve v1 gates intact; this is an additional final stage,
+  not a replacement for their earlier cost work. Fix severe performance defects
+  earlier when discovered rather than postponing them to this stage.
+  Profile semantic analysis, Typed/Lowered WIR, C++ emission/build/runtime,
+  VM, std/Unicode, native bridges, and SDK hosts. Measure compiler-stage time,
+  cold/warm/incremental builds, generated/binary size, startup/runtime, peak
+  memory, allocation/copy volume, and intrusive retain/release traffic.
+  Include the playground Mandelbrot workload and matching C++ baselines with
+  separate compute-only, formatting-only, and end-to-end measurements; audit
+  Debug/Release flag forwarding and growing StringBuilder append behavior.
+  Replace the string-wrapper-only builder implementation with amortized-linear
+  capacity reuse, direct append/numeric formatting, and explicit finalization
+  costs; qualify ordinary string `+=` and aliased/self-append correctness too.
+  Establish and enforce numeric performance budgets without weakening language
+  semantics or ownership correctness. See `docs/WIO_PERFORMANCE.md`, section 8.
+
 ## P3 - Product Direction
 
 1. [~] Define and validate Wio's primary product profile. The current proposal

@@ -268,12 +268,44 @@ Exit gate: the VS Code extension no longer needs an independent approximation
 of Wio semantics for the baseline feature set, and each maintained template is
 continuously smoke-tested from an installed toolchain.
 
+### Final Pre-Beta Stage - Heavy Optimization And Performance Acceptance
+
+Delivery order is: backend closure, final IDE/tooling and v1 correctness gates,
+then this integrated optimization stage, then beta/RC/stable. This is an
+additional final stage, not a renumbering or replacement of the nine backend
+closure items or the twelve v1 acceptance gates. Earlier performance work and
+severe regressions must still be addressed when discovered.
+
+Required scope:
+
+- establish reproducible baselines for compiler stages, generated native code,
+  VM execution, std/Unicode, native bridges, and SDK hosts;
+- optimize measured hotspots in the semantic analyzer, Typed WIR, Lowered WIR,
+  code generation, allocations, copies, and repeated work;
+- remove avoidable generated-code/runtime machinery, string/container copies,
+  retain/release traffic, dispatch costs, and native-boundary overhead without
+  weakening ownership, lifetime, overflow, or Unicode semantics;
+- qualify cold/warm/incremental build time, generated and binary size, runtime,
+  peak memory, allocations, and startup separately in Debug and Release;
+- include Mandelbrot compute-only, formatting-only, and end-to-end workloads,
+  compared with equivalent hand-written C++ under matching build settings;
+- enforce reviewed numeric budgets and regression thresholds in release gates,
+  with reproducible commands, toolchain versions, inputs, and correctness checks.
+
+Exit gate: all agreed budgets pass on the supported platform matrix, all
+correctness/ownership gates remain green, and measured regressions have been
+fixed or explicitly reviewed against those budgets. A faster native build flag
+alone does not close this stage; usable Debug performance and VM-specific costs
+must also be qualified. JIT remains post-v1. Detailed measurement scope is in
+[`WIO_PERFORMANCE.md`](./WIO_PERFORMANCE.md#8-final-pre-v1-optimization-stage).
+
 ### v1.0.0-beta.1 - Feature Complete
 
 All mandatory v1 surface is implemented. Large new stable features stop here.
 The beta period is for real-project qualification, migration feedback,
-documentation completion, performance baselines, and fixing compatibility
-mistakes while changes are still possible.
+documentation completion, performance regression qualification against the
+pre-beta baselines, and fixing compatibility mistakes while changes are still
+possible.
 
 ### v1.0.0-rc.1 - Frozen Candidate
 
@@ -304,6 +336,7 @@ post-v1 work.
 | Reflection/reload/ABI/platform matrix | `v0.17.0` |
 | Reproducible package and installed-toolchain workflow | `v0.18.0` |
 | Formatter, diagnostics, language service, templates, docs alignment | `v0.19.0` |
+| Integrated heavy optimization and measured performance budgets | before beta |
 | Real-world portfolio, compatibility and migration sign-off | beta/RC |
 | Signed, checksummed, provenance-backed release artifacts | RC/stable |
 
