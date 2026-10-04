@@ -619,7 +619,13 @@ Rider, and CLion are defined in
    The native differential gate qualifies the implemented boundary and adds
    owned string/text callbacks, structural runtime-value identities, mixed
    ref/view aliases, and retained worker entry. Remaining native parity work:
-   VM-created POD field/layout conversion; VM-created any/container/object
+   The native POD layout slice now materializes local components, unpacks native
+   results into editable fields, preserves unexposed C++ fields and existing
+   field borrows, and qualifies nested/concrete-generic/empty/async PODs against
+   the C++ backend. Remaining POD work includes fixed-array/opaque/nullable fields,
+   const-generic/pack shapes, C++ member-default initialization, and overlapping
+   aggregate/field argument aliases.
+   Remaining native parity work includes VM-created any/container/object
    materialization into producer storage; POD/object/container/nullable and
    ref/view callback signatures; consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See

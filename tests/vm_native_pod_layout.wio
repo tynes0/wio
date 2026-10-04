@@ -1,0 +1,80 @@
+using cpp::header("vm_pod_layout_fixture.h");
+use std::attribute as attribute;
+
+enum Mode { Idle = 0, Ready = 7 };
+flagset Permission { Read = 1u32, Write = 2u32 };
+
+[Native, CppName(vm_pod_layout::Point)]
+component Point { public x: f32; public y: f32; }
+[Native, CppName(vm_pod_layout::Cell)]
+component Cell<T> { public value: T; }
+// Wio field order deliberately differs from the padded C++ layout.
+[Native, CppName(vm_pod_layout::Packet)]
+component Packet {
+    public position: Point;
+    public tag: u8;
+    public cell: Cell<i32>;
+    public energy: f64;
+    public marker: char;
+    public active: bool;
+}
+[Native, CppName(vm_pod_layout::Empty)] component Empty {}
+
+extension PacketInterop for Packet {
+    [Native, CppName(vm_pod_layout::Score)] public view fn Score() -> f64;
+    [Native, CppName(vm_pod_layout::Adjust)] public ref fn Adjust();
+    [Native, CppName(vm_pod_layout::Hidden)] public view fn Hidden() -> i32;
+    [Native, CppName(vm_pod_layout::HighByte)] public ref fn HighByte();
+}
+[Native, CppName(vm_pod_layout::Make)] fn Make() -> Packet;
+[Native, CppName(vm_pod_layout::Identity)] fn Identity(value: Packet) -> Packet;
+[Native, CppName(vm_pod_layout::IdentityEmpty)] fn IdentityEmpty(value: Empty) -> Empty;
+[Native, CppName(vm_pod_layout::Aliased)] fn Aliased(left: ref Packet, right: ref Packet);
+[Native, CppName(vm_pod_layout::Increment), instantiate(i32)] fn Increment<T>(value: ref Cell<T>);
+[Native, CppName(vm_pod_layout::EchoCell), instantiate(Mode), instantiate(Permission), instantiate(u64)]
+fn EchoCell<T>(value: Cell<T>) -> Cell<T>;
+[Native, CppName(vm_pod_layout::Delayed)] async fn Delayed() -> Packet;
+[Native, CppName(vm_pod_layout::Print)] fn Print(message: string);
+[Native, CppName(vm_pod_layout::Code)] fn Code(value: char) -> u32;
+
+async fn Entry() -> i32 {
+    if (EchoCell<Mode>(Cell<Mode>(Mode::Ready)).value != Mode::Ready) { return 17; }
+    if (EchoCell<Permission>(Cell<Permission>(Permission::Read | Permission::Write)).value != (Permission::Read | Permission::Write)) { return 18; }
+    if (EchoCell<u64>(Cell<u64>(18446744073709551615u64)).value != 18446744073709551615u64) { return 19; }
+    mut local = Packet(Point(3.0f32, 4.0f32), 2u8, Cell<i32>(9), 10.0f64, '\0', false);
+    if (local.Score() != 28.0f64) {
+        Print($"local-score-failed: ${local.Score()}, x=${local.position.x}, tag=${local.tag}, cell=${local.cell.value}, energy=${local.energy}");
+        return 1;
+    }
+    let oldX: view f32 = ref local.position.x;
+    local.Adjust();
+    if (local.position.x != 13.0f32 or local.tag != 3u8 or local.cell.value != 13 or local.energy != 10.5f64) { return 2; }
+    if (deref oldX != 13.0f32) { return 3; }
+    if (local.Hidden() != 124) { return 10; }
+    if (local.marker != 'W' or !local.active) { return 14; }
+    Increment<i32>(ref local.cell);
+    if (local.cell.value != 14) { return 4; }
+    let copied = Identity(local);
+    local.position.x = 99.0f32;
+    if (copied.position.x != 13.0f32) { return 5; }
+    if (copied.Hidden() != 124) { return 11; }
+
+    mut produced = Make();
+    if (produced.position.x != 2.0f32 or produced.tag != 7u8 or produced.cell.value != 11 or produced.energy != 12.5f64) { return 6; }
+    produced.position.y = 8.0f32;
+    produced.Adjust();
+    if (produced.Score() != 56.0f64) { return 7; }
+    if (produced.Hidden() != 100) { return 12; }
+    if (produced.marker != 'W' or !produced.active) { return 15; }
+    Aliased(ref produced, ref produced);
+    if (produced.tag != 40u8) { return 8; }
+    produced.HighByte();
+    if (Code(produced.marker) != 255u32) { return 20; }
+    let delayed = await Delayed();
+    if (delayed.position.y != 3.0f32 or delayed.cell.value != 11 or delayed.Score() != 35.5f64) { return 9; }
+    if (delayed.Hidden() != 99) { return 13; }
+    if (delayed.marker != '\0' or delayed.active) { return 16; }
+    let empty = IdentityEmpty(Empty());
+    Print("native-pod-layout-ok:local/field/ref/borrow/nested/generic/padding/alias/copy/hidden/empty/async");
+    return 0;
+}

@@ -160,6 +160,10 @@ namespace wio::vm
         [[nodiscard]] const Value* field(std::size_t index) const noexcept;
         [[nodiscard]] std::uint64_t foreignTypeId() const noexcept;
         [[nodiscard]] std::span<const std::byte> nativePodBytes() const noexcept;
+        // Immutable producer bytes preserve fields not declared by Wio while
+        // the component's ordinary VM fields remain independently editable.
+        [[nodiscard]] Value nativePodBacking() const;
+        void setNativePodBacking(const Value& pod);
         [[nodiscard]] void* opaquePointer() const noexcept;
         [[nodiscard]] WioNativeAbiHandle foreignHandle() const noexcept;
 

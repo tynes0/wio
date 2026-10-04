@@ -1,4 +1,5 @@
 #include "native_bridge_internal.h"
+#include "native_pod_internal.h"
 
 #include <algorithm>
 #include <atomic>
@@ -166,9 +167,15 @@ namespace wio::vm::detail
     } // namespace
 
     bool encodeNativeValue(const bytecode::Module& module, const Value& value, const std::uint32_t declaredType,
-                           const std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error)
+                           const std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error,
+                           const NativePodLayouts* layouts, const unsigned depth)
     {
         output = {};
+        if (depth > 64)
+        {
+            error = "native POD nesting exceeds the bridge depth limit";
+            return false;
+        }
         if (value.kind() == Value::Kind::Null)
         {
             if (!isNullable(module, declaredType))
@@ -265,6 +272,8 @@ namespace wio::vm::detail
         case 4:
         {
             const std::uint64_t expected = stableTypeId(module, declaredType);
+            if (value.kind() == Value::Kind::Component && layouts)
+                return packNativePod(module, value, type, *layouts, output, error, depth);
             if (value.kind() != Value::Kind::NativePod || value.aggregateType() != type ||
                 value.foreignTypeId() != expected || expected == 0)
             {
@@ -272,6 +281,15 @@ namespace wio::vm::detail
                 return false;
             }
             const std::span bytes = value.nativePodBytes();
+            if (layouts)
+            {
+                const auto layout = layouts->types.find(type);
+                if (layout != layouts->types.end() && bytes.size() != layout->second.size)
+                {
+                    error = "VM native POD byte size does not match its producer layout";
+                    return false;
+                }
+            }
             output.kind = WIO_NATIVE_ABI_POD;
             output.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
             output.typeId = expected;
@@ -341,8 +359,11 @@ namespace wio::vm::detail
     }
 
     NativeValueResult decodeNativeValue(const bytecode::Module& module, const WioNativeAbiValue& value,
-                                        const std::uint32_t declaredType, const std::uint8_t marshalling)
+                                        const std::uint32_t declaredType, const std::uint8_t marshalling,
+                                        const NativePodLayouts* layouts, const unsigned depth)
     {
+        if (depth > 64)
+            return {{}, "native POD nesting exceeds the bridge depth limit"};
         const bool nullable = isNullable(module, declaredType);
         if (value.kind == WIO_NATIVE_ABI_VOID && nullable)
             return {Value::null(), {}};
@@ -411,6 +432,8 @@ namespace wio::vm::detail
                 value.payload.slice.size > static_cast<std::uint64_t>((std::numeric_limits<std::size_t>::max)()))
                 return {{}, typeError.empty() ? "native POD result has an invalid wire shape" : std::move(typeError)};
             const auto* data = static_cast<const std::byte*>(value.payload.slice.data);
+            if (layouts && layouts->types.contains(type))
+                return unpackNativePod(module, value, type, *layouts, depth);
             return {
                 Value::nativePod(type, expected,
                                  std::span<const std::byte>{data, static_cast<std::size_t>(value.payload.slice.size)}),

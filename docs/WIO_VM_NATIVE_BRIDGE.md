@@ -47,7 +47,9 @@ Current stable diagnostics are:
 
 The VM now has explicit value kinds for native POD bytes, opaque pointers,
 foreign objects, and foreign runtime values. Native POD results are copied into
-VM-owned byte storage. The other kinds retain the producer-supplied wire-v2
+VM-owned byte storage when the producer has no field adapter. With the additive
+POD layout sidecar described below they become ordinary VM components instead.
+The other kinds retain the producer-supplied wire-v2
 handle operations and release them when the last VM `Value` storage reference
 dies. The VM never directly deletes memory created by a native library.
 
@@ -221,12 +223,15 @@ to the existing CI matrix; a local Windows pass is not a Linux pass claim.
 ## Remaining VM/native parity and artifact work
 
 This gate qualifies the implemented bridge; it does **not** assert that every
-native C++ operation is supported by the VM. Three known boundaries have
-executable negative cases in the differential fixture:
+native C++ operation is supported by the VM. The remaining boundaries include
+executable negative cases for local `any` and structured callbacks:
 
-- Locally constructed VM components cannot yet be marshalled as native POD.
-  Native-produced POD storage can round-trip, but VM field access/construction
-  needs producer layout/field adapters. The current boundary is `WVM1223`.
+- Native PODs containing fixed-array/opaque/nullable fields, const-generic/pack
+  shapes, or other fields outside the scalar/nested-POD adapter surface still
+  need qualification.
+  C++ member-default initialization still needs its own default-value contract.
+  A producer without the layout sidecar retains raw-POD round-trips but does not
+  support local-component materialization (`WVM1223`) or ordinary field places.
 - VM-created `any`/containers/objects are not interchangeable with foreign
   runtime/object handles. Native factories and their foreign values work;
   structural VM-to-producer materialization still needs adapters (`WVM1223`).
@@ -239,3 +244,47 @@ Consumed native argument passing remains explicitly rejected as `WVM1225`.
 Native-only bridge pruning, hybrid VM SDK hosts, and VM executable/shared/static
 artifact packaging remain separate work. These boundaries must be removed or
 explicitly qualified before advertising full native-language parity.
+
+## Native POD layout and field adapters
+
+Generated native modules now export the optional `WioGetNativePodLayoutApi`
+sidecar declared in `sdk/include/wio_native_pod.h`. This is an additive API:
+wire-v2 values and the bytecode format keep their existing versions. Existing
+modules without the sidecar keep the previous opaque-byte POD round-trip path.
+
+For concrete native components with scalar/enum/flagset or nested native-POD
+fields, the producer emits its actual `sizeof`, `alignof`, field `offsetof`,
+field sizes, semantic kind/stable identities, and checked pack/read adapters.
+The VM validates names, types, bounds, alignment, overlap, and repeated
+registration before publishing an immutable layout snapshot together with the
+native function registry. Adapter code remains pinned by the library lease.
+No VM aggregate is reinterpreted as a C++ struct, and no public SDK reflection
+export is added to an otherwise unexported Wio type.
+
+VM-created components materialize into producer-owned POD wire values on calls;
+native-returned PODs unpack into ordinary VM component fields. `view`/`ref`,
+field reads/writes, nested components, concrete generics, by-value copies,
+whole-component aliases, empty PODs, and native async POD results use this path.
+Native aggregate construction now consumes its field arguments in the VM;
+generated C++ construction assigns by binding field name rather than assuming
+that Wio declaration order matches the C++ struct's order. Native `char` wire
+values use unsigned byte payloads regardless of the host's `char` signedness.
+
+An immutable copy of the original POD bytes is retained alongside unpacked
+fields. Pack adapters start from that prototype and overlay Wio-visible fields,
+so C++ fields absent from the Wio declaration survive field edits, copies,
+native mutation/copy-back, and async completion. Producer-owned result storage
+is released after unpacking. Mutable copy-back updates existing nested field
+storage in place, keeping previously acquired field borrows valid.
+
+The focused tests are `wio_vm_native_pod_layout` (malformed metadata, identity,
+size, scalar range, registration conflicts, storage ownership/failure cleanup,
+legacy fallback) and `wio_vm_native_pod_layout_differential` (one Wio program
+through generated C++ and VM plus real generated native thunks, with independent
+numeric oracles). They carry `native-differential;release-gate` labels. Local
+qualification is Windows only; Linux remains a CI verification requirement.
+
+POD adapters are internal ABI materialization, not the richer callback bridge.
+Structured callbacks and overlapping whole-component/field arguments within
+one native call still need dedicated borrow/alias plans; fixed-array/opaque/nullable
+fields and the remaining const-generic/pack shapes are not qualified by this slice.

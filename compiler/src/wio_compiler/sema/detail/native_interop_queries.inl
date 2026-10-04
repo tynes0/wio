@@ -164,6 +164,8 @@
             case TypeKind::Struct:
             {
                 auto structType = current.AsFast<StructType>();
+                if (structType && (structType->isEnum || structType->isFlagset))
+                    return isNativePodInteropFieldType(structType->enumUnderlyingType, allowGenericPlaceholders);
                 if (!structType || structType->isObject || structType->isInterface || !structType->isNativePodComponent)
                     return false;
 
@@ -205,7 +207,7 @@
 
                 WIO_LOG_ADD_ERROR(
                     errorLocation,
-                    "Declaration-level @Native component '{}' field '{}' resolves to type '{}' which is not POD-native-compatible yet. Supported field types are primitives, POD-compatible static arrays, and other declaration-level @Native components.",
+                    "Declaration-level [Native] component '{}' field '{}' resolves to type '{}' which is not POD-native-compatible yet. Supported field types are primitives, enum/flagset scalars, POD-compatible static arrays, and other declaration-level [Native] components.",
                     structType->toString(),
                     structType->fieldNames[fieldIndex],
                     structType->fieldTypes[fieldIndex] ? structType->fieldTypes[fieldIndex]->toString() : "<unknown>"

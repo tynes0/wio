@@ -1589,24 +1589,6 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     const TypeId id{static_cast<TypeId::ValueType>(index)};
                     const Type& type = module_.types.types()[index];
                     if (typeIsOpen(id) || type.kind != TypeKind::Named ||
-                        type.nominalRepresentation != NominalRepresentation::NativePod ||
-                        type.nominalKind != NominalKind::Component)
-                        continue;
-                    const auto name = cppType(id);
-                    output_ << "using " << typeName(id) << " = " << name << ";\n";
-                    output_ << "static_assert(std::is_standard_layout_v<" << name
-                            << "> && std::is_trivially_copyable_v<" << name
-                            << ">, \"Wio native component requires a standard-layout trivially-copyable C++ type\");\n";
-                    for (const auto& field : type.fields)
-                        output_ << "static_assert(std::is_same_v<decltype(std::declval<" << name << ">()." << field.name
-                                << "), " << cppType(field.type)
-                                << ">, \"Wio native component field type mismatch\");\n";
-                }
-                for (std::size_t index = 0; index < module_.types.size(); ++index)
-                {
-                    const TypeId id{static_cast<TypeId::ValueType>(index)};
-                    const Type& type = module_.types.types()[index];
-                    if (typeIsOpen(id) || type.kind != TypeKind::Named ||
                         type.nominalRepresentation != NominalRepresentation::Wio ||
                         (type.nominalKind != NominalKind::Enum && type.nominalKind != NominalKind::Flagset))
                         continue;
@@ -1636,6 +1618,26 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                 << " value) noexcept { return static_cast<" << name << ">(~static_cast<" << underlying
                                 << ">(value)); }\n";
                     }
+                }
+                // Concrete native templates may contain Wio enum/flagset
+                // fields, so their layout assertions need those types first.
+                for (std::size_t index = 0; index < module_.types.size(); ++index)
+                {
+                    const TypeId id{static_cast<TypeId::ValueType>(index)};
+                    const Type& type = module_.types.types()[index];
+                    if (typeIsOpen(id) || type.kind != TypeKind::Named ||
+                        type.nominalRepresentation != NominalRepresentation::NativePod ||
+                        type.nominalKind != NominalKind::Component)
+                        continue;
+                    const auto name = cppType(id);
+                    output_ << "using " << typeName(id) << " = " << name << ";\n";
+                    output_ << "static_assert(std::is_standard_layout_v<" << name
+                            << "> && std::is_trivially_copyable_v<" << name
+                            << ">, \"Wio native component requires a standard-layout trivially-copyable C++ type\");\n";
+                    for (const auto& field : type.fields)
+                        output_ << "static_assert(std::is_same_v<decltype(std::declval<" << name << ">()." << field.name
+                                << "), " << cppType(field.type)
+                                << ">, \"Wio native component field type mismatch\");\n";
                 }
                 output_ << '\n';
 
@@ -2877,6 +2879,22 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                     expression += ", " + callArguments(instruction, 0, true);
                                 expression += "); ";
                             }
+                        }
+                        assignResult(instruction, expression + "return instance; }())");
+                    }
+                    else if (constructedType.nominalRepresentation == NominalRepresentation::NativePod &&
+                             !instruction.operands.empty())
+                    {
+                        // Native field names are the binding contract. Wio's
+                        // declaration order need not match C++ padding/order.
+                        std::string expression = "([&]() { " + cppType(instruction.resultType) + " instance{}; ";
+                        for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                        {
+                            const auto value = instruction.operands[index];
+                            expression += "instance." + constructedType.fields.at(index).name + " = " +
+                                          (ownedValues_.contains(resolveValueAlias(value).value()) ? movedOperand(value)
+                                                                                                   : operand(value)) +
+                                          "; ";
                         }
                         assignResult(instruction, expression + "return instance; }())");
                     }

@@ -94,7 +94,12 @@ function(expect_remaining_boundary argument diagnostic)
 endfunction()
 # These are explicit remaining VM/native conversions, not parity claims.
 # Fail deterministically instead of interpreting a VM aggregate as C++ bytes.
-expect_remaining_boundary("local-pod" "WVM1223")
+execute_process(COMMAND "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}"
+    --native-library "${bridge}" -- local-pod RESULT_VARIABLE local_pod_result
+    OUTPUT_VARIABLE local_pod_output ERROR_VARIABLE local_pod_error TIMEOUT 30)
+if(NOT "${local_pod_result}" STREQUAL "0")
+    message(FATAL_ERROR "Local POD adapter regressed: ${local_pod_output}\n${local_pod_error}")
+endif()
 expect_remaining_boundary("local-any" "WVM1223")
 expect_remaining_boundary("pod-callback" "WVM1225")
 message(STATUS "C++/VM native differential gate passed: values, references, ownership, callbacks, async, failure")

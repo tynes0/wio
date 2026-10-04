@@ -6,6 +6,7 @@
 
 #include "native_bridge_internal.h"
 #include "native_library.h"
+#include "native_pod_internal.h"
 #include "string_intrinsics.h"
 #include "text_intrinsics.h"
 
@@ -88,6 +89,7 @@ namespace wio::vm
         constexpr std::uint8_t TypeIterator = 35;
 
         constexpr std::uint8_t NominalComponent = 1;
+        constexpr std::uint8_t RepresentationNativePod = 1;
         constexpr std::uint8_t NominalObject = 2;
         constexpr std::uint8_t NominalInterface = 3;
         constexpr std::uint8_t NominalEnum = 4;
@@ -1004,6 +1006,7 @@ namespace wio::vm
         std::atomic_uint32_t retainedForeignCallbacks{0};
         std::mutex nativeMutex;
         std::unordered_map<std::string, NativeFunction> nativeFunctions;
+        std::shared_ptr<const detail::NativePodLayouts> nativePodLayouts = std::make_shared<detail::NativePodLayouts>();
         std::vector<NativeFunction::TaskBridge> nativeTaskApis;
         std::mutex nativeTaskMutex;
         std::vector<std::shared_ptr<NativeTaskAdapter>> nativeTasks;
@@ -1133,8 +1136,13 @@ namespace wio::vm
             }
             else
             {
+                std::shared_ptr<const detail::NativePodLayouts> layouts;
+                {
+                    std::scoped_lock lock{program->nativeMutex};
+                    layouts = program->nativePodLayouts;
+                }
                 detail::NativeValueResult converted = detail::decodeNativeValue(
-                    *program->module, result, adapter->payloadType, adapter->payloadMarshalling);
+                    *program->module, result, adapter->payloadType, adapter->payloadMarshalling, layouts.get());
                 if (!converted.succeeded())
                     (void)owner->fail(adapter->task, "WVM1226",
                                       "Native task result conversion failed: " + converted.error);
@@ -1606,6 +1614,13 @@ namespace wio::vm
         return registerNativeRegistryImpl(registry, &tasks, &completions, error);
     }
 
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativePodLayoutApi& pods,
+                                         const WioNativeTaskApi* tasks, const WioNativeTaskCompletionApi* completions,
+                                         std::string* error)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, &pods);
+    }
+
     bool Machine::loadNativeLibrary(const std::filesystem::path& path, std::string* error)
     {
         const auto reject = [&](std::string message)
@@ -1668,7 +1683,8 @@ namespace wio::vm
     }
 
     bool Machine::registerNativeRegistryImpl(const WioNativeAbiRegistry& registry, const WioNativeTaskApi* tasks,
-                                             const WioNativeTaskCompletionApi* completions, std::string* error)
+                                             const WioNativeTaskCompletionApi* completions, std::string* error,
+                                             const WioNativePodLayoutApi* pods)
     {
         const auto reject = [&](std::string message)
         {
@@ -1717,6 +1733,14 @@ namespace wio::vm
         }
 
         std::scoped_lock lock{program_->nativeMutex};
+        std::shared_ptr<detail::NativePodLayouts> layouts;
+        if (pods)
+        {
+            layouts = std::make_shared<detail::NativePodLayouts>(*program_->nativePodLayouts);
+            std::string layoutError;
+            if (!detail::mergeNativePodLayouts(*program_->module, *pods, *layouts, layoutError))
+                return reject(std::move(layoutError));
+        }
         for (Program::NativeFunction& addition : additions)
         {
             const auto existing = program_->nativeFunctions.find(addition.stableKey);
@@ -1730,6 +1754,8 @@ namespace wio::vm
         }
         for (Program::NativeFunction& addition : additions)
             program_->nativeFunctions.insert_or_assign(addition.stableKey, std::move(addition));
+        if (layouts)
+            program_->nativePodLayouts = std::move(layouts);
         if (taskBridge && std::find(program_->nativeTaskApis.begin(), program_->nativeTaskApis.end(), *taskBridge) ==
                               program_->nativeTaskApis.end())
             program_->nativeTaskApis.push_back(*taskBridge);
@@ -3793,6 +3819,21 @@ namespace wio::vm
                 if (!write(instruction.result, constructAggregate(module, instruction.resultType, object)))
                     return fail("WVM1009", "Aggregate result register is invalid");
                 Register& constructedRegister = frame.registers[instruction.result];
+                if (!object && type.nominalRepresentation == RepresentationNativePod &&
+                    instruction.callee == bytecode::InvalidIndex && !instruction.operands.empty())
+                {
+                    if (instruction.operands.size() > type.fields.size())
+                        return fail("WVM1071", "Native POD aggregate has more arguments than declared fields");
+                    for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                    {
+                        const Value* operand = read(instruction.operands[index]);
+                        if (!operand)
+                            return fail("WVM1071", "Native POD aggregate reads an unavailable field argument");
+                        *constructedRegister.value.mutableField(index) = operand->cloneOwned();
+                    }
+                    ++frame.instruction;
+                    continue;
+                }
                 Value self;
                 if (object)
                     self = Value::objectBorrow(constructedRegister.value.scalar_.aggregate);
@@ -4115,6 +4156,7 @@ namespace wio::vm
                     return fail("WVM1221", "Native invocation argument count does not match its ABI plan");
 
                 Program::NativeFunction native;
+                std::shared_ptr<const detail::NativePodLayouts> podLayouts;
                 const std::string stableKey{module.string(declaration.nativeBinding.stableKey)};
                 {
                     std::scoped_lock lock{program_->nativeMutex};
@@ -4122,6 +4164,7 @@ namespace wio::vm
                     if (registered == program_->nativeFunctions.end())
                         return fail("WVM1220", "Native function is not registered: " + stableKey);
                     native = registered->second;
+                    podLayouts = program_->nativePodLayouts;
                 }
 
                 struct NativeToken
@@ -4198,7 +4241,7 @@ namespace wio::vm
                                               .mutableValue = abi.passing == 2};
                             std::string conversionError;
                             if (!detail::encodeNativeValue(module, place->storedValue(), abi.type, abi.marshalling,
-                                                           token.wire, conversionError))
+                                                           token.wire, conversionError, podLayouts.get()))
                                 return fail("WVM1223", "Native argument conversion failed: " + conversionError);
                             nativeFrame.tokens.push_back(std::move(token));
                             aliases.emplace(place, tokenIndex);
@@ -4348,7 +4391,8 @@ namespace wio::vm
                     }
                     WioNativeAbiValue wire;
                     std::string conversionError;
-                    if (!detail::encodeNativeValue(module, *direct, abi.type, abi.marshalling, wire, conversionError))
+                    if (!detail::encodeNativeValue(module, *direct, abi.type, abi.marshalling, wire, conversionError,
+                                                   podLayouts.get()))
                         return fail("WVM1223", "Native argument conversion failed: " + conversionError);
                     nativeFrame.arguments.push_back(wire);
                 }
@@ -4379,7 +4423,7 @@ namespace wio::vm
                         continue;
                     }
                     detail::NativeValueResult replacement =
-                        detail::decodeNativeValue(module, token.wire, token.type, token.marshalling);
+                        detail::decodeNativeValue(module, token.wire, token.type, token.marshalling, podLayouts.get());
                     if (!replacement.succeeded())
                     {
                         if (copyBackError.empty())
@@ -4394,10 +4438,28 @@ namespace wio::vm
                 }
                 if (copyBackError.empty())
                 {
+                    // Existing field places point into component storage. Keep
+                    // that storage alive when a native ref updates its fields,
+                    // including nested PODs; replacing the aggregate would
+                    // leave a pre-existing field borrow observing stale data.
+                    const auto copyBack = [&](auto&& self, Value& target, Value replacement) -> void
+                    {
+                        if (target.kind() == Value::Kind::Component && replacement.kind() == Value::Kind::Component &&
+                            target.aggregateType() == replacement.aggregateType() &&
+                            target.fieldCount() == replacement.fieldCount())
+                        {
+                            target.setNativePodBacking(replacement.nativePodBacking());
+                            for (std::size_t field = 0; field < target.fieldCount(); ++field)
+                                self(self, *target.mutableField(field), std::move(*replacement.mutableField(field)));
+                        }
+                        else
+                            target = std::move(replacement);
+                    };
                     for (std::size_t index = 0; index < nativeFrame.tokens.size(); ++index)
                     {
                         if (nativeFrame.tokens[index].mutableValue)
-                            nativeFrame.tokens[index].place->storedValue() = std::move(replacements[index]);
+                            copyBack(copyBack, nativeFrame.tokens[index].place->storedValue(),
+                                     std::move(replacements[index]));
                     }
                 }
 
@@ -4434,7 +4496,7 @@ namespace wio::vm
 
                 detail::NativeValueResult result =
                     detail::decodeNativeValue(module, nativeFrame.result, declaration.nativeBinding.result.type,
-                                              declaration.nativeBinding.result.marshalling);
+                                              declaration.nativeBinding.result.marshalling, podLayouts.get());
                 if (!result.succeeded())
                     return fail("WVM1224", "Native result conversion failed: " + result.error);
                 program_->pinNativeLibraries(result.value);

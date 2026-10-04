@@ -79,6 +79,12 @@ template <class T, std::uint64_t Id> struct Codec
             require(v.kind == WIO_NATIVE_ABI_BOOL);
             return v.payload.boolean;
         }
+        else if constexpr (std::is_same_v<T, char>)
+        {
+            require(v.kind == WIO_NATIVE_ABI_U64 &&
+                    v.payload.unsignedInteger <= std::numeric_limits<unsigned char>::max());
+            return static_cast<char>(static_cast<unsigned char>(v.payload.unsignedInteger));
+        }
         else if constexpr (std::is_integral_v<T>)
         {
             if constexpr (std::is_signed_v<T>)
@@ -139,6 +145,11 @@ template <class T, std::uint64_t Id> struct Codec
         {
             v.kind = WIO_NATIVE_ABI_BOOL;
             v.payload.boolean = input;
+        }
+        else if constexpr (std::is_same_v<T, char>)
+        {
+            v.kind = WIO_NATIVE_ABI_U64;
+            v.payload.unsignedInteger = static_cast<unsigned char>(input);
         }
         else if constexpr (std::is_integral_v<T> && std::is_signed_v<T>)
         {

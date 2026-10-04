@@ -1125,3 +1125,31 @@ here as historical evidence rather than active work:
       once; test names, commands, environments, timeouts, and resource locks
       are preserved. A CMake catalog fixture checks label preservation,
       deduplication, renamed cases, and `BUILD_TESTING` on/off behavior.
+
+## VM Native POD Layout and Field Materialization
+
+- [x] Added an optional producer-owned POD layout/pack/read sidecar without
+      changing wire-v2 or bytecode versions. Layout registration validates field
+      names/types, stable nominal identities, size/alignment/bounds/overlap, and
+      conflicts before publishing a snapshot with the native function registry.
+- [x] Local VM native components cross scalar/nested-POD adapters; native-produced
+      PODs expose normal fields and mutable places. Concrete generic PODs, empty
+      components, whole-value aliases, and native async POD payloads follow the
+      same path. Old producers without the sidecar keep raw-byte round-trips.
+- [x] Preserved C++ fields omitted by Wio through immutable backing/prototype
+      storage, and preserved pre-existing field borrows during nested copy-back.
+      Partial/failing adapter outputs use the normal exactly-once wire release.
+- [x] Fixed ignored native aggregate constructor arguments in the VM and
+      order-dependent native aggregate construction in generated C++. Native
+      char codecs now exchange unsigned byte values on signed-char hosts.
+      Native generic POD fields accept enum/flagset underlying scalars, with
+      enum definitions emitted before native template layout assertions.
+- [x] Added focused malformed-layout/ownership tests and a real generated-thunk
+      C++/VM differential fixture covering padding and reordered declarations,
+      hidden C++ fields, generic/enum/flagset/scalar fields, local construction,
+      field mutation, copy isolation, references/aliases, and async results.
+      Remaining field shapes and structured callbacks remain explicit backlog
+      work; this slice is not a full native parity claim.
+- [x] Local Windows qualification: both new tests plus the updated native
+      differential gate passed (3/3, 34.48 seconds). No full-suite or local Linux
+      pass is claimed; the `native-differential` labels select CI coverage.

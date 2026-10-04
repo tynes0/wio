@@ -10,6 +10,7 @@
 
 namespace wio::vm::detail
 {
+    struct NativePodLayouts;
     struct NativeValueResult
     {
         Value value;
@@ -22,9 +23,11 @@ namespace wio::vm::detail
     };
 
     [[nodiscard]] bool encodeNativeValue(const bytecode::Module& module, const Value& value, std::uint32_t declaredType,
-                                         std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error);
+                                         std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error,
+                                         const NativePodLayouts* layouts = nullptr, unsigned depth = 0);
     [[nodiscard]] NativeValueResult decodeNativeValue(const bytecode::Module& module, const WioNativeAbiValue& value,
-                                                      std::uint32_t declaredType, std::uint8_t marshalling);
+                                                      std::uint32_t declaredType, std::uint8_t marshalling,
+                                                      const NativePodLayouts* layouts = nullptr, unsigned depth = 0);
     // Slice results must outlive the callback's ExecutionResult. This transfers
     // one producer-owned storage claim to the native caller (wire-v2 owner).
     [[nodiscard]] bool encodeOwnedNativeValue(const bytecode::Module& module, const Value& value,

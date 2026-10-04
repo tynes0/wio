@@ -102,6 +102,14 @@ namespace wio::vm
         {
         }
 
+        ~AggregateStorage()
+        {
+            if (nativeBacking)
+                nativeBacking->release();
+        }
+
+        ForeignStorage* nativeBacking = nullptr;
+
         void retain() noexcept
         {
             references_.fetch_add(1, std::memory_order_relaxed);
@@ -1115,6 +1123,29 @@ namespace wio::vm
         return kind_ == Kind::NativePod ? scalar_.foreign->bytes() : std::span<const std::byte>{};
     }
 
+    Value Value::nativePodBacking() const
+    {
+        if (kind_ != Kind::Component || !scalar_.aggregate->nativeBacking)
+            return {};
+        Value result{Kind::NativePod};
+        result.scalar_.foreign = scalar_.aggregate->nativeBacking;
+        result.scalar_.foreign->retain();
+        return result;
+    }
+
+    void Value::setNativePodBacking(const Value& pod)
+    {
+        if (kind_ != Kind::Component ||
+            (!pod.isEmpty() && (pod.kind_ != Kind::NativePod || pod.aggregateType() != aggregateType())))
+            return;
+        ForeignStorage* next = pod.isEmpty() ? nullptr : pod.scalar_.foreign;
+        if (next)
+            next->retain();
+        if (scalar_.aggregate->nativeBacking)
+            scalar_.aggregate->nativeBacking->release();
+        scalar_.aggregate->nativeBacking = next;
+    }
+
     void* Value::opaquePointer() const noexcept
     {
         return kind_ == Kind::Opaque ? scalar_.foreign->opaque() : nullptr;
@@ -1146,7 +1177,9 @@ namespace wio::vm
             return array(std::move(cloned));
         if (kind_ == Kind::Dictionary)
             return dictionary(aggregateType(), std::move(cloned), dictionaryIsOrdered());
-        return component(aggregateType(), std::move(cloned));
+        Value copy = component(aggregateType(), std::move(cloned));
+        copy.setNativePodBacking(nativePodBacking());
+        return copy;
     }
 
     Value Value::retainObject() const noexcept

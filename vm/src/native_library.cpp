@@ -3,6 +3,7 @@
 #include "wio/vm/machine.h"
 
 #include <wio_native_abi.h>
+#include <wio_native_pod.h>
 
 #include <system_error>
 #include <map>
@@ -85,6 +86,7 @@ namespace wio::vm::detail
         const WioNativeAbiRegistry* registry = nullptr;
         const WioNativeTaskApi* tasks = nullptr;
         const WioNativeTaskCompletionApi* completions = nullptr;
+        const WioNativePodLayoutApi* pods = nullptr;
         std::mutex machineMutex;
         std::size_t activeMachines = 0;
 
@@ -174,6 +176,12 @@ namespace wio::vm::detail
                         "' exports task completions without the native task API");
 
         library->state_->registry = registry;
+        if (const auto getPods = loadSymbol<WioGetNativePodLayoutApiFn>(handle, "WioGetNativePodLayoutApi"))
+        {
+            library->state_->pods = getPods();
+            if (!library->state_->pods)
+                return fail("native VM module returned a null POD layout sidecar");
+        }
         if (getTasks)
         {
             library->state_->tasks = getTasks();
@@ -204,7 +212,10 @@ namespace wio::vm::detail
         }
         std::scoped_lock lock{state_->machineMutex};
         const bool registered =
-            state_->tasks && state_->completions
+            state_->pods ? machine.registerNativeRegistry(*state_->registry, *state_->pods,
+                                                          state_->completions ? state_->tasks : nullptr,
+                                                          state_->completions, &error)
+            : state_->tasks && state_->completions
                 ? machine.registerNativeRegistry(*state_->registry, *state_->tasks, *state_->completions, &error)
                 : machine.registerNativeRegistry(*state_->registry, &error);
         if (registered)
