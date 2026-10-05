@@ -75,6 +75,14 @@ here does not by itself mean that v1 cannot ship.
    extensions, extension properties, static extension functions, explicit
    conflict resolution, import-scoped visibility, documentation generation,
    reflection metadata, and editor completion.
+   Design note (not an approved syntax change): consider making the extension
+   group name optional and using `extension for Type { ... }` as the concise
+   form. The current name is an internal naming input, not a callable namespace.
+   If adopted, derive deterministic internal identities from module, target
+   type, and method signature; preserve named syntax for compatibility and the
+   existing collision rules. Revisit names if selective imports or explicit
+   group-based conflict resolution give them a user-facing purpose. No compiler
+   or syntax change is scheduled by this note.
 
 13. [~] Complete a language-coherence pass before broad surface expansion.
     The first 0.11 stabilization slice aligned scoped attributes, pipelines,
