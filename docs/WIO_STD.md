@@ -14,6 +14,11 @@ see:
 - [`WIO_GETTING_STARTED.md`](./WIO_GETTING_STARTED.md)
 - [`WIO_FAQ.md`](./WIO_FAQ.md)
 
+For compiler-provided member methods that are not declared in std `.wio`
+sources (string/text, arrays, dictionaries, enum/flagset, tasks and packs), see
+[`WIO_BUILTIN_METHODS.md`](./WIO_BUILTIN_METHODS.md). It lists parameter and
+return types, overloads and mutable-receiver requirements.
+
 ---
 
 ## 0. Stability Reading
