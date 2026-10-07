@@ -54,19 +54,30 @@ inline WioNativeAbiStatus failure(WioNativeAbiFailure* out, WioNativeAbiStatus c
     if (out) *out = {code, 0, {"wio.native", 10}, {buffer, length}};
     return code;
 }
-template<class T, std::uint64_t Id> struct Box {
+template <class T, std::uint64_t Id> struct Box
+{
     std::atomic<std::uint32_t> refs{1};
     T value;
-    explicit Box(T input) : value(std::move(input)) {}
-    inline static const WioNativeAbiHandleOps ops{WIO_NATIVE_ABI_VERSION, 0,
-                                                  [](void* p) noexcept { ++static_cast<Box*>(p)->refs; },
-                                                  [](void* p) noexcept
-                                                  {
-                                                      auto* b = static_cast<Box*>(p);
-                                                      if (--b->refs == 0)
-                                                          delete b;
-                                                  },
-                                                  [](const void*) noexcept { return Id; }};
+    explicit Box(T input) : value(std::move(input))
+    {
+    }
+    static void retain(void* p) noexcept
+    {
+        ++static_cast<Box*>(p)->refs;
+    }
+    static void release(void* p) noexcept
+    {
+        auto* box = static_cast<Box*>(p);
+        if (--box->refs == 0)
+            delete box;
+    }
+    static std::uint64_t typeId(const void*) noexcept
+    {
+        return Id;
+    }
+    // Named operations avoid instantiating incomplete Box members inside an
+    // inline static initializer on MSVC. The owner contract is unchanged.
+    inline static const WioNativeAbiHandleOps ops{WIO_NATIVE_ABI_VERSION, 0, &retain, &release, &typeId};
 };
 template <class T, std::uint64_t Id> struct Codec
 {
@@ -242,30 +253,78 @@ template<class T, std::uint64_t Id> struct Codec<runtime::Ref<T>, Id> {
 // A ref/view wire argument points at another tagged value, not a foreign C++
 // string/object layout. Repeated borrows of the same token share one local
 // storage cell, preserving aliasing. Copy-back runs even on a caught failure.
-class Frame {
-    struct Slot { std::uint64_t type; std::any storage; std::function<void()> commit; };
+class Frame
+{
+    struct Slot
+    {
+        std::uint64_t type;
+        std::any storage;
+        std::function<void()> commit;
+        void* address;
+        std::size_t size;
+        bool projectable;
+        bool dirty = false;
+    };
     std::map<WioNativeAbiValue*, Slot> slots_;
+
 public:
-    template<class T, std::uint64_t Id> T& borrow(const WioNativeAbiValue& wire, bool mutableAccess) {
+    template <class T, std::uint64_t Id> T& borrow(const WioNativeAbiValue& wire, bool mutableAccess)
+    {
         require(wire.kind == WIO_NATIVE_ABI_REFERENCE && (wire.flags & WIO_NATIVE_ABI_VALUE_BORROWED) &&
-            (!mutableAccess || (wire.flags & WIO_NATIVE_ABI_VALUE_MUTABLE)) &&
-            wire.payload.mutableSlice.data && wire.payload.mutableSlice.size == sizeof(WioNativeAbiValue), WIO_NATIVE_ABI_INVALID_ARGUMENT);
+                    (!mutableAccess || (wire.flags & WIO_NATIVE_ABI_VALUE_MUTABLE)) && wire.payload.mutableSlice.data,
+                WIO_NATIVE_ABI_INVALID_ARGUMENT);
+        if (wire.flags & WIO_NATIVE_ABI_VALUE_PROJECTED)
+        {
+            require(wire.payload.mutableSlice.size == sizeof(WioNativeAbiProjection) &&
+                        reinterpret_cast<std::uintptr_t>(wire.payload.mutableSlice.data) %
+                                alignof(WioNativeAbiProjection) ==
+                            0,
+                    WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            const auto& projection = *static_cast<const WioNativeAbiProjection*>(wire.payload.mutableSlice.data);
+            const auto found = slots_.find(projection.root);
+            require(found != slots_.end() && found->second.projectable && found->second.type == projection.rootTypeId &&
+                    projection.typeId == Id && projection.size == sizeof(T) &&
+                    projection.offset <= found->second.size &&
+                    projection.size <= found->second.size - projection.offset);
+            auto* address = static_cast<std::byte*>(found->second.address) + projection.offset;
+            require(reinterpret_cast<std::uintptr_t>(address) % alignof(T) == 0, WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            if (mutableAccess)
+                found->second.dirty = true;
+            return *reinterpret_cast<T*>(address);
+        }
+        require(wire.payload.mutableSlice.size == sizeof(WioNativeAbiValue), WIO_NATIVE_ABI_INVALID_ARGUMENT);
         auto* token = static_cast<WioNativeAbiValue*>(wire.payload.mutableSlice.data);
-        require(reinterpret_cast<std::uintptr_t>(token) % alignof(WioNativeAbiValue) == 0, WIO_NATIVE_ABI_INVALID_ARGUMENT);
+        require(reinterpret_cast<std::uintptr_t>(token) % alignof(WioNativeAbiValue) == 0,
+                WIO_NATIVE_ABI_INVALID_ARGUMENT);
         auto found = slots_.find(token);
-        if (found == slots_.end()) {
+        if (found == slots_.end())
+        {
             auto storage = std::make_shared<T>(Codec<T, Id>::read(*token));
-            found = slots_.emplace(token, Slot{Id, storage, {}}).first;
+            auto commit = [token, storage]
+            {
+                auto replacement = Codec<T, Id>::write(*storage);
+                WioNativeAbiReleaseValue(token);
+                *token = replacement;
+            };
+            found = slots_
+                        .emplace(token, Slot{Id, storage, std::move(commit), storage.get(), sizeof(T),
+                                             token->kind == WIO_NATIVE_ABI_POD})
+                        .first;
         }
         require(found->second.type == Id);
         auto storage = std::any_cast<std::shared_ptr<T>>(found->second.storage);
-        if (mutableAccess && !found->second.commit) found->second.commit = [token, storage] {
-            auto replacement = Codec<T, Id>::write(*storage);
-            WioNativeAbiReleaseValue(token); *token = replacement;
-        };
+        found->second.dirty = found->second.dirty || mutableAccess;
         return *storage;
     }
-    void commit() { for (auto& [_, slot] : slots_) if (slot.commit) { slot.commit(); slot.commit = {}; } }
+    void commit()
+    {
+        for (auto& [_, slot] : slots_)
+            if (slot.dirty)
+            {
+                slot.commit();
+                slot.dirty = false;
+            }
+    }
 };
 
 template<class R, class... A, std::uint64_t Id> struct Codec<std::function<R(A...)>, Id> {

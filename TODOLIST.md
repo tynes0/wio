@@ -671,8 +671,11 @@ Rider, and CLion are defined in
    use an optional producer-owned factory sidecar: C++ `T{}` runs once, visible
    and hidden defaults survive copies, and explicit arguments override visible
    fields. Nested/fixed-array defaults and producer-library lifetime are covered
-   by focused differential gates. Remaining POD work includes overlapping
-   aggregate/field argument aliases.
+   by focused differential gates. Overlapping aggregate/field/array-element
+   ref/view arguments now use producer-offset projections into one outer POD
+   slot, preserving address identity, reversed argument order, hidden fields,
+   mutable-field updates through a view root and existing borrows. Old producers
+   lacking the additive capability bit reject this shape explicitly.
    Remaining native parity work includes VM-created any/container/object
    materialization into producer storage; POD/object/container/nullable and
    ref/view callback signatures; consumed arguments. Native-only bridge pruning

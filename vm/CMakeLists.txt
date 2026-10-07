@@ -23,6 +23,16 @@ target_compile_options(wio_vm PRIVATE
 )
 
 if(BUILD_TESTING)
+    add_executable(wio_vm_native_pod_alias_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_native_pod_alias_test.cpp"
+    )
+    target_include_directories(wio_vm_native_pod_alias_test PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/runtime/include"
+    )
+    target_link_libraries(wio_vm_native_pod_alias_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_native_pod_alias COMMAND wio_vm_native_pod_alias_test)
+    set_property(TEST wio_vm_native_pod_alias APPEND PROPERTY LABELS "vm;native;native-differential;release-gate")
+
     add_library(wio_vm_native_pod_default_module SHARED
         "${CMAKE_SOURCE_DIR}/tests/native/vm_pod_default_module.cpp"
     )

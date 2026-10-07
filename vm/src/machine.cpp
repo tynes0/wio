@@ -4292,6 +4292,7 @@ namespace wio::vm
                     std::uint32_t type = bytecode::InvalidIndex;
                     std::uint8_t marshalling = 0;
                     bool mutableValue = false;
+                    std::size_t projectionRoot = (std::numeric_limits<std::size_t>::max)();
                     WioNativeAbiValue wire;
                 };
                 struct NativeFrame
@@ -4304,6 +4305,7 @@ namespace wio::vm
 
                     std::vector<NativeToken> tokens;
                     std::vector<WioNativeAbiValue> arguments;
+                    std::vector<WioNativeAbiProjection> projections;
                     std::vector<CallbackLease> callbacks;
                     WioNativeAbiValue result;
 
@@ -4328,8 +4330,17 @@ namespace wio::vm
                 } nativeFrame;
                 nativeFrame.tokens.reserve(instruction.operands.size());
                 nativeFrame.arguments.reserve(instruction.operands.size());
+                nativeFrame.projections.reserve(instruction.operands.size());
                 nativeFrame.callbacks.reserve(instruction.operands.size());
-                std::unordered_map<PlaceStorage*, std::size_t> aliases;
+                // Independently acquired places can name the same field cell.
+                std::unordered_map<Value*, std::size_t> aliases;
+                const auto referenceBase = [&](const std::uint32_t type)
+                {
+                    return type < module.types.size() && module.types[type].kind == TypeReference &&
+                                   !module.types[type].arguments.empty()
+                               ? module.types[type].arguments.front()
+                               : type;
+                };
 
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {
@@ -4350,7 +4361,7 @@ namespace wio::vm
                                         "Native ref/view argument references unavailable or immutable storage");
 
                         std::size_t tokenIndex = 0;
-                        const auto alias = aliases.find(place);
+                        const auto alias = aliases.find(&place->storedValue());
                         if (alias == aliases.end())
                         {
                             tokenIndex = nativeFrame.tokens.size();
@@ -4363,19 +4374,12 @@ namespace wio::vm
                                                            token.wire, conversionError, podLayouts.get()))
                                 return fail("WVM1223", "Native argument conversion failed: " + conversionError);
                             nativeFrame.tokens.push_back(std::move(token));
-                            aliases.emplace(place, tokenIndex);
+                            aliases.emplace(&place->storedValue(), tokenIndex);
                         }
                         else
                         {
                             tokenIndex = alias->second;
                             NativeToken& token = nativeFrame.tokens[tokenIndex];
-                            const auto referenceBase = [&](const std::uint32_t type)
-                            {
-                                return type < module.types.size() && module.types[type].kind == TypeReference &&
-                                               !module.types[type].arguments.empty()
-                                           ? module.types[type].arguments.front()
-                                           : type;
-                            };
                             if (referenceBase(token.type) != referenceBase(abi.type) ||
                                 token.marshalling != abi.marshalling)
                                 return fail("WVM1223", "Aliased native references disagree on their ABI value type");
@@ -4516,6 +4520,60 @@ namespace wio::vm
                     nativeFrame.arguments.push_back(wire);
                 }
 
+                // One outermost POD slot owns every overlapping field/nested
+                // reference. Producer offsets, not VM object layout, locate
+                // projected C++ storage. Discover after collecting all args so
+                // reversed parameter order has identical alias semantics.
+                for (std::size_t childIndex = 0; childIndex < nativeFrame.tokens.size(); ++childIndex)
+                {
+                    auto& child = nativeFrame.tokens[childIndex];
+                    std::size_t rootIndex = (std::numeric_limits<std::size_t>::max)();
+                    detail::NativePodProjection location;
+                    for (std::size_t candidate = 0; candidate < nativeFrame.tokens.size(); ++candidate)
+                    {
+                        if (candidate == childIndex)
+                            continue;
+                        const auto& root = nativeFrame.tokens[candidate];
+                        detail::NativePodProjection found;
+                        if (detail::findNativePodProjection(module, root.place->storedValue(), referenceBase(root.type),
+                                                            child.place->storedValue(), *podLayouts, found) &&
+                            found.depth > location.depth)
+                        {
+                            rootIndex = candidate;
+                            location = found;
+                        }
+                    }
+                    if (rootIndex == (std::numeric_limits<std::size_t>::max)())
+                        continue;
+                    if (!(native.flags & WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES))
+                        return fail("WVM1225",
+                                    "Native producer does not support overlapping POD reference projections");
+                    auto& root = nativeFrame.tokens[rootIndex];
+                    if (location.type != referenceBase(child.type) || !location.typeId ||
+                        root.wire.kind != WIO_NATIVE_ABI_POD || location.offset > root.wire.payload.slice.size ||
+                        location.size > root.wire.payload.slice.size - location.offset)
+                        return fail("WVM1223",
+                                    "Overlapping native field reference has an incompatible producer layout: " +
+                                        std::string(module.string(declaration.name)) + " (field type " +
+                                        std::to_string(location.type) + ", argument type " +
+                                        std::to_string(referenceBase(child.type)) + ", identity " +
+                                        std::to_string(location.typeId) + ")");
+                    child.projectionRoot = rootIndex;
+                    root.mutableValue = root.mutableValue || child.mutableValue;
+                    nativeFrame.projections.push_back(
+                        {&root.wire, root.wire.typeId, location.typeId, location.offset, location.size});
+                    for (auto& argument : nativeFrame.arguments)
+                    {
+                        if (argument.kind == WIO_NATIVE_ABI_REFERENCE &&
+                            argument.payload.mutableSlice.data == &child.wire)
+                        {
+                            argument.flags |= WIO_NATIVE_ABI_VALUE_PROJECTED;
+                            argument.payload.mutableSlice = {&nativeFrame.projections.back(),
+                                                             sizeof(WioNativeAbiProjection)};
+                        }
+                    }
+                }
+
                 WioNativeAbiFailure nativeFailure;
                 const bool permitsForeignThreadCallback =
                     program_->retainedForeignCallbacks.load(std::memory_order_acquire) != 0 ||
@@ -4536,7 +4594,7 @@ namespace wio::vm
                 replacements.reserve(nativeFrame.tokens.size());
                 for (NativeToken& token : nativeFrame.tokens)
                 {
-                    if (!token.mutableValue)
+                    if (!token.mutableValue || token.projectionRoot != (std::numeric_limits<std::size_t>::max)())
                     {
                         replacements.push_back({});
                         continue;
@@ -4585,7 +4643,8 @@ namespace wio::vm
                     };
                     for (std::size_t index = 0; index < nativeFrame.tokens.size(); ++index)
                     {
-                        if (nativeFrame.tokens[index].mutableValue)
+                        if (nativeFrame.tokens[index].mutableValue &&
+                            nativeFrame.tokens[index].projectionRoot == (std::numeric_limits<std::size_t>::max)())
                             copyBack(copyBack, nativeFrame.tokens[index].place->storedValue(),
                                      std::move(replacements[index]));
                     }

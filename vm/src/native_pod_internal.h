@@ -36,6 +36,22 @@ namespace wio::vm::detail
         std::unordered_map<std::uint32_t, WioNativePodDefaultFn> defaults;
     };
 
+    struct NativePodProjection
+    {
+        std::uint32_t type = bytecode::InvalidIndex;
+        std::uint64_t typeId = 0;
+        std::uint64_t offset = 0;
+        std::uint64_t size = 0;
+        unsigned depth = 0;
+    };
+
+    // Locate actual nested storage, not a value-equal copy. Traversal is bounded
+    // to registered POD fields and concrete fixed-array elements.
+    [[nodiscard]] bool findNativePodProjection(const bytecode::Module& module, const Value& root,
+                                               std::uint32_t rootType, const Value& target,
+                                               const NativePodLayouts& layouts, NativePodProjection& projection,
+                                               unsigned depth = 0);
+
     // POD pointers are borrowed void* storage, optionally nullable. No optional,
     // object handle, reference token, or nested nullable wrapper is a POD pointer.
     [[nodiscard]] std::uint32_t nativePodPointerType(const bytecode::Module& module, std::uint32_t type) noexcept;

@@ -213,6 +213,75 @@ namespace wio::vm::detail
         return unpackNativePod(module, wire, type, layouts, 0);
     }
 
+    bool findNativePodProjection(const bytecode::Module& module, const Value& root, const std::uint32_t rootType,
+                                 const Value& target, const NativePodLayouts& layouts, NativePodProjection& projection,
+                                 const unsigned depth)
+    {
+        if (depth > 128 || rootType >= module.types.size())
+            return false;
+        const auto& type = module.types[rootType];
+        const auto layout = layouts.types.find(rootType);
+        if (root.kind() == Value::Kind::Component && layout != layouts.types.end() &&
+            root.aggregateType() == rootType && root.fieldCount() == type.fields.size() &&
+            layout->second.fields.size() == type.fields.size())
+        {
+            for (std::size_t index = 0; index < root.fieldCount(); ++index)
+            {
+                const auto& field = layout->second.fields[index];
+                const auto* value = root.field(index);
+                if (value == &target)
+                {
+                    projection = {type.fields[index].type, field.typeId, field.offset, field.size, depth + 1};
+                    return true;
+                }
+                NativePodProjection nested;
+                if (findNativePodProjection(module, *value, type.fields[index].type, target, layouts, nested,
+                                            depth + 1))
+                {
+                    if (nested.offset > (std::numeric_limits<std::uint64_t>::max)() - field.offset)
+                        return false;
+                    nested.offset += field.offset;
+                    projection = nested;
+                    return true;
+                }
+            }
+        }
+        else if (root.kind() == Value::Kind::Array && type.kind == 31 && type.arguments.size() == 1 &&
+                 type.staticExtent == root.elementCount())
+        {
+            const auto elementType = type.arguments.front();
+            std::size_t stride = 0;
+            std::string error;
+            if (!NativePodArrayCodec::byteSize(module, elementType, layouts, stride, error, depth + 1))
+                return false;
+            for (std::size_t index = 0; index < root.elementCount(); ++index)
+            {
+                if (stride && index > (std::numeric_limits<std::uint64_t>::max)() / stride)
+                    return false;
+                const auto* value = root.element(index);
+                if (value == &target)
+                {
+                    std::uint64_t identity = 0;
+                    for (const auto& reflected : module.contract.reflection)
+                        if (reflected.type == elementType)
+                            identity = reflected.stableTypeId;
+                    projection = {elementType, identity, index * stride, stride, depth + 1};
+                    return true;
+                }
+                NativePodProjection nested;
+                if (findNativePodProjection(module, *value, elementType, target, layouts, nested, depth + 1))
+                {
+                    if (nested.offset > (std::numeric_limits<std::uint64_t>::max)() - index * stride)
+                        return false;
+                    nested.offset += index * stride;
+                    projection = nested;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     bool packNativePod(const bytecode::Module& module, const Value& value, const std::uint32_t type,
                        const NativePodLayouts& layouts, WioNativeAbiValue& output, std::string& error,
                        const unsigned depth)

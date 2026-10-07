@@ -230,7 +230,7 @@ executable negative cases for local `any` and structured callbacks:
   scalar/pointer/fixed-array/nested-POD adapter surface still need qualification.
   Actual pack-storage fields are not POD fields. Concrete const-generic and
   variadic component arguments and producer-owned C++ defaults are qualified
-  below; overlapping aggregate/field argument aliases remain separate work.
+  below, including overlapping aggregate/field/array-element references.
   A producer without the layout sidecar retains raw-POD round-trips but does not
   support local-component materialization (`WVM1223`) or ordinary field places.
 - VM-created `any`/containers/objects are not interchangeable with foreign
@@ -287,8 +287,9 @@ numeric oracles). They carry `native-differential;release-gate` labels. Local
 qualification is Windows only; Linux remains a CI verification requirement.
 
 POD adapters are internal ABI materialization, not the richer callback bridge.
-Structured callbacks and overlapping whole-component/field arguments within
-one native call still need dedicated borrow/alias plans. Native member defaults
+Structured callbacks still need signature-specific borrow/alias plans.
+Overlapping whole-component/field arguments use the projection contract below.
+Native member defaults
 use the optional producer factory described below; hidden prototype fields are
 preserved.
 
@@ -540,4 +541,69 @@ They cover registration/ownership failures, independent value and initializer
 count oracles, C++/VM output parity, default-only modules and escaped DLL values.
 All four passed locally on Windows (4/4, 23.66 seconds). No full-suite or local
 Linux pass is claimed; existing `native-differential;release-gate` labels select
-CI coverage. Overlapping whole-component/field arguments remain open.
+CI coverage. Overlapping whole-component/field arguments are qualified below.
+
+## Overlapping POD references and field projections
+
+Native calls now preserve actual alias identity when a POD and one of its
+fields, nested PODs or fixed-array elements are passed together as `ref`/`view`.
+For example, both arguments below designate the same producer field:
+
+```wio
+Whole(ref packet, ref packet.count);
+Reversed(ref packet.count, ref packet);
+Nested(ref packet.inner.value, ref packet.inner, ref packet);
+```
+
+VM places are deduplicated by the referenced storage cell, not by their place
+wrapper. Two independently acquired field places therefore share one token,
+while equal-valued independent copies do not. After collecting arguments, the
+VM selects an outermost native POD root and finds child offsets through
+registered producer layouts and checked concrete fixed-array strides. It never
+casts a VM component to a C++ struct or guesses Wio/C++ field-order equivalence.
+
+The additive `WIO_NATIVE_ABI_VALUE_PROJECTED` reference flag selects a
+call-scoped `WioNativeAbiProjection` descriptor containing the root token,
+root/field type identities, offset and extent. Generated thunks bind all
+unprojected POD roots before reading their arguments, so parameter order does
+not change aliasing. Projected borrows refer directly into the aligned typed
+producer-frame object. A nested POD argument shares that object too, rather
+than materializing a second nested copy.
+
+The frame validates descriptor extent/alignment, bound POD root, root/field
+identities, field size, overflow-safe bounds, alignment and mutable access.
+Bytecode pins otherwise non-nominal ref-parameter codec identities in existing
+reflection records, including primitive multidimensional-array elements;
+the VM does not reconstruct compiler type spellings. Traversal is bounded and
+does not descend through cyclic object/reference graphs.
+
+Mutable projections mark only their outer root dirty, even if that root was
+passed as `view`. This does not make the C++ view writable: the mutable field
+argument must independently reference mutable VM storage. The root is committed
+once and decoded/copy-backed once. Existing nested field/element places survive
+in-place copy-back; hidden producer fields and immutable backing bytes survive
+as before. Generated exception boundaries commit dirty slots on failure too.
+Raw pointer fields remain borrowed, with no new ownership-transfer semantics.
+
+Generated native descriptors advertise
+`WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES` in the existing flags field.
+The VM rejects overlapping calls to producers without this bit as `WVM1225`,
+before invoking the thunk, instead of silently passing independent copies.
+Ordinary legacy reference calls remain supported. Wire-v2 value/function
+structure sizes, layout-v1 descriptors and bytecode format versions are
+unchanged. Projected arguments are call-scoped and are not a retained-reference
+or structured-callback lifetime contract. Whole native container references are
+not implied by fixed-array element support.
+
+The two focused gates are `wio_vm_native_pod_alias` and
+`wio_vm_native_pod_alias_differential`. The contract gate checks malformed
+metadata, read-only rejection, repeated commit, exception copy-back and
+storage-identity lookup. The differential gate checks real C++ address identity,
+forward/reversed/mixed view/ref calls, nested and multidimensional arrays,
+bool/f64/nullable-opaque fields, hidden fields, pre-existing borrows, independent
+copies and a real generated registry with the capability bit removed.
+Both passed locally on Windows (2/2, 15.25 seconds); no full-suite or local Linux
+pass is claimed. Existing `native-differential;release-gate` labels select CI
+coverage. The gate also instantiates native POD codec/frame operations under
+MSVC, qualifying the named owner-operation definitions that avoid incomplete
+template instantiation in inline static lambda initializers.

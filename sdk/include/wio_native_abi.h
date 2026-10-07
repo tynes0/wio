@@ -46,7 +46,9 @@ enum WioNativeAbiValueFlag : std::uint32_t
     WIO_NATIVE_ABI_VALUE_BORROWED = 1u << 1u,
     WIO_NATIVE_ABI_VALUE_MUTABLE = 1u << 2u,
     WIO_NATIVE_ABI_VALUE_CONSUMED = 1u << 3u,
-    WIO_NATIVE_ABI_VALUE_OWNED = 1u << 4u
+    WIO_NATIVE_ABI_VALUE_OWNED = 1u << 4u,
+    // Additive reference form; payload points to WioNativeAbiProjection.
+    WIO_NATIVE_ABI_VALUE_PROJECTED = 1u << 5u
 };
 
 struct WioNativeAbiSlice
@@ -86,12 +88,9 @@ struct WioNativeAbiCallbackOps
     std::uint32_t flags = 0;
     void (*retain)(void* userdata) noexcept = nullptr;
     void (*release)(void* userdata) noexcept = nullptr;
-    WioNativeAbiStatus (*invoke)(
-        void* userdata,
-        const struct WioNativeAbiValue* arguments,
-        std::uint64_t argumentCount,
-        struct WioNativeAbiValue* result,
-        struct WioNativeAbiFailure* failure) noexcept = nullptr;
+    WioNativeAbiStatus (*invoke)(void* userdata, const struct WioNativeAbiValue* arguments, std::uint64_t argumentCount,
+                                 struct WioNativeAbiValue* result,
+                                 struct WioNativeAbiFailure* failure) noexcept = nullptr;
 };
 
 enum WioNativeAbiCallbackFlag : std::uint32_t
@@ -123,10 +122,29 @@ struct WioNativeAbiValue
         WioNativeAbiCallback callback;
         void* opaque;
 
-        constexpr Payload() : unsignedInteger(0) {}
+        constexpr Payload() : unsignedInteger(0)
+        {
+        }
     } payload{};
     // v2: storage owner for slices/POD. Object/runtime handles own themselves.
     WioNativeAbiHandle owner{};
+};
+
+// Call-scoped projection into one producer-materialized POD reference token.
+// root points to a tagged POD value, never to VM component storage. Offsets
+// and extents come from validated producer layout metadata.
+struct WioNativeAbiProjection
+{
+    WioNativeAbiValue* root = nullptr;
+    std::uint64_t rootTypeId = 0;
+    std::uint64_t typeId = 0;
+    std::uint64_t offset = 0;
+    std::uint64_t size = 0;
+};
+
+enum WioNativeAbiFunctionFlag : std::uint32_t
+{
+    WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES = 1u << 0u
 };
 
 struct WioNativeAbiFailure
@@ -137,11 +155,8 @@ struct WioNativeAbiFailure
     WioNativeAbiSlice message{};
 };
 
-using WioNativeAbiThunk = WioNativeAbiStatus(*)(
-    const WioNativeAbiValue* arguments,
-    std::uint64_t argumentCount,
-    WioNativeAbiValue* result,
-    WioNativeAbiFailure* failure) noexcept;
+using WioNativeAbiThunk = WioNativeAbiStatus (*)(const WioNativeAbiValue* arguments, std::uint64_t argumentCount,
+                                                 WioNativeAbiValue* result, WioNativeAbiFailure* failure) noexcept;
 
 struct WioNativeAbiFunctionDescriptor
 {
@@ -154,14 +169,16 @@ struct WioNativeAbiFunctionDescriptor
     WioNativeAbiThunk thunk = nullptr;
 };
 
-struct WioNativeAbiRegistry {
+struct WioNativeAbiRegistry
+{
     std::uint32_t abiVersion;
     std::uint32_t functionCount;
     const WioNativeAbiFunctionDescriptor* functions;
 };
-using WioGetNativeAbiRegistryFn = const WioNativeAbiRegistry*(*)();
+using WioGetNativeAbiRegistryFn = const WioNativeAbiRegistry* (*)();
 
-struct WioNativeTaskApi {
+struct WioNativeTaskApi
+{
     std::uint32_t abiVersion;
     WioNativeAbiStatus (*ready)(const WioNativeAbiValue*, bool*) noexcept;
     WioNativeAbiStatus (*cancel)(const WioNativeAbiValue*) noexcept;
@@ -170,18 +187,19 @@ struct WioNativeTaskApi {
     std::uint64_t (*pumpMain)() noexcept;
     void (*shutdown)() noexcept;
 };
-using WioGetNativeTaskApiFn = const WioNativeTaskApi*(*)();
+using WioGetNativeTaskApiFn = const WioNativeTaskApi* (*)();
 
 // Completion registration is a separate additive sidecar so wire-v2 modules
 // built before native task adaptation keep the original WioNativeTaskApi
 // layout. A successful subscription owns one exactly-once callback delivery;
 // delivery may happen synchronously or from any foreign thread.
-using WioNativeTaskCompletionFn = void(*)(void*, WioNativeAbiStatus) noexcept;
-struct WioNativeTaskCompletionApi {
+using WioNativeTaskCompletionFn = void (*)(void*, WioNativeAbiStatus) noexcept;
+struct WioNativeTaskCompletionApi
+{
     std::uint32_t abiVersion;
     WioNativeAbiStatus (*onComplete)(const WioNativeAbiValue*, WioNativeTaskCompletionFn, void*) noexcept;
 };
-using WioGetNativeTaskCompletionApiFn = const WioNativeTaskCompletionApi*(*)();
+using WioGetNativeTaskCompletionApiFn = const WioNativeTaskCompletionApi* (*)();
 
 inline void WioNativeAbiRetain(WioNativeAbiHandle handle) noexcept
 {
@@ -201,11 +219,14 @@ inline void WioNativeAbiRelease(WioNativeAbiHandle* handle) noexcept
 
 inline void WioNativeAbiReleaseValue(WioNativeAbiValue* value) noexcept
 {
-    if (!value) return;
-    if (value->flags & WIO_NATIVE_ABI_VALUE_OWNED) {
+    if (!value)
+        return;
+    if (value->flags & WIO_NATIVE_ABI_VALUE_OWNED)
+    {
         if (value->kind == WIO_NATIVE_ABI_OBJECT || value->kind == WIO_NATIVE_ABI_RUNTIME_VALUE)
             WioNativeAbiRelease(&value->payload.handle);
-        if (value->kind == WIO_NATIVE_ABI_CALLBACK && value->payload.callback.ops && value->payload.callback.ops->release)
+        if (value->kind == WIO_NATIVE_ABI_CALLBACK && value->payload.callback.ops &&
+            value->payload.callback.ops->release)
             value->payload.callback.ops->release(value->payload.callback.userdata);
         WioNativeAbiRelease(&value->owner);
     }

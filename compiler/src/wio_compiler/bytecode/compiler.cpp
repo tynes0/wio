@@ -1,4 +1,5 @@
 #include "wio/bytecode/compiler.h"
+#include <algorithm>
 #include "wio/bytecode/enum_encoding.h"
 
 #include "wio/wir/lowered_ir_verifier.h"
@@ -370,7 +371,27 @@ namespace wio::bytecode
             if (!function.nativeBinding)
                 continue;
             for (const wir::NativeAbiValue& parameter : function.nativeBinding->parameters)
+            {
                 addRuntimeAbiIdentity(parameter);
+                // Projected POD array elements may be primitive types without
+                // nominal reflection. Pin their exact producer codec identity
+                // rather than reconstructing compiler type keys in the VM.
+                const auto* parameterType = source.types.tryGet(parameter.type);
+                if (parameterType && parameterType->kind == wir::TypeKind::Reference &&
+                    parameterType->arguments.size() == 1)
+                {
+                    const auto base = parameterType->arguments.front();
+                    const auto raw = rawId(base);
+                    if (std::ranges::none_of(module.contract.reflection,
+                                             [&](const Reflection& entry) { return entry.type == raw; }))
+                    {
+                        const auto key = wir::nativeAbiTypeKey(source.types, base);
+                        module.contract.reflection.push_back(Reflection{.stableTypeId = wir::stableModuleHash(key),
+                                                                        .logicalName = strings.intern(key),
+                                                                        .type = raw});
+                    }
+                }
+            }
             addRuntimeAbiIdentity(function.nativeBinding->result);
         }
         for (const wir::SystemDescriptor& sourceSystem : source.contract.systems)

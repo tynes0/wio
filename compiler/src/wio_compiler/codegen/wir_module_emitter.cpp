@@ -249,6 +249,21 @@ namespace wio::codegen
                 << f.parameters.size()
                 << " || (count && !args) || !result) return WIO_NATIVE_ABI_INVALID_ARGUMENT;\n"
                    "  *result = {}; wio::wir_backend::abi::Frame frame;\n  try {\n";
+            // Bind aggregate roots before projections, regardless of parameter
+            // order. Projected nested POD arguments use their outer root slot.
+            for (std::size_t i = 0; i < f.parameters.size(); ++i)
+            {
+                const auto& parameter = module.types.get(f.parameters[i].type);
+                if (parameter.kind != TypeKind::Reference || parameter.arguments.empty())
+                    continue;
+                const auto base = parameter.arguments.front();
+                const auto& target = module.types.get(base);
+                if (target.kind == TypeKind::Named && target.nominalKind == NominalKind::Component &&
+                    target.nominalRepresentation == NominalRepresentation::NativePod)
+                    out << "    if (!(args[" << i << "].flags & WIO_NATIVE_ABI_VALUE_PROJECTED)) "
+                        << "(void)frame.borrow<" << type(base) << ", " << wireId(base) << "ULL>(args[" << i << "], "
+                        << (parameter.isMutable ? "true" : "false") << ");\n";
+            }
             for (std::size_t i = 0; i < f.parameters.size(); ++i)
             {
                 auto id = f.parameters[i].type;
@@ -311,8 +326,9 @@ namespace wio::codegen
             for (auto* f : natives)
             {
                 const auto& b = *f->nativeBinding;
-                out << "{WIO_NATIVE_ABI_VERSION,0," << stableModuleHash(b.stableKey) << "ULL," << quoted(b.stableKey)
-                    << ',' << quoted(b.symbol) << ',' << quoted(b.thunkSymbol) << ",&" << b.thunkSymbol << "},\n";
+                out << "{WIO_NATIVE_ABI_VERSION,WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES,"
+                    << stableModuleHash(b.stableKey) << "ULL," << quoted(b.stableKey) << ',' << quoted(b.symbol) << ','
+                    << quoted(b.thunkSymbol) << ",&" << b.thunkSymbol << "},\n";
             }
             out << "};\n";
         }

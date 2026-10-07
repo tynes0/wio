@@ -1268,3 +1268,30 @@ here as historical evidence rather than active work:
       and a module with defaults but no native functions. All passed locally
       on Windows (4/4, 23.66 seconds). No full-suite or local Linux pass is
       claimed; overlapping aggregate/field argument aliases remain open.
+
+## VM Native POD Overlapping Reference Projections
+
+- [x] Deduplicated native ref/view tokens by actual VM storage cell rather than
+      place-wrapper identity. Independently acquired aliases share storage;
+      independent copies remain independent.
+- [x] Added bounded producer-layout projection lookup for POD fields, nested
+      PODs and concrete fixed-array elements, including multidimensional arrays.
+      Native thunks prebind outer POD roots regardless of parameter order and
+      projected fields/nested aggregates share one typed producer-frame object.
+- [x] Qualified mixed view/ref access, mutable fields under view roots,
+      hidden-field preservation and live pre-existing borrows. Dirty roots
+      commit/copy-back once; projected child tokens do not independently
+      overwrite them. Bytecode pins primitive ref-parameter codec identities.
+- [x] Added checked call-scoped projection descriptors and an additive producer
+      capability bit. Legacy producers explicitly reject overlapping calls as
+      `WVM1225`; existing ABI structure sizes and format versions are unchanged.
+      Retained references, structured callbacks and ownership transfer remain
+      separate contracts.
+- [x] Fixed MSVC POD owner-operation instantiation by using named operations
+      instead of incomplete-class lambdas in static initializers. Added contract
+      tests for malformed metadata, mutability/alignment/bounds, repeated commit,
+      exception copy-back and storage identity.
+- [x] Added a generated C++/VM address-identity differential fixture covering
+      reversed/nested/array/scalar/pointer/alias/copy scenarios, plus a real
+      capability-disabled registry rejection. Both new focused Windows gates
+      passed (2/2, 15.25 seconds). No full-suite or local Linux pass is claimed.
