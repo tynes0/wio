@@ -1,6 +1,7 @@
 #include "native_bridge_internal.h"
 #include "native_pod_internal.h"
 #include "native_sequence_internal.h"
+#include "native_dictionary_internal.h"
 
 #include <algorithm>
 #include <atomic>
@@ -318,6 +319,8 @@ namespace wio::vm::detail
             const bool object = marshalling == 6;
             if (!object && kind == TypeArray && value.kind() == Value::Kind::Array && layouts)
                 return packNativeSequence(module, value, type, *layouts, output, error, depth);
+            if (!object && kind == TypeDictionary && value.kind() == Value::Kind::Dictionary && layouts)
+                return packNativeDictionary(module, value, type, *layouts, output, error, depth);
             const std::uint64_t expected = stableTypeId(module, declaredType);
             if (value.kind() != (object ? Value::Kind::ForeignObject : Value::Kind::RuntimeValue) ||
                 value.aggregateType() != type || value.foreignTypeId() != expected || expected == 0)
@@ -470,6 +473,8 @@ namespace wio::vm::detail
                 return {{}, "native handle result has invalid producer operations or type identity"};
             if (!object && kind == TypeArray && layouts && layouts->sequences.contains(type))
                 return unpackNativeSequence(module, value, type, *layouts, depth);
+            if (!object && kind == TypeDictionary && layouts && layouts->dictionaries.contains(type))
+                return unpackNativeDictionary(module, value, type, *layouts, depth);
             return {object ? Value::foreignObject(type, expected, value.payload.handle)
                            : Value::runtimeValue(type, expected, value.payload.handle),
                     {}};

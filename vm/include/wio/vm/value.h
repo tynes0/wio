@@ -223,6 +223,7 @@ namespace wio::vm
         [[nodiscard]] Value* mutableIteratorState(std::size_t index) noexcept;
         [[nodiscard]] Value* mutableElement(std::size_t index) noexcept;
         [[nodiscard]] Value* mutableDictionaryValue(const Value& key) noexcept;
+        [[nodiscard]] Value* mutableDictionaryValue(std::size_t index) noexcept;
         [[nodiscard]] Value* mutableField(std::size_t index) noexcept;
         [[nodiscard]] Value cloneOwned() const;
         [[nodiscard]] Value retainObject() const noexcept;

@@ -19,6 +19,7 @@ struct WioNativeTaskCompletionApi;
 struct WioNativePodLayoutApi;
 struct WioNativePodDefaultApi;
 struct WioNativeSequenceApi;
+struct WioNativeDictionaryApi;
 
 namespace wio::vm
 {
@@ -153,12 +154,17 @@ namespace wio::vm
                                                   std::string* error, const WioNativePodDefaultApi* defaults);
         // Independent optional sequence sidecar, with atomic registration.
         [[nodiscard]] bool registerNativeRegistry(const WioNativeAbiRegistry& registry,
-                                                  const WioNativeSequenceApi& sequences,
-                                                  std::string* error = nullptr,
+                                                  const WioNativeSequenceApi& sequences, std::string* error = nullptr,
                                                   const WioNativePodLayoutApi* pods = nullptr,
                                                   const WioNativePodDefaultApi* defaults = nullptr,
                                                   const WioNativeTaskApi* tasks = nullptr,
                                                   const WioNativeTaskCompletionApi* completions = nullptr);
+
+        [[nodiscard]] bool registerNativeRegistry(
+            const WioNativeAbiRegistry& registry, const WioNativeDictionaryApi& dictionaries,
+            std::string* error = nullptr, const WioNativeSequenceApi* sequences = nullptr,
+            const WioNativePodLayoutApi* pods = nullptr, const WioNativePodDefaultApi* defaults = nullptr,
+            const WioNativeTaskApi* tasks = nullptr, const WioNativeTaskCompletionApi* completions = nullptr);
 
         // Loads a generated native thunk module, discovers its registry and
         // optional async sidecars, and pins the dynamic library until this
@@ -202,7 +208,8 @@ namespace wio::vm
                                                       const WioNativeTaskCompletionApi* completions,
                                                       std::string* error, const WioNativePodLayoutApi* pods = nullptr,
                                                       const WioNativePodDefaultApi* defaults = nullptr,
-                                                      const WioNativeSequenceApi* sequences = nullptr);
+                                                      const WioNativeSequenceApi* sequences = nullptr,
+                                                      const WioNativeDictionaryApi* dictionaries = nullptr);
 
         struct Program;
         std::shared_ptr<Program> program_;

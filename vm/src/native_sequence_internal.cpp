@@ -1,4 +1,5 @@
 #include "native_sequence_internal.h"
+#include "native_dictionary_internal.h"
 
 #include <algorithm>
 #include <limits>
@@ -36,34 +37,53 @@ namespace wio::vm::detail
             return 0;
         }
 
-        bool supportedElement(const bytecode::Module& module, std::uint32_t type, const NativePodLayouts& layouts)
-        {
-            if (type >= module.types.size())
-                return false;
-            const auto& definition = module.types[type];
-            if (definition.kind == 30)
-                return nativePodPointerType(module, type) != bytecode::InvalidIndex;
-            std::uint8_t marshalling = 0;
-            if (!nativeValueMarshalling(module, type, marshalling))
-                return false;
-            if (marshalling == 4)
-                return layouts.types.contains(type);
-            return (marshalling >= 1 && marshalling <= 5) ||
-                   (definition.kind == 31 && layouts.sequences.contains(type));
-        }
-
-        bool validSequenceWire(const WioNativeAbiValue& value, std::uint64_t typeId)
-        {
-            const auto& handle = value.payload.handle;
-            return value.kind == WIO_NATIVE_ABI_RUNTIME_VALUE && value.typeId == typeId &&
-                   (value.flags & (WIO_NATIVE_ABI_VALUE_OWNED | WIO_NATIVE_ABI_VALUE_BORROWED)) && handle.state &&
-                   handle.ops && handle.ops->abiVersion == WIO_NATIVE_ABI_VERSION && handle.ops->retain &&
-                   handle.ops->release && handle.ops->typeId && handle.ops->typeId(handle.state) == typeId;
-        }
     } // namespace
 
+    bool supportedNativeContainerValue(const bytecode::Module& module, std::uint32_t type,
+                                       const NativePodLayouts& layouts)
+    {
+        if (type >= module.types.size())
+            return false;
+        const auto& definition = module.types[type];
+        if (definition.kind == 30)
+            return nativePodPointerType(module, type) != bytecode::InvalidIndex;
+        std::uint8_t marshalling = 0;
+        if (!nativeValueMarshalling(module, type, marshalling))
+            return false;
+        if (marshalling == 4)
+            return layouts.types.contains(type);
+        return (marshalling >= 1 && marshalling <= 5) || (definition.kind == 31 && layouts.sequences.contains(type)) ||
+               (definition.kind == 32 && layouts.dictionaries.contains(type));
+    }
+
+    bool validNativeContainerWire(const WioNativeAbiValue& value, std::uint64_t typeId)
+    {
+        const auto& handle = value.payload.handle;
+        return value.kind == WIO_NATIVE_ABI_RUNTIME_VALUE && value.typeId == typeId &&
+               (value.flags & (WIO_NATIVE_ABI_VALUE_OWNED | WIO_NATIVE_ABI_VALUE_BORROWED)) && handle.state &&
+               handle.ops && handle.ops->abiVersion == WIO_NATIVE_ABI_VERSION && handle.ops->retain &&
+               handle.ops->release && handle.ops->typeId && handle.ops->typeId(handle.state) == typeId;
+    }
+    bool validateNativeContainers(const bytecode::Module& module, const NativePodLayouts& layouts, std::string& error)
+    {
+        for (const auto& [type, descriptor] : layouts.sequences)
+            if (!supportedNativeContainerValue(module, module.types[type].arguments.front(), layouts))
+            {
+                error = "native sequence element requires unsupported structural materialization";
+                return false;
+            }
+        for (const auto& [type, descriptor] : layouts.dictionaries)
+            if (!supportedNativeDictionaryKey(module, module.types[type].arguments.front()) ||
+                !supportedNativeContainerValue(module, module.types[type].arguments.back(), layouts))
+            {
+                error = "native dictionary key/value requires unsupported structural materialization";
+                return false;
+            }
+        return true;
+    }
+
     bool mergeNativeSequences(const bytecode::Module& module, const WioNativeSequenceApi& api,
-                              NativePodLayouts& layouts, std::string& error)
+                              NativePodLayouts& layouts, std::string& error, bool validateElements)
     {
         const auto reject = [&](const char* message)
         {
@@ -98,11 +118,8 @@ namespace wio::vm::detail
                  found->second.read != descriptor.read))
                 return reject("native sequence type is already registered with a different adapter");
         }
-        for (const auto& [type, descriptor] : candidate.sequences)
-        {
-            if (!supportedElement(module, module.types[type].arguments.front(), candidate))
-                return reject("native sequence element requires unsupported structural materialization");
-        }
+        if (validateElements && !validateNativeContainers(module, candidate, error))
+            return false;
         layouts = std::move(candidate);
         return true;
     }
@@ -145,7 +162,7 @@ namespace wio::vm::detail
             error = nativeFailureMessage(failure);
             return false;
         }
-        if (!validSequenceWire(result.value, adapter->second.typeId) ||
+        if (!validNativeContainerWire(result.value, adapter->second.typeId) ||
             !(result.value.flags & WIO_NATIVE_ABI_VALUE_OWNED))
         {
             error = "producer sequence pack returned an invalid or non-owned runtime handle";
@@ -162,7 +179,7 @@ namespace wio::vm::detail
         const auto adapter = layouts.sequences.find(type);
         if (adapter == layouts.sequences.end() || depth > 64)
             return {{}, "native sequence result requires an adapter and bounded nesting depth"};
-        if (!validSequenceWire(value, adapter->second.typeId))
+        if (!validNativeContainerWire(value, adapter->second.typeId))
             return {{}, "native sequence result has an invalid runtime handle"};
         std::uint64_t count = 0;
         WioNativeAbiFailure failure;
@@ -201,6 +218,17 @@ namespace wio::vm::detail
     {
         if (depth > 64)
             return false;
+        if (root.kind() == Value::Kind::Dictionary)
+        {
+            for (std::size_t index = 0; index < root.dictionaryCount(); ++index)
+            {
+                const auto* key = root.dictionaryKey(index);
+                const auto* cell = root.dictionaryValue(index);
+                if (key == &target || cell == &target || containsNativeSequencePlace(*cell, target, depth + 1))
+                    return true;
+            }
+            return false;
+        }
         const bool array = root.kind() == Value::Kind::Array;
         const auto count = array ? root.elementCount() : root.fieldCount();
         for (std::size_t index = 0; index < count; ++index)
@@ -216,6 +244,17 @@ namespace wio::vm::detail
     {
         if (depth > 64)
             return false;
+        if (target.kind() == Value::Kind::Dictionary)
+        {
+            std::vector<std::size_t> order;
+            if (!nativeDictionaryCopyBackOrder(target, replacement, order))
+                return false;
+            for (std::size_t index = 0; index < order.size(); ++index)
+                if (!compatibleNativeSequenceCopyBack(*target.dictionaryValue(index),
+                                                      *replacement.dictionaryValue(order[index]), depth + 1))
+                    return false;
+            return true;
+        }
         if (target.kind() != Value::Kind::Array)
             return true;
         if (replacement.kind() != Value::Kind::Array || target.elementCount() != replacement.elementCount())

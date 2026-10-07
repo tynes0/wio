@@ -8,6 +8,7 @@
 #include "native_library.h"
 #include "native_pod_internal.h"
 #include "native_sequence_internal.h"
+#include "native_dictionary_internal.h"
 #include "string_intrinsics.h"
 #include "text_intrinsics.h"
 
@@ -924,7 +925,8 @@ namespace wio::vm
         {
             if (value.kind() != Value::Kind::Opaque && value.kind() != Value::Kind::ForeignObject &&
                 value.kind() != Value::Kind::RuntimeValue && value.kind() != Value::Kind::Component &&
-                value.kind() != Value::Kind::Array && value.kind() != Value::Kind::NativePod)
+                value.kind() != Value::Kind::Array && value.kind() != Value::Kind::Dictionary &&
+                value.kind() != Value::Kind::NativePod)
                 return;
             std::scoped_lock lock{nativeMutex};
             for (const auto& library : nativeLibraries)
@@ -1672,6 +1674,16 @@ namespace wio::vm
         return registerNativeRegistryImpl(registry, tasks, completions, error, pods, defaults, &sequences);
     }
 
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry,
+                                         const WioNativeDictionaryApi& dictionaries, std::string* error,
+                                         const WioNativeSequenceApi* sequences, const WioNativePodLayoutApi* pods,
+                                         const WioNativePodDefaultApi* defaults, const WioNativeTaskApi* tasks,
+                                         const WioNativeTaskCompletionApi* completions)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, pods, defaults, sequences,
+                                          &dictionaries);
+    }
+
     bool Machine::loadNativeLibrary(const std::filesystem::path& path, std::string* error)
     {
         const auto reject = [&](std::string message)
@@ -1736,7 +1748,8 @@ namespace wio::vm
     bool Machine::registerNativeRegistryImpl(const WioNativeAbiRegistry& registry, const WioNativeTaskApi* tasks,
                                              const WioNativeTaskCompletionApi* completions, std::string* error,
                                              const WioNativePodLayoutApi* pods, const WioNativePodDefaultApi* defaults,
-                                             const WioNativeSequenceApi* sequences)
+                                             const WioNativeSequenceApi* sequences,
+                                             const WioNativeDictionaryApi* dictionaries)
     {
         const auto reject = [&](std::string message)
         {
@@ -1788,7 +1801,7 @@ namespace wio::vm
 
         std::scoped_lock lock{program_->nativeMutex};
         std::shared_ptr<detail::NativePodLayouts> layouts;
-        if (pods || sequences)
+        if (pods || sequences || dictionaries)
         {
             layouts = std::make_shared<detail::NativePodLayouts>(*program_->nativePodLayouts);
             std::string layoutError;
@@ -1796,7 +1809,12 @@ namespace wio::vm
                 return reject(std::move(layoutError));
             if (defaults && !detail::mergeNativePodDefaults(*program_->module, *defaults, *layouts, layoutError))
                 return reject(std::move(layoutError));
-            if (sequences && !detail::mergeNativeSequences(*program_->module, *sequences, *layouts, layoutError))
+            if (sequences && !detail::mergeNativeSequences(*program_->module, *sequences, *layouts, layoutError, false))
+                return reject(std::move(layoutError));
+            if (dictionaries &&
+                !detail::mergeNativeDictionaries(*program_->module, *dictionaries, *layouts, layoutError, false))
+                return reject(std::move(layoutError));
+            if (!detail::validateNativeContainers(*program_->module, *layouts, layoutError))
                 return reject(std::move(layoutError));
         }
         for (Program::NativeFunction& addition : additions)
@@ -4536,13 +4554,14 @@ namespace wio::vm
 
                 for (const auto& root : nativeFrame.tokens)
                 {
-                    if (!podLayouts->sequences.contains(referenceBase(root.type)))
+                    if (!podLayouts->sequences.contains(referenceBase(root.type)) &&
+                        !podLayouts->dictionaries.contains(referenceBase(root.type)))
                         continue;
                     for (const auto& child : nativeFrame.tokens)
                         if (&root != &child &&
                             detail::containsNativeSequencePlace(root.place->storedValue(), child.place->storedValue()))
                             return fail("WVM1225",
-                                        "Overlapping native array/element references require sequence projections");
+                                        "Overlapping native container/element references require sequence projections");
                 }
 
                 // One outermost POD slot owns every overlapping field/nested
@@ -4634,11 +4653,13 @@ namespace wio::vm
                     }
                     else
                     {
-                        if (podLayouts->sequences.contains(referenceBase(token.type)) &&
+                        if ((podLayouts->sequences.contains(referenceBase(token.type)) ||
+                             podLayouts->dictionaries.contains(referenceBase(token.type))) &&
                             !detail::compatibleNativeSequenceCopyBack(token.place->storedValue(), replacement.value))
                         {
                             if (copyBackError.empty())
-                                copyBackError = "Native array ref cannot change sequence lengths before borrow "
+                                copyBackError = "Native container ref cannot change sequence lengths or dictionary key "
+                                                "sets before borrow "
                                                 "invalidation is supported";
                             replacements.push_back({});
                             continue;
@@ -4671,6 +4692,17 @@ namespace wio::vm
                             for (std::size_t element = 0; element < target.elementCount(); ++element)
                                 self(self, *target.mutableElement(element),
                                      std::move(*replacement.mutableElement(element)));
+                        }
+                        else if (target.kind() == Value::Kind::Dictionary &&
+                                 replacement.kind() == Value::Kind::Dictionary)
+                        {
+                            std::vector<std::size_t> order;
+                            // The full key/shape match was checked before committing
+                            // any replacement. Preserve every existing value cell.
+                            if (detail::nativeDictionaryCopyBackOrder(target, replacement, order))
+                                for (std::size_t index = 0; index < order.size(); ++index)
+                                    self(self, *target.mutableDictionaryValue(index),
+                                         std::move(*replacement.mutableDictionaryValue(order[index])));
                         }
                         else
                             target = std::move(replacement);

@@ -233,10 +233,10 @@ executable negative cases for local `any` and structured callbacks:
   below, including overlapping aggregate/field/array-element references.
   A producer without the layout sidecar retains raw-POD round-trips but does not
   support local-component materialization (`WVM1223`) or ordinary field places.
-- VM-created `any`/dictionaries/objects are not interchangeable with foreign
+- VM-created `any`/objects are not interchangeable with foreign
   runtime/object handles. Native factories and their foreign values work;
   structural VM-to-producer materialization still needs adapters (`WVM1223`).
-  Dynamic arrays now use the optional sequence adapter described below; this
+  Dynamic arrays/dictionaries now use the optional container adapters described below; this
   does not imply arbitrary runtime-value, nullable-wrapper or object conversion.
 - POD/object/container callback signatures, nullable callback signatures, and
   callback `ref`/`view` parameters need signature-specific type identities and
@@ -648,10 +648,10 @@ outputs; strings, text and nested arrays never borrow a released producer box.
 
 Automatic adapters cover dynamic arrays with scalar/enum/flagset, string, text,
 opaque/nullable-opaque, registered non-generic native POD, or recursively
-supported dynamic-array elements. `std::vector<bool>` uses explicit bool values,
+supported dynamic-array/dictionary elements. `std::vector<bool>` uses explicit bool values,
 not foreign proxy references. Unexposed POD fields survive array round trips via
 the existing producer backing representation. Fixed arrays as sequence elements,
-generic POD elements, arbitrary nullable elements, `any`, Wio objects, dictionaries
+generic POD elements, arbitrary nullable elements, `any`, Wio objects
 and structured callbacks are not part of this slice. Existing fixed-array POD
 field support is independent.
 
@@ -690,3 +690,98 @@ and mixed view/ref aliases. It also checks real VM diagnostics for length-changi
 ref copy-back, array/element overlap and producer exception diagnostics.
 Both focused gates passed locally on Windows (2/2, 35.70 seconds). Only these
 new gates were run; no full-suite or local Linux pass is claimed.
+
+## Ordered and unordered dictionary producer adapters
+
+The optional `WioGetNativeDictionaryApi` export uses dictionary-v1 metadata,
+independent of sequence-v1 and POD layout/default sidecars. It maps Wio
+`Dict<K, V>` to producer `std::unordered_map<K, V>` and `Tree<K, V>` to
+`std::map<K, V>`. Existing wire-v2 layouts, bytecode formats and public SDK
+registration symbols remain unchanged. Old producers can still round-trip
+their foreign runtime handles; local VM dictionaries require adapters
+(`WVM1223`).
+
+```wio
+using cpp::header("scores.h");
+use std::attribute as attribute;
+
+[Native, CppName(scores::Transform)]
+fn Transform(values: Dict<string, i32>) -> Dict<string, i32>;
+[Native, CppName(scores::Update)]
+fn Update(values: ref Dict<string, i32>);
+
+fn Entry() -> i32 {
+    mut scores: Dict<string, i32> = { "health": 7, "armor": 11 };
+    let armor: view i32 = ref scores["armor"];
+    let copy = Transform(scores); // by-value isolation; returned keys may differ
+    Update(ref scores);           // existing key set, in-place value updates
+    return deref armor;
+}
+```
+
+Each descriptor records exact dictionary, key and mapped-value identities,
+ordered/unordered flags and producer pack/count/read operations. Entry buffers
+alternate key and value cells; counts refer to pairs. The producer constructs
+its concrete C++ map, including its real typed runtime box. Read fills the entire
+buffer in one traversal, avoiding an indexed-map walk from the beginning for
+each entry. It does not copy the complete map for count or read. Owned key/value
+cells are independently released, including every partially filled failure.
+Duplicate keys are rejected on both producer pack and VM decode, rather than
+silently collapsing malformed producer output.
+
+Portable keys are bool, signed/unsigned integers, byte, char, enum/flagset,
+string and Unicode text. Floating-point, nullable, opaque and object/container
+keys are not part of the automatic adapter contract. Values cover scalar,
+string/text, opaque/nullable-opaque, registered non-generic native POD and
+recursively supported dynamic array/dictionary shapes. Examples include
+`Dict<string, i32[]>`, `Dict<string, Tree<i32, string>>` and
+`Dict<string, i32>[]`. Arbitrary nullable wrappers, generic POD elements,
+`any`, Wio objects and structured callbacks remain separate work.
+
+Sequence/dictionary descriptors are staged together, then all key/value and
+nested dependencies are validated before publishing the registry snapshot.
+Mixed nesting therefore does not depend on descriptor order. Unknown flags,
+wrong identities/order, incomplete descriptors, conflicting adapters and
+missing dependencies reject registration atomically. Conversion has the same
+depth-64 bound and one-million-entry limit per dictionary as sequence conversion.
+
+Ref copy-back uses a temporary key index, not producer iteration positions.
+Unordered rehashing cannot redirect one VM value borrow to another key. Updates
+preserve each original VM value cell, including nested array elements and POD
+fields/backing. Whole-container view/ref aliases share the existing producer
+frame slot; repeated commits do not acquire a second ownership claim. Library
+pinning now traverses dictionary keys/values, so escaped native POD/opaque
+children keep producer code/data loaded after their VM is destroyed.
+
+Current restrictions:
+
+- Ref calls must preserve the key set and all nested container shapes. Adding,
+  removing or renaming keys, even without changing the count, or changing a
+  nested array length fails with `WVM1224` before VM replacements are applied.
+- A container and its key/value/descendant cell cannot be passed as separate
+  ref/view arguments (`WVM1225` before the thunk executes). Address-preserving
+  container projections and borrow invalidation are still pending.
+- By-value native calls may change keys/lengths and return a new container.
+  Rejected copy-back cannot roll back independent native side effects.
+  Materialized ref/view values remain call-scoped.
+
+Dictionary decode, duplicate validation and copy-back key matching use hash
+indices for expected-linear work. Large VM dictionary construction now uses the
+same portable-key hash helper instead of scanning all preceding keys; existing
+first-key-wins semantics and insertion order are unchanged. Small or unsupported
+key sets retain the original path. Ordered dictionaries still perform their
+normal key sort. This is an asymptotic improvement, not a measured end-to-end
+compiler/runtime speedup claim.
+
+Focused gates: `wio_vm_native_dictionary` and
+`wio_vm_native_dictionary_differential`. They cover checked producer boxes,
+malformed metadata, cross-container dependency ordering, key-based copy-back,
+invalid/duplicate keys and buffers, owned partial failures, empty/nested maps,
+embedded-NUL keys/strings, Unicode keys, unordered rehashing, view/ref aliases,
+POD hidden fields, nullable pointers, by-value isolation and existing borrows.
+The real generated-DLL host case checks escaped dictionary/POD library lifetime
+and final lease release. Negative VM gates cover key insertion, same-size key
+renaming, nested array growth, overlapping element borrows and producer
+exceptions. Both new gates passed locally on Windows (2/2, 85.62 seconds),
+including the real generated-DLL lifetime host case. Only the new focused
+gates were run; no full-suite or Linux pass is claimed.

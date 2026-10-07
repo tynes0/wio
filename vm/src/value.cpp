@@ -1,4 +1,5 @@
 #include "wio/vm/value.h"
+#include "dictionary_keys.h"
 
 #include <algorithm>
 #include <atomic>
@@ -8,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <utility>
+#include <unordered_set>
 #include <vector>
 
 namespace wio::vm
@@ -498,10 +500,18 @@ namespace wio::vm
     {
         std::vector<Value> unique;
         unique.reserve(entries.size());
+        // Keep first-key-wins semantics. Bulk portable keys use a hash index
+        // into reserved, stable output storage instead of a quadratic scan.
+        bool indexed = entries.size() >= 32;
+        for (std::size_t index = 0; indexed && index + 1 < entries.size(); index += 2)
+            indexed = detail::DictionaryKeyHash::supported(entries[index]);
+        std::unordered_set<const Value*, detail::DictionaryKeyHash, detail::DictionaryKeyEqual> keys;
+        if (indexed)
+            keys.reserve(entries.size() / 2);
         for (std::size_t index = 0; index + 1 < entries.size(); index += 2)
         {
-            bool duplicate = false;
-            for (std::size_t existing = 0; existing < unique.size(); existing += 2)
+            bool duplicate = indexed && keys.contains(&entries[index]);
+            for (std::size_t existing = 0; !indexed && existing < unique.size(); existing += 2)
             {
                 if (unique[existing] == entries[index])
                 {
@@ -513,6 +523,8 @@ namespace wio::vm
             {
                 unique.push_back(std::move(entries[index]));
                 unique.push_back(std::move(entries[index + 1]));
+                if (indexed)
+                    keys.insert(&unique[unique.size() - 2]);
             }
         }
         if (ordered)
@@ -591,6 +603,12 @@ namespace wio::vm
         else if (kind_ == Kind::Array)
             for (std::size_t index = 0; index < elementCount(); ++index)
                 element(index)->pinNativeLibrary(library);
+        else if (kind_ == Kind::Dictionary)
+            for (std::size_t index = 0; index < dictionaryCount(); ++index)
+            {
+                dictionaryKey(index)->pinNativeLibrary(library);
+                dictionaryValue(index)->pinNativeLibrary(library);
+            }
         if (library && (kind_ == Kind::Opaque || kind_ == Kind::ForeignObject || kind_ == Kind::RuntimeValue ||
                         kind_ == Kind::NativePod))
             scalar_.foreign->pinLibrary(std::move(library));
@@ -1019,6 +1037,12 @@ namespace wio::vm
                 return &entries[index + 1];
         }
         return nullptr;
+    }
+
+    Value* Value::mutableDictionaryValue(const std::size_t index) noexcept
+    {
+        return kind_ == Kind::Dictionary && index < dictionaryCount() ? &scalar_.aggregate->values()[index * 2 + 1]
+                                                                      : nullptr;
     }
 
     Value* Value::mutableDictionaryValue(const Value& key) noexcept

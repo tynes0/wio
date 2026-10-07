@@ -682,7 +682,14 @@ Rider, and CLion are defined in
    and same-shape ref copy-back have focused differential coverage. Length-changing
    ref copy-back and overlapping array/element references reject explicitly until
    their borrow-invalidation/projection contract is complete.
-   Remaining native parity work includes VM-created any/dictionary/object
+   Dictionary adapters now cover ordered/unordered maps, portable key identities,
+   string/text/native-POD/nullable-opaque values, nested dictionaries and mixed
+   array/dictionary shapes. Bulk producer reads use one traversal; copy-back
+   matches by key and updates existing cells despite unordered rehashing.
+   Same-key-set ref updates and escaped producer-library lifetime have focused
+   coverage. Key-set/sequence-length changes and overlapping container/descendant
+   borrows still require an explicit invalidation/projection contract.
+   Remaining native parity work includes VM-created any/object
    materialization into producer storage; POD/object/container/nullable and
    ref/view callback signatures; consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See

@@ -1,43 +1,15 @@
 #pragma once
 
-#include "wir_abi.h"
+#include "wir_container_abi.h"
 #include <wio_native_sequence.h>
 
 namespace wio::wir_backend::abi
 {
-    template <class T, std::uint64_t Id, std::uint64_t ElementId> struct SequenceAdapter final
+    template <class T, std::uint64_t Id, std::uint64_t ElementId> struct SequenceAdapter final : ContainerAdapter<T, Id>
     {
         using Element = typename T::value_type;
-
-        static const T& storage(const WioNativeAbiValue* value)
-        {
-            require(value && value->kind == WIO_NATIVE_ABI_RUNTIME_VALUE && value->typeId == Id &&
-                    value->payload.handle.state && value->payload.handle.ops == &Box<T, Id>::ops);
-            return static_cast<const Box<T, Id>*>(value->payload.handle.state)->value;
-        }
-
-        template <class F> static WioNativeAbiStatus boundary(WioNativeAbiFailure* output, F&& action) noexcept
-        {
-            if (output)
-                *output = {};
-            try
-            {
-                action();
-                return WIO_NATIVE_ABI_OK;
-            }
-            catch (const Error& error)
-            {
-                return failure(output, error.status, error.what());
-            }
-            catch (const std::exception& error)
-            {
-                return failure(output, WIO_NATIVE_ABI_EXCEPTION, error.what());
-            }
-            catch (...)
-            {
-                return failure(output, WIO_NATIVE_ABI_EXCEPTION, "native sequence adapter failed");
-            }
-        }
+        using ContainerAdapter<T, Id>::boundary;
+        using ContainerAdapter<T, Id>::storage;
 
         static WioNativeAbiStatus pack(const WioNativeAbiValue* elements, std::uint64_t count,
                                        WioNativeAbiValue* result, WioNativeAbiFailure* output) noexcept
@@ -54,19 +26,6 @@ namespace wio::wir_backend::abi
                                 for (std::uint64_t index = 0; index < count; ++index)
                                     value.push_back(Codec<Element, ElementId>::read(elements[index]));
                                 *result = Codec<T, Id>::write(std::move(value));
-                            });
-        }
-
-        static WioNativeAbiStatus count(const WioNativeAbiValue* value, std::uint64_t* result,
-                                        WioNativeAbiFailure* output) noexcept
-        {
-            if (result)
-                *result = 0;
-            return boundary(output,
-                            [&]
-                            {
-                                require(result, WIO_NATIVE_ABI_INVALID_ARGUMENT);
-                                *result = storage(value).size();
                             });
         }
 

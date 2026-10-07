@@ -5,7 +5,13 @@
 namespace wio::vm::detail
 {
     [[nodiscard]] bool mergeNativeSequences(const bytecode::Module& module, const WioNativeSequenceApi& api,
-                                            NativePodLayouts& layouts, std::string& error);
+                                            NativePodLayouts& layouts, std::string& error,
+                                            bool validateElements = true);
+    [[nodiscard]] bool supportedNativeContainerValue(const bytecode::Module& module, std::uint32_t type,
+                                                     const NativePodLayouts& layouts);
+    [[nodiscard]] bool validateNativeContainers(const bytecode::Module& module, const NativePodLayouts& layouts,
+                                                std::string& error);
+    [[nodiscard]] bool validNativeContainerWire(const WioNativeAbiValue& value, std::uint64_t typeId);
     [[nodiscard]] bool packNativeSequence(const bytecode::Module& module, const Value& value, std::uint32_t type,
                                           const NativePodLayouts& layouts, WioNativeAbiValue& output,
                                           std::string& error, unsigned depth);

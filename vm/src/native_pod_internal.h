@@ -3,6 +3,7 @@
 #include "native_bridge_internal.h"
 #include <wio_native_pod.h>
 #include <wio_native_sequence.h>
+#include <wio_native_dictionary.h>
 
 #include <unordered_map>
 #include <vector>
@@ -36,6 +37,7 @@ namespace wio::vm::detail
         std::unordered_map<std::uint32_t, NativePodLayout> types;
         std::unordered_map<std::uint32_t, WioNativePodDefaultFn> defaults;
         std::unordered_map<std::uint32_t, WioNativeSequenceDescriptor> sequences;
+        std::unordered_map<std::uint32_t, WioNativeDictionaryDescriptor> dictionaries;
     };
 
     struct NativePodProjection

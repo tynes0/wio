@@ -5,6 +5,7 @@
 #include <wio_native_abi.h>
 #include <wio_native_pod.h>
 #include <wio_native_sequence.h>
+#include <wio_native_dictionary.h>
 
 #include <system_error>
 #include <map>
@@ -90,6 +91,7 @@ namespace wio::vm::detail
         const WioNativePodLayoutApi* pods = nullptr;
         const WioNativePodDefaultApi* defaults = nullptr;
         const WioNativeSequenceApi* sequences = nullptr;
+        const WioNativeDictionaryApi* dictionaries = nullptr;
         std::mutex machineMutex;
         std::size_t activeMachines = 0;
 
@@ -213,6 +215,12 @@ namespace wio::vm::detail
             if (!library->state_->sequences)
                 return fail("native VM module returned a null sequence sidecar");
         }
+        if (const auto getDictionaries = loadSymbol<WioGetNativeDictionaryApiFn>(handle, "WioGetNativeDictionaryApi"))
+        {
+            library->state_->dictionaries = getDictionaries();
+            if (!library->state_->dictionaries)
+                return fail("native VM module returned a null dictionary sidecar");
+        }
         error.clear();
         cache.insert_or_assign(library->path(), library);
         return library;
@@ -227,7 +235,11 @@ namespace wio::vm::detail
         }
         std::scoped_lock lock{state_->machineMutex};
         const bool registered =
-            state_->sequences
+            state_->dictionaries
+                ? machine.registerNativeRegistry(*state_->registry, *state_->dictionaries, &error, state_->sequences,
+                                                 state_->pods, state_->defaults,
+                                                 state_->completions ? state_->tasks : nullptr, state_->completions)
+            : state_->sequences
                 ? machine.registerNativeRegistry(*state_->registry, *state_->sequences, &error, state_->pods,
                                                  state_->defaults, state_->completions ? state_->tasks : nullptr,
                                                  state_->completions)

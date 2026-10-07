@@ -4,7 +4,7 @@
 
 namespace wio::codegen
 {
-    class WirNativeSequenceEmitter final
+    class WirNativeContainerEmitter final
     {
     public:
         [[nodiscard]] static std::string emit(const wir::lowered::Module& module,
