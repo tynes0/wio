@@ -1241,3 +1241,30 @@ here as historical evidence rather than active work:
       these gates; wire-v2, the layout sidecar and bytecode versions are unchanged.
       Visible C++ member defaults and overlapping aggregate/field arguments
       remain separate backlog work.
+
+## VM Native POD Producer Defaults
+
+- [x] Added the optional version-1 default factory sidecar alongside the
+      unchanged version-1 layout API. Generated producers evaluate C++ `T{}`
+      and return checked owned POD output; the existing registration overload,
+      wire-v2 and bytecode versions remain unchanged.
+- [x] Qualified explicit/implicit defaults, memberwise overrides, nested and
+      fixed-array defaults, concrete generic/zero-extent/empty PODs, native
+      fields in Wio components/objects and native async results. Wio memberwise
+      arguments do not execute defaults for native fields already supplied.
+- [x] Preserved hidden producer defaults through immutable prototypes and
+      fixed incidental C++ default initialization during POD decoding by using
+      byte-copy/bit-cast materialization. Independent initializer counters
+      verify exactly-once construction across copies and native calls.
+- [x] Validated default registration transactionally and checked owned wire
+      identity, size and owner operations. Partial/failing/malformed factory
+      results release owned storage once. Legacy fully specified construction
+      still works; missing required default factories report `WVM1223`.
+- [x] Pinned producer libraries through decoded opaque fields and immutable POD
+      backing bytes. A real independent-DLL gate checks escaped static pointers
+      after machine teardown, including the final backing-only lease. Raw
+      pointers remain borrowed rather than implicitly owned.
+- [x] Added four focused gates, including generated C++/VM differential tests
+      and a module with defaults but no native functions. All passed locally
+      on Windows (4/4, 23.66 seconds). No full-suite or local Linux pass is
+      claimed; overlapping aggregate/field argument aliases remain open.

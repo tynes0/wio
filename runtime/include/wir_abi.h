@@ -1,5 +1,7 @@
 #pragma once
 #include <wio_native_abi.h>
+#include <array>
+#include <bit>
 #include <atomic>
 #include <any>
 #include <functional>
@@ -122,9 +124,11 @@ template <class T, std::uint64_t Id> struct Codec
         {
             require(v.kind == WIO_NATIVE_ABI_POD && v.typeId == Id && v.payload.slice.data &&
                     v.payload.slice.size == sizeof(T));
-            T result;
-            std::memcpy(&result, v.payload.slice.data, sizeof(T));
-            return result;
+            // Materializing an existing POD must not execute its C++ member
+            // default initializers before overwriting the object bytes.
+            std::array<std::byte, sizeof(T)> bytes;
+            std::memcpy(bytes.data(), v.payload.slice.data, sizeof(T));
+            return std::bit_cast<T>(bytes);
         }
         else
         {

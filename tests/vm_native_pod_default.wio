@@ -1,0 +1,120 @@
+using cpp::header("vm_pod_default_fixture.h");
+use std::attribute as attribute;
+
+// Deliberately reordered relative to C++.
+[Native, CppName(vm_pod_default::Settings)]
+component Settings {
+    public pointer: opaque?;
+    public count: i32;
+    public enabled: bool;
+    public values: [i32; 3];
+    public scale: f64;
+}
+
+[Native, CppName(vm_pod_default::Buffer)]
+component Buffer<T, const N: usize> {
+    public values: [T; N];
+}
+
+[Native, CppName(vm_pod_default::Nested)]
+component Nested {
+    public settings: Settings;
+    public copies: [Settings; 2];
+    public empty: Buffer<i32, 0>;
+}
+
+[Native, CppName(vm_pod_default::Empty)]
+component Empty {}
+
+component Wrapper {
+    public settings: Settings;
+}
+
+object Holder {
+    public settings: Settings;
+}
+
+[Native, CppName(vm_pod_default::Reset)]
+fn Reset();
+[Native, CppName(vm_pod_default::Count)]
+fn Count() -> i32;
+[Native, CppName(vm_pod_default::Echo)]
+fn Echo(value: Settings) -> Settings;
+[Native, CppName(vm_pod_default::Bump)]
+fn Bump(value: ref Settings);
+[Native, CppName(vm_pod_default::Hidden)]
+fn Hidden(value: view Settings) -> i32;
+[Native, CppName(vm_pod_default::HiddenEmpty)]
+fn HiddenEmpty(value: view Empty) -> i32;
+[Native, CppName(vm_pod_default::Read)]
+fn Read(value: opaque?) -> i32;
+[Native, CppName(vm_pod_default::EchoBuffer), instantiate(i32, 3), instantiate(i32, 0)]
+fn EchoBuffer<T, const N: usize>(value: Buffer<T, N>) -> Buffer<T, N>;
+[Native, CppName(vm_pod_default::Delayed)]
+async fn Delayed() -> Settings;
+[Native, CppName(vm_pod_default::Print)]
+fn Print(value: string);
+
+async fn Entry() -> i32 {
+    Reset();
+    mut settings = Settings();
+    if (Count() != 1 or settings.count != 17 or !settings.enabled or settings.scale != 2.5f64 or
+        settings.values[2usize] != 7 or Read(settings.pointer) != 47 or Hidden(ref settings) != 61) {
+        return 1;
+    }
+
+    let borrow: view i32 = ref settings.count;
+    let copy = Echo(settings);
+    Bump(ref settings);
+    if (Count() != 1 or deref borrow != 18 or copy.count != 17 or Hidden(ref settings) != 62) {
+        return 2;
+    }
+
+    let explicit = Settings(null, 29, false, [1, 2, 3], 4.5f64);
+    if (Count() != 2 or explicit.pointer != null or explicit.count != 29 or explicit.enabled or
+        explicit.scale != 4.5f64 or explicit.values[2usize] != 3 or Hidden(ref explicit) != 61) {
+        return 3;
+    }
+
+    mut defaulted: Settings;
+    if (Count() != 3 or defaulted.count != 17 or Read(defaulted.pointer) != 47) {
+        return 4;
+    }
+    mut array: [Settings; 2];
+    if (Count() != 5 or array[1usize].count != 17) {
+        return 5;
+    }
+
+    let nested = Nested();
+    if (Count() != 8 or nested.settings.count != 17 or nested.copies[1usize].values[0usize] != 3 or
+        nested.empty.values.Count() != 0usize) {
+        return 6;
+    }
+
+    let buffer = EchoBuffer<i32, 3>(Buffer<i32, 3>());
+    let empty = EchoBuffer<i32, 0>(Buffer<i32, 0>());
+    if (buffer.values[0usize] != 11 or buffer.values[2usize] != 13 or empty.values.Count() != 0usize) {
+        return 7;
+    }
+
+    let wrapper = Wrapper();
+    let holder = Holder();
+    if (Count() != 10 or wrapper.settings.count != 17 or holder.settings.count != 17) {
+        return 8;
+    }
+    let explicitWrapper = Wrapper(copy);
+    if (Count() != 10 or explicitWrapper.settings.count != 17) {
+        return 9;
+    }
+
+    let delayed = await Delayed();
+    if (Count() != 11 or delayed.count != 17 or Hidden(ref delayed) != 61 or Read(delayed.pointer) != 47) {
+        return 10;
+    }
+    let emptyRecord = Empty();
+    if (Count() != 12 or HiddenEmpty(ref emptyRecord) != 48 or Count() != 12) {
+        return 11;
+    }
+    Print("native-pod-default-ok:local/explicit/array/nested/generic/zero/empty/wrapper/object/borrow/copy/hidden/async/once");
+    return 0;
+}

@@ -17,6 +17,7 @@ struct WioNativeAbiRegistry;
 struct WioNativeTaskApi;
 struct WioNativeTaskCompletionApi;
 struct WioNativePodLayoutApi;
+struct WioNativePodDefaultApi;
 
 namespace wio::vm
 {
@@ -143,6 +144,12 @@ namespace wio::vm
                                                   const WioNativeTaskApi* tasks = nullptr,
                                                   const WioNativeTaskCompletionApi* completions = nullptr,
                                                   std::string* error = nullptr);
+        // Additive overload: preserve the original C++ registration symbol.
+        [[nodiscard]] bool registerNativeRegistry(const WioNativeAbiRegistry& registry,
+                                                  const WioNativePodLayoutApi& pods,
+                                                  const WioNativeTaskApi* tasks,
+                                                  const WioNativeTaskCompletionApi* completions,
+                                                  std::string* error, const WioNativePodDefaultApi* defaults);
 
         // Loads a generated native thunk module, discovers its registry and
         // optional async sidecars, and pins the dynamic library until this
@@ -184,7 +191,8 @@ namespace wio::vm
         [[nodiscard]] bool registerNativeRegistryImpl(const WioNativeAbiRegistry& registry,
                                                       const WioNativeTaskApi* tasks,
                                                       const WioNativeTaskCompletionApi* completions,
-                                                      std::string* error, const WioNativePodLayoutApi* pods = nullptr);
+                                                      std::string* error, const WioNativePodLayoutApi* pods = nullptr,
+                                                      const WioNativePodDefaultApi* defaults = nullptr);
 
         struct Program;
         std::shared_ptr<Program> program_;

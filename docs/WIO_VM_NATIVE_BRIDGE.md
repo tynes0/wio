@@ -229,8 +229,8 @@ executable negative cases for local `any` and structured callbacks:
 - Native PODs with fields outside the qualified
   scalar/pointer/fixed-array/nested-POD adapter surface still need qualification.
   Actual pack-storage fields are not POD fields. Concrete const-generic and
-  variadic component arguments are qualified below; visible C++ member-default
-  initialization still needs its own default-value contract.
+  variadic component arguments and producer-owned C++ defaults are qualified
+  below; overlapping aggregate/field argument aliases remain separate work.
   A producer without the layout sidecar retains raw-POD round-trips but does not
   support local-component materialization (`WVM1223`) or ordinary field places.
 - VM-created `any`/containers/objects are not interchangeable with foreign
@@ -288,8 +288,9 @@ qualification is Windows only; Linux remains a CI verification requirement.
 
 POD adapters are internal ABI materialization, not the richer callback bridge.
 Structured callbacks and overlapping whole-component/field arguments within
-one native call still need dedicated borrow/alias plans. Visible native member
-defaults also remain separate work; hidden prototype fields are preserved.
+one native call still need dedicated borrow/alias plans. Native member defaults
+use the optional producer factory described below; hidden prototype fields are
+preserved.
 
 ## Fixed-array POD fields
 
@@ -461,3 +462,82 @@ oracles; rejection fixtures also qualify non-POD variadic/specialized fields,
 pack storage and non-allowlisted extents. Qualification is local Windows only;
 Linux remains selected by `native-differential;release-gate` CI labels.
 Wire-v2, the layout sidecar and bytecode format versions are unchanged.
+
+## Native POD producer defaults
+
+Generated native modules export an optional `WioGetNativePodDefaultApi` sidecar
+declared in `sdk/include/wio_native_pod.h`. Its version-1 descriptors map stable
+type identities to checked default factories. This is independent of the
+existing version-1 layout descriptor: layout structure/stride, wire-v2 and
+bytecode versions are unchanged, and the original C++ registration overload
+remains available.
+
+Each factory evaluates the producer's C++ `T{}` and returns an owned POD wire
+value. The VM validates identity, size and ownership, decodes visible fields,
+and keeps an immutable byte prototype for hidden fields. Owned output is
+released exactly once, including partial-output and malformed-output failures;
+generated factories translate exceptions through the native failure boundary.
+Registration validates layout/factory pairing and publishes changes atomically.
+
+For example, the C++ producer can define:
+
+```cpp
+struct SettingsCpp
+{
+    std::int32_t count = 17;
+    bool enabled = true;
+    double scale = 2.5;
+    std::int32_t hidden = 61;
+};
+```
+
+The Wio declaration can expose only the public fields:
+
+```wio
+using cpp::header("settings.h");
+use std::attribute as attribute;
+
+[Native, CppName(SettingsCpp)]
+component Settings
+{
+    public count: i32;
+    public enabled: bool;
+    public scale: f64;
+}
+```
+
+`Settings()` and an implicitly initialized `mut settings: Settings;` then use
+the producer defaults instead of guessed VM zeroes. Native memberwise arguments
+override their corresponding visible fields after `T{}`, matching the C++
+backend. The hidden value remains in the prototype. Decoding an existing
+trivially-copyable POD uses a byte copy and `std::bit_cast`, not default
+construction followed by overwrite; initializer side effects are not repeated
+by packing, native calls or copying.
+
+The qualified surface includes zero-argument construction, implicit defaults,
+fixed arrays, nested/concrete-generic/zero-extent/empty native PODs, native
+fields inside Wio components and objects, and native async results. A nested
+native aggregate is defaulted as a whole by its producer, preserving outer C++
+initializers. Wio memberwise fields supplied by arguments do not execute an
+unused native default initializer before being replaced.
+
+Legacy producers without the default sidecar still support fully specified
+memberwise construction through the existing layout adapters. Construction
+that needs a producer default reports `WVM1223` instead of silently guessing
+zeroes. The default sidecar is emitted and discovered even when the module
+contains no native function declarations.
+
+Raw pointer defaults are borrowed; byte copying does not infer pointee
+ownership or destruction. Decoded opaque fields and immutable POD backing
+storage both pin the producer library, including hidden pointers into producer
+static data after machine teardown. This does not turn arbitrary pointers into
+owned resources or extend externally managed resource lifetime.
+
+The four focused gates are `wio_vm_native_pod_default`,
+`wio_vm_native_pod_default_differential`,
+`wio_vm_native_pod_default_lifetime`, and `wio_vm_native_pod_default_only`.
+They cover registration/ownership failures, independent value and initializer
+count oracles, C++/VM output parity, default-only modules and escaped DLL values.
+All four passed locally on Windows (4/4, 23.66 seconds). No full-suite or local
+Linux pass is claimed; existing `native-differential;release-gate` labels select
+CI coverage. Overlapping whole-component/field arguments remain open.

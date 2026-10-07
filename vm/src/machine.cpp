@@ -422,6 +422,40 @@ namespace wio::vm
             return object ? Value::object(typeId, std::move(fields)) : Value::component(typeId, std::move(fields));
         }
 
+        [[nodiscard]] detail::NativeValueResult runtimeDefaultValue(const bytecode::Module& module,
+                                                                    const std::uint32_t typeId,
+                                                                    const detail::NativePodLayouts& layouts,
+                                                                    const unsigned depth = 0)
+        {
+            if (typeId >= module.types.size() || depth > 128)
+                return {{}, "default construction has an invalid type or exceeds its recursion budget"};
+            const auto& type = module.types[typeId];
+            if (type.kind == TypeNamed && type.nominalKind == NominalComponent &&
+                type.nominalRepresentation == RepresentationNativePod)
+                return detail::defaultNativePod(module, typeId, layouts);
+            const bool component = type.kind == TypeNamed && type.nominalKind == NominalComponent;
+            const bool fixedArray =
+                type.kind == TypeArray && type.staticExtent != (std::numeric_limits<std::uint64_t>::max)();
+            if (component || fixedArray)
+            {
+                const auto count = component ? type.fields.size() : type.staticExtent;
+                if (count > (std::numeric_limits<std::size_t>::max)() || (fixedArray && type.arguments.size() != 1))
+                    return {{}, "default array has an invalid extent or element type"};
+                std::vector<Value> values;
+                values.reserve(static_cast<std::size_t>(count));
+                for (std::size_t index = 0; index < count; ++index)
+                {
+                    const auto elementType = component ? type.fields[index].type : type.arguments.front();
+                    auto value = runtimeDefaultValue(module, elementType, layouts, depth + 1);
+                    if (!value.succeeded())
+                        return value;
+                    values.push_back(std::move(value.value));
+                }
+                return {component ? Value::component(typeId, std::move(values)) : Value::array(std::move(values)), {}};
+            }
+            return {defaultValue(module, typeId, depth), {}};
+        }
+
         [[nodiscard]] bool compareResult(const std::uint8_t operation, const bool less, const bool equal) noexcept
         {
             switch (operation)
@@ -889,7 +923,7 @@ namespace wio::vm
         {
             if (value.kind() != Value::Kind::Opaque && value.kind() != Value::Kind::ForeignObject &&
                 value.kind() != Value::Kind::RuntimeValue && value.kind() != Value::Kind::Component &&
-                value.kind() != Value::Kind::Array)
+                value.kind() != Value::Kind::Array && value.kind() != Value::Kind::NativePod)
                 return;
             std::scoped_lock lock{nativeMutex};
             for (const auto& library : nativeLibraries)
@@ -1622,6 +1656,13 @@ namespace wio::vm
         return registerNativeRegistryImpl(registry, tasks, completions, error, &pods);
     }
 
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativePodLayoutApi& pods,
+                                         const WioNativeTaskApi* tasks, const WioNativeTaskCompletionApi* completions,
+                                         std::string* error, const WioNativePodDefaultApi* defaults)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, &pods, defaults);
+    }
+
     bool Machine::loadNativeLibrary(const std::filesystem::path& path, std::string* error)
     {
         const auto reject = [&](std::string message)
@@ -1685,7 +1726,7 @@ namespace wio::vm
 
     bool Machine::registerNativeRegistryImpl(const WioNativeAbiRegistry& registry, const WioNativeTaskApi* tasks,
                                              const WioNativeTaskCompletionApi* completions, std::string* error,
-                                             const WioNativePodLayoutApi* pods)
+                                             const WioNativePodLayoutApi* pods, const WioNativePodDefaultApi* defaults)
     {
         const auto reject = [&](std::string message)
         {
@@ -1740,6 +1781,8 @@ namespace wio::vm
             layouts = std::make_shared<detail::NativePodLayouts>(*program_->nativePodLayouts);
             std::string layoutError;
             if (!detail::mergeNativePodLayouts(*program_->module, *pods, *layouts, layoutError))
+                return reject(std::move(layoutError));
+            if (defaults && !detail::mergeNativePodDefaults(*program_->module, *defaults, *layouts, layoutError))
                 return reject(std::move(layoutError));
         }
         for (Program::NativeFunction& addition : additions)
@@ -2345,7 +2388,22 @@ namespace wio::vm
             if (instruction.opcode == bytecode::Opcode::DefaultValue)
             {
                 const std::uint8_t type = module.types[instruction.resultType].kind;
-                Value value = defaultValue(module, instruction.resultType);
+                Value value;
+                if (type != TypeNamed && type != TypeArray)
+                    value = defaultValue(module, instruction.resultType);
+                else
+                {
+                    std::shared_ptr<const detail::NativePodLayouts> layouts;
+                    {
+                        std::scoped_lock lock{program_->nativeMutex};
+                        layouts = program_->nativePodLayouts;
+                    }
+                    auto initialized = runtimeDefaultValue(module, instruction.resultType, *layouts);
+                    if (!initialized.succeeded())
+                        return fail("WVM1223", initialized.error);
+                    value = std::move(initialized.value);
+                }
+                program_->pinNativeLibraries(value);
                 if (value.isEmpty() && type != TypeVoid)
                     return fail("WVM1010", "Default value is not implemented for this bytecode type");
                 if (!write(instruction.result, std::move(value)))
@@ -3817,7 +3875,56 @@ namespace wio::vm
                 if (type.kind != TypeNamed || type.nominalKind != expected)
                     return fail("WVM1070", "Aggregate construction kind does not match its result type");
 
-                if (!write(instruction.result, constructAggregate(module, instruction.resultType, object)))
+                std::shared_ptr<const detail::NativePodLayouts> layouts;
+                {
+                    std::scoped_lock lock{program_->nativeMutex};
+                    layouts = program_->nativePodLayouts;
+                }
+                Value initial;
+                const bool legacyMemberwise = !object && type.nominalRepresentation == RepresentationNativePod &&
+                                              !layouts->defaults.contains(instruction.resultType) &&
+                                              instruction.callee == bytecode::InvalidIndex &&
+                                              instruction.operands.size() == type.fields.size();
+                if (legacyMemberwise)
+                    initial = constructAggregate(module, instruction.resultType, false);
+                else if (!object && type.nominalRepresentation != RepresentationNativePod &&
+                         instruction.callee == bytecode::InvalidIndex && !instruction.operands.empty())
+                {
+                    // Wio aggregate arguments directly initialize their fields,
+                    // unlike native construction's T{} followed by assignments.
+                    // Do not run producer defaults for fields replaced by args.
+                    initial = constructAggregate(module, instruction.resultType, false);
+                    for (std::size_t index = instruction.operands.size(); index < type.fields.size(); ++index)
+                    {
+                        auto initialized = runtimeDefaultValue(module, type.fields[index].type, *layouts);
+                        if (!initialized.succeeded())
+                            return fail("WVM1223", initialized.error);
+                        *initial.mutableField(index) = std::move(initialized.value);
+                    }
+                }
+                else if (!object)
+                {
+                    auto initialized = runtimeDefaultValue(module, instruction.resultType, *layouts);
+                    if (!initialized.succeeded())
+                        return fail("WVM1223", initialized.error);
+                    initial = std::move(initialized.value);
+                }
+                else
+                {
+                    std::vector<Value> fields;
+                    fields.reserve(type.fields.size());
+                    for (const auto& field : type.fields)
+                    {
+                        auto initialized = runtimeDefaultValue(module, field.type, *layouts);
+                        if (!initialized.succeeded())
+                            return fail("WVM1223", initialized.error);
+                        program_->pinNativeLibraries(initialized.value);
+                        fields.push_back(std::move(initialized.value));
+                    }
+                    initial = Value::object(instruction.resultType, std::move(fields));
+                }
+                program_->pinNativeLibraries(initial);
+                if (!write(instruction.result, std::move(initial)))
                     return fail("WVM1009", "Aggregate result register is invalid");
                 Register& constructedRegister = frame.registers[instruction.result];
                 if (!object && instruction.callee == bytecode::InvalidIndex && !instruction.operands.empty())

@@ -667,8 +667,11 @@ Rider, and CLion are defined in
    partial/explicit specialization and variadic/empty-pack component shapes now
    use the same adapters. Template arguments are checked for concreteness
    separately from physical fields; unused string/text arguments are allowed,
-   but pack-storage fields are not part of the POD contract. Remaining POD work
-   includes visible C++ member-default initialization and overlapping
+   but pack-storage fields are not part of the POD contract. Native defaults now
+   use an optional producer-owned factory sidecar: C++ `T{}` runs once, visible
+   and hidden defaults survive copies, and explicit arguments override visible
+   fields. Nested/fixed-array defaults and producer-library lifetime are covered
+   by focused differential gates. Remaining POD work includes overlapping
    aggregate/field argument aliases.
    Remaining native parity work includes VM-created any/container/object
    materialization into producer storage; POD/object/container/nullable and

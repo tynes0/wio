@@ -33,6 +33,7 @@ namespace wio::vm::detail
     struct NativePodLayouts
     {
         std::unordered_map<std::uint32_t, NativePodLayout> types;
+        std::unordered_map<std::uint32_t, WioNativePodDefaultFn> defaults;
     };
 
     // POD pointers are borrowed void* storage, optionally nullable. No optional,
@@ -43,6 +44,10 @@ namespace wio::vm::detail
     // and arrays are not borrowed after validation; only adapter code is pinned.
     [[nodiscard]] bool mergeNativePodLayouts(const bytecode::Module& module, const WioNativePodLayoutApi& api,
                                              NativePodLayouts& layouts, std::string& error);
+    [[nodiscard]] bool mergeNativePodDefaults(const bytecode::Module& module, const WioNativePodDefaultApi& api,
+                                              NativePodLayouts& layouts, std::string& error);
+    [[nodiscard]] NativeValueResult defaultNativePod(const bytecode::Module& module, std::uint32_t type,
+                                                     const NativePodLayouts& layouts);
     [[nodiscard]] bool packNativePod(const bytecode::Module& module, const Value& value, std::uint32_t type,
                                      const NativePodLayouts& layouts, WioNativeAbiValue& output, std::string& error,
                                      unsigned depth);

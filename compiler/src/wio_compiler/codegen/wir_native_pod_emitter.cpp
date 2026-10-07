@@ -118,6 +118,15 @@ namespace wio::codegen
                     << "::read(fields[" << index << "]);\n";
             out << "        *result = " << codec(id) << "::write(std::move(value));\n";
             endBoundary();
+            out << "static WioNativeAbiStatus " << name
+                << "_default(WioNativeAbiValue* result, WioNativeAbiFailure* failure) noexcept {\n"
+                   "    if (failure) *failure = {};\n"
+                   "    if (!result) return WIO_NATIVE_ABI_INVALID_ARGUMENT;\n"
+                   "    *result = {};\n"
+                   "    try {\n"
+                   "        *result = "
+                << codec(id) << "::write(" << name << "{});\n";
+            endBoundary();
             boundary("read", "const WioNativeAbiValue* pod");
             out << "        if (!pod) return WIO_NATIVE_ABI_INVALID_ARGUMENT;\n"
                    "        const auto value = "
@@ -151,12 +160,21 @@ namespace wio::codegen
                     << "_read},\n";
             }
             out << "};\n";
+            out << "static const WioNativePodDefaultDescriptor _native_pod_defaults[] = {\n";
+            for (const auto id : types)
+                out << "    {" << identity(id) << "ULL, &_native_pod_" << id.value() << "_default},\n";
+            out << "};\n";
         }
         out << "static const WioNativePodLayoutApi _native_pod_api{WIO_NATIVE_POD_LAYOUT_VERSION, " << types.size()
             << ", " << (types.empty() ? "nullptr" : "_native_pod_layouts")
             << "};\n"
                "extern \"C\" WIO_WIR_EXPORT const WioNativePodLayoutApi* WioGetNativePodLayoutApi() noexcept {\n"
                "    return &_native_pod_api;\n}\n";
+        out << "static const WioNativePodDefaultApi _native_pod_default_api{WIO_NATIVE_POD_DEFAULT_VERSION, "
+            << types.size() << ", " << (types.empty() ? "nullptr" : "_native_pod_defaults")
+            << "};\n"
+               "extern \"C\" WIO_WIR_EXPORT const WioNativePodDefaultApi* WioGetNativePodDefaultApi() noexcept {\n"
+               "    return &_native_pod_default_api;\n}\n";
         return "#include <wio_native_pod.h>\n" + out.str();
     }
 } // namespace wio::codegen

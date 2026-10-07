@@ -1,0 +1,26 @@
+using cpp::header("vm_pod_default_fixture.h");
+use std::attribute as attribute;
+
+// There are no native functions. The producer is needed only for defaults.
+[Native, CppName(vm_pod_default::Settings)]
+component Settings {
+    public count: i32;
+    public enabled: bool;
+    public scale: f64;
+    public pointer: opaque?;
+    public values: [i32; 3];
+}
+
+fn Entry() -> i32 {
+    let value = Settings();
+    if (value.count != 17 or !value.enabled or value.scale != 2.5f64 or value.pointer == null or
+        value.values[2usize] != 7) {
+        return 1;
+    }
+    mut implicit: Settings;
+    mut array: [Settings; 2];
+    if (implicit.count != 17 or array[1usize].values[0usize] != 3) {
+        return 2;
+    }
+    return 0;
+}

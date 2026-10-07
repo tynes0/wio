@@ -648,3 +648,33 @@ add_test(
 )
 wio_test_labels(wio_vm_native_pod_template_rejection interop vm native native-differential invalid release-gate)
 set_tests_properties(wio_vm_native_pod_template_rejection PROPERTIES TIMEOUT 90)
+
+add_test(
+    NAME wio_vm_native_pod_default_differential
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_pod_default.wio"
+        "-DWIO_EXPECTED_OUTPUT=native-pod-default-ok:"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-pod-default"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_pod_layout_test.cmake"
+)
+wio_test_labels(wio_vm_native_pod_default_differential interop vm native native-differential differential release-gate)
+set_tests_properties(wio_vm_native_pod_default_differential PROPERTIES TIMEOUT 420)
+
+add_test(
+    NAME wio_vm_native_pod_default_only
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_pod_default_only.wio"
+        "-DWIO_EXPECTED_OUTPUT=^$"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-pod-default-only"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_pod_layout_test.cmake"
+)
+wio_test_labels(wio_vm_native_pod_default_only interop vm native native-differential differential release-gate)
+set_tests_properties(wio_vm_native_pod_default_only PROPERTIES TIMEOUT 420)

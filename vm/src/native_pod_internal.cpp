@@ -155,6 +155,64 @@ namespace wio::vm::detail
         return true;
     }
 
+    bool mergeNativePodDefaults(const bytecode::Module& module, const WioNativePodDefaultApi& api,
+                                NativePodLayouts& layouts, std::string& error)
+    {
+        const auto reject = [&](const char* message)
+        {
+            error = message;
+            return false;
+        };
+        if (api.version != WIO_NATIVE_POD_DEFAULT_VERSION || (api.typeCount && !api.types))
+            return reject("native POD default API version or descriptor array is invalid");
+        auto candidate = layouts.defaults;
+        for (std::uint32_t index = 0; index < api.typeCount; ++index)
+        {
+            const auto& descriptor = api.types[index];
+            if (!descriptor.typeId || !descriptor.create)
+                return reject("native POD default descriptor requires a type identity and factory");
+            const auto reflected = std::ranges::find_if(module.contract.reflection, [&](const auto& entry)
+                                                        { return entry.stableTypeId == descriptor.typeId; });
+            if (reflected == module.contract.reflection.end())
+                continue;
+            const auto layout = layouts.types.find(reflected->type);
+            if (layout == layouts.types.end() || layout->second.typeId != descriptor.typeId)
+                return reject("native POD default factory has no matching registered layout");
+            const auto [found, inserted] = candidate.emplace(reflected->type, descriptor.create);
+            if (!inserted && found->second != descriptor.create)
+                return reject("native POD default factory is already registered with a different adapter");
+        }
+        layouts.defaults = std::move(candidate);
+        error.clear();
+        return true;
+    }
+
+    NativeValueResult defaultNativePod(const bytecode::Module& module, std::uint32_t type,
+                                       const NativePodLayouts& layouts)
+    {
+        const auto factory = layouts.defaults.find(type);
+        const auto layout = layouts.types.find(type);
+        if (factory == layouts.defaults.end() || layout == layouts.types.end())
+            return {{}, "native POD default construction requires a registered producer default factory"};
+        WireGuard result{};
+        WioNativeAbiFailure failure{};
+        const auto status = factory->second(&result.value, &failure);
+        if (status != WIO_NATIVE_ABI_OK)
+        {
+            failure.status = status;
+            return {{}, "native POD default construction failed: " + nativeFailureMessage(failure)};
+        }
+        const auto& wire = result.value;
+        if (wire.kind != WIO_NATIVE_ABI_POD || wire.typeId != layout->second.typeId ||
+            wire.payload.slice.size != layout->second.size || !wire.payload.slice.data ||
+            !(wire.flags & WIO_NATIVE_ABI_VALUE_OWNED) || (wire.flags & WIO_NATIVE_ABI_VALUE_BORROWED) ||
+            !wire.owner.state || !wire.owner.ops || wire.owner.ops->abiVersion != WIO_NATIVE_ABI_VERSION ||
+            !wire.owner.ops->retain || !wire.owner.ops->release || !wire.owner.ops->typeId ||
+            wire.owner.ops->typeId(wire.owner.state) != wire.typeId)
+            return {{}, "native POD default factory returned an invalid owned wire value"};
+        return unpackNativePod(module, wire, type, layouts, 0);
+    }
+
     bool packNativePod(const bytecode::Module& module, const Value& value, const std::uint32_t type,
                        const NativePodLayouts& layouts, WioNativeAbiValue& output, std::string& error,
                        const unsigned depth)

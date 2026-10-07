@@ -46,3 +46,24 @@ struct WioNativePodLayoutApi
     const WioNativePodLayoutDescriptor* types;
 };
 using WioGetNativePodLayoutApiFn = const WioNativePodLayoutApi* (*)();
+
+// Optional default-construction sidecar. Kept separate so layout-v1 producers
+// remain binary compatible and never advertise a factory they do not implement.
+inline constexpr std::uint32_t WIO_NATIVE_POD_DEFAULT_VERSION = 1;
+using WioNativePodDefaultFn = WioNativeAbiStatus (*)(WioNativeAbiValue*, WioNativeAbiFailure*) noexcept;
+
+struct WioNativePodDefaultDescriptor
+{
+    std::uint64_t typeId;
+    // Executes the producer's T{} exactly once and returns an owned POD value.
+    // Outputs, including partially produced failures, use normal wire release.
+    WioNativePodDefaultFn create;
+};
+
+struct WioNativePodDefaultApi
+{
+    std::uint32_t version;
+    std::uint32_t typeCount;
+    const WioNativePodDefaultDescriptor* types;
+};
+using WioGetNativePodDefaultApiFn = const WioNativePodDefaultApi* (*)();

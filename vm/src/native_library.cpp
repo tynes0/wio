@@ -87,6 +87,7 @@ namespace wio::vm::detail
         const WioNativeTaskApi* tasks = nullptr;
         const WioNativeTaskCompletionApi* completions = nullptr;
         const WioNativePodLayoutApi* pods = nullptr;
+        const WioNativePodDefaultApi* defaults = nullptr;
         std::mutex machineMutex;
         std::size_t activeMachines = 0;
 
@@ -198,6 +199,12 @@ namespace wio::vm::detail
                 return {};
             }
         }
+        if (const auto getDefaults = loadSymbol<WioGetNativePodDefaultApiFn>(handle, "WioGetNativePodDefaultApi"))
+        {
+            library->state_->defaults = getDefaults();
+            if (!library->state_->defaults || !library->state_->pods)
+                return fail("native VM module default sidecar requires a non-null API and POD layout sidecar");
+        }
         error.clear();
         cache.insert_or_assign(library->path(), library);
         return library;
@@ -214,7 +221,7 @@ namespace wio::vm::detail
         const bool registered =
             state_->pods ? machine.registerNativeRegistry(*state_->registry, *state_->pods,
                                                           state_->completions ? state_->tasks : nullptr,
-                                                          state_->completions, &error)
+                                                          state_->completions, &error, state_->defaults)
             : state_->tasks && state_->completions
                 ? machine.registerNativeRegistry(*state_->registry, *state_->tasks, *state_->completions, &error)
                 : machine.registerNativeRegistry(*state_->registry, &error);

@@ -23,6 +23,31 @@ target_compile_options(wio_vm PRIVATE
 )
 
 if(BUILD_TESTING)
+    add_library(wio_vm_native_pod_default_module SHARED
+        "${CMAKE_SOURCE_DIR}/tests/native/vm_pod_default_module.cpp"
+    )
+    target_include_directories(wio_vm_native_pod_default_module PRIVATE "${CMAKE_SOURCE_DIR}/sdk/include")
+    add_executable(wio_vm_native_pod_default_lifetime_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_native_pod_default_lifetime_test.cpp"
+    )
+    target_link_libraries(wio_vm_native_pod_default_lifetime_test PRIVATE wio_vm)
+    target_compile_definitions(wio_vm_native_pod_default_lifetime_test PRIVATE
+        WIO_TEST_POD_DEFAULT_LIBRARY="$<TARGET_FILE:wio_vm_native_pod_default_module>"
+    )
+    add_dependencies(wio_vm_native_pod_default_lifetime_test wio_vm_native_pod_default_module)
+    add_test(NAME wio_vm_native_pod_default_lifetime COMMAND wio_vm_native_pod_default_lifetime_test)
+    set_property(TEST wio_vm_native_pod_default_lifetime APPEND PROPERTY LABELS "vm;native;native-differential;release-gate")
+
+    add_executable(wio_vm_native_pod_default_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_native_pod_default_test.cpp"
+    )
+    target_include_directories(wio_vm_native_pod_default_test PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/runtime/include"
+    )
+    target_link_libraries(wio_vm_native_pod_default_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_native_pod_default COMMAND wio_vm_native_pod_default_test)
+    set_property(TEST wio_vm_native_pod_default APPEND PROPERTY LABELS "vm;native;native-differential;release-gate")
+
     add_executable(wio_vm_native_pod_template_contract_test
         "${CMAKE_SOURCE_DIR}/tests/vm_native_pod_template_contract_test.cpp"
     )
