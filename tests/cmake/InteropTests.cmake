@@ -694,3 +694,18 @@ add_test(
 )
 wio_test_labels(wio_vm_native_pod_alias_differential interop vm native native-differential differential release-gate)
 set_tests_properties(wio_vm_native_pod_alias_differential PROPERTIES TIMEOUT 420)
+
+add_test(
+    NAME wio_vm_native_sequence_differential
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_sequence.wio"
+        "-DWIO_EXPECTED_OUTPUT=native-sequence-ok:"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-sequence"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_sequence_test.cmake"
+)
+wio_test_labels(wio_vm_native_sequence_differential interop vm native native-differential differential release-gate)
+set_tests_properties(wio_vm_native_sequence_differential PROPERTIES TIMEOUT 600)

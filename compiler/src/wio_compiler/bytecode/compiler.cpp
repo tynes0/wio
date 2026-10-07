@@ -334,6 +334,25 @@ namespace wio::bytecode
         // same structural wire id as WirModuleEmitter, not a module-local id.
         // Record that identity explicitly so the VM never has to reconstruct
         // compiler type spellings, and producer handles are still validated.
+        const auto addStructuralAbiIdentity = [&](auto&& self, wir::TypeId typeId, unsigned depth) -> void
+        {
+            const auto* type = source.types.tryGet(typeId);
+            if (!type || depth > 64)
+                return;
+            const auto raw = rawId(typeId);
+            if (std::ranges::none_of(module.contract.reflection,
+                                     [&](const Reflection& entry) { return entry.type == raw; }))
+            {
+                const auto key = wir::nativeAbiTypeKey(source.types, typeId);
+                module.contract.reflection.push_back(Reflection{
+                    .stableTypeId = wir::stableModuleHash(key), .logicalName = strings.intern(key), .type = raw});
+            }
+            // Sequence adapters need exact element codec identities, including
+            // primitive and nested sequence types, not just the outer handle.
+            if (type->kind == wir::TypeKind::Array || type->kind == wir::TypeKind::Nullable)
+                for (const auto argument : type->arguments)
+                    self(self, argument, depth + 1);
+        };
         const auto addRuntimeAbiIdentity = [&](const wir::NativeAbiValue& abi)
         {
             if (abi.marshalling != wir::NativeMarshallingKind::RuntimeValue)
@@ -358,13 +377,7 @@ namespace wio::bytecode
             }
             if (!type || type->kind == wir::TypeKind::Named || type->kind == wir::TypeKind::AsyncTask)
                 return;
-            const auto raw = rawId(typeId);
-            for (const Reflection& existing : module.contract.reflection)
-                if (existing.type == raw)
-                    return;
-            const std::string key = wir::nativeAbiTypeKey(source.types, typeId);
-            module.contract.reflection.push_back(Reflection{
-                .stableTypeId = wir::stableModuleHash(key), .logicalName = strings.intern(key), .type = raw});
+            addStructuralAbiIdentity(addStructuralAbiIdentity, typeId, 0);
         };
         for (const wir::lowered::Function& function : source.functions)
         {

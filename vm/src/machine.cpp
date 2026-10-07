@@ -7,6 +7,7 @@
 #include "native_bridge_internal.h"
 #include "native_library.h"
 #include "native_pod_internal.h"
+#include "native_sequence_internal.h"
 #include "string_intrinsics.h"
 #include "text_intrinsics.h"
 
@@ -1663,6 +1664,14 @@ namespace wio::vm
         return registerNativeRegistryImpl(registry, tasks, completions, error, &pods, defaults);
     }
 
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativeSequenceApi& sequences,
+                                         std::string* error, const WioNativePodLayoutApi* pods,
+                                         const WioNativePodDefaultApi* defaults, const WioNativeTaskApi* tasks,
+                                         const WioNativeTaskCompletionApi* completions)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, pods, defaults, &sequences);
+    }
+
     bool Machine::loadNativeLibrary(const std::filesystem::path& path, std::string* error)
     {
         const auto reject = [&](std::string message)
@@ -1726,7 +1735,8 @@ namespace wio::vm
 
     bool Machine::registerNativeRegistryImpl(const WioNativeAbiRegistry& registry, const WioNativeTaskApi* tasks,
                                              const WioNativeTaskCompletionApi* completions, std::string* error,
-                                             const WioNativePodLayoutApi* pods, const WioNativePodDefaultApi* defaults)
+                                             const WioNativePodLayoutApi* pods, const WioNativePodDefaultApi* defaults,
+                                             const WioNativeSequenceApi* sequences)
     {
         const auto reject = [&](std::string message)
         {
@@ -1742,6 +1752,8 @@ namespace wio::vm
             return reject("native registry has a non-zero function count and no descriptor array");
         if ((tasks == nullptr) != (completions == nullptr))
             return reject("native task and completion APIs must be registered together");
+        if (defaults && !pods)
+            return reject("native POD defaults require a POD layout sidecar");
 
         std::optional<Program::NativeFunction::TaskBridge> taskBridge;
         if (tasks)
@@ -1776,13 +1788,15 @@ namespace wio::vm
 
         std::scoped_lock lock{program_->nativeMutex};
         std::shared_ptr<detail::NativePodLayouts> layouts;
-        if (pods)
+        if (pods || sequences)
         {
             layouts = std::make_shared<detail::NativePodLayouts>(*program_->nativePodLayouts);
             std::string layoutError;
-            if (!detail::mergeNativePodLayouts(*program_->module, *pods, *layouts, layoutError))
+            if (pods && !detail::mergeNativePodLayouts(*program_->module, *pods, *layouts, layoutError))
                 return reject(std::move(layoutError));
             if (defaults && !detail::mergeNativePodDefaults(*program_->module, *defaults, *layouts, layoutError))
+                return reject(std::move(layoutError));
+            if (sequences && !detail::mergeNativeSequences(*program_->module, *sequences, *layouts, layoutError))
                 return reject(std::move(layoutError));
         }
         for (Program::NativeFunction& addition : additions)
@@ -4520,6 +4534,17 @@ namespace wio::vm
                     nativeFrame.arguments.push_back(wire);
                 }
 
+                for (const auto& root : nativeFrame.tokens)
+                {
+                    if (!podLayouts->sequences.contains(referenceBase(root.type)))
+                        continue;
+                    for (const auto& child : nativeFrame.tokens)
+                        if (&root != &child &&
+                            detail::containsNativeSequencePlace(root.place->storedValue(), child.place->storedValue()))
+                            return fail("WVM1225",
+                                        "Overlapping native array/element references require sequence projections");
+                }
+
                 // One outermost POD slot owns every overlapping field/nested
                 // reference. Producer offsets, not VM object layout, locate
                 // projected C++ storage. Discover after collecting all args so
@@ -4609,6 +4634,15 @@ namespace wio::vm
                     }
                     else
                     {
+                        if (podLayouts->sequences.contains(referenceBase(token.type)) &&
+                            !detail::compatibleNativeSequenceCopyBack(token.place->storedValue(), replacement.value))
+                        {
+                            if (copyBackError.empty())
+                                copyBackError = "Native array ref cannot change sequence lengths before borrow "
+                                                "invalidation is supported";
+                            replacements.push_back({});
+                            continue;
+                        }
                         program_->pinNativeLibraries(replacement.value);
                         replacements.push_back(std::move(replacement.value));
                     }

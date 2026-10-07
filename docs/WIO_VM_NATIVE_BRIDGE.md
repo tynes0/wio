@@ -233,9 +233,11 @@ executable negative cases for local `any` and structured callbacks:
   below, including overlapping aggregate/field/array-element references.
   A producer without the layout sidecar retains raw-POD round-trips but does not
   support local-component materialization (`WVM1223`) or ordinary field places.
-- VM-created `any`/containers/objects are not interchangeable with foreign
+- VM-created `any`/dictionaries/objects are not interchangeable with foreign
   runtime/object handles. Native factories and their foreign values work;
   structural VM-to-producer materialization still needs adapters (`WVM1223`).
+  Dynamic arrays now use the optional sequence adapter described below; this
+  does not imply arbitrary runtime-value, nullable-wrapper or object conversion.
 - POD/object/container callback signatures, nullable callback signatures, and
   callback `ref`/`view` parameters need signature-specific type identities and
   borrow/copy-back plans. Scalar, enum/flagset, string, text, and void callbacks
@@ -607,3 +609,84 @@ pass is claimed. Existing `native-differential;release-gate` labels select CI
 coverage. The gate also instantiates native POD codec/frame operations under
 MSVC, qualifying the named owner-operation definitions that avoid incomplete
 template instantiation in inline static lambda initializers.
+
+## Dynamic array producer adapters
+
+The optional `WioGetNativeSequenceApi` sidecar (sequence-v1) bridges Wio dynamic
+arrays to their concrete producer `std::vector<T>` type. Wire-v2 value/function
+layouts, existing SDK registration overloads and bytecode format versions remain
+unchanged. Existing producers without this export can still pass through their
+foreign runtime handles; VM-created arrays require an adapter (`WVM1223`).
+
+```wio
+using cpp::header("numbers.h");
+use std::attribute as attribute;
+
+[Native, CppName(numbers::Sum)]
+fn Sum(values: view i32[]) -> i32;
+[Native, CppName(numbers::Transform)]
+fn Transform(values: i32[]) -> i32[];
+[Native, CppName(numbers::Mutate)]
+fn Mutate(values: ref i32[]);
+
+fn Entry() -> i32 {
+    mut values: i32[] = [2, 5, 11];
+    let copy = Transform(values); // producer result becomes a normal VM array
+    Mutate(ref values);          // same-shape updates preserve element places
+    return Sum(ref values);
+}
+```
+
+Descriptors contain stable sequence/element identities and three producer
+operations: pack, count and indexed read. The producer copies tagged elements
+into its typed container and returns its own owned `Box<T, Id>` handle. The VM
+never fabricates producer handle operations or casts VM aggregate memory into
+C++ storage. Count and read access the checked producer box by reference rather
+than copying the entire vector on every indexed access. Each read returns an
+independent wire value. VM decoding creates local values before releasing those
+outputs; strings, text and nested arrays never borrow a released producer box.
+
+Automatic adapters cover dynamic arrays with scalar/enum/flagset, string, text,
+opaque/nullable-opaque, registered non-generic native POD, or recursively
+supported dynamic-array elements. `std::vector<bool>` uses explicit bool values,
+not foreign proxy references. Unexposed POD fields survive array round trips via
+the existing producer backing representation. Fixed arrays as sequence elements,
+generic POD elements, arbitrary nullable elements, `any`, Wio objects, dictionaries
+and structured callbacks are not part of this slice. Existing fixed-array POD
+field support is independent.
+
+Registration validates descriptor completeness, exact element identities,
+container shape, nested adapter availability and conflicts before publishing an
+immutable snapshot with the native registry. Producers may list descriptors
+unused by a consuming module. Recursive conversion is bounded to depth 64 and
+one million elements per sequence. Owned outputs and partial failure outputs are
+released through producer operations, including failed pack and indexed read.
+Decoded foreign POD/opaque children use the existing recursive library pinning.
+
+By-value calls have copy isolation. Whole-array view/ref aliases share one
+call-scoped producer slot, even when the view is passed first. Same-shape mutable
+copy-back updates VM element cells in place, including nested arrays and PODs.
+Two restrictions remain explicit:
+
+- Length-changing ref copy-back (including nested sequence lengths) fails with
+  `WVM1224`. All replacements are validated before any VM ref update is applied.
+  A by-value native function may freely resize its private array and return it.
+- Passing an array and one of its element/descendant cells as separate ref/view
+  arguments fails with `WVM1225` before the native thunk executes. Sequence
+  projections need a separate address/invalidation contract; independent copies
+  would silently break alias semantics.
+
+These failures cannot roll back external native side effects. Ref/view arguments
+and their materialized containers are call-scoped, not retained-reference APIs.
+
+Focused gates: `wio_vm_native_sequence` and
+`wio_vm_native_sequence_differential`. The contract gate exercises malformed and
+conflicting registration, nested adapter ordering, missing adapters, null/opaque
+elements, owned partial failures, invalid kind/identity/index/count and repeated
+slot commits. The differential gate compares real generated C++ and VM programs
+with numeric oracles, empty/nested arrays, embedded-NUL strings, Unicode text,
+bool proxies, hidden POD fields, by-value isolation, pre-existing element borrows
+and mixed view/ref aliases. It also checks real VM diagnostics for length-changing
+ref copy-back, array/element overlap and producer exception diagnostics.
+Both focused gates passed locally on Windows (2/2, 35.70 seconds). Only these
+new gates were run; no full-suite or local Linux pass is claimed.

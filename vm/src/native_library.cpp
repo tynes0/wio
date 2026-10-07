@@ -4,6 +4,7 @@
 
 #include <wio_native_abi.h>
 #include <wio_native_pod.h>
+#include <wio_native_sequence.h>
 
 #include <system_error>
 #include <map>
@@ -88,6 +89,7 @@ namespace wio::vm::detail
         const WioNativeTaskCompletionApi* completions = nullptr;
         const WioNativePodLayoutApi* pods = nullptr;
         const WioNativePodDefaultApi* defaults = nullptr;
+        const WioNativeSequenceApi* sequences = nullptr;
         std::mutex machineMutex;
         std::size_t activeMachines = 0;
 
@@ -205,6 +207,12 @@ namespace wio::vm::detail
             if (!library->state_->defaults || !library->state_->pods)
                 return fail("native VM module default sidecar requires a non-null API and POD layout sidecar");
         }
+        if (const auto getSequences = loadSymbol<WioGetNativeSequenceApiFn>(handle, "WioGetNativeSequenceApi"))
+        {
+            library->state_->sequences = getSequences();
+            if (!library->state_->sequences)
+                return fail("native VM module returned a null sequence sidecar");
+        }
         error.clear();
         cache.insert_or_assign(library->path(), library);
         return library;
@@ -219,9 +227,13 @@ namespace wio::vm::detail
         }
         std::scoped_lock lock{state_->machineMutex};
         const bool registered =
-            state_->pods ? machine.registerNativeRegistry(*state_->registry, *state_->pods,
-                                                          state_->completions ? state_->tasks : nullptr,
-                                                          state_->completions, &error, state_->defaults)
+            state_->sequences
+                ? machine.registerNativeRegistry(*state_->registry, *state_->sequences, &error, state_->pods,
+                                                 state_->defaults, state_->completions ? state_->tasks : nullptr,
+                                                 state_->completions)
+            : state_->pods ? machine.registerNativeRegistry(*state_->registry, *state_->pods,
+                                                            state_->completions ? state_->tasks : nullptr,
+                                                            state_->completions, &error, state_->defaults)
             : state_->tasks && state_->completions
                 ? machine.registerNativeRegistry(*state_->registry, *state_->tasks, *state_->completions, &error)
                 : machine.registerNativeRegistry(*state_->registry, &error);

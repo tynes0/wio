@@ -676,7 +676,13 @@ Rider, and CLion are defined in
    slot, preserving address identity, reversed argument order, hidden fields,
    mutable-field updates through a view root and existing borrows. Old producers
    lacking the additive capability bit reject this shape explicitly.
-   Remaining native parity work includes VM-created any/container/object
+   Dynamic array adapters now materialize VM-created arrays in producer storage
+   and decode producer results back to editable VM arrays. Empty/nested arrays,
+   string/text/bool and native POD elements, by-value isolation, view/ref aliases,
+   and same-shape ref copy-back have focused differential coverage. Length-changing
+   ref copy-back and overlapping array/element references reject explicitly until
+   their borrow-invalidation/projection contract is complete.
+   Remaining native parity work includes VM-created any/dictionary/object
    materialization into producer storage; POD/object/container/nullable and
    ref/view callback signatures; consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See

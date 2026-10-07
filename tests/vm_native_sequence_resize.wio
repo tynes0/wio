@@ -1,0 +1,11 @@
+using cpp::header("vm_sequence_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_sequence::Resize)]
+fn Resize(values: ref i32[]);
+
+fn Entry() -> i32 {
+    mut values: i32[] = [1, 2];
+    Resize(ref values);
+    return 0;
+}

@@ -3,6 +3,7 @@
 #include "wio/codegen/wir_cpp_text.h"
 #include "wio/codegen/wir_reflection_emitter.h"
 #include "wio/codegen/wir_native_pod_emitter.h"
+#include "wio/codegen/wir_native_sequence_emitter.h"
 #include "wio/wir/native_abi_types.h"
 #include <algorithm>
 #include <functional>
@@ -339,6 +340,7 @@ namespace wio::codegen
                "&_native_registry; }\n";
         out << WirApplicationEmitter::emit(module, type);
         out << WirNativePodEmitter::emit(module, type);
+        out << WirNativeSequenceEmitter::emit(module, type);
         out << WirReflectionEmitter::emit(module, type, thunk);
         if (module.contract.kind != ModuleKind::WioLibrary && !nativeTaskSidecars)
             return out.str();
