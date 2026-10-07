@@ -573,8 +573,19 @@ namespace wio::vm
         return result;
     }
 
-    void Value::pinNativeLibrary(std::shared_ptr<void> library)
+    void Value::pinNativeLibrary(std::shared_ptr<void> library) const
     {
+        if (!library)
+            return;
+        // Native PODs are decoded into value aggregates. Their opaque fields
+        // must pin producer code/data independently of the enclosing machine.
+        // Do not traverse object/reference graphs, which can contain cycles.
+        if (kind_ == Kind::Component)
+            for (std::size_t index = 0; index < fieldCount(); ++index)
+                field(index)->pinNativeLibrary(library);
+        else if (kind_ == Kind::Array)
+            for (std::size_t index = 0; index < elementCount(); ++index)
+                element(index)->pinNativeLibrary(library);
         if (library && (kind_ == Kind::Opaque || kind_ == Kind::ForeignObject || kind_ == Kind::RuntimeValue))
             scalar_.foreign->pinLibrary(std::move(library));
     }

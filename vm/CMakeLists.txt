@@ -23,6 +23,29 @@ target_compile_options(wio_vm PRIVATE
 )
 
 if(BUILD_TESTING)
+    add_library(wio_vm_native_pod_pointer_module SHARED
+        "${CMAKE_SOURCE_DIR}/tests/native/vm_pod_pointer_lifetime_module.cpp"
+    )
+    target_include_directories(wio_vm_native_pod_pointer_module PRIVATE "${CMAKE_SOURCE_DIR}/sdk/include")
+    add_executable(wio_vm_native_pod_pointer_lifetime_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_native_pod_pointer_lifetime_test.cpp"
+    )
+    target_link_libraries(wio_vm_native_pod_pointer_lifetime_test PRIVATE wio_vm)
+    target_compile_definitions(wio_vm_native_pod_pointer_lifetime_test PRIVATE
+        WIO_TEST_POD_POINTER_LIBRARY="$<TARGET_FILE:wio_vm_native_pod_pointer_module>"
+    )
+    add_dependencies(wio_vm_native_pod_pointer_lifetime_test wio_vm_native_pod_pointer_module)
+    add_test(NAME wio_vm_native_pod_pointer_lifetime COMMAND wio_vm_native_pod_pointer_lifetime_test)
+    set_property(TEST wio_vm_native_pod_pointer_lifetime APPEND PROPERTY LABELS "vm;native;native-differential;release-gate")
+
+    add_executable(wio_vm_native_pod_pointer_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_native_pod_pointer_test.cpp"
+    )
+    target_include_directories(wio_vm_native_pod_pointer_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+    target_link_libraries(wio_vm_native_pod_pointer_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_native_pod_pointer COMMAND wio_vm_native_pod_pointer_test)
+    set_property(TEST wio_vm_native_pod_pointer APPEND PROPERTY LABELS "vm;native;native-differential;release-gate")
+
     add_executable(wio_vm_native_pod_array_codec_test
         "${CMAKE_SOURCE_DIR}/tests/vm_native_pod_array_codec_test.cpp"
     )

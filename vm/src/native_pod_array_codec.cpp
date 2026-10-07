@@ -73,6 +73,11 @@ namespace wio::vm::detail
         if (depth > 64 || type >= module.types.size())
             return reject(error, "native POD array has an invalid type or excessive nesting");
         const auto& definition = module.types[type];
+        if (nativePodPointerType(module, type) != bytecode::InvalidIndex)
+        {
+            size = sizeof(void*);
+            return true;
+        }
         if (scalarStorage(definition.kind,
                           [&]<class T>()
                           {
@@ -147,6 +152,12 @@ namespace wio::vm::detail
         if (!nativeValueMarshalling(module, type, marshalling) ||
             !encodeNativeValue(module, value, type, marshalling, wire.value, error, &layouts, depth + 1))
             return false;
+        if (nativePodPointerType(module, type) != bytecode::InvalidIndex)
+        {
+            void* pointer = wire.value.kind == WIO_NATIVE_ABI_VOID ? nullptr : wire.value.payload.opaque;
+            std::memcpy(bytes.data(), &pointer, sizeof(pointer));
+            return true;
+        }
         if (definition.kind == TypeNamed && definition.nominalRepresentation == 1 && definition.nominalKind == 1)
         {
             if (wire.value.kind != WIO_NATIVE_ABI_POD || wire.value.payload.slice.size != bytes.size() ||
@@ -203,6 +214,16 @@ namespace wio::vm::detail
             return {Value::array(std::move(elements)), {}};
         }
         WioNativeAbiValue wire;
+        const auto pointerType = nativePodPointerType(module, type);
+        if (pointerType != bytecode::InvalidIndex)
+        {
+            wire.kind = WIO_NATIVE_ABI_OPAQUE;
+            for (const auto& reflected : module.contract.reflection)
+                if (reflected.type == pointerType)
+                    wire.typeId = reflected.stableTypeId;
+            std::memcpy(&wire.payload.opaque, bytes.data(), sizeof(void*));
+            return decodeNativeValue(module, wire, type, 5, &layouts, depth + 1);
+        }
         if (definition.kind == TypeNamed && definition.nominalRepresentation == 1 && definition.nominalKind == 1)
         {
             wire.kind = WIO_NATIVE_ABI_POD;

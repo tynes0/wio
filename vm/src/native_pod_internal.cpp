@@ -41,6 +41,18 @@ namespace wio::vm::detail
         }
     } // namespace
 
+    std::uint32_t nativePodPointerType(const bytecode::Module& module, std::uint32_t type) noexcept
+    {
+        if (type < module.types.size() && module.types[type].kind == 30)
+        {
+            const auto& arguments = module.types[type].arguments;
+            if (arguments.size() != 1)
+                return bytecode::InvalidIndex;
+            type = arguments.front();
+        }
+        return type < module.types.size() && module.types[type].kind == 20 ? type : bytecode::InvalidIndex;
+    }
+
     bool mergeNativePodLayouts(const bytecode::Module& module, const WioNativePodLayoutApi& api,
                                NativePodLayouts& layouts, std::string& error)
     {
@@ -85,9 +97,14 @@ namespace wio::vm::detail
                 if (stableId && stableId != native.typeId)
                     return reject("native POD field stable type identity does not match its VM declaration");
                 std::uint8_t marshalling = 0;
+                const bool pointer = nativePodPointerType(module, field.type) != bytecode::InvalidIndex;
                 if (module.types[field.type].kind != 31 && (!nativeValueMarshalling(module, field.type, marshalling) ||
-                                                            (marshalling != 1 && marshalling != 4)))
+                                                            (marshalling != 1 && marshalling != 4 && !pointer)))
                     return reject("native POD field requires unsupported VM materialization");
+                if (module.types[field.type].kind == 30 && !pointer)
+                    return reject("native POD nullable fields must be opaque pointers");
+                if (pointer && native.size != sizeof(void*))
+                    return reject("native POD opaque field does not have pointer-sized storage");
                 for (std::size_t previous = 0; previous < fieldIndex; ++previous)
                 {
                     const auto& other = descriptor.fields[previous];
@@ -160,6 +177,9 @@ namespace wio::vm::detail
                 !encodeNativeValue(module, *value.field(index), fieldType, marshalling, fields.values[index], error,
                                    &layouts, depth + 1))
                 return false;
+            if (nativePodPointerType(module, fieldType) != bytecode::InvalidIndex &&
+                fields.values[index].kind == WIO_NATIVE_ABI_OPAQUE)
+                fields.values[index].typeId = found->second.fields[index].typeId;
         }
         WireGuard packed;
         const Value backing = value.nativePodBacking();
@@ -230,6 +250,18 @@ namespace wio::vm::detail
             std::uint8_t marshalling = 0;
             if (!nativeValueMarshalling(module, fieldType, marshalling))
                 return {{}, "native POD field marshalling is unavailable"};
+            if (nativePodPointerType(module, fieldType) != bytecode::InvalidIndex)
+            {
+                const bool nullableNull = module.types[fieldType].kind == 30 &&
+                                          field.value.kind == WIO_NATIVE_ABI_VOID &&
+                                          (field.value.flags & WIO_NATIVE_ABI_VALUE_NULLABLE);
+                if (!nullableNull && (field.value.kind != WIO_NATIVE_ABI_OPAQUE ||
+                                      field.value.typeId != found->second.fields[index].typeId))
+                    return {{}, "native POD opaque field adapter returned an invalid wire identity/shape"};
+                // The sidecar identifies the declared field (opaque or opaque?),
+                // while the general bridge identifies the unwrapped payload type.
+                field.value.typeId = identity(module, nativePodPointerType(module, fieldType));
+            }
             auto decoded = decodeNativeValue(module, field.value, fieldType, marshalling, &layouts, depth + 1);
             if (!decoded.succeeded())
                 return decoded;

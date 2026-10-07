@@ -1175,3 +1175,30 @@ here as historical evidence rather than active work:
       are not claimed. Opaque/nullable fields, const-generic/pack shapes,
       member-default initialization and aggregate/field overlapping arguments
       remain tracked in the active backlog.
+
+## VM Native POD Opaque and Nullable-opaque Fields
+
+- [x] Native POD adapters now accept `opaque`/`opaque?` fields and aliases,
+      pointer arrays, nested PODs and concrete generic components. The existing
+      C++ `void*` representation is used without changing ABI/bytecode versions.
+- [x] VM registration validates pointer storage width; field decoding checks
+      registered wire identities/kinds and normalizes nullable payload identity.
+      Array codecs check value kinds and distinguish nullable null from a raw
+      opaque value. Unsupported nullable wrappers remain rejected.
+- [x] Fixed C++ backend nullable wrapping of opaque pointers: generated code
+      forwards the pointer or emits `nullptr`, never invalid `void*{...}` syntax.
+- [x] Added a real generated-thunk C++/VM differential fixture covering local,
+      native, alias, generic, nested and async values, null/pointer arrays, hidden
+      fields, copy isolation, mutable copy-back and pre-existing field/element
+      borrows. Added malformed metadata/wire, owned-pointer lifetime/failure
+      cleanup and frontend nullable-surface rejection tests.
+- [x] Ownership remains explicit: raw POD pointer fields/arrays borrow pointees;
+      copying producer bytes does not infer resource retention/deletion. Owned
+      field-read handles retain their producer until the decoded value dies.
+      Library pinning descends into decoded fields/elements; an independent-DLL
+      test qualifies escaped owned pointers and borrowed native static data
+      after machine teardown, including the final array-only pin.
+- [x] Four new focused Windows gates and the adjusted array-codec gate pass.
+      No full-suite or local Linux qualification is claimed. Const-generic/pack
+      shapes, member-default initialization and overlapping aggregate/field
+      arguments remain open; this is not a full native parity claim.

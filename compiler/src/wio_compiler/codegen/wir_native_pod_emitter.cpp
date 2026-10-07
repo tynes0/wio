@@ -28,6 +28,10 @@ namespace wio::codegen
             const auto& type = module.types.get(id);
             if (type.kind >= TypeKind::Bool && type.kind <= TypeKind::Char)
                 return true;
+            if (type.kind == TypeKind::Opaque)
+                return true;
+            if (type.kind == TypeKind::Nullable)
+                return type.arguments.size() == 1 && module.types.get(type.arguments.front()).kind == TypeKind::Opaque;
             if (type.kind == TypeKind::Array)
                 return type.staticExtent.has_value() && !type.extentParameter && type.arguments.size() == 1 &&
                        self(self, type.arguments.front(), depth + 1);
@@ -58,6 +62,9 @@ namespace wio::codegen
             for (const auto& field : type.fields)
             {
                 const auto& fieldType = module.types.get(field.type);
+                if (fieldType.kind == TypeKind::Opaque || fieldType.kind == TypeKind::Nullable)
+                    out << "static_assert(std::is_same_v<std::remove_cvref_t<decltype(" << name << "{}." << field.name
+                        << ")>, void*>, \"native POD opaque field must have void* storage\");\n";
                 if (fieldType.kind == TypeKind::Array)
                     out << "static_assert(sizeof(" << name << "{}." << field.name << ") == "
                         << (*fieldType.staticExtent ? "sizeof(" + cpp(fieldType.arguments.front()) + ") * " +

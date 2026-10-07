@@ -2526,7 +2526,7 @@
                         {
                             WIO_LOG_ADD_ERROR(
                                 varDecl->location(),
-                                "Declaration-level @Native component '{}' field '{}' uses type '{}' which is not POD-native-compatible yet. Supported field types are primitives, POD-compatible static arrays, and other declaration-level @Native components.",
+                                "Declaration-level [Native] component '{}' field '{}' uses type '{}' which is not POD-native-compatible yet. Supported field types are primitives, opaque/opaque? pointers, enum/flagset scalars, POD-compatible static arrays, and other declaration-level [Native] components.",
                                 node.name->token.value,
                                 varDecl->name->token.value,
                                 memberSym->type ? memberSym->type->toString() : "<unknown>"

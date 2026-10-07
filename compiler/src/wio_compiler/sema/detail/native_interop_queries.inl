@@ -153,6 +153,15 @@
             case TypeKind::GenericParameter:
             case TypeKind::ConstGenericParameter:
                 return allowGenericPlaceholders;
+            case TypeKind::Nullable:
+            {
+                Ref<Type> valueType = current.AsFast<NullableType>()->valueType;
+                while (valueType && valueType->kind() == TypeKind::Alias)
+                    valueType = valueType.AsFast<AliasType>()->aliasedType;
+                // Only opaque nullability has a POD representation (void*).
+                // Other nullable values use a wrapper, not a foreign POD field.
+                return valueType && valueType->kind() == TypeKind::Primitive && valueType->toString() == "opaque";
+            }
             case TypeKind::Array:
             {
                 auto arrayType = current.AsFast<ArrayType>();
@@ -207,7 +216,7 @@
 
                 WIO_LOG_ADD_ERROR(
                     errorLocation,
-                    "Declaration-level [Native] component '{}' field '{}' resolves to type '{}' which is not POD-native-compatible yet. Supported field types are primitives, enum/flagset scalars, POD-compatible static arrays, and other declaration-level [Native] components.",
+                    "Declaration-level [Native] component '{}' field '{}' resolves to type '{}' which is not POD-native-compatible yet. Supported field types are primitives, opaque/opaque? pointers, enum/flagset scalars, POD-compatible static arrays, and other declaration-level [Native] components.",
                     structType->toString(),
                     structType->fieldNames[fieldIndex],
                     structType->fieldTypes[fieldIndex] ? structType->fieldTypes[fieldIndex]->toString() : "<unknown>"

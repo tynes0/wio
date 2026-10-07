@@ -2772,6 +2772,13 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     break;
                 }
                 case lowered::Opcode::NullableWrap:
+                    if (module_.types.get(module_.types.get(instruction.resultType).arguments.front()).kind ==
+                        TypeKind::Opaque)
+                    {
+                        assignResult(instruction, instruction.operands.empty() ? "nullptr"
+                                                                              : operand(instruction.operands[0]));
+                        break;
+                    }
                     assignResult(instruction,
                                  instruction.operands.empty()
                                      ? cppType(instruction.resultType) + "{}"

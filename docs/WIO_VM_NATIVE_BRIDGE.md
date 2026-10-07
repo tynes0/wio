@@ -226,8 +226,8 @@ This gate qualifies the implemented bridge; it does **not** assert that every
 native C++ operation is supported by the VM. The remaining boundaries include
 executable negative cases for local `any` and structured callbacks:
 
-- Native PODs containing opaque/nullable fields, const-generic/pack
-  shapes, or other fields outside the scalar/nested-POD adapter surface still
+- Native PODs containing const-generic/pack shapes or other fields outside
+  the qualified scalar/pointer/fixed-array/nested-POD adapter surface still
   need qualification.
   C++ member-default initialization still needs its own default-value contract.
   A producer without the layout sidecar retains raw-POD round-trips but does not
@@ -252,8 +252,9 @@ sidecar declared in `sdk/include/wio_native_pod.h`. This is an additive API:
 wire-v2 values and the bytecode format keep their existing versions. Existing
 modules without the sidecar keep the previous opaque-byte POD round-trip path.
 
-For concrete native components with scalar/enum/flagset or nested native-POD
-fields, the producer emits its actual `sizeof`, `alignof`, field `offsetof`,
+For concrete native components with scalar/enum/flagset, opaque/nullable-opaque,
+supported fixed-array or nested native-POD fields, the producer emits its actual
+`sizeof`, `alignof`, field `offsetof`,
 field sizes, semantic kind/stable identities, and checked pack/read adapters.
 The VM validates names, types, bounds, alignment, overlap, and repeated
 registration before publishing an immutable layout snapshot together with the
@@ -286,13 +287,14 @@ qualification is Windows only; Linux remains a CI verification requirement.
 
 POD adapters are internal ABI materialization, not the richer callback bridge.
 Structured callbacks and overlapping whole-component/field arguments within
-one native call still need dedicated borrow/alias plans; opaque/nullable fields
-and the remaining const-generic/pack shapes are not qualified by these slices.
+one native call still need dedicated borrow/alias plans; the remaining
+const-generic/pack shapes are not qualified by these slices.
 
 ## Fixed-array POD fields
 
 The layout sidecar now includes native component fields of concrete `[T; N]`
-types when `T` is a supported scalar/enum/flagset, nested native POD, or another
+types when `T` is a supported scalar/enum/flagset, opaque/nullable-opaque pointer,
+nested native POD, or another
 supported fixed array. Generated producers assert contiguous field storage and
 use the existing typed POD codecs; no wire-v2, sidecar-version or bytecode-format
 change is needed. Native enum identities are not mistakenly published as
@@ -320,3 +322,61 @@ registration, owned-read failure cleanup, and real local/generic/nested/native
 enum/async values through C++ and VM. Local qualification is Windows only;
 Linux remains CI qualification. This is field-adapter support, not structural
 materialization of arbitrary native container arguments or callbacks.
+
+## Opaque pointer POD fields
+
+Native components may expose `opaque` and `opaque?` fields (including aliases),
+concrete fixed arrays of those types, and nested/generic PODs containing them.
+Both representations use actual C++ `void*` storage. Nullable opaque values
+map between Wio `null` and native `nullptr`; present values preserve pointer
+identity. Typed C++ pointers, smart pointers and nullable object/function/ref
+wrappers are not implicitly reinterpreted as `void*` POD fields.
+
+```wio
+using cpp::header("links.h");
+use std::attribute as attribute;
+
+[Native, CppName(native::Links)]
+component Links {
+    public required: opaque;
+    public optional: opaque?;
+    public slots: [opaque?; 2];
+}
+```
+
+The corresponding C++ fields are `void* required`, `void* optional`, and
+`std::array<void*, 2> slots`. The producer checks direct pointer-field types;
+the VM rejects pointer-size mismatches transactionally before invoking adapter
+code. Returned pointer fields must have the registered field's wire identity,
+or a properly marked nullable-void value. The bridge then normalizes that field
+identity to the unwrapped opaque payload identity. Pointer-array codecs check
+each VM element rather than interpreting integers as pointer addresses.
+
+These are **borrowed pointers, not ownership declarations**. Copying a raw C++
+POD/array does not retain or delete pointees; callers must keep the resource
+alive for its uses, including deferred native operations. If an individual
+field read supplies a producer owner handle, the decoded VM opaque value
+retains that handle until its last storage reference dies. Pack/read temporary
+wire owners are released exactly once on success, malformed output or failure.
+No ownership is inferred for pointers stored in raw array bytes.
+Producer library pinning descends through decoded component/array values.
+Escaped owned fields keep release operations loaded, and borrowed pointers to
+native static data keep that module's storage loaded after machine teardown.
+This pins code/data, not an externally managed pointee's allocation lifetime.
+
+The `wio_vm_native_pod_pointer` gate covers null/present values, array type/size
+checks, malformed identities/kinds, unsupported nullable shapes, transactional
+registration and owned-pointer lifetime/failure cleanup.
+`wio_vm_native_pod_pointer_rejection` qualifies frontend rejection of invalid
+nullable scalar/object fields, including concrete generic instantiation.
+`wio_vm_native_pod_pointer_lifetime` loads an independent DLL, destroys the
+machine, then uses/releases an escaped owned field and keeps native static data
+alive with only the escaped pointer array remaining.
+`wio_vm_native_pod_pointer_differential` runs the same Wio program through C++
+and VM with aliases, reordered fields, local/native/generic/nested construction,
+pointer arrays, existing borrows, mutable copy-back, copy isolation, hidden
+fields and async results. It also covers the corrected C++ nullable-wrap
+emission: an opaque pointer is forwarded directly, not spelled `void*{...}`.
+Qualification is local Windows only, with Linux selected by the existing
+`native-differential;release-gate` CI labels. Wire-v2, the POD sidecar and
+bytecode versions remain unchanged.

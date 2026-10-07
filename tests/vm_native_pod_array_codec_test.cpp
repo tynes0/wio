@@ -76,7 +76,6 @@ int main()
     const auto empty = array(5, 0);
     const auto dynamic = array(5, (std::numeric_limits<std::uint64_t>::max)());
     const auto overflow = array(14, (std::numeric_limits<std::uint64_t>::max)() - 1);
-    const auto opaque = array(20, 2);
     bridge::NativePodLayouts layouts;
     std::string error;
     std::size_t size = 0;
@@ -154,7 +153,7 @@ int main()
     storage.clear();
     passed &= expect(!bridge::NativePodArrayCodec::unpack(module, storage, empty, layouts).succeeded(),
                      "zero-byte empty array storage accepted");
-    for (const auto rejected : {dynamic, overflow, opaque, wio::bytecode::InvalidIndex})
+    for (const auto rejected : {dynamic, overflow, wio::bytecode::InvalidIndex})
         passed &= expect(!bridge::NativePodArrayCodec::byteSize(module, rejected, layouts, size, error),
                          "unsupported/overflowing array layout accepted");
     passed &= expect(!bridge::NativePodArrayCodec::byteSize(module, matrix, layouts, size, error, 65),

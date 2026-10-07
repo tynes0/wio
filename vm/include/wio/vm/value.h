@@ -239,7 +239,7 @@ namespace wio::vm
         void destroy() noexcept;
         void copyFrom(const Value& other);
         void moveFrom(Value&& other) noexcept;
-        void pinNativeLibrary(std::shared_ptr<void> library);
+        void pinNativeLibrary(std::shared_ptr<void> library) const;
 
         Kind kind_ = Kind::Empty;
 

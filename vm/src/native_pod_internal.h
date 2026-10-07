@@ -35,6 +35,10 @@ namespace wio::vm::detail
         std::unordered_map<std::uint32_t, NativePodLayout> types;
     };
 
+    // POD pointers are borrowed void* storage, optionally nullable. No optional,
+    // object handle, reference token, or nested nullable wrapper is a POD pointer.
+    [[nodiscard]] std::uint32_t nativePodPointerType(const bytecode::Module& module, std::uint32_t type) noexcept;
+
     // Merge transactionally into an unpublished snapshot. Descriptor strings
     // and arrays are not borrowed after validation; only adapter code is pinned.
     [[nodiscard]] bool mergeNativePodLayouts(const bytecode::Module& module, const WioNativePodLayoutApi& api,

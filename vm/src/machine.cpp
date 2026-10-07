@@ -888,7 +888,8 @@ namespace wio::vm
         void pinNativeLibraries(Value& value)
         {
             if (value.kind() != Value::Kind::Opaque && value.kind() != Value::Kind::ForeignObject &&
-                value.kind() != Value::Kind::RuntimeValue)
+                value.kind() != Value::Kind::RuntimeValue && value.kind() != Value::Kind::Component &&
+                value.kind() != Value::Kind::Array)
                 return;
             std::scoped_lock lock{nativeMutex};
             for (const auto& library : nativeLibraries)
