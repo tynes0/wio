@@ -5,7 +5,13 @@ foreach(required WIO_EXECUTABLE WIO_ROOT WIO_OUTPUT_DIR WIO_SHARED_SUFFIX)
 endforeach()
 
 file(MAKE_DIRECTORY "${WIO_OUTPUT_DIR}")
-set(source "${WIO_ROOT}/tests/vm_native_pod_layout.wio")
+if(NOT DEFINED WIO_SOURCE)
+    set(WIO_SOURCE "${WIO_ROOT}/tests/vm_native_pod_layout.wio")
+endif()
+if(NOT DEFINED WIO_EXPECTED_OUTPUT)
+    set(WIO_EXPECTED_OUTPUT "native-pod-layout-ok:")
+endif()
+set(source "${WIO_SOURCE}")
 set(native "${WIO_OUTPUT_DIR}/native${WIO_EXECUTABLE_SUFFIX}")
 set(bridge "${WIO_OUTPUT_DIR}/bridge${WIO_SHARED_SUFFIX}")
 set(bytecode "${WIO_OUTPUT_DIR}/program.wiob")
@@ -29,7 +35,7 @@ execute_process(COMMAND "${native}" RESULT_VARIABLE native_result
 execute_process(COMMAND "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}" --native-library "${bridge}"
     RESULT_VARIABLE vm_result OUTPUT_VARIABLE vm_output ERROR_VARIABLE vm_error TIMEOUT 30)
 if(NOT "${native_result}" STREQUAL "0" OR NOT "${vm_result}" STREQUAL "0" OR
-   NOT native_output MATCHES "native-pod-layout-ok:" OR
+   NOT native_output MATCHES "${WIO_EXPECTED_OUTPUT}" OR
    NOT native_output STREQUAL vm_output OR NOT native_error STREQUAL vm_error)
     message(FATAL_ERROR "POD layout differential failed: C++=${native_result}, VM=${vm_result}\nC++: ${native_output}\n${native_error}\nVM: ${vm_output}\n${vm_error}")
 endif()

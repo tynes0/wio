@@ -1,4 +1,5 @@
 #include "native_pod_internal.h"
+#include "native_pod_array_codec.h"
 
 #include <algorithm>
 #include <limits>
@@ -23,6 +24,7 @@ namespace wio::vm::detail
         struct FieldWires
         {
             std::vector<WioNativeAbiValue> values;
+            std::vector<std::vector<std::byte>> arrays;
             ~FieldWires()
             {
                 for (auto& value : values)
@@ -83,7 +85,8 @@ namespace wio::vm::detail
                 if (stableId && stableId != native.typeId)
                     return reject("native POD field stable type identity does not match its VM declaration");
                 std::uint8_t marshalling = 0;
-                if (!nativeValueMarshalling(module, field.type, marshalling) || (marshalling != 1 && marshalling != 4))
+                if (module.types[field.type].kind != 31 && (!nativeValueMarshalling(module, field.type, marshalling) ||
+                                                            (marshalling != 1 && marshalling != 4)))
                     return reject("native POD field requires unsupported VM materialization");
                 for (std::size_t previous = 0; previous < fieldIndex; ++previous)
                 {
@@ -104,6 +107,18 @@ namespace wio::vm::detail
             if (!inserted && existing->second != layout)
                 return reject("native POD type is already registered with a different layout/adapter");
         }
+        // Nested element layouts may appear later in the producer descriptor
+        // table. Validate fixed-array byte extents against the complete snapshot.
+        for (const auto& [type, layout] : candidate.types)
+            for (std::size_t index = 0; index < layout.fields.size(); ++index)
+            {
+                const auto fieldType = module.types[type].fields[index].type;
+                if (module.types[fieldType].kind != 31)
+                    continue;
+                if (!NativePodArrayCodec::validateByteSize(module, fieldType, candidate,
+                                                           static_cast<std::size_t>(layout.fields[index].size), error))
+                    return reject("native POD fixed-array field has an unsupported or mismatched byte layout");
+            }
         layouts = std::move(candidate);
         error.clear();
         return true;
@@ -122,9 +137,24 @@ namespace wio::vm::detail
         }
         FieldWires fields;
         fields.values.resize(value.fieldCount());
+        fields.arrays.resize(value.fieldCount());
         for (std::size_t index = 0; index < fields.values.size(); ++index)
         {
             const auto fieldType = module.types[type].fields[index].type;
+            if (module.types[fieldType].kind == 31)
+            {
+                auto& bytes = fields.arrays[index];
+                bytes.resize(static_cast<std::size_t>(found->second.fields[index].size));
+                if (!NativePodArrayCodec::pack(module, *value.field(index), fieldType, layouts, bytes, error,
+                                               depth + 1))
+                    return false;
+                auto& wire = fields.values[index];
+                wire.kind = WIO_NATIVE_ABI_POD;
+                wire.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+                wire.typeId = found->second.fields[index].typeId;
+                wire.payload.slice = {bytes.data(), bytes.size()};
+                continue;
+            }
             std::uint8_t marshalling = 0;
             if (!nativeValueMarshalling(module, fieldType, marshalling) ||
                 !encodeNativeValue(module, *value.field(index), fieldType, marshalling, fields.values[index], error,
@@ -180,6 +210,23 @@ namespace wio::vm::detail
                 return {{}, "native POD field read failed: " + nativeFailureMessage(failure)};
             }
             const auto fieldType = module.types[type].fields[index].type;
+            if (module.types[fieldType].kind == 31)
+            {
+                if (field.value.kind != WIO_NATIVE_ABI_POD ||
+                    field.value.typeId != found->second.fields[index].typeId ||
+                    field.value.payload.slice.size != found->second.fields[index].size ||
+                    !field.value.payload.slice.data)
+                    return {{}, "native POD array field adapter returned an invalid wire shape"};
+                auto decoded =
+                    NativePodArrayCodec::unpack(module,
+                                                {static_cast<const std::byte*>(field.value.payload.slice.data),
+                                                 static_cast<std::size_t>(field.value.payload.slice.size)},
+                                                fieldType, layouts, depth + 1);
+                if (!decoded.succeeded())
+                    return decoded;
+                fields.push_back(std::move(decoded.value));
+                continue;
+            }
             std::uint8_t marshalling = 0;
             if (!nativeValueMarshalling(module, fieldType, marshalling))
                 return {{}, "native POD field marshalling is unavailable"};

@@ -16,6 +16,9 @@ struct WioNativePodFieldDescriptor
     const char* name;
     std::uint64_t typeId;
     std::uint64_t offset;
+    // Actual producer storage size, including empty fixed-array storage.
+    // Fixed-array field adapters return POD slices with this field typeId;
+    // consumers reconstruct elements using checked scalar/nested-POD layouts.
     std::uint64_t size;
     std::uint8_t typeKind;
 };

@@ -1153,3 +1153,25 @@ here as historical evidence rather than active work:
 - [x] Local Windows qualification: both new tests plus the updated native
       differential gate passed (3/3, 34.48 seconds). No full-suite or local Linux
       pass is claimed; the `native-differential` labels select CI coverage.
+
+## VM Native POD Fixed-array Fields
+
+- [x] Native POD field adapters now accept concrete fixed arrays of supported
+      scalars/enums/flagsets, nested native PODs and further fixed arrays,
+      including concrete generic component fields and zero extents. The
+      additive sidecar, wire-v2 and bytecode versions are unchanged.
+- [x] Added the `NativePodArrayCodec` helper with checked element counts,
+      scalar ranges/representations, recursion/size limits, contiguous field
+      extents and nested producer-layout lookup. Empty-array storage and
+      nested-empty strides use producer metadata, not a guessed MSVC/GCC size.
+- [x] Native mutable copy-back preserves existing element/field places inside
+      arrays, nested POD hidden fields, independent copies and async results.
+      Native enum metadata is not emitted as a component layout descriptor.
+- [x] Added focused negative/ownership/registration codec tests and a generated
+      C++/VM differential fixture for local construction, native factories,
+      generic arrays, multidimensional and empty fields, native enum arrays,
+      high-byte chars, bool/f32 fields, borrows, copies and async results.
+- [x] The two new Windows gates pass; full-suite and local Linux qualification
+      are not claimed. Opaque/nullable fields, const-generic/pack shapes,
+      member-default initialization and aggregate/field overlapping arguments
+      remain tracked in the active backlog.

@@ -28,6 +28,9 @@ namespace wio::codegen
             const auto& type = module.types.get(id);
             if (type.kind >= TypeKind::Bool && type.kind <= TypeKind::Char)
                 return true;
+            if (type.kind == TypeKind::Array)
+                return type.staticExtent.has_value() && !type.extentParameter && type.arguments.size() == 1 &&
+                       self(self, type.arguments.front(), depth + 1);
             if (type.kind != TypeKind::Named)
                 return false;
             if (type.nominalKind == NominalKind::Enum || type.nominalKind == NominalKind::Flagset)
@@ -45,12 +48,23 @@ namespace wio::codegen
         {
             const auto id = reflected.type;
             const auto& type = module.types.get(id);
-            if (type.nominalRepresentation != NominalRepresentation::NativePod || !supported(supported, id, 0) ||
+            if (type.nominalKind != NominalKind::Component ||
+                type.nominalRepresentation != NominalRepresentation::NativePod || !supported(supported, id, 0) ||
                 std::ranges::find(types, id) != types.end())
                 continue;
             types.push_back(id);
             const auto name = "_native_pod_" + std::to_string(id.value());
             out << "using " << name << " = " << cpp(id) << ";\n";
+            for (const auto& field : type.fields)
+            {
+                const auto& fieldType = module.types.get(field.type);
+                if (fieldType.kind == TypeKind::Array)
+                    out << "static_assert(sizeof(" << name << "{}." << field.name << ") == "
+                        << (*fieldType.staticExtent ? "sizeof(" + cpp(fieldType.arguments.front()) + ") * " +
+                                                          std::to_string(*fieldType.staticExtent)
+                                                    : "sizeof(" + cpp(field.type) + ")")
+                        << ", \"native POD fixed-array field layout is unsupported\");\n";
+            }
             const auto boundary = [&](const std::string& operation, const std::string& first)
             {
                 out << "static WioNativeAbiStatus " << name << '_' << operation << '(' << first

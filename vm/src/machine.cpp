@@ -4452,6 +4452,15 @@ namespace wio::vm
                             for (std::size_t field = 0; field < target.fieldCount(); ++field)
                                 self(self, *target.mutableField(field), std::move(*replacement.mutableField(field)));
                         }
+                        else if (target.kind() == Value::Kind::Array && replacement.kind() == Value::Kind::Array &&
+                                 target.elementCount() == replacement.elementCount())
+                        {
+                            // Fixed-array fields keep element places alive just
+                            // like nested component fields during native copy-back.
+                            for (std::size_t element = 0; element < target.elementCount(); ++element)
+                                self(self, *target.mutableElement(element),
+                                     std::move(*replacement.mutableElement(element)));
+                        }
                         else
                             target = std::move(replacement);
                     };

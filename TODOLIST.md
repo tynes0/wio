@@ -657,7 +657,10 @@ Rider, and CLion are defined in
    The native POD layout slice now materializes local components, unpacks native
    results into editable fields, preserves unexposed C++ fields and existing
    field borrows, and qualifies nested/concrete-generic/empty/async PODs against
-   the C++ backend. Remaining POD work includes fixed-array/opaque/nullable fields,
+   the C++ backend. Fixed-array field adapters now cover scalar/native-enum,
+   nested-POD, multidimensional, concrete-generic, and empty arrays, preserving
+   element/field borrows during copy-back and using producer-specific empty
+   storage extents. Remaining POD work includes opaque/nullable fields,
    const-generic/pack shapes, C++ member-default initialization, and overlapping
    aggregate/field argument aliases.
    Remaining native parity work includes VM-created any/container/object

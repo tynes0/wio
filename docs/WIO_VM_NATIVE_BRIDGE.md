@@ -226,7 +226,7 @@ This gate qualifies the implemented bridge; it does **not** assert that every
 native C++ operation is supported by the VM. The remaining boundaries include
 executable negative cases for local `any` and structured callbacks:
 
-- Native PODs containing fixed-array/opaque/nullable fields, const-generic/pack
+- Native PODs containing opaque/nullable fields, const-generic/pack
   shapes, or other fields outside the scalar/nested-POD adapter surface still
   need qualification.
   C++ member-default initialization still needs its own default-value contract.
@@ -286,5 +286,37 @@ qualification is Windows only; Linux remains a CI verification requirement.
 
 POD adapters are internal ABI materialization, not the richer callback bridge.
 Structured callbacks and overlapping whole-component/field arguments within
-one native call still need dedicated borrow/alias plans; fixed-array/opaque/nullable
-fields and the remaining const-generic/pack shapes are not qualified by this slice.
+one native call still need dedicated borrow/alias plans; opaque/nullable fields
+and the remaining const-generic/pack shapes are not qualified by these slices.
+
+## Fixed-array POD fields
+
+The layout sidecar now includes native component fields of concrete `[T; N]`
+types when `T` is a supported scalar/enum/flagset, nested native POD, or another
+supported fixed array. Generated producers assert contiguous field storage and
+use the existing typed POD codecs; no wire-v2, sidecar-version or bytecode-format
+change is needed. Native enum identities are not mistakenly published as
+component layout descriptors.
+
+`NativePodArrayCodec` validates field extents against scalar storage widths and
+registered nested layouts, checks element counts/ranges and recursion/size
+budgets, and reconstructs independent VM arrays/components. It does not cast a
+VM array or component into a C++ object. Array fields use their registered
+stable field identity and actual producer byte extent. Empty `std::array<T, 0>`
+storage is producer-specific: GCC and MSVC libraries can differ, including
+inside multidimensional arrays, so the VM validates the supplied stride rather
+than assuming one host library's empty-array size.
+
+Native ref copy-back updates existing array elements recursively; previously
+acquired element and nested-component field places remain live. Nested POD
+elements retain hidden producer fields through the same immutable backing as
+ordinary POD fields. Owned field results are released exactly once after
+decoding or adapter failure.
+
+The new `wio_vm_native_pod_array_codec` and
+`wio_vm_native_pod_array_differential` gates cover malformed extents/types,
+scalar ranges, bool representations, zero/nested-empty layouts, transactional
+registration, owned-read failure cleanup, and real local/generic/nested/native
+enum/async values through C++ and VM. Local qualification is Windows only;
+Linux remains CI qualification. This is field-adapter support, not structural
+materialization of arbitrary native container arguments or callbacks.
