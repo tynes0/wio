@@ -21,6 +21,20 @@ namespace wio::codegen
         };
         const auto codec = [&](TypeId id)
         { return "wio::wir_backend::abi::Codec<" + cpp(id) + ", " + std::to_string(identity(id)) + "ULL>"; };
+        const auto concreteArgument = [&](auto&& self, TypeId id, unsigned depth) -> bool
+        {
+            const auto* type = module.types.tryGet(id);
+            if (!type || depth > 64 || type->extentParameter || type->kind == TypeKind::Invalid ||
+                type->kind == TypeKind::GenericParameter || type->kind == TypeKind::ConstGenericParameter ||
+                type->kind == TypeKind::GenericParameterPack || type->kind == TypeKind::TypePack ||
+                type->kind == TypeKind::ValuePack)
+                return false;
+            // Arguments identify a template specialization; they are not
+            // necessarily stored fields (e.g. an integer extent or an unused
+            // string type). Field compatibility is checked separately below.
+            return std::ranges::all_of(type->arguments,
+                                       [&](TypeId argument) { return self(self, argument, depth + 1); });
+        };
         const auto supported = [&](auto&& self, TypeId id, unsigned depth) -> bool
         {
             if (depth > 64)
@@ -42,7 +56,7 @@ namespace wio::codegen
             if (type.nominalRepresentation != NominalRepresentation::NativePod)
                 return false;
             for (const auto argument : type.arguments)
-                if (!self(self, argument, depth + 1))
+                if (!concreteArgument(concreteArgument, argument, depth + 1))
                     return false;
             return std::ranges::all_of(type.fields,
                                        [&](const auto& field) { return self(self, field.type, depth + 1); });

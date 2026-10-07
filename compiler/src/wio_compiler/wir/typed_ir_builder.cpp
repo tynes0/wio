@@ -75,7 +75,7 @@ namespace wio::wir::typed
                 buildFunction(declaration);
             functionBodiesScope.stop();
             common::profiling::Scope objectInitializersScope("WIR.Typed.ObjectInitializers");
-            buildObjectFieldInitializers();
+            buildNominalFieldInitializers();
             objectInitializersScope.stop();
             common::profiling::Scope globalInitializersScope("WIR.Typed.GlobalInitializers");
             buildGlobalInitializers();
@@ -1610,7 +1610,7 @@ namespace wio::wir::typed
             return id;
         }
 
-        void buildObjectFieldInitializers()
+        void buildNominalFieldInitializers()
         {
             for (const TypeDeclarationInfo& declaration : typeDeclarations_)
             {
@@ -1620,14 +1620,13 @@ namespace wio::wir::typed
                 const Type& initialLayout = result_.module_.types.get(ownerType);
                 if (initialLayout.kind != TypeKind::Named ||
                     initialLayout.nominalRepresentation != NominalRepresentation::Wio ||
-                    initialLayout.nominalKind != NominalKind::Object)
+                    (initialLayout.nominalKind != NominalKind::Object &&
+                     initialLayout.nominalKind != NominalKind::Component))
                 {
                     continue;
                 }
                 const std::string layoutName = initialLayout.name;
                 const std::vector<FieldLayout> fields = initialLayout.fields;
-                const std::vector<MethodLayout> methods = initialLayout.methods;
-
                 std::vector<const VariableDeclaration*> initializedFields;
                 const auto collectFields = [&](const auto& members)
                 {
@@ -1645,6 +1644,20 @@ namespace wio::wir::typed
                     collectFields(object->members);
                 if (initializedFields.empty())
                     continue;
+
+                // Lifecycle functions are intentionally excluded from virtual
+                // method layouts. Resolve their already-pinned bodies instead.
+                FunctionId defaultConstructor;
+                for (const Function& candidate : result_.module_.functions)
+                {
+                    if (candidate.ownerType == ownerType && candidate.parameters.size() == 1 &&
+                        !candidate.name.starts_with("$default::") &&
+                        (candidate.name == "OnConstruct" || candidate.name.ends_with("::OnConstruct")))
+                    {
+                        defaultConstructor = candidate.id;
+                        break;
+                    }
+                }
 
                 const SourceSpan source = SourceSpan::at(declaration.declaration->location());
                 const TypeId receiverType = referenceType(ownerType, true);
@@ -1697,17 +1710,14 @@ namespace wio::wir::typed
                                     .source = SourceSpan::at(variable->location())});
                 }
 
-                const auto defaultConstructor = std::ranges::find_if(
-                    methods, [](const MethodLayout& method)
-                    { return method.name == "OnConstruct" && method.parameterTypes.empty() && !method.isAbstract; });
-                if (defaultConstructor != methods.end())
+                if (defaultConstructor)
                 {
-                    const Function* target = findFunction(defaultConstructor->function);
+                    const Function* target = findFunction(defaultConstructor);
                     currentBlock(state).instructions.push_back(
                         Instruction{.opcode = target && target->nativeBinding ? Opcode::NativeCall : Opcode::Call,
                                     .resultType = result_.module_.types.voidType(),
                                     .operands = {receiver},
-                                    .callee = defaultConstructor->function,
+                                    .callee = defaultConstructor,
                                     .signatureTypes = {receiverType},
                                     .source = source});
                 }
@@ -2350,7 +2360,7 @@ namespace wio::wir::typed
                     identity->scopePath.empty() ? identity->name : identity->scopePath + "::" + identity->name;
                 for (std::size_t index = 0; index < structure->genericArguments.size(); ++index)
                     wirType.arguments.push_back(mapGenericArgument(structure->genericArguments[index], index));
-                if (structure->genericArguments.empty())
+                if (structure->genericArguments.empty() && !primary)
                     for (const auto& parameter : structure->genericParameterTypes)
                         wirType.arguments.push_back(mapType(parameter, source));
                 wirType.nominalKind = identity->isFlagset     ? NominalKind::Flagset
@@ -2365,6 +2375,9 @@ namespace wio::wir::typed
                     wirType.nativeBinding = NativeTypeBinding{
                         .cppName = identity->nativeCppName.empty() ? identity->name : identity->nativeCppName,
                         .header = identity->nativeCppHeader};
+                    if (primary && identity->hasGenericParameterPack && wirType.arguments.empty() &&
+                        wirType.nativeBinding->cppName.find('<') == std::string::npos)
+                        wirType.nativeBinding->cppName += "<>";
                 }
                 if (wirType.nominalKind == NominalKind::Object || wirType.nominalKind == NominalKind::Interface)
                 {
@@ -2411,7 +2424,7 @@ namespace wio::wir::typed
                 auto fieldNames = usePrimaryFields ? identity->fieldNames : structure->fieldNames;
                 auto fieldTypes = usePrimaryFields ? identity->fieldTypes : structure->fieldTypes;
                 std::vector<TypeId> parameters, arguments;
-                if (!structure->genericArguments.empty())
+                if (!structure->genericArguments.empty() || (primary && structure->hasGenericParameterPack))
                 {
                     const auto& fieldGenericParameters =
                         usePrimaryFields ? identity->genericParameterTypes : structure->genericParameterTypes;
@@ -2509,6 +2522,8 @@ namespace wio::wir::typed
                         parameter = substituteGenericType(parameter, parameters, arguments);
                 }
                 Type& storedType = result_.module_.types.getMutable(id);
+                storedType.hasSpecializedLayout =
+                    structure->isExplicitSpecialization || structure->isPartialSpecialization;
                 storedType.baseTypes = std::move(baseTypes);
                 storedType.fields = std::move(fields);
                 storedType.methods = std::move(methods);
@@ -4223,18 +4238,19 @@ namespace wio::wir::typed
                            expression.Get());
                     return {};
                 }
+                // Building nested expressions can intern types and relocate the
+                // type table. Keep semantic values, not pointers across it.
+                const TypeKind objectKind = objectType->kind;
                 const ValueId object = buildAutoReadableExpression(access->object, state);
                 const ValueId index = buildAutoReadableExpression(access->index, state);
                 if (!object || !index)
                     return {};
                 const ValueId result = appendValue(Instruction{
-                    .opcode = objectType->kind == TypeKind::Array        ? Opcode::ArrayGet
-                              : objectType->kind == TypeKind::Dictionary ? Opcode::DictionaryGet
-                                                                         : Opcode::IntrinsicCall,
+                    .opcode = objectKind == TypeKind::Array        ? Opcode::ArrayGet
+                              : objectKind == TypeKind::Dictionary ? Opcode::DictionaryGet
+                                                                   : Opcode::IntrinsicCall,
                     .operands = {object, index},
-                    .selector = objectType->kind == TypeKind::String || objectType->kind == TypeKind::Text
-                                    ? "Get"
-                                    : std::string{},
+                    .selector = objectKind == TypeKind::String || objectKind == TypeKind::Text ? "Get" : std::string{},
                     .signatureTypes = {objectTypeId, mapType(access->index->refType.Lock(), access->index.Get())},
                     .intrinsicFamily = intrinsicFamilyFor(objectTypeId),
                     .targetType = objectTypeId,
@@ -5208,13 +5224,14 @@ namespace wio::wir::typed
                            expression.Get());
                     return {};
                 }
+                const TypeKind containerKind = container->kind;
                 const ValueId base = buildPlace(access->object, needsMutable, state);
                 const ValueId index = buildAutoReadableExpression(access->index, state);
                 if (!base || !index)
                     return {};
                 const ValueId result{state.nextValue++};
                 currentBlock(state).instructions.push_back(Instruction{
-                    .opcode = container->kind == TypeKind::Dictionary ? Opcode::DictionaryPlace : Opcode::ArrayPlace,
+                    .opcode = containerKind == TypeKind::Dictionary ? Opcode::DictionaryPlace : Opcode::ArrayPlace,
                     .result = result,
                     .resultType = referenceType(mapType(expression->refType.Lock(), expression.Get()), needsMutable),
                     .operands = {base, index},

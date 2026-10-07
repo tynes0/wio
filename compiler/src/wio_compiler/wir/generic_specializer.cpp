@@ -696,6 +696,12 @@ namespace wio::wir
                     if (module_.types.size() != oldTypeCount)
                         noteTypeMutation();
                     cache[id] = result;
+                    // Sema may already have selected a different field layout
+                    // for these concrete arguments (e.g. Buffer<T, 4>). The
+                    // primary signature supplies identity, not that layout.
+                    const Type& selected = module_.types.get(result);
+                    if (selected.hasSpecializedLayout && !openType(result))
+                        type = selected;
                 }
                 for (TypeId& base : type.baseTypes)
                     base = substitute(base, bindings, cache);
@@ -737,11 +743,9 @@ namespace wio::wir
                 }
                 if (result)
                 {
-                    // This path starts from an open nominal declaration. Its
-                    // fully substituted layout is authoritative even when the
-                    // nominal identity was interned earlier from a signature;
-                    // that earlier snapshot can otherwise carry fields or
-                    // method types from a different instantiation.
+                    // Refresh ordinary signature snapshots with the substituted
+                    // declaration layout. Semantically selected specializations
+                    // were preserved above and remain authoritative instead.
                     const Type& existing = module_.types.get(result);
                     const bool hasMaterializedMethods =
                         std::ranges::any_of(existing.methods, [&](const MethodLayout& method)

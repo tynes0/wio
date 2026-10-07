@@ -296,6 +296,21 @@ namespace wio::sema
         {
             auto* v1 = static_cast<const ConstValueType*>(t1);
             auto* v2 = static_cast<const ConstValueType*>(t2);
+            const auto integer = [](Ref<Type> type)
+            {
+                while (type && type->kind() == TypeKind::Alias)
+                    type = type.AsFast<AliasType>()->aliasedType;
+                if (!type || type->kind() != TypeKind::Primitive)
+                    return false;
+                const auto& name = type.AsFast<PrimitiveType>()->name;
+                return name == "i8" || name == "i16" || name == "i32" || name == "i64" || name == "isize" ||
+                       name == "u8" || name == "u16" || name == "u32" || name == "u64" || name == "usize";
+            };
+            // Const-generic declarations pin the target integer representation.
+            // Equal evaluated values do not acquire different specialization
+            // identities from a literal suffix or a const symbol's integer width.
+            if (integer(v1->valueType) && integer(v2->valueType))
+                return v1->value == v2->value;
             return v1->value == v2->value && v1->valueType->isCompatibleWith(v2->valueType);
         }
         case TypeKind::GenericParameterPack:

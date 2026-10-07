@@ -1,0 +1,12 @@
+use std::attribute as attribute;
+
+[Native, CppName(NativeHead)]
+component Head<T, Tail...> {
+    public value: T;
+}
+
+fn Entry() -> i32 {
+    // Three arguments must not bypass concrete POD validation of two parameters.
+    let invalid = Head<string, i32, f64>("not a POD field");
+    return 0;
+}

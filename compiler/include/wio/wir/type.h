@@ -398,6 +398,9 @@ namespace wio::wir
         std::vector<EnumCaseLayout> enumCases;
         bool hasConstructor = false;
         bool hasDestructor = false;
+        // Layout selected by semantic explicit/partial specialization. Generic
+        // substitution must not replace it with the primary declaration's fields.
+        bool hasSpecializedLayout = false;
         OwnershipModel ownership = OwnershipModel::Trivial;
         CleanupKind cleanup = CleanupKind::None;
         std::optional<NativeTypeBinding> nativeBinding;

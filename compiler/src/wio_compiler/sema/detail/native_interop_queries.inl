@@ -197,19 +197,26 @@
             if (!structType || !structType->isNativePodComponent)
                 return;
 
+            const auto primary = structType->genericPrimaryType.Lock();
+            const auto& parameters = primary ? primary->genericParameterNames : structType->genericParameterNames;
+            const bool hasPack = primary ? primary->hasGenericParameterPack : structType->hasGenericParameterPack;
             const bool hasConcreteInstantiation =
-                structType->genericParameterNames.empty() ||
-                (!structType->genericArguments.empty() &&
-                 structType->genericArguments.size() == structType->genericParameterNames.size() &&
-                 std::ranges::all_of(structType->genericArguments, [](const Ref<Type>& genericArgument)
-                 {
-                     return genericArgument && !genericArgument->isUnknown() && !containsGenericParameterType(genericArgument);
-                 }));
+                parameters.empty() || ((!structType->genericArguments.empty() || (hasPack && primary)) &&
+                                       (hasPack ? structType->genericArguments.size() + 1 >= parameters.size()
+                                                : structType->genericArguments.size() == parameters.size()) &&
+                                       std::ranges::all_of(structType->genericArguments,
+                                                           [](const Ref<Type>& genericArgument)
+                                                           {
+                                                               return genericArgument &&
+                                                                      !genericArgument->isUnknown() &&
+                                                                      !containsGenericParameterType(genericArgument);
+                                                           }));
 
             if (!hasConcreteInstantiation)
                 return;
 
-            for (size_t fieldIndex = 0; fieldIndex < structType->fieldTypes.size() && fieldIndex < structType->fieldNames.size(); ++fieldIndex)
+            for (size_t fieldIndex = 0;
+                 fieldIndex < structType->fieldTypes.size() && fieldIndex < structType->fieldNames.size(); ++fieldIndex)
             {
                 if (isNativePodInteropFieldType(structType->fieldTypes[fieldIndex], false))
                     continue;

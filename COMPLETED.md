@@ -1202,3 +1202,42 @@ here as historical evidence rather than active work:
       No full-suite or local Linux qualification is claimed. Const-generic/pack
       shapes, member-default initialization and overlapping aggregate/field
       arguments remain open; this is not a full native parity claim.
+
+## VM Native POD Const-generic and Variadic Components
+
+- [x] Qualified concrete integer const/default/zero-extent arguments, native
+      partial/explicit specialization layouts, variadic type arguments and an
+      empty trailing pack. Template argument closure is checked separately from
+      physical field ABI, so unused string/text arguments do not exclude an
+      otherwise POD-compatible C++ type. Actual pack storage remains unsupported.
+- [x] Matched equal evaluated integer const values independently of their
+      literal/const-symbol width while preserving different-value allowlist
+      rejection. Native generic function allowlists and the existing
+      nonnegative const-argument domain remain unchanged.
+- [x] Re-selected generic signatures through the primary specialization
+      registry and preserved semantic specialization layout provenance in WIR.
+      Generic materialization no longer replaces selected fields with primary
+      fields. Empty pack-only bindings emit C++ `Template<>` rather than an open
+      template name.
+- [x] Fixed type-table pointer invalidation while building nested array
+      expressions/places. Concrete variadic and partial-specialized native
+      fields now undergo analysis-time POD compatibility checks.
+- [x] Fixed ignored memberwise arguments for ordinary VM Wio components, and
+      lowered Wio component field defaults previously skipped by both backends.
+      The new differential fixture separately verifies generic component
+      round-trips, no-argument defaults, explicit memberwise arguments and
+      explicit constructors.
+- [x] Resolved default lifecycle bodies independently of virtual method
+      layouts, which intentionally exclude constructors. Default component and
+      object constructors run once after field initialization, not zero times
+      or again through the VM construction continuation.
+- [x] Added adapter/registry contract tests, a generated C++/VM differential
+      fixture covering local/native/default/zero/specialized/variadic/empty-pack/
+      unused-type/nested/ref/borrow/copy/async cases, and frontend rejection
+      fixtures for non-POD variadic/specialized fields, pack storage and
+      non-allowlisted const values.
+- [x] All three new focused Windows gates passed (3/3, 20.06 seconds).
+      No full-suite or local Linux pass is claimed. Existing CI labels select
+      these gates; wire-v2, the layout sidecar and bytecode versions are unchanged.
+      Visible C++ member defaults and overlapping aggregate/field arguments
+      remain separate backlog work.

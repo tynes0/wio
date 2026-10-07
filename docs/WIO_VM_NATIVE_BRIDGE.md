@@ -226,10 +226,11 @@ This gate qualifies the implemented bridge; it does **not** assert that every
 native C++ operation is supported by the VM. The remaining boundaries include
 executable negative cases for local `any` and structured callbacks:
 
-- Native PODs containing const-generic/pack shapes or other fields outside
-  the qualified scalar/pointer/fixed-array/nested-POD adapter surface still
-  need qualification.
-  C++ member-default initialization still needs its own default-value contract.
+- Native PODs with fields outside the qualified
+  scalar/pointer/fixed-array/nested-POD adapter surface still need qualification.
+  Actual pack-storage fields are not POD fields. Concrete const-generic and
+  variadic component arguments are qualified below; visible C++ member-default
+  initialization still needs its own default-value contract.
   A producer without the layout sidecar retains raw-POD round-trips but does not
   support local-component materialization (`WVM1223`) or ordinary field places.
 - VM-created `any`/containers/objects are not interchangeable with foreign
@@ -287,8 +288,8 @@ qualification is Windows only; Linux remains a CI verification requirement.
 
 POD adapters are internal ABI materialization, not the richer callback bridge.
 Structured callbacks and overlapping whole-component/field arguments within
-one native call still need dedicated borrow/alias plans; the remaining
-const-generic/pack shapes are not qualified by these slices.
+one native call still need dedicated borrow/alias plans. Visible native member
+defaults also remain separate work; hidden prototype fields are preserved.
 
 ## Fixed-array POD fields
 
@@ -380,3 +381,83 @@ emission: an opaque pointer is forwarded directly, not spelled `void*{...}`.
 Qualification is local Windows only, with Linux selected by the existing
 `native-differential;release-gate` CI labels. Wire-v2, the POD sidecar and
 bytecode versions remain unchanged.
+
+## Const-generic and variadic native POD components
+
+Concrete native component bindings now qualify integer const arguments,
+defaulted arguments, zero extents, partial/explicit specialization layouts,
+variadic type arguments and an empty trailing pack. For example:
+
+```wio
+using cpp::header("vm_pod_template_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_pod_template::Buffer)]
+component Buffer<T, const N: usize = 3> {
+    public values: [T; N];
+}
+
+[Specialize(T, 4)]
+component Buffer<T> {
+    public values: [T; 4];
+    public bonus: i32;
+}
+
+[Native, CppName(vm_pod_template::Echo), instantiate(i32, 3), instantiate(i32, 4)]
+fn Echo<T, const N: usize>(value: Buffer<T, N>) -> Buffer<T, N>;
+
+const Extent: usize = 1usize + 2usize;
+
+fn Entry() -> i32 {
+    let defaultSize = Echo<i32, Extent>(Buffer<i32>([1, 2, 3]));
+    let specialized = Echo<i32, 4>(Buffer<i32, 4>([1, 2, 3, 4], 23));
+    return specialized.bonus - 23;
+}
+```
+
+Native generic functions still require an explicit `[instantiate(...)]`
+allowlist. Equal evaluated integer const values match that allowlist even
+when a literal and a const symbol have different integer widths; different
+values do not match. This does not expand the language's integer const-argument
+domain: the existing nonnegative-value restrictions still apply.
+
+Template argument closure and field storage compatibility are separate checks.
+A concrete `Marker<string, text>` can be POD-compatible when its C++ template
+does not physically store either type. A `Head<string, i32>` with a stored
+string field is rejected during analysis. Actual `pack` storage fields remain
+unsupported; this is not a promise to reinterpret `std::tuple` as POD bytes.
+The producer's usual trivial-layout checks still apply.
+
+A trailing pack can be empty: Wio uses the type `Marker` and construction
+`Marker(9)` for a pack-only component with one integer field. Its native type
+spelling is `Marker<>`; Wio does not require an empty angle-bracket list.
+Concrete variadic component types can be passed to ordinary native declarations.
+Native generic function packs retain their existing trailing function-parameter
+pack rule; this slice does not change that rule.
+
+Semantic specialization selection is repeated from the primary declaration
+when generic function signatures are instantiated. Typed WIR records selected
+layout provenance so generic materialization cannot overwrite specialization
+fields with the primary layout. This also applies to ordinary Wio components.
+VM memberwise component construction now consumes explicit field arguments for
+both native and Wio components. Wio component field initializers are now
+lowered alongside object initializers, fixing defaults previously ignored by
+both backends. No-argument field initialization and explicit `OnConstruct`
+calls use their separate execution paths; memberwise arguments override the
+corresponding defaults.
+Default constructors are resolved from pinned lifecycle bodies, not virtual
+method layouts (which exclude constructors). An initializer invokes a
+parameterless `OnConstruct` once; the VM continuation invokes only a remaining
+parameterized constructor after that initialization step.
+
+The three focused gates are `wio_vm_native_pod_template_contract`,
+`wio_vm_native_pod_template_differential`, and
+`wio_vm_native_pod_template_rejection`. They cover adapter eligibility,
+transactional rejection of open/cyclic/invalid template arguments, local and
+native construction, specialization fields, array indexing, copy-back,
+pre-existing borrows, hidden producer fields, nested arrays and async results.
+The differential gate compares C++/VM output and checks independent numeric
+oracles; rejection fixtures also qualify non-POD variadic/specialized fields,
+pack storage and non-allowlisted extents. Qualification is local Windows only;
+Linux remains selected by `native-differential;release-gate` CI labels.
+Wire-v2, the layout sidecar and bytecode format versions are unchanged.

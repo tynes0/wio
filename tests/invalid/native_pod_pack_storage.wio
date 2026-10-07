@@ -1,0 +1,10 @@
+use std::attribute as attribute;
+
+[Native, CppName(NativePack)]
+component Pack<Types...> {
+    public pack values: Types...;
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

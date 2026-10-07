@@ -39,6 +39,18 @@ namespace wio::vm::detail
                     return reflected.stableTypeId;
             return 0;
         }
+
+        bool concreteArgument(const bytecode::Module& module, std::uint32_t type, unsigned depth = 0)
+        {
+            if (type >= module.types.size() || depth > 64)
+                return false;
+            const auto& definition = module.types[type];
+            if (definition.kind == 0 || definition.kind == 21 || definition.kind == 22 || definition.kind == 24 ||
+                definition.kind == 25 || definition.kind == 26 || definition.extentParameter != bytecode::InvalidIndex)
+                return false;
+            return std::ranges::all_of(definition.arguments,
+                                       [&](auto argument) { return concreteArgument(module, argument, depth + 1); });
+        }
     } // namespace
 
     std::uint32_t nativePodPointerType(const bytecode::Module& module, std::uint32_t type) noexcept
@@ -85,6 +97,8 @@ namespace wio::vm::detail
                 type.nominalRepresentation != RepresentationNativePod || !type.hasNativeBinding ||
                 descriptor.fieldCount != type.fields.size())
                 return reject("native POD layout does not match a native component declaration");
+            if (!std::ranges::all_of(type.arguments, [&](auto argument) { return concreteArgument(module, argument); }))
+                return reject("native POD layout requires concrete template arguments");
             for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
             {
                 const auto& field = type.fields[fieldIndex];

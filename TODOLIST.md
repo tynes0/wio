@@ -663,8 +663,12 @@ Rider, and CLion are defined in
    storage extents. Opaque and nullable-opaque fields now use checked borrowed
    `void*` adapters, including pointer arrays, aliases, concrete generics, nested
    components, copy-back and async results. Nullable scalar/component wrappers
-   are deliberately not POD fields. Remaining POD work includes const-generic/
-   pack shapes, C++ member-default initialization, and overlapping
+   are deliberately not POD fields. Concrete const-generic/default/zero-extent,
+   partial/explicit specialization and variadic/empty-pack component shapes now
+   use the same adapters. Template arguments are checked for concreteness
+   separately from physical fields; unused string/text arguments are allowed,
+   but pack-storage fields are not part of the POD contract. Remaining POD work
+   includes visible C++ member-default initialization and overlapping
    aggregate/field argument aliases.
    Remaining native parity work includes VM-created any/container/object
    materialization into producer storage; POD/object/container/nullable and

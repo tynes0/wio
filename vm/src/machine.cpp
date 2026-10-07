@@ -3820,16 +3820,18 @@ namespace wio::vm
                 if (!write(instruction.result, constructAggregate(module, instruction.resultType, object)))
                     return fail("WVM1009", "Aggregate result register is invalid");
                 Register& constructedRegister = frame.registers[instruction.result];
-                if (!object && type.nominalRepresentation == RepresentationNativePod &&
-                    instruction.callee == bytecode::InvalidIndex && !instruction.operands.empty())
+                if (!object && instruction.callee == bytecode::InvalidIndex && !instruction.operands.empty())
                 {
+                    // Memberwise construction (native or Wio) consumes field
+                    // arguments directly, rather than ignoring them or running
+                    // the no-argument field initializer over explicit values.
                     if (instruction.operands.size() > type.fields.size())
-                        return fail("WVM1071", "Native POD aggregate has more arguments than declared fields");
+                        return fail("WVM1071", "Component aggregate has more arguments than declared fields");
                     for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                     {
                         const Value* operand = read(instruction.operands[index]);
                         if (!operand)
-                            return fail("WVM1071", "Native POD aggregate reads an unavailable field argument");
+                            return fail("WVM1071", "Component aggregate reads an unavailable field argument");
                         *constructedRegister.value.mutableField(index) = operand->cloneOwned();
                     }
                     ++frame.instruction;
@@ -3862,10 +3864,19 @@ namespace wio::vm
 
                 const std::uint32_t initializer = type.fieldInitializer;
                 const std::uint32_t constructor = instruction.callee;
+                if ((initializer != bytecode::InvalidIndex && initializer >= module.functions.size()) ||
+                    (constructor != bytecode::InvalidIndex && constructor >= module.functions.size()))
+                    return fail("WVM1074", "Component construction references an invalid lifecycle function");
+                // Field initializer bodies already invoke a zero-argument
+                // OnConstruct. Only parameterized constructors need a second
+                // frame after initialization (the generated C++ contract).
+                const bool invokeConstructor =
+                    constructor != bytecode::InvalidIndex &&
+                    (initializer == bytecode::InvalidIndex || module.functions[constructor].parameters.size() > 1);
                 ++frame.instruction;
                 if (initializer != bytecode::InvalidIndex)
                 {
-                    FrameContinuation continuation{.completion = constructor != bytecode::InvalidIndex
+                    FrameContinuation continuation{.completion = invokeConstructor
                                                                      ? FrameCompletion::ContinueConstruction
                                                                      : FrameCompletion::Ignore,
                                                    .nextFunction = constructor,
@@ -3877,7 +3888,7 @@ namespace wio::vm
                         return pushed;
                     continue;
                 }
-                if (constructor != bytecode::InvalidIndex)
+                if (invokeConstructor)
                 {
                     ExecutionResult pushed = pushFrame(module.functions[constructor], constructorArguments,
                                                        FrameContinuation{.completion = FrameCompletion::Ignore});
