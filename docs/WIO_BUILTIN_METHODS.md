@@ -1,114 +1,117 @@
-# Wio gömülü method referansı
+# Wio Built-in Method Reference
 
-Bu belge, `.wio` std dosyalarında gövdesi/deklarasyonu görünmeyen, derleyicinin
-doğrudan tanıdığı üye methodları listeler. Mevcut kaynak ağacındaki semantik
-imzaları esas alır; gelecekte planlanan API'leri veya her backend için bir
-destek/parite garantisini ifade etmez.
+This document lists member methods recognized directly by the compiler whose
+bodies or declarations are not visible in std `.wio` sources. It describes the
+semantic signatures in the current source tree, not planned APIs or a
+support/parity guarantee for every backend.
 
-`std::Vector`, `std::Span`, `std::Option`, `std::Result`, buffer, pool ve diğer
-std tiplerinin kaynakta tanımlı methodları bu katalogdan ayrıdır. Onlar için
-[std referansına](./WIO_STD.md) ve ilgili `std/*.wio` dosyasına bakılabilir.
+Source-defined methods on `std::Vector`, `std::Span`, `std::Option`,
+`std::Result`, buffers, pools and other std types are outside this catalog.
+See the [std reference](./WIO_STD.md) and the corresponding `std/*.wio` sources
+for those APIs.
 
-## İçindekiler
+## Contents
 
-- [Okuma kuralları](#okuma-kuralları)
+- [Reading conventions](#reading-conventions)
 - [string](#string)
 - [text](#text)
-- [Array: T[] ve [T; N]](#array)
-- [Dictionary: Dict ve Tree](#dictionary)
+- [Arrays: T[] and [T; N]](#array)
+- [Dictionaries: Dict and Tree](#dictionary)
 - [enum](#enum)
 - [flagset](#flagset)
 - [Async: coroutine](#async)
-- [Generic/value pack üyeleri](#pack)
-- [Kısa örnekler](#örnekler)
-- [Kaynaklar ve bakım](#kaynaklar-ve-bakım)
+- [Generic/value pack members](#pack)
+- [Examples](#examples)
+- [Sources and maintenance](#sources-and-maintenance)
 
-<a id="okuma-kuralları"></a>
+<a id="reading-conventions"></a>
 
-## Okuma kuralları
+## Reading conventions
 
-- İmzalar `Method(parametre: Tip) -> DönüşTipi` şeklinde yazılır.
-  Parametre adları açıklayıcı etiketlerdir; named-argument desteği anlamına gelmez.
-- Method adları büyük/küçük harfe duyarlıdır: `ToI32`, `Count`, `GetOr` gibi.
-- `void`, bir sonuç değeri dönmediğini belirtir.
-- `T`: eleman tipi; `K`: anahtar tipi; `V`: dictionary değer tipi;
-  `N`: sabit eleman sayısı; `A`: alıcının tam array tipi;
-  `D`: alıcının tam dictionary tipi; `E`: enum tipi; `F`: flagset tipi;
-  `U`: enum'un tanımlanmış temel integer tipi.
-- **`mut` gerekli** tablolarındaki methodlar değiştirilebilir bir alıcı ister.
-  Salt-okunur `view` veya değiştirilemez bir değişken üzerinden çağrılamazlar.
-  `ref`/`view`/alias kullanımı yeni bir method kümesi oluşturmaz; alttaki tip ve
-  erişim hakkı esas alınır. Nullable alıcı önce non-null olarak daraltılmalıdır.
-- `Get` ile `At` aynı değildir: `Get` bulunamayan değeri `std::Option` ile
-  temsil eder, `At` doğrudan değer ister. `GetOr` verilen yedeği döndürür.
-  `Option` dönen imzalar `std::Option` deklarasyonunun kullanılabilir olmasını
-  gerektirir; builtin std kapatıldığında bu bağımlılık ortadan kalkmaz.
+- Signatures use `Method(parameter: Type) -> ReturnType`.
+  Parameter names are descriptive labels, not a claim of named-argument support.
+- Method names are case-sensitive: `ToI32`, `Count`, `GetOr`, etc.
+- `void` indicates that no result value is returned.
+- `T`: element type; `K`: key type; `V`: dictionary value type;
+  `N`: fixed element count; `A`: the receiver's exact array type;
+  `D`: the receiver's exact dictionary type; `E`: enum type; `F`: flagset type;
+  `U`: the enum's declared underlying integer type.
+- Methods in **mutable receiver required** tables require a mutable receiver.
+  They cannot be called through a read-only `view` or an immutable variable.
+  `ref`/`view`/aliases do not introduce a separate method set; the underlying
+  type and access permissions determine availability. Nullable receivers must
+  first be narrowed to non-null.
+- `Get` and `At` are different: `Get` represents a missing value with
+  `std::Option`, whereas `At` requires a value to exist. `GetOr` returns the
+  supplied fallback when no value exists. Signatures returning `Option` require
+  the `std::Option` declaration to be available; disabling builtin std does not
+  remove this dependency.
 
 <a id="string"></a>
 
 ## string
 
-`string` byte dizisidir. UTF-8 metin taşıyabilir ama `Count`, index, `Slice`,
-`First`/`Last`, `Reverse` ve `char` işlemleri Unicode karakter/grapheme değil,
-byte üzerinden çalışır. Unicode metin işlemleri için `text` kullanılmalıdır.
+`string` is a byte string. It can carry UTF-8 text, but `Count`, indexing,
+`Slice`, `First`/`Last`, `Reverse` and `char` operations work on bytes, not
+Unicode characters or graphemes. Use `text` for Unicode-aware operations.
 
-### Okuma ve arama — mut gerekli değil
+### Reading and searching — no mutable receiver required
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `Count() -> usize` | Byte sayısı. |
-| `Empty() -> bool` | Boş mu? |
-| `Contains(value: string) -> bool` | Alt string var mı? |
-| `Contains(value: char) -> bool` | Byte/char var mı? |
-| `ContainsChar(value: char) -> bool` | Char aramasının açık isimli karşılığı. |
-| `StartsWith(prefix: string) -> bool` | Önek kontrolü. |
-| `EndsWith(suffix: string) -> bool` | Sonek kontrolü. |
-| `IndexOf(value: string) -> isize` | İlk eşleşmenin byte index'i; yoksa `-1`. |
-| `IndexOf(value: char) -> isize` | İlk char eşleşmesi; yoksa `-1`. |
-| `LastIndexOf(value: string) -> isize` | Son eşleşmenin byte index'i; yoksa `-1`. |
-| `LastIndexOf(value: char) -> isize` | Son char eşleşmesi; yoksa `-1`. |
-| `IndexOfChar(value: char) -> isize` | Char için ilk index; yoksa `-1`. |
-| `LastIndexOfChar(value: char) -> isize` | Char için son index; yoksa `-1`. |
-| `First() -> char` | İlk byte; boş string hata durumudur. |
-| `Last() -> char` | Son byte; boş string hata durumudur. |
-| `Get(index: usize) -> std::Option<char>` | Index geçerliyse `Some`, değilse `None`. |
-| `At(index: usize) -> char` | Doğrudan byte; geçersiz index hata durumudur. |
-| `GetOr(index: usize, fallback: char) -> char` | Geçersiz index'te yedek char. |
+| `Count() -> usize` | Number of bytes. |
+| `Empty() -> bool` | Whether the string is empty. |
+| `Contains(value: string) -> bool` | Whether a substring exists. |
+| `Contains(value: char) -> bool` | Whether a byte/char exists. |
+| `ContainsChar(value: char) -> bool` | Explicitly named char search. |
+| `StartsWith(prefix: string) -> bool` | Prefix check. |
+| `EndsWith(suffix: string) -> bool` | Suffix check. |
+| `IndexOf(value: string) -> isize` | Byte index of the first match, or `-1`. |
+| `IndexOf(value: char) -> isize` | Index of the first char match, or `-1`. |
+| `LastIndexOf(value: string) -> isize` | Byte index of the last match, or `-1`. |
+| `LastIndexOf(value: char) -> isize` | Index of the last char match, or `-1`. |
+| `IndexOfChar(value: char) -> isize` | First char index, or `-1`. |
+| `LastIndexOfChar(value: char) -> isize` | Last char index, or `-1`. |
+| `First() -> char` | First byte; an empty string is an error. |
+| `Last() -> char` | Last byte; an empty string is an error. |
+| `Get(index: usize) -> std::Option<char>` | `Some` for a valid index, otherwise `None`. |
+| `At(index: usize) -> char` | Direct byte access; an invalid index is an error. |
+| `GetOr(index: usize, fallback: char) -> char` | Fallback char for an invalid index. |
 
-### Yeni değer üreten işlemler — mut gerekli değil
+### Operations producing new values — no mutable receiver required
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `Slice(start: usize) -> string` | Başlangıçtan sona kadar. |
-| `Slice(start: usize, count: usize) -> string` | En fazla `count` byte; ikinci argüman bitiş index'i değildir. |
-| `SliceFrom(start: usize) -> string` | Başlangıçtan sona kadar. |
-| `Take(count: usize) -> string` | Baştan en fazla `count` byte. |
-| `Skip(count: usize) -> string` | Baştaki byte'ları atlar. |
-| `Left(count: usize) -> string` | Soldan en fazla `count` byte. |
-| `Right(count: usize) -> string` | Sağdan en fazla `count` byte. |
-| `Trim() -> string` | İki uçtaki whitespace'i temizler. |
-| `TrimStart() -> string` | Başlangıçtaki whitespace'i temizler. |
-| `TrimEnd() -> string` | Sondaki whitespace'i temizler. |
-| `ToLower() -> string` | Byte tabanlı küçük harf dönüşümü; tam Unicode case folding değildir. |
-| `ToUpper() -> string` | Byte tabanlı büyük harf dönüşümü. |
-| `Replace(oldValue: string, newValue: string) -> string` | Eşleşmeleri değiştirir. |
-| `ReplaceFirst(oldValue: string, newValue: string) -> string` | İlk eşleşmeyi değiştirir. |
-| `Repeat(count: usize) -> string` | Tekrar edilmiş string. |
-| `Split(separator: string) -> string[]` | Ayırıcıya göre parçalar. |
-| `Lines() -> string[]` | Satırlara ayırır. |
-| `PadLeft(width: usize) -> string` | Soldan boşlukla en az verilen byte genişliğine tamamlar. |
-| `PadLeft(width: usize, fill: char) -> string` | Soldan verilen char ile tamamlar. |
-| `PadRight(width: usize) -> string` | Sağdan boşlukla tamamlar. |
-| `PadRight(width: usize, fill: char) -> string` | Sağdan verilen char ile tamamlar. |
-| `Reversed() -> string` | Byte sırası ters çevrilmiş yeni string. |
+| `Slice(start: usize) -> string` | From the starting index to the end. |
+| `Slice(start: usize, count: usize) -> string` | At most `count` bytes; the second argument is not an end index. |
+| `SliceFrom(start: usize) -> string` | From the starting index to the end. |
+| `Take(count: usize) -> string` | At most `count` bytes from the beginning. |
+| `Skip(count: usize) -> string` | Skips bytes at the beginning. |
+| `Left(count: usize) -> string` | At most `count` bytes from the left. |
+| `Right(count: usize) -> string` | At most `count` bytes from the right. |
+| `Trim() -> string` | Removes whitespace at both ends. |
+| `TrimStart() -> string` | Removes leading whitespace. |
+| `TrimEnd() -> string` | Removes trailing whitespace. |
+| `ToLower() -> string` | Byte-based lowercase conversion, not full Unicode case folding. |
+| `ToUpper() -> string` | Byte-based uppercase conversion. |
+| `Replace(oldValue: string, newValue: string) -> string` | Replaces matching substrings. |
+| `ReplaceFirst(oldValue: string, newValue: string) -> string` | Replaces the first match. |
+| `Repeat(count: usize) -> string` | Repeated string. |
+| `Split(separator: string) -> string[]` | Splits on the separator. |
+| `Lines() -> string[]` | Splits into lines. |
+| `PadLeft(width: usize) -> string` | Pads with spaces on the left to at least the requested byte width. |
+| `PadLeft(width: usize, fill: char) -> string` | Pads on the left with the supplied char. |
+| `PadRight(width: usize) -> string` | Pads with spaces on the right. |
+| `PadRight(width: usize, fill: char) -> string` | Pads on the right with the supplied char. |
+| `Reversed() -> string` | New string with its byte order reversed. |
 
-Slice/take/skip işlemleri mevcut uzunluğa kırpılır; fazladan eleman üretmez.
-UTF-8 kod noktalarının ortasından kesmek veya byte sırasını ters çevirmek,
-geçerli Unicode metni geçersiz UTF-8 byte'larına dönüştürebilir.
+Slice/take/skip operations clamp to the available length; they do not create
+extra elements. Cutting through a UTF-8 code point or reversing byte order can
+turn valid Unicode text into invalid UTF-8 bytes.
 
-### Tip dönüşümleri — mut gerekli değil
+### Type conversions — no mutable receiver required
 
-| Parametresiz imza | Taban alan overload |
+| Parameterless signature | Overload accepting a base |
 | --- | --- |
 | `ToI8() -> i8` | `ToI8(base: i32) -> i8` |
 | `ToI16() -> i16` | `ToI16(base: i32) -> i16` |
@@ -121,292 +124,297 @@ geçerli Unicode metni geçersiz UTF-8 byte'larına dönüştürebilir.
 | `ToISize() -> isize` | `ToISize(base: i32) -> isize` |
 | `ToUSize() -> usize` | `ToUSize(base: i32) -> usize` |
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `ToF32() -> f32` | Floating-point parse. |
-| `ToF64() -> f64` | Floating-point parse. |
-| `ToBool() -> bool` | Bool parse. |
+| `ToF32() -> f32` | Floating-point parsing. |
+| `ToF64() -> f64` | Floating-point parsing. |
+| `ToBool() -> bool` | Boolean parsing. |
 
-Parametresiz integer dönüşümleri taban `10` kullanır. Bu methodlar
-`Option`/`Result` döndürmez; geçersiz parse veya aralık aşımı hata durumudur.
-Kontrollü parse için `std::convert` kaynakta tanımlı API'lerine bakılmalıdır.
+Parameterless integer conversions use base `10`. These methods do not return
+`Option`/`Result`; invalid parsing or an out-of-range value is an error.
+For checked parsing APIs, see the source-defined `std::convert` surface.
 
-### Yerinde değiştirme — mut gerekli
+### In-place mutation — mutable receiver required
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `Append(value: string) -> void` | Sona string ekler. |
-| `Push(value: char) -> void` | Sona bir byte ekler. |
-| `Insert(index: usize, value: string) -> void` | Verilen konuma ekler. |
-| `Erase(start: usize, count: usize) -> void` | Verilen aralığı siler. |
-| `Clear() -> void` | İçeriği boşaltır. |
-| `Reverse() -> void` | Byte sırasını yerinde ters çevirir. |
-| `ReplaceInPlace(oldValue: string, newValue: string) -> void` | Eşleşmeleri yerinde değiştirir. |
-| `TrimInPlace() -> void` | İki uçtaki whitespace'i yerinde temizler. |
-| `ToLowerInPlace() -> void` | Yerinde küçük harf dönüşümü. |
-| `ToUpperInPlace() -> void` | Yerinde büyük harf dönüşümü. |
+| `Append(value: string) -> void` | Appends a string. |
+| `Push(value: char) -> void` | Appends one byte. |
+| `Insert(index: usize, value: string) -> void` | Inserts at the supplied position. |
+| `Erase(start: usize, count: usize) -> void` | Removes the supplied range. |
+| `Clear() -> void` | Empties the string. |
+| `Reverse() -> void` | Reverses byte order in place. |
+| `ReplaceInPlace(oldValue: string, newValue: string) -> void` | Replaces matches in place. |
+| `TrimInPlace() -> void` | Removes whitespace at both ends in place. |
+| `ToLowerInPlace() -> void` | Lowercase conversion in place. |
+| `ToUpperInPlace() -> void` | Uppercase conversion in place. |
 
-`string` için gömülü `Reserve` veya `Capacity` methodu kayıtlı değildir.
+No built-in `Reserve` or `Capacity` method is registered for `string`.
 
 <a id="text"></a>
 
 ## text
 
-`text`, doğrulanmış UTF-8 Unicode değeridir; literal biçimi `u"Merhaba 🌍"`.
-Aşağıdaki methodların hiçbiri değiştirilebilir alıcı gerektirmez.
+`text` is a validated UTF-8 Unicode value; its literal form is `u"Hello 🌍"`.
+None of the following methods require a mutable receiver.
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `Count() -> usize` | Unicode kod noktası sayısı. |
-| `ByteCount() -> usize` | UTF-8 depolama boyutu. |
-| `Empty() -> bool` | Boş mu? |
-| `Slice(start: usize) -> text` | Kod noktası index'inden sona kadar. |
-| `Slice(start: usize, count: usize) -> text` | Kod noktası index'i ve adediyle kesit. |
-| `ToString() -> string` | UTF-8 byte string üretir. |
-| `Utf8() -> string` | `ToString` ile aynı gömülü dönüşüm. |
-| `Contains(value: text) -> bool` | Alt text araması. |
-| `StartsWith(prefix: text) -> bool` | Önek kontrolü. |
-| `EndsWith(suffix: text) -> bool` | Sonek kontrolü. |
-| `GraphemeCount() -> usize` | Grapheme kümesi sayısı. |
-| `SliceGraphemes(start: usize, count: usize) -> text` | Grapheme index'i ve adediyle kesit. |
-| `DisplayWidth() -> usize` | Unicode genişlik kurallarına göre görüntüleme sütunu hesabı; font piksel genişliği değildir. |
+| `Count() -> usize` | Number of Unicode code points. |
+| `ByteCount() -> usize` | UTF-8 storage size. |
+| `Empty() -> bool` | Whether the text is empty. |
+| `Slice(start: usize) -> text` | From the code-point index to the end. |
+| `Slice(start: usize, count: usize) -> text` | Slice by code-point index and count. |
+| `ToString() -> string` | Produces a UTF-8 byte string. |
+| `Utf8() -> string` | Same built-in conversion as `ToString`. |
+| `Contains(value: text) -> bool` | Subtext search. |
+| `StartsWith(prefix: text) -> bool` | Prefix check. |
+| `EndsWith(suffix: text) -> bool` | Suffix check. |
+| `GraphemeCount() -> usize` | Number of grapheme clusters. |
+| `SliceGraphemes(start: usize, count: usize) -> text` | Slice by grapheme index and count. |
+| `DisplayWidth() -> usize` | Display-column calculation using Unicode width rules, not font pixel width. |
 | `CaseFold() -> text` | Unicode case folding. |
-| `CodePoints() -> u32[]` | Kod noktalarının sayısal değerleri. |
-| `Graphemes() -> text[]` | Grapheme parçaları. |
+| `CodePoints() -> u32[]` | Numeric code-point values. |
+| `Graphemes() -> text[]` | Grapheme fragments. |
 
-Ek erişim: `value[index]` salt-okunur, tek kod noktalı bir **`text`** döndürür;
-`u32` veya `char` döndürmez. Sayısal kod noktaları için `CodePoints()` kullanılır.
-Kod noktası ile grapheme aynı şey değildir: birleşen işaretler ve bazı emoji
-dizileri birden çok kod noktasından oluşur. Şu an `text` üzerinde gömülü
-`Get`, `At`, `Append`, `Trim` veya `ToLower` methodu yoktur.
+Additional access: `value[index]` returns a read-only, single-code-point
+**`text`**, not a `u32` or `char`. Use `CodePoints()` for numeric code points.
+Code points and graphemes are different: combining marks and some emoji
+sequences contain multiple code points. Currently, `text` has no built-in
+`Get`, `At`, `Append`, `Trim` or `ToLower` method.
 
 <a id="array"></a>
 
-## Array: T[] ve [T; N]
+## Arrays: T[] and [T; N]
 
-`T[]` dinamik, `[T; N]` sabit boyutlu array'dir. Aşağıda `A`, alıcının tam
-tipidir. Örneğin `[i32; 3]` üzerinde `Clone() -> [i32; 3]`,
-`Slice(...) -> i32[]` olur.
+`T[]` is a dynamic array; `[T; N]` is a fixed-size array. Below, `A` denotes
+the receiver's exact type. For example, on `[i32; 3]`,
+`Clone() -> [i32; 3]` whereas `Slice(...) -> i32[]`.
 
-### İki array türünde ortak — mut gerekli değil
+### Shared by both array types — no mutable receiver required
 
-| İmza | Koşul / açıklama |
+| Signature | Requirement / description |
 | --- | --- |
-| `Count() -> usize` | Eleman sayısı. |
-| `Empty() -> bool` | Boş mu? |
-| `Capacity() -> usize` | Dinamik kapasite; sabit array için `N`. |
-| `Contains(value: T) -> bool` | `T` için intrinsic eşitlik desteği gerekir. |
-| `IndexOf(value: T) -> isize` | Eşitlik desteği; ilk index, yoksa `-1`. |
-| `LastIndexOf(value: T) -> isize` | Eşitlik desteği; son index, yoksa `-1`. |
-| `First() -> T` | İlk eleman; boş array hata durumudur. |
-| `Last() -> T` | Son eleman; boş array hata durumudur. |
-| `Get(index: usize) -> std::Option<T>` | Geçerli index'te `Some`, değilse `None`. |
-| `At(index: usize) -> T` | Geçersiz index hata durumudur. |
-| `GetOr(index: usize, fallback: T) -> T` | Geçersiz index'te yedek değer. |
-| `Clone() -> A` | Array değerini kopyalar; elemanları otomatik deep-clone etmez. |
-| `Slice(start: usize) -> T[]` | Başlangıçtan sona kadar dinamik array. |
-| `Slice(start: usize, count: usize) -> T[]` | En fazla `count` eleman. |
-| `Take(count: usize) -> T[]` | Baştan elemanlar. |
-| `Skip(count: usize) -> T[]` | Başlangıçtaki elemanları atlar. |
-| `Concat(other: A) -> T[]` | Birleştirilmiş dinamik array. |
-| `Reversed() -> A` | Sırası ters yeni array. |
-| `Join(separator: string) -> string` | Yalnız `T = string`. |
-| `Sorted() -> A` | Intrinsic sıralama desteği gerekir; sıralanmış kopya. |
+| `Count() -> usize` | Number of elements. |
+| `Empty() -> bool` | Whether the array is empty. |
+| `Capacity() -> usize` | Dynamic capacity; `N` for a fixed-size array. |
+| `Contains(value: T) -> bool` | Requires intrinsic equality support for `T`. |
+| `IndexOf(value: T) -> isize` | Requires equality support; first index, or `-1`. |
+| `LastIndexOf(value: T) -> isize` | Requires equality support; last index, or `-1`. |
+| `First() -> T` | First element; an empty array is an error. |
+| `Last() -> T` | Last element; an empty array is an error. |
+| `Get(index: usize) -> std::Option<T>` | `Some` for a valid index, otherwise `None`. |
+| `At(index: usize) -> T` | An invalid index is an error. |
+| `GetOr(index: usize, fallback: T) -> T` | Fallback value for an invalid index. |
+| `Clone() -> A` | Copies the array value; does not automatically deep-clone elements. |
+| `Slice(start: usize) -> T[]` | Dynamic array from the starting index to the end. |
+| `Slice(start: usize, count: usize) -> T[]` | At most `count` elements. |
+| `Take(count: usize) -> T[]` | Elements from the beginning. |
+| `Skip(count: usize) -> T[]` | Skips elements at the beginning. |
+| `Concat(other: A) -> T[]` | Concatenated dynamic array. |
+| `Reversed() -> A` | New array with reversed order. |
+| `Join(separator: string) -> string` | Only for `T = string`. |
+| `Sorted() -> A` | Requires intrinsic ordering support; sorted copy. |
 
-`Concat` parametresi tam alıcı tipidir: `[T; N]` alıcıda diğer array de
-`[T; N]` olmalıdır. Slice/take/skip uzunluğu mevcut elemana göre kırpılır.
-Bu kesitler `Span`/borrow view değil, dinamik array değeri döndürür.
+The `Concat` parameter uses the receiver's exact type: for a `[T; N]` receiver,
+the other array must also be `[T; N]`. Slice/take/skip operations clamp to the
+available elements. These slices return dynamic array values, not
+`Span`/borrow views.
 
-### İki array türünde ortak — mut gerekli
+### Shared by both array types — mutable receiver required
 
-| İmza | Koşul / açıklama |
+| Signature | Requirement / description |
 | --- | --- |
-| `Fill(value: T) -> void` | Mevcut elemanların değerini değiştirir. |
-| `Reverse() -> void` | Yerinde ters çevirir. |
-| `Sort() -> void` | Intrinsic sıralama desteği gerekir; yerinde sıralar. |
+| `Fill(value: T) -> void` | Changes the values of existing elements. |
+| `Reverse() -> void` | Reverses in place. |
+| `Sort() -> void` | Requires intrinsic ordering support; sorts in place. |
 
-### Yalnız dinamik T[] — mut gerekli
+### Dynamic T[] only — mutable receiver required
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `Push(value: T) -> void` | Sona ekler. |
-| `PushFront(value: T) -> void` | Başa ekler. |
-| `Pop() -> T` | Son elemanı çıkarıp döndürür; boş array hata durumudur. |
-| `PopFront() -> T` | İlk elemanı çıkarıp döndürür; boş array hata durumudur. |
-| `Insert(index: usize, value: T) -> void` | Konuma eleman ekler. |
-| `RemoveAt(index: usize) -> void` | Konumdaki elemanı siler. |
-| `Remove(value: T) -> bool` | Eşitlik desteği; ilk eşleşmeyi siler, silindi mi döndürür. |
-| `Clear() -> void` | Array'i boşaltır. |
-| `Extend(other: T[]) -> void` | Diğer array'in elemanlarını sona ekler. |
-| `Reserve(capacity: usize) -> void` | Kapasite ayırır; eleman sayısını değiştirmez. |
-| `ShrinkToFit() -> void` | Fazla kapasiteyi azaltma isteği. |
+| `Push(value: T) -> void` | Appends an element. |
+| `PushFront(value: T) -> void` | Prepends an element. |
+| `Pop() -> T` | Removes and returns the last element; an empty array is an error. |
+| `PopFront() -> T` | Removes and returns the first element; an empty array is an error. |
+| `Insert(index: usize, value: T) -> void` | Inserts an element at a position. |
+| `RemoveAt(index: usize) -> void` | Removes the element at a position. |
+| `Remove(value: T) -> bool` | Requires equality support; removes the first match and reports whether removal occurred. |
+| `Clear() -> void` | Empties the array. |
+| `Extend(other: T[]) -> void` | Appends the other array's elements. |
+| `Reserve(capacity: usize) -> void` | Reserves capacity without changing the element count. |
+| `ShrinkToFit() -> void` | Requests a reduction of excess capacity. |
 
-### Eşitlik ve sıralama sınırları
+### Equality and ordering restrictions
 
-Mevcut resolver, eşitlik için `void`/bilinmeyen tip dışındaki primitive'leri,
-`null`, generic parametreleri ve elemanları yine bu koşulu sağlayan array/dictionary
-tiplerini kabul eder. Sıralama için primitive'leri ve generic parametreleri kabul
-eder. Generic placeholder'ın kabul edilmesi her somut tipin runtime işlemini
-desteklediği anlamına gelmez.
+For equality, the current resolver accepts primitives other than `void`/unknown
+types, `null`, generic parameters and arrays/dictionaries whose elements also
+satisfy these requirements. For ordering, it accepts primitives and generic
+parameters. Accepting a generic placeholder does not guarantee runtime support
+for every concrete type.
 
-Bu kapı, kullanıcı tanımlı her `component`/`object`/enum için otomatik açılmaz;
-bir karşılaştırma operatörü yazılması tek başına bu intrinsic resolver'ın
-kısıtlarını değiştirmez. Comparator alan gömülü `Sort` overload'u yoktur.
+This gate does not automatically admit every user-defined
+`component`/`object`/enum. Defining a comparison operator alone does not change
+the intrinsic resolver's restrictions. There is no built-in `Sort` overload
+accepting a comparator.
 
 <a id="dictionary"></a>
 
-## Dictionary: Dict<K, V> ve Tree<K, V>
+## Dictionaries: Dict<K, V> and Tree<K, V>
 
-`Dict<K, V>` unordered, `Tree<K, V>` ordered dictionary'dir.
-`D` alıcının tam tipidir; `Merge`/`Extend` aynı dictionary türünü alır.
+`Dict<K, V>` is an unordered dictionary; `Tree<K, V>` is an ordered dictionary.
+`D` denotes the receiver's exact type; `Merge`/`Extend` take the same
+dictionary type.
 
-### Ortak — alıcı için mut gerekli değil
+### Shared — no mutable receiver required
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `Count() -> usize` | Kayıt sayısı. |
-| `Empty() -> bool` | Boş mu? |
-| `ContainsKey(key: K) -> bool` | Anahtar mevcut mu? |
-| `ContainsValue(value: V) -> bool` | `V` için intrinsic eşitlik desteği gerekir. |
-| `Get(key: K) -> std::Option<V>` | Anahtar varsa `Some`, yoksa `None`. |
-| `At(key: K) -> V` | Anahtar yoksa hata durumudur. |
-| `GetOr(key: K, fallback: V) -> V` | Anahtar yoksa yedek değer. |
-| `TryGet(key: K, outValue: ref V) -> bool` | Bulursa output'a yazar ve `true` döner; bulamazsa output değişmez. |
-| `Keys() -> K[]` | Anahtarların dinamik array'i. |
-| `Values() -> V[]` | Değerlerin dinamik array'i. |
-| `Clone() -> D` | Dictionary kopyası; değerlerdeki object handle'larını deep-clone etmez. |
-| `Merge(other: D) -> D` | Birleştirilmiş kopya; çakışan anahtarda `other` değeri kullanılır. |
+| `Count() -> usize` | Number of entries. |
+| `Empty() -> bool` | Whether the dictionary is empty. |
+| `ContainsKey(key: K) -> bool` | Whether the key exists. |
+| `ContainsValue(value: V) -> bool` | Requires intrinsic equality support for `V`. |
+| `Get(key: K) -> std::Option<V>` | `Some` if the key exists, otherwise `None`. |
+| `At(key: K) -> V` | A missing key is an error. |
+| `GetOr(key: K, fallback: V) -> V` | Fallback value for a missing key. |
+| `TryGet(key: K, outValue: ref V) -> bool` | Writes to the output and returns `true` if found; otherwise leaves the output unchanged. |
+| `Keys() -> K[]` | Dynamic array of keys. |
+| `Values() -> V[]` | Dynamic array of values. |
+| `Clone() -> D` | Dictionary copy; does not deep-clone object handles stored as values. |
+| `Merge(other: D) -> D` | Merged copy; `other` wins on duplicate keys. |
 
-`TryGet` alıcı dictionary'yi değiştirmez ama `outValue` argümanı değiştirilebilir
-referans olmalıdır. `Dict` için anahtar/değer iterasyon sırası garanti edilmez;
-`Tree` anahtar sırasını kullanır.
+`TryGet` does not mutate the receiver dictionary, but its `outValue` argument
+must be a mutable reference. Key/value iteration order is not guaranteed for
+`Dict`; `Tree` uses key order.
 
-### Ortak — mut gerekli
+### Shared — mutable receiver required
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `Set(key: K, value: V) -> void` | Ekler veya mevcut değeri değiştirir. |
-| `GetOrAdd(key: K, fallback: V) -> V` | Mevcut değeri döndürür; yoksa yedeği ekler ve döndürür. |
-| `Extend(other: D) -> void` | Yerinde birleştirir; çakışan anahtarda diğer değeri kullanır. |
-| `Clear() -> void` | Tüm kayıtları siler. |
-| `Remove(key: K) -> bool` | Anahtarı siler; silindi mi döndürür. |
+| `Set(key: K, value: V) -> void` | Inserts or replaces a value. |
+| `GetOrAdd(key: K, fallback: V) -> V` | Returns an existing value, or inserts and returns the fallback. |
+| `Extend(other: D) -> void` | Merges in place; the other value wins on duplicate keys. |
+| `Clear() -> void` | Removes all entries. |
+| `Remove(key: K) -> bool` | Removes the key and reports whether removal occurred. |
 
-### Yalnız Tree<K, V> — mut gerekli değil
+### Tree<K, V> only — no mutable receiver required
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `FirstKey() -> K` | En küçük anahtar; boş Tree hata durumudur. |
-| `FirstValue() -> V` | En küçük anahtarın değeri; boş Tree hata durumudur. |
-| `LastKey() -> K` | En büyük anahtar; boş Tree hata durumudur. |
-| `LastValue() -> V` | En büyük anahtarın değeri; boş Tree hata durumudur. |
-| `FloorKeyOr(key: K, fallback: K) -> K` | Verilen anahtardan küçük/eşit en büyük anahtar; yoksa yedek. |
-| `CeilKeyOr(key: K, fallback: K) -> K` | Verilen anahtardan büyük/eşit en küçük anahtar; yoksa yedek. |
+| `FirstKey() -> K` | Smallest key; an empty Tree is an error. |
+| `FirstValue() -> V` | Value of the smallest key; an empty Tree is an error. |
+| `LastKey() -> K` | Largest key; an empty Tree is an error. |
+| `LastValue() -> V` | Value of the largest key; an empty Tree is an error. |
+| `FloorKeyOr(key: K, fallback: K) -> K` | Largest key less than or equal to the supplied key, or the fallback. |
+| `CeilKeyOr(key: K, fallback: K) -> K` | Smallest key greater than or equal to the supplied key, or the fallback. |
 
 <a id="enum"></a>
 
 ## enum
 
-Enum değeri üzerinde çağrılır; mut gerekli değildir.
+Called on enum values; no mutable receiver is required.
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `Name() -> string` | Enum değerinin adı. |
-| `Value() -> U` | Enum'un temel integer tipindeki değeri. |
-| `IsValid() -> bool` | Tanımlı enum değerlerinden biri mi? |
+| `Name() -> string` | Name of the enum value. |
+| `Value() -> U` | Value in the enum's underlying integer type. |
+| `IsValid() -> bool` | Whether this is one of the declared enum values. |
 
-`Value` her zaman `i32` dönmez; enum'un declared underlying tipi esas alınır.
-Enum tipi üzerinden kullanılan reflection API'leri bu instance methodlarının
-yerine geçmez; ayrı std reflection yüzeyidir.
+`Value` does not always return `i32`; it uses the enum's declared underlying
+type. Reflection APIs used on the enum type are a separate std reflection
+surface, not substitutes for these instance methods.
 
 <a id="flagset"></a>
 
 ## flagset
 
-Flagset değeri üzerinde çağrılır. Hepsi mut gerektirmeyen işlemlerdir.
+Called on flagset values. None of these operations require a mutable receiver.
 
-| İmza | Açıklama |
+| Signature | Description |
 | --- | --- |
-| `Name() -> string` | Flagset'in ad gösterimi. |
-| `Has(flags: F) -> bool` | Verilen bitlerin tamamı mevcut mu? |
-| `HasAny(flags: F) -> bool` | Verilen bitlerden en az biri mevcut mu? |
-| `With(flags: F) -> F` | Bitleri eklenmiş yeni değer. |
-| `Without(flags: F) -> F` | Bitleri kaldırılmış yeni değer. |
-| `Toggle(flags: F) -> F` | Verilen bitleri ters çevrilmiş yeni değer. |
-| `Clear() -> F` | Tüm bitleri temizlenmiş yeni değer. |
+| `Name() -> string` | Name representation of the flagset. |
+| `Has(flags: F) -> bool` | Whether all supplied bits are present. |
+| `HasAny(flags: F) -> bool` | Whether at least one supplied bit is present. |
+| `With(flags: F) -> F` | New value with the bits added. |
+| `Without(flags: F) -> F` | New value with the bits removed. |
+| `Toggle(flags: F) -> F` | New value with the supplied bits toggled. |
+| `Clear() -> F` | New value with all bits cleared. |
 
-Önemli: flagset `Clear()` **alıcıyı değiştirmez**; array/string/dictionary
-`Clear()` gibi `void` dönen mutating bir method değildir. Alıcıyı değiştirmek
-isteniyorsa dönen değer yeniden atanmalıdır. Enum'daki `Value()`/`IsValid()`
-bu flagset intrinsic listesinde kayıtlı değildir.
+Important: flagset `Clear()` **does not mutate the receiver**. Unlike
+array/string/dictionary `Clear()`, it is not a mutating method returning
+`void`. To change the receiver, assign the returned value back to it.
+The enum methods `Value()`/`IsValid()` are not registered in this flagset
+intrinsic list.
 
 <a id="async"></a>
 
-## Async: coroutine<T> ve coroutine<void>
+## Async: coroutine<T> and coroutine<void>
 
-Timeout argümanlarının birimi **milisaniye**dir. Aşağıdaki methodlar `mut` alıcı
-gerektirmez; `Start`/`Cancel` gibi işlemler paylaşılan task durumunu etkileyebilir.
-Bu nedenle `mut` gerektirmemeleri işlemlerin saf olduğu anlamına gelmez.
+Timeout arguments are measured in **milliseconds**. The following methods do
+not require a `mut` receiver; operations such as `Start`/`Cancel` can affect
+shared task state. Not requiring `mut` does not mean these operations are pure.
 
-| İmza: coroutine<T> | Açıklama |
+| Signature: coroutine<T> | Description |
 | --- | --- |
-| `Start() -> coroutine<T>` | Task'ı başlatır; task handle'ını döndürür. |
-| `Cancel() -> void` | İptal isteği verir; thread'i zorla sonlandırmaz. |
-| `IsReady() -> bool` | Task tamamlanmış mı? |
-| `IsCancelled() -> bool` | İptal durumu. |
-| `IsFaulted() -> bool` | Hata ile tamamlanmış mı? |
-| `WaitFor(milliseconds: u64) -> bool` | Çağıran thread'de süreli bekleme; hazırsa `true`. |
-| `Block() -> T` | Sonuç için çağıran thread'i bloklayarak bekler. |
-| `Poll() -> std::async::TaskPoll<T>` | Beklemeden durum, optional sonuç ve hata bilgisini alır. |
-| `Within(milliseconds: u64) -> coroutine<std::Option<T>>` | Başarıda `Some`, timeout'ta `None` üreten async işlem. |
-| `CancelAfter(milliseconds: u64) -> coroutine<void>` | Süre sonunda task hâlâ bitmemişse iptal isteyen async işlem. |
-| `Detach() -> void` | Task'ı detached çalışmaya bırakır. |
+| `Start() -> coroutine<T>` | Starts the task and returns the task handle. |
+| `Cancel() -> void` | Requests cancellation; does not forcibly terminate a thread. |
+| `IsReady() -> bool` | Whether the task has completed. |
+| `IsCancelled() -> bool` | Cancellation state. |
+| `IsFaulted() -> bool` | Whether the task completed with a failure. |
+| `WaitFor(milliseconds: u64) -> bool` | Timed wait on the calling thread; `true` if ready. |
+| `Block() -> T` | Blocks the calling thread until the result is available. |
+| `Poll() -> std::async::TaskPoll<T>` | Retrieves status, optional result and failure information without waiting. |
+| `Within(milliseconds: u64) -> coroutine<std::Option<T>>` | Async operation producing `Some` on success or `None` on timeout. |
+| `CancelAfter(milliseconds: u64) -> coroutine<void>` | Async operation requesting cancellation after the delay if the task is still incomplete. |
+| `Detach() -> void` | Leaves the task running detached. |
 
-`coroutine<void>` üzerinde `Start`, `Block`, `Poll` ve `Within` dönüşleri şöyledir;
-diğer methodların parametre ve dönüş tipleri üsttekiyle aynıdır:
+For `coroutine<void>`, `Start`, `Block`, `Poll` and `Within` return the types
+below. All other methods have the same parameter and return types as above:
 
-| İmza: coroutine<void> | Açıklama |
+| Signature: coroutine<void> | Description |
 | --- | --- |
-| `Start() -> coroutine<void>` | Void task'ı başlatır. |
-| `Block() -> void` | Tamamlanmayı bloklayarak bekler; değer üretmez. |
-| `Poll() -> std::async::VoidTaskPoll` | Sonuç değeri olmadan durum ve hata bilgisi. |
-| `Within(milliseconds: u64) -> coroutine<bool>` | Süre içinde tamamlandıysa `true`, timeout'ta `false`. |
+| `Start() -> coroutine<void>` | Starts the void task. |
+| `Block() -> void` | Blocks until completion without producing a value. |
+| `Poll() -> std::async::VoidTaskPoll` | Status and failure information without a result value. |
+| `Within(milliseconds: u64) -> coroutine<bool>` | `true` if completed within the timeout, otherwise `false`. |
 
-`Poll` ve `Within` için ilgili `std::async` deklarasyonları, değerli `Within`
-için ayrıca `std::Option` gerekir. `Within` timeout'ta kaynak task için iptal
-isteği verir; hata/iptal, başarılı bir `None` sonucu ile aynı şey değildir.
-`Within`/`CancelAfter` task döndürür; bunları senkron `WaitFor` ile karıştırma.
-Dönen task normal async başlatma/await kurallarına tabidir; methodu çağırmak tek
-başına her durumda zamanlayıcının çalışmaya başladığını varsaydırmaz.
+`Poll` and `Within` require the corresponding `std::async` declarations;
+value-producing `Within` also requires `std::Option`. On timeout, `Within`
+requests cancellation of the source task. Failure/cancellation is not the same
+as a successful `None` result. `Within`/`CancelAfter` return tasks; do not confuse
+them with synchronous `WaitFor`. Returned tasks follow the normal async
+start/await rules; calling the method alone does not imply that the timer has
+already started in every situation.
 
 <a id="pack"></a>
 
-## Generic/value pack üyeleri
+## Generic/value pack members
 
-Bu yüzey normal array methodlarıyla aynı değildir. Pack'lerde iki **property**
-ve bir method özel olarak tanınır:
+This surface is different from ordinary array methods. Two **properties** and
+one method are recognized specially on packs:
 
-| Üye | Parametre / sonuç | Koşul |
+| Member | Parameters / result | Requirement |
 | --- | --- | --- |
-| `size` | Argüman yok; `usize`. | Generic/value/type pack ve pack storage üzerinde. |
-| `array` | Argüman yok; value-pack view veya type-pack view. | Değer pack'inde value view, tip pack'inde type view. |
-| `ToStaticArray<T>() -> [T; N]` | Bir explicit generic eleman tipi; runtime argümanı yok. | Değer pack/view/storage için; `N` pack eleman sayısıdır. |
+| `size` | No arguments; `usize`. | Generic/value/type packs and pack storage. |
+| `array` | No arguments; a value-pack view or type-pack view. | Value view for value packs, type view for type packs. |
+| `ToStaticArray<T>() -> [T; N]` | One explicit generic element type; no runtime arguments. | Value packs/views/storage; `N` is the pack element count. |
 
-`args.size`, `args.array` biçiminde kullanılır; `size()`/`array()` değildir.
-`array`, heterojen pack view olabilir, otomatik olarak `T[]` demek değildir.
-`ToStaticArray<T>()` için tam bir generic tip argümanı gerekir; type pack'ini
-runtime array'e dönüştürmek desteklenmez. Değerlerin hedef elemana uygunluğu
-ayrıca korunmalıdır.
+Use `args.size` and `args.array`, not `size()`/`array()`.
+`array` can be a heterogeneous pack view; it does not automatically mean
+`T[]`. `ToStaticArray<T>()` requires exactly one generic type argument.
+Converting a type pack to a runtime array is unsupported. Values must also be
+compatible with the target element type.
 
-<a id="örnekler"></a>
+<a id="examples"></a>
 
-## Kısa örnekler
+## Examples
 
-### string: kopya ile yerinde değiştirme
+### string: copying versus in-place mutation
 
 ```wio
 mut title: string = "  Wio  ";
-let trimmed: string = title.Trim(); // title değişmez
-title.TrimInPlace();                // title değişir
+let trimmed: string = title.Trim(); // title is unchanged
+title.TrimInPlace();                // title is modified
 title.Append(" language");
 
 let number: i32 = "42".ToI32();
@@ -415,7 +423,7 @@ let maybeByte: std::Option<char> = title.Get(999usize);
 let fallback: char = title.GetOr(999usize, '?');
 ```
 
-### Dinamik ve sabit array
+### Dynamic and fixed-size arrays
 
 ```wio
 mut values: i32[] = [3, 1, 2];
@@ -427,10 +435,10 @@ let copied: i32[] = values.Slice(1usize, 2usize);
 let fixed: [i32; 3] = [3, 1, 2];
 let sorted: [i32; 3] = fixed.Sorted();
 let dynamic: i32[] = fixed.Take(2usize);
-// fixed.Push(4); // sabit array boyutu değiştirilemez
+// fixed.Push(4); // fixed-size arrays cannot be resized
 ```
 
-### Dictionary: güvenli ve doğrudan erişim
+### Dictionary: optional versus direct access
 
 ```wio
 mut scores: Dict<string, i32>;
@@ -443,7 +451,7 @@ mut output: i32 = 0;
 let found: bool = scores.TryGet("Ada", ref output);
 ```
 
-### Unicode: byte, kod noktası, grapheme
+### Unicode: bytes, code points and graphemes
 
 ```wio
 let label: text = u"Merhaba 🌍";
@@ -455,24 +463,29 @@ let pieces: text[] = label.Graphemes();
 let utf8: string = label.Utf8();
 ```
 
-## Kaynaklar ve bakım
+<a id="sources-and-maintenance"></a>
 
-Bu liste std kaynaklarından tahmin edilerek değil, şu kaynaklar birlikte
-okunarak hazırlanmıştır. Özellikle resolver'ın ilk verdiği `Get`/`Poll`/`Within`
-tipleri tek başına nihai kullanıcı imzası değildir; analyzer bunları tamamlar.
+## Sources and maintenance
+
+This catalog was prepared by reading the following sources together, not by
+guessing from std sources. In particular, the resolver's initial types for
+`Get`/`Poll`/`Within` are not the final user-facing signatures; the analyzer
+completes them.
 
 - [Intrinsic member resolver](../compiler/src/wio_compiler/sema/intrinsic_member_resolver.cpp):
-  method adları, overload parametreleri, dönüş tipleri ve mut koşulları.
-- [Access/call analizi](../compiler/src/wio_compiler/sema/detail/access_and_call_visitors.inl):
-  `Option` dönüşleri, task sonuçları, pack üyeleri ve erişim kontrolleri.
-- [Intrinsic kimlikleri](../compiler/include/wio/ast/ast.h): intrinsic envanteri.
-- [Runtime intrinsic yardımcıları](../runtime/include/intrinsics.h): kesit,
-  arama, mutation ve parse davranışları.
-- [Unicode text runtime](../runtime/include/text.h): byte/kod noktası/grapheme ayrımı.
-- [Async std yüzeyi](../std/async.wio) ve
-  [async runtime](../runtime/include/std_async.h): poll, timeout, iptal ve bekleme.
-- [Dönüşüm std yüzeyi](../std/convert.wio): `std::ToString<T>(value)` dahil
-  kaynakta tanımlı dönüşümler. Her tipe gömülü `.ToString()` varmış gibi
-  düşünülmemelidir.
+  method names, overload parameters, return types and mutability requirements.
+- [Access/call analysis](../compiler/src/wio_compiler/sema/detail/access_and_call_visitors.inl):
+  `Option` returns, task results, pack members and access checks.
+- [Intrinsic identities](../compiler/include/wio/ast/ast.h): intrinsic inventory.
+- [Runtime intrinsic helpers](../runtime/include/intrinsics.h):
+  slicing, searching, mutation and parsing behavior.
+- [Unicode text runtime](../runtime/include/text.h):
+  byte/code-point/grapheme distinctions.
+- [Async std surface](../std/async.wio) and
+  [async runtime](../runtime/include/std_async.h):
+  polling, timeouts, cancellation and waiting.
+- [Conversion std surface](../std/convert.wio):
+  source-defined conversions including `std::ToString<T>(value)`.
+  Do not assume that every type has a built-in `.ToString()`.
 
-Yeni intrinsic veya overload eklenince ilgili tablo da güncellenmelidir.
+Update the corresponding table whenever a new intrinsic or overload is added.
