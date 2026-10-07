@@ -148,6 +148,16 @@ here does not by itself mean that v1 cannot ship.
     interning, cross-module constant export, and the final
     Unicode normalization policy.
 
+18. [ ] Retire legacy attribute attachment syntax before v1.
+    Keep declaration-leading `[Attribute]` as the sole attachment spelling;
+    remove compiler compatibility for `@Attribute(...)` and postfix attribute
+    `with ...` after source migration. Preserve scoped `using`, including
+    `using cpp::header(...)`, typed composition/processors and reflection.
+    Migrate std/CLI/SDK, tests, examples, generators, formatter and maintained
+    IDE/docs surfaces; reject obsolete spellings with actionable diagnostics.
+    This is an accepted v1 blocker, not implemented by this planning note.
+    Scope and acceptance: `docs/WIO_V1_SURFACE_CONSOLIDATION_PLAN.md`, section 2.
+
 ## P1 - Standard Library Correctness and Consistency
 
 1. [~] Build a real Unicode text model.
@@ -255,6 +265,23 @@ here does not by itself mean that v1 cannot ship.
     Host date/time formatting, bigint, RLE compression, MIME, INI, statistics,
     geometry/color, localization, and CLI parsing exist. Add decimal, archive,
     TOML, database primitives, and real-project qualification.
+
+11. [ ] Complete the Result-first std standardization, cleanup and performance
+    pass before v1. Standard checked retrieval/fallible operations return
+    `Result<T>` with standardized missing-value/key/index, invalid-value and
+    other error contracts; ordinary calls, `!()` and `?()` share one model.
+    Keep infallible APIs direct. Keep `Option<T>` only as an explicitly chosen
+    user optional-value utility, not an automatic standard-operation return.
+    Audit intrinsic methods and every std module, async payloads, both WIR
+    backends, SDK descriptors, CLI consumers and examples together. Remove
+    redundant `Try...`/`...Result`/`...Raw` aliases, obsolete helpers/modules
+    and duplicated implementations without deleting distinct capabilities.
+    Standardize naming, overloads, ownership, Unicode/bounds/error behavior;
+    profile and optimize allocations/copies, algorithms, containers, builders
+    and byte/buffer I/O with reproducible native/VM performance gates.
+    Publish migration diagnostics/docs and keep IDE/SDK interfaces aligned.
+    This is an accepted v1 blocker; final integrated optimization still follows.
+    Scope and acceptance: `docs/WIO_V1_SURFACE_CONSOLIDATION_PLAN.md`, sections 1/3.
 
 ## P1 - Native Interop, SDK, and Ecosystem
 

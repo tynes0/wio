@@ -72,6 +72,31 @@ must close before v1.
 
 ---
 
+### 2.1 Accepted Surface-Consolidation Blockers (2026-10-07)
+
+The v1 language/std contract now additionally requires the following closure
+work within the existing coherence, std, migration and performance gates:
+
+- **Result-first standard APIs:** checked retrieval and fallible std/intrinsic
+  operations return `Result<T>` with standardized errors and consistent
+  ordinary/`!()`/`?()` calls. Infallible operations keep direct returns.
+  `Option<T>` remains an opt-in user utility, not an automatically selected
+  standard-operation return type.
+- **Bracket-only attachment syntax:** migrate maintained source, then remove
+  compiler acceptance of `@Attribute(...)` and postfix attribute `with ...`.
+  Keep `[Attribute]` and scoped `using`, including `using cpp::header(...)`.
+- **Comprehensive std pass:** standardize the public API, remove redundant
+  Try/Result/Raw aliases and obsolete implementations, and optimize measured
+  std/native/VM hotspots with explicit correctness and performance evidence.
+
+These are accepted blockers, not completed work. Full scope, migration rules
+and acceptance criteria are in
+[`WIO_V1_SURFACE_CONSOLIDATION_PLAN.md`](./WIO_V1_SURFACE_CONSOLIDATION_PLAN.md).
+They must close before beta and be requalified during final optimization.
+Historical release scopes below remain historical; they do not override this
+later decision or imply that the current implementation has already migrated.
+Existing backend and v1 gate identities are not renumbered by this addition.
+
 ## 3. Planned Release Train
 
 ### v0.13.0 - Language Coherence
@@ -337,6 +362,7 @@ post-v1 work.
 | Reproducible package and installed-toolchain workflow | `v0.18.0` |
 | Formatter, diagnostics, language service, templates, docs alignment | `v0.19.0` |
 | Integrated heavy optimization and measured performance budgets | before beta |
+| Result-first std, bracket-only attachment and standardized/optimized std pass | before beta; requalified during final optimization |
 | Real-world portfolio, compatibility and migration sign-off | beta/RC |
 | Signed, checksummed, provenance-backed release artifacts | RC/stable |
 

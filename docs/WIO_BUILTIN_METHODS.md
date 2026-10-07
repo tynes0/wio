@@ -10,6 +10,11 @@ Source-defined methods on `std::Vector`, `std::Span`, `std::Option`,
 See the [std reference](./WIO_STD.md) and the corresponding `std/*.wio` sources
 for those APIs.
 
+The accepted [v1 surface-consolidation plan](./WIO_V1_SURFACE_CONSOLIDATION_PLAN.md)
+will replace implicit Option returns in standard checked operations with Result
+and align fallible APIs with `!()`/`?()`. That migration is pending; the tables
+below describe current implementation, not the proposed replacement signatures.
+
 ## Contents
 
 - [Reading conventions](#reading-conventions)

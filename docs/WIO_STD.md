@@ -21,6 +21,12 @@ return types, overloads and mutable-receiver requirements.
 
 ---
 
+The accepted [v1 surface-consolidation plan](./WIO_V1_SURFACE_CONSOLIDATION_PLAN.md)
+requires a Result-first std API and a standardization/cleanup/performance pass
+before v1. This is implementation-pending: the Option-returning signatures and
+compatibility helpers described below still document current behavior, not the
+final contract. Option remains available for explicit user choice.
+
 ## 0. Stability Reading
 
 For the current `v1` freeze, the std surface should be read in four buckets:

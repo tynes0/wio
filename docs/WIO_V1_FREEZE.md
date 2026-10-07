@@ -24,6 +24,16 @@ For full details, see:
 
 ---
 
+### Accepted pre-v1 contract revision (2026-10-07)
+
+The [surface-consolidation plan](./WIO_V1_SURFACE_CONSOLIDATION_PLAN.md) records
+mandatory, implementation-pending v1 changes: Result-first standard fallible
+APIs with Option reserved for explicit user choice, bracket-only attribute
+attachment with scoped `using` retained, and a complete std API/implementation/
+performance pass. It supersedes conflicting intended-v1 claims in this snapshot
+about legacy `@`/postfix `with` compatibility or automatic Option retrieval.
+Current compiler behavior is not changed by this planning note.
+
 ## 1. Freeze Policy
 
 The current `v1` rule is:
