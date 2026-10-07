@@ -90,6 +90,13 @@ namespace wio::vm
         [[nodiscard]] static Value runtimeValue(std::uint32_t type, std::uint64_t stableTypeId,
                                                 WioNativeAbiHandle handle);
         [[nodiscard]] std::uint32_t aggregateType() const noexcept;
+        [[nodiscard]] std::uint32_t anyType() const noexcept;
+        [[nodiscard]] const Value* anyPayload() const noexcept;
+        // Producer backing is shared with the boxed cell, not with fitted
+        // value copies. This preserves native AnyCell identity across calls.
+        [[nodiscard]] Value nativeAnyBacking() const;
+        // First-writer installation; subsequent aliases keep the original cell.
+        void setNativeAnyBacking(const Value& backing) const;
         [[nodiscard]] std::uint32_t strongReferenceCount() const noexcept;
         [[nodiscard]] std::uint32_t callableFunction() const noexcept;
         [[nodiscard]] std::size_t captureCount() const noexcept;
@@ -210,8 +217,6 @@ namespace wio::vm
                                                  bool inclusive);
         [[nodiscard]] static Value containerIterator(std::uint32_t type, Value source, std::size_t step);
         [[nodiscard]] PlaceStorage* asPlace() const noexcept;
-        [[nodiscard]] std::uint32_t anyType() const noexcept;
-        [[nodiscard]] const Value* anyPayload() const noexcept;
         [[nodiscard]] bool iteratorIsRange() const noexcept;
         [[nodiscard]] bool iteratorInclusive() const noexcept;
         [[nodiscard]] bool iteratorFinished() const noexcept;

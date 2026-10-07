@@ -33,6 +33,11 @@ foreach(artifact "${native}" "${bridge}" "${bytecode}")
 endforeach()
 
 function(compare_run argument succeeds)
+    if(ARGC GREATER 2)
+        set(success_oracle "${ARGV2}")
+    else()
+        set(success_oracle "native-differential-ok:scalar/ref/alias/pod/generic/opaque/any/callback/string/text/async")
+    endif()
     execute_process(
         COMMAND "${native}" "${argument}"
         WORKING_DIRECTORY "${WIO_OUTPUT_DIR}"
@@ -49,7 +54,7 @@ function(compare_run argument succeeds)
         if(NOT "${native_result}" STREQUAL "0" OR NOT "${vm_result}" STREQUAL "0")
             message(FATAL_ERROR "Expected successful executions: C++=${native_result}, VM=${vm_result}\nC++: ${native_output}\n${native_error}\nVM: ${vm_output}\n${vm_error}")
         endif()
-        if(NOT native_output MATCHES "native-differential-ok:scalar/ref/alias/pod/generic/opaque/any/callback/string/text/async")
+        if(NOT native_output MATCHES "${success_oracle}")
             message(FATAL_ERROR "Success oracle missing; identical silent failures cannot pass this gate")
         endif()
         if(NOT native_output STREQUAL vm_output OR NOT native_error STREQUAL vm_error)
@@ -100,6 +105,6 @@ execute_process(COMMAND "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}"
 if(NOT "${local_pod_result}" STREQUAL "0")
     message(FATAL_ERROR "Local POD adapter regressed: ${local_pod_output}\n${local_pod_error}")
 endif()
-expect_remaining_boundary("local-any" "WVM1223")
+compare_run("local-any" TRUE "^$")
 expect_remaining_boundary("pod-callback" "WVM1225")
 message(STATUS "C++/VM native differential gate passed: values, references, ownership, callbacks, async, failure")

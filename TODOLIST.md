@@ -689,8 +689,16 @@ Rider, and CLion are defined in
    Same-key-set ref updates and escaped producer-library lifetime have focused
    coverage. Key-set/sequence-length changes and overlapping container/descendant
    borrows still require an explicit invalidation/projection contract.
-   Remaining native parity work includes VM-created any/object
-   materialization into producer storage; POD/object/container/nullable and
+   Any adapters now materialize VM-created value payloads and decode producer
+   any results using stable payload identities. Producer cell backing preserves
+   shared-copy mutation, while whole-value ref replacement leaves old aliases
+   intact. Scalar/string/text, supported array/dictionary, opaque, native POD,
+   null defaults, and escaped producer-library lifetime have focused coverage.
+   Payload discovery uses concrete AnyBox/is/fit types; unknown payloads and
+   ambiguous C++ aliases reject explicitly rather than guessing identities.
+   Remaining native parity work includes VM-created object materialization,
+   object/interface/Box and nullable/generic any payloads, any-bearing containers,
+   alias identity canonicalization; POD/object/container/nullable and
    ref/view callback signatures; consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.

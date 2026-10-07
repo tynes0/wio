@@ -382,6 +382,12 @@ namespace wio::bytecode
         };
         for (const wir::lowered::Function& function : source.functions)
         {
+            for (const auto& block : function.blocks)
+                for (const auto& instruction : block.instructions)
+                    if (instruction.opcode == wir::lowered::Opcode::AnyBox ||
+                        instruction.opcode == wir::lowered::Opcode::AnyCheckedCast ||
+                        instruction.opcode == wir::lowered::Opcode::AnyTypeTest)
+                        addStructuralAbiIdentity(addStructuralAbiIdentity, instruction.targetType, 0);
             if (!function.nativeBinding)
                 continue;
             for (const wir::NativeAbiValue& parameter : function.nativeBinding->parameters)

@@ -785,3 +785,76 @@ renaming, nested array growth, overlapping element borrows and producer
 exceptions. Both new gates passed locally on Windows (2/2, 85.62 seconds),
 including the real generated-DLL lifetime host case. Only the new focused
 gates were run; no full-suite or Linux pass is claimed.
+
+## VM-created any value payloads
+
+The optional `WioGetNativeAnyApi` sidecar (`wio_native_any.h`, version 1)
+materializes VM-created boxed values as real producer-owned `runtime::Any`
+cells. Wire ABI v2 and the bytecode format are unchanged. The payload registry
+maps stable Wio type ids to producer pack/read functions; C++ type-token
+addresses never serve as cross-backend identities. Registration is staged
+after POD/sequence/dictionary dependencies and published atomically.
+
+The automatic descriptor closure comes from concrete `AnyBox`, `is` and `fit`
+operations in the module, when native signatures use `any`. Eligible payloads
+are scalars, string, Unicode text, opaque, supported non-generic native POD,
+dynamic arrays and ordered/unordered dictionaries, including supported nested
+container shapes. Null `any` has a separate producer operation, not a fake
+boxed payload or nullable wire cell. VM default initialization and null type
+tests now agree with the C++ runtime.
+
+```wio
+[Native, CppName(interop::MutateCopy)]
+fn MutateCopy(value: any);
+[Native, CppName(interop::Replace)]
+fn Replace(value: ref any);
+
+mut value: any = 7;
+let alias: any = value;
+MutateCopy(value); // a C++ Any copy shares its boxed cell
+let changed = alias fit i32;
+Replace(ref value); // replacing the Any itself does not replace alias
+```
+
+VM any copies share a producer backing handle once materialized. Native code
+may mutate the boxed payload through a copied Any; subsequent VM `is`/`fit`
+operations refresh from that producer cell. This also permits container growth
+inside any, because `fit` recovers owned value copies, not live element borrows.
+Whole-value ref replacement instead publishes a new VM any and leaves previous
+copies bound to their old producer cell. Same-place view/ref arguments share a
+typed producer frame slot. The sidecar reads producer storage without copying
+the entire Any before dispatch; payload extraction still copies owned values.
+Backing and decoded POD/opaque children pin producer code after the machine
+dies, and the final release drops the library lease.
+Concurrent first materializations converge on one installed producer cell;
+VM extraction uses a local snapshot rather than rewriting shared payload data.
+
+Limits remain explicit:
+
+- A native payload absent from the concrete descriptor closure retains its
+  producer handle for native-to-native forwarding. Trying to inspect/cast that
+  payload in the VM fails with `WVM1224`; a VM payload without a supported
+  adapter fails with `WVM1223`.
+- Multiple Wio identities represented by the same producer C++ boxed type
+  are rejected as ambiguous, not selected by hash-map iteration order.
+  Source-alias canonicalization/tagging remains pending.
+- Object/interface/Box, arbitrary nullable wrappers, generic POD payloads,
+  nested `any` and any-bearing container adapters are not qualified here.
+  Native structured callbacks and consumed parameters remain separate work.
+- Producer code must not concurrently mutate the same cell during VM
+  extraction. This does not introduce synchronization for native data races.
+- Native modules without this optional API keep their old foreign-handle
+  forwarding path; their any payloads are not structurally decoded.
+
+Focused gates: `wio_vm_native_any` and `wio_vm_native_any_differential`.
+They cover stable ids, atomic metadata rejection, malformed handles, unknown
+and ambiguous payloads, owned partial failure cleanup, by-value shared mutation,
+concurrent first materialization, unsupported native payload forwarding,
+ref replacement and aliases, null/default behavior, embedded-NUL strings,
+Unicode text, array/dictionary payload growth and fitted-copy isolation, POD
+hidden fields, opaque payloads, and a real generated-DLL escaped-value lifetime
+host. Only the new gates are run for this change; no full-suite/Linux parity
+claim is made.
+Both focused gates passed locally on Windows (2/2, 23.85 seconds), including
+the generated native executable, VM/DLL differential, unsupported-cast
+diagnostic, and escaped-value lifetime checks.

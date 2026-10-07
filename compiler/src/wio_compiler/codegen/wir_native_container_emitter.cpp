@@ -43,6 +43,8 @@ namespace wio::codegen
         };
         std::set<TypeId> sequences;
         std::set<TypeId> dictionaries;
+        std::set<TypeId> anyPayloads;
+        TypeId anyType;
         const auto collect = [&](auto&& self, TypeId id, unsigned depth) -> void
         {
             const auto* type = module.types.tryGet(id);
@@ -51,6 +53,11 @@ namespace wio::codegen
             if ((type->kind == TypeKind::Reference || type->kind == TypeKind::AsyncTask) && type->arguments.size() == 1)
             {
                 self(self, type->arguments.front(), depth + 1);
+                return;
+            }
+            if (type->kind == TypeKind::Any)
+            {
+                anyType = id;
                 return;
             }
             if (!supported(supported, id, 0))
@@ -69,7 +76,20 @@ namespace wio::codegen
                 collect(collect, parameter.type, 0);
             collect(collect, function.nativeBinding->result.type, 0);
         }
-        if (sequences.empty() && dictionaries.empty())
+        if (anyType.isValid())
+            for (const auto& function : module.functions)
+                for (const auto& block : function.blocks)
+                    for (const auto& instruction : block.instructions)
+                        if ((instruction.opcode == lowered::Opcode::AnyBox ||
+                             instruction.opcode == lowered::Opcode::AnyCheckedCast ||
+                             instruction.opcode == lowered::Opcode::AnyTypeTest) &&
+                            supported(supported, instruction.targetType, 0) &&
+                            module.types.get(instruction.targetType).kind != TypeKind::Nullable)
+                        {
+                            anyPayloads.insert(instruction.targetType);
+                            collect(collect, instruction.targetType, 0);
+                        }
+        if (sequences.empty() && dictionaries.empty() && !anyType.isValid())
             return {};
         const auto identity = [&](TypeId id)
         {
@@ -82,6 +102,8 @@ namespace wio::codegen
         out << "#include <wir_sequence_abi.h>\n";
         if (!dictionaries.empty())
             out << "#include <wir_dictionary_abi.h>\n";
+        if (anyType.isValid())
+            out << "#include <wir_any_abi.h>\n";
         for (const auto id : sequences)
         {
             auto element = module.types.get(id).arguments.front();
@@ -134,6 +156,29 @@ namespace wio::codegen
                    "extern \"C\" WIO_WIR_EXPORT const WioNativeDictionaryApi* WioGetNativeDictionaryApi() noexcept { "
                    "return "
                    "&_native_dictionary_api; }\n";
+        }
+        if (anyType.isValid())
+        {
+            for (const auto id : anyPayloads)
+                out << "using _native_any_payload_" << id.value() << " = wio::wir_backend::abi::AnyPayloadAdapter<"
+                    << cpp(id) << ", " << identity(anyType) << "ULL, " << identity(id) << "ULL>;\n";
+            if (!anyPayloads.empty())
+            {
+                out << "static const WioNativeAnyPayloadDescriptor _native_any_payloads[] = {\n";
+                for (const auto id : anyPayloads)
+                {
+                    const auto name = "_native_any_payload_" + std::to_string(id.value());
+                    out << "    {" << identity(id) << "ULL, &" << name << "::pack, &" << name << "::read},\n";
+                }
+                out << "};\n";
+            }
+            const auto adapter = "wio::wir_backend::abi::AnyAdapter<" + std::to_string(identity(anyType)) + "ULL>";
+            out << "static const WioNativeAnyApi _native_any_api{WIO_NATIVE_ANY_VERSION, " << anyPayloads.size() << ", "
+                << identity(anyType) << "ULL, " << (anyPayloads.empty() ? "nullptr" : "_native_any_payloads") << ", &"
+                << adapter << "::packNull, &" << adapter
+                << "::isNull};\n"
+                   "extern \"C\" WIO_WIR_EXPORT const WioNativeAnyApi* WioGetNativeAnyApi() noexcept { "
+                   "return &_native_any_api; }\n";
         }
         return out.str();
     }

@@ -9,6 +9,7 @@
 #include "native_pod_internal.h"
 #include "native_sequence_internal.h"
 #include "native_dictionary_internal.h"
+#include "native_any_internal.h"
 #include "string_intrinsics.h"
 #include "text_intrinsics.h"
 
@@ -383,7 +384,7 @@ namespace wio::vm
                 return Value::string({});
             if (kind == TypeText)
                 return Value::text({});
-            if (kind == TypeNullable)
+            if (kind == TypeNullable || kind == TypeAny)
                 return Value::null();
             if (kind == TypeArray)
             {
@@ -921,12 +922,12 @@ namespace wio::vm
         static void completeNativeTask(void* userData, WioNativeAbiStatus status) noexcept;
         static void finishNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter, WioNativeAbiStatus status);
 
-        void pinNativeLibraries(Value& value)
+        void pinNativeLibraries(const Value& value)
         {
             if (value.kind() != Value::Kind::Opaque && value.kind() != Value::Kind::ForeignObject &&
                 value.kind() != Value::Kind::RuntimeValue && value.kind() != Value::Kind::Component &&
                 value.kind() != Value::Kind::Array && value.kind() != Value::Kind::Dictionary &&
-                value.kind() != Value::Kind::NativePod)
+                value.kind() != Value::Kind::NativePod && value.kind() != Value::Kind::Any)
                 return;
             std::scoped_lock lock{nativeMutex};
             for (const auto& library : nativeLibraries)
@@ -1684,6 +1685,16 @@ namespace wio::vm
                                           &dictionaries);
     }
 
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativeAnyApi& any,
+                                         std::string* error, const WioNativeDictionaryApi* dictionaries,
+                                         const WioNativeSequenceApi* sequences, const WioNativePodLayoutApi* pods,
+                                         const WioNativePodDefaultApi* defaults, const WioNativeTaskApi* tasks,
+                                         const WioNativeTaskCompletionApi* completions)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, pods, defaults, sequences, dictionaries,
+                                          &any);
+    }
+
     bool Machine::loadNativeLibrary(const std::filesystem::path& path, std::string* error)
     {
         const auto reject = [&](std::string message)
@@ -1749,7 +1760,7 @@ namespace wio::vm
                                              const WioNativeTaskCompletionApi* completions, std::string* error,
                                              const WioNativePodLayoutApi* pods, const WioNativePodDefaultApi* defaults,
                                              const WioNativeSequenceApi* sequences,
-                                             const WioNativeDictionaryApi* dictionaries)
+                                             const WioNativeDictionaryApi* dictionaries, const WioNativeAnyApi* any)
     {
         const auto reject = [&](std::string message)
         {
@@ -1801,7 +1812,7 @@ namespace wio::vm
 
         std::scoped_lock lock{program_->nativeMutex};
         std::shared_ptr<detail::NativePodLayouts> layouts;
-        if (pods || sequences || dictionaries)
+        if (pods || sequences || dictionaries || any)
         {
             layouts = std::make_shared<detail::NativePodLayouts>(*program_->nativePodLayouts);
             std::string layoutError;
@@ -1815,6 +1826,8 @@ namespace wio::vm
                 !detail::mergeNativeDictionaries(*program_->module, *dictionaries, *layouts, layoutError, false))
                 return reject(std::move(layoutError));
             if (!detail::validateNativeContainers(*program_->module, *layouts, layoutError))
+                return reject(std::move(layoutError));
+            if (any && !detail::mergeNativeAny(*program_->module, *any, *layouts, layoutError))
                 return reject(std::move(layoutError));
         }
         for (Program::NativeFunction& addition : additions)
@@ -3329,6 +3342,48 @@ namespace wio::vm
             {
                 const Value* boxed =
                     instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                if (boxed && boxed->kind() == Value::Kind::Null)
+                {
+                    if (instruction.opcode == bytecode::Opcode::AnyCheckedCast)
+                        return fail("WVM1184", "Checked any cast cannot recover a payload from null");
+                    if (!write(instruction.result, Value::boolean(false)))
+                        return fail("WVM1009", "Any type-test result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+                // Native Any copies share a producer cell. Re-read the payload
+                // after native code may have mutated that cell through a copy.
+                const auto backing = boxed && boxed->kind() == Value::Kind::RuntimeValue ? *boxed
+                                     : boxed                                             ? boxed->nativeAnyBacking()
+                                                                                         : Value{};
+                Value nativeBox;
+                if (!backing.isEmpty())
+                {
+                    std::shared_ptr<const detail::NativePodLayouts> layouts;
+                    {
+                        std::scoped_lock lock{program_->nativeMutex};
+                        layouts = program_->nativePodLayouts;
+                    }
+                    WioNativeAbiValue wire{};
+                    wire.kind = WIO_NATIVE_ABI_RUNTIME_VALUE;
+                    wire.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+                    wire.typeId = backing.foreignTypeId();
+                    wire.payload.handle = backing.foreignHandle();
+                    auto refreshed = detail::unpackNativeAny(module, wire, backing.aggregateType(), *layouts, 0);
+                    if (!refreshed.succeeded())
+                        return fail("WVM1224", "Native any payload refresh failed: " + refreshed.error);
+                    if (refreshed.value.kind() == Value::Kind::RuntimeValue)
+                        return fail("WVM1224",
+                                    "Native any payload is unsupported or absent from its descriptor closure");
+                    if (refreshed.value.kind() != Value::Kind::Any ||
+                        (boxed->kind() == Value::Kind::Any && refreshed.value.anyType() != boxed->anyType()))
+                        return fail("WVM1224", "Native any shared cell changed its payload identity");
+                    program_->pinNativeLibraries(refreshed.value);
+                    // Extraction is local: do not write another thread's VM
+                    // snapshot merely because two Any values share backing.
+                    nativeBox = std::move(refreshed.value);
+                    boxed = &nativeBox;
+                }
                 const Value* payload = boxed ? boxed->anyPayload() : nullptr;
                 if (!boxed || boxed->kind() != Value::Kind::Any || !payload)
                     return fail("WVM1183", "Any test or cast requires a live boxed value");
@@ -4405,6 +4460,7 @@ namespace wio::vm
                             if (!detail::encodeNativeValue(module, place->storedValue(), abi.type, abi.marshalling,
                                                            token.wire, conversionError, podLayouts.get()))
                                 return fail("WVM1223", "Native argument conversion failed: " + conversionError);
+                            program_->pinNativeLibraries(place->storedValue());
                             nativeFrame.tokens.push_back(std::move(token));
                             aliases.emplace(&place->storedValue(), tokenIndex);
                         }
@@ -4549,6 +4605,7 @@ namespace wio::vm
                     if (!detail::encodeNativeValue(module, *direct, abi.type, abi.marshalling, wire, conversionError,
                                                    podLayouts.get()))
                         return fail("WVM1223", "Native argument conversion failed: " + conversionError);
+                    program_->pinNativeLibraries(*direct);
                     nativeFrame.arguments.push_back(wire);
                 }
 

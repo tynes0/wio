@@ -2,6 +2,7 @@
 #include "native_pod_internal.h"
 #include "native_sequence_internal.h"
 #include "native_dictionary_internal.h"
+#include "native_any_internal.h"
 
 #include <algorithm>
 #include <atomic>
@@ -180,6 +181,9 @@ namespace wio::vm::detail
         }
         if (value.kind() == Value::Kind::Null)
         {
+            const auto type = scalarType(module, declaredType);
+            if (marshalling == 8 && type < module.types.size() && module.types[type].kind == TypeAny && layouts)
+                return packNativeAny(module, value, type, *layouts, output, error, depth);
             if (!isNullable(module, declaredType))
             {
                 error = "null VM value does not match a nullable native ABI declaration";
@@ -321,6 +325,8 @@ namespace wio::vm::detail
                 return packNativeSequence(module, value, type, *layouts, output, error, depth);
             if (!object && kind == TypeDictionary && value.kind() == Value::Kind::Dictionary && layouts)
                 return packNativeDictionary(module, value, type, *layouts, output, error, depth);
+            if (!object && kind == TypeAny && value.kind() == Value::Kind::Any && layouts)
+                return packNativeAny(module, value, type, *layouts, output, error, depth);
             const std::uint64_t expected = stableTypeId(module, declaredType);
             if (value.kind() != (object ? Value::Kind::ForeignObject : Value::Kind::RuntimeValue) ||
                 value.aggregateType() != type || value.foreignTypeId() != expected || expected == 0)
@@ -475,6 +481,8 @@ namespace wio::vm::detail
                 return unpackNativeSequence(module, value, type, *layouts, depth);
             if (!object && kind == TypeDictionary && layouts && layouts->dictionaries.contains(type))
                 return unpackNativeDictionary(module, value, type, *layouts, depth);
+            if (!object && kind == TypeAny && layouts && layouts->any.contains(type))
+                return unpackNativeAny(module, value, type, *layouts, depth);
             return {object ? Value::foreignObject(type, expected, value.payload.handle)
                            : Value::runtimeValue(type, expected, value.payload.handle),
                     {}};

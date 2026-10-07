@@ -78,6 +78,7 @@ namespace wio::vm
 
         void pinLibrary(std::shared_ptr<void> library)
         {
+            std::scoped_lock lock{libraryMutex_};
             if (std::ranges::find(libraries_, library) == libraries_.end())
                 libraries_.push_back(std::move(library));
         }
@@ -91,6 +92,7 @@ namespace wio::vm
         void* opaque_ = nullptr;
         WioNativeAbiHandle handle_{};
         std::vector<std::shared_ptr<void>> libraries_;
+        std::mutex libraryMutex_;
     };
 
     class AggregateStorage final
@@ -111,6 +113,11 @@ namespace wio::vm
         }
 
         ForeignStorage* nativeBacking = nullptr;
+
+        [[nodiscard]] std::mutex& nativeBackingMutex() const noexcept
+        {
+            return taskMutex_;
+        }
 
         void retain() noexcept
         {
@@ -609,6 +616,12 @@ namespace wio::vm
                 dictionaryKey(index)->pinNativeLibrary(library);
                 dictionaryValue(index)->pinNativeLibrary(library);
             }
+        else if (kind_ == Kind::Any)
+        {
+            if (const auto* payload = anyPayload())
+                payload->pinNativeLibrary(library);
+            nativeAnyBacking().pinNativeLibrary(library);
+        }
         if (library && (kind_ == Kind::Opaque || kind_ == Kind::ForeignObject || kind_ == Kind::RuntimeValue ||
                         kind_ == Kind::NativePod))
             scalar_.foreign->pinLibrary(std::move(library));
@@ -1162,6 +1175,32 @@ namespace wio::vm
     std::span<const std::byte> Value::nativePodBytes() const noexcept
     {
         return kind_ == Kind::NativePod ? scalar_.foreign->bytes() : std::span<const std::byte>{};
+    }
+
+    Value Value::nativeAnyBacking() const
+    {
+        if (kind_ != Kind::Any)
+            return {};
+        std::scoped_lock lock{scalar_.aggregate->nativeBackingMutex()};
+        if (!scalar_.aggregate->nativeBacking)
+            return {};
+        Value result{Kind::RuntimeValue};
+        result.scalar_.foreign = scalar_.aggregate->nativeBacking;
+        result.scalar_.foreign->retain();
+        return result;
+    }
+
+    void Value::setNativeAnyBacking(const Value& backing) const
+    {
+        if (kind_ != Kind::Any || backing.kind_ != Kind::RuntimeValue)
+            return;
+        std::scoped_lock lock{scalar_.aggregate->nativeBackingMutex()};
+        // Install once: independently materialized copies must converge on
+        // one producer AnyCell before any native thunk sees their handles.
+        if (scalar_.aggregate->nativeBacking)
+            return;
+        backing.scalar_.foreign->retain();
+        scalar_.aggregate->nativeBacking = backing.scalar_.foreign;
     }
 
     Value Value::nativePodBacking() const

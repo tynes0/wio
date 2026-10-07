@@ -20,6 +20,7 @@ struct WioNativePodLayoutApi;
 struct WioNativePodDefaultApi;
 struct WioNativeSequenceApi;
 struct WioNativeDictionaryApi;
+struct WioNativeAnyApi;
 
 namespace wio::vm
 {
@@ -148,10 +149,9 @@ namespace wio::vm
                                                   std::string* error = nullptr);
         // Additive overload: preserve the original C++ registration symbol.
         [[nodiscard]] bool registerNativeRegistry(const WioNativeAbiRegistry& registry,
-                                                  const WioNativePodLayoutApi& pods,
-                                                  const WioNativeTaskApi* tasks,
-                                                  const WioNativeTaskCompletionApi* completions,
-                                                  std::string* error, const WioNativePodDefaultApi* defaults);
+                                                  const WioNativePodLayoutApi& pods, const WioNativeTaskApi* tasks,
+                                                  const WioNativeTaskCompletionApi* completions, std::string* error,
+                                                  const WioNativePodDefaultApi* defaults);
         // Independent optional sequence sidecar, with atomic registration.
         [[nodiscard]] bool registerNativeRegistry(const WioNativeAbiRegistry& registry,
                                                   const WioNativeSequenceApi& sequences, std::string* error = nullptr,
@@ -163,6 +163,12 @@ namespace wio::vm
         [[nodiscard]] bool registerNativeRegistry(
             const WioNativeAbiRegistry& registry, const WioNativeDictionaryApi& dictionaries,
             std::string* error = nullptr, const WioNativeSequenceApi* sequences = nullptr,
+            const WioNativePodLayoutApi* pods = nullptr, const WioNativePodDefaultApi* defaults = nullptr,
+            const WioNativeTaskApi* tasks = nullptr, const WioNativeTaskCompletionApi* completions = nullptr);
+
+        [[nodiscard]] bool registerNativeRegistry(
+            const WioNativeAbiRegistry& registry, const WioNativeAnyApi& any, std::string* error = nullptr,
+            const WioNativeDictionaryApi* dictionaries = nullptr, const WioNativeSequenceApi* sequences = nullptr,
             const WioNativePodLayoutApi* pods = nullptr, const WioNativePodDefaultApi* defaults = nullptr,
             const WioNativeTaskApi* tasks = nullptr, const WioNativeTaskCompletionApi* completions = nullptr);
 
@@ -205,11 +211,12 @@ namespace wio::vm
         [[nodiscard]] ExecutionResult driveTask(const Value& task);
         [[nodiscard]] bool registerNativeRegistryImpl(const WioNativeAbiRegistry& registry,
                                                       const WioNativeTaskApi* tasks,
-                                                      const WioNativeTaskCompletionApi* completions,
-                                                      std::string* error, const WioNativePodLayoutApi* pods = nullptr,
+                                                      const WioNativeTaskCompletionApi* completions, std::string* error,
+                                                      const WioNativePodLayoutApi* pods = nullptr,
                                                       const WioNativePodDefaultApi* defaults = nullptr,
                                                       const WioNativeSequenceApi* sequences = nullptr,
-                                                      const WioNativeDictionaryApi* dictionaries = nullptr);
+                                                      const WioNativeDictionaryApi* dictionaries = nullptr,
+                                                      const WioNativeAnyApi* any = nullptr);
 
         struct Program;
         std::shared_ptr<Program> program_;

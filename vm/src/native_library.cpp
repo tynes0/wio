@@ -6,6 +6,7 @@
 #include <wio_native_pod.h>
 #include <wio_native_sequence.h>
 #include <wio_native_dictionary.h>
+#include <wio_native_any.h>
 
 #include <system_error>
 #include <map>
@@ -92,6 +93,7 @@ namespace wio::vm::detail
         const WioNativePodDefaultApi* defaults = nullptr;
         const WioNativeSequenceApi* sequences = nullptr;
         const WioNativeDictionaryApi* dictionaries = nullptr;
+        const WioNativeAnyApi* any = nullptr;
         std::mutex machineMutex;
         std::size_t activeMachines = 0;
 
@@ -221,6 +223,12 @@ namespace wio::vm::detail
             if (!library->state_->dictionaries)
                 return fail("native VM module returned a null dictionary sidecar");
         }
+        if (const auto getAny = loadSymbol<WioGetNativeAnyApiFn>(handle, "WioGetNativeAnyApi"))
+        {
+            library->state_->any = getAny();
+            if (!library->state_->any)
+                return fail("native VM module returned a null any sidecar");
+        }
         error.clear();
         cache.insert_or_assign(library->path(), library);
         return library;
@@ -235,7 +243,11 @@ namespace wio::vm::detail
         }
         std::scoped_lock lock{state_->machineMutex};
         const bool registered =
-            state_->dictionaries
+            state_->any
+                ? machine.registerNativeRegistry(*state_->registry, *state_->any, &error, state_->dictionaries,
+                                                 state_->sequences, state_->pods, state_->defaults,
+                                                 state_->completions ? state_->tasks : nullptr, state_->completions)
+            : state_->dictionaries
                 ? machine.registerNativeRegistry(*state_->registry, *state_->dictionaries, &error, state_->sequences,
                                                  state_->pods, state_->defaults,
                                                  state_->completions ? state_->tasks : nullptr, state_->completions)
