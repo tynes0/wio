@@ -2,9 +2,36 @@
 
 #include "wir_container_abi.h"
 #include <wio_native_object.h>
+#include <array>
 
 namespace wio::wir_backend::abi
 {
+    // Each codec can acquire an owned wire. Incremental initialization keeps
+    // earlier arguments guarded if a later conversion or host call throws.
+    template <std::size_t Count> class ObjectArguments final
+    {
+    public:
+        ObjectArguments() = default;
+        ObjectArguments(const ObjectArguments&) = delete;
+        ObjectArguments& operator=(const ObjectArguments&) = delete;
+        ~ObjectArguments()
+        {
+            for (auto& value : values_)
+                WioNativeAbiReleaseValue(&value);
+        }
+        WioNativeAbiValue& operator[](std::size_t index) noexcept
+        {
+            return values_[index];
+        }
+        const WioNativeAbiValue* data() const noexcept
+        {
+            return values_.data();
+        }
+
+    private:
+        std::array<WioNativeAbiValue, Count> values_{};
+    };
+
     class ObjectDispatchError final : public Error
     {
     public:

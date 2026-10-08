@@ -1594,7 +1594,25 @@ namespace wio::vm
                     }
                     const auto releaseOwner = [program](Machine*) { program->releaseOwner(); };
                     const std::unique_ptr<Machine, decltype(releaseOwner)> guard{owner, releaseOwner};
+                    std::scoped_lock executionLock{program->executionMutex};
+                    std::shared_ptr<const detail::NativePodLayouts> layouts;
+                    {
+                        std::scoped_lock nativeLock{program->nativeMutex};
+                        layouts = program->nativePodLayouts;
+                    }
                     const auto& module = *program->module;
+                    const auto methodMarshalling = [&](std::uint32_t type, std::uint8_t& marshalling)
+                    {
+                        if (detail::callbackValueMarshalling(module, type, marshalling))
+                            return true;
+                        if (type < module.types.size() && module.types[type].kind == TypeNamed &&
+                            module.types[type].nominalKind == NominalObject && layouts->objects.contains(type))
+                        {
+                            marshalling = 6;
+                            return true;
+                        }
+                        return false;
+                    };
                     const auto reflected = std::ranges::find(module.contract.reflection, object.aggregateType(),
                                                              &bytecode::Reflection::type);
                     if (reflected == module.contract.reflection.end())
@@ -1607,10 +1625,19 @@ namespace wio::vm
                     for (std::size_t index = 0; index < count; ++index)
                     {
                         std::uint8_t marshalling = 0;
-                        if (!detail::callbackValueMarshalling(module, method->parameterTypes[index], marshalling))
+                        if (!methodMarshalling(method->parameterTypes[index], marshalling))
+                        {
+                            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                                               "unsupported hosted method argument type");
                             return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                        }
                         auto decoded =
-                            detail::decodeNativeValue(module, args[index], method->parameterTypes[index], marshalling);
+                            marshalling == 6
+                                ? owner->decodeNativeObject(args[index], method->parameterTypes[index], *layouts)
+                                : detail::decodeNativeValue(module, args[index], method->parameterTypes[index],
+                                                            marshalling);
+                        if (decoded.succeeded() && marshalling == 6 && decoded.value.kind() != Value::Kind::Object)
+                            decoded.error = "hosted method argument requires an original VM object from this machine";
                         if (!decoded.succeeded())
                         {
                             setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, decoded.error);
@@ -1618,18 +1645,39 @@ namespace wio::vm
                         }
                         parameters.push_back(std::move(decoded.value));
                     }
-                    const auto execution = owner->invoke(method->function, parameters);
+                    auto execution = owner->invoke(method->function, parameters);
                     if (!execution.succeeded())
                     {
                         setCallbackFailure(failure, WIO_NATIVE_ABI_PANIC,
                                            execution.error().code + ": " + execution.error().message);
                         return WIO_NATIVE_ABI_PANIC;
                     }
+                    // Encoding can throw before a returned object's proxy claim
+                    // is installed. Keep Wio lifecycle cleanup attached to the
+                    // execution result, without copying its scalar/string data.
+                    const auto releaseResult = [owner](Value* value) noexcept
+                    {
+                        try
+                        {
+                            ExecutionError cleanupError;
+                            owner->cleanupValue(*value, cleanupError);
+                        }
+                        catch (...)
+                        {
+                        }
+                    };
+                    const std::unique_ptr<Value, decltype(releaseResult)> resultGuard{&execution.value_, releaseResult};
                     std::uint8_t marshalling = 0;
                     std::string error;
-                    if (!detail::callbackValueMarshalling(module, method->returnType, marshalling) ||
-                        !detail::encodeOwnedNativeValue(module, execution.value(), method->returnType, marshalling,
-                                                        *output, error))
+                    const bool supported = methodMarshalling(method->returnType, marshalling);
+                    const bool encoded =
+                        supported &&
+                        (marshalling == 6
+                             ? owner->encodeNativeObject(execution.value(), method->returnType, *output, error,
+                                                         *layouts)
+                             : detail::encodeOwnedNativeValue(module, execution.value(), method->returnType,
+                                                              marshalling, *output, error));
+                    if (!encoded)
                     {
                         setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, error);
                         return WIO_NATIVE_ABI_TYPE_MISMATCH;

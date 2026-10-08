@@ -13,7 +13,7 @@ namespace wio::codegen
 
         // Initial method-only surface: concrete, non-generic Wio objects with
         // no custom bases, only private scalar/string/text fields, and
-        // scalar/string/text/void method signatures.
+        // scalar/string/text/qualified-object method signatures (or void).
         [[nodiscard]] static std::set<wir::TypeId> eligibleTypes(const wir::lowered::Module& module);
         [[nodiscard]] static std::string emit(const wir::lowered::Module& module, const std::set<wir::TypeId>& objects,
                                               const WirModuleEmitter::TypeSpelling& cpp,

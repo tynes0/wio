@@ -26,6 +26,7 @@ namespace
     namespace bridge = wio::vm::detail;
     namespace abi = wio::wir_backend::abi;
     using wio::vm::Value;
+    WioNativeObjectCreateFn partialObjectFactory = nullptr;
 
     void check(bool passed, const char* message)
     {
@@ -98,8 +99,40 @@ namespace
         rejects([&](auto& trial) { trial.functions[0].isExternal = true; }, "external method was silently proxied");
         rejects([&](auto& trial) { trial.functions[0].parameters.push_back({.type = receiver}); },
                 "borrowed method parameter was silently proxied");
-        rejects([&](auto& trial) { trial.functions[0].returnType = object; },
-                "object return method was partially proxied");
+        {
+            auto trial = module;
+            trial.functions[0].returnType = object;
+            trial.contract.reflection[0].methods[0].returnType = object;
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "self-returning object method was rejected");
+            const auto dependency = trial.types.internNominal(Type{
+                .kind = TypeKind::Named,
+                .name = "Badge",
+                .nominalKind = NominalKind::Object,
+                .fields = {{.name = "value", .type = integer}},
+            });
+            trial.contract.reflection.push_back(
+                {.stableTypeId = 9002, .type = dependency, .nominalKind = NominalKind::Object});
+            trial.functions[0].returnType = dependency;
+            trial.contract.reflection[0].methods[0].returnType = dependency;
+            check(Emitter::eligibleTypes(trial) == std::set{object, dependency},
+                  "object method dependency missing from proxy closure");
+            const auto dependencyReceiver =
+                trial.types.intern(Type{.kind = TypeKind::Reference, .arguments = {dependency}});
+            trial.functions.push_back({.id = FunctionId{2},
+                                       .name = "Back",
+                                       .parameters = {{.type = dependencyReceiver}},
+                                       .returnType = object,
+                                       .ownerType = dependency,
+                                       .isMethod = true});
+            trial.types.getMutable(dependency).methods = {
+                {.name = "Back", .returnType = object, .function = FunctionId{2}}};
+            trial.contract.reflection.back().methods = {
+                {.stableId = 1002, .name = "Back", .function = FunctionId{2}, .returnType = object}};
+            check(Emitter::eligibleTypes(trial) == std::set{object, dependency},
+                  "mutually dependent object method signatures did not converge");
+            trial.types.getMutable(dependency).fields[0].visibility = FieldVisibility::Public;
+            check(Emitter::eligibleTypes(trial).empty(), "unsupported dependency left a partially usable proxy");
+        }
         rejects([&](auto& trial) { trial.contract.reflection[0].methods[0].stableId = 0; },
                 "method without stable identity was proxied");
         rejects([&](auto& trial) { trial.types.getMutable(object).baseTypes = {object}; },
@@ -521,6 +554,186 @@ namespace
         check(scalar(registry, "vm_object_proxy::Destructions") == 6, "proxy final release reran Wio destructor");
         return 0;
     }
+
+    void qualifyArgumentGuards()
+    {
+        static_assert(!std::is_copy_constructible_v<abi::ObjectArguments<2>>);
+        int released = 0;
+        const WioNativeAbiHandleOps operations{WIO_NATIVE_ABI_VERSION, 0, [](void*) noexcept {},
+                                               [](void* pointer) noexcept { ++*static_cast<int*>(pointer); },
+                                               [](const void*) noexcept -> std::uint64_t { return 1; }};
+        try
+        {
+            abi::ObjectArguments<2> arguments;
+            arguments[0].kind = WIO_NATIVE_ABI_BYTES;
+            arguments[0].flags = WIO_NATIVE_ABI_VALUE_OWNED;
+            arguments[0].owner = {&released, &operations, 1};
+            throw std::runtime_error("second argument conversion failed");
+        }
+        catch (const std::runtime_error&)
+        {
+        }
+        check(released == 1, "partial object-method argument initialization leaked an owned wire");
+        {
+            abi::ObjectArguments<1> arguments;
+            arguments[0].kind = WIO_NATIVE_ABI_BYTES;
+            arguments[0].flags = WIO_NATIVE_ABI_VALUE_OWNED;
+            arguments[0].owner = {&released, &operations, 1};
+        }
+        check(released == 2, "successful object-method call did not release its owned argument");
+    }
+
+    int qualifyMethods(const char* bytecode, const char* producer)
+    {
+        qualifyArgumentGuards();
+        std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
+        const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        auto decoded = bc::decode(std::as_bytes(std::span{bytes.data(), bytes.size()}));
+        check(decoded.succeeded(), "object-valued method bytecode decode failed");
+        Library library{std::filesystem::u8path(producer)};
+        const auto getObjects = library.symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
+        check(getObjects && getObjects()->typeCount == 2, "method-only dependency did not emit an object adapter");
+        const auto types = std::span{getObjects()->types, getObjects()->typeCount};
+        for (const char* name : {"Counter", "Badge"})
+        {
+            const auto reflected = std::ranges::find_if(decoded.module.contract.reflection, [&](const auto& type)
+                                                        { return decoded.module.string(type.logicalName) == name; });
+            check(reflected != decoded.module.contract.reflection.end(), "object-valued method reflection missing");
+            check(std::ranges::find(types, reflected->stableTypeId, &WioNativeObjectDescriptor::typeId) != types.end(),
+                  "method-only object dependency lost its stable producer identity");
+        }
+        auto machine = std::make_unique<wio::vm::Machine>(decoded.module);
+        std::string error;
+        check(machine->loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+        const auto entry = std::ranges::find_if(decoded.module.functions, [&](const auto& function)
+                                                { return decoded.module.string(function.name) == "Entry"; });
+        check(entry != decoded.module.functions.end(), "object-valued method entry missing");
+        const auto result = machine->invoke(entry->id);
+        if (!result.succeeded())
+            throw std::runtime_error(result.error().code + ": " + result.error().message);
+        check(result.value().asSignedInteger() == 0, "object-valued method identity/lifecycle qualification failed");
+        const auto captureEntry =
+            std::ranges::find_if(decoded.module.functions, [&](const auto& function)
+                                 { return decoded.module.string(function.name) == "CaptureEntry"; });
+        check(captureEntry != decoded.module.functions.end(), "hosted method capture entry missing");
+        const auto captured = machine->invoke(captureEntry->id);
+        check(captured.succeeded(), "hosted method capture failed");
+        const auto* token = reinterpret_cast<const WioNativeObjectHost*>(captured.value().asUnsignedInteger());
+        check(token && token->owner.state && token->invoke, "hosted method token missing");
+        const auto reflected =
+            std::ranges::find(decoded.module.contract.reflection, token->typeId, &bc::Reflection::stableTypeId);
+        check(reflected != decoded.module.contract.reflection.end(), "captured method owner type missing");
+        const auto choose = std::ranges::find_if(reflected->methods, [&](const auto& method)
+                                                 { return decoded.module.string(method.name) == "Choose"; });
+        check(choose != reflected->methods.end(), "captured object-valued method missing");
+        const auto adapter = std::ranges::find(types, token->typeId, &WioNativeObjectDescriptor::typeId);
+        Wire argument;
+        check(adapter->create(token, &argument.value, nullptr) == WIO_NATIVE_ABI_OK, "captured argument proxy failed");
+        Weak argumentWeak;
+        check(adapter->weak(&argument.value, &argumentWeak.value, nullptr) == WIO_NATIVE_ABI_OK,
+              "object-valued method argument weak probe failed");
+        Wire returned;
+        check(token->invoke(token, choose->stableId, &argument.value, 1, &returned.value, nullptr) == WIO_NATIVE_ABI_OK,
+              "hosted object-valued method rejected its own machine's object");
+        WioNativeObjectHost identity{};
+        check(adapter->host(&returned.value, &identity, nullptr) == WIO_NATIVE_ABI_OK &&
+                  identity.objectId == token->objectId && identity.owner.state == token->owner.state,
+              "hosted method return lost canonical original-object identity");
+        auto foreign = std::make_shared<bridge::NativeObjectBridge>(
+            [](const Value&, std::uint64_t, const WioNativeAbiValue*, std::uint64_t, WioNativeAbiValue*,
+               WioNativeAbiFailure*) { return WIO_NATIVE_ABI_INVALID_ARGUMENT; },
+            []() -> std::shared_ptr<void> { return {}; });
+        Value foreignObject = Value::object(reflected->type, {Value::signedInteger(13)});
+        Wire foreignWire;
+        check(foreign->encode(foreignObject, reflected->type, *adapter, foreignWire.value, error), error.c_str());
+        Wire rejected;
+        WioNativeAbiFailure failure{};
+        check(token->invoke(token, choose->stableId, &foreignWire.value, 1, &rejected.value, &failure) ==
+                      WIO_NATIVE_ABI_TYPE_MISMATCH &&
+                  rejected.value.kind == WIO_NATIVE_ABI_VOID,
+              "hosted method accepted a different machine's object argument");
+        check(token->invoke(token, choose->stableId, nullptr, 0, &rejected.value, &failure) ==
+                  WIO_NATIVE_ABI_INVALID_ARGUMENT,
+              "hosted method accepted an invalid object argument count");
+        const auto getRegistry = library.symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
+        check(getRegistry, "object-valued method registry missing");
+        const auto& registry = *getRegistry();
+        const std::array failArguments{argument.value};
+        {
+            Wire producerObject;
+            check(call(registry, "vm_object_methods::MakeForeign", failArguments, producerObject.value) ==
+                      WIO_NATIVE_ABI_OK,
+                  "producer-created object setup failed");
+            check(token->invoke(token, choose->stableId, &producerObject.value, 1, &rejected.value, &failure) ==
+                      WIO_NATIVE_ABI_TYPE_MISMATCH,
+                  "hosted method accepted a producer-owned object without VM field synchronization");
+        }
+        Wire failed;
+        check(call(registry, "vm_object_methods::Fail", failArguments, failed.value) == WIO_NATIVE_ABI_PANIC,
+              "object-valued method failure lost its VM panic status");
+        WioNativeAbiReleaseValue(&argument.value);
+        WioNativeAbiReleaseValue(&returned.value);
+        Wire weakProbe;
+        check(adapter->lock(&argumentWeak.value, &weakProbe.value, nullptr) == WIO_NATIVE_ABI_STALE_HANDLE,
+              "failed object-valued method leaked an owned argument proxy claim");
+        WioNativeAbiValue counterKind{};
+        counterKind.kind = WIO_NATIVE_ABI_I64;
+        const std::array counterArguments{counterKind};
+        check(scalar(registry, "vm_object_methods::Constructions", counterArguments) == 3 &&
+                  scalar(registry, "vm_object_methods::Destructions", counterArguments) == 3,
+              "object method failure changed original/producer lifecycle counts");
+        machine.reset();
+        check(scalar(registry, "vm_object_methods::Destructions", counterArguments) == 4,
+              "object-valued method shutdown did not destroy its VM receiver exactly once");
+        check(token->invoke(token, choose->stableId, &foreignWire.value, 1, &rejected.value, &failure) ==
+                  WIO_NATIVE_ABI_STALE_HANDLE,
+              "closed machine accepted an object-valued method call");
+        Wire cleared;
+        check(call(registry, "vm_object_methods::ClearCapture", {}, cleared.value) == WIO_NATIVE_ABI_OK,
+              "captured method proxy final release failed");
+        wio::vm::Machine::collectNativeObjectRetirements();
+        check(scalar(registry, "vm_object_methods::Destructions", counterArguments) == 4,
+              "object-valued method proxy final release repeated Wio lifecycle");
+        const auto badge = std::ranges::find_if(decoded.module.contract.reflection, [&](const auto& type)
+                                                { return decoded.module.string(type.logicalName) == "Badge"; });
+        check(badge != decoded.module.contract.reflection.end(), "failed-return object metadata missing");
+        std::vector<WioNativeObjectDescriptor> failingTypes{types.begin(), types.end()};
+        for (auto& type : failingTypes)
+            if (type.typeId == badge->stableTypeId)
+            {
+                partialObjectFactory = type.create;
+                type.create = [](const WioNativeObjectHost* host, WioNativeAbiValue* output,
+                                 WioNativeAbiFailure* failure) noexcept
+                {
+                    const auto status = partialObjectFactory(host, output, failure);
+                    if (status != WIO_NATIVE_ABI_OK)
+                        return status;
+                    if (failure)
+                    {
+                        *failure = {};
+                        failure->status = WIO_NATIVE_ABI_EXCEPTION;
+                    }
+                    return WIO_NATIVE_ABI_EXCEPTION; // Deliberately leave one owned partial proxy output.
+                };
+            }
+        WioNativeAbiValue badgeKind{};
+        badgeKind.kind = WIO_NATIVE_ABI_I64;
+        badgeKind.payload.signedInteger = 1;
+        const std::array badgeArguments{badgeKind};
+        const auto beforeBadgeConstructors = scalar(registry, "vm_object_methods::Constructions", badgeArguments);
+        const auto beforeBadgeDestructors = scalar(registry, "vm_object_methods::Destructions", badgeArguments);
+        const WioNativeObjectApi failingApi{WIO_NATIVE_OBJECT_VERSION, static_cast<std::uint32_t>(failingTypes.size()),
+                                            failingTypes.data()};
+        wio::vm::Machine failedMachine{decoded.module};
+        check(failedMachine.registerNativeRegistry(registry, failingApi, &error), error.c_str());
+        const auto failedReturn = failedMachine.invoke(entry->id);
+        check(!failedReturn.succeeded() && failedReturn.error().code == "WVM1222",
+              "partial proxy factory failure did not cross the native boundary safely");
+        check(scalar(registry, "vm_object_methods::Constructions", badgeArguments) == beforeBadgeConstructors + 1 &&
+                  scalar(registry, "vm_object_methods::Destructions", badgeArguments) == beforeBadgeDestructors + 1,
+              "failed method result materialization lost or repeated the returned object's Wio destructor");
+        return 0;
+    }
 } // namespace
 
 int main(int argc, char** argv)
@@ -529,6 +742,8 @@ int main(int argc, char** argv)
     {
         check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4 && std::string_view(argv[3]) == "methods")
+            return qualifyMethods(argv[1], argv[2]);
         if (argc == 4)
             return qualifyAutomatic(argv[1], argv[2]);
         return qualify(argv[1], argv[2]);

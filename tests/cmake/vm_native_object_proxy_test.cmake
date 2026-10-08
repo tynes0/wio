@@ -6,6 +6,9 @@ endforeach()
 
 file(MAKE_DIRECTORY "${WIO_OUTPUT_DIR}")
 set(source "${WIO_ROOT}/tests/vm_native_object_proxy.wio")
+if(WIO_OBJECT_METHOD_VALUES)
+    set(source "${WIO_ROOT}/tests/vm_native_object_method_values.wio")
+endif()
 set(native "${WIO_OUTPUT_DIR}/native${WIO_EXECUTABLE_SUFFIX}")
 set(bridge "${WIO_OUTPUT_DIR}/bridge${WIO_SHARED_SUFFIX}")
 set(bytecode "${WIO_OUTPUT_DIR}/program.wiob")
@@ -29,18 +32,26 @@ execute_process(COMMAND "${native}" RESULT_VARIABLE result
 if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Normal generated C++ object calls regressed: ${output}\n${error}")
 endif()
-if(WIO_AUTOMATIC_OBJECTS)
+if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES)
     execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
         "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}" --native-library "${bridge}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
     if(NOT "${result}" STREQUAL "0")
         message(FATAL_ERROR "Automatic VM object materialization failed (${result}): ${output}\n${error}")
     endif()
-    execute_process(COMMAND "${WIO_OBJECT_PROXY_EXECUTABLE}" "${bytecode}" "${bridge}" automatic
+    set(hostMode automatic)
+    if(WIO_OBJECT_METHOD_VALUES)
+        set(hostMode methods)
+    endif()
+    execute_process(COMMAND "${WIO_OBJECT_PROXY_EXECUTABLE}" "${bytecode}" "${bridge}" "${hostMode}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
     if(NOT "${result}" STREQUAL "0")
         message(FATAL_ERROR "Automatic VM object host lifetime failed (${result}): ${output}\n${error}")
     endif()
+endif()
+if(WIO_OBJECT_METHOD_VALUES)
+    message(STATUS "Generated C++/VM object-valued method qualification passed")
+    return()
 endif()
 execute_process(COMMAND "${WIO_OBJECT_PROXY_EXECUTABLE}" "${bytecode}" "${bridge}"
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)

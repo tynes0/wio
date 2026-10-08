@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <ranges>
 #include <sstream>
+#include <vector>
 
 namespace wio::codegen
 {
@@ -47,6 +48,7 @@ namespace wio::codegen
     std::set<wir::TypeId> WirNativeObjectEmitter::eligibleTypes(const wir::lowered::Module& module)
     {
         std::set<TypeId> candidates;
+        std::vector<TypeId> pending;
         const auto collect = [&](TypeId id)
         {
             const Type* type = module.types.tryGet(id);
@@ -55,8 +57,9 @@ namespace wio::codegen
                 id = type->arguments.front();
                 type = module.types.tryGet(id);
             }
-            if (type && type->kind == TypeKind::Named && type->nominalKind == NominalKind::Object)
-                candidates.insert(id);
+            if (type && type->kind == TypeKind::Named && type->nominalKind == NominalKind::Object &&
+                candidates.insert(id).second)
+                pending.push_back(id);
         };
         for (const auto& declaration : module.functions)
             if (declaration.nativeBinding && declaration.genericParameters.empty())
@@ -65,50 +68,88 @@ namespace wio::codegen
                     collect(parameter.type);
                 collect(declaration.nativeBinding->result.type);
             }
+        const auto roots = candidates;
+        // Method-only object dependencies may never appear in a free native
+        // declaration. Discover the full signature closure before qualification.
+        for (std::size_t index = 0; index < pending.size(); ++index)
+            for (const auto& method : module.types.get(pending[index]).methods)
+                if (const auto* implementation = function(module, method.function))
+                {
+                    collect(implementation->returnType);
+                    for (const auto& parameter : implementation->parameters | std::views::drop(1))
+                        collect(parameter.type);
+                }
 
-        std::erase_if(candidates,
-                      [&](TypeId id)
-                      {
-                          const auto& type = module.types.get(id);
-                          const auto* reflected = reflection(module, id);
-                          const bool onlyRootBases = std::ranges::all_of(
-                              type.baseTypes,
-                              [&](TypeId base)
-                              {
-                                  const auto& root = module.types.get(base);
-                                  return root.kind == TypeKind::Named && root.nominalKind == NominalKind::Object &&
-                                         root.name == "object" && root.fields.empty() && root.methods.empty() &&
-                                         root.baseTypes.empty() && !root.defaultConstructor && !root.destructor;
-                              });
-                          if (!reflected || !reflected->stableTypeId || !type.arguments.empty() || !onlyRootBases ||
-                              type.nominalRepresentation != NominalRepresentation::Wio ||
-                              std::ranges::any_of(type.fields,
-                                                  [&](const auto& field)
-                                                  {
-                                                      // Placeholder fields must not run nested Wio
-                                                      // lifecycle or expose stale native projections.
-                                                      return field.visibility == FieldVisibility::Public ||
-                                                             !wireValue(module, field.type);
-                                                  }))
-                              return true;
-                          const auto supported = [&](FunctionId methodId)
+        const auto methodValue = [&](TypeId id, bool allowVoid = false)
+        { return wireValue(module, id, allowVoid) || candidates.contains(id); };
+        // Reject transitively: no proxy may advertise a method whose object
+        // signature depends on a type that failed whole-surface qualification.
+        std::size_t previousSize = 0;
+        do
+        {
+            previousSize = candidates.size();
+            std::erase_if(candidates,
+                          [&](TypeId id)
                           {
-                              const auto* method = function(module, methodId);
-                              return method && method->isMethod && !method->isAbstract && !method->isAsync &&
-                                     !method->isExternal && !method->nativeBinding &&
-                                     method->genericParameters.empty() && !method->parameters.empty() &&
-                                     methodIdentity(*reflected, methodId) &&
-                                     wireValue(module, method->returnType, true) &&
-                                     std::ranges::all_of(method->parameters | std::views::drop(1),
-                                                         [&](const auto& parameter)
-                                                         { return wireValue(module, parameter.type); });
-                          };
-                          return std::ranges::any_of(type.methods,
-                                                     [&](const auto& method) { return !supported(method.function); }) ||
-                                 std::ranges::any_of(type.dispatchEntries, [&](const auto& entry)
-                                                     { return !supported(entry.implementation); });
-                      });
-        return candidates;
+                              const auto& type = module.types.get(id);
+                              const auto* reflected = reflection(module, id);
+                              const bool onlyRootBases = std::ranges::all_of(
+                                  type.baseTypes,
+                                  [&](TypeId base)
+                                  {
+                                      const auto& root = module.types.get(base);
+                                      return root.kind == TypeKind::Named && root.nominalKind == NominalKind::Object &&
+                                             root.name == "object" && root.fields.empty() && root.methods.empty() &&
+                                             root.baseTypes.empty() && !root.defaultConstructor && !root.destructor;
+                                  });
+                              if (!reflected || !reflected->stableTypeId || !type.arguments.empty() || !onlyRootBases ||
+                                  type.nominalRepresentation != NominalRepresentation::Wio ||
+                                  std::ranges::any_of(type.fields,
+                                                      [&](const auto& field)
+                                                      {
+                                                          // Placeholder fields must not run nested Wio
+                                                          // lifecycle or expose stale native projections.
+                                                          return field.visibility == FieldVisibility::Public ||
+                                                                 !wireValue(module, field.type);
+                                                      }))
+                                  return true;
+                              const auto supported = [&](FunctionId methodId)
+                              {
+                                  const auto* method = function(module, methodId);
+                                  return method && method->isMethod && !method->isAbstract && !method->isAsync &&
+                                         !method->isExternal && !method->nativeBinding &&
+                                         method->genericParameters.empty() && !method->parameters.empty() &&
+                                         methodIdentity(*reflected, methodId) &&
+                                         methodValue(method->returnType, true) &&
+                                         std::ranges::all_of(method->parameters | std::views::drop(1),
+                                                             [&](const auto& parameter)
+                                                             { return methodValue(parameter.type); });
+                              };
+                              return std::ranges::any_of(type.methods, [&](const auto& method)
+                                                         { return !supported(method.function); }) ||
+                                     std::ranges::any_of(type.dispatchEntries, [&](const auto& entry)
+                                                         { return !supported(entry.implementation); });
+                          });
+        } while (candidates.size() != previousSize);
+
+        std::set<TypeId> reachable;
+        pending.clear();
+        const auto include = [&](TypeId id)
+        {
+            if (candidates.contains(id) && reachable.insert(id).second)
+                pending.push_back(id);
+        };
+        for (const auto root : roots)
+            include(root);
+        for (std::size_t index = 0; index < pending.size(); ++index)
+            for (const auto& method : module.types.get(pending[index]).methods)
+                if (const auto* implementation = function(module, method.function))
+                {
+                    include(implementation->returnType);
+                    for (const auto& parameter : implementation->parameters | std::views::drop(1))
+                        include(parameter.type);
+                }
+        return reachable;
     }
 
     std::string WirNativeObjectEmitter::emit(const wir::lowered::Module& module, const std::set<wir::TypeId>& objects,
@@ -141,12 +182,12 @@ namespace wio::codegen
                 const auto count = method.parameters.size() - 1;
                 if (count)
                 {
-                    out << "        const std::array<WioNativeAbiValue, " << count << "> arguments{\n";
+                    out << "        wio::wir_backend::abi::ObjectArguments<" << count << "> arguments;\n";
                     for (std::size_t index = 1; index < method.parameters.size(); ++index)
-                        out << "            wio::wir_backend::abi::Codec<" << cpp(method.parameters[index].type) << ", "
-                            << identity(module, method.parameters[index].type) << "ULL>::write(_a" << (index - 1)
-                            << "),\n";
-                    out << "        };\n";
+                        out << "        arguments[" << (index - 1) << "] = wio::wir_backend::abi::Codec<"
+                            << cpp(method.parameters[index].type) << ", "
+                            << identity(module, method.parameters[index].type) << "ULL>::write(std::move(_a"
+                            << (index - 1) << "));\n";
                 }
                 out << "        return hostLease().call<" << cpp(method.returnType) << ", "
                     << identity(module, method.returnType) << "ULL>(" << methodIdentity(reflected, method.id) << "ULL, "

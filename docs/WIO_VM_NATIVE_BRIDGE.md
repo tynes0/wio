@@ -925,8 +925,8 @@ proxy. The initial automatic producer surface is deliberately narrow:
 - Private scalar/string/text fields, with no public native projections. Other
   field shapes are excluded so dummy producer fields cannot run nested Wio
   lifecycle bodies during proxy construction/destruction.
-- Non-abstract, synchronous Wio methods with scalar/string/text arguments and
-  scalar/string/text/void results. Reference, nullable, object, container,
+- Non-abstract, synchronous Wio methods with scalar/string/text and qualified
+  object values in their arguments/results (or void results). Reference, nullable, container,
   generic, native/external and async method signatures remain excluded.
 
 Proxies override both canonical WIR dispatch slots and the public `_WF_*`
@@ -1021,3 +1021,73 @@ no full-suite or Linux pass is claimed.
 The automatic gate passed locally on Windows (1/1, 14.50 seconds), including
 generated native execution, actual bytecode CLI execution, manager identity
 checks, retained-proxy shutdown and foreign-thread final release.
+
+## Object-valued hosted method signatures
+
+Qualified hosted methods can now receive and return concrete VM-origin object
+values. This includes returning the receiver, selecting an existing argument,
+and constructing a different eligible object type:
+
+```wio
+public fn Same() -> Counter {
+    return deref self;
+}
+
+public fn Choose(other: Counter) -> Counter {
+    return other;
+}
+
+public fn MakeBadge(seed: i32) -> Badge {
+    return Badge(seed);
+}
+```
+
+Native C++ calls still use the real generated `runtime::Ref<T>` method surface.
+Object arguments recover their original VM identity before method execution;
+object results use the same machine-managed weak proxy cache as free native
+calls. A returned receiver therefore uses its canonical live producer proxy,
+not a copied field projection. Newly constructed results retain their VM object
+until the final native claim retires at a VM safe point.
+
+Proxy selection now follows method signature dependencies. A `Badge` appearing
+only in a `Counter` method signature gets an adapter even if every free native
+declaration mentions only `Counter`. Discovery uses a work queue, handles
+mutually dependent signatures, rejects unsupported dependencies transitively,
+and removes otherwise eligible dependencies that no surviving native root needs.
+No partially functional method surface is advertised.
+
+Every generated method's codec arguments are held in a non-copyable,
+stack-allocated `ObjectArguments<N>` guard. Owned object, string and text wires
+are released on normal return, host failure, or a later argument conversion
+failure. Initialization is incremental so a conversion exception cannot strand
+already acquired claims. This also fixes the previous scalar/string/text proxy
+path's missing release of owned codec arguments. By-value C++ method arguments
+move into their codecs, avoiding an extra string copy or object retain/release
+pair. A separate execution-result guard preserves Wio lifecycle cleanup if a
+returned object's proxy factory fails before installing its native claim; it
+does not copy scalar/string results.
+
+Object-valued method parameters must belong to the same live machine. A hosted
+proxy from another machine, or an ordinary producer-created C++ object without
+VM field storage, rejects with `TYPE_MISMATCH`. General foreign-object method
+routing/field synchronization, nullable objects, object ref/view method
+signatures, generics, inheritance and interfaces remain pending. VM method
+failures preserve `PANIC` through the generated native boundary; closed hosts
+continue returning `STALE_HANDLE`. This is an implementation extension to the
+existing wire-v2/object-sidecar-v1 contracts, not a wire-version change.
+
+The focused `wio_vm_native_object_method_values` gate compares the generated
+C++ executable and actual VM CLI against one generated producer DLL. Fifty
+constructor/return/argument/identity/destructor rounds exercise a method-only
+dependency, receiver returns, other-object returns, multiple object parameters,
+embedded-NUL strings and Unicode text. The host gate also covers same-machine
+identity recovery, cross-machine and producer-owned argument rejection, bad
+arity, VM panic propagation, shutdown, partial argument initialization cleanup,
+owned argument weak-cache expiry after panic, partial proxy factory output
+release, exactly-once returned-object destruction after factory failure, and
+transitive/cyclic proxy selection. Only this new gate is run for this slice;
+no full-suite or Linux pass is claimed.
+
+The method-values gate passed locally on Windows (1/1, 24.38 seconds), including
+generated native execution, actual bytecode CLI execution, and host-injected
+factory failure qualification.

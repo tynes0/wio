@@ -715,6 +715,18 @@ Rider, and CLion are defined in
    failures, overlap rejection, cross-machine/generation validation and safe
    producer code-lease retirement. WIR object borrow/retain/place-transfer rules
    now prevent hidden register claims from deferring lexical destruction.
+   Hosted methods now accept/return qualified concrete VM object values,
+   including self/argument identity and freshly constructed method-only types.
+   Signature dependency discovery uses a work queue with transitive rejection;
+   unsupported dependencies cannot leave partial proxies. Stack argument guards
+   release owned object/string/text codec wires on success and failure. Focused
+   C++/VM qualification covers 50 lifecycle rounds, signature-only adapters,
+   same-machine identity, cross-machine/producer-owned rejection, VM panic,
+   shutdown, partial conversion cleanup, and exactly-once returned-object
+   destruction when proxy materialization fails. The new method-values gate
+   passed locally on Windows (1/1, 24.38 seconds).
+   Ref/view/nullable/generic object methods and foreign-object field/method
+   synchronization remain pending.
    Field synchronization, inheritance/interface and SDK/reflection routing
    remain pending; this does not close object parity.
    Remaining native parity work includes broader VM-created object signatures,
