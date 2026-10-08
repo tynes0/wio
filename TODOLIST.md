@@ -701,9 +701,15 @@ Rider, and CLion are defined in
    caller-thread method dispatch back into a live VM. Focused qualification
    covers shared identity, native-held host lifetime, weak-cache expiry,
    construction/dispatch failure cleanup and transactional registration.
-   Automatic proxy emission and VM materialization/identity caches, field
-   synchronization, inheritance/interface routing and Wio lifecycle integration
-   are not connected yet; this foundation does not close object parity.
+   The compiler now emits producer proxies and object sidecars for concrete
+   method-only objects with private scalar/string/text fields and supported
+   synchronous method signatures. Both WIR dispatch slots and native-visible
+   public wrappers route by stable method ids; hosted instances skip duplicate
+   Wio lifecycle bodies. Real generated executable/DLL plus live-VM host
+   qualification covers scalar/string/text/void methods and retained Ref/weak
+   lifetime. VM automatic materialization/identity caches, field synchronization,
+   inheritance/interface and SDK/reflection routing, and Machine-managed Wio
+   lifecycle integration remain pending; this does not close object parity.
    Remaining native parity work includes VM-created object materialization,
    object/interface/Box and nullable/generic any payloads, any-bearing containers,
    alias identity canonicalization; POD/object/container/nullable and

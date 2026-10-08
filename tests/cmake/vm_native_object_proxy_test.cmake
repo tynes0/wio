@@ -1,0 +1,37 @@
+foreach(required WIO_EXECUTABLE WIO_ROOT WIO_OUTPUT_DIR WIO_OBJECT_PROXY_EXECUTABLE WIO_SHARED_SUFFIX)
+    if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
+        message(FATAL_ERROR "Object proxy qualification requires ${required}")
+    endif()
+endforeach()
+
+file(MAKE_DIRECTORY "${WIO_OUTPUT_DIR}")
+set(source "${WIO_ROOT}/tests/vm_native_object_proxy.wio")
+set(native "${WIO_OUTPUT_DIR}/native${WIO_EXECUTABLE_SUFFIX}")
+set(bridge "${WIO_OUTPUT_DIR}/bridge${WIO_SHARED_SUFFIX}")
+set(bytecode "${WIO_OUTPUT_DIR}/program.wiob")
+foreach(mode IN ITEMS native bridge)
+    if(mode STREQUAL "native")
+        set(options --target exe --output "${native}")
+    else()
+        set(options --target shared --output "${bridge}" --bytecode-sidecar "${bytecode}")
+    endif()
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
+        "${WIO_EXECUTABLE}" "${source}" --cpp-backend wir
+        --include-dir "${WIO_ROOT}/tests/native" ${options}
+        WORKING_DIRECTORY "${WIO_ROOT}"
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 180)
+    if(NOT "${result}" STREQUAL "0")
+        message(FATAL_ERROR "${mode} object proxy compilation failed (${result}):\n${output}\n${error}")
+    endif()
+endforeach()
+execute_process(COMMAND "${native}" RESULT_VARIABLE result
+    OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 30)
+if(NOT "${result}" STREQUAL "0")
+    message(FATAL_ERROR "Normal generated C++ object calls regressed: ${output}\n${error}")
+endif()
+execute_process(COMMAND "${WIO_OBJECT_PROXY_EXECUTABLE}" "${bytecode}" "${bridge}"
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
+if(NOT "${result}" STREQUAL "0")
+    message(FATAL_ERROR "Generated DLL/VM object proxy qualification failed: ${output}\n${error}")
+endif()
+message(STATUS "Generated C++ executable and DLL/VM object proxy qualification passed")

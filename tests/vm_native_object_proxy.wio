@@ -1,0 +1,82 @@
+using cpp::header("vm_object_proxy_fixture.h");
+use std::attribute as attribute;
+
+object Counter {
+    value: i32;
+
+    public OnConstruct(seed: i32) {
+        self.value = seed;
+        Constructed();
+    }
+    OnDestruct() {
+        Destroyed();
+    }
+    public fn Read() -> i32 {
+        return self.value;
+    }
+    public fn Add(delta: i32) -> i32 {
+        self.value += delta;
+        return self.value;
+    }
+    public fn Label(prefix: string) -> string {
+        return prefix + ":counter";
+    }
+    public fn Reset(value: i32) {
+        self.value = value;
+    }
+    public fn EchoText(value: text) -> text {
+        return value;
+    }
+}
+
+[Native, CppName(vm_object_proxy::Constructed)]
+fn Constructed();
+[Native, CppName(vm_object_proxy::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_object_proxy::Constructions)]
+fn Constructions() -> i32;
+[Native, CppName(vm_object_proxy::Destructions)]
+fn Destructions() -> i32;
+[Native, CppName(vm_object_proxy::Add)]
+fn NativeAdd(value: Counter, delta: i32) -> i32;
+[Native, CppName(vm_object_proxy::Read)]
+fn NativeRead(value: Counter) -> i32;
+[Native, CppName(vm_object_proxy::Label)]
+fn NativeLabel(value: Counter, prefix: string) -> string;
+[Native, CppName(vm_object_proxy::Reset)]
+fn NativeReset(value: Counter, seed: i32);
+[Native, CppName(vm_object_proxy::EchoText)]
+fn NativeEchoText(value: Counter, content: text) -> text;
+[Native, CppName(vm_object_proxy::Store)]
+fn Store(value: Counter);
+[Native, CppName(vm_object_proxy::ReadStored)]
+fn ReadStored() -> i32;
+[Native, CppName(vm_object_proxy::Clear)]
+fn Clear();
+
+fn Make() -> Counter {
+    return Counter(7);
+}
+
+fn Entry() -> i32 {
+    {
+        let value = Make();
+        if (NativeRead(value) != 7 or NativeAdd(value, 11) != 18 or value.Read() != 18) {
+            return 1;
+        }
+        if (NativeLabel(value, "hello") != "hello:counter" or
+            NativeEchoText(value, u"İstanbul 🚀") != u"İstanbul 🚀") {
+            return 2;
+        }
+        NativeReset(value, 23);
+        Store(value);
+        if (ReadStored() != 23) {
+            return 3;
+        }
+        Clear();
+    }
+    if (Constructions() != 1 or Destructions() != 1) {
+        return 4;
+    }
+    return 0;
+}

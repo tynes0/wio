@@ -1,6 +1,7 @@
 #include "wio/codegen/wir_cpp_backend.h"
 #include "wio/codegen/wir_intrinsics.h"
 #include "wio/codegen/wir_module_emitter.h"
+#include "wio/codegen/wir_native_object_emitter.h"
 #include "wio/codegen/wir_reflection_emitter.h"
 
 #include "wio/common/profiling.h"
@@ -260,6 +261,7 @@ namespace wio::codegen
                 }
                 {
                     common::profiling::Scope scope("Backend.Cpp.EmitNominals");
+                    nativeProxyTypes_ = WirNativeObjectEmitter::eligibleTypes(module_);
                     emitNominalDeclarations();
                 }
                 {
@@ -289,8 +291,12 @@ namespace wio::codegen
                 }
                 {
                     common::profiling::Scope scope("Backend.Cpp.EmitModule");
-                    output_ << WirModuleEmitter::emit(module_, [this](TypeId id) { return cppType(id); },
-                                                      options_.emitNativeTaskSidecars);
+                    output_ << WirModuleEmitter::emit(
+                        module_, [this](TypeId id) { return cppType(id); }, options_.emitNativeTaskSidecars);
+                    output_ << WirNativeObjectEmitter::emit(
+                        module_, nativeProxyTypes_, [this](TypeId id) { return cppType(id); },
+                        [this](const MethodLayout& method, const lowered::Function& implementation)
+                        { return legacyMethodName(method, implementation); });
                 }
                 {
                     common::profiling::Scope scope("Backend.Cpp.EmitMain");
@@ -320,6 +326,7 @@ namespace wio::codegen
             std::unordered_set<const lowered::Instruction*> suppressedInstructions_;
             std::unordered_set<std::uint32_t> directValues_;
             std::unordered_set<std::uint32_t> structuralAliases_;
+            std::set<TypeId> nativeProxyTypes_;
             mutable std::vector<std::uint8_t> openTypeCache_;
             mutable std::vector<std::string> cppTypeCache_;
             mutable std::vector<std::uint8_t> cppTypeCacheReady_;
@@ -1569,8 +1576,10 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     if (type.destructor)
                     {
                         const auto& function = *functions_.at(type.destructor.value());
-                        output_ << objectName(id) << "::~" << objectName(id) << "() { " << functionName(function.id)
-                                << "(" << cppType(function.parameters.front().type) << "::raw(this)); }\n";
+                        output_ << objectName(id) << "::~" << objectName(id) << "() { "
+                                << (nativeProxyTypes_.contains(id) ? "if (!_wio_hosted_proxy) " : "")
+                                << functionName(function.id) << "(" << cppType(function.parameters.front().type)
+                                << "::raw(this)); }\n";
                     }
                     if ((type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface) &&
                         type.defaultConstructor)
@@ -1719,6 +1728,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                     << objectName(base);
                     }
                     output_ << " {\n";
+                    if (nativeProxyTypes_.contains(id))
+                        output_ << "    bool _wio_hosted_proxy = false;\n";
                     for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
                         output_ << "    " << cppType(type.fields[fieldIndex].type) << " _f" << fieldIndex << "{}; // "
                                 << safeIdentifier(type.fields[fieldIndex].name) << "\n";
@@ -1772,7 +1783,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                             const std::string name = legacyMethodName(method, *function);
                             if (!emittedLegacyMethods.insert(name).second)
                                 continue;
-                            output_ << "    " << cppType(function->returnType) << ' ' << name << '(';
+                            output_ << "    " << (nativeProxyTypes_.contains(id) ? "virtual " : "")
+                                    << cppType(function->returnType) << ' ' << name << '(';
                             for (std::size_t parameterIndex = 1; parameterIndex < function->parameters.size();
                                  ++parameterIndex)
                             {

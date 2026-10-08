@@ -889,9 +889,10 @@ canonicalize repeated object identities.
 
 This is a contract/runtime foundation, **not automatic CLI object transfer**:
 
-- Compiler-generated proxy classes and automatic VM object materialization are
-  still pending. The VM currently records object descriptors but does not use
-  them to encode/decode a locally created object at a native call boundary.
+- Automatic VM object materialization is still pending. The VM currently
+  records object descriptors but does not use them to encode/decode a locally
+  created object at a native call boundary. The initial compiler-generated
+  producer proxy surface is described below.
 - A machine-owned identity cache must use producer weak handles to avoid a
   VM object -> native proxy -> VM object reference-counting cycle. Generation
   validation and canonical proxy reuse must be connected there.
@@ -913,3 +914,51 @@ wrong-thread rejection and malformed/conflicting/atomic descriptor registration.
 This gate does not qualify generated proxies, real DLL object transfers or
 full C++/VM object parity. Only the new focused gate was run locally on Windows;
 no full-suite or Linux pass is claimed.
+
+## Compiler-generated producer object proxies
+
+`WirNativeObjectEmitter` now selects eligible objects from native parameter and
+result signatures and emits concrete proxy classes plus `WioGetNativeObjectApi`
+factory/identity/weak-lock descriptors. Objects that never cross a native
+boundary do not emit this support. An object is selected only when the entire
+method surface qualifies; unsupported methods do not get a partially functional
+proxy. The initial automatic producer surface is deliberately narrow:
+
+- Concrete non-generic Wio objects; only the empty built-in `object` base is
+  allowed. Custom inheritance and interfaces remain pending.
+- Private scalar/string/text fields, with no public native projections. Other
+  field shapes are excluded so dummy producer fields cannot run nested Wio
+  lifecycle bodies during proxy construction/destruction.
+- Non-abstract, synchronous Wio methods with scalar/string/text arguments and
+  scalar/string/text/void results. Reference, nullable, object, container,
+  generic, native/external and async method signatures remain excluded.
+
+Proxies override both canonical WIR dispatch slots and the public `_WF_*`
+wrapper methods used by native C++ libraries. Those wrappers are virtual only
+for selected object types. Method routing uses canonical reflected stable
+method ids, not source names or numeric bytecode function offsets. Argument
+and result codecs use canonical stable type identities. The producer uses
+`SkipConstructor` and marks the instance as hosted; its C++ destructor skips
+the Wio destructor body. Ordinary C++ backend object instances retain their
+normal constructor/destructor behavior. This does not yet add field access,
+SDK/reflection-thunk routing, or automatic VM lifecycle ownership.
+
+The focused gate `wio_vm_native_object_proxy` builds a real generated C++
+executable and a generated DLL with its bytecode sidecar. The native executable
+checks ordinary object calls. A qualification host discovers the DLL's generated
+object API and native registry, registers it through the real VM library loader,
+creates the original object by running a VM constructor, and invokes producer
+thunks against the generated proxy. It qualifies scalar field mutation,
+embedded-NUL string results, non-ASCII Unicode text, void methods, native-held
+Ref lifetime, identity recovery, weak expiry, and suppressed duplicate Wio
+constructor/destructor bodies. This test host explicitly owns lifecycle cleanup;
+it is not a replacement for the pending Machine-managed host and identity cache.
+Emitter selection tests also reject unsupported fields/signatures, abstract and
+async methods, missing stable identities, custom inheritance, and unused types.
+
+Only this new focused gate is run for this slice. Automatic `wio --vm` object
+argument/result materialization, producer-to-VM identity recovery, weak-cache
+canonicalization, host cleanup scheduling and broader object parity remain the
+next integration steps. No full-suite or Linux pass is claimed.
+The new gate passed locally on Windows (1/1, 12.68 seconds), including selection
+checks, generated native executable behavior and the generated DLL/live-VM host.
