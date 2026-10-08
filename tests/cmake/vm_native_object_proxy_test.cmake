@@ -29,6 +29,19 @@ execute_process(COMMAND "${native}" RESULT_VARIABLE result
 if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Normal generated C++ object calls regressed: ${output}\n${error}")
 endif()
+if(WIO_AUTOMATIC_OBJECTS)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
+        "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}" --native-library "${bridge}"
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
+    if(NOT "${result}" STREQUAL "0")
+        message(FATAL_ERROR "Automatic VM object materialization failed (${result}): ${output}\n${error}")
+    endif()
+    execute_process(COMMAND "${WIO_OBJECT_PROXY_EXECUTABLE}" "${bytecode}" "${bridge}" automatic
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
+    if(NOT "${result}" STREQUAL "0")
+        message(FATAL_ERROR "Automatic VM object host lifetime failed (${result}): ${output}\n${error}")
+    endif()
+endif()
 execute_process(COMMAND "${WIO_OBJECT_PROXY_EXECUTABLE}" "${bytecode}" "${bridge}"
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
 if(NOT "${result}" STREQUAL "0")

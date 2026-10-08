@@ -889,20 +889,16 @@ canonicalize repeated object identities.
 
 This is a contract/runtime foundation, **not automatic CLI object transfer**:
 
-- Automatic VM object materialization is still pending. The VM currently
-  records object descriptors but does not use them to encode/decode a locally
-  created object at a native call boundary. The initial compiler-generated
-  producer proxy surface is described below.
-- A machine-owned identity cache must use producer weak handles to avoid a
-  VM object -> native proxy -> VM object reference-counting cycle. Generation
-  validation and canonical proxy reuse must be connected there.
+- Automatic VM materialization now uses the qualified compiler-generated
+  producer surface below. Machine-owned identity caches use producer weak
+  handles, validate generations and recover the original VM object on returns
+  and mutable-reference copy-back without a strong cache ownership cycle.
 - Native field projections/synchronization, `ref`/`view` receiver contracts,
   inheritance/interfaces and generic object routing are not qualified yet.
-- Proxy construction/destruction must not run Wio lifecycle bodies twice.
-  Integration with VM cleanup, final release scheduling and machine/library
-  lifetime is pending. The sidecar host retains/releases are required to be
-  safe wherever a native Ref is released; caller-thread-only invocation does
-  not by itself solve foreign-thread final destruction.
+- Hosted proxies skip duplicate Wio construction/destruction. Final host
+  release queues cleanup for a VM safe point; it does not execute a Wio
+  destructor on an arbitrary native release thread. Machine shutdown invalidates
+  retained proxies and cleans their VM objects. See lifetime limits below.
 
 The focused gate `wio_vm_native_object_host` uses real encoded/decoded bytecode
 and a live VM host behind a typed native proxy. Virtual native calls execute VM
@@ -941,7 +937,8 @@ and result codecs use canonical stable type identities. The producer uses
 `SkipConstructor` and marks the instance as hosted; its C++ destructor skips
 the Wio destructor body. Ordinary C++ backend object instances retain their
 normal constructor/destructor behavior. This does not yet add field access,
-SDK/reflection-thunk routing, or automatic VM lifecycle ownership.
+SDK/reflection-thunk routing. Automatic VM lifecycle ownership for this
+qualified surface is described below.
 
 The focused gate `wio_vm_native_object_proxy` builds a real generated C++
 executable and a generated DLL with its bytecode sidecar. The native executable
@@ -952,13 +949,75 @@ thunks against the generated proxy. It qualifies scalar field mutation,
 embedded-NUL string results, non-ASCII Unicode text, void methods, native-held
 Ref lifetime, identity recovery, weak expiry, and suppressed duplicate Wio
 constructor/destructor bodies. This test host explicitly owns lifecycle cleanup;
-it is not a replacement for the pending Machine-managed host and identity cache.
+it is separate from the Machine-managed host and identity-cache gate below.
 Emitter selection tests also reject unsupported fields/signatures, abstract and
 async methods, missing stable identities, custom inheritance, and unused types.
 
-Only this new focused gate is run for this slice. Automatic `wio --vm` object
-argument/result materialization, producer-to-VM identity recovery, weak-cache
-canonicalization, host cleanup scheduling and broader object parity remain the
-next integration steps. No full-suite or Linux pass is claimed.
+This producer gate does not by itself qualify automatic VM ownership. The
+automatic integration has a separate focused gate below. No full-suite or
+Linux pass is claimed.
 The new gate passed locally on Windows (1/1, 12.68 seconds), including selection
 checks, generated native executable behavior and the generated DLL/live-VM host.
+
+## Machine-managed object materialization and identity
+
+Native calls now materialize eligible VM-created objects through the producer
+object sidecar. Each VM object receives a process-unique, non-reused identity.
+The machine caches a producer weak handle keyed by that identity. Simultaneous
+arguments for the same object reuse one live proxy. After its final native
+strong release, a later materialization uses a fresh host generation instead of
+resurrecting the expired proxy.
+
+Producer object returns and whole-object `ref` copy-back recover the original
+VM object, including its fields and identity. A proxy belonging to a different
+machine, a stale generation, or a closed host is rejected. Genuine producer-owned
+objects retain the existing foreign-object path. Mutable object handles can be
+replaced without transferring field ownership to a copied producer projection.
+
+Ownership follows WIR: borrowed object loads do not acquire strong references,
+explicit retain creates an owned claim, and owned place writes transfer the SSA
+handle. This prevents hidden VM register claims from delaying lexical Wio
+destruction. A native-held `Ref` can keep the object alive after its Wio scope
+ends, while the owning machine remains active.
+
+Final proxy release queues a cleanup claim without allocating or executing Wio
+code in the release callback. The machine drains it after native wire releases
+and at invocation safe points. Wio lifecycle bodies execute once, independently
+of producer weak-storage deallocation. Producer library leases protect proxy
+code and weak-handle operations.
+
+Lifetime limits are explicit:
+
+- This slice supports the eligible concrete object/method surface listed above,
+  not inheritance, interfaces, generic objects, public fields or general SDK
+  reflection dispatch.
+- Proxy method calls are caller-thread-only. Foreign-thread calls preserve
+  `WRONG_THREAD` through the generated native exception boundary.
+- Machine destruction invalidates hosts and cleans retained VM objects; it does
+  not prolong VM execution. Calls through surviving native references return
+  `STALE_HANDLE` until those references are released.
+- A last proxy release after machine shutdown defers its producer code lease.
+  Embedders call `Machine::collectNativeObjectRetirements()` from host code after
+  producer calls have returned and concurrent producer releases have quiesced.
+  This prevents unloading a DLL inside its own final-release stack frame.
+- Passing a hosted object and a separate reference to one of its fields in the
+  same native call rejects with `WVM1225`. Independent producer reference cells
+  cannot yet synchronize mutations performed by hosted method dispatch.
+- Cleanup queued by an external native release is observed at the next machine
+  invocation safe point, or shutdown; it is not a background Wio executor.
+- Deferred destructor failures are not currently propagated through an external
+  native release. Richer safe-point/teardown cleanup diagnostics remain pending.
+
+The focused `wio_vm_native_object_materialization` gate compares generated C++
+and actual `--vm-run-bytecode` execution against the same generated producer DLL.
+It covers proxy reuse, original-object returns and ref replacement, scalar/string/
+text/void calls, scope destruction, retained references, wrong-thread and stale
+host failures, foreign-thread final release, safe-point cleanup, overlap rejection
+and failure unwind. Additional host checks cover
+cross-machine identity rejection, generation validation, weak-cache recreation
+and deferred code-lease collection. Only this focused gate is run for this slice;
+no full-suite or Linux pass is claimed.
+
+The automatic gate passed locally on Windows (1/1, 14.50 seconds), including
+generated native execution, actual bytecode CLI execution, manager identity
+checks, retained-proxy shutdown and foreign-thread final release.

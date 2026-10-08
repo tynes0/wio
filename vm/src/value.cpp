@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <utility>
 #include <unordered_set>
 #include <vector>
@@ -104,6 +105,17 @@ namespace wio::vm
                          const bool ordered = false)
             : kind_(kind), type_(type), values_(std::move(values)), ordered_(ordered)
         {
+            if (kind == Value::Kind::Object)
+            {
+                static std::atomic_uint64_t nextIdentity{1};
+                auto candidate = nextIdentity.load(std::memory_order_relaxed);
+                do
+                {
+                    if (candidate == std::numeric_limits<std::uint64_t>::max())
+                        throw std::overflow_error("VM object identity space exhausted");
+                } while (!nextIdentity.compare_exchange_weak(candidate, candidate + 1, std::memory_order_relaxed));
+                objectIdentity = candidate;
+            }
         }
 
         ~AggregateStorage()
@@ -113,6 +125,7 @@ namespace wio::vm
         }
 
         ForeignStorage* nativeBacking = nullptr;
+        std::uint64_t objectIdentity = 0;
 
         [[nodiscard]] std::mutex& nativeBackingMutex() const noexcept
         {
@@ -1247,6 +1260,8 @@ namespace wio::vm
 
     Value Value::cloneOwned() const
     {
+        if (kind_ == Kind::ObjectBorrow)
+            return retainObject();
         if (kind_ != Kind::Array && kind_ != Kind::Dictionary && kind_ != Kind::Component)
             return *this;
         std::vector<Value> cloned;
@@ -1270,6 +1285,11 @@ namespace wio::vm
         result.scalar_.aggregate = scalar_.aggregate;
         result.scalar_.aggregate->retain();
         return result;
+    }
+
+    std::uint64_t Value::objectIdentity() const noexcept
+    {
+        return kind_ == Kind::Object || kind_ == Kind::ObjectBorrow ? scalar_.aggregate->objectIdentity : 0;
     }
 
     std::vector<Value> Value::takeOwnedChildrenForCleanup()

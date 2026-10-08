@@ -27,6 +27,9 @@ object Counter {
     public fn EchoText(value: text) -> text {
         return value;
     }
+    public fn Aliased() -> i32 {
+        return NativeAliased(deref self, ref self.value);
+    }
 }
 
 [Native, CppName(vm_object_proxy::Constructed)]
@@ -41,6 +44,14 @@ fn Destructions() -> i32;
 fn NativeAdd(value: Counter, delta: i32) -> i32;
 [Native, CppName(vm_object_proxy::Read)]
 fn NativeRead(value: Counter) -> i32;
+[Native, CppName(vm_object_proxy::Same)]
+fn NativeSame(left: Counter, right: Counter) -> bool;
+[Native, CppName(vm_object_proxy::Echo)]
+fn NativeEcho(value: Counter) -> Counter;
+[Native, CppName(vm_object_proxy::Replace)]
+fn NativeReplace(target: ref Counter, source: Counter);
+[Native, CppName(vm_object_proxy::Aliased)]
+fn NativeAliased(value: Counter, field: ref i32) -> i32;
 [Native, CppName(vm_object_proxy::Label)]
 fn NativeLabel(value: Counter, prefix: string) -> string;
 [Native, CppName(vm_object_proxy::Reset)]
@@ -58,9 +69,24 @@ fn Make() -> Counter {
     return Counter(7);
 }
 
+fn RetainForHost() {
+    let value = Counter(41);
+    Store(value);
+}
+
+fn AliasedEntry() -> i32 {
+    let value = Counter(3);
+    return value.Aliased();
+}
+
 fn Entry() -> i32 {
     {
         let value = Make();
+        if (not NativeSame(value, value)) {
+            return 5;
+        }
+        let echoed = NativeEcho(value);
+        NativeReset(echoed, 7);
         if (NativeRead(value) != 7 or NativeAdd(value, 11) != 18 or value.Read() != 18) {
             return 1;
         }
@@ -77,6 +103,22 @@ fn Entry() -> i32 {
     }
     if (Constructions() != 1 or Destructions() != 1) {
         return 4;
+    }
+    {
+        mut target = Counter(2);
+        let source = Counter(9);
+        NativeReplace(ref target, source);
+        if (target.Read() != 9 or not NativeSame(target, source)) {
+            return 6;
+        }
+        Store(source);
+    }
+    if (Constructions() != 3 or Destructions() != 2 or ReadStored() != 9) {
+        return 7;
+    }
+    Clear();
+    if (Destructions() != 3) {
+        return 8;
     }
     return 0;
 }

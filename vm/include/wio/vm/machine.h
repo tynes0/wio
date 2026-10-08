@@ -25,6 +25,11 @@ struct WioNativeObjectApi;
 
 namespace wio::vm
 {
+    namespace detail
+    {
+        struct NativePodLayouts;
+        struct NativeValueResult;
+    } // namespace detail
     enum class ExecutorKind : std::uint8_t
     {
         Inherit,
@@ -184,6 +189,9 @@ namespace wio::vm
         // optional async sidecars, and pins the dynamic library until this
         // machine has cancelled tasks and released all foreign values.
         [[nodiscard]] bool loadNativeLibrary(const std::filesystem::path& path, std::string* error = nullptr);
+        // Host safe point after external producer calls have returned. Releases
+        // delayed code leases from proxies disposed after their VM was closed.
+        static void collectNativeObjectRetirements();
 
         // Main-executor continuations run only on the bound thread. wait()
         // pumps this queue automatically when called by that thread.
@@ -211,6 +219,11 @@ namespace wio::vm
         [[nodiscard]] ExecutionError unwind(ExecutionState& state, ExecutionError error);
         void cancelAndUnwindContinuations();
         void cleanupGlobals();
+        void cleanupNativeObjects(bool shutdown = false) noexcept;
+        [[nodiscard]] bool encodeNativeObject(const Value&, std::uint32_t, WioNativeAbiValue&, std::string&,
+                                              const detail::NativePodLayouts&);
+        [[nodiscard]] detail::NativeValueResult decodeNativeObject(const WioNativeAbiValue&, std::uint32_t,
+                                                                   const detail::NativePodLayouts&);
         [[nodiscard]] bool scheduleTask(const std::shared_ptr<ExecutionState>& state, ExecutorKind executor);
         void wakeTask(std::weak_ptr<ExecutionState> state, AsyncTaskState terminalState, const Value& result,
                       const ExecutionError& error);

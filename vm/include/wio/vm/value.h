@@ -21,6 +21,10 @@ namespace wio::vm
     class PlaceStorage;
     class AggregateStorage;
     class ForeignStorage;
+    namespace detail
+    {
+        class NativeObjectBridge;
+    }
 
     enum class AsyncTaskState : std::uint8_t
     {
@@ -90,6 +94,7 @@ namespace wio::vm
         [[nodiscard]] static Value runtimeValue(std::uint32_t type, std::uint64_t stableTypeId,
                                                 WioNativeAbiHandle handle);
         [[nodiscard]] std::uint32_t aggregateType() const noexcept;
+        [[nodiscard]] std::uint64_t objectIdentity() const noexcept;
         [[nodiscard]] std::uint32_t anyType() const noexcept;
         [[nodiscard]] const Value* anyPayload() const noexcept;
         // Producer backing is shared with the boxed cell, not with fitted
@@ -250,5 +255,6 @@ namespace wio::vm
         Kind kind_ = Kind::Empty;
 
         friend class Machine;
+        friend class detail::NativeObjectBridge;
     };
 } // namespace wio::vm

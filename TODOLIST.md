@@ -707,10 +707,17 @@ Rider, and CLion are defined in
    public wrappers route by stable method ids; hosted instances skip duplicate
    Wio lifecycle bodies. Real generated executable/DLL plus live-VM host
    qualification covers scalar/string/text/void methods and retained Ref/weak
-   lifetime. VM automatic materialization/identity caches, field synchronization,
-   inheritance/interface and SDK/reflection routing, and Machine-managed Wio
-   lifecycle integration remain pending; this does not close object parity.
-   Remaining native parity work includes VM-created object materialization,
+   lifetime. Machine now automatically materializes eligible VM objects, reuses
+   live proxies through a weak identity cache, and recovers original objects on
+   native return/ref replacement. Final release schedules Wio cleanup at VM safe
+   points; shutdown invalidates retained proxies. Focused C++/VM differential
+   coverage includes scope lifecycle, retained Ref, wrong-thread/stale-host
+   failures, overlap rejection, cross-machine/generation validation and safe
+   producer code-lease retirement. WIR object borrow/retain/place-transfer rules
+   now prevent hidden register claims from deferring lexical destruction.
+   Field synchronization, inheritance/interface and SDK/reflection routing
+   remain pending; this does not close object parity.
+   Remaining native parity work includes broader VM-created object signatures,
    object/interface/Box and nullable/generic any payloads, any-bearing containers,
    alias identity canonicalization; POD/object/container/nullable and
    ref/view callback signatures; consumed arguments. Native-only bridge pruning

@@ -38,6 +38,23 @@ namespace vm_object_proxy
     {
         return object->_WF_Read();
     }
+    template <class T> bool Same(wio::runtime::Ref<T> left, wio::runtime::Ref<T> right)
+    {
+        return left.Get() == right.Get();
+    }
+    template <class T> wio::runtime::Ref<T> Echo(wio::runtime::Ref<T> object)
+    {
+        return object;
+    }
+    template <class T> void Replace(wio::runtime::Ref<T>& target, wio::runtime::Ref<T> source)
+    {
+        target = std::move(source);
+    }
+    template <class T> std::int32_t Aliased(wio::runtime::Ref<T> object, std::int32_t& field)
+    {
+        object->_WF_Reset_i32(19);
+        return field;
+    }
     template <class T> std::string Label(wio::runtime::Ref<T> object, std::string prefix)
     {
         return object->_WF_Label_string(std::move(prefix));

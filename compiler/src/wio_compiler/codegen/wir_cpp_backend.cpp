@@ -3431,7 +3431,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                             output_ << "return " << call << ';';
                             if (function.nativeBinding->exceptionBoundary != NativeExceptionBoundary::None)
                             {
-                                output_ << " } catch (const wio::runtime::RuntimeException&) { throw; } catch (const "
+                                output_ << " } catch (const wio::wir_backend::abi::Error&) { throw; } "
+                                           "catch (const wio::runtime::RuntimeException&) { throw; } catch (const "
                                            "std::exception& _error) { throw wio::runtime::RuntimeException("
                                         << cppString("Native call '" + function.nativeBinding->symbol + "' failed: ")
                                         << " + std::string(_error.what())); } catch (...) { throw "

@@ -1,4 +1,5 @@
 #include "native_bridge_internal.h"
+#include "native_object_internal.h"
 #include "wio/bytecode/codec.h"
 #include "wio/codegen/wir_native_object_emitter.h"
 #include "wio/vm/machine.h"
@@ -11,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <thread>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -375,14 +377,160 @@ namespace
               "delayed native destructor reran Wio lifecycle or native wrappers bypassed VM dispatch");
         return 0;
     }
+
+    void qualifyIdentityCache(const bc::Module& module, const WioNativeObjectDescriptor& adapter)
+    {
+        const auto reflected =
+            std::ranges::find(module.contract.reflection, adapter.typeId, &bc::Reflection::stableTypeId);
+        check(reflected != module.contract.reflection.end(), "identity-cache object type missing");
+        auto retiredCode = std::make_shared<int>(0);
+        const auto invoke = [](const Value&, std::uint64_t, const WioNativeAbiValue*, std::uint64_t, WioNativeAbiValue*,
+                               WioNativeAbiFailure*) { return WIO_NATIVE_ABI_INVALID_ARGUMENT; };
+        const auto codeLease = [retiredCode]() -> std::shared_ptr<void>
+        {
+            const auto release = [retiredCode](int* lease)
+            {
+                ++*retiredCode;
+                delete lease;
+            };
+            return std::shared_ptr<int>(new int(0), release);
+        };
+        auto manager = std::make_shared<bridge::NativeObjectBridge>(invoke, codeLease);
+        auto other = std::make_shared<bridge::NativeObjectBridge>(invoke, []() -> std::shared_ptr<void> { return {}; });
+        Value object = Value::object(reflected->type, {Value::signedInteger(3)});
+        Value second = Value::object(reflected->type, {Value::signedInteger(3)});
+        check(object.objectIdentity() != second.objectIdentity(), "different objects reused a VM identity");
+        Wire first;
+        Wire alias;
+        std::string error;
+        check(manager->encode(object, reflected->type, adapter, first.value, error) &&
+                  manager->encode(object, reflected->type, adapter, alias.value, error),
+              error.c_str());
+        WioNativeObjectHost firstHost{}, aliasHost{};
+        check(adapter.host(&first.value, &firstHost, nullptr) == WIO_NATIVE_ABI_OK &&
+                  adapter.host(&alias.value, &aliasHost, nullptr) == WIO_NATIVE_ABI_OK &&
+                  firstHost.owner.state == aliasHost.owner.state,
+              "weak cache did not reuse its canonical live proxy");
+        bool matched = false;
+        auto recovered = manager->recover(alias.value, reflected->type, adapter, matched);
+        check(matched && recovered.succeeded() && recovered.value.objectIdentity() == object.objectIdentity(),
+              "producer object return did not recover original VM identity");
+        recovered = other->recover(alias.value, reflected->type, adapter, matched);
+        check(matched && !recovered.succeeded(), "identity recovery accepted a different machine host");
+        auto invalid = firstHost;
+        ++invalid.generation;
+        Wire result;
+        check(invalid.invoke(&invalid, 1, nullptr, 0, &result.value, nullptr) == WIO_NATIVE_ABI_STALE_HANDLE,
+              "dispatch accepted a stale host generation");
+        WioNativeAbiReleaseValue(&alias.value);
+        WioNativeAbiReleaseValue(&first.value);
+        auto retired = manager->takeRetired();
+        check(retired.size() == 1 && retired.front().objectIdentity() == object.objectIdentity(),
+              "final native release lost or duplicated its cleanup claim");
+        retired.clear();
+        check(manager->encode(object, reflected->type, adapter, first.value, error), error.c_str());
+        check(adapter.host(&first.value, &aliasHost, nullptr) == WIO_NATIVE_ABI_OK &&
+                  aliasHost.generation != firstHost.generation,
+              "expired weak cache resurrected an old host generation");
+        auto closed = manager->shutdown();
+        check(closed.size() == 1, "shutdown lost its live object cleanup claim");
+        check(aliasHost.invoke(&aliasHost, 1, nullptr, 0, &result.value, nullptr) == WIO_NATIVE_ABI_STALE_HANDLE,
+              "closed manager accepted object dispatch");
+        const int beforeFinalRelease = *retiredCode;
+        WioNativeAbiReleaseValue(&first.value);
+        check(*retiredCode == beforeFinalRelease, "producer code lease retired inside final release");
+        wio::vm::Machine::collectNativeObjectRetirements();
+        check(*retiredCode == beforeFinalRelease + 1, "safe host collection did not retire producer code lease");
+    }
+
+    int qualifyAutomatic(const char* bytecode, const char* producer)
+    {
+        std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
+        const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        auto decoded = bc::decode(std::as_bytes(std::span{bytes.data(), bytes.size()}));
+        check(decoded.succeeded(), "automatic object bytecode decode failed");
+        auto machine = std::make_unique<wio::vm::Machine>(decoded.module);
+        Library library{std::filesystem::u8path(producer)};
+        const auto getRegistry = library.symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
+        check(getRegistry, "automatic object registry missing");
+        const auto& registry = *getRegistry();
+        const auto getObjects = library.symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
+        check(getObjects && getObjects()->typeCount == 1, "automatic object sidecar missing");
+        qualifyIdentityCache(decoded.module, getObjects()->types[0]);
+        std::string error;
+        check(machine->loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+        const auto functionId = [&](const char* name)
+        {
+            const auto function = std::ranges::find_if(decoded.module.functions, [&](const auto& function)
+                                                       { return decoded.module.string(function.name) == name; });
+            check(function != decoded.module.functions.end(), "automatic object entry missing");
+            return function->id;
+        };
+        const auto result = machine->invoke(functionId("Entry"));
+        if (!result.succeeded())
+            throw std::runtime_error(result.error().code + ": " + result.error().message);
+        if (result.value().asSignedInteger() != 0)
+        {
+            std::cerr << "Entry returned " << result.value().asSignedInteger()
+                      << ", constructions=" << scalar(registry, "vm_object_proxy::Constructions")
+                      << ", destructions=" << scalar(registry, "vm_object_proxy::Destructions") << '\n';
+            throw std::runtime_error("automatic object lifecycle/identity qualification failed");
+        }
+        const auto aliased = machine->invoke(functionId("AliasedEntry"));
+        if (!aliased.succeeded())
+            std::cerr << aliased.error().code << ": " << aliased.error().message << '\n';
+        check(!aliased.succeeded() && aliased.error().code == "WVM1225",
+              "native object/field overlap was not rejected before producer invocation");
+        check(scalar(registry, "vm_object_proxy::Destructions") == 4,
+              "object/field overlap failure did not unwind its VM object once");
+        check(machine->invoke(functionId("RetainForHost")).succeeded(), "native-held VM object setup failed");
+        check(scalar(registry, "vm_object_proxy::ReadStored") == 41 &&
+                  scalar(registry, "vm_object_proxy::Destructions") == 4,
+              "native-held Ref did not keep its original VM object alive");
+        WioNativeAbiStatus threadStatus = WIO_NATIVE_ABI_OK;
+        std::thread foreign(
+            [&]
+            {
+                Wire wire;
+                threadStatus = call(registry, "vm_object_proxy::ReadStored", {}, wire.value);
+            });
+        foreign.join();
+        check(threadStatus == WIO_NATIVE_ABI_WRONG_THREAD, "hosted object accepted foreign-thread dispatch");
+        std::thread foreignRelease(
+            [&]
+            {
+                Wire wire;
+                threadStatus = call(registry, "vm_object_proxy::Clear", {}, wire.value);
+            });
+        foreignRelease.join();
+        check(threadStatus == WIO_NATIVE_ABI_OK && scalar(registry, "vm_object_proxy::Destructions") == 4,
+              "foreign-thread final release executed Wio cleanup instead of queuing it");
+        check(machine->invoke(functionId("RetainForHost")).succeeded() &&
+                  scalar(registry, "vm_object_proxy::Destructions") == 5 &&
+                  scalar(registry, "vm_object_proxy::ReadStored") == 41,
+              "next invocation did not drain queued object cleanup exactly once");
+        machine.reset();
+        check(scalar(registry, "vm_object_proxy::Destructions") == 6, "shutdown did not clean hosted VM object once");
+        Wire stale;
+        check(call(registry, "vm_object_proxy::ReadStored", {}, stale.value) == WIO_NATIVE_ABI_STALE_HANDLE,
+              "native proxy invoked a destroyed machine");
+        Wire cleared;
+        check(call(registry, "vm_object_proxy::Clear", {}, cleared.value) == WIO_NATIVE_ABI_OK,
+              "closed-machine proxy final release failed");
+        wio::vm::Machine::collectNativeObjectRetirements();
+        check(scalar(registry, "vm_object_proxy::Destructions") == 6, "proxy final release reran Wio destructor");
+        return 0;
+    }
 } // namespace
 
 int main(int argc, char** argv)
 {
     try
     {
-        check(argc == 3, "object proxy qualification requires bytecode and producer paths");
+        check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4)
+            return qualifyAutomatic(argv[1], argv[2]);
         return qualify(argv[1], argv[2]);
     }
     catch (const std::exception& error)
