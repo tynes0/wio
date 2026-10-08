@@ -1429,3 +1429,80 @@ is claimed. The broader native interoperability sprint remains open.
 
 The concrete-generic gate passed locally on Windows (1/1, 15.25 seconds),
 including generated C++, VM CLI, live producer/host and negative qualifications.
+
+## Concrete hosted inheritance and native interface views
+
+An exact qualified concrete Wio object can now cross the native boundary even
+when it inherits other Wio objects or implements interfaces. This extends the
+earlier flat-object qualification; it does not make polymorphic ABI conversion
+generally available. Every ancestor must be concrete, Wio-represented, and have
+only non-public scalar/string/text fields. Existing whole-method and borrowed
+result restrictions still apply. Cycles, open ancestors, public projections and
+structured ancestor fields reject proxy eligibility.
+
+For a `Leaf : Derived : Base` hierarchy, a native function receiving the exact
+`Leaf` proxy can use C++ `Base*` and implemented interface pointers. Their
+virtual method wrappers route back to the concrete VM implementation. An
+unchanged inherited method keeps its declaration's stable identity across
+different concrete reflection descriptors; the concrete type identities remain
+distinct. `super` calls execute the selected base body without virtual
+redispatch. Native template parameters absent from the argument types are
+emitted explicitly rather than incorrectly relying on C++ deduction.
+
+```wio
+interface IRead { fn Read() -> i32; }
+
+[From(IRead)]
+object Base {
+    seed: i32 = 5;
+    public fn Read() -> i32 { return self.seed; }
+}
+
+[From(Base)]
+object Derived {
+    public fn Read() -> i32 { return super.Read() + 100; }
+}
+
+// Inspect receives exactly Derived; inside C++ it can use Base/IRead views.
+[Native, CppName(engine::Inspect)]
+fn Inspect(value: Derived) -> i32;
+```
+
+The VM still uses one intrusive object allocation. Cached owner-to-offset maps
+translate owner-local WIR field indices, preventing a base field from aliasing
+a derived field with the same local index. Repeated interface paths share one
+logical owner. Base field initialization/default constructors run before the
+concrete initializer; teardown runs in reverse owner order, releasing each
+owner's fields after its destructor body. Base initialization plans are cached;
+flat construction does not allocate the new inheritance plan.
+
+Partial base construction tracks the completed-owner frontier in an existing
+kind-specific storage slot, without another allocation. A failing base's body
+is not destroyed, but completed ancestors and owned field values are cleaned.
+Failure in the concrete object's explicit initializer/OnConstruct retains the
+existing full-object cleanup contract. Hosted C++ placeholder construction uses
+a distinct skip tag through all direct/virtual ancestors; creating or destroying
+a proxy must not repeat the VM object's lifecycle. Ordinary generated C++ base
+construction executes field initialization before OnConstruct.
+
+The focused `wio_vm_native_object_hierarchy` gate compares 30 Derived and 30
+Leaf lifetimes in generated C++ and actual VM CLI execution. The live host
+checks inherited/overridden calls, base field separation, direct super calls,
+stable declaration identities, secondary proxy identity, weak expiration and
+exact lifecycle counts. Four VM constructor-failure cases cover incomplete
+bases and concrete failure; these are VM-host checks, not differential C++
+exception tests. Layout checks cover repeated interface paths, invalid/cyclic
+bases, unpublished failed layouts and the 128-level VM boundary. All 33 existing
+built-in alias spellings resolve to their canonical contracts; the Wio fixture
+also mixes `[Native, CppName(...)]` and `[native, cpp::name(...)]`.
+The combined compiler/runtime test translation unit also qualifies explicit
+runtime Ref/WeakRef friend declarations independently of an outer `wio::Ref`
+declaration and header include order.
+
+Direct Base/interface-typed ABI parameters/results, arbitrary field
+synchronization, broader signatures, foreign-object synchronization, SDK
+reflection routing and async task ownership remain pending. Native wire-v2,
+object-sidecar-v1 and WIOB 1.1 are unchanged. Only the new focused Windows gate
+was run; no full-suite or Linux result is claimed. The native sprint remains open.
+
+The final hierarchy/alias gate passed locally on Windows (1/1, 16.35 seconds).

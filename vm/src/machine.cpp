@@ -11,6 +11,7 @@
 #include "native_dictionary_internal.h"
 #include "native_any_internal.h"
 #include "native_object_internal.h"
+#include "object_layout_internal.h"
 #include "string_intrinsics.h"
 #include "text_intrinsics.h"
 
@@ -229,6 +230,8 @@ namespace wio::vm
             std::uint32_t callerResult = bytecode::InvalidIndex;
             std::uint32_t nextFunction = bytecode::InvalidIndex;
             std::vector<Value> nextArguments;
+            std::vector<detail::ObjectLayouts::ConstructionStep> constructionFunctions;
+            std::size_t nextConstruction = 0;
         };
 
         struct Frame
@@ -1052,6 +1055,7 @@ namespace wio::vm
         const bytecode::Module* module = nullptr;
         ExecutionError loadError;
         std::vector<FunctionPlan> functions;
+        detail::ObjectLayouts objectLayouts;
         std::vector<std::unique_ptr<PlaceStorage>> globals;
         std::mutex timerMutex;
         std::unique_ptr<TimerScheduler> timers;
@@ -1328,45 +1332,65 @@ namespace wio::vm
         {
             const bytecode::Module& module = *program_->module;
             const std::uint32_t type = value.aggregateType();
-            const std::uint32_t destructor =
-                type < module.types.size() ? module.types[type].destructor : bytecode::InvalidIndex;
-            if (destructor != bytecode::InvalidIndex && destructor < module.functions.size())
+            const auto* layout = value.kind() == Value::Kind::Object ? program_->objectLayouts.get(type) : nullptr;
+            std::span<const std::uint32_t> owners{&type, 1};
+            if (layout)
+                owners = layout->constructionOwners;
+            const auto completedOwners = layout ? std::min(value.objectConstructionLimit(), owners.size()) : 1;
+            for (std::size_t index = owners.size(); index > 0; --index)
             {
-                try
+                const auto owner = owners[index - 1];
+                const auto destructor =
+                    owner < module.types.size() ? module.types[owner].destructor : bytecode::InvalidIndex;
+                if (index - 1 < completedOwners && destructor != bytecode::InvalidIndex &&
+                    destructor < module.functions.size())
                 {
-                    Value receiver;
-                    std::unique_ptr<PlaceStorage> componentPlace;
-                    if (value.kind() == Value::Kind::Object)
-                        receiver = Value::objectBorrow(value.scalar_.aggregate);
-                    else
+                    try
                     {
-                        componentPlace = std::make_unique<PlaceStorage>();
-                        componentPlace->alias = &value;
-                        componentPlace->initialized = true;
-                        componentPlace->mutableValue = true;
-                        receiver = Value::place(componentPlace.get());
-                    }
+                        Value receiver;
+                        std::unique_ptr<PlaceStorage> componentPlace;
+                        if (value.kind() == Value::Kind::Object)
+                            receiver = Value::objectBorrow(value.scalar_.aggregate);
+                        else
+                        {
+                            componentPlace = std::make_unique<PlaceStorage>();
+                            componentPlace->alias = &value;
+                            componentPlace->initialized = true;
+                            componentPlace->mutableValue = true;
+                            receiver = Value::place(componentPlace.get());
+                        }
 
-                    const ExecutionResult destroyed = execute(destructor, std::span{&receiver, 1}, nullptr);
-                    if (!destroyed.succeeded())
+                        const ExecutionResult destroyed = execute(destructor, std::span{&receiver, 1}, nullptr);
+                        if (!destroyed.succeeded())
+                        {
+                            primaryError.cleanupFailures.push_back(
+                                {destroyed.error().code, destroyed.error().message, destroyed.error().stack});
+                            primaryError.cleanupFailures.insert(primaryError.cleanupFailures.end(),
+                                                                destroyed.error().cleanupFailures.begin(),
+                                                                destroyed.error().cleanupFailures.end());
+                        }
+                    }
+                    catch (const std::exception& error)
                     {
                         primaryError.cleanupFailures.push_back(
-                            {destroyed.error().code, destroyed.error().message, destroyed.error().stack});
-                        primaryError.cleanupFailures.insert(primaryError.cleanupFailures.end(),
-                                                            destroyed.error().cleanupFailures.begin(),
-                                                            destroyed.error().cleanupFailures.end());
+                            {"WVM1210", std::string{"VM destructor threw while unwinding: "} + error.what(), {}});
+                    }
+                    catch (...)
+                    {
+                        primaryError.cleanupFailures.push_back(
+                            {"WVM1210", "VM destructor threw a non-standard exception while unwinding", {}});
                     }
                 }
-                catch (const std::exception& error)
-                {
-                    primaryError.cleanupFailures.push_back(
-                        {"WVM1210", std::string{"VM destructor threw while unwinding: "} + error.what(), {}});
-                }
-                catch (...)
-                {
-                    primaryError.cleanupFailures.push_back(
-                        {"WVM1210", "VM destructor threw a non-standard exception while unwinding", {}});
-                }
+                // Match native subobject teardown: derived fields are released
+                // after the derived body, before invoking the base destructor.
+                if (layout && owner < module.types.size())
+                    for (std::size_t fieldIndex = module.types[owner].fields.size(); fieldIndex > 0; --fieldIndex)
+                        if (auto* field = value.mutableField(layout->offsets.at(owner) + fieldIndex - 1))
+                        {
+                            auto child = std::move(*field);
+                            *field = {};
+                            cleanupValue(child, primaryError);
+                        }
             }
         }
 
@@ -1464,6 +1488,12 @@ namespace wio::vm
             return;
         }
 
+        std::string layoutError;
+        if (!program_->objectLayouts.build(module, layoutError))
+        {
+            program_->loadError = {"WVM1241", std::move(layoutError)};
+            return;
+        }
         program_->functions.resize(module.functions.size());
         for (const bytecode::Function& function : module.functions)
         {
@@ -2719,6 +2749,30 @@ namespace wio::vm
             }
             else if (continuation.completion == FrameCompletion::ContinueConstruction)
             {
+                if (!continuation.constructionFunctions.empty())
+                {
+                    const auto& self = continuation.nextArguments.front();
+                    if (continuation.nextConstruction == continuation.constructionFunctions.size())
+                    {
+                        self.setObjectConstructionLimit(std::numeric_limits<std::size_t>::max());
+                        return std::nullopt;
+                    }
+                    const auto step = continuation.constructionFunctions[continuation.nextConstruction++];
+                    const auto target = step.function;
+                    if (target >= module.functions.size())
+                        return failWithStack({"WVM1074", "Construction chain references an invalid function"});
+                    const auto* layout = program_->objectLayouts.get(self.aggregateType());
+                    self.setObjectConstructionLimit(step.ownerIndex + 1 == layout->constructionOwners.size()
+                                                        ? std::numeric_limits<std::size_t>::max()
+                                                        : step.ownerIndex);
+                    const std::vector<Value> values = module.functions[target].parameters.size() == 1
+                                                          ? std::vector<Value>{continuation.nextArguments.front()}
+                                                          : continuation.nextArguments;
+                    auto pushed = pushFrame(module.functions[target], values, std::move(continuation));
+                    if (!pushed.succeeded())
+                        return pushed;
+                    return std::nullopt;
+                }
                 if (continuation.nextFunction >= module.functions.size())
                     return failWithStack({"WVM1074", "Construction continuation references an invalid function",
                                           caller.function->id, caller.block->id});
@@ -4359,7 +4413,19 @@ namespace wio::vm
 
                 auto storage = std::make_unique<PlaceStorage>();
                 storage->owner = *aggregate;
-                storage->alias = storage->owner.mutableField(instruction.projectionIndex);
+                std::size_t fieldIndex = instruction.projectionIndex;
+                if (aggregate->objectIdentity())
+                {
+                    const auto* layout = program_->objectLayouts.get(aggregate->aggregateType());
+                    if (!layout)
+                        return fail("WVM1065", "Object has no field layout");
+                    const auto offset = layout->offsets.find(instruction.targetType);
+                    if (offset == layout->offsets.end() || instruction.targetType >= module.types.size() ||
+                        fieldIndex >= module.types[instruction.targetType].fields.size())
+                        return fail("WVM1065", "Field owner is outside the concrete object hierarchy");
+                    fieldIndex += offset->second;
+                }
+                storage->alias = storage->owner.mutableField(fieldIndex);
                 storage->initialized = storage->alias && !storage->alias->isEmpty();
                 storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
                 if (!storage->alias)
@@ -4461,10 +4527,13 @@ namespace wio::vm
                 else
                 {
                     std::vector<Value> fields;
-                    fields.reserve(type.fields.size());
-                    for (const auto& field : type.fields)
+                    const auto* objectLayout = object ? program_->objectLayouts.get(instruction.resultType) : nullptr;
+                    const std::size_t count = objectLayout ? objectLayout->fieldTypes.size() : type.fields.size();
+                    fields.reserve(count);
+                    for (std::size_t index = 0; index < count; ++index)
                     {
-                        auto initialized = runtimeDefaultValue(module, field.type, *layouts);
+                        const auto fieldType = objectLayout ? objectLayout->fieldTypes[index] : type.fields[index].type;
+                        auto initialized = runtimeDefaultValue(module, fieldType, *layouts);
                         if (!initialized.succeeded())
                             return fail("WVM1223", initialized.error);
                         program_->pinNativeLibraries(initialized.value);
@@ -4530,6 +4599,32 @@ namespace wio::vm
                     constructor != bytecode::InvalidIndex &&
                     (initializer == bytecode::InvalidIndex || module.functions[constructor].parameters.size() > 1);
                 ++frame.instruction;
+                if (object)
+                {
+                    const auto* layout = program_->objectLayouts.get(instruction.resultType);
+                    if (!layout->baseInitializers.empty())
+                    {
+                        auto functions = layout->baseInitializers;
+                        const auto ownIndex = layout->constructionOwners.size() - 1;
+                        if (initializer != bytecode::InvalidIndex)
+                            functions.push_back({initializer, ownIndex});
+                        if (invokeConstructor)
+                            functions.push_back({constructor, ownIndex});
+                        const auto first = functions.front().function;
+                        self.setObjectConstructionLimit(functions.front().ownerIndex);
+                        FrameContinuation continuation{.completion = FrameCompletion::ContinueConstruction,
+                                                       .nextArguments = constructorArguments,
+                                                       .constructionFunctions = std::move(functions),
+                                                       .nextConstruction = 1};
+                        const std::vector<Value> values = module.functions[first].parameters.size() == 1
+                                                              ? std::vector<Value>{self}
+                                                              : constructorArguments;
+                        auto pushed = pushFrame(module.functions[first], values, std::move(continuation));
+                        if (!pushed.succeeded())
+                            return pushed;
+                        continue;
+                    }
+                }
                 if (initializer != bytecode::InvalidIndex)
                 {
                     FrameContinuation continuation{.completion = invokeConstructor

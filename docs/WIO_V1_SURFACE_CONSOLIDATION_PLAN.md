@@ -95,6 +95,11 @@ host-visible. No silent compatibility coercion masks an old return type.
   design decision.
 - Do not remove unrelated language uses of a token merely because it also
   appeared in an old attribute grammar.
+- Built-in canonical names and their existing aliases remain accepted inside
+  bracket attributes: `[Native, CppName("engine::Tick")]` and
+  `[native, cpp::name("engine::Tick")]` resolve to the same contracts. The
+  2026-10-09 decision retains these names; retiring attachment syntax does not
+  retire built-in name aliases or make user attributes case-insensitive.
 - A dedicated migration tool may still recognize legacy source as input and
   rewrite it; this is not permission for the v1 compiler to accept it.
 

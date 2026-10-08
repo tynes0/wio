@@ -618,6 +618,30 @@ namespace wio::wir::typed
                  binding.symbol == "wio::runtime::EnumTryFromRaw" || binding.symbol == "wio::runtime::EnumFromRaw");
             for (const Ref<sema::Type>& parameter : functionType.paramTypes)
                 binding.parameters.push_back(nativeAbiValue(mapType(parameter, &declaration), false));
+            if (!function.genericParameters.empty() && !binding.explicitTemplateArguments)
+            {
+                std::unordered_set<std::uint32_t> deducible;
+                std::vector<TypeId> pending;
+                for (const auto& parameter : binding.parameters)
+                    pending.push_back(parameter.type);
+                while (!pending.empty())
+                {
+                    const auto id = pending.back();
+                    pending.pop_back();
+                    if (!id || !deducible.insert(id.value()).second)
+                        continue;
+                    const auto& type = result_.module_.types.get(id);
+                    pending.insert(pending.end(), type.arguments.begin(), type.arguments.end());
+                    if (type.extentParameter)
+                        pending.push_back(type.extentParameter);
+                }
+                // A native template parameter absent from every argument
+                // cannot be deduced by C++. Pin all selected arguments instead
+                // of silently dropping unused type/const identity parameters.
+                binding.explicitTemplateArguments =
+                    std::ranges::any_of(function.genericParameters,
+                                        [&](TypeId parameter) { return !deducible.contains(parameter.value()); });
+            }
             for (std::size_t index = 0; index < declaration.parameters.size() && index < binding.parameters.size();
                  ++index)
             {

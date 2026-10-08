@@ -262,6 +262,8 @@ namespace wio::codegen
                 {
                     common::profiling::Scope scope("Backend.Cpp.EmitNominals");
                     nativeProxyTypes_ = WirNativeObjectEmitter::eligibleTypes(module_);
+                    nativeProxyHierarchyTypes_ =
+                        WirNativeObjectEmitter::hostedHierarchyTypes(module_, nativeProxyTypes_);
                     emitNominalDeclarations();
                 }
                 {
@@ -327,6 +329,7 @@ namespace wio::codegen
             std::unordered_set<std::uint32_t> directValues_;
             std::unordered_set<std::uint32_t> structuralAliases_;
             std::set<TypeId> nativeProxyTypes_;
+            std::set<TypeId> nativeProxyHierarchyTypes_;
             mutable std::vector<std::uint8_t> openTypeCache_;
             mutable std::vector<std::string> cppTypeCache_;
             mutable std::vector<std::uint8_t> cppTypeCacheReady_;
@@ -1224,6 +1227,7 @@ namespace wio::codegen
                 output_ << R"CPP(
 namespace wio::wir_backend {
 struct SkipConstructor {};
+struct SkipHostedConstructor {};
 template<class To, class From> To numeric_fit(const From value) {
     if constexpr (std::is_same_v<To, bool>) {
         return value != From{};
@@ -1592,14 +1596,15 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     {
                         const auto& function = *functions_.at(type.destructor.value());
                         output_ << objectName(id) << "::~" << objectName(id) << "() { "
-                                << (nativeProxyTypes_.contains(id) ? "if (!_wio_hosted_proxy) " : "")
+                                << (nativeProxyHierarchyTypes_.contains(id) ? "if (!_wio_hosted_proxy) " : "")
                                 << functionName(function.id) << "(" << cppType(function.parameters.front().type)
                                 << "::raw(this)); }\n";
                     }
                     if ((type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface) &&
-                        type.defaultConstructor)
+                        (type.defaultConstructor || type.fieldInitializer))
                     {
-                        const auto& function = *functions_.at(type.defaultConstructor.value());
+                        const auto& function = *functions_.at(
+                            (type.fieldInitializer ? type.fieldInitializer : type.defaultConstructor).value());
                         output_ << objectName(id) << "::" << objectName(id) << "() { " << functionName(function.id)
                                 << "(" << cppType(function.parameters.front().type) << "::raw(this)); }\n";
                     }
@@ -1743,7 +1748,7 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                     << objectName(base);
                     }
                     output_ << " {\n";
-                    if (nativeProxyTypes_.contains(id))
+                    if (nativeProxyHierarchyTypes_.contains(id))
                         output_ << "    bool _wio_hosted_proxy = false;\n";
                     for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
                         output_ << "    " << cppType(type.fields[fieldIndex].type) << " _f" << fieldIndex << "{}; // "
@@ -1793,12 +1798,20 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                         for (const MethodLayout& method : type.methods)
                         {
                             const lowered::Function* function = concreteMethod(method);
-                            if (!function || method.visibility != FieldVisibility::Public)
+                            if (!function && nativeProxyHierarchyTypes_.contains(id))
+                            {
+                                const auto declaration = functions_.find(method.function.value());
+                                if (declaration != functions_.end() && declaration->second->isAbstract &&
+                                    !functionIsOpen(*declaration->second) && !declaration->second->parameters.empty())
+                                    function = declaration->second;
+                            }
+                            if (!function || (method.visibility != FieldVisibility::Public &&
+                                              type.nominalKind != NominalKind::Interface))
                                 continue;
                             const std::string name = legacyMethodName(method, *function);
                             if (!emittedLegacyMethods.insert(name).second)
                                 continue;
-                            output_ << "    " << (nativeProxyTypes_.contains(id) ? "virtual " : "")
+                            output_ << "    " << (nativeProxyHierarchyTypes_.contains(id) ? "virtual " : "")
                                     << cppType(function->returnType) << ' ' << name << '(';
                             for (std::size_t parameterIndex = 1; parameterIndex < function->parameters.size();
                                  ++parameterIndex)
@@ -1808,12 +1821,30 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                 output_ << cppType(function->parameters[parameterIndex].type) << " _a"
                                         << (parameterIndex - 1);
                             }
-                            output_ << ");\n";
+                            output_ << (function->isAbstract ? ") = 0;\n" : ");\n");
                         }
                         if (type.destructor)
                             output_ << "    ~" << objectName(id) << "() override;\n";
-                        output_ << "    " << objectName(id) << (type.defaultConstructor ? "();\n" : "() = default;\n");
+                        output_ << "    " << objectName(id)
+                                << (type.defaultConstructor || type.fieldInitializer ? "();\n" : "() = default;\n");
                         output_ << "    explicit " << objectName(id) << "(wio::wir_backend::SkipConstructor) {}\n";
+                        if (nativeProxyHierarchyTypes_.contains(id))
+                        {
+                            output_ << "    explicit " << objectName(id) << "(wio::wir_backend::SkipHostedConstructor)";
+                            std::set<TypeId> bases(type.baseTypes.begin(), type.baseTypes.end());
+                            const auto hierarchy = WirNativeObjectEmitter::hostedHierarchyTypes(module_, {id});
+                            for (auto ancestor : hierarchy)
+                                if (ancestor != id && module_.types.get(ancestor).nominalKind == NominalKind::Interface)
+                                    bases.insert(ancestor); // Most-derived constructor owns virtual bases.
+                            bool first = true;
+                            for (auto base : bases)
+                            {
+                                output_ << (first ? " : " : ", ") << objectName(base)
+                                        << "(wio::wir_backend::SkipHostedConstructor{})";
+                                first = false;
+                            }
+                            output_ << " { _wio_hosted_proxy = true; }\n";
+                        }
                         if (type.nominalValueModel == NominalValueModel::Option && type.fields.size() >= 2 &&
                             !type.arguments.empty())
                         {

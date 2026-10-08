@@ -153,6 +153,9 @@ here does not by itself mean that v1 cannot ship.
     remove compiler compatibility for `@Attribute(...)` and postfix attribute
     `with ...` after source migration. Preserve scoped `using`, including
     `using cpp::header(...)`, typed composition/processors and reflection.
+    Built-in canonical names and their existing short aliases remain supported
+    inside brackets (for example Native/native and CppName/cpp::name). Alias
+    normalization is not case-insensitive user-attribute lookup.
     Migrate std/CLI/SDK, tests, examples, generators, formatter and maintained
     IDE/docs surfaces; reject obsolete spellings with actionable diagnostics.
     This is an accepted v1 blocker, not implemented by this planning note.
@@ -774,8 +777,20 @@ Rider, and CLion are defined in
    declarations, recursive openness and format compatibility. Variadic/partial
    specialization and generic method templates remain unqualified at this boundary.
    The concrete-generic gate passed locally on Windows (1/1, 15.25 seconds).
-   Field synchronization, inheritance/interface and SDK/reflection routing
-   remain pending; this does not close object parity.
+   Concrete hosted object hierarchies now preserve inherited private scalar/
+   string/text storage and route native C++ base/interface pointer calls to the
+   concrete VM override. The Base/Derived/Leaf gate covers repeated interface
+   paths, inherited method identity, direct super calls, constructor/destructor
+   order, weak expiration and VM partial-construction cleanup. Owner-local WIR
+   fields map to cached VM offsets; base initialization plans are cached, while
+   flat construction retains its existing fast path. Hosted C++ placeholders
+   suppress lifecycle bodies throughout the hierarchy. Non-deducible native
+   template parameters retain their explicit selected arguments.
+   The hierarchy gate passed locally on Windows (1/1, 16.35 seconds), comparing
+   normal generated C++/VM execution and exercising the live host. Constructor
+   failure injection is VM-host qualification, not differential C++ coverage.
+   Polymorphic Base/interface-typed ABI parameters/results, field synchronization
+   and SDK/reflection routing remain pending; this does not close object parity.
    Remaining native parity work includes broader VM-created object signatures,
    object/interface/Box and nullable/generic any payloads, any-bearing containers,
    alias identity canonicalization; POD/object/container/nullable and

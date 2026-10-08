@@ -237,6 +237,9 @@ namespace wio::vm
         [[nodiscard]] Value* mutableField(std::size_t index) noexcept;
         [[nodiscard]] Value cloneOwned() const;
         [[nodiscard]] Value retainObject() const noexcept;
+        // Prefix of completed inheritance owners; max means fully constructed.
+        [[nodiscard]] std::size_t objectConstructionLimit() const noexcept;
+        void setObjectConstructionLimit(std::size_t limit) const noexcept;
         [[nodiscard]] std::vector<Value> takeOwnedChildrenForCleanup();
         [[nodiscard]] std::vector<Value> takeTaskArgumentsForCleanup() const;
         bool beginTask() const noexcept;

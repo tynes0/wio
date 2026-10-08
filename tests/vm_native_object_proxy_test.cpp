@@ -1,5 +1,7 @@
 #include "native_bridge_internal.h"
 #include "native_object_internal.h"
+#include "object_layout_internal.h"
+#include "wio/ast/attribute_contract.h"
 #include "wio/bytecode/codec.h"
 #include "wio/bytecode/verifier.h"
 #include "wio/codegen/wir_native_object_emitter.h"
@@ -256,7 +258,31 @@ namespace
         rejects([&](auto& trial) { trial.contract.reflection[0].methods[0].stableId = 0; },
                 "method without stable identity was proxied");
         rejects([&](auto& trial) { trial.types.getMutable(object).baseTypes = {object}; },
-                "unqualified inheritance was silently proxied");
+                "cyclic inheritance was silently proxied");
+        {
+            auto trial = module;
+            const auto base = trial.types.intern(Type{.kind = TypeKind::Named,
+                                                      .name = "Base",
+                                                      .nominalKind = NominalKind::Object,
+                                                      .nominalRepresentation = NominalRepresentation::Wio,
+                                                      .fields = {{.name = "seed", .type = integer}}});
+            const auto contract = trial.types.intern(Type{.kind = TypeKind::Named,
+                                                          .name = "IRead",
+                                                          .nominalKind = NominalKind::Interface,
+                                                          .nominalRepresentation = NominalRepresentation::Wio});
+            trial.types.getMutable(object).baseTypes = {base, contract};
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "qualified concrete hierarchy was rejected");
+            check(Emitter::hostedHierarchyTypes(trial, {object}) == std::set{object, base, contract},
+                  "hosted lifecycle/wrapper closure lost non-materialized ancestors");
+            trial.types.getMutable(base).fields[0].visibility = FieldVisibility::Public;
+            check(Emitter::eligibleTypes(trial).empty(), "public ancestor field exposed an unsynchronized projection");
+            trial.types.getMutable(base).fields[0].visibility = FieldVisibility::Private;
+            trial.types.getMutable(base).fields[0].type = object;
+            check(Emitter::eligibleTypes(trial).empty(), "ancestor object field ran a dummy lifecycle");
+            trial.types.getMutable(base).fields[0].type = integer;
+            trial.types.getMutable(base).baseTypes = {object};
+            check(Emitter::eligibleTypes(trial).empty(), "indirect hierarchy cycle was proxied");
+        }
         rejects([&](auto& trial) { trial.functions[1].nativeBinding.reset(); },
                 "object without a native boundary emitted an unused proxy");
     }
@@ -859,6 +885,214 @@ namespace
               "nullable factory failure lost or repeated returned-object destruction");
         check(call(registry, "vm_object_nullable::ClearCapture", {}, cleared.value) == WIO_NATIVE_ABI_OK,
               "nullable factory failure receiver cleanup failed");
+        return 0;
+    }
+
+    int qualifyHierarchy(const char* bytecode, const char* producer)
+    {
+        {
+            const std::array aliases{std::pair{"ReadOnly", "readonly"},
+                                     std::pair{"Default", "default"},
+                                     std::pair{"NoDefaultCtor", "no_default_ctor"},
+                                     std::pair{"GenerateCtors", "generate_ctors"},
+                                     std::pair{"From", "from"},
+                                     std::pair{"From", "conversion::from"},
+                                     std::pair{"Trust", "trust"},
+                                     std::pair{"Final", "final"},
+                                     std::pair{"Type", "type"},
+                                     std::pair{"Type", "abi::type"},
+                                     std::pair{"Native", "native"},
+                                     std::pair{"CppHeader", "cpp::header"},
+                                     std::pair{"CppName", "cpp::name"},
+                                     std::pair{"Instantiate", "instantiate"},
+                                     std::pair{"Specialize", "specialize"},
+                                     std::pair{"Apply", "apply"},
+                                     std::pair{"Export", "export"},
+                                     std::pair{"Export", "export::c"},
+                                     std::pair{"Command", "command"},
+                                     std::pair{"Event", "event"},
+                                     std::pair{"ModuleApiVersion", "module::api_version"},
+                                     std::pair{"ModuleLoad", "module::load"},
+                                     std::pair{"ModuleUpdate", "module::update"},
+                                     std::pair{"ModuleUnload", "module::unload"},
+                                     std::pair{"ModuleSaveState", "module::save_state"},
+                                     std::pair{"ModuleRestoreState", "module::restore_state"},
+                                     std::pair{"Start", "application::start"},
+                                     std::pair{"Update", "application::update"},
+                                     std::pair{"Close", "application::close"},
+                                     std::pair{"Fixed", "application::fixed"},
+                                     std::pair{"After", "application::after"},
+                                     std::pair{"Main", "application::main"},
+                                     std::pair{"Worker", "application::worker"}};
+            for (const auto& [name, alias] : aliases)
+            {
+                const auto canonical = wio::resolveBuiltinAttribute(std::string{"std::attribute::"} + name);
+                check(canonical && wio::resolveBuiltinAttribute(name) == canonical &&
+                          wio::resolveBuiltinAttribute(alias) == canonical,
+                      "a canonical built-in attribute and its alias resolved to different contracts");
+            }
+            check(!wio::resolveBuiltinAttribute("NATIVE"), "built-in aliases became unrestricted case folding");
+        }
+        {
+            bc::Module graph;
+            graph.types = {{.kind = 28, .nominalKind = 3},
+                           {.kind = 28, .nominalKind = 2, .baseTypes = {0}, .fields = {{.type = 4}}},
+                           {.kind = 28, .nominalKind = 2, .baseTypes = {1, 0}, .fields = {{.type = 4}}},
+                           {.kind = 28, .nominalKind = 2, .baseTypes = {2}},
+                           {.kind = 8}};
+            bridge::ObjectLayouts layouts;
+            std::string error;
+            check(layouts.build(graph, error), "valid object layout graph rejected");
+            const auto* leaf = layouts.get(3);
+            check(leaf && leaf->fieldTypes.size() == 2 && leaf->offsets.at(1) != leaf->offsets.at(2) &&
+                      leaf->constructionOwners == std::vector<std::uint32_t>({0, 1, 2, 3}),
+                  "object layout overlapped base fields or repeated diamond owners");
+            graph.types[0].baseTypes = {3};
+            check(!layouts.build(graph, error), "cyclic object layout graph accepted");
+            graph.types[0].baseTypes = {bc::InvalidIndex};
+            check(!layouts.build(graph, error), "invalid base layout index accepted");
+            graph.types[0].baseTypes = {4};
+            check(!layouts.build(graph, error), "non-nominal inheritance base accepted");
+            check(!layouts.get(3), "failed graph validation published a partial layout");
+            graph.types.assign(129, bc::Type{.kind = 28, .nominalKind = 2});
+            for (std::uint32_t index = 1; index < graph.types.size(); ++index)
+                graph.types[index].baseTypes = {index - 1};
+            check(!layouts.build(graph, error), "cached bases bypassed the inheritance depth limit");
+            graph.types.pop_back();
+            check(layouts.build(graph, error), "128-level inheritance boundary rejected");
+        }
+        std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
+        const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        auto decoded = bc::decode(std::as_bytes(std::span{bytes.data(), bytes.size()}));
+        check(decoded.succeeded(), "hierarchy bytecode decode failed");
+        Library library{std::filesystem::u8path(producer)};
+        const auto getObjects = library.symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
+        const auto getRegistry = library.symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
+        check(getObjects && getObjects()->typeCount == 2 && getRegistry, "concrete hierarchy adapters missing");
+        const auto& api = *getObjects();
+        const auto& registry = *getRegistry();
+        wio::vm::Machine machine{decoded.module};
+        std::string error;
+        check(machine.loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+        const auto invoke = [&](const char* name)
+        {
+            const auto function = std::ranges::find_if(decoded.module.functions, [&](const auto& item)
+                                                       { return decoded.module.string(item.name) == name; });
+            check(function != decoded.module.functions.end(), "hierarchy entry missing");
+            auto result = machine.invoke(function->id);
+            if (!result.succeeded())
+                throw std::runtime_error(result.error().code + ": " + result.error().message);
+            return result;
+        };
+        check(invoke("Entry").value().asSignedInteger() == 0, "native base/interface dispatch or lifecycle failed");
+        std::uint64_t inheritedMethod = 0;
+        std::set<std::uint64_t> concreteTypes;
+        const std::array entries{"CaptureDerivedEntry", "CaptureLeafEntry"};
+        for (std::size_t index = 0; index < entries.size(); ++index)
+        {
+            Wire reset;
+            check(call(registry, "vm_object_hierarchy::ResetOrder", {}, reset.value) == WIO_NATIVE_ABI_OK,
+                  "hierarchy order reset failed");
+            const auto captured = invoke(entries[index]);
+            const auto token = *reinterpret_cast<const WioNativeObjectHost*>(captured.value().asUnsignedInteger());
+            const auto adapters = std::span{api.types, api.typeCount};
+            const auto adapter = std::ranges::find(adapters, token.typeId, &WioNativeObjectDescriptor::typeId);
+            check(adapter != adapters.end(), "captured concrete hierarchy adapter missing");
+            const auto reflected =
+                std::ranges::find(decoded.module.contract.reflection, token.typeId, &bc::Reflection::stableTypeId);
+            check(reflected != decoded.module.contract.reflection.end(), "hierarchy reflection missing");
+            const auto methodId = [&](const char* name)
+            {
+                const auto method = std::ranges::find_if(reflected->methods, [&](const auto& item)
+                                                         { return decoded.module.string(item.name) == name; });
+                check(method != reflected->methods.end(), "inherited reflected method missing");
+                return method->stableId;
+            };
+            check(concreteTypes.insert(token.typeId).second, "different concrete types shared a type identity");
+            if (index == 0)
+                inheritedMethod = methodId("BaseOnly");
+            else
+                check(methodId("BaseOnly") == inheritedMethod,
+                      "an unchanged inherited declaration lost its stable method identity");
+            Wire proxy;
+            check(adapter->create(&token, &proxy.value, nullptr) == WIO_NATIVE_ABI_OK,
+                  "secondary hierarchy proxy creation failed");
+            WioNativeObjectHost recovered{};
+            check(adapter->host(&proxy.value, &recovered, nullptr) == WIO_NATIVE_ABI_OK &&
+                      recovered.owner.state == token.owner.state && recovered.objectId == token.objectId,
+                  "hierarchy proxy recovered a different host");
+            Wire read;
+            check(token.invoke(&token, methodId("Read"), nullptr, 0, &read.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                      read.value.payload.signedInteger == (index ? 137 : 37),
+                  "leaf/derived override dispatched to a base declaration");
+            WioNativeAbiValue amount{};
+            amount.kind = WIO_NATIVE_ABI_I64;
+            amount.payload.signedInteger = 2;
+            Wire base;
+            check(token.invoke(&token, methodId("BaseOnly"), &amount, 1, &base.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                      base.value.payload.signedInteger == 9,
+                  "inherited method did not update original base field storage");
+            Wire super;
+            check(token.invoke(&token, methodId("BaseRead"), nullptr, 0, &super.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                      super.value.payload.signedInteger == 9,
+                  "super call accidentally redispatched through the override");
+            Weak weak;
+            check(adapter->weak(&proxy.value, &weak.value, nullptr) == WIO_NATIVE_ABI_OK,
+                  "hierarchy proxy weak storage failed");
+            Wire cleared;
+            check(call(registry, "vm_object_hierarchy::ClearCapture", {}, cleared.value) == WIO_NATIVE_ABI_OK,
+                  "hierarchy capture cleanup failed");
+            WioNativeAbiReleaseValue(&proxy.value);
+            invoke("SafePoint");
+            Wire expired;
+            check(adapter->lock(&weak.value, &expired.value, nullptr) == WIO_NATIVE_ABI_STALE_HANDLE &&
+                      expired.value.kind == WIO_NATIVE_ABI_VOID,
+                  "hierarchy proxy weak storage kept a host claim alive");
+            check(scalar(registry, "vm_object_hierarchy::Order") == (index ? 321 : 21),
+                  "hosted base/derived destructors were skipped, duplicated or reordered");
+        }
+        for (std::int32_t kind = 0; kind < 3; ++kind)
+        {
+            WioNativeAbiValue argument{};
+            argument.kind = WIO_NATIVE_ABI_I64;
+            argument.payload.signedInteger = kind;
+            const auto arguments = std::span{&argument, 1};
+            const auto count = kind == 2 ? 31 : 62;
+            check(scalar(registry, "vm_object_hierarchy::Constructions", arguments) == count &&
+                      scalar(registry, "vm_object_hierarchy::Destructions", arguments) == count,
+                  "hierarchy proxy ran a duplicate constructor/destructor body");
+        }
+        const auto findFunction = [&](const char* name)
+        {
+            const auto found = std::ranges::find_if(decoded.module.functions, [&](const auto& item)
+                                                    { return decoded.module.string(item.name) == name; });
+            check(found != decoded.module.functions.end(), "failure-path entry missing");
+            return found->id;
+        };
+        const auto failConstruction = [&](const char* entry, std::int32_t failingKind, std::int32_t order)
+        {
+            Wire ignored;
+            check(call(registry, "vm_object_hierarchy::ResetOrder", {}, ignored.value) == WIO_NATIVE_ABI_OK,
+                  "failure-path order reset failed");
+            WioNativeAbiValue kind{};
+            kind.kind = WIO_NATIVE_ABI_I64;
+            kind.payload.signedInteger = failingKind;
+            const auto args = std::span{&kind, 1};
+            check(call(registry, "vm_object_hierarchy::SetFailure", args, ignored.value) == WIO_NATIVE_ABI_OK,
+                  "constructor failure injection failed");
+            const auto failed = machine.invoke(findFunction(entry));
+            kind.payload.signedInteger = -1;
+            check(call(registry, "vm_object_hierarchy::SetFailure", args, ignored.value) == WIO_NATIVE_ABI_OK,
+                  "constructor failure reset failed");
+            check(!failed.succeeded() && failed.error().cleanupFailures.empty(),
+                  "constructor failure escaped or generated a secondary cleanup failure");
+            check(scalar(registry, "vm_object_hierarchy::Order") == order,
+                  "partial construction destroyed an incomplete base or skipped a completed owner");
+        };
+        failConstruction("CaptureDerivedEntry", 0, 0);
+        failConstruction("CaptureDerivedEntry", 1, 21);
+        failConstruction("CaptureLeafEntry", 1, 1);
+        failConstruction("CaptureLeafEntry", 2, 321);
         return 0;
     }
 
@@ -1590,6 +1824,8 @@ int main(int argc, char** argv)
     {
         check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4 && std::string_view(argv[3]) == "hierarchy")
+            return qualifyHierarchy(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "concrete-generics")
             return qualifyConcreteGenerics(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "borrowed-results")

@@ -1,0 +1,73 @@
+using cpp::header("vm_object_hierarchy_fixture.h");
+use std::attribute as attribute;
+
+interface IRead { fn Read() -> i32; }
+interface IWrite { fn Set(value: i32); }
+
+[From(IRead)]
+object Base {
+    seed: i32 = 5;
+    public OnConstruct() { self.seed += 2; Constructed(0); }
+    OnDestruct() { Destroyed(0); }
+    public fn Read() -> i32 { return self.seed; }
+    public fn BaseOnly(amount: i32) -> i32 { self.seed += amount; return self.seed; }
+}
+
+[From(Base), From(IRead), From(IWrite)]
+object Derived {
+    value: i32;
+    public OnConstruct() { self.value = 37; Constructed(1); }
+    OnDestruct() { Destroyed(1); }
+    public fn Read() -> i32 { return self.value; }
+    public fn Set(value: i32) { self.value = value; }
+    public fn BaseRead() -> i32 { return super.Read(); }
+}
+
+[From(Derived)]
+object Leaf {
+    public OnConstruct() { Constructed(2); }
+    OnDestruct() { Destroyed(2); }
+    public fn Read() -> i32 { return super.Read() + 100; }
+}
+
+[native, cpp::name(vm_object_hierarchy::Constructed)] fn Constructed(kind: i32);
+[Native, CppName(vm_object_hierarchy::Destroyed)] fn Destroyed(kind: i32);
+[Native, CppName(vm_object_hierarchy::Constructions)] fn Constructions(kind: i32) -> i32;
+[Native, CppName(vm_object_hierarchy::Destructions)] fn Destructions(kind: i32) -> i32;
+[Native, CppName(vm_object_hierarchy::Order)] fn Order() -> i32;
+[Native, CppName(vm_object_hierarchy::ResetOrder)] fn ResetOrder();
+[Native, CppName(vm_object_hierarchy::SetFailure)] fn SetFailure(kind: i32);
+[Native, CppName(vm_object_hierarchy::Capture)] fn CaptureDerived(value: Derived) -> u64;
+[Native, CppName(vm_object_hierarchy::Capture)] fn CaptureLeaf(value: Leaf) -> u64;
+[Native, CppName(vm_object_hierarchy::ClearCapture)] fn ClearCapture();
+[Native, CppName(vm_object_hierarchy::Exercise), Instantiate(Derived, Base, IRead, IWrite),
+ Instantiate(Leaf, Base, IRead, IWrite)]
+fn Exercise<D, B, R, W>(value: D) -> i32;
+
+fn CaptureDerivedEntry() -> u64 { return CaptureDerived(Derived()); }
+fn CaptureLeafEntry() -> u64 { return CaptureLeaf(Leaf()); }
+fn SafePoint() -> i32 { return 0; }
+fn Entry() -> i32 {
+    mut round = 0;
+    while (round < 30) {
+        ResetOrder();
+        {
+            let derived = Derived();
+            let result = Exercise<Derived, Base, IRead, IWrite>(derived);
+            if (result != 0) { return 10 + result; }
+        }
+        if (Order() != 21) { return 2; }
+        ResetOrder();
+        {
+            let leaf = Leaf();
+            let result = Exercise<Leaf, Base, IRead, IWrite>(leaf);
+            if (result != 0) { return 30 + result; }
+        }
+        if (Order() != 321) { return 4; }
+        round += 1;
+    }
+    if (Constructions(0) != 60 or Destructions(0) != 60 or
+        Constructions(1) != 60 or Destructions(1) != 60 or
+        Constructions(2) != 30 or Destructions(2) != 30) { return 5; }
+    return 0;
+}

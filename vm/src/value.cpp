@@ -107,6 +107,9 @@ namespace wio::vm
         {
             if (kind == Value::Kind::Object)
             {
+                // Objects and iterators never share a storage kind. Reuse the
+                // iterator cursor slot for the partial-construction frontier.
+                cursor_ = std::numeric_limits<std::size_t>::max();
                 static std::atomic_uint64_t nextIdentity{1};
                 auto candidate = nextIdentity.load(std::memory_order_relaxed);
                 do
@@ -176,6 +179,11 @@ namespace wio::vm
         [[nodiscard]] std::size_t cursor() const noexcept
         {
             return cursor_;
+        }
+
+        void setCursor(std::size_t cursor) noexcept
+        {
+            cursor_ = cursor;
         }
 
         [[nodiscard]] std::size_t step() const noexcept
@@ -1290,6 +1298,17 @@ namespace wio::vm
     std::uint64_t Value::objectIdentity() const noexcept
     {
         return kind_ == Kind::Object || kind_ == Kind::ObjectBorrow ? scalar_.aggregate->objectIdentity : 0;
+    }
+
+    std::size_t Value::objectConstructionLimit() const noexcept
+    {
+        return kind_ == Kind::Object || kind_ == Kind::ObjectBorrow ? scalar_.aggregate->cursor() : 0;
+    }
+
+    void Value::setObjectConstructionLimit(std::size_t limit) const noexcept
+    {
+        if (kind_ == Kind::Object || kind_ == Kind::ObjectBorrow)
+            scalar_.aggregate->setCursor(limit);
     }
 
     std::vector<Value> Value::takeOwnedChildrenForCleanup()

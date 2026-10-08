@@ -61,6 +61,36 @@ namespace wio::codegen
                                        [&](TypeId argument) { return concreteArguments(types, argument, depth + 1); });
         }
 
+        bool supportedHierarchy(const lowered::Module& module, TypeId id, std::set<TypeId>& path,
+                                std::vector<unsigned>& heights)
+        {
+            const auto* type = module.types.tryGet(id);
+            if (type && heights[id.value()] != 0)
+                return path.size() + heights[id.value()] <= 64;
+            if (!type || path.size() >= 64 || !path.insert(id).second)
+                return false;
+            // Proxy placeholders must not run nested Wio lifecycle or expose
+            // stale native field projections, including inherited fields.
+            const bool supported =
+                type->kind == TypeKind::Named &&
+                (type->nominalKind == NominalKind::Object || type->nominalKind == NominalKind::Interface) &&
+                type->nominalRepresentation == NominalRepresentation::Wio && concreteArguments(module.types, id) &&
+                std::ranges::all_of(
+                    type->fields, [&](const auto& field)
+                    { return field.visibility != FieldVisibility::Public && wireValue(module, field.type); }) &&
+                std::ranges::all_of(type->baseTypes,
+                                    [&](TypeId base) { return supportedHierarchy(module, base, path, heights); });
+            if (supported)
+            {
+                unsigned height = 1;
+                for (const auto base : type->baseTypes)
+                    height = std::max(height, heights[base.value()] + 1);
+                heights[id.value()] = height;
+            }
+            path.erase(id);
+            return supported;
+        }
+
         // A returned borrow must name receiver/argument storage that survives
         // dispatch. Never advertise a global, projection, local or opaque call
         // result merely because its signature looks like a supported object.
@@ -186,6 +216,7 @@ namespace wio::codegen
         // Reject transitively: no proxy may advertise a method whose object
         // signature depends on a type that failed whole-surface qualification.
         std::size_t previousSize = 0;
+        std::vector<unsigned> hierarchyHeights(module.types.size());
         do
         {
             previousSize = candidates.size();
@@ -195,25 +226,9 @@ namespace wio::codegen
                 {
                     const auto& type = module.types.get(id);
                     const auto* reflected = reflection(module, id);
-                    const bool onlyRootBases = std::ranges::all_of(
-                        type.baseTypes,
-                        [&](TypeId base)
-                        {
-                            const auto& root = module.types.get(base);
-                            return root.kind == TypeKind::Named && root.nominalKind == NominalKind::Object &&
-                                   root.name == "object" && root.fields.empty() && root.methods.empty() &&
-                                   root.baseTypes.empty() && !root.defaultConstructor && !root.destructor;
-                        });
-                    if (!reflected || !reflected->stableTypeId || !concreteArguments(module.types, id) ||
-                        !onlyRootBases || type.nominalRepresentation != NominalRepresentation::Wio ||
-                        std::ranges::any_of(type.fields,
-                                            [&](const auto& field)
-                                            {
-                                                // Placeholder fields must not run nested Wio
-                                                // lifecycle or expose stale native projections.
-                                                return field.visibility == FieldVisibility::Public ||
-                                                       !wireValue(module, field.type);
-                                            }))
+                    std::set<TypeId> hierarchyPath;
+                    if (!reflected || !reflected->stableTypeId ||
+                        !supportedHierarchy(module, id, hierarchyPath, hierarchyHeights))
                         return true;
                     const auto supported = [&](FunctionId methodId)
                     {
@@ -254,6 +269,18 @@ namespace wio::codegen
         return reachable;
     }
 
+    std::set<wir::TypeId> WirNativeObjectEmitter::hostedHierarchyTypes(const wir::lowered::Module& module,
+                                                                       const std::set<wir::TypeId>& objects)
+    {
+        std::set<wir::TypeId> result = objects;
+        std::vector<wir::TypeId> pending(objects.begin(), objects.end());
+        for (std::size_t index = 0; index < pending.size(); ++index)
+            for (const auto base : module.types.get(pending[index]).baseTypes)
+                if (result.insert(base).second)
+                    pending.push_back(base);
+        return result;
+    }
+
     std::string WirNativeObjectEmitter::emit(const wir::lowered::Module& module, const std::set<wir::TypeId>& objects,
                                              const WirModuleEmitter::TypeSpelling& cpp,
                                              const MethodSpelling& legacyMethod)
@@ -270,7 +297,11 @@ namespace wio::codegen
             const auto proxy = "_native_object_proxy_" + std::to_string(id.value());
             out << "struct " << proxy << " final : wio::wir_backend::abi::HostObject<" << object << "> {\n"
                 << "    explicit " << proxy << "(const WioNativeObjectHost& host)\n"
-                << "        : HostObject(host, wio::wir_backend::SkipConstructor{}) { _wio_hosted_proxy = true; }\n";
+                << "        : HostObject(host, wio::wir_backend::SkipHostedConstructor{})";
+            for (const auto ancestor : hostedHierarchyTypes(module, {id}))
+                if (ancestor != id && module.types.get(ancestor).nominalKind == NominalKind::Interface)
+                    out << ", _wio_obj" << ancestor.value() << "(wio::wir_backend::SkipHostedConstructor{})";
+            out << " {}\n";
             const auto emitMethod = [&](const lowered::Function& method, const std::string& name)
             {
                 out << "    " << cpp(method.returnType) << ' ' << name << '(';

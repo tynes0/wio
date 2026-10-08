@@ -6,6 +6,9 @@ endforeach()
 
 file(MAKE_DIRECTORY "${WIO_OUTPUT_DIR}")
 set(source "${WIO_ROOT}/tests/vm_native_object_proxy.wio")
+if(WIO_OBJECT_HIERARCHY)
+    set(source "${WIO_ROOT}/tests/vm_native_object_hierarchy.wio")
+endif()
 if(WIO_OBJECT_METHOD_VALUES)
     set(source "${WIO_ROOT}/tests/vm_native_object_method_values.wio")
 endif()
@@ -56,7 +59,8 @@ if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Normal generated C++ object calls regressed (${result}): ${output}\n${error}")
 endif()
 if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERENCES OR WIO_OBJECT_METHOD_NULLABLE
-   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES OR WIO_OBJECT_METHOD_BORROWED_RESULTS OR WIO_OBJECT_CONCRETE_GENERICS)
+   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES OR WIO_OBJECT_METHOD_BORROWED_RESULTS OR WIO_OBJECT_CONCRETE_GENERICS
+   OR WIO_OBJECT_HIERARCHY)
     execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
         "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}" --native-library "${bridge}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
@@ -82,6 +86,9 @@ if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERE
     if(WIO_OBJECT_CONCRETE_GENERICS)
         set(hostMode concrete-generics)
     endif()
+    if(WIO_OBJECT_HIERARCHY)
+        set(hostMode hierarchy)
+    endif()
     execute_process(COMMAND "${WIO_OBJECT_PROXY_EXECUTABLE}" "${bytecode}" "${bridge}" "${hostMode}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
     if(NOT "${result}" STREQUAL "0")
@@ -89,7 +96,8 @@ if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERE
     endif()
 endif()
 if(WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERENCES OR WIO_OBJECT_METHOD_NULLABLE
-   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES OR WIO_OBJECT_METHOD_BORROWED_RESULTS OR WIO_OBJECT_CONCRETE_GENERICS)
+   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES OR WIO_OBJECT_METHOD_BORROWED_RESULTS OR WIO_OBJECT_CONCRETE_GENERICS
+   OR WIO_OBJECT_HIERARCHY)
     message(STATUS "Generated C++/VM object method qualification passed")
     return()
 endif()
