@@ -8,7 +8,7 @@ namespace wio::wir_backend::abi
 {
     // Each codec can acquire an owned wire. Incremental initialization keeps
     // earlier arguments guarded if a later conversion or host call throws.
-    template <std::size_t Count> class ObjectArguments final
+    template <std::size_t Count> class ObjectArguments
     {
     public:
         ObjectArguments() = default;
@@ -30,6 +30,56 @@ namespace wio::wir_backend::abi
 
     private:
         std::array<WioNativeAbiValue, Count> values_{};
+    };
+
+    // Only borrowed signatures need tagged reference cells and copy-back state.
+    template <std::size_t Count> class ObjectReferences final : public ObjectArguments<Count>
+    {
+    public:
+        ~ObjectReferences()
+        {
+            for (auto& token : tokens_)
+                WioNativeAbiReleaseValue(&token);
+        }
+        template <class T, std::uint64_t Id, class Place>
+        void borrow(std::size_t index, Place place, bool mutableAccess)
+        {
+            require(index < Count && (!mutableAccess || place.canRebind()), WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            const auto* address = place.borrowIdentity();
+            require(address != nullptr, WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            std::size_t slot = 0;
+            while (slot < tokenCount_ && addresses_[slot] != address)
+                ++slot;
+            if (slot == tokenCount_)
+            {
+                require(slot < Count, WIO_NATIVE_ABI_INVALID_ARGUMENT);
+                tokens_[slot] = Codec<T, Id>::write(place.read());
+                addresses_[slot] = address;
+                ++tokenCount_;
+            }
+            require(tokens_[slot].typeId == Id);
+            if (mutableAccess && !commits_[slot])
+                commits_[slot] = [this, slot, place]() mutable { place.write(Codec<T, Id>::read(tokens_[slot])); };
+            auto& wire = (*this)[index];
+            wire.kind = WIO_NATIVE_ABI_REFERENCE;
+            wire.flags = WIO_NATIVE_ABI_VALUE_BORROWED | (mutableAccess ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
+            wire.payload.mutableSlice = {&tokens_[slot], sizeof(WioNativeAbiValue)};
+        }
+        void commit()
+        {
+            for (auto& commit : commits_)
+                if (commit)
+                {
+                    commit();
+                    commit = {};
+                }
+        }
+
+    private:
+        std::array<WioNativeAbiValue, Count> tokens_{};
+        std::array<const void*, Count> addresses_{};
+        std::array<std::function<void()>, Count> commits_{};
+        std::size_t tokenCount_ = 0;
     };
 
     class ObjectDispatchError final : public Error

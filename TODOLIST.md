@@ -725,8 +725,14 @@ Rider, and CLion are defined in
    shutdown, partial conversion cleanup, and exactly-once returned-object
    destruction when proxy materialization fails. The new method-values gate
    passed locally on Windows (1/1, 24.38 seconds).
-   Ref/view/nullable/generic object methods and foreign-object field/method
-   synchronization remain pending.
+   Object ref/view method parameters now use alias-preserving tagged handle
+   cells, with staged transactional copy-back and panic-unwind copy-back.
+   Distinct cells holding one object remain independent. Borrowed results,
+   nullable/generic object methods and foreign-object field/method
+   synchronization remain pending. Focused qualification covers 30 lifecycle
+   rounds, ref/ref and ref/view aliases, malformed references and partial
+   factory failure while staging one or multiple replacement cells.
+   The reference-method gate passed locally on Windows (1/1, 18.55 seconds).
    Field synchronization, inheritance/interface and SDK/reflection routing
    remain pending; this does not close object parity.
    Remaining native parity work includes broader VM-created object signatures,

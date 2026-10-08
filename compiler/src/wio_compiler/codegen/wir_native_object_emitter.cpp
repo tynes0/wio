@@ -80,8 +80,13 @@ namespace wio::codegen
                         collect(parameter.type);
                 }
 
-        const auto methodValue = [&](TypeId id, bool allowVoid = false)
-        { return wireValue(module, id, allowVoid) || candidates.contains(id); };
+        const auto methodValue = [&](TypeId id, bool allowVoid = false, bool allowReference = false)
+        {
+            const auto& type = module.types.get(id);
+            if (allowReference && type.kind == TypeKind::Reference && type.arguments.size() == 1)
+                return candidates.contains(type.arguments.front());
+            return wireValue(module, id, allowVoid) || candidates.contains(id);
+        };
         // Reject transitively: no proxy may advertise a method whose object
         // signature depends on a type that failed whole-surface qualification.
         std::size_t previousSize = 0;
@@ -123,7 +128,7 @@ namespace wio::codegen
                                          methodValue(method->returnType, true) &&
                                          std::ranges::all_of(method->parameters | std::views::drop(1),
                                                              [&](const auto& parameter)
-                                                             { return methodValue(parameter.type); });
+                                                             { return methodValue(parameter.type, false, true); });
                               };
                               return std::ranges::any_of(type.methods, [&](const auto& method)
                                                          { return !supported(method.function); }) ||
@@ -136,6 +141,9 @@ namespace wio::codegen
         pending.clear();
         const auto include = [&](TypeId id)
         {
+            const auto& type = module.types.get(id);
+            if (type.kind == TypeKind::Reference && type.arguments.size() == 1)
+                id = type.arguments.front();
             if (candidates.contains(id) && reachable.insert(id).second)
                 pending.push_back(id);
         };
@@ -180,18 +188,47 @@ namespace wio::codegen
                 }
                 out << ") override {\n";
                 const auto count = method.parameters.size() - 1;
+                const bool hasBorrows =
+                    std::ranges::any_of(method.parameters | std::views::drop(1), [&](const auto& parameter)
+                                        { return module.types.get(parameter.type).kind == TypeKind::Reference; });
                 if (count)
                 {
-                    out << "        wio::wir_backend::abi::ObjectArguments<" << count << "> arguments;\n";
+                    out << "        wio::wir_backend::abi::" << (hasBorrows ? "ObjectReferences<" : "ObjectArguments<")
+                        << count << "> arguments;\n";
+                    if (hasBorrows)
+                        out << "        try {\n";
                     for (std::size_t index = 1; index < method.parameters.size(); ++index)
+                    {
+                        const auto& parameter = module.types.get(method.parameters[index].type);
+                        if (parameter.kind == TypeKind::Reference)
+                        {
+                            const auto base = parameter.arguments.front();
+                            out << "        arguments.borrow<" << cpp(base) << ", " << identity(module, base) << "ULL>("
+                                << (index - 1) << ", _a" << (index - 1) << ", "
+                                << (parameter.isMutable ? "true" : "false") << ");\n";
+                            continue;
+                        }
                         out << "        arguments[" << (index - 1) << "] = wio::wir_backend::abi::Codec<"
                             << cpp(method.parameters[index].type) << ", "
                             << identity(module, method.parameters[index].type) << "ULL>::write(std::move(_a"
                             << (index - 1) << "));\n";
+                    }
                 }
-                out << "        return hostLease().call<" << cpp(method.returnType) << ", "
-                    << identity(module, method.returnType) << "ULL>(" << methodIdentity(reflected, method.id) << "ULL, "
-                    << (count ? "arguments.data()" : "nullptr") << ", " << count << ");\n    }\n";
+                out << "        "
+                    << (hasBorrows
+                            ? (module.types.get(method.returnType).kind == TypeKind::Void ? "" : "auto result = ")
+                            : "return ")
+                    << "hostLease().call<" << cpp(method.returnType) << ", " << identity(module, method.returnType)
+                    << "ULL>(" << methodIdentity(reflected, method.id) << "ULL, "
+                    << (count ? "arguments.data()" : "nullptr") << ", " << count << ");\n";
+                if (hasBorrows)
+                {
+                    out << "        arguments.commit();\n";
+                    if (module.types.get(method.returnType).kind != TypeKind::Void)
+                        out << "        return result;\n";
+                    out << "        } catch (...) { try { arguments.commit(); } catch (...) {} throw; }\n";
+                }
+                out << "    }\n";
             };
             for (const auto& entry : type.dispatchEntries)
                 emitMethod(*function(module, entry.implementation), "_dispatch_" +

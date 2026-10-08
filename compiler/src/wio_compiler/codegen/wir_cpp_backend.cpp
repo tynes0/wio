@@ -1334,6 +1334,12 @@ public:
         return *rawHandle_;
     }
     const Handle& read() const { return const_cast<Place*>(this)->read(); }
+    bool canRebind() const { return !readOnly_ && (handle_ || owner_); }
+    const void* borrowIdentity() const {
+        if (handle_) return handle_;
+        if (owner_) return owner_.get();
+        return raw_;
+    }
     void write(Handle value) {
         if (readOnly_) throw std::runtime_error("write through a Wio view");
         if (handle_) *handle_ = std::move(value);

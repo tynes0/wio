@@ -220,6 +220,9 @@ namespace wio::vm
         void cancelAndUnwindContinuations();
         void cleanupGlobals();
         void cleanupNativeObjects(bool shutdown = false) noexcept;
+        [[nodiscard]] WioNativeAbiStatus dispatchNativeObjectMethod(const Value&, std::uint64_t,
+                                                                    const WioNativeAbiValue*, std::uint64_t,
+                                                                    WioNativeAbiValue*, WioNativeAbiFailure*);
         [[nodiscard]] bool encodeNativeObject(const Value&, std::uint32_t, WioNativeAbiValue&, std::string&,
                                               const detail::NativePodLayouts&);
         [[nodiscard]] detail::NativeValueResult decodeNativeObject(const WioNativeAbiValue&, std::uint32_t,

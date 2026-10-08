@@ -27,6 +27,8 @@ namespace
     namespace abi = wio::wir_backend::abi;
     using wio::vm::Value;
     WioNativeObjectCreateFn partialObjectFactory = nullptr;
+    bool failObjectFactory = false;
+    int objectFactoryCallsBeforeFailure = 0;
 
     void check(bool passed, const char* message)
     {
@@ -97,8 +99,24 @@ namespace
         rejects([&](auto& trial) { trial.functions[0].isAsync = true; }, "async method was silently proxied");
         rejects([&](auto& trial) { trial.functions[0].isAbstract = true; }, "abstract method was silently proxied");
         rejects([&](auto& trial) { trial.functions[0].isExternal = true; }, "external method was silently proxied");
-        rejects([&](auto& trial) { trial.functions[0].parameters.push_back({.type = receiver}); },
-                "borrowed method parameter was silently proxied");
+        {
+            auto trial = module;
+            trial.functions[0].parameters.push_back({.type = receiver});
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "object ref method parameter was rejected");
+            const auto view =
+                trial.types.intern(Type{.kind = TypeKind::Reference, .arguments = {object}, .isMutable = false});
+            trial.functions[0].parameters.back().type = view;
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "object view method parameter was rejected");
+            trial.functions[0].returnType = receiver;
+            check(Emitter::eligibleTypes(trial).empty(), "borrowed method return was silently proxied");
+        }
+        rejects(
+            [&](auto& trial)
+            {
+                const auto scalarRef = trial.types.intern(Type{.kind = TypeKind::Reference, .arguments = {integer}});
+                trial.functions[0].parameters.push_back({.type = scalarRef});
+            },
+            "scalar reference method parameter was silently qualified by the object-only borrow slice");
         {
             auto trial = module;
             trial.functions[0].returnType = object;
@@ -583,6 +601,149 @@ namespace
         check(released == 2, "successful object-method call did not release its owned argument");
     }
 
+    int qualifyReferences(const char* bytecode, const char* producer)
+    {
+        std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
+        const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        auto decoded = bc::decode(std::as_bytes(std::span{bytes.data(), bytes.size()}));
+        check(decoded.succeeded(), "object reference method bytecode decode failed");
+        Library library{std::filesystem::u8path(producer)};
+        const auto getObjects = library.symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
+        const auto getRegistry = library.symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
+        check(getObjects && getObjects()->typeCount == 1 && getRegistry, "object reference producer API missing");
+        const auto& adapter = getObjects()->types[0];
+        const auto& registry = *getRegistry();
+        wio::vm::Machine machine{decoded.module};
+        std::string error;
+        check(machine.loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+        for (const auto* name : {"Entry", "PanicEntry"})
+        {
+            const auto entry = std::ranges::find_if(decoded.module.functions, [&](const auto& function)
+                                                    { return decoded.module.string(function.name) == name; });
+            check(entry != decoded.module.functions.end(), "object reference method entry missing");
+            const auto result = machine.invoke(entry->id);
+            if (!result.succeeded())
+                throw std::runtime_error(result.error().code + ": " + result.error().message);
+            check(result.value().asSignedInteger() == 0, "object reference alias/copy-back/lifecycle check failed");
+        }
+        const auto capture = std::ranges::find_if(decoded.module.functions, [&](const auto& function)
+                                                  { return decoded.module.string(function.name) == "CaptureEntry"; });
+        check(capture != decoded.module.functions.end(), "object reference capture entry missing");
+        const auto captured = machine.invoke(capture->id);
+        check(captured.succeeded(), "object reference capture failed");
+        const auto token = *reinterpret_cast<const WioNativeObjectHost*>(captured.value().asUnsignedInteger());
+        const auto reflected =
+            std::ranges::find(decoded.module.contract.reflection, token.typeId, &bc::Reflection::stableTypeId);
+        check(reflected != decoded.module.contract.reflection.end(), "object reference method metadata missing");
+        const auto makeTarget = std::ranges::find_if(reflected->methods, [&](const auto& method)
+                                                     { return decoded.module.string(method.name) == "MakeTarget"; });
+        check(makeTarget != reflected->methods.end(), "mutable object reference method missing");
+        Wire cell;
+        check(adapter.create(&token, &cell.value, nullptr) == WIO_NATIVE_ABI_OK, "object reference cell setup failed");
+        WioNativeAbiValue reference{};
+        reference.kind = WIO_NATIVE_ABI_REFERENCE;
+        reference.flags = WIO_NATIVE_ABI_VALUE_BORROWED | WIO_NATIVE_ABI_VALUE_MUTABLE;
+        reference.payload.mutableSlice = {&cell.value, sizeof(WioNativeAbiValue)};
+        WioNativeAbiValue seed{};
+        seed.kind = WIO_NATIVE_ABI_I64;
+        seed.payload.signedInteger = 99;
+        const auto beforeInvalid = scalar(registry, "vm_object_references::Constructions");
+        for (int kind = 0; kind < 5; ++kind)
+        {
+            auto invalid = reference;
+            if (kind == 0)
+                invalid.flags &= ~WIO_NATIVE_ABI_VALUE_MUTABLE;
+            if (kind == 1)
+                invalid.payload.mutableSlice.size = 1;
+            if (kind == 2)
+                invalid.payload.mutableSlice.data = nullptr;
+            if (kind == 3)
+                invalid.flags |= WIO_NATIVE_ABI_VALUE_PROJECTED;
+            if (kind == 4)
+                invalid.payload.mutableSlice.data = reinterpret_cast<std::byte*>(&cell.value) + 1;
+            const std::array arguments{invalid, seed};
+            Wire output;
+            check(token.invoke(&token, makeTarget->stableId, arguments.data(), arguments.size(), &output.value,
+                               nullptr) == WIO_NATIVE_ABI_INVALID_ARGUMENT &&
+                      output.value.kind == WIO_NATIVE_ABI_VOID,
+                  "malformed/readonly hosted ref was accepted or changed its output");
+        }
+        check(scalar(registry, "vm_object_references::Constructions") == beforeInvalid,
+              "invalid object ref invoked the method body");
+        Wire cleared;
+        check(call(registry, "vm_object_references::ClearCapture", {}, cleared.value) == WIO_NATIVE_ABI_OK,
+              "object reference capture cleanup failed");
+
+        auto failingDescriptor = adapter;
+        partialObjectFactory = adapter.create;
+        failingDescriptor.create =
+            [](const WioNativeObjectHost* host, WioNativeAbiValue* output, WioNativeAbiFailure* failure) noexcept
+        {
+            const auto status = partialObjectFactory(host, output, failure);
+            if (status != WIO_NATIVE_ABI_OK || !failObjectFactory || objectFactoryCallsBeforeFailure-- > 0)
+                return status;
+            return WIO_NATIVE_ABI_EXCEPTION; // Leave an owned partial output for failure cleanup.
+        };
+        const WioNativeObjectApi failingApi{WIO_NATIVE_OBJECT_VERSION, 1, &failingDescriptor};
+        wio::vm::Machine failedMachine{decoded.module};
+        check(failedMachine.registerNativeRegistry(registry, failingApi, &error), error.c_str());
+        const auto failureCaptured = failedMachine.invoke(capture->id);
+        check(failureCaptured.succeeded(), "failed copy-back host capture failed");
+        const auto failureToken =
+            *reinterpret_cast<const WioNativeObjectHost*>(failureCaptured.value().asUnsignedInteger());
+        Wire failureCell;
+        check(adapter.create(&failureToken, &failureCell.value, nullptr) == WIO_NATIVE_ABI_OK,
+              "failed copy-back argument setup failed");
+        reference.payload.mutableSlice.data = &failureCell.value;
+        const auto originalPointer = failureCell.value.payload.handle.state;
+        const auto beforeConstructed = scalar(registry, "vm_object_references::Constructions");
+        const auto beforeDestroyed = scalar(registry, "vm_object_references::Destructions");
+        failObjectFactory = true;
+        const std::array failureArguments{reference, seed};
+        Wire failed;
+        check(failureToken.invoke(&failureToken, makeTarget->stableId, failureArguments.data(), failureArguments.size(),
+                                  &failed.value, nullptr) == WIO_NATIVE_ABI_TYPE_MISMATCH,
+              "failed object reference copy-back lost its boundary status");
+        failObjectFactory = false;
+        check(failureCell.value.payload.handle.state == originalPointer,
+              "failed object reference copy-back partially replaced the caller's cell");
+        const auto safePoint = std::ranges::find_if(decoded.module.functions, [&](const auto& function)
+                                                    { return decoded.module.string(function.name) == "SafePoint"; });
+        check(safePoint != decoded.module.functions.end() && failedMachine.invoke(safePoint->id).succeeded(),
+              "failed object reference cleanup safe point missing");
+        check(scalar(registry, "vm_object_references::Constructions") == beforeConstructed + 1 &&
+                  scalar(registry, "vm_object_references::Destructions") == beforeDestroyed + 1,
+              "failed object reference copy-back lost or repeated Wio lifecycle cleanup");
+        const auto makePair = std::ranges::find_if(reflected->methods, [&](const auto& method)
+                                                   { return decoded.module.string(method.name) == "MakePair"; });
+        check(makePair != reflected->methods.end(), "transactional object reference method missing");
+        Wire secondCell;
+        check(adapter.create(&failureToken, &secondCell.value, nullptr) == WIO_NATIVE_ABI_OK,
+              "transactional object reference cell setup failed");
+        auto secondReference = reference;
+        secondReference.payload.mutableSlice.data = &secondCell.value;
+        const auto secondPointer = secondCell.value.payload.handle.state;
+        const auto beforePairConstructed = scalar(registry, "vm_object_references::Constructions");
+        const auto beforePairDestroyed = scalar(registry, "vm_object_references::Destructions");
+        objectFactoryCallsBeforeFailure = 1;
+        failObjectFactory = true;
+        const std::array pairArguments{reference, secondReference, seed};
+        check(failureToken.invoke(&failureToken, makePair->stableId, pairArguments.data(), pairArguments.size(),
+                                  &failed.value, nullptr) == WIO_NATIVE_ABI_TYPE_MISMATCH,
+              "second-cell proxy factory failure lost its boundary status");
+        failObjectFactory = false;
+        check(failureCell.value.payload.handle.state == originalPointer &&
+                  secondCell.value.payload.handle.state == secondPointer,
+              "second-cell copy-back failure committed the first reference cell");
+        check(failedMachine.invoke(safePoint->id).succeeded(), "transactional copy-back cleanup safe point failed");
+        check(scalar(registry, "vm_object_references::Constructions") == beforePairConstructed + 2 &&
+                  scalar(registry, "vm_object_references::Destructions") == beforePairDestroyed + 2,
+              "transactional reference copy-back failure leaked staged VM objects");
+        check(call(registry, "vm_object_references::ClearCapture", {}, cleared.value) == WIO_NATIVE_ABI_OK,
+              "failed copy-back capture cleanup failed");
+        return 0;
+    }
+
     int qualifyMethods(const char* bytecode, const char* producer)
     {
         qualifyArgumentGuards();
@@ -742,6 +903,8 @@ int main(int argc, char** argv)
     {
         check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4 && std::string_view(argv[3]) == "references")
+            return qualifyReferences(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "methods")
             return qualifyMethods(argv[1], argv[2]);
         if (argc == 4)

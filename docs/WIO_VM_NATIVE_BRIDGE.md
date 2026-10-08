@@ -926,8 +926,10 @@ proxy. The initial automatic producer surface is deliberately narrow:
   field shapes are excluded so dummy producer fields cannot run nested Wio
   lifecycle bodies during proxy construction/destruction.
 - Non-abstract, synchronous Wio methods with scalar/string/text and qualified
-  object values in their arguments/results (or void results). Reference, nullable, container,
-  generic, native/external and async method signatures remain excluded.
+  object values in their arguments/results (or void results), plus `ref/view`
+  qualified-object parameters. Borrowed results, scalar/container references,
+  nullable, container, generic, native/external and async method signatures
+  remain excluded.
 
 Proxies override both canonical WIR dispatch slots and the public `_WF_*`
 wrapper methods used by native C++ libraries. Those wrappers are virtual only
@@ -1070,8 +1072,8 @@ does not copy scalar/string results.
 Object-valued method parameters must belong to the same live machine. A hosted
 proxy from another machine, or an ordinary producer-created C++ object without
 VM field storage, rejects with `TYPE_MISMATCH`. General foreign-object method
-routing/field synchronization, nullable objects, object ref/view method
-signatures, generics, inheritance and interfaces remain pending. VM method
+routing/field synchronization, nullable objects, borrowed method results,
+generics, inheritance and interfaces remain pending. VM method
 failures preserve `PANIC` through the generated native boundary; closed hosts
 continue returning `STALE_HANDLE`. This is an implementation extension to the
 existing wire-v2/object-sidecar-v1 contracts, not a wire-version change.
@@ -1091,3 +1093,64 @@ no full-suite or Linux pass is claimed.
 The method-values gate passed locally on Windows (1/1, 24.38 seconds), including
 generated native execution, actual bytecode CLI execution, and host-injected
 factory failure qualification.
+
+## Object ref/view method parameters
+
+Hosted synchronous methods can borrow eligible same-machine object handle cells:
+
+```wio
+public fn ReadFrom(source: view Counter) -> i32 {
+    return source.Read();
+}
+
+public fn Replace(target: ref Counter, source: Counter) {
+    target = source;
+}
+
+public fn MakeTarget(target: ref Counter, seed: i32) {
+    target = Counter(seed);
+}
+```
+
+The borrow is of the **handle cell**, not a copied object field projection.
+Two parameters borrowing one cell share a VM place; `ref + view` and `ref + ref`
+observe rebinding immediately within the method. Two distinct cells holding the
+same object stay independent. The producer uses tagged reference wires and
+keys aliases by stable handle-cell/local-place identity; raw receiver views use
+object identity, not the address of a temporary lazily materialized handle.
+`ObjectReferences<N>` holds the producer's reference cells; C++ method wrappers
+keep the existing generated
+`Place<runtime::Ref<T>>` surface. Method signature dependencies also follow
+borrowed object types.
+
+Only `ref` cells copy back. Replacements are encoded before any caller cell is
+committed, so a later proxy factory failure leaves all caller cells unchanged.
+Successful rebinding copies back even when the Wio method subsequently panics;
+the native boundary preserves `PANIC`. The producer wrapper commits its local
+handle cells on both normal return and exceptional unwind. Owned argument,
+temporary VM-place, staged-output and execution-result claims are guarded.
+Objects retired during external host dispatch are cleaned at the next VM safe
+point or shutdown, consistent with the existing proxy lifetime contract.
+
+`view` cannot be used as a mutable argument. Raw receiver places cannot be
+rebound through this bridge. Null, undersized, misaligned, projected or invalid
+flagged reference buffers reject before executing the method. Recovered object
+arguments must still originate in the same machine; a reference does not grant
+foreign-object field synchronization. Reference cells and VM places remain
+call-scoped: **borrowed results and escaping reference cells are not supported**.
+Scalar/POD/container reference method parameters and nullable object parameters
+are separate remaining work. No wire-v2/object-sidecar-v1 ABI version changed.
+
+The focused `wio_vm_native_object_method_references` gate compares generated C++
+and actual VM CLI execution, with 30 rounds covering fresh-object rebinding,
+`view` reads, distinct raw receiver views, mixed aliases, repeated mutable
+aliases, distinct cells containing
+one object, combined ref-parameter/object-result methods, and lifecycle counts.
+The live host adds panic copy-back, readonly/raw C++ place rejection, invalid
+reference rejection, partial proxy factory cleanup, and transactional multi-cell
+copy-back failure. Only this new gate is run for this slice; no full-suite or
+Linux pass is claimed.
+
+The reference-method gate passed locally on Windows (1/1, 18.55 seconds),
+including generated native execution, actual bytecode CLI execution and the
+live host's negative/factory-failure scenarios.

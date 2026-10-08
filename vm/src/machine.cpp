@@ -1566,6 +1566,207 @@ namespace wio::vm
         }
     }
 
+    WioNativeAbiStatus Machine::dispatchNativeObjectMethod(const Value& object, std::uint64_t methodId,
+                                                           const WioNativeAbiValue* args, std::uint64_t count,
+                                                           WioNativeAbiValue* output, WioNativeAbiFailure* failure)
+    {
+        const auto program = program_;
+        Machine* const owner = this;
+        std::scoped_lock executionLock{program->executionMutex};
+        std::shared_ptr<const detail::NativePodLayouts> layouts;
+        {
+            std::scoped_lock nativeLock{program->nativeMutex};
+            layouts = program->nativePodLayouts;
+        }
+        const auto& module = *program->module;
+        const auto methodMarshalling = [&](std::uint32_t type, std::uint8_t& marshalling)
+        {
+            if (type < module.types.size() && module.types[type].kind == TypeReference &&
+                module.types[type].arguments.size() == 1)
+                type = module.types[type].arguments.front();
+            if (detail::callbackValueMarshalling(module, type, marshalling))
+                return true;
+            if (type < module.types.size() && module.types[type].kind == TypeNamed &&
+                module.types[type].nominalKind == NominalObject && layouts->objects.contains(type))
+            {
+                marshalling = 6;
+                return true;
+            }
+            return false;
+        };
+        const auto reflected =
+            std::ranges::find(module.contract.reflection, object.aggregateType(), &bytecode::Reflection::type);
+        if (reflected == module.contract.reflection.end())
+            return WIO_NATIVE_ABI_TYPE_MISMATCH;
+        const auto method = std::ranges::find(reflected->methods, methodId, &bytecode::ReflectedMethod::stableId);
+        if (method == reflected->methods.end() || method->isAsync || count != method->parameterTypes.size())
+            return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+        if (module.types[method->returnType].kind == TypeReference)
+        {
+            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                               "hosted object methods do not yet support borrowed results");
+            return WIO_NATIVE_ABI_TYPE_MISMATCH;
+        }
+        struct Borrow
+        {
+            WioNativeAbiValue* token;
+            std::uint32_t type;
+            std::unique_ptr<PlaceStorage> place;
+            bool mutableAccess;
+        };
+        std::vector<Borrow> borrows;
+        const auto releaseBorrows = [owner, &borrows](void*) noexcept
+        {
+            for (auto& borrow : borrows)
+                try
+                {
+                    ExecutionError error;
+                    owner->cleanupValue(borrow.place->value, error);
+                }
+                catch (...)
+                {
+                }
+        };
+        const std::unique_ptr<void, decltype(releaseBorrows)> borrowGuard{owner, releaseBorrows};
+        std::vector<Value> parameters{object};
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            const auto parameterType = method->parameterTypes[index];
+            std::uint8_t marshalling = 0;
+            if (!methodMarshalling(parameterType, marshalling))
+            {
+                setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, "unsupported hosted method argument type");
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            }
+            if (module.types[parameterType].kind == TypeReference)
+            {
+                const auto& type = module.types[parameterType];
+                const bool mutableAccess = (type.flags & 0x01u) != 0;
+                const auto& wire = args[index];
+                if (marshalling != 6 || wire.kind != WIO_NATIVE_ABI_REFERENCE ||
+                    !(wire.flags & WIO_NATIVE_ABI_VALUE_BORROWED) ||
+                    (wire.flags & ~(WIO_NATIVE_ABI_VALUE_BORROWED | WIO_NATIVE_ABI_VALUE_MUTABLE)) ||
+                    (mutableAccess && !(wire.flags & WIO_NATIVE_ABI_VALUE_MUTABLE)) ||
+                    !wire.payload.mutableSlice.data || wire.payload.mutableSlice.size != sizeof(WioNativeAbiValue) ||
+                    reinterpret_cast<std::uintptr_t>(wire.payload.mutableSlice.data) % alignof(WioNativeAbiValue))
+                {
+                    setCallbackFailure(failure, WIO_NATIVE_ABI_INVALID_ARGUMENT,
+                                       "hosted object ref/view requires a compatible tagged-value cell");
+                    return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                }
+                auto* token = static_cast<WioNativeAbiValue*>(wire.payload.mutableSlice.data);
+                const auto base = type.arguments.front();
+                auto slot = std::ranges::find(borrows, token, &Borrow::token);
+                if (slot == borrows.end())
+                {
+                    auto decoded = owner->decodeNativeObject(*token, base, *layouts);
+                    if (!decoded.succeeded() || decoded.value.kind() != Value::Kind::Object)
+                    {
+                        setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                                           "hosted object ref/view requires an original VM object");
+                        return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                    }
+                    auto place = std::make_unique<PlaceStorage>();
+                    place->value = std::move(decoded.value);
+                    place->initialized = true;
+                    place->mutableValue = mutableAccess;
+                    borrows.push_back({token, base, std::move(place), mutableAccess});
+                    slot = std::prev(borrows.end());
+                }
+                if (slot->type != base)
+                {
+                    setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                                       "aliased hosted object references disagree on their type");
+                    return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                }
+                slot->mutableAccess |= mutableAccess;
+                slot->place->mutableValue |= mutableAccess;
+                parameters.push_back(Value::place(slot->place.get()));
+                continue;
+            }
+            auto decoded =
+                marshalling == 6
+                    ? owner->decodeNativeObject(args[index], method->parameterTypes[index], *layouts)
+                    : detail::decodeNativeValue(module, args[index], method->parameterTypes[index], marshalling);
+            if (decoded.succeeded() && marshalling == 6 && decoded.value.kind() != Value::Kind::Object)
+                decoded.error = "hosted method argument requires an original VM object from this machine";
+            if (!decoded.succeeded())
+            {
+                setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, decoded.error);
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            }
+            parameters.push_back(std::move(decoded.value));
+        }
+        auto execution = owner->invoke(method->function, parameters);
+        // Copy-back or result encoding can throw before the returned
+        // object's native claim is installed. Preserve Wio cleanup.
+        const auto releaseResult = [owner](Value* value) noexcept
+        {
+            try
+            {
+                ExecutionError cleanupError;
+                owner->cleanupValue(*value, cleanupError);
+            }
+            catch (...)
+            {
+            }
+        };
+        const std::unique_ptr<Value, decltype(releaseResult)> resultGuard{&execution.value_, releaseResult};
+        // Stage all mutable cells before committing any of them. Aliased
+        // ref/view parameters share one VM place and one output token.
+        std::vector<WioNativeAbiValue> replacements(borrows.size());
+        const auto releaseReplacements = [&replacements](void*) noexcept
+        {
+            for (auto& value : replacements)
+                WioNativeAbiReleaseValue(&value);
+        };
+        const std::unique_ptr<void, decltype(releaseReplacements)> replacementGuard{owner, releaseReplacements};
+        std::string copyBackError;
+        for (std::size_t index = 0; index < borrows.size(); ++index)
+            if (borrows[index].mutableAccess &&
+                !owner->encodeNativeObject(borrows[index].place->value, borrows[index].type, replacements[index],
+                                           copyBackError, *layouts))
+            {
+                if (copyBackError.empty())
+                    copyBackError = "hosted object reference copy-back failed";
+                break;
+            }
+        if (copyBackError.empty())
+            for (std::size_t index = 0; index < borrows.size(); ++index)
+                if (borrows[index].mutableAccess)
+                {
+                    WioNativeAbiReleaseValue(borrows[index].token);
+                    *borrows[index].token = replacements[index];
+                    replacements[index] = {};
+                }
+        if (!execution.succeeded())
+        {
+            setCallbackFailure(failure, WIO_NATIVE_ABI_PANIC,
+                               execution.error().code + ": " + execution.error().message);
+            return WIO_NATIVE_ABI_PANIC;
+        }
+        if (!copyBackError.empty())
+        {
+            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, copyBackError);
+            return WIO_NATIVE_ABI_TYPE_MISMATCH;
+        }
+        std::uint8_t marshalling = 0;
+        std::string error;
+        const bool supported = methodMarshalling(method->returnType, marshalling);
+        const bool encoded =
+            supported &&
+            (marshalling == 6
+                 ? owner->encodeNativeObject(execution.value(), method->returnType, *output, error, *layouts)
+                 : detail::encodeOwnedNativeValue(module, execution.value(), method->returnType, marshalling, *output,
+                                                  error));
+        if (!encoded)
+        {
+            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, error);
+            return WIO_NATIVE_ABI_TYPE_MISMATCH;
+        }
+        return WIO_NATIVE_ABI_OK;
+    }
+
     bool Machine::encodeNativeObject(const Value& object, std::uint32_t type, WioNativeAbiValue& output,
                                      std::string& error, const detail::NativePodLayouts& layouts)
     {
@@ -1594,95 +1795,7 @@ namespace wio::vm
                     }
                     const auto releaseOwner = [program](Machine*) { program->releaseOwner(); };
                     const std::unique_ptr<Machine, decltype(releaseOwner)> guard{owner, releaseOwner};
-                    std::scoped_lock executionLock{program->executionMutex};
-                    std::shared_ptr<const detail::NativePodLayouts> layouts;
-                    {
-                        std::scoped_lock nativeLock{program->nativeMutex};
-                        layouts = program->nativePodLayouts;
-                    }
-                    const auto& module = *program->module;
-                    const auto methodMarshalling = [&](std::uint32_t type, std::uint8_t& marshalling)
-                    {
-                        if (detail::callbackValueMarshalling(module, type, marshalling))
-                            return true;
-                        if (type < module.types.size() && module.types[type].kind == TypeNamed &&
-                            module.types[type].nominalKind == NominalObject && layouts->objects.contains(type))
-                        {
-                            marshalling = 6;
-                            return true;
-                        }
-                        return false;
-                    };
-                    const auto reflected = std::ranges::find(module.contract.reflection, object.aggregateType(),
-                                                             &bytecode::Reflection::type);
-                    if (reflected == module.contract.reflection.end())
-                        return WIO_NATIVE_ABI_TYPE_MISMATCH;
-                    const auto method =
-                        std::ranges::find(reflected->methods, methodId, &bytecode::ReflectedMethod::stableId);
-                    if (method == reflected->methods.end() || method->isAsync || count != method->parameterTypes.size())
-                        return WIO_NATIVE_ABI_INVALID_ARGUMENT;
-                    std::vector<Value> parameters{object};
-                    for (std::size_t index = 0; index < count; ++index)
-                    {
-                        std::uint8_t marshalling = 0;
-                        if (!methodMarshalling(method->parameterTypes[index], marshalling))
-                        {
-                            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
-                                               "unsupported hosted method argument type");
-                            return WIO_NATIVE_ABI_TYPE_MISMATCH;
-                        }
-                        auto decoded =
-                            marshalling == 6
-                                ? owner->decodeNativeObject(args[index], method->parameterTypes[index], *layouts)
-                                : detail::decodeNativeValue(module, args[index], method->parameterTypes[index],
-                                                            marshalling);
-                        if (decoded.succeeded() && marshalling == 6 && decoded.value.kind() != Value::Kind::Object)
-                            decoded.error = "hosted method argument requires an original VM object from this machine";
-                        if (!decoded.succeeded())
-                        {
-                            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, decoded.error);
-                            return WIO_NATIVE_ABI_TYPE_MISMATCH;
-                        }
-                        parameters.push_back(std::move(decoded.value));
-                    }
-                    auto execution = owner->invoke(method->function, parameters);
-                    if (!execution.succeeded())
-                    {
-                        setCallbackFailure(failure, WIO_NATIVE_ABI_PANIC,
-                                           execution.error().code + ": " + execution.error().message);
-                        return WIO_NATIVE_ABI_PANIC;
-                    }
-                    // Encoding can throw before a returned object's proxy claim
-                    // is installed. Keep Wio lifecycle cleanup attached to the
-                    // execution result, without copying its scalar/string data.
-                    const auto releaseResult = [owner](Value* value) noexcept
-                    {
-                        try
-                        {
-                            ExecutionError cleanupError;
-                            owner->cleanupValue(*value, cleanupError);
-                        }
-                        catch (...)
-                        {
-                        }
-                    };
-                    const std::unique_ptr<Value, decltype(releaseResult)> resultGuard{&execution.value_, releaseResult};
-                    std::uint8_t marshalling = 0;
-                    std::string error;
-                    const bool supported = methodMarshalling(method->returnType, marshalling);
-                    const bool encoded =
-                        supported &&
-                        (marshalling == 6
-                             ? owner->encodeNativeObject(execution.value(), method->returnType, *output, error,
-                                                         *layouts)
-                             : detail::encodeOwnedNativeValue(module, execution.value(), method->returnType,
-                                                              marshalling, *output, error));
-                    if (!encoded)
-                    {
-                        setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, error);
-                        return WIO_NATIVE_ABI_TYPE_MISMATCH;
-                    }
-                    return WIO_NATIVE_ABI_OK;
+                    return owner->dispatchNativeObjectMethod(object, methodId, args, count, output, failure);
                 },
                 [weak]() -> std::shared_ptr<void>
                 {
