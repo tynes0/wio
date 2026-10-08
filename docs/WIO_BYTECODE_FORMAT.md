@@ -33,6 +33,11 @@ All integers are little-endian. The fixed 48-byte header contains:
 Unknown major versions are rejected. A reader may accept a newer minor only
 after the compatibility policy for that minor is implemented.
 
+The current writer emits **1.1**. Readers also accept 1.0 modules that do not
+use the template-declaration function flag introduced in 1.1. Relabeling a 1.1
+template-bearing module as 1.0 is rejected, as are unknown future minors. Native
+wire-v2 and object-sidecar-v1 are independent of this bytecode format version.
+
 ## Section directory
 
 Each 32-byte directory entry contains a pinned section kind, flags, absolute
@@ -62,6 +67,22 @@ intrinsic selectors, async operations, and source spans.
 The wide v1 representation deliberately favors validation and tooling over
 premature packing. A later compact execution representation may be produced
 by the VM loader without changing the file ABI.
+
+## Generic declaration records (1.1)
+
+Function flag `0x0100` (`FunctionTemplateDeclaration`) marks an open generic
+declaration retained only for signature and specialization identity. Such a
+record has no code, native binding, or coroutine layout. Its owner, signature,
+or generic parameter list must contain an unresolved parameter. A concrete
+function cannot use this flag to omit its executable body.
+
+Concrete implementations retain `genericOrigin` and their specialization
+arguments, and carry normal executable bodies. Open template bodies are not
+serialized: unresolved `GenericConstant` operations still reject in executable
+functions. Direct VM invocation of a declaration fails with `WVM1240` rather
+than attempting to execute unspecialized code. Type openness is computed once
+over the type dependency graph, including recursive argument, field, base, and
+extent dependencies, without scanning the entire type table per parameter.
 
 ## Validation layers
 

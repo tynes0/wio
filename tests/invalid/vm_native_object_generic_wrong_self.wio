@@ -1,0 +1,12 @@
+object Box<T, const Tag: usize> {
+    public fn WrongType() -> Box<i32, Tag> {
+        return deref self;
+    }
+    public fn WrongTag() -> view Box<T, 9> {
+        return self;
+    }
+}
+
+fn Entry() -> i32 {
+    return 0;
+}

@@ -14,6 +14,8 @@ namespace wio::bytecode
         { result.diagnostics_.push_back({std::move(code), std::move(message), function, block, instruction}); };
         auto validString = [&](const StringId id) { return id == InvalidIndex || id < module.strings.size(); };
         auto validType = [&](const std::uint32_t id) { return id == InvalidIndex || id < module.types.size(); };
+        const auto openTypes = module.openTypes();
+        const auto isOpenType = [&](std::uint32_t id) { return id < openTypes.size() && openTypes[id]; };
         auto validFunction = [&](const std::uint32_t id)
         { return id == InvalidIndex || (id < module.functions.size() && module.functions[id].id == id); };
         const auto nominalType = [&](std::uint32_t id)
@@ -213,8 +215,20 @@ namespace wio::bytecode
                     blocksById.emplace(block.id, &block);
             }
             const bool external = (function.flags & 0x0002u) != 0;
-            if ((external && !function.blocks.empty()) || (!external && function.blocks.empty()))
-                report("WBC1034", "External functions must have no code and defined functions must have code",
+            const bool metadataOnly = (function.flags & FunctionTemplateDeclaration) != 0;
+            if (((external || metadataOnly) && !function.blocks.empty()) ||
+                (!external && !metadataOnly && function.blocks.empty()))
+                report("WBC1034",
+                       "External/template declarations must have no code and defined functions must have code",
+                       function.id);
+            if (metadataOnly &&
+                (external || function.hasNativeBinding || function.hasCoroutine ||
+                 (!isOpenType(function.ownerType) && !isOpenType(function.returnType) &&
+                  !std::ranges::any_of(function.genericParameters, [&](auto type) { return isOpenType(type); }) &&
+                  !std::ranges::any_of(function.parameters,
+                                       [&](const auto& parameter) { return isOpenType(parameter.type); }))))
+                report("WBC1080",
+                       "Template declaration must have an open signature and no runtime binding or coroutine",
                        function.id);
 
             std::unordered_map<std::uint32_t, std::uint32_t> valueTypes;
@@ -271,7 +285,7 @@ namespace wio::bytecode
                         report("WBC1033", "Coroutine state references invalid block or type metadata", function.id);
                 }
             }
-            else if ((function.flags & 0x0001u) != 0)
+            else if ((function.flags & 0x0001u) != 0 && !metadataOnly)
                 report("WBC1058", "Async bytecode function is missing its coroutine layout", function.id);
             for (const Block& block : function.blocks)
             {

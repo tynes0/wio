@@ -9,6 +9,7 @@
 #include <functional>
 #include <limits>
 #include <map>
+#include <ranges>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -385,21 +386,71 @@ namespace wio::wir
 
             void refreshReflectionLayouts()
             {
+                std::unordered_map<FunctionId, const Function*, IdHash> implementations;
+                implementations.reserve(module_.functions.size());
+                for (const auto& function : module_.functions)
+                    implementations.emplace(function.id, &function);
+                std::unordered_map<FunctionId, std::vector<std::uint64_t>, IdHash> declarationAttributes;
+                for (const auto& descriptor : module_.contract.reflection)
+                    for (const auto& method : descriptor.methods)
+                        declarationAttributes.try_emplace(method.function, method.attributes);
                 for (ReflectionDescriptor& descriptor : module_.contract.reflection)
                 {
                     const Type* type = module_.types.tryGet(descriptor.type);
-                    if (!type || type->kind != TypeKind::Named || !descriptor.fields.empty() || type->fields.empty())
+                    if (!type || type->kind != TypeKind::Named)
                         continue;
 
-                    descriptor.fields.reserve(type->fields.size());
-                    for (const FieldLayout& field : type->fields)
-                        descriptor.fields.push_back(ReflectedFieldDescriptor{
-                            .stableId =
-                                stableModuleHash(std::to_string(descriptor.stableTypeId) + ":field:" + field.name),
-                            .name = field.name,
-                            .type = field.type,
-                            .visibility = field.visibility,
-                            .isMutable = field.isMutable});
+                    if (descriptor.fields.empty())
+                    {
+                        descriptor.fields.reserve(type->fields.size());
+                        for (const FieldLayout& field : type->fields)
+                            descriptor.fields.push_back(ReflectedFieldDescriptor{
+                                .stableId =
+                                    stableModuleHash(std::to_string(descriptor.stableTypeId) + ":field:" + field.name),
+                                .name = field.name,
+                                .type = field.type,
+                                .visibility = field.visibility,
+                                .isMutable = field.isMutable});
+                    }
+                    if (openType(descriptor.type))
+                        continue;
+                    for (const auto& method : type->methods)
+                    {
+                        const auto found = implementations.find(method.function);
+                        if (found == implementations.end())
+                            continue;
+                        const auto* implementation = found->second;
+                        auto reflected = std::ranges::find_if(
+                            descriptor.methods, [&](const auto& existing)
+                            { return existing.name == method.name && existing.slot == method.slot; });
+                        if (reflected != descriptor.methods.end() && reflected->function == method.function)
+                            continue;
+                        std::string key = std::to_string(descriptor.stableTypeId) + ":method:" + method.name + "(";
+                        std::vector<TypeId> parameters;
+                        for (const auto& parameter : implementation->parameters | std::views::drop(1))
+                        {
+                            parameters.push_back(parameter.type);
+                            key += nativeAbiTypeKey(module_.types, parameter.type) + ";";
+                        }
+                        key += ")->" + nativeAbiTypeKey(module_.types, implementation->returnType);
+                        ReflectedMethodDescriptor updated{.stableId = stableModuleHash(key),
+                                                          .name = method.name,
+                                                          .function = method.function,
+                                                          .returnType = implementation->returnType,
+                                                          .parameterTypes = std::move(parameters),
+                                                          .slot = method.slot,
+                                                          .isAsync = implementation->isAsync,
+                                                          .visibility = method.visibility};
+                        const auto origin =
+                            implementation->genericOrigin ? implementation->genericOrigin : method.function;
+                        if (const auto attributes = declarationAttributes.find(origin);
+                            attributes != declarationAttributes.end())
+                            updated.attributes = attributes->second;
+                        if (reflected == descriptor.methods.end())
+                            descriptor.methods.push_back(std::move(updated));
+                        else
+                            *reflected = std::move(updated);
+                    }
                 }
             }
 

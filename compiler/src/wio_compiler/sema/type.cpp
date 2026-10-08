@@ -488,12 +488,23 @@ namespace wio::sema
             if (s1->name != s2->name || s1->scopePath != s2->scopePath)
                 return false;
 
-            if (s1->genericArguments.size() != s2->genericArguments.size())
+            // The primary declaration's self type is symbolic Box<T, ...>,
+            // not an argument-free Box. Compare its declared parameters to
+            // explicit symbolic arguments without treating them as wildcards.
+            const auto& arguments1 =
+                s1->genericArguments.empty() && !s1->genericPrimaryType.Lock() && !s1->hasGenericParameterPack
+                    ? s1->genericParameterTypes
+                    : s1->genericArguments;
+            const auto& arguments2 =
+                s2->genericArguments.empty() && !s2->genericPrimaryType.Lock() && !s2->hasGenericParameterPack
+                    ? s2->genericParameterTypes
+                    : s2->genericArguments;
+            if (arguments1.size() != arguments2.size())
                 return false;
 
-            for (size_t i = 0; i < s1->genericArguments.size(); ++i)
+            for (size_t i = 0; i < arguments1.size(); ++i)
             {
-                if (!s1->genericArguments[i]->isCompatibleWith(s2->genericArguments[i]))
+                if (!arguments1[i] || !arguments2[i] || !arguments1[i]->isCompatibleWith(arguments2[i]))
                     return false;
             }
 

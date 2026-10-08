@@ -566,9 +566,17 @@ namespace wio::bytecode
                                                                                (sourceGlobal.isConst ? 0x02u : 0u))});
         }
 
+        const auto openTypes = module.openTypes();
+        const auto isOpenType = [&](std::uint32_t id) { return id < openTypes.size() && openTypes[id]; };
         module.functions.reserve(source.functions.size());
         for (const wir::lowered::Function& sourceFunction : source.functions)
         {
+            const bool metadataOnly =
+                !sourceFunction.isExternal &&
+                (!sourceFunction.genericParameters.empty() || isOpenType(rawId(sourceFunction.ownerType)) ||
+                 isOpenType(rawId(sourceFunction.returnType)) ||
+                 std::ranges::any_of(sourceFunction.parameters,
+                                     [&](const auto& parameter) { return isOpenType(rawId(parameter.type)); }));
             Function function;
             function.id = functionId(sourceFunction.id);
             function.name = strings.intern(sourceFunction.name);
@@ -585,6 +593,8 @@ namespace wio::bytecode
                 (sourceFunction.isMethod ? 0x0004u : 0u) | (sourceFunction.isAbstract ? 0x0008u : 0u) |
                 (sourceFunction.isExtension ? 0x0010u : 0u) | (sourceFunction.isClosureBody ? 0x0020u : 0u) |
                 (sourceFunction.nativeBinding ? 0x0040u : 0u) | (sourceFunction.coroutine ? 0x0080u : 0u));
+            if (metadataOnly)
+                function.flags = (function.flags & ~0x0080u) | FunctionTemplateDeclaration;
 
             for (const wir::CaptureLayout& sourceCapture : sourceFunction.captures)
             {
@@ -622,7 +632,7 @@ namespace wio::bytecode
                 function.nativeBinding.explicitTemplateArguments = sourceBinding.explicitTemplateArguments;
                 function.nativeBinding.requiresAdapter = sourceBinding.requiresAdapter;
             }
-            if (sourceFunction.coroutine)
+            if (sourceFunction.coroutine && !metadataOnly)
             {
                 const wir::CoroutineLayout& sourceCoroutine = *sourceFunction.coroutine;
                 function.hasCoroutine = true;
@@ -661,6 +671,12 @@ namespace wio::bytecode
                 function.genericParameters.push_back(rawId(type));
             for (const wir::TypeId type : sourceFunction.specializationArguments)
                 function.specializationArguments.push_back(rawId(type));
+
+            if (metadataOnly)
+            {
+                module.functions.push_back(std::move(function));
+                continue;
+            }
 
             function.blocks.reserve(sourceFunction.blocks.size());
             for (const wir::lowered::BasicBlock& sourceBlock : sourceFunction.blocks)

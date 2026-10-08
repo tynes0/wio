@@ -1278,6 +1278,9 @@ namespace wio::bytecode
             if (!reader.finished())
                 return fail("Trailing data in WIOB code section");
         }
+        if (minor == 0 && std::ranges::any_of(result.module.functions, [](const Function& function)
+                                             { return (function.flags & FunctionTemplateDeclaration) != 0; }))
+            return fail("Template declarations require WIOB format 1.1 or later");
         return result;
     }
 } // namespace wio::bytecode

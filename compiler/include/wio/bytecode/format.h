@@ -12,7 +12,7 @@ namespace wio::bytecode
         std::byte{'W'}, std::byte{'I'}, std::byte{'O'}, std::byte{'B'},
         std::byte{'C'}, std::byte{0x0d}, std::byte{0x0a}, std::byte{0x1a}};
     inline constexpr std::uint16_t FormatMajor = 1;
-    inline constexpr std::uint16_t FormatMinor = 0;
+    inline constexpr std::uint16_t FormatMinor = 1;
     inline constexpr std::uint32_t LittleEndianMarker = 0x01020304u;
     inline constexpr std::uint32_t InvalidIndex = (std::numeric_limits<std::uint32_t>::max)();
     inline constexpr std::uint32_t HeaderSize = 48;

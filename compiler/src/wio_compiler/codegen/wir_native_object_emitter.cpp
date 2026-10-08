@@ -47,6 +47,20 @@ namespace wio::codegen
                             (type->kind >= TypeKind::Bool && type->kind <= TypeKind::Text));
         }
 
+        bool concreteArguments(const TypeTable& types, TypeId id, unsigned depth = 0)
+        {
+            const auto* type = types.tryGet(id);
+            if (!type || depth >= 64 || type->extentParameter || type->kind == TypeKind::Invalid ||
+                type->kind == TypeKind::GenericParameter || type->kind == TypeKind::ConstGenericParameter ||
+                type->kind == TypeKind::GenericParameterPack || type->kind == TypeKind::TypePack ||
+                type->kind == TypeKind::ValuePack || type->kind == TypeKind::PackStorage)
+                return false;
+            // Specialization arguments identify the type, not its physical
+            // fields. Unused string/type/const arguments are valid identities.
+            return std::ranges::all_of(type->arguments,
+                                       [&](TypeId argument) { return concreteArguments(types, argument, depth + 1); });
+        }
+
         // A returned borrow must name receiver/argument storage that survives
         // dispatch. Never advertise a global, projection, local or opaque call
         // result merely because its signature looks like a supported object.
@@ -190,8 +204,8 @@ namespace wio::codegen
                                    root.name == "object" && root.fields.empty() && root.methods.empty() &&
                                    root.baseTypes.empty() && !root.defaultConstructor && !root.destructor;
                         });
-                    if (!reflected || !reflected->stableTypeId || !type.arguments.empty() || !onlyRootBases ||
-                        type.nominalRepresentation != NominalRepresentation::Wio ||
+                    if (!reflected || !reflected->stableTypeId || !concreteArguments(module.types, id) ||
+                        !onlyRootBases || type.nominalRepresentation != NominalRepresentation::Wio ||
                         std::ranges::any_of(type.fields,
                                             [&](const auto& field)
                                             {

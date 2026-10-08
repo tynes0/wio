@@ -13,6 +13,9 @@
 
 namespace wio::bytecode
 {
+    // Identity/signature-only generic declaration. It has no executable body;
+    // genericOrigin on concrete functions may still reference this record.
+    inline constexpr std::uint16_t FunctionTemplateDeclaration = 0x0100u;
     using StringId = std::uint32_t;
     using ConstantId = std::uint32_t;
 
@@ -311,6 +314,7 @@ namespace wio::bytecode
         Contract contract;
 
         [[nodiscard]] std::string_view string(StringId id) const noexcept;
+        [[nodiscard]] std::vector<bool> openTypes() const;
 
         auto operator<=>(const Module&) const = default;
     };

@@ -1546,6 +1546,9 @@ namespace wio::vm
             return ExecutionResult::failure(program_->loadError);
         if (functionId >= program_->module->functions.size())
             return ExecutionResult::failure({"WVM1002", "Entry function id is outside the module"});
+        if ((program_->module->functions[functionId].flags & bytecode::FunctionTemplateDeclaration) != 0)
+            return ExecutionResult::failure(
+                {"WVM1240", "Generic declaration requires a concrete function specialization", functionId});
         if ((program_->module->functions[functionId].flags & 0x0001u) != 0)
             return ExecutionResult::success(startTask(functionId, arguments));
         auto result = execute(functionId, arguments, nullptr);
@@ -2641,6 +2644,9 @@ namespace wio::vm
         auto pushFrame = [&](const bytecode::Function& function, const std::span<const Value> values,
                              FrameContinuation continuation) -> ExecutionResult
         {
+            if ((function.flags & bytecode::FunctionTemplateDeclaration) != 0)
+                return failWithStack(
+                    {"WVM1240", "Generic declaration requires a concrete function specialization", function.id});
             if ((function.flags & 0x0002u) != 0)
                 return failWithStack(
                     {"WVM1003", "External function requires the Sprint 20 native bridge", function.id});

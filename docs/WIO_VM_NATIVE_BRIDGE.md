@@ -893,8 +893,9 @@ This is a contract/runtime foundation, **not automatic CLI object transfer**:
   producer surface below. Machine-owned identity caches use producer weak
   handles, validate generations and recover the original VM object on returns
   and mutable-reference copy-back without a strong cache ownership cycle.
-- Native field projections/synchronization, `ref`/`view` receiver contracts,
-  inheritance/interfaces and generic object routing are not qualified yet.
+- Native field projections/synchronization and inheritance/interfaces remain
+  pending. Qualified caller-rooted `ref`/`view` results and concrete generic
+  object routing are described in the later producer sections.
 - Hosted proxies skip duplicate Wio construction/destruction. Final host
   release queues cleanup for a VM safe point; it does not execute a Wio
   destructor on an arbitrary native release thread. Machine shutdown invalidates
@@ -920,16 +921,17 @@ boundary do not emit this support. An object is selected only when the entire
 method surface qualifies; unsupported methods do not get a partially functional
 proxy. The initial automatic producer surface is deliberately narrow:
 
-- Concrete non-generic Wio objects; only the empty built-in `object` base is
-  allowed. Custom inheritance and interfaces remain pending.
+- Concrete Wio objects, including the fixed-arity type/const specializations
+  qualified below; only the empty built-in `object` base is allowed. Custom
+  inheritance and interfaces remain pending.
 - Private scalar/string/text fields, with no public native projections. Other
   field shapes are excluded so dummy producer fields cannot run nested Wio
   lifecycle bodies during proxy construction/destruction.
 - Non-abstract, synchronous Wio methods with scalar/string/text and qualified
   object and nullable-object values in their arguments/results (or void results), plus `ref/view`
-  qualified-object parameters. Borrowed results, scalar/container references,
-  nullable scalar/container values, container, generic,
-  native/external and async method signatures
+  qualified-object parameters and proven caller-rooted object borrowed results.
+  Scalar/container references, nullable scalar/container values, container,
+  open generic method templates, native/external and async method signatures
   remain excluded.
 
 Proxies override both canonical WIR dispatch slots and the public `_WF_*`
@@ -992,7 +994,7 @@ code and weak-handle operations.
 Lifetime limits are explicit:
 
 - This slice supports the eligible concrete object/method surface listed above,
-  not inheritance, interfaces, generic objects, public fields or general SDK
+  not inheritance, interfaces, open generic objects, public fields or general SDK
   reflection dispatch.
 - Proxy method calls are caller-thread-only. Foreign-thread calls preserve
   `WRONG_THREAD` through the generated native exception boundary.
@@ -1074,8 +1076,8 @@ Object-valued method parameters must belong to the same live machine. A hosted
 proxy from another machine, or an ordinary producer-created C++ object without
 VM field storage, rejects with `TYPE_MISMATCH`. General foreign-object method
 routing/field synchronization, unqualified borrowed-result origins,
-generics, inheritance and interfaces remain pending. Caller-rooted borrowed
-results are qualified in the later section below. VM method
+inheritance and interfaces remain pending. Caller-rooted borrowed
+results and concrete generic objects are qualified in the later sections below. VM method
 failures preserve `PANIC` through the generated native boundary; closed hosts
 continue returning `STALE_HANDLE`. This is an implementation extension to the
 existing wire-v2/object-sidecar-v1 contracts, not a wire-version change.
@@ -1214,7 +1216,7 @@ object wire compatibility, and partial proxy factory failure with exactly-once
 returned-object cleanup at the next VM safe point.
 
 Unqualified borrowed-result origins, nullable scalar/POD/container method
-values, structured fields, generic
+values, structured fields, open generic
 objects, inheritance/interfaces and general foreign-object synchronization
 remain separate pending work. This slice does not close native object parity.
 Only this new focused gate is run; no full-suite or Linux pass is claimed.
@@ -1299,7 +1301,7 @@ factory failure, transactional null replacement rollback, and two-stage
 null-to-object rollback with exact constructor/destructor counts.
 
 Unqualified borrowed-result origins, escaping VM cells, scalar/POD/container method references,
-generic objects, inheritance/interfaces and foreign-object synchronization
+open generic objects, inheritance/interfaces and foreign-object synchronization
 remain pending. Async task-launch ownership is separate from this synchronous
 call-frame correction and still requires its own lifecycle qualification.
 Only the new focused gate is run; no full-suite or Linux pass is claimed.
@@ -1377,10 +1379,53 @@ through generated wrappers. Selection checks cover all CFG predecessors,
 readonly merges and conservative rejection of unsupported origins.
 
 The wire-v2/object-sidecar-v1 versions are unchanged. Global/projection/nested
-borrowed results, broader method signatures, generic/inherited/interface objects,
+borrowed results, broader method signatures, open-generic/inherited/interface objects,
 foreign-object synchronization and async task ownership remain separate work.
 Only this new focused gate is run; no full-suite or Linux pass is claimed.
 
 The borrowed-result gate passed locally on Windows (1/1, 14.94 seconds), including
 generated C++, actual VM CLI, host identity/cell tests and malformed-result
 rejection. The broader native interoperability sprint remains open.
+
+## Concrete generic object proxies
+
+Fixed-arity Wio object specializations can now cross the automatic native object
+boundary under the same field, method, lifecycle, and borrow restrictions as
+non-generic objects. The focused surface includes `Box<i32, 7>`, `Box<i32, 9>`,
+and `Box<string>` with a default const parameter. Type and const arguments remain
+part of the stable object identity; distinct specializations cannot decode one
+another's handles. Open type/const arguments, unresolved nested arguments,
+packs, and open generic method templates are not eligible proxies.
+
+For a primary fixed-arity declaration, semantic `self` compatibility compares
+the symbolic declared parameters with explicit `Box<T, Tag>` arguments. It does
+not make parameters wildcards: returning self as a different type or const
+specialization remains a semantic error. Owned `deref self`, borrowed `self`,
+and newly constructed concrete results preserve their selected specialization.
+
+Generic materialization now refreshes reflected method descriptors with the
+concrete owner, parameter/result types, specialized function, declaration
+attributes, and a signature-derived stable method identity. Open generic
+declarations remain signature-only bytecode metadata; concrete method bodies
+retain their origin identity and execute normally. See
+[the bytecode declaration contract](WIO_BYTECODE_FORMAT.md#generic-declaration-records-11).
+
+`wio_vm_native_object_concrete_generics` compares generated C++, actual VM CLI,
+and the generated producer DLL/live host. Thirty rounds per specialization
+exercise scalar/string reads, const/default arguments, owned and ref/view self
+results, cloned objects, and exactly-once constructor/destructor counts. The
+host checks concrete reflection/origin metadata, specialization isolation,
+wrong-type handle rejection, template invocation rejection, malformed template
+records, recursive type-openness propagation, and bytecode version compatibility.
+The semantic negative fixture must reject both wrong-type and wrong-const self
+returns.
+
+Native wire-v2/object-sidecar-v1 remain unchanged; the bytecode writer now emits
+WIOB 1.1 for template-declaration metadata. This does not qualify variadic or
+partial-specialized objects, generic method templates, inherited/interface
+objects, structured/public fields, general SDK reflection routing, or async
+task ownership. Only the new focused gate is run; no full-suite or Linux pass
+is claimed. The broader native interoperability sprint remains open.
+
+The concrete-generic gate passed locally on Windows (1/1, 15.25 seconds),
+including generated C++, VM CLI, live producer/host and negative qualifications.

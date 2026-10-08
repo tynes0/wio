@@ -1,6 +1,7 @@
 #include "native_bridge_internal.h"
 #include "native_object_internal.h"
 #include "wio/bytecode/codec.h"
+#include "wio/bytecode/verifier.h"
 #include "wio/codegen/wir_native_object_emitter.h"
 #include "wio/vm/machine.h"
 #include <wir_object_abi.h>
@@ -93,8 +94,27 @@ namespace
         };
         rejects([&](auto& trial) { trial.types.getMutable(object).fields[0].visibility = FieldVisibility::Public; },
                 "public field object was proxied without field synchronization");
-        rejects([&](auto& trial) { trial.types.getMutable(object).arguments = {integer}; },
-                "generic object was silently proxied");
+        {
+            auto trial = module;
+            trial.types.getMutable(object).arguments = {integer};
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "concrete generic object was rejected");
+            const auto unresolved = trial.types.intern(Type{.kind = TypeKind::GenericParameter, .name = "T"});
+            trial.types.getMutable(object).arguments = {unresolved};
+            check(Emitter::eligibleTypes(trial).empty(), "open generic object was silently proxied");
+            const auto nested = trial.types.intern(Type{.kind = TypeKind::Array, .arguments = {unresolved}});
+            trial.types.getMutable(object).arguments = {nested};
+            check(Emitter::eligibleTypes(trial).empty(), "nested unresolved generic identity was proxied");
+            const auto constant =
+                trial.types.intern(Type{.kind = TypeKind::ConstGenericParameter, .name = "N", .arguments = {integer}});
+            trial.types.getMutable(object).arguments = {constant};
+            check(Emitter::eligibleTypes(trial).empty(), "unresolved const generic identity was proxied");
+            const auto pack = trial.types.intern(Type{.kind = TypeKind::GenericParameterPack, .name = "Args"});
+            trial.types.getMutable(object).arguments = {pack};
+            check(Emitter::eligibleTypes(trial).empty(), "unresolved generic pack identity was proxied");
+            trial.types.getMutable(object).arguments = {integer};
+            trial.functions[0].genericParameters = {unresolved};
+            check(Emitter::eligibleTypes(trial).empty(), "open generic method was silently qualified");
+        }
         rejects([&](auto& trial) { trial.types.getMutable(object).fields[0].type = object; },
                 "structured field was proxied without nested lifecycle integration");
         rejects([&](auto& trial) { trial.functions[0].isAsync = true; }, "async method was silently proxied");
@@ -842,6 +862,186 @@ namespace
         return 0;
     }
 
+    int qualifyConcreteGenerics(const char* bytecode, const char* producer)
+    {
+        std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
+        const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        auto decoded = bc::decode(std::as_bytes(std::span{bytes.data(), bytes.size()}));
+        check(decoded.succeeded(), "generic object bytecode decode failed");
+        {
+            bc::Module graph;
+            graph.strings = {"Pack"};
+            graph.types = {{.kind = 28, .arguments = {1}},
+                           {.kind = 28, .arguments = {0}},
+                           {.kind = 21},
+                           {.kind = 28, .arguments = {4, 2}},
+                           {.kind = 28, .arguments = {3}},
+                           {.kind = 29, .arguments = {4}},
+                           {.kind = 28, .baseTypes = {4}},
+                           {.kind = 28, .fields = {{.type = 5}}},
+                           {.kind = 31, .extentParameter = 2},
+                           {.kind = 28, .arguments = {bc::InvalidIndex}},
+                           {.kind = 24},
+                           {.kind = 25, .arguments = {0}},
+                           {.kind = 26, .arguments = {2}},
+                           {.kind = 27, .arguments = {0}},
+                           {.kind = 25},
+                           {.kind = 26, .name = 0},
+                           {.kind = 27, .name = 0},
+                           {.kind = 22},
+                           {.kind = 23}};
+            check(graph.openTypes() == std::vector<bool>({false, false, true, true, true, true, true, true, true, false,
+                                                          true, false, true, false, false, true, true, true, false}),
+                  "type openness lost recursive, reference, field, base or extent dependencies");
+        }
+        {
+            auto encoded = bc::encode(decoded.module);
+            check(encoded[10] == std::byte{1} && encoded[11] == std::byte{0},
+                  "generic declarations were emitted without WIOB 1.1 versioning");
+            encoded[10] = std::byte{2};
+            check(!bc::decode(encoded).succeeded(), "unknown future bytecode minor was accepted");
+            encoded[10] = std::byte{0};
+            check(!bc::decode(encoded).succeeded(), "template declaration was accepted as WIOB 1.0");
+            auto legacy = bc::encode(bc::Module{});
+            legacy[10] = std::byte{0};
+            check(bc::decode(legacy).succeeded(), "WIOB 1.0 without template declarations lost loader compatibility");
+        }
+        Library library{std::filesystem::u8path(producer)};
+        const auto getObjects = library.symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
+        const auto getRegistry = library.symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
+        check(getObjects && getObjects()->typeCount == 3 && getRegistry, "generic object producer adapters missing");
+        const auto& api = *getObjects();
+        const auto& registry = *getRegistry();
+        wio::vm::Machine machine{decoded.module};
+        std::string error;
+        check(machine.loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+        const auto invoke = [&](const char* name)
+        {
+            const auto function = std::ranges::find_if(decoded.module.functions, [&](const auto& item)
+                                                       { return decoded.module.string(item.name) == name; });
+            check(function != decoded.module.functions.end(), "generic object entry missing");
+            auto result = machine.invoke(function->id);
+            if (!result.succeeded())
+                throw std::runtime_error(result.error().code + ": " + result.error().message);
+            return result;
+        };
+        check(invoke("Entry").value().asSignedInteger() == 0, "generic object identity/lifecycle check failed");
+        const auto open = std::ranges::find_if(decoded.module.functions,
+                                               [&](const auto& function)
+                                               {
+                                                   return decoded.module.string(function.name) == "TagValue" &&
+                                                          (function.flags & bc::FunctionTemplateDeclaration) != 0;
+                                               });
+        check(open != decoded.module.functions.end() && open->blocks.empty(),
+              "open generic method leaked executable code into bytecode");
+        const auto invalidInvocation = machine.invoke(open->id);
+        check(!invalidInvocation.succeeded() && invalidInvocation.error().code == "WVM1240",
+              "VM attempted to execute an open generic declaration");
+        {
+            auto asyncDeclaration = decoded.module;
+            asyncDeclaration.functions[open->id].flags |= 0x0001u;
+            check(bc::Verifier{}.verify(asyncDeclaration).succeeded(), "async template declaration metadata rejected");
+            wio::vm::Machine asyncMachine{asyncDeclaration};
+            const auto result = asyncMachine.invoke(open->id);
+            check(!result.succeeded() && result.error().code == "WVM1240",
+                  "async template invocation created a task instead of rejecting the declaration");
+        }
+        {
+            auto malformed = decoded.module;
+            malformed.functions[open->id].flags &= ~bc::FunctionTemplateDeclaration;
+            check(!bc::Verifier{}.verify(malformed).succeeded(), "bodyless template lost its declaration marker");
+            malformed = decoded.module;
+            malformed.functions[open->id].blocks = {{.id = 0, .instructions = {{.opcode = bc::Opcode::Unreachable}}}};
+            check(!bc::Verifier{}.verify(malformed).succeeded(), "template declaration accepted an executable body");
+            malformed = decoded.module;
+            const auto closed = std::ranges::find_if(malformed.functions, [&](const auto& function)
+                                                     { return malformed.string(function.name) == "Entry"; });
+            check(closed != malformed.functions.end(), "concrete entry missing");
+            closed->flags |= bc::FunctionTemplateDeclaration;
+            closed->blocks.clear();
+            check(!bc::Verifier{}.verify(malformed).succeeded(), "concrete function forged a template declaration");
+        }
+        std::set<std::uint64_t> identities;
+        const std::array entries{"CaptureIntEntry", "CaptureOtherEntry", "CaptureStringEntry"};
+        const std::array<std::uint64_t, 3> tags{7, 9, 5};
+        for (std::size_t index = 0; index < entries.size(); ++index)
+        {
+            const auto captured = invoke(entries[index]);
+            const auto token = *reinterpret_cast<const WioNativeObjectHost*>(captured.value().asUnsignedInteger());
+            check(identities.insert(token.typeId).second, "generic type/const specializations shared a native type id");
+            const auto adapters = std::span{api.types, api.typeCount};
+            const auto adapter = std::ranges::find(adapters, token.typeId, &WioNativeObjectDescriptor::typeId);
+            check(adapter != adapters.end(), "concrete generic adapter missing");
+            const auto reflected =
+                std::ranges::find(decoded.module.contract.reflection, token.typeId, &bc::Reflection::stableTypeId);
+            check(reflected != decoded.module.contract.reflection.end(), "concrete generic reflection missing");
+            const auto& type = decoded.module.types[reflected->type];
+            check(type.arguments.size() == 2, "generic reflection lost type/const arguments");
+            const auto methodId = [&](const char* name)
+            {
+                const auto method = std::ranges::find_if(reflected->methods, [&](const auto& item)
+                                                         { return decoded.module.string(item.name) == name; });
+                check(method != reflected->methods.end(), "generic reflected method missing");
+                check(decoded.module.functions[method->function].ownerType == reflected->type,
+                      "generic method dispatch retained the open declaration owner");
+                const auto& implementation = decoded.module.functions[method->function];
+                check((implementation.flags & bc::FunctionTemplateDeclaration) == 0 && !implementation.blocks.empty() &&
+                          implementation.genericOrigin < decoded.module.functions.size() &&
+                          (decoded.module.functions[implementation.genericOrigin].flags &
+                           bc::FunctionTemplateDeclaration),
+                      "concrete method lost its executable specialization or template origin");
+                return method->stableId;
+            };
+            Wire tagged;
+            check(token.invoke(&token, methodId("TagValue"), nullptr, 0, &tagged.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                      tagged.value.kind == WIO_NATIVE_ABI_U64 && tagged.value.payload.unsignedInteger == tags[index],
+                  "const generic method dispatched with another specialization's value");
+            Wire same;
+            check(token.invoke(&token, methodId("Same"), nullptr, 0, &same.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                      same.value.kind == WIO_NATIVE_ABI_OBJECT && same.value.typeId == token.typeId,
+                  "generic owned self return lost its specialization");
+            WioNativeObjectHost recovered{};
+            check(adapter->host(&same.value, &recovered, nullptr) == WIO_NATIVE_ABI_OK &&
+                      recovered.owner.state == token.owner.state && recovered.objectId == token.objectId,
+                  "generic self return changed VM identity");
+            Wire clone;
+            check(token.invoke(&token, methodId("Clone"), nullptr, 0, &clone.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                      clone.value.typeId == token.typeId &&
+                      adapter->host(&clone.value, &recovered, nullptr) == WIO_NATIVE_ABI_OK &&
+                      recovered.objectId != token.objectId,
+                  "generic constructor result reused its receiver or another type");
+            Wire read;
+            check(token.invoke(&token, methodId("Read"), nullptr, 0, &read.value, nullptr) == WIO_NATIVE_ABI_OK,
+                  "generic value method failed");
+            if (index == 2)
+                check(read.value.kind == WIO_NATIVE_ABI_BYTES &&
+                          std::string_view{static_cast<const char*>(read.value.payload.slice.data),
+                                           static_cast<std::size_t>(read.value.payload.slice.size)} == "wio-generic",
+                      "string generic method used scalar storage");
+            else
+                check(read.value.kind == WIO_NATIVE_ABI_I64 &&
+                          read.value.payload.signedInteger == (index == 0 ? 37 : 41),
+                      "integer generic method used a different type/const specialization");
+            for (const auto& wrong : adapters)
+                if (wrong.typeId != token.typeId)
+                {
+                    Wire rejected;
+                    check(wrong.create(&token, &rejected.value, nullptr) == WIO_NATIVE_ABI_INVALID_ARGUMENT &&
+                              rejected.value.kind == WIO_NATIVE_ABI_VOID &&
+                              wrong.host(&same.value, &recovered, nullptr) == WIO_NATIVE_ABI_TYPE_MISMATCH,
+                          "different generic type/const specializations accepted one another's object handles");
+                }
+        }
+        Wire cleared;
+        check(call(registry, "vm_object_generic::ClearCapture", {}, cleared.value) == WIO_NATIVE_ABI_OK,
+              "generic capture cleanup failed");
+        invoke("SafePoint");
+        check(scalar(registry, "vm_object_generic::Constructions") ==
+                  scalar(registry, "vm_object_generic::Destructions"),
+              "generic object constructors/destructors were lost or repeated");
+        return 0;
+    }
+
     int qualifyBorrowedResults(const char* bytecode, const char* producer)
     {
         std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
@@ -1390,6 +1590,8 @@ int main(int argc, char** argv)
     {
         check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4 && std::string_view(argv[3]) == "concrete-generics")
+            return qualifyConcreteGenerics(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "borrowed-results")
             return qualifyBorrowedResults(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "nullable-references")

@@ -728,7 +728,7 @@ Rider, and CLion are defined in
    Object ref/view method parameters now use alias-preserving tagged handle
    cells, with staged transactional copy-back and panic-unwind copy-back.
    Distinct cells holding one object remain independent. Unqualified borrowed-result origins,
-   generic object methods and foreign-object field/method
+   open generic object methods and foreign-object field/method
    synchronization remain pending. Focused qualification covers 30 lifecycle
    rounds, ref/ref and ref/view aliases, malformed references and partial
    factory failure while staging one or multiple replacement cells.
@@ -763,6 +763,17 @@ Rider, and CLion are defined in
    C++/VM/host gate covers 30 lifecycle rounds, aliases, nullable/read-only paths,
    branch selection, separate proxy identity and malformed result rejection.
    The borrowed-result gate passed locally on Windows (1/1, 14.94 seconds).
+   Concrete fixed-arity type/const object specializations now receive producer
+   proxies with distinct stable identities and specialized reflected methods.
+   Generic declaration self compatibility accepts matching symbolic arguments
+   while rejecting different type/const specializations. Open generic bodies
+   remain signature-only WIOB 1.1 metadata; concrete bodies retain their origin
+   identity. Focused C++/VM/host qualification covers 30 rounds per specialization,
+   scalar/string/default-const values, owned/ref/view self returns, clones,
+   lifecycle counts, reflection/origin metadata, wrong-type handles, malformed
+   declarations, recursive openness and format compatibility. Variadic/partial
+   specialization and generic method templates remain unqualified at this boundary.
+   The concrete-generic gate passed locally on Windows (1/1, 15.25 seconds).
    Field synchronization, inheritance/interface and SDK/reflection routing
    remain pending; this does not close object parity.
    Remaining native parity work includes broader VM-created object signatures,

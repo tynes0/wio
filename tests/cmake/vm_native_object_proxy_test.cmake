@@ -21,6 +21,17 @@ endif()
 if(WIO_OBJECT_METHOD_BORROWED_RESULTS)
     set(source "${WIO_ROOT}/tests/vm_native_object_method_borrowed_results.wio")
 endif()
+if(WIO_OBJECT_CONCRETE_GENERICS)
+    set(source "${WIO_ROOT}/tests/vm_native_object_concrete_generics.wio")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
+        "${WIO_EXECUTABLE}" file check "${WIO_ROOT}/tests/invalid/vm_native_object_generic_wrong_self.wio"
+        RESULT_VARIABLE invalidResult OUTPUT_VARIABLE invalidOutput ERROR_VARIABLE invalidError TIMEOUT 30)
+    string(REGEX MATCHALL "Return type mismatch" invalidDiagnostics "${invalidOutput}${invalidError}")
+    list(LENGTH invalidDiagnostics invalidCount)
+    if("${invalidResult}" STREQUAL "0" OR NOT invalidCount EQUAL 2)
+        message(FATAL_ERROR "Generic self accepted a different type/const specialization:\n${invalidOutput}\n${invalidError}")
+    endif()
+endif()
 set(native "${WIO_OUTPUT_DIR}/native${WIO_EXECUTABLE_SUFFIX}")
 set(bridge "${WIO_OUTPUT_DIR}/bridge${WIO_SHARED_SUFFIX}")
 set(bytecode "${WIO_OUTPUT_DIR}/program.wiob")
@@ -45,7 +56,7 @@ if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Normal generated C++ object calls regressed (${result}): ${output}\n${error}")
 endif()
 if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERENCES OR WIO_OBJECT_METHOD_NULLABLE
-   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES OR WIO_OBJECT_METHOD_BORROWED_RESULTS)
+   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES OR WIO_OBJECT_METHOD_BORROWED_RESULTS OR WIO_OBJECT_CONCRETE_GENERICS)
     execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
         "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}" --native-library "${bridge}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
@@ -68,6 +79,9 @@ if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERE
     if(WIO_OBJECT_METHOD_BORROWED_RESULTS)
         set(hostMode borrowed-results)
     endif()
+    if(WIO_OBJECT_CONCRETE_GENERICS)
+        set(hostMode concrete-generics)
+    endif()
     execute_process(COMMAND "${WIO_OBJECT_PROXY_EXECUTABLE}" "${bytecode}" "${bridge}" "${hostMode}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
     if(NOT "${result}" STREQUAL "0")
@@ -75,7 +89,7 @@ if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERE
     endif()
 endif()
 if(WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERENCES OR WIO_OBJECT_METHOD_NULLABLE
-   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES OR WIO_OBJECT_METHOD_BORROWED_RESULTS)
+   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES OR WIO_OBJECT_METHOD_BORROWED_RESULTS OR WIO_OBJECT_CONCRETE_GENERICS)
     message(STATUS "Generated C++/VM object method qualification passed")
     return()
 endif()
