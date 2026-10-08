@@ -4880,8 +4880,20 @@ namespace wio::wir::typed
                         const Type* methodResultType = result_.module_.types.tryGet(callResultType);
                         const bool borrowedResult = methodResultType && methodResultType->kind == TypeKind::Reference;
                         const bool temporaryReceiver = memberCallee->object->is<FunctionCallExpression>();
+                        // Existing object storage already roots a receiver borrow.
+                        // Do not create an owned SSA copy that survives lexical
+                        // cleanup merely because the method returns ref/view.
+                        // Temporaries still use their tracked backing place.
+                        const bool lexicalObjectReceiver =
+                            borrowedResult &&
+                            (receiverOwner->nominalKind == NominalKind::Object ||
+                             receiverOwner->nominalKind == NominalKind::Interface) &&
+                            (memberCallee->object->is<Identifier>() || memberCallee->object->is<SelfExpression>() ||
+                             memberCallee->object->is<SuperExpression>());
                         const ValueId receiver = borrowedResult && temporaryReceiver
                                                      ? buildPlace(memberCallee->object, method->receiverMutable, state)
+                                                 : lexicalObjectReceiver
+                                                     ? buildAutoReadableExpression(memberCallee->object, state)
                                                      : buildExpressionAs(memberCallee->object, rawReceiverType, state);
                         if (!receiver)
                             return {};

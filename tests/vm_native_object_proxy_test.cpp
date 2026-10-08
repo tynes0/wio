@@ -29,6 +29,7 @@ namespace
     WioNativeObjectCreateFn partialObjectFactory = nullptr;
     bool failObjectFactory = false;
     int objectFactoryCallsBeforeFailure = 0;
+    WioNativeAbiValue malformedBorrowOutput{};
 
     void check(bool passed, const char* message)
     {
@@ -108,7 +109,60 @@ namespace
             trial.functions[0].parameters.back().type = view;
             check(Emitter::eligibleTypes(trial) == std::set{object}, "object view method parameter was rejected");
             trial.functions[0].returnType = receiver;
-            check(Emitter::eligibleTypes(trial).empty(), "borrowed method return was silently proxied");
+            check(Emitter::eligibleTypes(trial).empty(), "unproven borrowed method return was silently proxied");
+        }
+        {
+            auto trial = module;
+            auto& method = trial.functions[0];
+            method.parameters[0].id = ValueId{0};
+            method.returnType = receiver;
+            trial.contract.reflection[0].methods[0].returnType = receiver;
+            method.blocks = {
+                {.id = BlockId{0}, .instructions = {{.opcode = lowered::Opcode::Return, .operands = {ValueId{0}}}}}};
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "receiver-rooted result was rejected");
+            method.parameters.push_back({.id = ValueId{1}, .type = receiver});
+            method.blocks[0].instructions[0].operands = {ValueId{1}};
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "parameter-rooted result was rejected");
+            const auto view =
+                trial.types.intern(Type{.kind = TypeKind::Reference, .arguments = {object}, .isMutable = false});
+            method.parameters[1].type = view;
+            check(Emitter::eligibleTypes(trial).empty(), "readonly parameter returned a mutable borrow");
+            method.returnType = view;
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "readonly parameter result was rejected");
+            method.parameters[1].type = receiver;
+            method.blocks[0].instructions = {
+                {.opcode = lowered::Opcode::Borrow, .result = ValueId{2}, .resultType = view, .operands = {ValueId{1}}},
+                {.opcode = lowered::Opcode::Return, .operands = {ValueId{2}}}};
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "readonly borrow forwarding was rejected");
+            method.returnType = receiver;
+            check(Emitter::eligibleTypes(trial).empty(), "readonly intermediate strengthened a returned borrow");
+            method.returnType = view;
+            method.blocks[0].instructions[0].opcode = lowered::Opcode::GlobalPlace;
+            check(Emitter::eligibleTypes(trial).empty(), "unqualified global result was proxied");
+            method.blocks[0].instructions[0].opcode = lowered::Opcode::FieldPlace;
+            check(Emitter::eligibleTypes(trial).empty(), "unqualified projection result was proxied");
+            method.blocks[0].instructions[0].opcode = lowered::Opcode::Borrow;
+            method.parameters[1].type = object;
+            check(Emitter::eligibleTypes(trial).empty(), "owned argument storage escaped as a borrowed result");
+            method.parameters[1].type = receiver;
+            method.parameters.push_back({.id = ValueId{2}, .type = trial.types.boolType()});
+            method.returnType = receiver;
+            method.blocks = {{.id = BlockId{0},
+                              .instructions = {{.opcode = lowered::Opcode::CondJump,
+                                                .operands = {ValueId{2}},
+                                                .targets = {{.block = BlockId{1}, .arguments = {ValueId{0}}},
+                                                            {.block = BlockId{1}, .arguments = {ValueId{1}}}}}}},
+                             {.id = BlockId{1},
+                              .parameters = {{.id = ValueId{3}, .type = receiver}},
+                              .instructions = {{.opcode = lowered::Opcode::Return, .operands = {ValueId{3}}}}}};
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "caller-rooted CFG merge was rejected");
+            method.blocks[1].parameters[0].type = view;
+            check(Emitter::eligibleTypes(trial).empty(), "readonly CFG merge strengthened a borrow");
+            method.blocks[1].parameters[0].type = receiver;
+            method.blocks[0].instructions[0].targets[1].arguments = {ValueId{99}};
+            check(Emitter::eligibleTypes(trial).empty(), "unproven CFG predecessor escaped as a borrow");
+            method.blocks[0].instructions[0].targets[1].arguments = {ValueId{3}};
+            check(Emitter::eligibleTypes(trial).empty(), "cyclic borrow provenance was silently accepted");
         }
         rejects(
             [&](auto& trial)
@@ -788,6 +842,143 @@ namespace
         return 0;
     }
 
+    int qualifyBorrowedResults(const char* bytecode, const char* producer)
+    {
+        std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
+        const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        auto decoded = bc::decode(std::as_bytes(std::span{bytes.data(), bytes.size()}));
+        check(decoded.succeeded(), "borrowed result bytecode decode failed");
+        Library library{std::filesystem::u8path(producer)};
+        const auto getObjects = library.symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
+        const auto getRegistry = library.symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
+        check(getObjects && getObjects()->typeCount == 1 && getRegistry, "borrowed result producer API missing");
+        const auto& adapter = getObjects()->types[0];
+        const auto& registry = *getRegistry();
+        wio::vm::Machine machine{decoded.module};
+        std::string error;
+        check(machine.loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+        const auto invoke = [&](const char* name)
+        {
+            const auto entry = std::ranges::find_if(decoded.module.functions, [&](const auto& function)
+                                                    { return decoded.module.string(function.name) == name; });
+            check(entry != decoded.module.functions.end(), "borrowed result entry missing");
+            auto result = machine.invoke(entry->id);
+            if (!result.succeeded())
+                throw std::runtime_error(result.error().code + ": " + result.error().message);
+            return result;
+        };
+        check(invoke("Entry").value().asSignedInteger() == 0, "borrowed result alias/lifecycle checks failed");
+        const auto captured = invoke("CaptureEntry");
+        const auto token = *reinterpret_cast<const WioNativeObjectHost*>(captured.value().asUnsignedInteger());
+        const auto reflected =
+            std::ranges::find(decoded.module.contract.reflection, token.typeId, &bc::Reflection::stableTypeId);
+        check(reflected != decoded.module.contract.reflection.end(), "borrowed result metadata missing");
+        const auto methodId = [&](const char* name)
+        {
+            const auto method = std::ranges::find_if(reflected->methods, [&](const auto& item)
+                                                     { return decoded.module.string(item.name) == name; });
+            check(method != reflected->methods.end(), "borrowed result method missing");
+            return method->stableId;
+        };
+        for (const auto* name : {"AsRef", "AsView"})
+        {
+            Wire output;
+            check(token.invoke(&token, methodId(name), nullptr, 0, &output.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                      output.value.kind == WIO_NATIVE_ABI_OBJECT && output.value.typeId == token.typeId,
+                  "receiver borrow lost its transport identity");
+            WioNativeObjectHost recovered{};
+            check(adapter.host(&output.value, &recovered, nullptr) == WIO_NATIVE_ABI_OK &&
+                      recovered.owner.state == token.owner.state && recovered.objectId == token.objectId &&
+                      recovered.generation == token.generation,
+                  "receiver borrow returned a different object");
+        }
+        Wire first;
+        Wire second;
+        check(adapter.create(&token, &first.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                  adapter.create(&token, &second.value, nullptr) == WIO_NATIVE_ABI_OK,
+              "borrowed result cell setup failed");
+        WioNativeAbiValue reference{};
+        reference.kind = WIO_NATIVE_ABI_REFERENCE;
+        reference.flags = WIO_NATIVE_ABI_VALUE_BORROWED | WIO_NATIVE_ABI_VALUE_MUTABLE;
+        reference.payload.mutableSlice = {&first.value, sizeof(WioNativeAbiValue)};
+        auto other = reference;
+        other.payload.mutableSlice.data = &second.value;
+        Wire exercise;
+        check(call(registry, "vm_object_borrowed_results::CheckReceiver", std::span{&first.value, 1}, exercise.value) ==
+                      WIO_NATIVE_ABI_OK &&
+                  exercise.value.payload.signedInteger == 0,
+              "borrowed results failed on a separately materialized proxy for the same VM object");
+        const auto verify = [&](const char* name, std::span<const WioNativeAbiValue> arguments,
+                                WioNativeAbiValue* expected, bool mutableResult)
+        {
+            Wire output;
+            check(token.invoke(&token, methodId(name), arguments.data(), arguments.size(), &output.value, nullptr) ==
+                          WIO_NATIVE_ABI_OK &&
+                      output.value.kind == WIO_NATIVE_ABI_REFERENCE && output.value.typeId == token.typeId &&
+                      output.value.flags ==
+                          (WIO_NATIVE_ABI_VALUE_BORROWED | (mutableResult ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0)) &&
+                      output.value.payload.mutableSlice.data == expected &&
+                      output.value.payload.mutableSlice.size == sizeof(WioNativeAbiValue) &&
+                      !output.value.owner.state && !output.value.owner.ops,
+                  "borrowed result did not preserve the caller's exact cell and mutability");
+        };
+        verify("BorrowTarget", std::span{&reference, 1}, &first.value, true);
+        auto readonly = reference;
+        readonly.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+        verify("ViewTarget", std::span{&readonly, 1}, &first.value, false);
+        for (const bool left : {false, true})
+        {
+            WioNativeAbiValue choice{};
+            choice.kind = WIO_NATIVE_ABI_BOOL;
+            choice.payload.unsignedInteger = left;
+            const std::array arguments{reference, other, choice};
+            verify("Choose", arguments, left ? &first.value : &second.value, true);
+        }
+        Wire missing;
+        missing.value.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+        missing.value.typeId = token.typeId;
+        auto nullable = reference;
+        nullable.payload.mutableSlice.data = &missing.value;
+        verify("NullableTarget", std::span{&nullable, 1}, &missing.value, true);
+        nullable.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+        verify("NullableView", std::span{&nullable, 1}, &missing.value, false);
+        Wire rejected;
+        check(token.invoke(&token, methodId("BorrowTarget"), &readonly, 1, &rejected.value, nullptr) ==
+                      WIO_NATIVE_ABI_INVALID_ARGUMENT &&
+                  rejected.value.kind == WIO_NATIVE_ABI_VOID,
+              "readonly input was strengthened by a mutable borrowed result");
+        auto malformedHost = token;
+        malformedHost.invoke = [](const WioNativeObjectHost*, std::uint64_t, const WioNativeAbiValue*, std::uint64_t,
+                                  WioNativeAbiValue* output, WioNativeAbiFailure*) noexcept
+        {
+            *output = malformedBorrowOutput;
+            if (output->kind == WIO_NATIVE_ABI_OBJECT && output->flags & WIO_NATIVE_ABI_VALUE_OWNED)
+                WioNativeAbiRetain(output->payload.handle);
+            return WIO_NATIVE_ABI_OK;
+        };
+        for (int malformed = 0; malformed < 3; ++malformed)
+        {
+            malformedBorrowOutput = reference;
+            malformedBorrowOutput.typeId = token.typeId;
+            if (malformed == 1)
+                malformedBorrowOutput.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+            if (malformed == 2)
+                malformedBorrowOutput = first.value; // Different dispatcher identity, despite the same object id.
+            Wire proxy;
+            check(adapter.create(&malformedHost, &proxy.value, nullptr) == WIO_NATIVE_ABI_OK,
+                  "malformed borrowed result proxy setup failed");
+            Wire failure;
+            check(call(registry, "vm_object_borrowed_results::CheckReceiver", std::span{&proxy.value, 1},
+                       failure.value) == WIO_NATIVE_ABI_TYPE_MISMATCH &&
+                      failure.value.kind == WIO_NATIVE_ABI_VOID,
+                  "generated proxy accepted an unrelated cell, weakened ref or mismatched receiver dispatcher");
+        }
+        malformedBorrowOutput = {};
+        check(call(registry, "vm_object_references::ClearCapture", {}, rejected.value) == WIO_NATIVE_ABI_OK,
+              "borrowed result capture cleanup failed");
+        return 0;
+    }
+
     int qualifyReferences(const char* bytecode, const char* producer, bool nullable = false)
     {
         std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
@@ -1199,6 +1390,8 @@ int main(int argc, char** argv)
     {
         check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4 && std::string_view(argv[3]) == "borrowed-results")
+            return qualifyBorrowedResults(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "nullable-references")
             return qualifyReferences(argv[1], argv[2], true);
         if (argc == 4 && std::string_view(argv[3]) == "nullable")

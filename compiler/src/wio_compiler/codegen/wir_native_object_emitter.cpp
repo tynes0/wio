@@ -2,6 +2,7 @@
 #include "wio/wir/native_abi_types.h"
 
 #include <algorithm>
+#include <functional>
 #include <ranges>
 #include <sstream>
 #include <vector>
@@ -44,6 +45,77 @@ namespace wio::codegen
             const auto* type = module.types.tryGet(id);
             return type && ((allowVoid && type->kind == TypeKind::Void) ||
                             (type->kind >= TypeKind::Bool && type->kind <= TypeKind::Text));
+        }
+
+        // A returned borrow must name receiver/argument storage that survives
+        // dispatch. Never advertise a global, projection, local or opaque call
+        // result merely because its signature looks like a supported object.
+        bool borrowedResultProven(const lowered::Module& module, const lowered::Function& method)
+        {
+            const auto& result = module.types.get(method.returnType);
+            if (result.kind != TypeKind::Reference)
+                return true;
+            if (result.arguments.size() != 1)
+                return false;
+            std::function<bool(ValueId, std::set<ValueId>&)> source;
+            source = [&](ValueId value, std::set<ValueId>& visiting)
+            {
+                if (!value || visiting.size() >= 64 || !visiting.insert(value).second)
+                    return false;
+                for (const auto& parameter : method.parameters)
+                    if (parameter.id == value)
+                    {
+                        const auto& type = module.types.get(parameter.type);
+                        return type.kind == TypeKind::Reference && type.arguments == result.arguments &&
+                               (!result.isMutable || type.isMutable);
+                    }
+                for (const auto& block : method.blocks)
+                {
+                    for (const auto& instruction : block.instructions)
+                        if (instruction.result == value)
+                        {
+                            if (instruction.opcode != lowered::Opcode::Borrow || instruction.operands.size() != 1)
+                                return false;
+                            const auto& type = module.types.get(instruction.resultType);
+                            return type.kind == TypeKind::Reference && type.arguments == result.arguments &&
+                                   (!result.isMutable || type.isMutable) &&
+                                   source(instruction.operands.front(), visiting);
+                        }
+                    for (std::size_t index = 0; index < block.parameters.size(); ++index)
+                        if (block.parameters[index].id == value)
+                        {
+                            const auto& type = module.types.get(block.parameters[index].type);
+                            if (type.kind != TypeKind::Reference || type.arguments != result.arguments ||
+                                (result.isMutable && !type.isMutable))
+                                return false;
+                            bool incoming = false;
+                            for (const auto& predecessor : method.blocks)
+                                for (const auto& instruction : predecessor.instructions)
+                                    for (const auto& target : instruction.targets)
+                                        if (target.block == block.id)
+                                        {
+                                            auto path = visiting;
+                                            if (index >= target.arguments.size() ||
+                                                !source(target.arguments[index], path))
+                                                return false;
+                                            incoming = true;
+                                        }
+                            return incoming;
+                        }
+                }
+                return false;
+            };
+            bool returned = false;
+            for (const auto& block : method.blocks)
+                for (const auto& instruction : block.instructions)
+                    if (instruction.opcode == lowered::Opcode::Return)
+                    {
+                        std::set<ValueId> visiting;
+                        if (instruction.operands.size() != 1 || !source(instruction.operands.front(), visiting))
+                            return false;
+                        returned = true;
+                    }
+            return returned;
         }
     } // namespace
 
@@ -103,48 +175,47 @@ namespace wio::codegen
         do
         {
             previousSize = candidates.size();
-            std::erase_if(candidates,
-                          [&](TypeId id)
-                          {
-                              const auto& type = module.types.get(id);
-                              const auto* reflected = reflection(module, id);
-                              const bool onlyRootBases = std::ranges::all_of(
-                                  type.baseTypes,
-                                  [&](TypeId base)
-                                  {
-                                      const auto& root = module.types.get(base);
-                                      return root.kind == TypeKind::Named && root.nominalKind == NominalKind::Object &&
-                                             root.name == "object" && root.fields.empty() && root.methods.empty() &&
-                                             root.baseTypes.empty() && !root.defaultConstructor && !root.destructor;
-                                  });
-                              if (!reflected || !reflected->stableTypeId || !type.arguments.empty() || !onlyRootBases ||
-                                  type.nominalRepresentation != NominalRepresentation::Wio ||
-                                  std::ranges::any_of(type.fields,
-                                                      [&](const auto& field)
-                                                      {
-                                                          // Placeholder fields must not run nested Wio
-                                                          // lifecycle or expose stale native projections.
-                                                          return field.visibility == FieldVisibility::Public ||
-                                                                 !wireValue(module, field.type);
-                                                      }))
-                                  return true;
-                              const auto supported = [&](FunctionId methodId)
-                              {
-                                  const auto* method = function(module, methodId);
-                                  return method && method->isMethod && !method->isAbstract && !method->isAsync &&
-                                         !method->isExternal && !method->nativeBinding &&
-                                         method->genericParameters.empty() && !method->parameters.empty() &&
-                                         methodIdentity(*reflected, methodId) &&
-                                         methodValue(method->returnType, true) &&
-                                         std::ranges::all_of(method->parameters | std::views::drop(1),
-                                                             [&](const auto& parameter)
-                                                             { return methodValue(parameter.type, false, true); });
-                              };
-                              return std::ranges::any_of(type.methods, [&](const auto& method)
-                                                         { return !supported(method.function); }) ||
-                                     std::ranges::any_of(type.dispatchEntries, [&](const auto& entry)
-                                                         { return !supported(entry.implementation); });
-                          });
+            std::erase_if(
+                candidates,
+                [&](TypeId id)
+                {
+                    const auto& type = module.types.get(id);
+                    const auto* reflected = reflection(module, id);
+                    const bool onlyRootBases = std::ranges::all_of(
+                        type.baseTypes,
+                        [&](TypeId base)
+                        {
+                            const auto& root = module.types.get(base);
+                            return root.kind == TypeKind::Named && root.nominalKind == NominalKind::Object &&
+                                   root.name == "object" && root.fields.empty() && root.methods.empty() &&
+                                   root.baseTypes.empty() && !root.defaultConstructor && !root.destructor;
+                        });
+                    if (!reflected || !reflected->stableTypeId || !type.arguments.empty() || !onlyRootBases ||
+                        type.nominalRepresentation != NominalRepresentation::Wio ||
+                        std::ranges::any_of(type.fields,
+                                            [&](const auto& field)
+                                            {
+                                                // Placeholder fields must not run nested Wio
+                                                // lifecycle or expose stale native projections.
+                                                return field.visibility == FieldVisibility::Public ||
+                                                       !wireValue(module, field.type);
+                                            }))
+                        return true;
+                    const auto supported = [&](FunctionId methodId)
+                    {
+                        const auto* method = function(module, methodId);
+                        return method && method->isMethod && !method->isAbstract && !method->isAsync &&
+                               !method->isExternal && !method->nativeBinding && method->genericParameters.empty() &&
+                               !method->parameters.empty() && methodIdentity(*reflected, methodId) &&
+                               methodValue(method->returnType, true, true) && borrowedResultProven(module, *method) &&
+                               std::ranges::all_of(method->parameters | std::views::drop(1), [&](const auto& parameter)
+                                                   { return methodValue(parameter.type, false, true); });
+                    };
+                    return std::ranges::any_of(type.methods,
+                                               [&](const auto& method) { return !supported(method.function); }) ||
+                           std::ranges::any_of(type.dispatchEntries,
+                                               [&](const auto& entry) { return !supported(entry.implementation); });
+                });
         } while (candidates.size() != previousSize);
 
         std::set<TypeId> reachable;
@@ -223,13 +294,62 @@ namespace wio::codegen
                             << (index - 1) << "));\n";
                     }
                 }
+                const auto& resultType = module.types.get(method.returnType);
+                const bool borrowedResult = resultType.kind == TypeKind::Reference;
                 out << "        "
                     << (hasBorrows
                             ? (module.types.get(method.returnType).kind == TypeKind::Void ? "" : "auto result = ")
                             : "return ")
-                    << "hostLease().call<" << cpp(method.returnType) << ", " << identity(module, method.returnType)
-                    << "ULL>(" << methodIdentity(reflected, method.id) << "ULL, "
-                    << (count ? "arguments.data()" : "nullptr") << ", " << count << ");\n";
+                    << "hostLease()." << (borrowedResult ? "callMapped<" : "call<") << cpp(method.returnType);
+                if (!borrowedResult)
+                    out << ", " << identity(module, method.returnType) << "ULL";
+                out << ">(" << methodIdentity(reflected, method.id) << "ULL, "
+                    << (count ? "arguments.data()" : "nullptr") << ", " << count;
+                if (borrowedResult)
+                {
+                    const auto base = resultType.arguments.front();
+                    const auto resultId = identity(module, base);
+                    out << ", [&](const WioNativeAbiValue& borrowed) -> " << cpp(method.returnType) << " {\n"
+                        << "            using wio::wir_backend::abi::require;\n"
+                        << "            require(borrowed.typeId == " << resultId << "ULL);\n"
+                        << "            if (borrowed.kind == WIO_NATIVE_ABI_REFERENCE) {\n"
+                        << "                require(borrowed.flags == (WIO_NATIVE_ABI_VALUE_BORROWED"
+                        << (resultType.isMutable ? " | WIO_NATIVE_ABI_VALUE_MUTABLE" : "")
+                        << ") && !borrowed.owner.state && !borrowed.owner.ops && "
+                           "borrowed.payload.mutableSlice.size == sizeof(WioNativeAbiValue));\n";
+                    for (std::size_t index = 1; index < method.parameters.size(); ++index)
+                    {
+                        const auto& parameter = module.types.get(method.parameters[index].type);
+                        if (parameter.kind == TypeKind::Reference && parameter.arguments.front() == base &&
+                            (!resultType.isMutable || parameter.isMutable))
+                            out << "                if (borrowed.payload.mutableSlice.data == arguments[" << (index - 1)
+                                << "].payload.mutableSlice.data) return _a" << (index - 1)
+                                << (resultType.isMutable ? "" : ".asView()") << ";\n";
+                    }
+                    out << "            }\n";
+                    if (base == id)
+                        out << "            if (borrowed.kind == WIO_NATIVE_ABI_OBJECT) {\n"
+                            << "                require(borrowed.flags == WIO_NATIVE_ABI_VALUE_OWNED && "
+                               "!borrowed.owner.state && !borrowed.owner.ops && borrowed.payload.handle.state && "
+                               "borrowed.payload.handle.generation == 1);\n"
+                            << "                auto receiver = wio::wir_backend::abi::Codec<" << cpp(id) << ", "
+                            << resultId << "ULL>::read(borrowed);\n"
+                            << "                auto* hosted = dynamic_cast<const wio::wir_backend::abi::HostObject<"
+                            << object << ">*>(receiver.Get());\n"
+                            << "                require(hosted != nullptr);\n"
+                            << "                auto returnedHost = hosted->hostLease().host();\n"
+                            << "                auto expectedHost = hostLease().host();\n"
+                            << "                require(returnedHost.owner.state == expectedHost.owner.state && "
+                               "returnedHost.objectId == expectedHost.objectId && "
+                               "returnedHost.generation == expectedHost.generation && "
+                               "returnedHost.invoke == expectedHost.invoke);\n"
+                            << "                return " << cpp(method.returnType) << "::raw(this)"
+                            << (resultType.isMutable ? "" : ".asView()") << ";\n"
+                            << "            }\n";
+                    out << "            throw wio::wir_backend::abi::Error(WIO_NATIVE_ABI_TYPE_MISMATCH);\n"
+                        << "        }";
+                }
+                out << ");\n";
                 if (hasBorrows)
                 {
                     out << "        arguments.commit();\n";

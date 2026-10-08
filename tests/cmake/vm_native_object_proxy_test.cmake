@@ -18,6 +18,9 @@ endif()
 if(WIO_OBJECT_METHOD_NULLABLE_REFERENCES)
     set(source "${WIO_ROOT}/tests/vm_native_object_method_nullable_references.wio")
 endif()
+if(WIO_OBJECT_METHOD_BORROWED_RESULTS)
+    set(source "${WIO_ROOT}/tests/vm_native_object_method_borrowed_results.wio")
+endif()
 set(native "${WIO_OUTPUT_DIR}/native${WIO_EXECUTABLE_SUFFIX}")
 set(bridge "${WIO_OUTPUT_DIR}/bridge${WIO_SHARED_SUFFIX}")
 set(bytecode "${WIO_OUTPUT_DIR}/program.wiob")
@@ -42,7 +45,7 @@ if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Normal generated C++ object calls regressed (${result}): ${output}\n${error}")
 endif()
 if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERENCES OR WIO_OBJECT_METHOD_NULLABLE
-   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES)
+   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES OR WIO_OBJECT_METHOD_BORROWED_RESULTS)
     execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
         "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}" --native-library "${bridge}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
@@ -62,6 +65,9 @@ if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERE
     if(WIO_OBJECT_METHOD_NULLABLE_REFERENCES)
         set(hostMode nullable-references)
     endif()
+    if(WIO_OBJECT_METHOD_BORROWED_RESULTS)
+        set(hostMode borrowed-results)
+    endif()
     execute_process(COMMAND "${WIO_OBJECT_PROXY_EXECUTABLE}" "${bytecode}" "${bridge}" "${hostMode}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
     if(NOT "${result}" STREQUAL "0")
@@ -69,7 +75,7 @@ if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERE
     endif()
 endif()
 if(WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERENCES OR WIO_OBJECT_METHOD_NULLABLE
-   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES)
+   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES OR WIO_OBJECT_METHOD_BORROWED_RESULTS)
     message(STATUS "Generated C++/VM object method qualification passed")
     return()
 endif()

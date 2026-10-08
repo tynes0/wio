@@ -1073,8 +1073,9 @@ does not copy scalar/string results.
 Object-valued method parameters must belong to the same live machine. A hosted
 proxy from another machine, or an ordinary producer-created C++ object without
 VM field storage, rejects with `TYPE_MISMATCH`. General foreign-object method
-routing/field synchronization, borrowed method results,
-generics, inheritance and interfaces remain pending. VM method
+routing/field synchronization, unqualified borrowed-result origins,
+generics, inheritance and interfaces remain pending. Caller-rooted borrowed
+results are qualified in the later section below. VM method
 failures preserve `PANIC` through the generated native boundary; closed hosts
 continue returning `STALE_HANDLE`. This is an implementation extension to the
 existing wire-v2/object-sidecar-v1 contracts, not a wire-version change.
@@ -1138,7 +1139,8 @@ rebound through this bridge. Null, undersized, misaligned, projected or invalid
 flagged reference buffers reject before executing the method. Recovered object
 arguments must still originate in the same machine; a reference does not grant
 foreign-object field synchronization. Reference cells and VM places remain
-call-scoped: **borrowed results and escaping reference cells are not supported**.
+call-scoped: no VM place or temporary tagged cell escapes. The later borrowed
+result slice maps supported results back to original caller storage.
 Scalar/POD/container reference method parameters
 are separate remaining work. No wire-v2/object-sidecar-v1 ABI version changed.
 
@@ -1211,8 +1213,8 @@ host covers canonical null, malformed null, non-nullable rejection, ordinary
 object wire compatibility, and partial proxy factory failure with exactly-once
 returned-object cleanup at the next VM safe point.
 
-Borrowed nullable results, all other borrowed method results,
-nullable scalar/POD/container method values, structured fields, generic
+Unqualified borrowed-result origins, nullable scalar/POD/container method
+values, structured fields, generic
 objects, inheritance/interfaces and general foreign-object synchronization
 remain separate pending work. This slice does not close native object parity.
 Only this new focused gate is run; no full-suite or Linux pass is claimed.
@@ -1296,7 +1298,7 @@ adds malformed null/reference rejection, mixed-type alias rejection, partial
 factory failure, transactional null replacement rollback, and two-stage
 null-to-object rollback with exact constructor/destructor counts.
 
-Borrowed results, escaping cells, scalar/POD/container method references,
+Unqualified borrowed-result origins, escaping VM cells, scalar/POD/container method references,
 generic objects, inheritance/interfaces and foreign-object synchronization
 remain pending. Async task-launch ownership is separate from this synchronous
 call-frame correction and still requires its own lifecycle qualification.
@@ -1305,3 +1307,80 @@ Only the new focused gate is run; no full-suite or Linux pass is claimed.
 The nullable-reference gate passed locally on Windows (1/1, 24.28 seconds),
 including generated C++, actual VM CLI and the host's panic/factory-failure
 qualification. This does not close the broader native interoperability sprint.
+
+## Caller-rooted borrowed object method results
+
+Hosted synchronous methods can now return `ref/view` of a qualified concrete
+object, including a reference to a nullable object handle cell. The generator
+proves that every return originates in the receiver or a compatible reference
+parameter. Direct returns, readonly borrow forwarding and acyclic block-parameter
+merges are supported; every incoming path must have a supported origin. Readonly
+references cannot become mutable results. Global, local, field/projection,
+nested-call and cyclic/unproven origins conservatively reject proxy eligibility.
+
+```wio
+public fn AsRef() -> ref Counter {
+    return self;
+}
+
+public fn AsView() -> view Counter {
+    return self;
+}
+
+public fn BorrowTarget(target: ref Counter?) -> ref Counter? {
+    return target;
+}
+```
+
+There are two distinct transports:
+
+- A receiver result uses a temporary owned object wire. The generated wrapper
+  validates the returned host's owner, object id, generation and dispatcher,
+  then returns a raw borrow of its own receiver. Different C++ proxy instances
+  for the same VM identity are accepted. The temporary wire is released before
+  returning; no permanent strong claim is added to the borrow. Receiver borrows
+  cannot rebind an object handle cell.
+- A parameter result uses a borrowed `WIO_NATIVE_ABI_REFERENCE` pointing to the
+  original caller's tagged cell, not the per-call VM `PlaceStorage`. It has the
+  concrete object type id, no owner, and `MUTABLE` only for a `ref` result. A
+  nullable result refers to an ordinary non-null cell whose contents may be null.
+  The generated wrapper maps this token back to its original `Place` before the
+  temporary argument guard expires. Result mapping does not preserve a pointer
+  to the temporary ABI buffer. Copy-back completes before the result leaves the
+  wrapper, so assigning a fresh handle and returning its alias observes the
+  new handle.
+
+The VM compares returned place identities against known live argument places;
+it never dereferences an unmatched result that might point into a popped frame.
+`Place::asView()` preserves cell identity while removing write/rebind access.
+Distinct caller cells containing the same object remain distinct aliases.
+Shared local places retain their original shared cell, not a copied handle.
+
+Borrowing does not extend an externally borrowed source cell's lifetime. C++
+callers must keep the referenced cell or receiver's owning handle alive while
+using the result. This is not a persistent/global-reference or dangling-pointer
+safety feature for arbitrary native code.
+
+Typed WIR no longer retains an unnecessary owned receiver SSA copy for borrowed
+method results on lexical object identifiers/self/super. Temporary receivers
+retain their tracked backing-place behavior. Synchronous VM frames normalize
+owned object inputs to non-owning receiver references when the formal is
+borrowed, avoiding an extra strong claim in the returned borrow.
+
+`wio_vm_native_object_method_borrowed_results` compares generated C++, VM CLI and
+a live host. Thirty rounds cover self/ref/view results, nullable cells, readonly
+write rejection, stable aliases after rebinding, assign-and-return copy-back,
+shared local places and exact lexical constructor/destructor counts. The host
+also exercises separately materialized proxies, wire cell identity, branch
+selection, readonly-to-ref rejection and malformed/mismatched result rejection
+through generated wrappers. Selection checks cover all CFG predecessors,
+readonly merges and conservative rejection of unsupported origins.
+
+The wire-v2/object-sidecar-v1 versions are unchanged. Global/projection/nested
+borrowed results, broader method signatures, generic/inherited/interface objects,
+foreign-object synchronization and async task ownership remain separate work.
+Only this new focused gate is run; no full-suite or Linux pass is claimed.
+
+The borrowed-result gate passed locally on Windows (1/1, 14.94 seconds), including
+generated C++, actual VM CLI, host identity/cell tests and malformed-result
+rejection. The broader native interoperability sprint remains open.

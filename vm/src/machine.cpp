@@ -1619,12 +1619,6 @@ namespace wio::vm
         const auto method = std::ranges::find(reflected->methods, methodId, &bytecode::ReflectedMethod::stableId);
         if (method == reflected->methods.end() || method->isAsync || count != method->parameterTypes.size())
             return WIO_NATIVE_ABI_INVALID_ARGUMENT;
-        if (module.types[method->returnType].kind == TypeReference)
-        {
-            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
-                               "hosted object methods do not yet support borrowed results");
-            return WIO_NATIVE_ABI_TYPE_MISMATCH;
-        }
         struct Borrow
         {
             WioNativeAbiValue* token;
@@ -1769,6 +1763,52 @@ namespace wio::vm
         if (!copyBackError.empty())
         {
             setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, copyBackError);
+            return WIO_NATIVE_ABI_TYPE_MISMATCH;
+        }
+        const auto& resultType = module.types[method->returnType];
+        if (resultType.kind == TypeReference && resultType.arguments.size() == 1)
+        {
+            const auto base = resultType.arguments.front();
+            const bool mutableResult = (resultType.flags & 0x01u) != 0;
+            if (execution.value().kind() == Value::Kind::Place)
+            {
+                // Compare identities only: an unqualified returned place may
+                // point into a popped frame and must never be dereferenced.
+                const auto slot = std::ranges::find_if(borrows,
+                                                       [&](const auto& borrow)
+                                                       {
+                                                           return borrow.place.get() == execution.value().asPlace() &&
+                                                                  borrow.type == base &&
+                                                                  (!mutableResult || borrow.mutableAccess);
+                                                       });
+                if (slot != borrows.end())
+                {
+                    auto objectType = base;
+                    if (module.types[objectType].kind == TypeNullable)
+                        objectType = module.types[objectType].arguments.front();
+                    *output = {};
+                    output->kind = WIO_NATIVE_ABI_REFERENCE;
+                    output->flags = WIO_NATIVE_ABI_VALUE_BORROWED | (mutableResult ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
+                    output->typeId = layouts->objects.at(objectType).typeId;
+                    output->payload.mutableSlice = {slot->token, sizeof(WioNativeAbiValue)};
+                    return WIO_NATIVE_ABI_OK;
+                }
+            }
+            else if ((execution.value().kind() == Value::Kind::ObjectBorrow ||
+                      execution.value().kind() == Value::Kind::Object) &&
+                     base == object.aggregateType() && execution.value().objectIdentity() == object.objectIdentity())
+            {
+                // A receiver borrow has no rebindable cell. Its temporary
+                // object wire is mapped back to the producer's raw receiver,
+                // and released before the borrowed Place leaves the wrapper.
+                std::string error;
+                if (owner->encodeNativeObject(object, base, *output, error, *layouts))
+                    return WIO_NATIVE_ABI_OK;
+                setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, error);
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            }
+            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                               "borrowed method result must alias its receiver or a compatible caller handle cell");
             return WIO_NATIVE_ABI_TYPE_MISMATCH;
         }
         std::uint8_t marshalling = 0;
@@ -2633,7 +2673,16 @@ namespace wio::vm
                     frame.registers[id] = Register{Value::place(pointer), true};
                 }
                 else
-                    frame.registers[id] = Register{values[index], true};
+                {
+                    const auto& parameter = function.parameters[index];
+                    const auto& type = module.types[parameter.type];
+                    const bool borrowedObject = parameter.ownership == 1 && type.kind == TypeReference &&
+                                                type.arguments.size() == 1 &&
+                                                module.types[type.arguments.front()].kind == TypeNamed &&
+                                                values[index].kind() == Value::Kind::Object;
+                    frame.registers[id] = Register{
+                        borrowedObject ? Value::objectBorrow(values[index].scalar_.aggregate) : values[index], true};
+                }
             }
             frames.push_back(std::move(frame));
             return ExecutionResult::success();

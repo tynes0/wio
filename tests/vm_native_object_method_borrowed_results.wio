@@ -1,0 +1,99 @@
+using cpp::header("vm_object_borrowed_result_fixture.h");
+use std::attribute as attribute;
+
+object Counter {
+    value: i32;
+    public OnConstruct(seed: i32) {
+        self.value = seed;
+        Constructed();
+    }
+    OnDestruct() {
+        Destroyed();
+    }
+    public fn Read() -> i32 {
+        return self.value;
+    }
+    public fn Set(seed: i32) {
+        self.value = seed;
+    }
+    public fn AsRef() -> ref Counter {
+        return self;
+    }
+    public fn AsView() -> view Counter {
+        return self;
+    }
+    public fn BorrowTarget(target: ref Counter) -> ref Counter {
+        return target;
+    }
+    public fn ViewTarget(target: view Counter) -> view Counter {
+        return target;
+    }
+    public fn NullableTarget(target: ref Counter?) -> ref Counter? {
+        return target;
+    }
+    public fn NullableView(target: view Counter?) -> view Counter? {
+        return target;
+    }
+    public fn Choose(left: ref Counter, right: ref Counter, chooseLeft: bool) -> ref Counter {
+        if (chooseLeft) {
+            return left;
+        }
+        return right;
+    }
+    public fn Make(target: ref Counter, seed: i32) {
+        target = Counter(seed);
+    }
+    public fn AssignAndBorrow(target: ref Counter, source: Counter) -> ref Counter {
+        target = source;
+        return target;
+    }
+}
+
+[Native, CppName(vm_object_references::Constructed)]
+fn Constructed();
+[Native, CppName(vm_object_references::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_object_references::Constructions)]
+fn Constructions() -> i32;
+[Native, CppName(vm_object_references::Destructions)]
+fn Destructions() -> i32;
+[Native, CppName(vm_object_references::Capture)]
+fn Capture(value: Counter) -> u64;
+[Native, CppName(vm_object_references::ClearCapture)]
+fn ClearCapture();
+[Native, CppName(vm_object_borrowed_results::Exercise)]
+fn Exercise(owner: Counter) -> i32;
+[Native, CppName(vm_object_borrowed_results::CheckReceiver)]
+fn CheckReceiver(owner: Counter) -> i32;
+
+fn CaptureEntry() -> u64 {
+    let value = Counter(37);
+    return Capture(value);
+}
+
+fn SafePoint() -> i32 {
+    return 0;
+}
+
+fn Entry() -> i32 {
+    {
+        let owner = Counter(17);
+        if (Exercise(owner) != 0) {
+            return 1;
+        }
+        let borrowed = owner.AsRef();
+        let observed = owner.AsView();
+        borrowed.Set(19);
+        if (observed.Read() != 19) {
+            return 2;
+        }
+        let forwarded = borrowed.AsView();
+        if (forwarded.Read() != 19) {
+            return 4;
+        }
+    }
+    if (Constructions() != 31 or Destructions() != 31) {
+        return 3;
+    }
+    return 0;
+}

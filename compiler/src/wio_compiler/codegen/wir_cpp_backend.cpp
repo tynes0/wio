@@ -1287,6 +1287,7 @@ public:
         if (pointer_) return pointer_;
         return owner_.get();
     }
+    Place asView() const { auto place = *this; place.readOnly_ = true; return place; }
     T take() {
         if (readOnly_) throw std::runtime_error("move through a Wio view");
         T value = std::move(read());
@@ -1347,6 +1348,7 @@ public:
         if (owner_) return owner_.get();
         return raw_;
     }
+    Place asView() const { auto place = *this; place.readOnly_ = true; return place; }
     void write(Handle value) {
         if (readOnly_) throw std::runtime_error("write through a Wio view");
         if (handle_) *handle_ = std::move(value);
@@ -2853,7 +2855,14 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                                   : operand(instruction.operands[0]) + ".read()");
                     break;
                 case lowered::Opcode::Borrow:
-                    assignResult(instruction, operand(instruction.operands[0]));
+                    assignResult(
+                        instruction,
+                        operand(instruction.operands[0]) +
+                            (module_.types.get(instruction.resultType).kind == TypeKind::Reference &&
+                                     !module_.types.get(instruction.resultType).isMutable &&
+                                     module_.types.get(valueType(instruction.operands[0])).kind == TypeKind::Reference
+                                 ? ".asView()"
+                                 : ""));
                     break;
                 case lowered::Opcode::FieldPlace:
                 {

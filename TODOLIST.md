@@ -727,7 +727,7 @@ Rider, and CLion are defined in
    passed locally on Windows (1/1, 24.38 seconds).
    Object ref/view method parameters now use alias-preserving tagged handle
    cells, with staged transactional copy-back and panic-unwind copy-back.
-   Distinct cells holding one object remain independent. Borrowed results,
+   Distinct cells holding one object remain independent. Unqualified borrowed-result origins,
    generic object methods and foreign-object field/method
    synchronization remain pending. Focused qualification covers 30 lifecycle
    rounds, ref/ref and ref/view aliases, malformed references and partial
@@ -752,6 +752,17 @@ Rider, and CLion are defined in
    indirect calls consume owned arguments too. Async task-launch ownership needs
    separate lifecycle qualification before applying the same transfer rule.
    The nullable-reference gate passed locally on Windows (1/1, 24.28 seconds).
+   Receiver/compatible-parameter-rooted object ref/view method results now
+   preserve caller cell identity, including nullable cells and assign-and-return
+   copy-back. Receiver wires validate host identity and map back to raw self
+   without a persistent strong pin. Separate proxies of one VM object work;
+   readonly results cannot rebind. Conservative WIR provenance checks reject
+   global/local/projection/nested-call/cyclic origins and readonly escalation.
+   Lexical object receivers avoid unnecessary owned SSA copies, and synchronous
+   VM receiver formals do not introduce hidden strong claims. The new focused
+   C++/VM/host gate covers 30 lifecycle rounds, aliases, nullable/read-only paths,
+   branch selection, separate proxy identity and malformed result rejection.
+   The borrowed-result gate passed locally on Windows (1/1, 14.94 seconds).
    Field synchronization, inheritance/interface and SDK/reflection routing
    remain pending; this does not close object parity.
    Remaining native parity work includes broader VM-created object signatures,

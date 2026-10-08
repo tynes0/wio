@@ -163,8 +163,12 @@ namespace wio::wir_backend::abi
             return host_.invoke(&host_, methodId, arguments, count, result, error);
         }
 
-        template <class R, std::uint64_t ResultId>
-        R call(std::uint64_t methodId, const WioNativeAbiValue* arguments, std::uint64_t count) const
+        // Mapping happens while the output and argument cells are still live.
+        // A borrowed result can map to caller storage, never to a temporary
+        // tagged cell owned by ObjectReferences on this call's stack.
+        template <class R, class Decode>
+        R callMapped(std::uint64_t methodId, const WioNativeAbiValue* arguments, std::uint64_t count,
+                     Decode decode) const
         {
             WioNativeAbiValue result{};
             struct Guard
@@ -179,10 +183,20 @@ namespace wio::wir_backend::abi
             const auto status = invoke(methodId, arguments, count, &result, &failure);
             if (status != WIO_NATIVE_ABI_OK)
                 throw ObjectDispatchError(status, failure);
-            if constexpr (std::is_void_v<R>)
-                require(result.kind == WIO_NATIVE_ABI_VOID);
-            else
-                return Codec<R, ResultId>::read(result);
+            return decode(result);
+        }
+
+        template <class R, std::uint64_t ResultId>
+        R call(std::uint64_t methodId, const WioNativeAbiValue* arguments, std::uint64_t count) const
+        {
+            return callMapped<R>(methodId, arguments, count,
+                                 [](const WioNativeAbiValue& result) -> R
+                                 {
+                                     if constexpr (std::is_void_v<R>)
+                                         require(result.kind == WIO_NATIVE_ABI_VOID);
+                                     else
+                                         return Codec<R, ResultId>::read(result);
+                                 });
         }
 
     private:
