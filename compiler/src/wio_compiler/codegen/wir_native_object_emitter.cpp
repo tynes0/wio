@@ -80,9 +80,19 @@ namespace wio::codegen
 
         const auto methodValue = [&](TypeId id, bool allowVoid = false, bool allowReference = false)
         {
+            if (allowReference)
+            {
+                const auto& reference = module.types.get(id);
+                if (reference.kind == TypeKind::Reference && reference.arguments.size() == 1)
+                {
+                    id = reference.arguments.front();
+                    const auto& value = module.types.get(id);
+                    return candidates.contains(id) ||
+                           (value.kind == TypeKind::Nullable && value.arguments.size() == 1 &&
+                            candidates.contains(value.arguments.front()));
+                }
+            }
             const auto& type = module.types.get(id);
-            if (allowReference && type.kind == TypeKind::Reference && type.arguments.size() == 1)
-                return candidates.contains(type.arguments.front());
             if (type.kind == TypeKind::Nullable && type.arguments.size() == 1)
                 return candidates.contains(type.arguments.front());
             return wireValue(module, id, allowVoid) || candidates.contains(id);

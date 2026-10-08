@@ -15,7 +15,8 @@ namespace wio::codegen
         // no custom bases, only private scalar/string/text fields, and
         // scalar/string/text/qualified-object and nullable-object values
         // (or void results), plus
-        // ref/view object parameters with alias-preserving handle copy-back.
+        // ref/view object (including nullable) parameters with alias-preserving
+        // handle copy-back. Borrowed results remain excluded.
         [[nodiscard]] static std::set<wir::TypeId> eligibleTypes(const wir::lowered::Module& module);
         [[nodiscard]] static std::string emit(const wir::lowered::Module& module, const std::set<wir::TypeId>& objects,
                                               const WirModuleEmitter::TypeSpelling& cpp,

@@ -1280,6 +1280,13 @@ public:
         return owner_->value();
     }
     const T& read() const { return const_cast<Place*>(this)->read(); }
+    // Only real handle/local cells have stable borrow identity. Proxy
+    // projections do not participate in the native object reference bridge.
+    bool canRebind() const { return !readOnly_ && (pointer_ || owner_); }
+    const void* borrowIdentity() const {
+        if (pointer_) return pointer_;
+        return owner_.get();
+    }
     T take() {
         if (readOnly_) throw std::runtime_error("move through a Wio view");
         T value = std::move(read());
@@ -2577,7 +2584,7 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 }
                 case lowered::Opcode::IndirectCall:
                     assignResult(instruction,
-                                 operand(instruction.operands[0]) + "(" + callArguments(instruction, 1) + ")");
+                                 operand(instruction.operands[0]) + "(" + callArguments(instruction, 1, true) + ")");
                     break;
                 case lowered::Opcode::VirtualCall:
                 case lowered::Opcode::InterfaceCall:

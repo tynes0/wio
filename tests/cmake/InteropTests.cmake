@@ -815,3 +815,18 @@ add_test(
 )
 wio_test_labels(wio_vm_native_object_method_nullable interop vm native native-object differential release-gate)
 set_tests_properties(wio_vm_native_object_method_nullable PROPERTIES TIMEOUT 600)
+
+add_test(
+    NAME wio_vm_native_object_method_nullable_references
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-object-method-nullable-references"
+        "-DWIO_OBJECT_PROXY_EXECUTABLE=$<TARGET_FILE:wio_vm_native_object_proxy_test>"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -DWIO_OBJECT_METHOD_NULLABLE_REFERENCES=ON
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_object_proxy_test.cmake"
+)
+wio_test_labels(wio_vm_native_object_method_nullable_references interop vm native native-object differential release-gate)
+set_tests_properties(wio_vm_native_object_method_nullable_references PROPERTIES TIMEOUT 600)

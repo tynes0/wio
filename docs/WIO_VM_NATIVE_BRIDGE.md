@@ -928,7 +928,7 @@ proxy. The initial automatic producer surface is deliberately narrow:
 - Non-abstract, synchronous Wio methods with scalar/string/text and qualified
   object and nullable-object values in their arguments/results (or void results), plus `ref/view`
   qualified-object parameters. Borrowed results, scalar/container references,
-  nullable scalar/container values, nullable object borrows, container, generic,
+  nullable scalar/container values, container, generic,
   native/external and async method signatures
   remain excluded.
 
@@ -1073,7 +1073,7 @@ does not copy scalar/string results.
 Object-valued method parameters must belong to the same live machine. A hosted
 proxy from another machine, or an ordinary producer-created C++ object without
 VM field storage, rejects with `TYPE_MISMATCH`. General foreign-object method
-routing/field synchronization, nullable object borrows, borrowed method results,
+routing/field synchronization, borrowed method results,
 generics, inheritance and interfaces remain pending. VM method
 failures preserve `PANIC` through the generated native boundary; closed hosts
 continue returning `STALE_HANDLE`. This is an implementation extension to the
@@ -1139,7 +1139,7 @@ flagged reference buffers reject before executing the method. Recovered object
 arguments must still originate in the same machine; a reference does not grant
 foreign-object field synchronization. Reference cells and VM places remain
 call-scoped: **borrowed results and escaping reference cells are not supported**.
-Scalar/POD/container reference method parameters and nullable object borrows
+Scalar/POD/container reference method parameters
 are separate remaining work. No wire-v2/object-sidecar-v1 ABI version changed.
 
 The focused `wio_vm_native_object_method_references` gate compares generated C++
@@ -1211,7 +1211,7 @@ host covers canonical null, malformed null, non-nullable rejection, ordinary
 object wire compatibility, and partial proxy factory failure with exactly-once
 returned-object cleanup at the next VM safe point.
 
-Borrowed nullable parameters/results, all other borrowed method results,
+Borrowed nullable results, all other borrowed method results,
 nullable scalar/POD/container method values, structured fields, generic
 objects, inheritance/interfaces and general foreign-object synchronization
 remain separate pending work. This slice does not close native object parity.
@@ -1219,3 +1219,89 @@ Only this new focused gate is run; no full-suite or Linux pass is claimed.
 
 The nullable-method gate passed locally on Windows (1/1, 10.76 seconds),
 including generated C++, VM CLI and host-injected partial factory failure.
+
+## Nullable object ref/view method parameters
+
+Hosted synchronous methods can now borrow eligible nullable object handle cells.
+This is `ref Counter?` / `view Counter?` (a reference to a nullable handle),
+not `(ref Counter)?` (a nullable reference). For example:
+
+```wio
+public fn Clear(target: ref Counter?) {
+    target = null;
+}
+
+public fn Make(target: ref Counter?, seed: i32) {
+    target = Counter(seed);
+}
+
+public fn ReadFrom(source: view Counter?) -> i32 {
+    let value = deref source;
+    if (value == null) {
+        return -1;
+    }
+    return value.Read();
+}
+
+mut target: Counter? = null;
+owner.Make(ref target, 42);
+let value = owner.ReadFrom(ref target); // mutable reference may bind to view
+owner.Clear(ref target);
+```
+
+Read through `deref` before narrowing the nullable value; member access on a
+reference to nullable storage is not itself a flow-narrowed object value.
+The producer's C++ signature remains `Place<std::optional<runtime::Ref<T>>>`.
+Borrowing uses the same tagged reference wire and concrete-object identity as
+the existing object bridge, with canonical nullable `VOID` for an empty cell.
+Generic local/borrowed places now expose stable cell identity and rebinding
+capability. Readonly and proxy-projection places cannot become mutable object
+borrow cells. This adds no native ABI box, wire version or sidecar version.
+
+Null-to-object and object-to-null copy-back are supported. Repeated `ref/ref`
+and `ref/view` borrows share one VM place, including view-first argument order;
+distinct cells containing one object remain independent. Nullable and
+non-nullable declarations cannot alias the same tagged cell, even though their
+concrete-object wire type ids agree. A null cell cannot satisfy a non-nullable
+reference. Malformed null tags and readonly/misaligned/projected reference
+buffers reject before execution.
+
+Copy-back stays transactional: all mutable replacement wires are staged before
+any caller cell is committed. If a second proxy factory fails, a first null
+replacement or first newly materialized object is discarded, leaving both old
+cells intact. Owned partial factory output and staged objects are released
+exactly once. Null copy-back also occurs before propagating a VM panic; the
+producer's exception path commits the changed cells before rethrowing `PANIC`.
+
+The gate exposed three ownership corrections beyond parameter qualification:
+
+- VM synchronous direct, virtual/interface and indirect calls clear an owned
+  argument's caller SSA claim after the callee frame acquires it. Borrowed
+  receivers/captures are not consumed. Caller frame lookup remains safe if
+  pushing the callee reallocates the frame vector.
+- Replacing an object-valued VM place with null runs the old object's cleanup;
+  borrowed self-assignment acquires its replacement claim before releasing the
+  old one. Final-handle destruction no longer disappears on null replacement.
+- Generated C++ indirect calls move owned operands, matching direct and virtual
+  calls instead of retaining an extra nullable handle until the caller exits.
+
+`wio_vm_native_object_method_nullable_references` compares generated C++ and
+actual VM CLI execution against the generated producer, then runs the live
+host. Thirty rounds cover nullable transitions, mixed plain/nullable parameters,
+ref/ref and ref/view aliases in both orders, distinct cells, and shared local
+places. Lexical counters cover owned direct/virtual/function-value arguments
+and destruction of a final object claim through a nullable reference. The
+VM-only panic entry verifies readonly rejection and null copy-back. The host
+adds malformed null/reference rejection, mixed-type alias rejection, partial
+factory failure, transactional null replacement rollback, and two-stage
+null-to-object rollback with exact constructor/destructor counts.
+
+Borrowed results, escaping cells, scalar/POD/container method references,
+generic objects, inheritance/interfaces and foreign-object synchronization
+remain pending. Async task-launch ownership is separate from this synchronous
+call-frame correction and still requires its own lifecycle qualification.
+Only the new focused gate is run; no full-suite or Linux pass is claimed.
+
+The nullable-reference gate passed locally on Windows (1/1, 24.28 seconds),
+including generated C++, actual VM CLI and the host's panic/factory-failure
+qualification. This does not close the broader native interoperability sprint.

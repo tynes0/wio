@@ -15,6 +15,9 @@ endif()
 if(WIO_OBJECT_METHOD_NULLABLE)
     set(source "${WIO_ROOT}/tests/vm_native_object_method_nullable.wio")
 endif()
+if(WIO_OBJECT_METHOD_NULLABLE_REFERENCES)
+    set(source "${WIO_ROOT}/tests/vm_native_object_method_nullable_references.wio")
+endif()
 set(native "${WIO_OUTPUT_DIR}/native${WIO_EXECUTABLE_SUFFIX}")
 set(bridge "${WIO_OUTPUT_DIR}/bridge${WIO_SHARED_SUFFIX}")
 set(bytecode "${WIO_OUTPUT_DIR}/program.wiob")
@@ -38,7 +41,8 @@ execute_process(COMMAND "${native}" RESULT_VARIABLE result
 if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Normal generated C++ object calls regressed (${result}): ${output}\n${error}")
 endif()
-if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERENCES OR WIO_OBJECT_METHOD_NULLABLE)
+if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERENCES OR WIO_OBJECT_METHOD_NULLABLE
+   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES)
     execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
         "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}" --native-library "${bridge}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
@@ -55,13 +59,17 @@ if(WIO_AUTOMATIC_OBJECTS OR WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERE
     if(WIO_OBJECT_METHOD_NULLABLE)
         set(hostMode nullable)
     endif()
+    if(WIO_OBJECT_METHOD_NULLABLE_REFERENCES)
+        set(hostMode nullable-references)
+    endif()
     execute_process(COMMAND "${WIO_OBJECT_PROXY_EXECUTABLE}" "${bytecode}" "${bridge}" "${hostMode}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45)
     if(NOT "${result}" STREQUAL "0")
         message(FATAL_ERROR "Automatic VM object host lifetime failed (${result}): ${output}\n${error}")
     endif()
 endif()
-if(WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERENCES OR WIO_OBJECT_METHOD_NULLABLE)
+if(WIO_OBJECT_METHOD_VALUES OR WIO_OBJECT_METHOD_REFERENCES OR WIO_OBJECT_METHOD_NULLABLE
+   OR WIO_OBJECT_METHOD_NULLABLE_REFERENCES)
     message(STATUS "Generated C++/VM object method qualification passed")
     return()
 endif()

@@ -1,0 +1,172 @@
+using cpp::header("vm_object_nullable_reference_fixture.h");
+use std::attribute as attribute;
+
+object Counter {
+    value: i32;
+    public OnConstruct(seed: i32) {
+        self.value = seed;
+        Constructed();
+    }
+    OnDestruct() {
+        Destroyed();
+    }
+    public fn Read() -> i32 {
+        return self.value;
+    }
+    public fn Clear(target: ref Counter?) {
+        target = null;
+    }
+    public fn Set(target: ref Counter?, source: Counter?) {
+        target = source;
+    }
+    public fn Make(target: ref Counter?, seed: i32) {
+        target = Counter(seed);
+    }
+    public fn ReadFrom(source: view Counter?) -> i32 {
+        let value = deref source;
+        if (value == null) {
+            return -1;
+        }
+        return value.Read();
+    }
+    public fn ClearAlias(target: ref Counter?, observed: view Counter?) -> bool {
+        target = null;
+        return observed == null;
+    }
+    public fn Alias(target: ref Counter?, observed: view Counter?, source: Counter?) -> i32 {
+        target = source;
+        let value = deref observed;
+        if (value == null) {
+            return -1;
+        }
+        return value.Read();
+    }
+    public fn Twice(left: ref Counter?, right: ref Counter?, source: Counter?) -> i32 {
+        left = source;
+        let value = deref right;
+        if (value == null) {
+            return -1;
+        }
+        return value.Read();
+    }
+    public fn ClearAndMake(left: ref Counter?, right: ref Counter?, seed: i32) {
+        left = null;
+        right = Counter(seed);
+    }
+    public fn ReverseAlias(observed: view Counter?, target: ref Counter?, source: Counter?) -> i32 {
+        target = source;
+        let value = deref observed;
+        if (value == null) {
+            return -1;
+        }
+        return value.Read();
+    }
+    public fn MakePair(left: ref Counter?, right: ref Counter?, seed: i32) {
+        left = Counter(seed);
+        right = Counter(seed + 1);
+    }
+    public fn FailClear(target: ref Counter?, divisor: i32) -> i32 {
+        target = null;
+        return self.value / divisor;
+    }
+    public fn Mixed(required: ref Counter, optional: view Counter?) -> i32 {
+        let value = deref optional;
+        if (value == null) {
+            return required.Read() - 1;
+        }
+        return required.Read() + value.Read();
+    }
+}
+
+[Native, CppName(vm_object_references::Constructed)]
+fn Constructed();
+[Native, CppName(vm_object_references::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_object_references::Constructions)]
+fn Constructions() -> i32;
+[Native, CppName(vm_object_references::Destructions)]
+fn Destructions() -> i32;
+[Native, CppName(vm_object_references::Capture)]
+fn Capture(value: Counter) -> u64;
+[Native, CppName(vm_object_references::ClearCapture)]
+fn ClearCapture();
+[Native, CppName(vm_object_nullable_references::Exercise)]
+fn Exercise(owner: Counter) -> i32;
+[Native, CppName(vm_object_nullable_references::ReadonlyClear)]
+fn ReadonlyClear(owner: Counter) -> bool;
+[Native, CppName(vm_object_nullable_references::PanicClear)]
+fn PanicClear(owner: Counter, target: ref Counter?) -> bool;
+[Native, CppName(vm_object_nullable_references::ReportCounts)]
+fn ReportCounts();
+
+fn CaptureEntry() -> u64 {
+    let owner = Counter(37);
+    return Capture(owner);
+}
+
+fn SafePoint() -> i32 {
+    return 0;
+}
+
+fn AcceptNullable(value: Counter?) -> i32 {
+    if (value == null) {
+        return -1;
+    }
+    return value.Read();
+}
+
+fn Entry() -> i32 {
+    {
+        let owner = Counter(17);
+        if (Exercise(owner) != 0) {
+            return 1;
+        }
+        mut target: Counter? = null;
+        owner.Set(ref target, owner);
+        if (owner.ReadFrom(ref target) != 17) {
+            return 2;
+        }
+        owner.Clear(ref target);
+        if (target != null) {
+            return 3;
+        }
+        if (AcceptNullable(owner) != 17) {
+            return 5;
+        }
+        let callback: fn(Counter?) -> i32 = AcceptNullable;
+        if (callback(owner) != 17) {
+            return 6;
+        }
+        // Clear the final object claim through a nullable reference, without
+        // any producer proxy retaining it until a later safe point.
+        mut fresh: Counter? = Counter(44);
+        owner.Clear(ref fresh);
+        if (Destructions() != 31) {
+            ReportCounts();
+            return 7;
+        }
+    }
+    if (Constructions() != 32 or Destructions() != 32) {
+        ReportCounts();
+        return 4;
+    }
+    return 0;
+}
+
+// VM-only: integer division by zero is not a catchable native C++ panic.
+fn PanicEntry() -> i32 {
+    {
+        let owner = Counter(23);
+        mut target: Counter? = owner;
+        if (not ReadonlyClear(owner)) {
+            return 1;
+        }
+        if (not PanicClear(owner, ref target) or target != null) {
+            return 2;
+        }
+    }
+    if (Constructions() != Destructions()) {
+        return 3;
+    }
+    return 0;
+}

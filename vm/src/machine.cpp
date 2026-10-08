@@ -244,6 +244,21 @@ namespace wio::vm
             bool hasResumedValue = false;
         };
 
+        // WIR owned parameters consume their argument SSA claim. Clear the
+        // caller only after a synchronous callee frame has acquired it; borrowed
+        // receivers and closure captures remain owned by their original scope.
+        void consumeCallArguments(Frame& caller, const bytecode::Function& callee,
+                                  std::span<const std::uint32_t> operands, std::size_t parameterOffset = 0)
+        {
+            for (std::size_t index = 0; index < operands.size(); ++index)
+                if (callee.parameters[index + parameterOffset].ownership == 2)
+                {
+                    auto& argument = caller.registers[operands[index]];
+                    argument.value = {};
+                    argument.initialized = false;
+                }
+        }
+
         [[nodiscard]] ExecutionError withStack(ExecutionError error, const std::vector<Frame>& frames)
         {
             error.stack.reserve(error.stack.size() + frames.size());
@@ -1663,7 +1678,9 @@ namespace wio::vm
                 if (slot == borrows.end())
                 {
                     auto decoded = owner->decodeNativeObject(*token, base, *layouts);
-                    if (!decoded.succeeded() || decoded.value.kind() != Value::Kind::Object)
+                    const bool nullableNull =
+                        module.types[base].kind == TypeNullable && decoded.value.kind() == Value::Kind::Null;
+                    if (!decoded.succeeded() || (decoded.value.kind() != Value::Kind::Object && !nullableNull))
                     {
                         setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
                                            "hosted object ref/view requires an original VM object");
@@ -4210,26 +4227,36 @@ namespace wio::vm
                     return fail("WVM1041", "Place can only be initialized once");
                 if (instruction.opcode != bytecode::Opcode::PlaceInit && (!place->initialized || !place->mutableValue))
                     return fail("WVM1042", "Store requires an initialized mutable place");
+                Value retainedBorrow;
+                if (source->kind() == Value::Kind::ObjectBorrow)
+                    retainedBorrow = source->retainObject();
+                if (place->initialized &&
+                    (source->kind() == Value::Kind::Object || source->kind() == Value::Kind::ObjectBorrow ||
+                     place->storedValue().kind() == Value::Kind::Object))
+                {
+                    // Null replacement is still a release of the old object.
+                    // Protect a borrowed self-assignment before dropping it.
+                    ExecutionError cleanupError;
+                    cleanupValue(place->storedValue(), cleanupError);
+                    if (!cleanupError.cleanupFailures.empty())
+                    {
+                        cleanupValue(retainedBorrow, cleanupError);
+                        cleanupError.code = "WVM1211";
+                        cleanupError.message = "Object replacement cleanup failed while running a destructor";
+                        return failWithStack(std::move(cleanupError));
+                    }
+                }
                 if (source->kind() == Value::Kind::Object)
                 {
                     // WIR place writes transfer an owned handle. Keeping an
                     // extra SSA-register claim would defer the Wio destructor
                     // past its lexical release until the entire frame ends.
                     Register* sourceRegister = readRegister(instruction.operands[1]);
-                    ExecutionError cleanupError;
-                    if (place->initialized)
-                        cleanupValue(place->storedValue(), cleanupError);
-                    if (!cleanupError.cleanupFailures.empty())
-                    {
-                        cleanupError.code = "WVM1211";
-                        cleanupError.message = "Object replacement cleanup failed while running a destructor";
-                        return failWithStack(std::move(cleanupError));
-                    }
                     place->storedValue() = std::move(sourceRegister->value);
                     sourceRegister->initialized = false;
                 }
                 else if (source->kind() == Value::Kind::ObjectBorrow)
-                    place->storedValue() = source->retainObject();
+                    place->storedValue() = std::move(retainedBorrow);
                 else
                     place->storedValue() = *source;
                 place->initialized = true;
@@ -4656,6 +4683,9 @@ namespace wio::vm
                     callArguments.push_back(*argument);
                 }
 
+                const auto captureCount = callable->captureCount();
+                const auto operandIds = std::span{instruction.operands}.subspan(1);
+                const auto callerIndex = frames.size() - 1;
                 const std::uint32_t result = instruction.result;
                 if ((module.functions[target].flags & 0x0001u) != 0)
                 {
@@ -4670,6 +4700,7 @@ namespace wio::vm
                               FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result});
                 if (!pushed.succeeded())
                     return pushed;
+                consumeCallArguments(frames[callerIndex], module.functions[target], operandIds, captureCount);
                 continue;
             }
             if (instruction.opcode == bytecode::Opcode::Upcast || instruction.opcode == bytecode::Opcode::CheckedCast)
@@ -5246,12 +5277,14 @@ namespace wio::vm
                     ++frame.instruction;
                     continue;
                 }
+                const auto callerIndex = frames.size() - 1;
                 ++frame.instruction;
                 ExecutionResult pushed =
                     pushFrame(module.functions[instruction.callee], callArguments,
                               FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result});
                 if (!pushed.succeeded())
                     return pushed;
+                consumeCallArguments(frames[callerIndex], module.functions[instruction.callee], instruction.operands);
                 continue;
             }
             if (instruction.opcode == bytecode::Opcode::VirtualCall ||
@@ -5285,12 +5318,14 @@ namespace wio::vm
                     ++frame.instruction;
                     continue;
                 }
+                const auto callerIndex = frames.size() - 1;
                 ++frame.instruction;
                 ExecutionResult pushed =
                     pushFrame(module.functions[target], callArguments,
                               FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result});
                 if (!pushed.succeeded())
                     return pushed;
+                consumeCallArguments(frames[callerIndex], module.functions[target], instruction.operands);
                 continue;
             }
             if (instruction.opcode == bytecode::Opcode::CancellationCheck)

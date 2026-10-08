@@ -129,7 +129,11 @@ namespace
             const auto borrowedNullable =
                 trial.types.intern(Type{.kind = TypeKind::Reference, .arguments = {nullable}, .isMutable = true});
             trial.functions[0].parameters.back().type = borrowedNullable;
-            check(Emitter::eligibleTypes(trial).empty(), "borrowed nullable method parameter was silently proxied");
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "nullable ref method parameter was rejected");
+            trial.types.getMutable(borrowedNullable).isMutable = false;
+            check(Emitter::eligibleTypes(trial) == std::set{object}, "nullable view method parameter was rejected");
+            trial.functions[0].returnType = borrowedNullable;
+            check(Emitter::eligibleTypes(trial).empty(), "borrowed nullable method result was silently proxied");
             trial.functions[0].parameters.back().type = nullable;
             trial.functions[0].returnType =
                 trial.types.intern(Type{.kind = TypeKind::Nullable, .arguments = {integer}});
@@ -784,7 +788,7 @@ namespace
         return 0;
     }
 
-    int qualifyReferences(const char* bytecode, const char* producer)
+    int qualifyReferences(const char* bytecode, const char* producer, bool nullable = false)
     {
         std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
         const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
@@ -818,8 +822,9 @@ namespace
         const auto reflected =
             std::ranges::find(decoded.module.contract.reflection, token.typeId, &bc::Reflection::stableTypeId);
         check(reflected != decoded.module.contract.reflection.end(), "object reference method metadata missing");
-        const auto makeTarget = std::ranges::find_if(reflected->methods, [&](const auto& method)
-                                                     { return decoded.module.string(method.name) == "MakeTarget"; });
+        const auto makeTarget =
+            std::ranges::find_if(reflected->methods, [&](const auto& method)
+                                 { return decoded.module.string(method.name) == (nullable ? "Make" : "MakeTarget"); });
         check(makeTarget != reflected->methods.end(), "mutable object reference method missing");
         Wire cell;
         check(adapter.create(&token, &cell.value, nullptr) == WIO_NATIVE_ABI_OK, "object reference cell setup failed");
@@ -853,6 +858,70 @@ namespace
         }
         check(scalar(registry, "vm_object_references::Constructions") == beforeInvalid,
               "invalid object ref invoked the method body");
+        if (nullable)
+        {
+            const auto methodId = [&](const char* name)
+            {
+                const auto method = std::ranges::find_if(reflected->methods, [&](const auto& item)
+                                                         { return decoded.module.string(item.name) == name; });
+                check(method != reflected->methods.end(), "nullable reference qualification method missing");
+                return method->stableId;
+            };
+            Wire missing;
+            missing.value.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+            missing.value.typeId = token.typeId;
+            auto mutableNull = reference;
+            mutableNull.payload.mutableSlice.data = &missing.value;
+            auto viewNull = mutableNull;
+            viewNull.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+            auto sameCellView = reference;
+            sameCellView.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+            const std::array mixedAliasArguments{reference, sameCellView};
+            const std::array mixedNullArguments{mutableNull, viewNull};
+            for (const auto& arguments : {mixedAliasArguments, mixedNullArguments})
+            {
+                Wire rejected;
+                check(token.invoke(&token, methodId("Mixed"), arguments.data(), arguments.size(), &rejected.value,
+                                   nullptr) == WIO_NATIVE_ABI_TYPE_MISMATCH,
+                      "mixed nullable/non-nullable references accepted an incompatible alias or null cell");
+            }
+            Wire read;
+            check(token.invoke(&token, methodId("ReadFrom"), &viewNull, 1, &read.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                      read.value.kind == WIO_NATIVE_ABI_I64 && read.value.payload.signedInteger == -1,
+                  "nullable view rejected an empty object handle cell");
+            for (int kind = 0; kind < 4; ++kind)
+            {
+                auto invalid = missing.value;
+                if (kind == 0)
+                    invalid.flags = 0;
+                if (kind == 1)
+                    invalid.typeId ^= 1;
+                if (kind == 2)
+                    invalid.flags |= WIO_NATIVE_ABI_VALUE_OWNED;
+                if (kind == 3)
+                    invalid.owner.state = &invalid;
+                auto badReference = mutableNull;
+                badReference.payload.mutableSlice.data = &invalid;
+                const auto expected = invalid;
+                Wire rejected;
+                check(token.invoke(&token, methodId("Clear"), &badReference, 1, &rejected.value, nullptr) ==
+                              WIO_NATIVE_ABI_TYPE_MISMATCH &&
+                          invalid.kind == expected.kind && invalid.flags == expected.flags &&
+                          invalid.typeId == expected.typeId && invalid.owner.state == expected.owner.state,
+                      "nullable reference accepted a malformed null cell");
+            }
+            const std::array nullArguments{mutableNull, seed};
+            Wire created;
+            check(token.invoke(&token, makeTarget->stableId, nullArguments.data(), nullArguments.size(), &created.value,
+                               nullptr) == WIO_NATIVE_ABI_OK &&
+                      missing.value.kind == WIO_NATIVE_ABI_OBJECT,
+                  "nullable reference did not copy a constructed object into a null cell");
+            check(token.invoke(&token, methodId("Clear"), &mutableNull, 1, &created.value, nullptr) ==
+                          WIO_NATIVE_ABI_OK &&
+                      missing.value.kind == WIO_NATIVE_ABI_VOID &&
+                      missing.value.flags == WIO_NATIVE_ABI_VALUE_NULLABLE && missing.value.typeId == token.typeId,
+                  "nullable reference did not copy canonical null back to its caller");
+        }
         Wire cleared;
         check(call(registry, "vm_object_references::ClearCapture", {}, cleared.value) == WIO_NATIVE_ABI_OK,
               "object reference capture cleanup failed");
@@ -922,6 +991,50 @@ namespace
         check(scalar(registry, "vm_object_references::Constructions") == beforePairConstructed + 2 &&
                   scalar(registry, "vm_object_references::Destructions") == beforePairDestroyed + 2,
               "transactional reference copy-back failure leaked staged VM objects");
+        if (nullable)
+        {
+            const auto clearAndMake =
+                std::ranges::find_if(reflected->methods, [&](const auto& method)
+                                     { return decoded.module.string(method.name) == "ClearAndMake"; });
+            check(clearAndMake != reflected->methods.end(), "nullable transactional clear method missing");
+            const auto beforeClearConstructed = scalar(registry, "vm_object_references::Constructions");
+            const auto beforeClearDestroyed = scalar(registry, "vm_object_references::Destructions");
+            objectFactoryCallsBeforeFailure = 0;
+            failObjectFactory = true;
+            check(failureToken.invoke(&failureToken, clearAndMake->stableId, pairArguments.data(), pairArguments.size(),
+                                      &failed.value, nullptr) == WIO_NATIVE_ABI_TYPE_MISMATCH,
+                  "nullable second-cell factory failure lost its status");
+            failObjectFactory = false;
+            check(failureCell.value.payload.handle.state == originalPointer &&
+                      secondCell.value.payload.handle.state == secondPointer,
+                  "nullable copy-back committed the first cell's null before the second factory failed");
+            check(failedMachine.invoke(safePoint->id).succeeded(), "nullable transaction cleanup safe point failed");
+            check(scalar(registry, "vm_object_references::Constructions") == beforeClearConstructed + 1 &&
+                      scalar(registry, "vm_object_references::Destructions") == beforeClearDestroyed + 1,
+                  "nullable transactional clear failure lost or repeated object cleanup");
+            for (auto* value : {&failureCell.value, &secondCell.value})
+            {
+                WioNativeAbiReleaseValue(value);
+                value->flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+                value->typeId = failureToken.typeId;
+            }
+            const auto beforeNullConstructed = scalar(registry, "vm_object_references::Constructions");
+            const auto beforeNullDestroyed = scalar(registry, "vm_object_references::Destructions");
+            objectFactoryCallsBeforeFailure = 1;
+            failObjectFactory = true;
+            check(failureToken.invoke(&failureToken, makePair->stableId, pairArguments.data(), pairArguments.size(),
+                                      &failed.value, nullptr) == WIO_NATIVE_ABI_TYPE_MISMATCH,
+                  "nullable null-to-object transactional failure lost its status");
+            failObjectFactory = false;
+            check(failureCell.value.kind == WIO_NATIVE_ABI_VOID && secondCell.value.kind == WIO_NATIVE_ABI_VOID &&
+                      failureCell.value.flags == WIO_NATIVE_ABI_VALUE_NULLABLE &&
+                      secondCell.value.flags == WIO_NATIVE_ABI_VALUE_NULLABLE,
+                  "nullable failed transaction partially replaced initially null cells");
+            check(failedMachine.invoke(safePoint->id).succeeded(), "nullable staged-object cleanup safe point failed");
+            check(scalar(registry, "vm_object_references::Constructions") == beforeNullConstructed + 2 &&
+                      scalar(registry, "vm_object_references::Destructions") == beforeNullDestroyed + 2,
+                  "nullable failed transaction leaked staged objects from initially null cells");
+        }
         check(call(registry, "vm_object_references::ClearCapture", {}, cleared.value) == WIO_NATIVE_ABI_OK,
               "failed copy-back capture cleanup failed");
         return 0;
@@ -1086,6 +1199,8 @@ int main(int argc, char** argv)
     {
         check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4 && std::string_view(argv[3]) == "nullable-references")
+            return qualifyReferences(argv[1], argv[2], true);
         if (argc == 4 && std::string_view(argv[3]) == "nullable")
             return qualifyNullable(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "references")

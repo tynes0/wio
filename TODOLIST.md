@@ -728,7 +728,7 @@ Rider, and CLion are defined in
    Object ref/view method parameters now use alias-preserving tagged handle
    cells, with staged transactional copy-back and panic-unwind copy-back.
    Distinct cells holding one object remain independent. Borrowed results,
-   nullable object borrows/generic object methods and foreign-object field/method
+   generic object methods and foreign-object field/method
    synchronization remain pending. Focused qualification covers 30 lifecycle
    rounds, ref/ref and ref/view aliases, malformed references and partial
    factory failure while staging one or multiple replacement cells.
@@ -741,6 +741,17 @@ Rider, and CLion are defined in
    qualification covers 40 lifecycle rounds, C++/VM/free-native identity,
    malformed null rejection and partial proxy factory output cleanup.
    The nullable-method gate passed locally on Windows (1/1, 10.76 seconds).
+   Nullable object ref/view method parameters now preserve aliases and copy
+   null/object transitions back through tagged cells. Mixed nullable/non-nullable
+   alias declarations reject. Two-cell copy-back rolls back staged null and
+   object replacements when a later factory fails; panic copy-back preserves
+   null updates. The new focused C++/VM/host gate covers 30 lifecycle rounds,
+   view-first aliases, readonly/malformed cells, partial factory failures,
+   direct/virtual/function-value owned arguments and final-handle null cleanup.
+   VM synchronous calls now transfer owned SSA arguments to the callee; C++
+   indirect calls consume owned arguments too. Async task-launch ownership needs
+   separate lifecycle qualification before applying the same transfer rule.
+   The nullable-reference gate passed locally on Windows (1/1, 24.28 seconds).
    Field synchronization, inheritance/interface and SDK/reflection routing
    remain pending; this does not close object parity.
    Remaining native parity work includes broader VM-created object signatures,
