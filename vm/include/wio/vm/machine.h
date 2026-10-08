@@ -21,6 +21,7 @@ struct WioNativePodDefaultApi;
 struct WioNativeSequenceApi;
 struct WioNativeDictionaryApi;
 struct WioNativeAnyApi;
+struct WioNativeObjectApi;
 
 namespace wio::vm
 {
@@ -172,6 +173,13 @@ namespace wio::vm
             const WioNativePodLayoutApi* pods = nullptr, const WioNativePodDefaultApi* defaults = nullptr,
             const WioNativeTaskApi* tasks = nullptr, const WioNativeTaskCompletionApi* completions = nullptr);
 
+        [[nodiscard]] bool registerNativeRegistry(
+            const WioNativeAbiRegistry& registry, const WioNativeObjectApi& objects, std::string* error = nullptr,
+            const WioNativeAnyApi* any = nullptr, const WioNativeDictionaryApi* dictionaries = nullptr,
+            const WioNativeSequenceApi* sequences = nullptr, const WioNativePodLayoutApi* pods = nullptr,
+            const WioNativePodDefaultApi* defaults = nullptr, const WioNativeTaskApi* tasks = nullptr,
+            const WioNativeTaskCompletionApi* completions = nullptr);
+
         // Loads a generated native thunk module, discovers its registry and
         // optional async sidecars, and pins the dynamic library until this
         // machine has cancelled tasks and released all foreign values.
@@ -209,14 +217,12 @@ namespace wio::vm
         void resumeTask(std::shared_ptr<ExecutionState> state);
         [[nodiscard]] Value startTask(std::uint32_t function, std::span<const Value> arguments);
         [[nodiscard]] ExecutionResult driveTask(const Value& task);
-        [[nodiscard]] bool registerNativeRegistryImpl(const WioNativeAbiRegistry& registry,
-                                                      const WioNativeTaskApi* tasks,
-                                                      const WioNativeTaskCompletionApi* completions, std::string* error,
-                                                      const WioNativePodLayoutApi* pods = nullptr,
-                                                      const WioNativePodDefaultApi* defaults = nullptr,
-                                                      const WioNativeSequenceApi* sequences = nullptr,
-                                                      const WioNativeDictionaryApi* dictionaries = nullptr,
-                                                      const WioNativeAnyApi* any = nullptr);
+        [[nodiscard]] bool registerNativeRegistryImpl(
+            const WioNativeAbiRegistry& registry, const WioNativeTaskApi* tasks,
+            const WioNativeTaskCompletionApi* completions, std::string* error,
+            const WioNativePodLayoutApi* pods = nullptr, const WioNativePodDefaultApi* defaults = nullptr,
+            const WioNativeSequenceApi* sequences = nullptr, const WioNativeDictionaryApi* dictionaries = nullptr,
+            const WioNativeAnyApi* any = nullptr, const WioNativeObjectApi* objects = nullptr);
 
         struct Program;
         std::shared_ptr<Program> program_;

@@ -12,6 +12,7 @@ set(WIO_SDK_HEADERS
     "${WIO_SDK_INCLUDE_DIR}/wio_native_sequence.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_native_dictionary.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_native_any.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_native_object.h"
 )
 
 add_library(wio_sdk INTERFACE)

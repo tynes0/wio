@@ -5,6 +5,7 @@
 #include <wio_native_sequence.h>
 #include <wio_native_dictionary.h>
 #include <wio_native_any.h>
+#include <wio_native_object.h>
 
 #include <unordered_map>
 #include <vector>
@@ -47,6 +48,7 @@ namespace wio::vm::detail
             std::unordered_map<std::uint32_t, WioNativeAnyPayloadDescriptor> payloads;
         };
         std::unordered_map<std::uint32_t, AnyLayout> any;
+        std::unordered_map<std::uint32_t, WioNativeObjectDescriptor> objects;
     };
 
     struct NativePodProjection

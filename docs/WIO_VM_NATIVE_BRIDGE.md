@@ -858,3 +858,58 @@ claim is made.
 Both focused gates passed locally on Windows (2/2, 23.85 seconds), including
 the generated native executable, VM/DLL differential, unsupported-cast
 diagnostic, and escaped-value lifetime checks.
+
+## Host-backed object contract foundation
+
+The optional `WioGetNativeObjectApi` export (`wio_native_object.h`, sidecar
+version 1) describes producer factories for typed proxies of VM-owned objects.
+It is additive: wire ABI v2 and the bytecode format are unchanged, and existing
+native registry registration overloads remain available. The loader discovers
+the optional sidecar; descriptors are validated and published transactionally
+with the other producer layouts. Only concrete reflected object types qualify.
+
+A host token carries a stable type id, object identity, generation, retained
+owner handle and method dispatch callback. The producer factory creates a real
+`runtime::Ref<T>` whose native-visible methods can delegate to that callback.
+There is no reinterpretation of VM object memory as a C++ object and no copied
+VM instance. `ObjectHostLease` validates the token and acquires exactly one
+host claim per proxy. Native Ref copies share the proxy and its host claim.
+Dispatch currently requires the proxy's construction thread; foreign-thread
+entry returns `WRONG_THREAD` without invoking the host.
+
+`ObjectAdapter<T, Proxy, TypeId>` supplies factory, borrowed identity recovery,
+owned weak-cache storage and owned strong-lock operations. Expired weak locks
+return `STALE_HANDLE`. Weak storage does not own a strong host claim:
+`HostObject<T>` releases its lease at `OnZeroStrong`, even when weak references
+delay the proxy's physical C++ destruction. Constructor failures and partially
+owned dispatch results unwind without leaking host/result claims. Method errors
+preserve their status and message as `ObjectDispatchError` for the native thunk
+exception boundary. A factory creates a new proxy; factory calls alone do not
+canonicalize repeated object identities.
+
+This is a contract/runtime foundation, **not automatic CLI object transfer**:
+
+- Compiler-generated proxy classes and automatic VM object materialization are
+  still pending. The VM currently records object descriptors but does not use
+  them to encode/decode a locally created object at a native call boundary.
+- A machine-owned identity cache must use producer weak handles to avoid a
+  VM object -> native proxy -> VM object reference-counting cycle. Generation
+  validation and canonical proxy reuse must be connected there.
+- Native field projections/synchronization, `ref`/`view` receiver contracts,
+  inheritance/interfaces and generic object routing are not qualified yet.
+- Proxy construction/destruction must not run Wio lifecycle bodies twice.
+  Integration with VM cleanup, final release scheduling and machine/library
+  lifetime is pending. The sidecar host retains/releases are required to be
+  safe wherever a native Ref is released; caller-thread-only invocation does
+  not by itself solve foreign-thread final destruction.
+
+The focused gate `wio_vm_native_object_host` uses real encoded/decoded bytecode
+and a live VM host behind a typed native proxy. Virtual native calls execute VM
+field load/store functions and mutate the original object. It checks identity
+recovery, native Ref aliases, host survival after the caller drops its machine
+claim, strong/weak lifetime separation, exactly-once final host/proxy release,
+void dispatch, owned partial failure cleanup, constructor exceptions,
+wrong-thread rejection and malformed/conflicting/atomic descriptor registration.
+This gate does not qualify generated proxies, real DLL object transfers or
+full C++/VM object parity. Only the new focused gate was run locally on Windows;
+no full-suite or Linux pass is claimed.

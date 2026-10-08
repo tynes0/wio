@@ -10,6 +10,7 @@
 #include "native_sequence_internal.h"
 #include "native_dictionary_internal.h"
 #include "native_any_internal.h"
+#include "native_object_internal.h"
 #include "string_intrinsics.h"
 #include "text_intrinsics.h"
 
@@ -1695,6 +1696,17 @@ namespace wio::vm
                                           &any);
     }
 
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativeObjectApi& objects,
+                                         std::string* error, const WioNativeAnyApi* any,
+                                         const WioNativeDictionaryApi* dictionaries,
+                                         const WioNativeSequenceApi* sequences, const WioNativePodLayoutApi* pods,
+                                         const WioNativePodDefaultApi* defaults, const WioNativeTaskApi* tasks,
+                                         const WioNativeTaskCompletionApi* completions)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, pods, defaults, sequences, dictionaries,
+                                          any, &objects);
+    }
+
     bool Machine::loadNativeLibrary(const std::filesystem::path& path, std::string* error)
     {
         const auto reject = [&](std::string message)
@@ -1760,7 +1772,8 @@ namespace wio::vm
                                              const WioNativeTaskCompletionApi* completions, std::string* error,
                                              const WioNativePodLayoutApi* pods, const WioNativePodDefaultApi* defaults,
                                              const WioNativeSequenceApi* sequences,
-                                             const WioNativeDictionaryApi* dictionaries, const WioNativeAnyApi* any)
+                                             const WioNativeDictionaryApi* dictionaries, const WioNativeAnyApi* any,
+                                             const WioNativeObjectApi* objects)
     {
         const auto reject = [&](std::string message)
         {
@@ -1812,7 +1825,7 @@ namespace wio::vm
 
         std::scoped_lock lock{program_->nativeMutex};
         std::shared_ptr<detail::NativePodLayouts> layouts;
-        if (pods || sequences || dictionaries || any)
+        if (pods || sequences || dictionaries || any || objects)
         {
             layouts = std::make_shared<detail::NativePodLayouts>(*program_->nativePodLayouts);
             std::string layoutError;
@@ -1828,6 +1841,8 @@ namespace wio::vm
             if (!detail::validateNativeContainers(*program_->module, *layouts, layoutError))
                 return reject(std::move(layoutError));
             if (any && !detail::mergeNativeAny(*program_->module, *any, *layouts, layoutError))
+                return reject(std::move(layoutError));
+            if (objects && !detail::mergeNativeObjects(*program_->module, *objects, *layouts, layoutError))
                 return reject(std::move(layoutError));
         }
         for (Program::NativeFunction& addition : additions)

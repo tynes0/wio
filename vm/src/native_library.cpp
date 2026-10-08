@@ -7,6 +7,7 @@
 #include <wio_native_sequence.h>
 #include <wio_native_dictionary.h>
 #include <wio_native_any.h>
+#include <wio_native_object.h>
 
 #include <system_error>
 #include <map>
@@ -94,6 +95,7 @@ namespace wio::vm::detail
         const WioNativeSequenceApi* sequences = nullptr;
         const WioNativeDictionaryApi* dictionaries = nullptr;
         const WioNativeAnyApi* any = nullptr;
+        const WioNativeObjectApi* objects = nullptr;
         std::mutex machineMutex;
         std::size_t activeMachines = 0;
 
@@ -229,6 +231,12 @@ namespace wio::vm::detail
             if (!library->state_->any)
                 return fail("native VM module returned a null any sidecar");
         }
+        if (const auto getObjects = loadSymbol<WioGetNativeObjectApiFn>(handle, "WioGetNativeObjectApi"))
+        {
+            library->state_->objects = getObjects();
+            if (!library->state_->objects)
+                return fail("native VM module returned a null object sidecar");
+        }
         error.clear();
         cache.insert_or_assign(library->path(), library);
         return library;
@@ -243,7 +251,12 @@ namespace wio::vm::detail
         }
         std::scoped_lock lock{state_->machineMutex};
         const bool registered =
-            state_->any
+            state_->objects
+                ? machine.registerNativeRegistry(*state_->registry, *state_->objects, &error, state_->any,
+                                                 state_->dictionaries, state_->sequences, state_->pods,
+                                                 state_->defaults, state_->completions ? state_->tasks : nullptr,
+                                                 state_->completions)
+            : state_->any
                 ? machine.registerNativeRegistry(*state_->registry, *state_->any, &error, state_->dictionaries,
                                                  state_->sequences, state_->pods, state_->defaults,
                                                  state_->completions ? state_->tasks : nullptr, state_->completions)

@@ -696,6 +696,14 @@ Rider, and CLion are defined in
    null defaults, and escaped producer-library lifetime have focused coverage.
    Payload discovery uses concrete AnyBox/is/fit types; unknown payloads and
    ambiguous C++ aliases reject explicitly rather than guessing identities.
+   Object bridge foundations now define an additive host-proxy sidecar, stable
+   object/type/generation identities, typed producer Ref/WeakRef adapters, and
+   caller-thread method dispatch back into a live VM. Focused qualification
+   covers shared identity, native-held host lifetime, weak-cache expiry,
+   construction/dispatch failure cleanup and transactional registration.
+   Automatic proxy emission and VM materialization/identity caches, field
+   synchronization, inheritance/interface routing and Wio lifecycle integration
+   are not connected yet; this foundation does not close object parity.
    Remaining native parity work includes VM-created object materialization,
    object/interface/Box and nullable/generic any payloads, any-bearing containers,
    alias identity canonicalization; POD/object/container/nullable and
