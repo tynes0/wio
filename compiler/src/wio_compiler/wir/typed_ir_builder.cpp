@@ -4519,11 +4519,20 @@ namespace wio::wir::typed
                         commonNumericType = result_.module_.types.intern(Type{.kind = *commonKind});
                 }
                 const TypeId operandType = numericResult ? expressionType : commonNumericType;
-                const ValueId left = operandType ? buildExpressionAs(binary->left, operandType, state)
+                // Flow analysis can narrow a nullable local's AST type while
+                // its storage/SSA value remains nullable. Honor that narrowing
+                // explicitly before identity comparison; never relax verifier
+                // requirements or evaluate either operand a second time.
+                const bool identityComparison =
+                    (binary->op.type == TokenType::opEqual || binary->op.type == TokenType::opNotEqual) &&
+                    underlyingNominalType(leftReadableType) && underlyingNominalType(rightReadableType);
+                const ValueId left = identityComparison ? buildExpressionAs(binary->left, leftReadableType, state)
+                                     : operandType      ? buildExpressionAs(binary->left, operandType, state)
                                      : leftLiteral && !rightLiteral
                                          ? buildExpressionAs(binary->left, rightReadableType, state)
                                          : buildAutoReadableExpression(binary->left, state);
-                const ValueId right = operandType ? buildExpressionAs(binary->right, operandType, state)
+                const ValueId right = identityComparison ? buildExpressionAs(binary->right, rightReadableType, state)
+                                      : operandType      ? buildExpressionAs(binary->right, operandType, state)
                                       : rightLiteral && !leftLiteral
                                           ? buildExpressionAs(binary->right, leftReadableType, state)
                                           : buildAutoReadableExpression(binary->right, state);
@@ -4532,10 +4541,6 @@ namespace wio::wir::typed
                     report("WIR2303", "Binary expression could not be lowered to Typed WIR.", expression.Get());
                     return {};
                 }
-                const bool identityComparison =
-                    (binary->op.type == TokenType::opEqual || binary->op.type == TokenType::opNotEqual) &&
-                    underlyingNominalType(mapType(binary->left->refType.Lock(), binary->left.Get())) &&
-                    underlyingNominalType(mapType(binary->right->refType.Lock(), binary->right.Get()));
                 const ValueId result =
                     appendValue(Instruction{.opcode = identityComparison ? Opcode::IdentityEqual : Opcode::Binary,
                                             .operands = {left, right},
@@ -5658,6 +5663,7 @@ namespace wio::wir::typed
                                 .resultOwnership = ownershipForType(destinationType),
                                 .source = SourceSpan::at(expression->location())});
                 rememberOwnership(state, wrapped, ownershipForType(destinationType));
+                releaseOwnedTemporary(value, expression.Get(), state);
                 return wrapped;
             }
 
@@ -5674,6 +5680,7 @@ namespace wio::wir::typed
                                 .resultOwnership = ownershipForType(destinationType),
                                 .source = SourceSpan::at(expression->location())});
                 rememberOwnership(state, unwrapped, ownershipForType(destinationType));
+                releaseOwnedTemporary(value, expression.Get(), state);
                 return unwrapped;
             }
 

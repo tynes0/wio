@@ -32,6 +32,8 @@ namespace wio::codegen
 
         std::uint64_t identity(const lowered::Module& module, TypeId id)
         {
+            if (const auto object = nativeAbiObjectType(module.types, id))
+                id = object;
             if (const auto* reflected = reflection(module, id))
                 return reflected->stableTypeId;
             return stableModuleHash(nativeAbiTypeKey(module.types, id));
@@ -51,12 +53,8 @@ namespace wio::codegen
         std::vector<TypeId> pending;
         const auto collect = [&](TypeId id)
         {
+            id = nativeAbiObjectType(module.types, id);
             const Type* type = module.types.tryGet(id);
-            if (type && type->kind == TypeKind::Reference && type->arguments.size() == 1)
-            {
-                id = type->arguments.front();
-                type = module.types.tryGet(id);
-            }
             if (type && type->kind == TypeKind::Named && type->nominalKind == NominalKind::Object &&
                 candidates.insert(id).second)
                 pending.push_back(id);
@@ -84,6 +82,8 @@ namespace wio::codegen
         {
             const auto& type = module.types.get(id);
             if (allowReference && type.kind == TypeKind::Reference && type.arguments.size() == 1)
+                return candidates.contains(type.arguments.front());
+            if (type.kind == TypeKind::Nullable && type.arguments.size() == 1)
                 return candidates.contains(type.arguments.front());
             return wireValue(module, id, allowVoid) || candidates.contains(id);
         };
@@ -141,9 +141,8 @@ namespace wio::codegen
         pending.clear();
         const auto include = [&](TypeId id)
         {
-            const auto& type = module.types.get(id);
-            if (type.kind == TypeKind::Reference && type.arguments.size() == 1)
-                id = type.arguments.front();
+            if (const auto object = nativeAbiObjectType(module.types, id))
+                id = object;
             if (candidates.contains(id) && reachable.insert(id).second)
                 pending.push_back(id);
         };

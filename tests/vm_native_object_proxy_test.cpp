@@ -119,6 +119,24 @@ namespace
             "scalar reference method parameter was silently qualified by the object-only borrow slice");
         {
             auto trial = module;
+            const auto nullable = trial.types.intern(Type{.kind = TypeKind::Nullable, .arguments = {object}});
+            trial.functions[1].nativeBinding->parameters[0].type = nullable;
+            trial.functions[0].parameters.push_back({.type = nullable});
+            trial.functions[0].returnType = nullable;
+            trial.contract.reflection[0].methods[0].returnType = nullable;
+            check(Emitter::eligibleTypes(trial) == std::set{object},
+                  "nullable object root, parameter or result was rejected");
+            const auto borrowedNullable =
+                trial.types.intern(Type{.kind = TypeKind::Reference, .arguments = {nullable}, .isMutable = true});
+            trial.functions[0].parameters.back().type = borrowedNullable;
+            check(Emitter::eligibleTypes(trial).empty(), "borrowed nullable method parameter was silently proxied");
+            trial.functions[0].parameters.back().type = nullable;
+            trial.functions[0].returnType =
+                trial.types.intern(Type{.kind = TypeKind::Nullable, .arguments = {integer}});
+            check(Emitter::eligibleTypes(trial).empty(), "nullable scalar method result was silently proxied");
+        }
+        {
+            auto trial = module;
             trial.functions[0].returnType = object;
             trial.contract.reflection[0].methods[0].returnType = object;
             check(Emitter::eligibleTypes(trial) == std::set{object}, "self-returning object method was rejected");
@@ -134,6 +152,12 @@ namespace
             trial.contract.reflection[0].methods[0].returnType = dependency;
             check(Emitter::eligibleTypes(trial) == std::set{object, dependency},
                   "object method dependency missing from proxy closure");
+            const auto nullableDependency =
+                trial.types.intern(Type{.kind = TypeKind::Nullable, .arguments = {dependency}});
+            trial.functions[0].returnType = nullableDependency;
+            trial.contract.reflection[0].methods[0].returnType = nullableDependency;
+            check(Emitter::eligibleTypes(trial) == std::set{object, dependency},
+                  "nullable-only method dependency missing from proxy closure");
             const auto dependencyReceiver =
                 trial.types.intern(Type{.kind = TypeKind::Reference, .arguments = {dependency}});
             trial.functions.push_back({.id = FunctionId{2},
@@ -601,6 +625,165 @@ namespace
         check(released == 2, "successful object-method call did not release its owned argument");
     }
 
+    int qualifyNullable(const char* bytecode, const char* producer)
+    {
+        using NullableHandle = std::optional<wio::runtime::Ref<wio::runtime::RefCountedObject>>;
+        using NullableCodec = abi::Codec<NullableHandle, 991>;
+        for (const auto& absent :
+             {NullableHandle{}, NullableHandle{wio::runtime::Ref<wio::runtime::RefCountedObject>{}}})
+        {
+            Wire encoded;
+            encoded.value = NullableCodec::write(absent);
+            check(encoded.value.kind == WIO_NATIVE_ABI_VOID && encoded.value.flags == WIO_NATIVE_ABI_VALUE_NULLABLE &&
+                      encoded.value.typeId == 991 && !NullableCodec::read(encoded.value),
+                  "nullable object codec did not normalize an empty C++ handle to null");
+        }
+        std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
+        const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        auto decoded = bc::decode(std::as_bytes(std::span{bytes.data(), bytes.size()}));
+        check(decoded.succeeded(), "nullable object method bytecode decode failed");
+        Library library{std::filesystem::u8path(producer)};
+        const auto getObjects = library.symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
+        check(getObjects && getObjects()->typeCount == 2, "nullable method-only dependency adapter missing");
+        wio::vm::Machine machine{decoded.module};
+        std::string error;
+        check(machine.loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+        const auto findFunction = [&](const char* name)
+        {
+            const auto found = std::ranges::find_if(decoded.module.functions, [&](const auto& function)
+                                                    { return decoded.module.string(function.name) == name; });
+            check(found != decoded.module.functions.end(), "nullable qualification function missing");
+            return found->id;
+        };
+        const auto entry = machine.invoke(findFunction("Entry"));
+        if (!entry.succeeded())
+            throw std::runtime_error(entry.error().code + ": " + entry.error().message);
+        check(entry.value().asSignedInteger() == 0, "nullable object native/VM identity or lifecycle failed");
+        const auto captured = machine.invoke(findFunction("CaptureEntry"));
+        check(captured.succeeded(), "nullable method host capture failed");
+        const auto token = *reinterpret_cast<const WioNativeObjectHost*>(captured.value().asUnsignedInteger());
+        const auto reflected =
+            std::ranges::find(decoded.module.contract.reflection, token.typeId, &bc::Reflection::stableTypeId);
+        check(reflected != decoded.module.contract.reflection.end(), "nullable method reflection missing");
+        const auto methodId = [&](const char* name)
+        {
+            const auto found = std::ranges::find_if(reflected->methods, [&](const auto& method)
+                                                    { return decoded.module.string(method.name) == name; });
+            check(found != reflected->methods.end(), "nullable qualification method missing");
+            return found->stableId;
+        };
+        WioNativeAbiValue null{};
+        null.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+        null.typeId = token.typeId;
+        Wire output;
+        check(token.invoke(&token, methodId("Echo"), &null, 1, &output.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                  output.value.kind == WIO_NATIVE_ABI_VOID && output.value.flags == WIO_NATIVE_ABI_VALUE_NULLABLE &&
+                  output.value.typeId == token.typeId,
+              "nullable method null wire was not canonical");
+        check(token.invoke(&token, methodId("Required"), &null, 1, &output.value, nullptr) ==
+                  WIO_NATIVE_ABI_TYPE_MISMATCH,
+              "non-nullable object method accepted a null wire");
+        for (int kind = 0; kind < 3; ++kind)
+        {
+            auto invalid = null;
+            if (kind == 0)
+                invalid.flags = 0;
+            if (kind == 1)
+                invalid.typeId ^= 1;
+            if (kind == 2)
+                invalid.flags |= WIO_NATIVE_ABI_VALUE_OWNED;
+            check(token.invoke(&token, methodId("Echo"), &invalid, 1, &output.value, nullptr) ==
+                      WIO_NATIVE_ABI_TYPE_MISMATCH,
+                  "malformed nullable object wire was accepted");
+        }
+        const auto types = std::span{getObjects()->types, getObjects()->typeCount};
+        const auto adapter = std::ranges::find(types, token.typeId, &WioNativeObjectDescriptor::typeId);
+        check(adapter != types.end(), "nullable owner adapter missing");
+        Wire argument;
+        check(adapter->create(&token, &argument.value, nullptr) == WIO_NATIVE_ABI_OK,
+              "nullable object argument setup failed");
+        Wire same;
+        check(token.invoke(&token, methodId("Echo"), &argument.value, 1, &same.value, nullptr) == WIO_NATIVE_ABI_OK,
+              "nullable method rejected a non-null object wire");
+        WioNativeObjectHost identity{};
+        check(adapter->host(&same.value, &identity, nullptr) == WIO_NATIVE_ABI_OK &&
+                  identity.objectId == token.objectId && identity.owner.state == token.owner.state,
+              "nullable method result changed original VM identity");
+        const auto getRegistry = library.symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
+        check(getRegistry, "nullable object producer registry missing");
+        const auto& registry = *getRegistry();
+        for (int kind = 0; kind < 5; ++kind)
+        {
+            auto invalid = null;
+            if (kind == 0)
+                invalid.flags = 0;
+            if (kind == 1)
+                invalid.typeId ^= 1;
+            if (kind == 2)
+                invalid.flags |= WIO_NATIVE_ABI_VALUE_OWNED;
+            if (kind == 3)
+                invalid.owner.state = &invalid;
+            if (kind == 4)
+                invalid.kind = WIO_NATIVE_ABI_OBJECT;
+            const std::array arguments{invalid};
+            Wire rejected;
+            check(call(registry, "vm_object_nullable::Echo", arguments, rejected.value) == WIO_NATIVE_ABI_TYPE_MISMATCH,
+                  "free native nullable object codec accepted a malformed null wire");
+        }
+        Wire cleared;
+        check(call(registry, "vm_object_nullable::ClearCapture", {}, cleared.value) == WIO_NATIVE_ABI_OK,
+              "nullable method capture cleanup failed");
+
+        const auto badge = std::ranges::find_if(decoded.module.contract.reflection, [&](const auto& type)
+                                                { return decoded.module.string(type.logicalName) == "Badge"; });
+        check(badge != decoded.module.contract.reflection.end(), "nullable factory result metadata missing");
+        std::vector<WioNativeObjectDescriptor> failingTypes{types.begin(), types.end()};
+        for (auto& type : failingTypes)
+            if (type.typeId == badge->stableTypeId)
+            {
+                partialObjectFactory = type.create;
+                type.create =
+                    [](const WioNativeObjectHost* host, WioNativeAbiValue* result, WioNativeAbiFailure*) noexcept
+                {
+                    const auto status = partialObjectFactory(host, result, nullptr);
+                    return status == WIO_NATIVE_ABI_OK ? WIO_NATIVE_ABI_EXCEPTION : status;
+                }; // Deliberately retain an owned partial output on failure.
+            }
+        const WioNativeObjectApi failingApi{WIO_NATIVE_OBJECT_VERSION, static_cast<std::uint32_t>(failingTypes.size()),
+                                            failingTypes.data()};
+        wio::vm::Machine failedMachine{decoded.module};
+        check(failedMachine.registerNativeRegistry(registry, failingApi, &error), error.c_str());
+        const auto failedCapture = failedMachine.invoke(findFunction("CaptureEntry"));
+        check(failedCapture.succeeded(), "nullable factory failure receiver capture failed");
+        const auto failedToken =
+            *reinterpret_cast<const WioNativeObjectHost*>(failedCapture.value().asUnsignedInteger());
+        WioNativeAbiValue badgeKind{};
+        badgeKind.kind = WIO_NATIVE_ABI_I64;
+        badgeKind.payload.signedInteger = 1;
+        const std::array badgeArguments{badgeKind};
+        const auto beforeConstructors = scalar(registry, "vm_object_nullable::Constructions", badgeArguments);
+        const auto beforeDestructors = scalar(registry, "vm_object_nullable::Destructions", badgeArguments);
+        WioNativeAbiValue seed{};
+        seed.kind = WIO_NATIVE_ABI_I64;
+        seed.payload.signedInteger = 99;
+        WioNativeAbiValue enabled{};
+        enabled.kind = WIO_NATIVE_ABI_BOOL;
+        enabled.payload.boolean = 1;
+        const std::array makeArguments{seed, enabled};
+        Wire failedOutput;
+        check(failedToken.invoke(&failedToken, methodId("MakeBadge"), makeArguments.data(), makeArguments.size(),
+                                 &failedOutput.value, nullptr) == WIO_NATIVE_ABI_TYPE_MISMATCH &&
+                  failedOutput.value.kind == WIO_NATIVE_ABI_VOID && !failedOutput.value.owner.state,
+              "nullable result factory failure leaked its partial output across the boundary");
+        check(failedMachine.invoke(findFunction("SafePoint")).succeeded(), "nullable cleanup safe point failed");
+        check(scalar(registry, "vm_object_nullable::Constructions", badgeArguments) == beforeConstructors + 1 &&
+                  scalar(registry, "vm_object_nullable::Destructions", badgeArguments) == beforeDestructors + 1,
+              "nullable factory failure lost or repeated returned-object destruction");
+        check(call(registry, "vm_object_nullable::ClearCapture", {}, cleared.value) == WIO_NATIVE_ABI_OK,
+              "nullable factory failure receiver cleanup failed");
+        return 0;
+    }
+
     int qualifyReferences(const char* bytecode, const char* producer)
     {
         std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
@@ -903,6 +1086,8 @@ int main(int argc, char** argv)
     {
         check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4 && std::string_view(argv[3]) == "nullable")
+            return qualifyNullable(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "references")
             return qualifyReferences(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "methods")

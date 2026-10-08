@@ -208,6 +208,8 @@ namespace wio::codegen
             functions[f.id] = &f;
         const auto wireId = [&](TypeId id)
         {
+            if (const auto object = nativeAbiObjectType(module.types, id))
+                id = object;
             for (const auto& reflected : module.contract.reflection)
                 if (reflected.type == id)
                     return reflected.stableTypeId;

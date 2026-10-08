@@ -926,9 +926,10 @@ proxy. The initial automatic producer surface is deliberately narrow:
   field shapes are excluded so dummy producer fields cannot run nested Wio
   lifecycle bodies during proxy construction/destruction.
 - Non-abstract, synchronous Wio methods with scalar/string/text and qualified
-  object values in their arguments/results (or void results), plus `ref/view`
+  object and nullable-object values in their arguments/results (or void results), plus `ref/view`
   qualified-object parameters. Borrowed results, scalar/container references,
-  nullable, container, generic, native/external and async method signatures
+  nullable scalar/container values, nullable object borrows, container, generic,
+  native/external and async method signatures
   remain excluded.
 
 Proxies override both canonical WIR dispatch slots and the public `_WF_*`
@@ -1072,7 +1073,7 @@ does not copy scalar/string results.
 Object-valued method parameters must belong to the same live machine. A hosted
 proxy from another machine, or an ordinary producer-created C++ object without
 VM field storage, rejects with `TYPE_MISMATCH`. General foreign-object method
-routing/field synchronization, nullable objects, borrowed method results,
+routing/field synchronization, nullable object borrows, borrowed method results,
 generics, inheritance and interfaces remain pending. VM method
 failures preserve `PANIC` through the generated native boundary; closed hosts
 continue returning `STALE_HANDLE`. This is an implementation extension to the
@@ -1138,7 +1139,7 @@ flagged reference buffers reject before executing the method. Recovered object
 arguments must still originate in the same machine; a reference does not grant
 foreign-object field synchronization. Reference cells and VM places remain
 call-scoped: **borrowed results and escaping reference cells are not supported**.
-Scalar/POD/container reference method parameters and nullable object parameters
+Scalar/POD/container reference method parameters and nullable object borrows
 are separate remaining work. No wire-v2/object-sidecar-v1 ABI version changed.
 
 The focused `wio_vm_native_object_method_references` gate compares generated C++
@@ -1154,3 +1155,67 @@ Linux pass is claimed.
 The reference-method gate passed locally on Windows (1/1, 18.55 seconds),
 including generated native execution, actual bytecode CLI execution and the
 live host's negative/factory-failure scenarios.
+
+## Nullable object method and free-native values
+
+Eligible concrete objects now cross synchronous hosted method and free-native
+boundaries as nullable values as well:
+
+```wio
+public fn MaybeSelf(enabled: bool) -> Counter? {
+    if (enabled) {
+        return deref self;
+    }
+    return null;
+}
+
+public fn ReadMaybe(value: Counter?) -> i32 {
+    if (value == null) {
+        return -1;
+    }
+    return value.Read();
+}
+
+[Native, CppName(native_api::Echo)]
+fn NativeEcho(value: Counter?) -> Counter?;
+```
+
+The generated C++ native signature uses `std::optional<runtime::Ref<T>>`.
+This is the existing nullable language representation, not an additional ABI
+box: a present value uses the same ordinary object handle, codec operations and
+canonical concrete-object type id as `T`. The nullable wrapper does not create
+a second proxy identity or duplicate the object. A disengaged optional or an
+engaged optional holding an empty C++ `Ref` writes canonical nullable `VOID`.
+Wio-origin non-null values still recover their original same-machine object.
+The restriction on foreign-machine and producer-only object values is unchanged.
+
+Null wires require exactly the `NULLABLE` flag, no owner state/operations and
+either zero or the matching concrete-object type id. Methods emitting a null
+result include that id. A non-nullable parameter rejects a null wire; malformed
+null flags, identities or fake object handles also reject. Nullable-only method
+dependencies participate in adapter discovery, whole-surface qualification and
+transitive rejection, even without a free-native declaration for that type.
+Neither wire-v2 nor object-sidecar-v1 changes version.
+
+Two Typed WIR corrections are covered by this slice. Flow-narrowed nullable
+storage is explicitly unwrapped before object identity comparison, preserving
+verifier requirements and single evaluation. Nullable wrap/unwrap retains the
+new result's ownership and releases its consumed owned temporary, rather than
+holding an extra object reference until function exit and delaying destruction.
+
+`wio_vm_native_object_method_nullable` runs generated C++ and actual VM CLI
+execution against the generated producer, plus the live host. Forty rounds
+cover absent/present receiver values, nullable arguments, free-native echo,
+identity, nullable-only `Badge` dependencies, and exact lifecycle counts. The
+host covers canonical null, malformed null, non-nullable rejection, ordinary
+object wire compatibility, and partial proxy factory failure with exactly-once
+returned-object cleanup at the next VM safe point.
+
+Borrowed nullable parameters/results, all other borrowed method results,
+nullable scalar/POD/container method values, structured fields, generic
+objects, inheritance/interfaces and general foreign-object synchronization
+remain separate pending work. This slice does not close native object parity.
+Only this new focused gate is run; no full-suite or Linux pass is claimed.
+
+The nullable-method gate passed locally on Windows (1/1, 10.76 seconds),
+including generated C++, VM CLI and host-injected partial factory failure.

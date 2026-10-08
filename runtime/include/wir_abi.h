@@ -7,6 +7,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <thread>
 #include <vector>
 #include <cstring>
@@ -247,6 +248,40 @@ template<class T, std::uint64_t Id> struct Codec<runtime::Ref<T>, Id> {
     static WioNativeAbiValue write(runtime::Ref<T> input) {
         WioNativeAbiValue v; v.kind = WIO_NATIVE_ABI_OBJECT; v.typeId = Id; v.flags = WIO_NATIVE_ABI_VALUE_OWNED;
         v.payload.handle = {input.Detach(), &ops, 1}; return v;
+    }
+};
+
+// Nullable objects keep the ordinary object handle and type identity. Null is
+// tagged void, never a boxed optional or a fake object with a null state.
+template <class T, std::uint64_t Id> struct Codec<std::optional<runtime::Ref<T>>, Id>
+{
+    using Handle = runtime::Ref<T>;
+    using Nullable = std::optional<Handle>;
+    static Nullable read(const WioNativeAbiValue& value)
+    {
+        if (value.kind == WIO_NATIVE_ABI_VOID)
+        {
+            require(value.flags == WIO_NATIVE_ABI_VALUE_NULLABLE && (!value.typeId || value.typeId == Id) &&
+                    !value.owner.state && !value.owner.ops);
+            return std::nullopt;
+        }
+        require(value.kind == WIO_NATIVE_ABI_OBJECT && value.payload.handle.state &&
+                value.payload.handle.generation == 1 &&
+                (value.flags & (WIO_NATIVE_ABI_VALUE_OWNED | WIO_NATIVE_ABI_VALUE_BORROWED)));
+        return Codec<Handle, Id>::read(value);
+    }
+    static WioNativeAbiValue write(Nullable input)
+    {
+        if (!input || !*input)
+        {
+            WioNativeAbiValue value{};
+            value.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+            value.typeId = Id;
+            return value;
+        }
+        auto value = Codec<Handle, Id>::write(std::move(*input));
+        value.flags |= WIO_NATIVE_ABI_VALUE_NULLABLE;
+        return value;
     }
 };
 

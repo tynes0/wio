@@ -68,4 +68,24 @@ namespace wio::wir
                         : result && t.cleanup != CleanupKind::None ? NativePassingMode::ReturnOwned
                                                                    : NativePassingMode::Value;
     }
+
+    TypeId nativeAbiObjectType(const TypeTable& types, TypeId id)
+    {
+        for (unsigned depth = 0; depth < 64; ++depth)
+        {
+            const auto* type = types.tryGet(id);
+            if (!type)
+                return {};
+            if ((type->kind == TypeKind::Reference || type->kind == TypeKind::Nullable) && type->arguments.size() == 1)
+            {
+                id = type->arguments.front();
+                continue;
+            }
+            return type->kind == TypeKind::Named &&
+                           (type->nominalKind == NominalKind::Object || type->nominalKind == NominalKind::Interface)
+                       ? id
+                       : TypeId{};
+        }
+        return {};
+    }
 } // namespace wio::wir

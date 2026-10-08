@@ -728,11 +728,19 @@ Rider, and CLion are defined in
    Object ref/view method parameters now use alias-preserving tagged handle
    cells, with staged transactional copy-back and panic-unwind copy-back.
    Distinct cells holding one object remain independent. Borrowed results,
-   nullable/generic object methods and foreign-object field/method
+   nullable object borrows/generic object methods and foreign-object field/method
    synchronization remain pending. Focused qualification covers 30 lifecycle
    rounds, ref/ref and ref/view aliases, malformed references and partial
    factory failure while staging one or multiple replacement cells.
    The reference-method gate passed locally on Windows (1/1, 18.55 seconds).
+   Nullable qualified-object values now cross hosted methods and free-native
+   calls without an ABI box or a wrapper-specific proxy identity. Null wires
+   have checked flags/type ids, and nullable-only method dependencies receive
+   adapters. Typed WIR now unwraps flow-narrowed nullable storage for identity
+   comparison and releases consumed wrap/unwrap temporaries promptly. Focused
+   qualification covers 40 lifecycle rounds, C++/VM/free-native identity,
+   malformed null rejection and partial proxy factory output cleanup.
+   The nullable-method gate passed locally on Windows (1/1, 10.76 seconds).
    Field synchronization, inheritance/interface and SDK/reflection routing
    remain pending; this does not close object parity.
    Remaining native parity work includes broader VM-created object signatures,

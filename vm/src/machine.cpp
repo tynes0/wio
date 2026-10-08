@@ -1584,6 +1584,9 @@ namespace wio::vm
             if (type < module.types.size() && module.types[type].kind == TypeReference &&
                 module.types[type].arguments.size() == 1)
                 type = module.types[type].arguments.front();
+            if (type < module.types.size() && module.types[type].kind == TypeNullable &&
+                module.types[type].arguments.size() == 1)
+                type = module.types[type].arguments.front();
             if (detail::callbackValueMarshalling(module, type, marshalling))
                 return true;
             if (type < module.types.size() && module.types[type].kind == TypeNamed &&
@@ -1688,7 +1691,8 @@ namespace wio::vm
                 marshalling == 6
                     ? owner->decodeNativeObject(args[index], method->parameterTypes[index], *layouts)
                     : detail::decodeNativeValue(module, args[index], method->parameterTypes[index], marshalling);
-            if (decoded.succeeded() && marshalling == 6 && decoded.value.kind() != Value::Kind::Object)
+            if (decoded.succeeded() && marshalling == 6 && decoded.value.kind() != Value::Kind::Object &&
+                !(module.types[parameterType].kind == TypeNullable && decoded.value.kind() == Value::Kind::Null))
                 decoded.error = "hosted method argument requires an original VM object from this machine";
             if (!decoded.succeeded())
             {
@@ -1772,11 +1776,27 @@ namespace wio::vm
     {
         while (type < program_->module->types.size() && program_->module->types[type].kind == TypeReference)
             type = program_->module->types[type].arguments.front();
+        const bool nullable =
+            type < program_->module->types.size() && program_->module->types[type].kind == TypeNullable;
+        if (nullable)
+            type = program_->module->types[type].arguments.front();
         const auto adapter = layouts.objects.find(type);
         if (adapter == layouts.objects.end())
         {
             error = "VM-created object has no qualified producer proxy adapter";
             return false;
+        }
+        if (object.kind() == Value::Kind::Null)
+        {
+            if (!nullable)
+            {
+                error = "null object does not match a non-nullable declaration";
+                return false;
+            }
+            output = {};
+            output.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+            output.typeId = adapter->second.typeId;
+            return true;
         }
         if (!program_->nativeObjects)
         {
@@ -1807,7 +1827,10 @@ namespace wio::vm
                         program->nativeLibraries);
                 });
         }
-        return program_->nativeObjects->encode(object, type, adapter->second, output, error);
+        const bool encoded = program_->nativeObjects->encode(object, type, adapter->second, output, error);
+        if (encoded && nullable)
+            output.flags |= WIO_NATIVE_ABI_VALUE_NULLABLE;
+        return encoded;
     }
 
     detail::NativeValueResult Machine::decodeNativeObject(const WioNativeAbiValue& value, std::uint32_t type,
@@ -1816,7 +1839,18 @@ namespace wio::vm
         const auto& module = *program_->module;
         while (type < module.types.size() && module.types[type].kind == TypeReference)
             type = module.types[type].arguments.front();
+        const auto declaredType = type;
+        const bool nullable = type < module.types.size() && module.types[type].kind == TypeNullable;
+        if (nullable)
+            type = module.types[type].arguments.front();
         const auto adapter = layouts.objects.find(type);
+        if (value.kind == WIO_NATIVE_ABI_VOID)
+        {
+            if (!nullable || value.flags != WIO_NATIVE_ABI_VALUE_NULLABLE || value.owner.state || value.owner.ops ||
+                (value.typeId && adapter != layouts.objects.end() && value.typeId != adapter->second.typeId))
+                return {{}, "native object null does not match its nullable declaration or wire contract"};
+            return {Value::null(), {}};
+        }
         if (program_->nativeObjects && adapter != layouts.objects.end())
         {
             bool matched = false;
@@ -1824,7 +1858,7 @@ namespace wio::vm
             if (matched)
                 return result;
         }
-        return detail::decodeNativeValue(module, value, type, 6, &layouts);
+        return detail::decodeNativeValue(module, value, declaredType, 6, &layouts);
     }
 
     ExecutionResult Machine::wait(const Value& task)
