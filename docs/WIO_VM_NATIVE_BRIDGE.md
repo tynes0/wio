@@ -1581,3 +1581,68 @@ Windows gate was run; no full-suite or Linux pass is claimed.
 
 The polymorphic gate passed locally on Windows (1/1, 12.53 seconds), including
 generated C++, actual VM CLI and the live producer/host checks.
+
+## Polymorphic handle cells and caller-rooted method borrows
+
+Qualified hosted objects can now inhabit `ref/view Base` and `ref/view IRead`
+cells, including their nullable variants, while the inner object wire continues
+to name the concrete Leaf/Sibling. Hosted methods can rebind such cells and
+return a borrow rooted in a compatible reference parameter:
+
+```wio
+object Owner {
+    public fn AssignReader(target: ref IRead, source: IRead) -> ref IRead {
+        target = source;
+        return target;
+    }
+    public fn ViewReader(target: view IRead) -> view IRead {
+        return target;
+    }
+}
+```
+
+The returned reference wire identifies the **static contract** and points back
+to the original caller's tagged-value cell. Its inner object wire identifies
+the **concrete object** and retains the concrete producer operations. The
+producer maps the result back to the caller's original Place; no local VM Place
+or transient dispatch buffer escapes. Borrow provenance still requires matching
+parameter storage and mutability, rather than accepting arbitrary references.
+
+Repeated same-contract `ref/view` arguments share one cell, including view-first
+then ref argument order. Distinct cells holding the same object stay distinct.
+A shared cell cannot be interpreted simultaneously as Base and IRead, or as
+nullable and non-nullable storage. Producer reference cells use a per-static-
+storage contract key instead of comparing their concrete wire id with the
+static declaration id. Native Frame storage mismatches report type mismatch,
+not an incidental `std::bad_any_cast` exception. A view cannot gain rebinding
+permission by being returned from a method.
+
+Interface method signatures participate in whole-surface qualification. A
+method-only Base/interface dependency discovers its concrete descendants;
+abstract interfaces receive codecs but no materialization adapter. The VM
+caches registered concrete adapters' ancestor contracts, avoiding an adapter
+inventory scan for every hosted method parameter.
+
+Inherited Base methods returning `ref/view Base` from `self` are supported on
+a Leaf receiver. The owned temporary transport still carries Leaf identity;
+the producer validates its host and maps it to a non-rebindable raw Base Place.
+The temporary transport is released before the result leaves the wrapper.
+Borrowing the receiver does not add a lasting intrusive claim.
+
+The new `wio_vm_native_object_polymorphic_references` gate compares generated
+C++, actual VM CLI execution and live hosted dispatch. It covers 30 rounds of
+Leaf/Base and Leaf/Sibling rebinding, same-cell ref/view aliases in both orders,
+independent cells, caller-rooted borrowed results, nullable/null transitions,
+inherited receiver ref/view returns and unchanged strong counts,
+readonly and malformed cells, incompatible/forged concrete transport, mixed
+static contracts, mixed native nullable storage and exactly-once final cleanup.
+
+This does not qualify explicit covariant receiver borrow declarations (for
+example a method declared on Leaf returning `ref Base` from Leaf-typed self),
+free-native reference results, foreign subclass state
+synchronization or general callback/async borrowed lifetime support. Wire-v2,
+object-sidecar-v1 and WIOB 1.1 formats are unchanged. Only this new focused gate
+is run for this slice; no full-suite or Linux pass is implied.
+
+The gate passed locally on Windows (1/1, 20.30 seconds), including generated
+C++, actual VM CLI execution, selection checks and live host dispatch.

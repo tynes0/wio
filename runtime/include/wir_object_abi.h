@@ -55,9 +55,13 @@ namespace wio::wir_backend::abi
                 require(slot < Count, WIO_NATIVE_ABI_INVALID_ARGUMENT);
                 tokens_[slot] = Codec<T, Id>::write(place.read());
                 addresses_[slot] = address;
+                contracts_[slot] = &contract<T, Id>;
                 ++tokenCount_;
             }
-            require(tokens_[slot].typeId == Id);
+            // The token names the concrete object, not the static cell type.
+            // Nullable/non-nullable and unrelated static views must not share
+            // typed copy-back storage even when they hold the same object.
+            require(contracts_[slot] == &contract<T, Id>);
             if (mutableAccess && !commits_[slot])
                 commits_[slot] = [this, slot, place]() mutable { place.write(Codec<T, Id>::read(tokens_[slot])); };
             auto& wire = (*this)[index];
@@ -76,8 +80,10 @@ namespace wio::wir_backend::abi
         }
 
     private:
+        template <class T, std::uint64_t Id> inline static char contract = 0;
         std::array<WioNativeAbiValue, Count> tokens_{};
         std::array<const void*, Count> addresses_{};
+        std::array<const void*, Count> contracts_{};
         std::array<std::function<void()>, Count> commits_{};
         std::size_t tokenCount_ = 0;
     };

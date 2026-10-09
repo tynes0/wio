@@ -8,6 +8,7 @@
 #include <wio_native_object.h>
 
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace wio::vm::detail
@@ -50,6 +51,7 @@ namespace wio::vm::detail
         std::unordered_map<std::uint32_t, AnyLayout> any;
         std::unordered_map<std::uint32_t, WioNativeObjectDescriptor> objects;
         std::unordered_map<std::uint64_t, std::uint32_t> objectTypes;
+        std::unordered_set<std::uint32_t> objectContracts;
     };
 
     struct NativePodProjection

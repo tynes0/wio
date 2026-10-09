@@ -213,17 +213,34 @@ namespace wio::codegen
                     familyPending.push_back(child);
         }
         const auto roots = candidates;
+        std::size_t familyCursor = familyPending.size();
+        const auto collectFamily = [&](TypeId id)
+        {
+            id = nativeAbiObjectType(module.types, id);
+            if (!id)
+                return;
+            if (family.insert(id).second)
+                familyPending.push_back(id);
+            for (; familyCursor < familyPending.size(); ++familyCursor)
+            {
+                collect(familyPending[familyCursor]);
+                for (const auto child : descendants[familyPending[familyCursor].value()])
+                    if (family.insert(child).second)
+                        familyPending.push_back(child);
+            }
+        };
         // Method-only object dependencies may never appear in a free native
         // declaration. Discover the full signature closure before qualification.
         for (std::size_t index = 0; index < pending.size(); ++index)
             for (const auto& method : module.types.get(pending[index]).methods)
                 if (const auto* implementation = function(module, method.function))
                 {
-                    collect(implementation->returnType);
+                    collectFamily(implementation->returnType);
                     for (const auto& parameter : implementation->parameters | std::views::drop(1))
-                        collect(parameter.type);
+                        collectFamily(parameter.type);
                 }
 
+        std::set<TypeId> contracts;
         const auto methodValue = [&](TypeId id, bool allowVoid = false, bool allowReference = false)
         {
             if (allowReference)
@@ -233,15 +250,14 @@ namespace wio::codegen
                 {
                     id = reference.arguments.front();
                     const auto& value = module.types.get(id);
-                    return candidates.contains(id) ||
-                           (value.kind == TypeKind::Nullable && value.arguments.size() == 1 &&
-                            candidates.contains(value.arguments.front()));
+                    return contracts.contains(id) || (value.kind == TypeKind::Nullable && value.arguments.size() == 1 &&
+                                                      contracts.contains(value.arguments.front()));
                 }
             }
             const auto& type = module.types.get(id);
             if (type.kind == TypeKind::Nullable && type.arguments.size() == 1)
-                return candidates.contains(type.arguments.front());
-            return wireValue(module, id, allowVoid) || candidates.contains(id);
+                return contracts.contains(type.arguments.front());
+            return wireValue(module, id, allowVoid) || contracts.contains(id);
         };
         // Reject transitively: no proxy may advertise a method whose object
         // signature depends on a type that failed whole-surface qualification.
@@ -250,6 +266,7 @@ namespace wio::codegen
         do
         {
             previousSize = candidates.size();
+            contracts = hostedHierarchyTypes(module, candidates);
             std::erase_if(
                 candidates,
                 [&](TypeId id)
@@ -278,13 +295,19 @@ namespace wio::codegen
         } while (candidates.size() != previousSize);
 
         std::set<TypeId> reachable;
+        std::vector<std::vector<TypeId>> contractObjects(module.types.size());
+        for (const auto candidate : candidates)
+            for (const auto contract : hostedHierarchyTypes(module, {candidate}))
+                contractObjects[contract.value()].push_back(candidate);
         pending.clear();
         const auto include = [&](TypeId id)
         {
             if (const auto object = nativeAbiObjectType(module.types, id))
                 id = object;
-            if (candidates.contains(id) && reachable.insert(id).second)
-                pending.push_back(id);
+            if (module.types.tryGet(id))
+                for (const auto candidate : contractObjects[id.value()])
+                    if (reachable.insert(candidate).second)
+                        pending.push_back(candidate);
         };
         for (const auto root : roots)
             include(root);
@@ -428,8 +451,8 @@ namespace wio::codegen
                     const auto resultId = identity(module, base);
                     out << ", [&](const WioNativeAbiValue& borrowed) -> " << cpp(method.returnType) << " {\n"
                         << "            using wio::wir_backend::abi::require;\n"
-                        << "            require(borrowed.typeId == " << resultId << "ULL);\n"
                         << "            if (borrowed.kind == WIO_NATIVE_ABI_REFERENCE) {\n"
+                        << "                require(borrowed.typeId == " << resultId << "ULL);\n"
                         << "                require(borrowed.flags == (WIO_NATIVE_ABI_VALUE_BORROWED"
                         << (resultType.isMutable ? " | WIO_NATIVE_ABI_VALUE_MUTABLE" : "")
                         << ") && !borrowed.owner.state && !borrowed.owner.ops && "
@@ -444,12 +467,13 @@ namespace wio::codegen
                                 << (resultType.isMutable ? "" : ".asView()") << ";\n";
                     }
                     out << "            }\n";
-                    if (base == id)
+                    if (hostedHierarchyTypes(module, {id}).contains(base))
                         out << "            if (borrowed.kind == WIO_NATIVE_ABI_OBJECT) {\n"
-                            << "                require(borrowed.flags == WIO_NATIVE_ABI_VALUE_OWNED && "
+                            << "                require(borrowed.typeId == " << identity(module, id)
+                            << "ULL && borrowed.flags == WIO_NATIVE_ABI_VALUE_OWNED && "
                                "!borrowed.owner.state && !borrowed.owner.ops && borrowed.payload.handle.state && "
                                "borrowed.payload.handle.generation == 1);\n"
-                            << "                auto receiver = wio::wir_backend::abi::Codec<" << cpp(id) << ", "
+                            << "                auto receiver = wio::wir_backend::abi::Codec<" << cpp(base) << ", "
                             << resultId << "ULL>::read(borrowed);\n"
                             << "                auto* hosted = dynamic_cast<const wio::wir_backend::abi::HostObject<"
                             << object << ">*>(receiver.Get());\n"
@@ -460,8 +484,9 @@ namespace wio::codegen
                                "returnedHost.objectId == expectedHost.objectId && "
                                "returnedHost.generation == expectedHost.generation && "
                                "returnedHost.invoke == expectedHost.invoke);\n"
-                            << "                return " << cpp(method.returnType) << "::raw(this)"
-                            << (resultType.isMutable ? "" : ".asView()") << ";\n"
+                            << "                return " << cpp(method.returnType) << "::raw(static_cast<typename "
+                            << cpp(base) << "::element_type*>(this))" << (resultType.isMutable ? "" : ".asView()")
+                            << ";\n"
                             << "            }\n";
                     out << "            throw wio::wir_backend::abi::Error(WIO_NATIVE_ABI_TYPE_MISMATCH);\n"
                         << "        }";

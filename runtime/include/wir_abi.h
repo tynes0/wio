@@ -369,9 +369,10 @@ public:
                         .first;
         }
         require(found->second.type == Id);
-        auto storage = std::any_cast<std::shared_ptr<T>>(found->second.storage);
+        const auto* storage = std::any_cast<std::shared_ptr<T>>(&found->second.storage);
+        require(storage != nullptr);
         found->second.dirty = found->second.dirty || mutableAccess;
-        return *storage;
+        return **storage;
     }
     void commit()
     {

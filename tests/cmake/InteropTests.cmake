@@ -890,3 +890,18 @@ add_test(
 )
 wio_test_labels(wio_vm_native_object_polymorphic interop vm native native-object inheritance interface differential release-gate)
 set_tests_properties(wio_vm_native_object_polymorphic PROPERTIES TIMEOUT 600)
+
+add_test(
+    NAME wio_vm_native_object_polymorphic_references
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-object-polymorphic-references"
+        "-DWIO_OBJECT_PROXY_EXECUTABLE=$<TARGET_FILE:wio_vm_native_object_proxy_test>"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -DWIO_OBJECT_POLYMORPHIC_REFERENCES=ON
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_object_proxy_test.cmake"
+)
+wio_test_labels(wio_vm_native_object_polymorphic_references interop vm native native-object inheritance interface borrowed-result differential release-gate)
+set_tests_properties(wio_vm_native_object_polymorphic_references PROPERTIES TIMEOUT 600)

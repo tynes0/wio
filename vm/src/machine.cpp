@@ -1638,7 +1638,9 @@ namespace wio::vm
             if (detail::callbackValueMarshalling(module, type, marshalling))
                 return true;
             if (type < module.types.size() && module.types[type].kind == TypeNamed &&
-                module.types[type].nominalKind == NominalObject && layouts->objects.contains(type))
+                (module.types[type].nominalKind == NominalObject ||
+                 module.types[type].nominalKind == NominalInterface) &&
+                layouts->objectContracts.contains(type))
             {
                 marshalling = 6;
                 return true;
@@ -1822,14 +1824,20 @@ namespace wio::vm
                     *output = {};
                     output->kind = WIO_NATIVE_ABI_REFERENCE;
                     output->flags = WIO_NATIVE_ABI_VALUE_BORROWED | (mutableResult ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
-                    output->typeId = layouts->objects.at(objectType).typeId;
+                    const auto contract =
+                        std::ranges::find(module.contract.reflection, objectType, &bytecode::Reflection::type);
+                    if (contract == module.contract.reflection.end() || !contract->stableTypeId)
+                        return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                    output->typeId = contract->stableTypeId;
                     output->payload.mutableSlice = {slot->token, sizeof(WioNativeAbiValue)};
                     return WIO_NATIVE_ABI_OK;
                 }
             }
             else if ((execution.value().kind() == Value::Kind::ObjectBorrow ||
                       execution.value().kind() == Value::Kind::Object) &&
-                     base == object.aggregateType() && execution.value().objectIdentity() == object.objectIdentity())
+                     program->objectLayouts.get(object.aggregateType()) &&
+                     program->objectLayouts.get(object.aggregateType())->offsets.contains(base) &&
+                     execution.value().objectIdentity() == object.objectIdentity())
             {
                 // A receiver borrow has no rebindable cell. Its temporary
                 // object wire is mapped back to the producer's raw receiver,

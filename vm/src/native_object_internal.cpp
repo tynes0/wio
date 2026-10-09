@@ -43,6 +43,16 @@ namespace wio::vm::detail
                               previous.create != descriptor.create || previous.host != descriptor.host ||
                               previous.weak != descriptor.weak || previous.lock != descriptor.lock))
                 return reject("native object type is already registered with a different producer adapter");
+            std::vector<std::uint32_t> hierarchy{reflected->type};
+            for (std::size_t cursor = 0; cursor < hierarchy.size(); ++cursor)
+            {
+                const auto contract = hierarchy[cursor];
+                if (contract >= module.types.size())
+                    return reject("native object hierarchy references an invalid VM type");
+                if (candidate.objectContracts.insert(contract).second)
+                    hierarchy.insert(hierarchy.end(), module.types[contract].baseTypes.begin(),
+                                     module.types[contract].baseTypes.end());
+            }
         }
         layouts = std::move(candidate);
         return true;

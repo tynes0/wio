@@ -798,10 +798,25 @@ Rider, and CLion are defined in
    alive until final release. The new C++/VM/host gate covers 30 lifecycle rounds,
    dynamic type tests/downcasts, shared identity, nullable/null round trips,
    native retention, incompatible siblings/results, missing concrete adapters
-   and forged handle operations. Polymorphic ref/view cells and borrowed results,
-   producer-owned foreign subclass synchronization, field synchronization and
+   and forged handle operations. Producer-owned foreign subclass synchronization,
+   field synchronization and
    SDK/reflection routing remain pending; this does not close object parity.
    The polymorphic gate passed locally on Windows (1/1, 12.53 seconds).
+   Qualified Base/interface ref/view handle cells now retain their concrete
+   object identity across native arguments and hosted method copy-back. Methods
+   can return caller-rooted Base/interface borrows, including nullable cells;
+   the result aliases caller storage, not a temporary VM frame. Same-contract
+   ref/view aliases share storage in either argument order; different static
+   or nullable/non-nullable contracts are rejected. Producer cells distinguish
+   static C++ storage shape from concrete wire identity. Method-only signature
+   discovery includes descendant adapters and the VM caches supported contracts.
+   The new differential gate covers concrete rebinding, independent cells,
+   borrowed results, nullable transitions, readonly/shape/type/ops rejection and
+   final lifecycle counts. Inherited Base self ref/view methods also preserve
+   the concrete Leaf receiver, without rebind permission or a retained claim.
+   The polymorphic-reference gate passed locally on Windows (1/1, 20.30 seconds).
+   Explicit covariant receiver borrows, free-native borrowed
+   results and broader foreign ownership remain unqualified.
    Remaining native parity work includes broader VM-created object signatures,
    object/interface/Box and nullable/generic any payloads, any-bearing containers,
    alias identity canonicalization; POD/object/container/nullable and

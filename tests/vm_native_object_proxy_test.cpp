@@ -1108,6 +1108,231 @@ namespace
         return 0;
     }
 
+    void qualifyPolymorphicReferenceSelection()
+    {
+        using namespace wio::wir;
+        using Emitter = wio::codegen::WirNativeObjectEmitter;
+        lowered::Module module;
+        const auto reader = module.types.internNominal(
+            Type{.kind = TypeKind::Named, .name = "IRead", .nominalKind = NominalKind::Interface});
+        const auto base =
+            module.types.internNominal(Type{.kind = TypeKind::Named,
+                                            .name = "Base",
+                                            .nominalKind = NominalKind::Object,
+                                            .baseTypes = {reader},
+                                            .fields = {{.name = "value", .type = module.types.i32Type()}}});
+        const auto leaf = module.types.internNominal(
+            Type{.kind = TypeKind::Named, .name = "Leaf", .nominalKind = NominalKind::Object, .baseTypes = {base}});
+        const auto sibling =
+            module.types.internNominal(Type{.kind = TypeKind::Named,
+                                            .name = "Sibling",
+                                            .nominalKind = NominalKind::Object,
+                                            .baseTypes = {reader},
+                                            .fields = {{.name = "value", .type = module.types.i32Type()}}});
+        const auto borrowed =
+            module.types.intern(Type{.kind = TypeKind::Reference, .arguments = {reader}, .isMutable = true});
+        const auto owner = module.types.internNominal(
+            Type{.kind = TypeKind::Named,
+                 .name = "Owner",
+                 .nominalKind = NominalKind::Object,
+                 .methods = {{.name = "Borrow", .returnType = borrowed, .function = FunctionId{0}}}});
+        const auto self =
+            module.types.intern(Type{.kind = TypeKind::Reference, .arguments = {owner}, .isMutable = true});
+        module.functions = {
+            {.id = FunctionId{0},
+             .name = "Borrow",
+             .parameters = {{.id = ValueId{0}, .type = self}, {.id = ValueId{1}, .type = borrowed}},
+             .returnType = borrowed,
+             .ownerType = owner,
+             .blocks = {{.id = BlockId{0},
+                         .instructions = {{.opcode = lowered::Opcode::Return, .operands = {ValueId{1}}}}}},
+             .isMethod = true},
+            {.id = FunctionId{1},
+             .name = "NativeOwner",
+             .returnType = module.types.i32Type(),
+             .nativeBinding = NativeBinding{.parameters = {{.type = owner}}}}};
+        for (const auto type : {reader, base, leaf, sibling, owner})
+            module.contract.reflection.push_back({.stableTypeId = 9000 + type.value(), .type = type});
+        module.contract.reflection.back().methods = {
+            {.stableId = 1001, .name = "Borrow", .function = FunctionId{0}, .returnType = borrowed}};
+        check(Emitter::eligibleTypes(module) == std::set{base, leaf, sibling, owner},
+              "method-only interface signature lost descendant adapters");
+        module.types.getMutable(base).fields[0].visibility = FieldVisibility::Public;
+        check(Emitter::eligibleTypes(module) == std::set{sibling, owner},
+              "interface signature did not preserve only qualified implementation families");
+        module.types.getMutable(sibling).fields[0].visibility = FieldVisibility::Public;
+        check(Emitter::eligibleTypes(module).empty(),
+              "interface method was qualified without any compatible concrete implementation");
+    }
+
+    int qualifyPolymorphicReferences(const char* bytecode, const char* producer)
+    {
+        qualifyPolymorphicReferenceSelection();
+        // Same token identity does not permit different C++ storage shapes,
+        // even if the wire encodings happen to have the same static id/kind.
+        const auto place = []<class T>(T value, const void* address)
+        {
+            struct Cell
+            {
+                T value;
+                const void* address;
+                bool canRebind() const
+                {
+                    return true;
+                }
+                const void* borrowIdentity() const
+                {
+                    return address;
+                }
+                T read() const
+                {
+                    return value;
+                }
+                void write(T replacement)
+                {
+                    value = replacement;
+                }
+            };
+            return Cell{value, address};
+        };
+        std::int32_t identity = 0;
+        abi::ObjectReferences<2> contracts;
+        contracts.borrow<std::int32_t, 17>(0, place(std::int32_t{3}, &identity), true);
+        bool rejected = false;
+        try
+        {
+            contracts.borrow<std::uint32_t, 17>(1, place(std::uint32_t{3}, &identity), false);
+        }
+        catch (const abi::Error& error)
+        {
+            rejected = error.status == WIO_NATIVE_ABI_TYPE_MISMATCH;
+        }
+        check(rejected, "producer reference cells merged different static storage types");
+        std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
+        const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        auto decoded = bc::decode(std::as_bytes(std::span{bytes.data(), bytes.size()}));
+        check(decoded.succeeded(), "polymorphic reference bytecode decode failed");
+        Library library{std::filesystem::u8path(producer)};
+        const auto getObjects = library.symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
+        const auto getRegistry = library.symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
+        check(getObjects && getObjects()->typeCount == 4 && getRegistry, "polymorphic reference adapters missing");
+        const auto& registry = *getRegistry();
+        wio::vm::Machine machine{decoded.module};
+        std::string error;
+        check(machine.loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+        const auto invoke = [&](const char* name)
+        {
+            const auto function = std::ranges::find_if(decoded.module.functions, [&](const auto& item)
+                                                       { return decoded.module.string(item.name) == name; });
+            check(function != decoded.module.functions.end(), "polymorphic reference entry missing");
+            auto result = machine.invoke(function->id);
+            if (!result.succeeded())
+                throw std::runtime_error(result.error().code + ": " + result.error().message);
+            return result;
+        };
+        check(invoke("Entry").value().asSignedInteger() == 0, "polymorphic reference alias/lifecycle checks failed");
+        const auto ownerResult = invoke("CaptureOwnerEntry");
+        const auto leafResult = invoke("CaptureLeafEntry");
+        const auto owner = *reinterpret_cast<const WioNativeObjectHost*>(ownerResult.value().asUnsignedInteger());
+        const auto leaf = *reinterpret_cast<const WioNativeObjectHost*>(leafResult.value().asUnsignedInteger());
+        const auto reflection = [&](const char* name) -> const bc::Reflection&
+        {
+            const auto found = std::ranges::find_if(decoded.module.contract.reflection, [&](const auto& type)
+                                                    { return decoded.module.string(type.logicalName) == name; });
+            check(found != decoded.module.contract.reflection.end(), "reference contract metadata missing");
+            return *found;
+        };
+        const auto& ownerType = reflection("Owner");
+        const auto method = [&](const char* name)
+        {
+            const auto found = std::ranges::find_if(ownerType.methods, [&](const auto& item)
+                                                    { return decoded.module.string(item.name) == name; });
+            check(found != ownerType.methods.end(), "reference method metadata missing");
+            return found->stableId;
+        };
+        const auto adapters = std::span{getObjects()->types, getObjects()->typeCount};
+        const auto adapter = std::ranges::find(adapters, leaf.typeId, &WioNativeObjectDescriptor::typeId);
+        check(adapter != adapters.end(), "concrete reference adapter missing");
+        {
+            Wire cell;
+            check(adapter->create(&leaf, &cell.value, nullptr) == WIO_NATIVE_ABI_OK, "reference cell setup failed");
+            WioNativeAbiValue reference{};
+            reference.kind = WIO_NATIVE_ABI_REFERENCE;
+            reference.flags = WIO_NATIVE_ABI_VALUE_BORROWED | WIO_NATIVE_ABI_VALUE_MUTABLE;
+            reference.payload.mutableSlice = {&cell.value, sizeof(WioNativeAbiValue)};
+            const auto verify = [&](const char* name, std::uint64_t staticId, bool writable)
+            {
+                auto argument = reference;
+                if (!writable)
+                    argument.flags &= ~WIO_NATIVE_ABI_VALUE_MUTABLE;
+                Wire output;
+                check(owner.invoke(&owner, method(name), &argument, 1, &output.value, nullptr) == WIO_NATIVE_ABI_OK &&
+                          output.value.kind == WIO_NATIVE_ABI_REFERENCE && output.value.typeId == staticId &&
+                          output.value.payload.mutableSlice.data == &cell.value &&
+                          output.value.payload.mutableSlice.size == sizeof(WioNativeAbiValue) &&
+                          !output.value.owner.state && !output.value.owner.ops &&
+                          output.value.flags ==
+                              (WIO_NATIVE_ABI_VALUE_BORROWED | (writable ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u)) &&
+                          (cell.value.kind == WIO_NATIVE_ABI_VOID || cell.value.typeId == leaf.typeId),
+                      "borrowed polymorphic result lost the caller cell or concrete identity");
+            };
+            verify("BorrowBase", reflection("Base").stableTypeId, true);
+            verify("ViewBase", reflection("Base").stableTypeId, false);
+            verify("BorrowReader", reflection("IRead").stableTypeId, true);
+            verify("ViewReader", reflection("IRead").stableTypeId, false);
+            verify("NullableBase", reflection("Base").stableTypeId, true);
+            verify("NullableReader", reflection("IRead").stableTypeId, true);
+            Wire output;
+            auto readonly = reference;
+            readonly.flags &= ~WIO_NATIVE_ABI_VALUE_MUTABLE;
+            check(owner.invoke(&owner, method("BorrowBase"), &readonly, 1, &output.value, nullptr) ==
+                      WIO_NATIVE_ABI_INVALID_ARGUMENT,
+                  "readonly polymorphic cell became writable");
+            auto malformed = reference;
+            malformed.payload.mutableSlice.size -= 1;
+            check(owner.invoke(&owner, method("BorrowBase"), &malformed, 1, &output.value, nullptr) ==
+                      WIO_NATIVE_ABI_INVALID_ARGUMENT,
+                  "malformed polymorphic cell accepted");
+            const auto concreteId = cell.value.typeId;
+            cell.value.typeId = reflection("Sibling").stableTypeId;
+            check(owner.invoke(&owner, method("BorrowBase"), &reference, 1, &output.value, nullptr) ==
+                      WIO_NATIVE_ABI_TYPE_MISMATCH,
+                  "incompatible concrete reference reached a Base method");
+            check(owner.invoke(&owner, method("BorrowReader"), &reference, 1, &output.value, nullptr) ==
+                      WIO_NATIVE_ABI_TYPE_MISMATCH,
+                  "forged concrete reference operations were accepted");
+            cell.value.typeId = concreteId;
+            const std::array mixed{reference, readonly};
+            check(owner.invoke(&owner, method("Mixed"), mixed.data(), mixed.size(), &output.value, nullptr) ==
+                      WIO_NATIVE_ABI_TYPE_MISMATCH,
+                  "different static cell contracts were silently merged");
+            const std::array nullableMixed{reference, reference};
+            check(call(registry, "vm_object_polymorphic_references::MixedNullable", nullableMixed, output.value) ==
+                      WIO_NATIVE_ABI_TYPE_MISMATCH,
+                  "nullable and non-nullable native storage were merged");
+            WioNativeAbiReleaseValue(&cell.value);
+            cell.value.kind = WIO_NATIVE_ABI_VOID;
+            cell.value.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+            cell.value.typeId = reflection("IRead").stableTypeId;
+            verify("NullableReader", reflection("IRead").stableTypeId, true);
+        }
+        Wire cleared;
+        check(call(registry, "vm_object_polymorphic_references::ClearCaptures", {}, cleared.value) == WIO_NATIVE_ABI_OK,
+              "polymorphic reference claims did not clear");
+        invoke("SafePoint");
+        WioNativeAbiValue kind{};
+        kind.kind = WIO_NATIVE_ABI_I64;
+        const std::array expected{61, 31, 30};
+        for (std::size_t index = 0; index < expected.size(); ++index)
+        {
+            kind.payload.signedInteger = static_cast<std::int64_t>(index);
+            check(scalar(registry, "vm_object_polymorphic::Constructions", std::span{&kind, 1}) == expected[index] &&
+                      scalar(registry, "vm_object_polymorphic::Destructions", std::span{&kind, 1}) == expected[index],
+                  "polymorphic reference final release was lost or repeated");
+        }
+        return 0;
+    }
+
     int qualifyPolymorphic(const char* bytecode, const char* producer)
     {
         std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
@@ -1974,6 +2199,8 @@ int main(int argc, char** argv)
     {
         check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4 && std::string_view(argv[3]) == "polymorphic-references")
+            return qualifyPolymorphicReferences(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "polymorphic")
             return qualifyPolymorphic(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "hierarchy")

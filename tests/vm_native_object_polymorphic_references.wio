@@ -1,0 +1,160 @@
+using cpp::header("vm_object_polymorphic_reference_fixture.h");
+use std::attribute as attribute;
+
+interface IRead {
+    fn Read() -> i32;
+}
+
+[From(IRead)]
+object Base {
+    public OnConstruct() {
+        Constructed(0);
+    }
+    OnDestruct() {
+        Destroyed(0);
+    }
+    public fn Read() -> i32 {
+        return 7;
+    }
+    public fn AsRef() -> ref Base {
+        return self;
+    }
+    public fn AsView() -> view Base {
+        return self;
+    }
+}
+
+[From(Base)]
+object Leaf {
+    public OnConstruct() {
+        Constructed(1);
+    }
+    OnDestruct() {
+        Destroyed(1);
+    }
+    public fn Read() -> i32 {
+        return 137;
+    }
+}
+
+[From(IRead)]
+object Sibling {
+    public OnConstruct() {
+        Constructed(2);
+    }
+    OnDestruct() {
+        Destroyed(2);
+    }
+    public fn Read() -> i32 {
+        return 19;
+    }
+}
+
+object Owner {
+    public fn BorrowBase(target: ref Base) -> ref Base {
+        return target;
+    }
+    public fn ViewBase(target: view Base) -> view Base {
+        return target;
+    }
+    public fn BorrowReader(target: ref IRead) -> ref IRead {
+        return target;
+    }
+    public fn ViewReader(target: view IRead) -> view IRead {
+        return target;
+    }
+    public fn NullableBase(target: ref Base?) -> ref Base? {
+        return target;
+    }
+    public fn NullableReader(target: ref IRead?) -> ref IRead? {
+        return target;
+    }
+    public fn AssignBase(target: ref Base, source: Base) -> ref Base {
+        target = source;
+        return target;
+    }
+    public fn AssignReader(target: ref IRead, source: IRead) -> ref IRead {
+        target = source;
+        return target;
+    }
+    public fn AliasBase(target: ref Base, observed: view Base, source: Base) -> bool {
+        target = source;
+        return deref observed == source;
+    }
+    public fn ReverseBase(observed: view Base, target: ref Base, source: Base) -> bool {
+        target = source;
+        return deref observed == source;
+    }
+    public fn Mixed(target: ref Base, observed: view IRead) {
+    }
+}
+
+[Native, CppName(vm_object_polymorphic::Constructed)]
+fn Constructed(kind: i32);
+[Native, CppName(vm_object_polymorphic::Destroyed)]
+fn Destroyed(kind: i32);
+[Native, CppName(vm_object_polymorphic::Constructions)]
+fn Constructions(kind: i32) -> i32;
+[Native, CppName(vm_object_polymorphic::Destructions)]
+fn Destructions(kind: i32) -> i32;
+[Native, CppName(vm_object_polymorphic_references::Exercise)]
+fn Exercise(owner: Owner, leaf: Base, plain: Base, sibling: IRead) -> i32;
+[Native, CppName(vm_object_polymorphic_references::Replace)]
+fn Replace(target: ref Base, source: Base);
+[Native, CppName(vm_object_polymorphic_references::ReplaceReader)]
+fn ReplaceReader(target: ref IRead, source: IRead);
+[Native, CppName(vm_object_polymorphic_references::MixedNullable)]
+fn MixedNullable(target: ref Base, nullable: ref Base?);
+[Native, CppName(vm_object_polymorphic_references::CaptureOwner)]
+fn CaptureOwner(value: Owner) -> u64;
+[Native, CppName(vm_object_polymorphic_references::CaptureLeaf)]
+fn CaptureLeaf(value: Leaf) -> u64;
+[Native, CppName(vm_object_polymorphic_references::ClearCaptures)]
+fn ClearCaptures();
+
+fn CaptureOwnerEntry() -> u64 {
+    return CaptureOwner(Owner());
+}
+fn CaptureLeafEntry() -> u64 {
+    return CaptureLeaf(Leaf());
+}
+fn SafePoint() -> i32 {
+    return 0;
+}
+
+fn Entry() -> i32 {
+    mut round = 0;
+    while (round < 30) {
+        {
+            let owner = Owner();
+            let leaf = Leaf();
+            let plain = Base();
+            let sibling = Sibling();
+            let result = Exercise(owner, leaf fit Base, plain, sibling fit IRead);
+            if (result != 0) {
+                return result;
+            }
+            mut base: Base = leaf fit Base;
+            Replace(ref base, plain);
+            if (base.Read() != 7) {
+                return 20;
+            }
+            Replace(ref base, leaf fit Base);
+            if (not (base is Leaf) or base.Read() != 137) {
+                return 21;
+            }
+            mut reader: IRead = leaf fit IRead;
+            ReplaceReader(ref reader, sibling fit IRead);
+            if (not (reader is Sibling) or reader.Read() != 19) {
+                return 22;
+            }
+        }
+        round += 1;
+        if (Constructions(0) != round * 2 or Destructions(0) != round * 2 or
+            Constructions(1) != round or Destructions(1) != round or
+            Constructions(2) != round or Destructions(2) != round) {
+            return 23;
+        }
+    }
+    return 0;
+}
