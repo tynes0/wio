@@ -20,4 +20,8 @@ namespace wio::vm::detail
     // or mutate either container; output is published only for a full match.
     [[nodiscard]] bool nativeDictionaryCopyBackOrder(const Value& target, const Value& replacement,
                                                      std::vector<std::size_t>& order);
+    // Old-key -> incoming-key positions, with max size_t for removed keys.
+    // Unlike the unchanged-shape order, insertion/removal is permitted.
+    [[nodiscard]] bool nativeDictionaryCopyBackMapping(const Value& target, const Value& replacement,
+                                                       std::vector<std::size_t>& order);
 } // namespace wio::vm::detail

@@ -1428,3 +1428,26 @@ here as historical evidence rather than active work:
       contracts remain separate work. Only the new focused Windows gate was run:
       1/1 passed in 14.76 seconds (14.83 seconds total). No full-suite or local
       Linux pass is claimed.
+
+## Structural Native Container Copy-Back
+
+- [x] Enabled dynamic array resize/clear and ordered/unordered dictionary key-set
+      updates at native `ref` boundaries. Same-shape cells stay stable; surviving
+      dictionary key/value places remap while removed/reallocated descendants
+      reject stale reads. Unaffected siblings and independent heap fields remain
+      valid. Shared iterator/snapshot storage and overlapping native arguments
+      still reject explicitly.
+- [x] Staged all decoded mutable outputs and recursive copy-back actions before
+      caller graph mutation. Added a narrow internal planner with Value friend
+      access, leaving public mutable container internals private.
+- [x] Drained retired hosted proxy claims before old-value recursive cleanup,
+      preserving exactly-once destruction and reporting failing destructors at
+      the native call boundary. Intrusive projection-domain teardown detaches
+      escaped owner-backed places from the destroyed program's tracking list.
+- [x] Added a 30-round C++/VM/live-host gate for nested containers, scalar/string/
+      text/bool/POD/Any/generic/nullable-object values, surviving mutable borrows,
+      invalid descendants, native/cleanup failures, recovery, malformed second
+      outputs with observable caller roots, and mapping/storage/depth checks.
+      ABI and bytecode versions are unchanged. Native Step 8 remains open.
+      Only the new focused Windows gate was run: 1/1 passed in 23.63 seconds
+      (23.71 seconds total). No full-suite or local Linux pass is claimed.

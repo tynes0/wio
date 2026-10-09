@@ -1,6 +1,7 @@
 include("${WIO_ROOT}/tests/cmake/vm_native_pod_layout_test.cmake")
 
-foreach(case IN ITEMS resize overlap failure)
+# Structural resize is qualified by wio_vm_native_container_shape.
+foreach(case IN ITEMS overlap failure)
     set(source "${WIO_ROOT}/tests/vm_native_sequence_${case}.wio")
     set(bridge "${WIO_OUTPUT_DIR}/${case}${WIO_SHARED_SUFFIX}")
     set(bytecode "${WIO_OUTPUT_DIR}/${case}.wiob")
@@ -14,9 +15,7 @@ foreach(case IN ITEMS resize overlap failure)
     endif()
     execute_process(COMMAND "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}" --native-library "${bridge}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 30)
-    if(case STREQUAL "resize")
-        set(expected "WVM1224.*cannot change sequence lengths")
-    elseif(case STREQUAL "overlap")
+    if(case STREQUAL "overlap")
         set(expected "WVM1225.*sequence projections")
     else()
         set(expected "WVM1222.*sequence failure oracle")

@@ -8,6 +8,7 @@
 #include "native_library.h"
 #include "native_pod_internal.h"
 #include "native_sequence_internal.h"
+#include "native_container_copy_back_internal.h"
 #include "native_dictionary_internal.h"
 #include "native_any_internal.h"
 #include "native_object_internal.h"
@@ -36,6 +37,14 @@
 
 namespace wio::vm
 {
+    struct PlaceProjectionDomain final
+    {
+        PlaceStorage* first = nullptr;
+        ~PlaceProjectionDomain();
+        void retireCells(const Value& root, bool includeRoot = false) noexcept;
+        void remapCell(const Value* source, Value* destination, const Value& oldDictionary, const Value& newDictionary);
+    };
+
     class PlaceStorage final
     {
     public:
@@ -46,6 +55,9 @@ namespace wio::vm
         PlaceStorage* firstProjection = nullptr;
         PlaceStorage* previousProjection = nullptr;
         PlaceStorage* nextProjection = nullptr;
+        PlaceProjectionDomain* domain = nullptr;
+        PlaceStorage* previousDomainProjection = nullptr;
+        PlaceStorage* nextDomainProjection = nullptr;
         bool initialized = false;
         bool mutableValue = true;
 
@@ -59,8 +71,16 @@ namespace wio::vm
             retireProjections();
         }
 
-        void bindProjection(PlaceStorage* root) noexcept
+        void bindProjection(PlaceStorage* root, PlaceProjectionDomain* projectionDomain = nullptr) noexcept
         {
+            domain = projectionDomain;
+            if (domain)
+            {
+                nextDomainProjection = domain->first;
+                if (nextDomainProjection)
+                    nextDomainProjection->previousDomainProjection = this;
+                domain->first = this;
+            }
             borrowedRoot = root;
             if (!root)
                 return;
@@ -72,6 +92,18 @@ namespace wio::vm
 
         void detachProjection() noexcept
         {
+            if (domain)
+            {
+                if (previousDomainProjection)
+                    previousDomainProjection->nextDomainProjection = nextDomainProjection;
+                else
+                    domain->first = nextDomainProjection;
+                if (nextDomainProjection)
+                    nextDomainProjection->previousDomainProjection = previousDomainProjection;
+                domain = nullptr;
+                previousDomainProjection = nullptr;
+                nextDomainProjection = nullptr;
+            }
             if (!borrowedRoot)
                 return;
             if (previousProjection)
@@ -113,6 +145,52 @@ namespace wio::vm
             initialized = false;
         }
     };
+
+    PlaceProjectionDomain::~PlaceProjectionDomain()
+    {
+        // Escaped owner-backed places may outlive the Machine. Their physical
+        // storage remains owned, but the program's tracking list must not.
+        while (first)
+        {
+            auto* projected = first;
+            first = projected->nextDomainProjection;
+            projected->domain = nullptr;
+            projected->previousDomainProjection = nullptr;
+            projected->nextDomainProjection = nullptr;
+        }
+    }
+
+    void PlaceProjectionDomain::retireCells(const Value& root, bool includeRoot) noexcept
+    {
+        if (!includeRoot && root.kind() != Value::Kind::Array && root.kind() != Value::Kind::Dictionary &&
+            root.kind() != Value::Kind::Component)
+            return;
+        for (auto* projected = first; projected;)
+        {
+            auto* next = projected->nextDomainProjection;
+            if (projected->initialized && projected->alias && (includeRoot || projected->alias != &root) &&
+                detail::containsNativeContainerCell(root, projected->alias))
+            {
+                projected->detachProjection();
+                projected->initialized = false;
+                projected->alias = nullptr;
+            }
+            projected = next;
+        }
+    }
+
+    void PlaceProjectionDomain::remapCell(const Value* source, Value* destination, const Value& oldDictionary,
+                                          const Value& newDictionary)
+    {
+        for (auto* projected = first; projected; projected = projected->nextDomainProjection)
+            if (projected->initialized && projected->alias == source)
+            {
+                projected->alias = destination;
+                if (projected->owner.kind() == Value::Kind::Dictionary && projected->owner.dictionaryCount() &&
+                    projected->owner.dictionaryKey(0) == oldDictionary.dictionaryKey(0))
+                    projected->owner = newDictionary;
+            }
+    }
 
     namespace
     {
@@ -1125,6 +1203,7 @@ namespace wio::vm
         ExecutionError loadError;
         std::vector<FunctionPlan> functions;
         detail::ObjectLayouts objectLayouts;
+        PlaceProjectionDomain projections;
         std::vector<std::unique_ptr<PlaceStorage>> globals;
         std::mutex timerMutex;
         std::unique_ptr<TimerScheduler> timers;
@@ -1456,6 +1535,7 @@ namespace wio::vm
                     for (std::size_t fieldIndex = module.types[owner].fields.size(); fieldIndex > 0; --fieldIndex)
                         if (auto* field = value.mutableField(layout->offsets.at(owner) + fieldIndex - 1))
                         {
+                            program_->projections.retireCells(*field, true);
                             auto child = std::move(*field);
                             *field = {};
                             cleanupValue(child, primaryError);
@@ -1472,7 +1552,7 @@ namespace wio::vm
                 // live. Retired host roots then give up their object claims
                 // before recursive Wio cleanup tests for a final owner.
                 backing = {};
-                cleanupNativeObjects();
+                cleanupNativeObjects(false, &primaryError);
             }
         }
         std::vector<Value> children = value.takeOwnedChildrenForCleanup();
@@ -1674,7 +1754,7 @@ namespace wio::vm
         detail::NativeObjectBridge::collectRetiredCode();
     }
 
-    void Machine::cleanupNativeObjects(bool shutdown) noexcept
+    void Machine::cleanupNativeObjects(bool shutdown, ExecutionError* primaryError) noexcept
     {
         if (!program_)
             return;
@@ -1684,11 +1764,12 @@ namespace wio::vm
             if (!program_->nativeObjects)
                 return;
             ExecutionError cleanupError;
+            auto& errors = primaryError ? *primaryError : cleanupError;
             auto values = shutdown ? program_->nativeObjects->shutdown() : program_->nativeObjects->takeRetired();
             while (!values.empty())
             {
                 for (auto& value : values)
-                    cleanupValue(value, cleanupError);
+                    cleanupValue(value, errors);
                 values = program_->nativeObjects->takeRetired();
             }
         }
@@ -3331,7 +3412,7 @@ namespace wio::vm
                     return fail("WVM1082", "Dictionary place base is not an initialized dictionary");
 
                 auto storage = std::make_unique<PlaceStorage>();
-                storage->bindProjection(projectionRoot(instruction.operands[0]));
+                storage->bindProjection(projectionRoot(instruction.operands[0]), &program_->projections);
                 if (!storage->borrowedRoot)
                     storage->owner = *dictionary;
                 storage->alias = const_cast<Value*>(dictionary)->mutableDictionaryValue(*key);
@@ -4295,6 +4376,7 @@ namespace wio::vm
                         module.types[instruction.resultType].kind == TypeReference)
                     {
                         auto place = std::make_unique<PlaceStorage>();
+                        place->bindProjection(nullptr, &program_->projections);
                         place->alias = selected;
                         if (Value* source = containerSource())
                             place->owner = *source;
@@ -4590,7 +4672,7 @@ namespace wio::vm
                     return fail("WVM1064", "Field place base is not initialized");
 
                 auto storage = std::make_unique<PlaceStorage>();
-                storage->bindProjection(projectionRoot(instruction.operands[0]));
+                storage->bindProjection(projectionRoot(instruction.operands[0]), &program_->projections);
                 if (!storage->borrowedRoot)
                     storage->owner = *aggregate;
                 std::size_t fieldIndex = instruction.projectionIndex;
@@ -4633,7 +4715,7 @@ namespace wio::vm
                     return fail("WVM1067", "Array place base is not an initialized array");
 
                 auto storage = std::make_unique<PlaceStorage>();
-                storage->bindProjection(projectionRoot(instruction.operands[0]));
+                storage->bindProjection(projectionRoot(instruction.operands[0]), &program_->projections);
                 if (!storage->borrowedRoot)
                     storage->owner = *array;
                 storage->alias = const_cast<Value*>(array)->mutableElement(*index);
@@ -5485,66 +5567,73 @@ namespace wio::vm
                     }
                     else
                     {
-                        if ((podLayouts->sequences.contains(referenceBase(token.type)) ||
-                             podLayouts->dictionaries.contains(referenceBase(token.type))) &&
-                            !detail::compatibleNativeSequenceCopyBack(token.place->storedValue(), replacement.value))
-                        {
-                            if (copyBackError.empty())
-                                copyBackError = "Native container ref cannot change sequence lengths or dictionary key "
-                                                "sets before borrow "
-                                                "invalidation is supported";
-                            replacements.push_back({});
-                            continue;
-                        }
                         program_->pinNativeLibraries(replacement.value);
                         replacements.push_back(std::move(replacement.value));
                     }
                 }
                 if (copyBackError.empty())
                 {
-                    // Existing field places point into component storage. Keep
-                    // that storage alive when a native ref updates its fields,
-                    // including nested PODs; replacing the aggregate would
-                    // leave a pre-existing field borrow observing stale data.
-                    const auto copyBack = [&](auto&& self, Value& target, Value replacement) -> void
-                    {
-                        if (target.kind() == Value::Kind::Component && replacement.kind() == Value::Kind::Component &&
-                            target.aggregateType() == replacement.aggregateType() &&
-                            target.fieldCount() == replacement.fieldCount())
-                        {
-                            target.setNativePodBacking(replacement.nativePodBacking());
-                            for (std::size_t field = 0; field < target.fieldCount(); ++field)
-                                self(self, *target.mutableField(field), std::move(*replacement.mutableField(field)));
-                        }
-                        else if (target.kind() == Value::Kind::Array && replacement.kind() == Value::Kind::Array &&
-                                 target.elementCount() == replacement.elementCount())
-                        {
-                            // Fixed-array fields keep element places alive just
-                            // like nested component fields during native copy-back.
-                            for (std::size_t element = 0; element < target.elementCount(); ++element)
-                                self(self, *target.mutableElement(element),
-                                     std::move(*replacement.mutableElement(element)));
-                        }
-                        else if (target.kind() == Value::Kind::Dictionary &&
-                                 replacement.kind() == Value::Kind::Dictionary)
-                        {
-                            std::vector<std::size_t> order;
-                            // The full key/shape match was checked before committing
-                            // any replacement. Preserve every existing value cell.
-                            if (detail::nativeDictionaryCopyBackOrder(target, replacement, order))
-                                for (std::size_t index = 0; index < order.size(); ++index)
-                                    self(self, *target.mutableDictionaryValue(index),
-                                         std::move(*replacement.mutableDictionaryValue(order[index])));
-                        }
-                        else
-                            target = std::move(replacement);
-                    };
+                    std::vector<detail::NativeCopyBackAction> actions;
                     for (std::size_t index = 0; index < nativeFrame.tokens.size(); ++index)
                     {
                         if (nativeFrame.tokens[index].mutableValue &&
-                            nativeFrame.tokens[index].projectionRoot == (std::numeric_limits<std::size_t>::max)())
-                            copyBack(copyBack, nativeFrame.tokens[index].place->storedValue(),
-                                     std::move(replacements[index]));
+                            nativeFrame.tokens[index].projectionRoot == (std::numeric_limits<std::size_t>::max)() &&
+                            !detail::planNativeCopyBack(nativeFrame.tokens[index].place->storedValue(),
+                                                        replacements[index], actions, copyBackError))
+                            break;
+                    }
+                    ExecutionError cleanupError;
+                    // A native resize/erase can retire hosted proxy roots.
+                    // Drain their claims while the old caller graph is live,
+                    // so its final cleanup observes unique objects and reports
+                    // destructor failures at this call boundary.
+                    cleanupNativeObjects(false, &cleanupError);
+                    if (copyBackError.empty())
+                        for (auto& action : actions)
+                        {
+                            auto& target = *action.target;
+                            auto& incoming = *action.replacement;
+                            if (action.kind == detail::NativeCopyBackAction::Kind::RefreshPod)
+                                target.setNativePodBacking(incoming.nativePodBacking());
+                            else if (action.kind == detail::NativeCopyBackAction::Kind::RebuildDictionary)
+                            {
+                                for (std::size_t oldIndex = 0; oldIndex < action.dictionaryOrder.size(); ++oldIndex)
+                                {
+                                    auto* oldKey = const_cast<Value*>(target.dictionaryKey(oldIndex));
+                                    auto* oldValue = target.mutableDictionaryValue(oldIndex);
+                                    const auto newIndex = action.dictionaryOrder[oldIndex];
+                                    if (newIndex == (std::numeric_limits<std::size_t>::max)())
+                                    {
+                                        program_->projections.retireCells(*oldKey, true);
+                                        program_->projections.retireCells(*oldValue, true);
+                                    }
+                                    else
+                                    {
+                                        auto* newKey = const_cast<Value*>(incoming.dictionaryKey(newIndex));
+                                        auto* newValue = incoming.mutableDictionaryValue(newIndex);
+                                        program_->projections.remapCell(oldKey, newKey, target, incoming);
+                                        program_->projections.remapCell(oldValue, newValue, target, incoming);
+                                        *newKey = std::move(*oldKey);
+                                        *newValue = std::move(*oldValue);
+                                    }
+                                }
+                                auto old = std::move(target);
+                                target = std::move(incoming);
+                                cleanupValue(old, cleanupError);
+                            }
+                            else
+                            {
+                                program_->projections.retireCells(target);
+                                auto old = std::move(target);
+                                target = std::move(incoming);
+                                cleanupValue(old, cleanupError);
+                            }
+                        }
+                    if (!cleanupError.cleanupFailures.empty())
+                    {
+                        ExecutionError error{"WVM1211", "Native copy-back cleanup failed while running a destructor"};
+                        error.cleanupFailures = std::move(cleanupError.cleanupFailures);
+                        return failWithStack(std::move(error));
                     }
                 }
 

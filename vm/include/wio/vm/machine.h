@@ -220,7 +220,7 @@ namespace wio::vm
         [[nodiscard]] ExecutionError unwind(ExecutionState& state, ExecutionError error);
         void cancelAndUnwindContinuations();
         void cleanupGlobals();
-        void cleanupNativeObjects(bool shutdown = false) noexcept;
+        void cleanupNativeObjects(bool shutdown = false, ExecutionError* primaryError = nullptr) noexcept;
         [[nodiscard]] WioNativeAbiStatus dispatchNativeObjectMethod(const Value&, std::uint64_t,
                                                                     const WioNativeAbiValue*, std::uint64_t,
                                                                     WioNativeAbiValue*, WioNativeAbiFailure*);

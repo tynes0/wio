@@ -22,6 +22,8 @@ namespace wio::vm::detail
     // Recurses through sequence/component cells by storage identity. Container
     // element projections have no producer-side address contract yet.
     [[nodiscard]] bool containsNativeSequencePlace(const Value& root, const Value& target, unsigned depth = 0);
+    // Address-only lookup: never dereference a possibly retired projection.
+    [[nodiscard]] bool containsNativeContainerCell(const Value& root, const Value* cell, unsigned depth = 0);
     [[nodiscard]] bool compatibleNativeSequenceCopyBack(const Value& target, const Value& replacement,
                                                         unsigned depth = 0);
 } // namespace wio::vm::detail

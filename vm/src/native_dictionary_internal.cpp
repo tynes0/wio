@@ -2,6 +2,7 @@
 #include "dictionary_keys.h"
 
 #include <algorithm>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -193,12 +194,11 @@ namespace wio::vm::detail
         return {Value::dictionary(type, std::move(entries), adapter->second.flags & WIO_NATIVE_DICTIONARY_ORDERED), {}};
     }
 
-    bool nativeDictionaryCopyBackOrder(const Value& target, const Value& replacement, std::vector<std::size_t>& order)
+    bool nativeDictionaryCopyBackMapping(const Value& target, const Value& replacement, std::vector<std::size_t>& order)
     {
         if (target.kind() != Value::Kind::Dictionary || replacement.kind() != Value::Kind::Dictionary ||
             target.aggregateType() != replacement.aggregateType() ||
-            target.dictionaryIsOrdered() != replacement.dictionaryIsOrdered() ||
-            target.dictionaryCount() != replacement.dictionaryCount())
+            target.dictionaryIsOrdered() != replacement.dictionaryIsOrdered())
             return false;
         std::unordered_map<const Value*, std::size_t, DictionaryKeyHash, DictionaryKeyEqual> incoming;
         incoming.reserve(replacement.dictionaryCount());
@@ -211,10 +211,19 @@ namespace wio::vm::detail
         for (std::size_t index = 0; index < target.dictionaryCount(); ++index)
         {
             const auto found = incoming.find(target.dictionaryKey(index));
-            if (found == incoming.end())
-                return false;
-            candidate.push_back(found->second);
+            candidate.push_back(found == incoming.end() ? (std::numeric_limits<std::size_t>::max)() : found->second);
         }
+        order = std::move(candidate);
+        return true;
+    }
+
+    bool nativeDictionaryCopyBackOrder(const Value& target, const Value& replacement, std::vector<std::size_t>& order)
+    {
+        std::vector<std::size_t> candidate;
+        if (target.dictionaryCount() != replacement.dictionaryCount() ||
+            !nativeDictionaryCopyBackMapping(target, replacement, candidate) ||
+            std::ranges::find(candidate, (std::numeric_limits<std::size_t>::max)()) != candidate.end())
+            return false;
         order = std::move(candidate);
         return true;
     }

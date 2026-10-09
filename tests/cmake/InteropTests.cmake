@@ -1001,3 +1001,19 @@ add_test(
 )
 wio_test_labels(wio_vm_native_nested_any interop vm native any container differential release-gate)
 set_tests_properties(wio_vm_native_nested_any PROPERTIES TIMEOUT 600)
+
+add_test(
+    NAME wio_vm_native_container_shape
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_container_shape.wio"
+        "-DWIO_EXPECTED_OUTPUT=native-container-shape-ok:30"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-container-shape"
+        "-DWIO_SHAPE_HOST_EXECUTABLE=$<TARGET_FILE:wio_vm_native_container_shape_test>"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_container_shape_test.cmake"
+)
+wio_test_labels(wio_vm_native_container_shape interop vm native container borrow cleanup differential release-gate)
+set_tests_properties(wio_vm_native_container_shape PROPERTIES TIMEOUT 600)

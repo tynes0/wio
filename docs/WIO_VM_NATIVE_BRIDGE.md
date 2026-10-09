@@ -1741,8 +1741,9 @@ let returned = EchoArray(records); // producer/VM value copies remain independen
 Existing producer codecs and VM registered-layout checks materialize these
 values. There is no generic-only wire representation and no runtime type guessing.
 Stable specialization identities, opaque fields and immutable native prototypes
-preserve visible and hidden producer state. Direct container ref updates retain
-the existing same-length/same-key-set rule and update existing descendant cells;
+preserve visible and hidden producer state. At this qualification stage direct
+container ref updates retained the same-length/same-key-set rule (the later
+structural copy-back section below extends it) and updated existing descendant cells;
 growth inside an Any payload is observed through an owned `fit` copy instead.
 
 The focused `wio_vm_native_any_generic` gate compares generated C++ and VM CLI
@@ -2017,3 +2018,65 @@ ownership, container projections, consumed arguments or callback/async signature
 Native Step 8 remains open. Only the new focused gate was run locally on Windows;
 1/1 passed in 14.76 seconds (14.83 seconds total). No full-suite or local Linux
 qualification is claimed.
+
+## Structural Native Container Copy-Back
+
+Synchronous native `ref` boundaries now allow dynamic arrays to grow, shrink or
+clear, and ordered/unordered dictionaries to insert, remove or replace keys.
+This extends the earlier same-shape-only qualification without an ABI or
+bytecode version change. It applies to the existing registered element/value
+surface, including nested arrays/maps, native POD, Any and qualified hosted
+object/nullable-object handles; it does not widen object proxy eligibility.
+
+```wio
+using cpp::header("scores.h");
+
+[Native, CppName(scores::Insert)]
+fn Insert(scores: ref Dict<string, i32>);
+
+mut scores: Dict<string, i32> = { "keep": 7 };
+let kept: view i32 = ref scores["keep"];
+Insert(ref scores); // Producer changes keep and adds new keys.
+// kept still names the surviving key's updated value.
+```
+
+All mutable native outputs are decoded, pinned and recursively planned before
+any caller value is committed. Invalid output types, duplicate/unsupported key
+contracts, excessive depth or incompatible storage reject without publishing a
+partial caller-container replacement. This does not roll back foreign side
+effects or mutations of already-shared object/Any cells.
+
+Same-length arrays and same-key-set dictionaries keep existing physical cells.
+Length-changing array replacement retires descendant element/field places while
+preserving the array root slot. Dictionary rebuilds remap surviving key/value
+places by key, preserve surviving nested storage, and retire removed key/value
+descendants. Only a nested container whose own storage is replaced loses its
+element borrows; unaffected siblings and heap-owner fields stay valid.
+Retired places report `WVM1043` instead of reading stale storage. C++ tests do
+not dereference invalidated native vector references (that would be undefined
+behavior); those negative probes are VM-only safety checks.
+
+Hosted proxy retirements are drained while the old caller graph is live, before
+removed/replaced values undergo recursive cleanup. Final object destruction is
+exactly once, and failing destructors surface as `WVM1211` cleanup failures at
+the native call. A program-local intrusive projection domain tracks aliases
+acquired independently through heap fields; shutdown detaches tracking links
+without creating a dangling domain pointer on escaped owner-backed places.
+
+Structural updates require exclusive VM container storage. Shared iterator/
+snapshot claims reject with `WVM1224`; a separate iterator invalidation contract
+is still needed. Passing a container and its descendant as overlapping native
+arguments continues to reject with `WVM1225`. This is not the container
+projection ABI, a concurrency guarantee, or arbitrary foreign ownership support.
+
+The new `wio_vm_native_container_shape` gate compares C++ and VM execution over
+30 rounds: value-copy isolation, binary strings, Unicode, bool, hidden native
+POD fields, shared/nested Any, generic/nullable object containers, nested growth,
+ordered/unordered key-set edits, surviving ref writes and independent heap-field
+borrows. Live-host checks cover expired descendants, overlap rejection, native
+exceptions, failing cleanup, lifecycle balance and recovery. A forged second
+mutable output uses observable VM globals to verify that neither caller root is
+partially committed. Unit checks cover mapping/planning and snapshot/depth/type
+rejection. Native Step 8 remains open. Only this new gate was run locally on
+Windows: 1/1 passed in 23.63 seconds (23.71 seconds total). No full-suite or
+local Linux qualification is claimed.

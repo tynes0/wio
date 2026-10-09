@@ -24,7 +24,8 @@ namespace wio::vm
     namespace detail
     {
         class NativeObjectBridge;
-    }
+        class NativeContainerCopyBackPlanner;
+    } // namespace detail
 
     enum class AsyncTaskState : std::uint8_t
     {
@@ -235,6 +236,7 @@ namespace wio::vm
         void advanceIteratorPosition() noexcept;
         [[nodiscard]] const Value* iteratorState(std::size_t index) const noexcept;
         [[nodiscard]] Value* mutableIteratorState(std::size_t index) noexcept;
+        friend class detail::NativeContainerCopyBackPlanner;
         [[nodiscard]] Value* mutableElement(std::size_t index) noexcept;
         [[nodiscard]] Value* mutableDictionaryValue(const Value& key) noexcept;
         [[nodiscard]] Value* mutableDictionaryValue(std::size_t index) noexcept;

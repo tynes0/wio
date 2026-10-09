@@ -271,4 +271,30 @@ namespace wio::vm::detail
                 return false;
         return true;
     }
+
+    bool containsNativeContainerCell(const Value& root, const Value* cell, unsigned depth)
+    {
+        if (!cell || depth > 64)
+            return false;
+        if (&root == cell)
+            return true;
+        if (root.kind() == Value::Kind::Dictionary)
+        {
+            for (std::size_t index = 0; index < root.dictionaryCount(); ++index)
+                if (root.dictionaryKey(index) == cell ||
+                    containsNativeContainerCell(*root.dictionaryValue(index), cell, depth + 1))
+                    return true;
+        }
+        else if (root.kind() == Value::Kind::Array || root.kind() == Value::Kind::Component)
+        {
+            const bool array = root.kind() == Value::Kind::Array;
+            const auto count = array ? root.elementCount() : root.fieldCount();
+            for (std::size_t index = 0; index < count; ++index)
+                if (containsNativeContainerCell(*(array ? root.element(index) : root.field(index)), cell, depth + 1))
+                    return true;
+        }
+        // Heap object fields and shared Any payloads are separate storage
+        // domains. Moving their handle cell does not move their owned data.
+        return false;
+    }
 } // namespace wio::vm::detail

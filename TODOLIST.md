@@ -682,16 +682,18 @@ Rider, and CLion are defined in
    Dynamic array adapters now materialize VM-created arrays in producer storage
    and decode producer results back to editable VM arrays. Empty/nested arrays,
    string/text/bool and native POD elements, by-value isolation, view/ref aliases,
-   and same-shape ref copy-back have focused differential coverage. Length-changing
-   ref copy-back and overlapping array/element references reject explicitly until
-   their borrow-invalidation/projection contract is complete.
+   and same-shape ref copy-back have focused differential coverage. Structural
+   ref copy-back now permits dynamic array growth/shrink/clear with invalidation
+   of replaced element storage. Overlapping array/element arguments still reject.
    Dictionary adapters now cover ordered/unordered maps, portable key identities,
    string/text/native-POD/nullable-opaque values, nested dictionaries and mixed
    array/dictionary shapes. Bulk producer reads use one traversal; copy-back
    matches by key and updates existing cells despite unordered rehashing.
    Same-key-set ref updates and escaped producer-library lifetime have focused
-   coverage. Key-set/sequence-length changes and overlapping container/descendant
-   borrows still require an explicit invalidation/projection contract.
+   coverage. Structural key-set updates now remap surviving key/value places and
+   invalidate removed keys, including nested sequence changes. Shared iterator/
+   snapshot storage and overlapping container/descendant arguments remain
+   explicitly unqualified.
    Any adapters now materialize VM-created value payloads and decode producer
    any results using stable payload identities. Producer cell backing preserves
    shared-copy mutation, while whole-value ref replacement leaves old aliases
@@ -890,6 +892,19 @@ Rider, and CLion are defined in
    bounded/cyclic decoding, partial failure and escaped child DLL leases.
    Only the new focused Windows gate was run: 1/1 passed in 14.76 seconds
    (14.83 seconds total); no full-suite or local Linux pass is claimed.
+   Native mutable containers now support structural copy-back: arrays may resize
+   and dictionaries may change key sets. Same-shape cells and surviving dictionary
+   key/value borrows are preserved; removed/reallocated descendant places reject
+   stale reads. All mutable outputs are decoded and planned before any commit.
+   Copy-back drains retired hosted proxies before old-value cleanup so removed
+   objects run exactly-once destruction and destructor failures are reported.
+   A focused C++/VM/live-host gate covers scalar/string/text/bool/POD/Any/object
+   elements, nested containers, independent heap-field borrows, malformed second
+   outputs, native failures, cleanup failures and recovery. Shared iterator/
+   snapshot structural updates and overlapping projection arguments remain
+   rejected; this does not close Native Step 8. Only the new focused Windows
+   gate was run: 1/1 passed in 23.63 seconds (23.71 seconds total); no full-suite
+   or local Linux qualification is claimed.
    Remaining native parity work includes broader VM-created object signatures,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and
