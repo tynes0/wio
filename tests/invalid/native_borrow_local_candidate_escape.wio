@@ -1,0 +1,8 @@
+use std::attribute as attribute;
+[Native]
+fn Choose(caller: ref i32, local: ref i32, left: bool) -> ref i32;
+fn Escape(caller: ref i32) -> ref i32 {
+    mut local = 7;
+    return Choose(caller, ref local, true);
+}
+fn Entry() -> i32 { return 0; }

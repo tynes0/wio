@@ -5546,6 +5546,46 @@ namespace wio::vm
                     return fail("WVM1224", "Native mutable-reference copy-back failed: " + copyBackError);
 
                 const std::uint32_t nativeResultType = declaration.nativeBinding.result.type;
+                if (nativeResultType < module.types.size() && module.types[nativeResultType].kind == TypeReference)
+                {
+                    const auto& resultType = module.types[nativeResultType];
+                    const auto base = resultType.arguments.front();
+                    const bool mutableResult = (resultType.flags & 0x01u) != 0;
+                    auto identityType = base;
+                    if (declaration.nativeBinding.result.marshalling == 6 &&
+                        module.types[identityType].kind == TypeNullable)
+                        identityType = module.types[identityType].arguments.front();
+                    const auto reflected =
+                        std::ranges::find(module.contract.reflection, identityType, &bytecode::Reflection::type);
+                    const auto& borrowed = nativeFrame.result;
+                    const auto flags =
+                        WIO_NATIVE_ABI_VALUE_BORROWED | (mutableResult ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
+                    if (reflected == module.contract.reflection.end() || !reflected->stableTypeId ||
+                        borrowed.kind != WIO_NATIVE_ABI_REFERENCE || borrowed.flags != flags ||
+                        borrowed.typeId != reflected->stableTypeId || borrowed.owner.state || borrowed.owner.ops ||
+                        borrowed.owner.generation || borrowed.payload.mutableSlice.size != sizeof(WioNativeAbiValue))
+                        return fail("WVM1224", "Native borrowed result has an invalid reference contract");
+                    PlaceStorage* caller = nullptr;
+                    for (const auto& token : nativeFrame.tokens)
+                        if (borrowed.payload.mutableSlice.data == &token.wire && referenceBase(token.type) == base &&
+                            token.marshalling == declaration.nativeBinding.result.marshalling &&
+                            token.projectionRoot == (std::numeric_limits<std::size_t>::max)() &&
+                            (!mutableResult || (token.mutableValue && token.place->mutableValue)))
+                        {
+                            caller = token.place;
+                            break;
+                        }
+                    // Match addresses, never dereference a foreign result pointer.
+                    // Returning the original caller Place also survives forwarding
+                    // through Wio frames without acquiring any ownership claim.
+                    if (!caller || !caller->initialized)
+                        return fail("WVM1224", "Native borrowed result does not name a compatible caller reference");
+                    if (instruction.result != bytecode::InvalidIndex &&
+                        !write(instruction.result, Value::place(caller)))
+                        return fail("WVM1224", "Native borrowed result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
                 if (nativeResultType < module.types.size() && module.types[nativeResultType].kind == TypeAsyncTask)
                 {
                     const bytecode::Type& taskType = module.types[nativeResultType];

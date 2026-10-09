@@ -815,8 +815,8 @@ Rider, and CLion are defined in
    final lifecycle counts. Inherited Base self ref/view methods also preserve
    the concrete Leaf receiver, without rebind permission or a retained claim.
    The polymorphic-reference gate passed locally on Windows (1/1, 20.30 seconds).
-   Explicit covariant receiver borrows, free-native borrowed
-   results and broader foreign ownership remain unqualified.
+   Explicit covariant receiver borrows and broader foreign ownership remain
+   unqualified; caller-bound free-native borrowed results are qualified below.
    Direct synchronous native any/ref-any/view-any payloads now preserve
    qualified concrete/base/interface object identity and concrete generic
    specializations. Any-only signatures discover the required object adapters;
@@ -864,6 +864,21 @@ Rider, and CLion are defined in
    equality uses the existing identity opcode in both WIR verification stages.
    The new handle-container gate passed locally on Windows (1/1, 35.08 seconds),
    including generated C++, actual VM CLI and live-host negative/lifecycle checks.
+   Direct synchronous free-native ref/view results now alias an exact-compatible
+   caller reference parameter. Generated C++ checks the returned native address;
+   producer thunks return caller token identity, and VM validation maps it back
+   to the original caller Place without owning/copying its value. Forwarding
+   through Wio frames preserves the cell. Semantic matching rejects implicit
+   numeric/nullable/nominal contract changes and readonly-to-mutable upgrades;
+   lifetime analysis conservatively includes every compatible native/indirect
+   call argument, preventing later local candidates from escaping.
+   The new qualification covers scalar/string/text/POD/Any/container, hosted
+   object/interface/generic and nullable object/opaque cells, rebinding, field-only
+   arguments, expired caller roots and malformed foreign result pointers/flags.
+   Returning projected overlap tokens, arbitrary producer/global/local storage,
+   asynchronous borrows and exported SDK ref/view results remain unqualified.
+   Only the ten new focused tests were run on Windows: 10/10 passed in 18.32
+   seconds total (C++/VM/live-host gate: 17.12 seconds).
    Remaining native parity work includes broader VM-created object signatures,
    std::Box, boxed Any-in-Any and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and

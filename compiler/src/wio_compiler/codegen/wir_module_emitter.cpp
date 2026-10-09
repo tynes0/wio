@@ -299,6 +299,29 @@ namespace wio::codegen
                 out << "    wio::wir_backend::abi::Tasks::get().track(value);\n";
             if (r.kind != TypeKind::Void && r.kind != TypeKind::Reference)
                 out << "    *result = " << codec(f.returnType) << "::write(std::move(value));\n";
+            else if (r.kind == TypeKind::Reference && f.nativeBinding)
+            {
+                const auto base = r.arguments.front();
+                // A free native result can borrow an input cell, never this
+                // thunk's frame storage or a producer-owned/global address.
+                for (std::size_t i = 0; i < f.parameters.size(); ++i)
+                {
+                    const auto& parameter = module.types.get(f.parameters[i].type);
+                    if (parameter.kind != TypeKind::Reference || parameter.arguments.front() != base ||
+                        (r.isMutable && !parameter.isMutable))
+                        continue;
+                    out << "    if (value.borrowIdentity() && value.borrowIdentity() == p" << i
+                        << ".borrowIdentity() && !(args[" << i << "].flags & WIO_NATIVE_ABI_VALUE_PROJECTED)"
+                        << (r.isMutable ? " && value.canRebind()" : "") << ") {\n"
+                        << "      result->kind = WIO_NATIVE_ABI_REFERENCE; result->typeId = " << wireId(base)
+                        << "ULL;\n      result->flags = WIO_NATIVE_ABI_VALUE_BORROWED"
+                        << (r.isMutable ? " | WIO_NATIVE_ABI_VALUE_MUTABLE" : "") << ";\n"
+                        << "      result->payload.mutableSlice = args[" << i << "].payload.mutableSlice;\n"
+                        << "      return WIO_NATIVE_ABI_OK;\n    }\n";
+                }
+                out << "    return wio::wir_backend::abi::failure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, "
+                       "\"native borrowed result must alias a compatible caller reference\");\n";
+            }
             else if (r.kind != TypeKind::Void)
                 out << "    return WIO_NATIVE_ABI_TYPE_MISMATCH;\n";
             out << "    return WIO_NATIVE_ABI_OK;\n"

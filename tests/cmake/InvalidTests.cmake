@@ -1217,6 +1217,46 @@ add_wio_failure_test_clean(
 )
 wio_test_labels(wio_invalid_native_reference_return_not_supported invalid)
 
+foreach(case IN ITEMS no_caller readonly_upgrade wrong_contract nested_wrong_contract)
+    add_wio_failure_test_clean(
+        wio_invalid_native_borrow_${case}
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_borrow_${case}.wio"
+        "without a compatible caller reference parameter"
+        "Compiling failed:"
+    )
+    wio_test_labels(wio_invalid_native_borrow_${case} invalid native borrowed-result)
+endforeach()
+add_wio_failure_test_clean(
+    wio_invalid_native_borrow_local_candidate_escape
+    "${CMAKE_SOURCE_DIR}/tests/invalid/native_borrow_local_candidate_escape.wio"
+    "Cannot return a reference borrowed from a local value"
+    "Compiling failed:"
+)
+wio_test_labels(wio_invalid_native_borrow_local_candidate_escape invalid native borrowed-result)
+add_wio_failure_test_clean(
+    wio_invalid_native_borrow_indirect_candidate_escape
+    "${CMAKE_SOURCE_DIR}/tests/invalid/native_borrow_indirect_candidate_escape.wio"
+    "Cannot return a reference borrowed from a local value"
+    "Compiling failed:"
+)
+wio_test_labels(wio_invalid_native_borrow_indirect_candidate_escape invalid native borrowed-result)
+foreach(case IN ITEMS narrowed_cell covariant_cell)
+    add_wio_failure_test_clean(
+        wio_invalid_native_borrow_${case}
+        "${CMAKE_SOURCE_DIR}/tests/invalid/native_borrow_${case}.wio"
+        "Native borrowed results require exact caller storage"
+        "Compiling failed:"
+    )
+    wio_test_labels(wio_invalid_native_borrow_${case} invalid native borrowed-result)
+endforeach()
+add_wio_failure_test_clean(
+    wio_invalid_native_borrow_extension_receiver
+    "${CMAKE_SOURCE_DIR}/tests/invalid/native_borrow_extension_receiver.wio"
+    "Native borrowed results currently require a free function"
+    "Compiling failed:"
+)
+wio_test_labels(wio_invalid_native_borrow_extension_receiver invalid native borrowed-result)
+
 add_wio_failure_test_clean(
     wio_invalid_floating_modulo_not_supported
     "${CMAKE_SOURCE_DIR}/tests/invalid/floating_modulo_not_supported.wio"

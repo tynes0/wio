@@ -1380,3 +1380,30 @@ here as historical evidence rather than active work:
       Existing ABI and bytecode versions are unchanged. Boxed Any-in-Any, std::Box,
       arbitrary foreign/container ownership, projection arguments, callbacks,
       consumed arguments and async lifetime contracts remain separate work.
+
+## Free-Native Caller-Bound Borrowed Results
+
+- [x] Enabled synchronous native ref/view results backed by an exact-compatible
+      input reference cell. C++ wrappers validate the native result address;
+      ABI thunks name the caller token, never their temporary frame storage.
+      VM results reuse the original caller Place with no new owning claim.
+- [x] Preserved ref rebinding, readonly views, same-cell aliases and forwarding
+      through Wio frames. The focused surface includes scalar/string/text,
+      registered POD, Any/array/dictionary, hosted object/interface/concrete
+      generic and nullable object/opaque handle cells.
+- [x] Added structural semantic identity matching for native borrow cells,
+      excluding numeric promotion, readonly upgrades and mismatched nested types.
+      Native and indirect call origins include every compatible candidate;
+      a caller-owned first argument cannot hide a later local borrow escape.
+- [x] Added a 30-round C++/VM/live-host qualification plus nine new semantic
+      rejection fixtures. Host checks reject unrelated producer/global storage,
+      projected overlap returns, forged pointer/type/ownership/mutability/size
+      contracts and reads after caller root cleanup; object cleanup balances.
+      Narrowed nullable/covariant input cells and implicit native receivers reject
+      explicitly; borrowed-result bytecode cannot use owned-result view narrowing.
+      Existing ABI and bytecode formats are unchanged. Projected result mapping,
+      arbitrary foreign storage, async/callback lifetime and SDK-exported borrow
+      results remain separate work; Native Step 8 is still open.
+      Only the ten new tests were run on Windows: 10/10 passed in 18.32 seconds
+      (differential/live-host gate: 17.12 seconds). No full-suite or local Linux
+      qualification is claimed.

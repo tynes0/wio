@@ -1063,14 +1063,48 @@ void SemanticAnalyzer::visit(FunctionCallExpression& node)
                     node.borrowOrigin = BorrowOrigin::Static;
                     if (functionType)
                     {
+                        auto symbol = node.referencedSymbol.Lock();
+                        if (!symbol && node.callee)
+                            symbol = node.callee->referencedSymbol.Lock();
+                        const auto attributes = attributeListsBySymbol_.find(symbol.Get());
+                        const bool nativeBorrow = attributes != attributeListsBySymbol_.end() && attributes->second &&
+                            hasAttribute(*attributes->second, Attribute::Native);
+                        const bool conservativeBorrow = nativeBorrow || !symbol || symbol->kind != SymbolKind::Function;
+                        const auto resultReference = resolvedResultType.AsFast<ReferenceType>();
                         const size_t argumentCount = std::min(node.arguments.size(), functionType->paramTypes.size());
                         for (size_t i = 0; i < argumentCount; ++i)
                         {
                             Ref<Type> parameterType = unwrapAliasType(functionType->paramTypes[i]);
                             if (parameterType && parameterType->kind() == TypeKind::Reference)
                             {
-                                node.borrowOrigin = classifyBorrowOrigin(node.arguments[i]);
-                                break;
+                                if (!conservativeBorrow)
+                                {
+                                    node.borrowOrigin = classifyBorrowOrigin(node.arguments[i]);
+                                    break;
+                                }
+                                const auto parameterReference = parameterType.AsFast<ReferenceType>();
+                                const bool compatibleCell = (!resultReference->isMutable || parameterReference->isMutable) &&
+                                    sameNativeBorrowCellType(resultReference->referredType, parameterReference->referredType);
+                                if (nativeBorrow && !compatibleCell)
+                                    continue;
+                                const auto argumentType = unwrapAliasType(node.arguments[i]->refType.Lock());
+                                const auto storageType = compatibleCell ? nativeBorrowStorageType(node.arguments[i]) : nullptr;
+                                if (compatibleCell &&
+                                    ((argumentType && argumentType->kind() == TypeKind::Reference &&
+                                      !sameNativeBorrowCellType(argumentType.AsFast<ReferenceType>()->referredType,
+                                                               parameterReference->referredType)) ||
+                                     (storageType && storageType->kind() == TypeKind::Nullable &&
+                                      unwrapAliasType(parameterReference->referredType)->kind() != TypeKind::Nullable)))
+                                    WIO_LOG_ADD_ERROR(node.arguments[i]->location(),
+                                        "Native borrowed results require exact caller storage; narrowed nullable or covariant references cannot supply the returned cell.");
+                                // Native calls can select any compatible cell.
+                                // Unknown callables can also return cast borrows.
+                                // A caller argument must not mask a later local.
+                                const auto origin = classifyBorrowOrigin(node.arguments[i]);
+                                if (origin == BorrowOrigin::Temporary ||
+                                    (origin == BorrowOrigin::Local && node.borrowOrigin != BorrowOrigin::Temporary) ||
+                                    (origin == BorrowOrigin::Caller && node.borrowOrigin == BorrowOrigin::Static))
+                                    node.borrowOrigin = origin;
                             }
                         }
                     }

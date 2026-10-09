@@ -1879,3 +1879,79 @@ foreign ownership and container/ref callback or async lifetime contracts remain
 separate work. Existing ABI, sidecar and bytecode versions are unchanged; Native
 Step 8 remains open. The new Windows gate passed (1/1, 35.08 seconds);
 no full-suite or local Linux qualification is claimed.
+
+## Free-native caller-bound ref/view results
+
+A synchronous free native function can return a reference to an exact-compatible
+caller reference parameter. The result's inner type must match the input cell's
+semantic/ABI identity; numeric promotion, Base/Derived substitution, nullable
+shape changes and readonly-to-mutable upgrades do not qualify.
+
+```cpp
+template<class T> T& Borrow(T& value) { return value; }
+inline void Set(std::int32_t& target, std::int32_t value) { target = value; }
+```
+
+```wio
+using cpp::header("my_borrow.h");
+use std::attribute as attribute;
+[Native, CppName(Borrow)]
+fn Borrow(value: ref i32) -> ref i32;
+[Native, CppName(Set)]
+fn Set(target: ref i32, value: i32);
+
+fn Forward(value: ref i32) -> ref i32 {
+    return Borrow(value);
+}
+
+fn Entry() -> i32 {
+    mut number = 7;
+    let alias: ref i32 = Forward(ref number);
+    Set(alias, 19);
+    return number - 19;
+}
+```
+
+Explicit ref/view variable annotations keep the borrow; ordinary inferred value
+variables retain the language's automatic reference-read behavior.
+
+Generated C++ evaluates the native call once and compares the returned address
+against eligible input storage before returning the original caller Place.
+Raw receiver/proxy storage does not qualify as a caller cell. Returning unrelated
+producer/global/local storage throws instead of leaking its address into Wio.
+The ABI thunk similarly checks the returned Place identity, then returns a
+borrowed `WIO_NATIVE_ABI_REFERENCE` naming the input token. After copy-back, the
+VM validates exact type/flags/size and a zero owner, matches the token address
+without dereferencing foreign result pointers, and reuses the original caller
+Place. It does not return a temporary thunk cell, create an owning value copy or
+allocate a separate result Place. A result forwarded through Wio frames therefore
+continues to observe the caller cell, including subsequent rebindings.
+
+Native and indirect call lifetime analysis conservatively combines all matching
+reference candidates. Returning a conditional native borrow is unsafe if any
+eligible input is local/temporary, even if a constant condition appears to select
+the caller-owned input. Declarations without a matching parameter or with only
+readonly candidates for a mutable result fail semantic analysis.
+
+The focused `wio_vm_native_free_borrow` gate compares C++ and actual VM execution
+over 30 rounds, covering scalar/string/text, native POD hidden state, Any and
+dynamic containers, hosted object/interface/concrete generic and nullable
+object/opaque cells, conditional/same-cell aliases and Wio forwarding. Independent
+field-only reference arguments can name caller storage. The live host rejects
+unrelated storage, projected-overlap results, forged addresses/type IDs/flags/
+size/owner generation and reads after explicit caller root cleanup. Nine new
+semantic fixtures cover missing candidates, readonly upgrades, scalar/nested
+contract mismatch, direct/indirect local candidate escape, narrowed nullable/
+covariant cells and implicit native extension receivers. Bytecode verification
+also rejects owned-result-style view narrowing on borrowed-result calls.
+
+Projected overlap tokens still require a separate result projection mapping:
+an input POD root and overlapping field can be passed together, but its projected
+field token cannot be returned through this new free-native result contract.
+Implicit native receivers, async borrowed results, arbitrary foreign storage and
+SDK-exported ref/view results remain unsupported. Existing wire/sidecar/bytecode
+versions are unchanged; this does not close Native Step 8 or claim full-suite/
+Linux qualification.
+
+Only the ten new focused tests were run locally on Windows: 10/10 passed in
+18.32 seconds total; the C++/VM/live-host gate took 17.12 seconds.

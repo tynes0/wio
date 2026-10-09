@@ -969,3 +969,19 @@ add_test(
 )
 wio_test_labels(wio_vm_native_handle_containers interop vm native any native-object container generic nullable differential release-gate)
 set_tests_properties(wio_vm_native_handle_containers PROPERTIES TIMEOUT 600)
+
+add_test(
+    NAME wio_vm_native_free_borrow
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_free_borrow.wio"
+        "-DWIO_EXPECTED_OUTPUT=native-free-borrow-ok:30"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-free-borrow"
+        "-DWIO_BORROW_HOST_EXECUTABLE=$<TARGET_FILE:wio_vm_native_free_borrow_test>"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_free_borrow_test.cmake"
+)
+wio_test_labels(wio_vm_native_free_borrow interop vm native borrowed-result nullable container differential release-gate)
+set_tests_properties(wio_vm_native_free_borrow PROPERTIES TIMEOUT 600)

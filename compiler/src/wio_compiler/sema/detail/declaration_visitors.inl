@@ -783,10 +783,22 @@
             Ref<Type> nativeReturnType = unwrapAliasType(funcType->returnType);
             if (nativeReturnType && nativeReturnType->kind() == TypeKind::Reference)
             {
-                WIO_LOG_ADD_ERROR(
-                    node.location(),
-                    "@Native functions cannot return ref/view values because the native borrow lifetime cannot be proven. Return an owning value or handle instead."
-                );
+                const auto resultReference = nativeReturnType.AsFast<ReferenceType>();
+                const bool callerBound = std::ranges::any_of(funcType->paramTypes, [&](const auto& parameter)
+                {
+                    const auto resolved = unwrapAliasType(parameter);
+                    if (!resolved || resolved->kind() != TypeKind::Reference)
+                        return false;
+                    const auto reference = resolved.AsFast<ReferenceType>();
+                    return (!resultReference->isMutable || reference->isMutable) &&
+                           sameNativeBorrowCellType(reference->referredType, resultReference->referredType);
+                });
+                if (!callerBound)
+                    WIO_LOG_ADD_ERROR(node.location(),
+                        "@Native functions cannot return ref/view values without a compatible caller reference parameter; globals, temporaries and unrelated native storage cannot be returned.");
+                if (isStructMethod || node.isExtensionMethod)
+                    WIO_LOG_ADD_ERROR(node.location(),
+                        "Native borrowed results currently require a free function with no implicit receiver.");
             }
 
             for (size_t index = 0; index < funcSym->genericParameterTypes.size(); ++index)

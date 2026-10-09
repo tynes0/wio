@@ -584,7 +584,19 @@ namespace wio::codegen
                         continue;
                     const auto& result = module_.types.get(function.returnType);
                     const bool async = result.kind == TypeKind::AsyncTask;
-                    bool unsafe = result.kind == TypeKind::Reference ||
+                    const bool callerBoundNativeResult =
+                        function.nativeBinding && !exported && !function.isMethod && !function.isExtension &&
+                        function.nativeBinding->receiver == NativeReceiverKind::None &&
+                        result.kind == TypeKind::Reference &&
+                        std::ranges::any_of(function.parameters,
+                                            [&](const auto& parameter)
+                                            {
+                                                const auto& input = module_.types.get(parameter.type);
+                                                return input.kind == TypeKind::Reference &&
+                                                       input.arguments == result.arguments &&
+                                                       (!result.isMutable || input.isMutable);
+                                            });
+                    bool unsafe = (result.kind == TypeKind::Reference && !callerBoundNativeResult) ||
                                   (async && module_.types.get(result.arguments.front()).kind == TypeKind::Reference);
                     for (const auto& parameter : function.parameters)
                         unsafe |= async && module_.types.get(parameter.type).kind == TypeKind::Reference;
@@ -1289,6 +1301,7 @@ public:
     // Only real handle/local cells have stable borrow identity. Proxy
     // projections do not participate in the native object reference bridge.
     bool canRebind() const { return !readOnly_ && (pointer_ || owner_); }
+    bool hasStorageCell() const { return pointer_ || owner_; }
     const void* borrowIdentity() const {
         if (pointer_) return pointer_;
         return owner_.get();
@@ -1349,6 +1362,7 @@ public:
     }
     const Handle& read() const { return const_cast<Place*>(this)->read(); }
     bool canRebind() const { return !readOnly_ && (handle_ || owner_); }
+    bool hasStorageCell() const { return handle_ || owner_; }
     const void* borrowIdentity() const {
         if (handle_) return handle_;
         if (owner_) return owner_.get();
@@ -3479,8 +3493,27 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                             }
                             const auto& returnType = module_.types.get(function.returnType);
                             if (returnType.kind == TypeKind::Reference)
-                                call = cppType(function.returnType) +
-                                       (returnType.isMutable ? "::borrow(" : "::borrowView(") + call + ")";
+                            {
+                                std::string checks;
+                                for (std::size_t index = 0; index < function.parameters.size(); ++index)
+                                {
+                                    const auto& parameter = module_.types.get(function.parameters[index].type);
+                                    if (parameter.kind == TypeKind::Reference &&
+                                        parameter.arguments == returnType.arguments &&
+                                        (!returnType.isMutable || parameter.isMutable))
+                                        checks +=
+                                            "if (_p" + std::to_string(index) + ".hasStorageCell()" +
+                                            (returnType.isMutable ? " && _p" + std::to_string(index) + ".canRebind()"
+                                                                  : "") +
+                                            " && std::addressof(_borrowed) == std::addressof(_p" +
+                                            std::to_string(index) + ".read())) return _p" + std::to_string(index) +
+                                            (returnType.isMutable ? "; " : ".asView(); ");
+                                }
+                                call = "([&]() -> " + cppType(function.returnType) + " { auto&& _borrowed = " + call +
+                                       "; " + checks +
+                                       "throw wio::runtime::RuntimeException(\"Native borrowed result must alias a "
+                                       "compatible caller reference\"); }())";
+                            }
                             if (function.nativeBinding->exceptionBoundary != NativeExceptionBoundary::None)
                                 output_ << "try { ";
                             output_ << "return " << call << ';';

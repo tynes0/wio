@@ -1,0 +1,5 @@
+fn Escape(action: fn(ref i32, ref i32, bool) -> ref i32, caller: ref i32) -> ref i32 {
+    mut local = 7;
+    return action(caller, ref local, true);
+}
+fn Entry() -> i32 { return 0; }

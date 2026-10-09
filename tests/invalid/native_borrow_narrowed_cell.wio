@@ -1,0 +1,11 @@
+use std::attribute as attribute;
+object Counter {}
+[Native]
+fn Observe(value: view Counter) -> view Counter;
+fn Entry() -> i32 {
+    mut value: Counter? = Counter();
+    if (value != null) {
+        let alias: view Counter = Observe(ref value);
+    }
+    return 0;
+}

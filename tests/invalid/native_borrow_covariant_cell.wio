@@ -1,0 +1,11 @@
+use std::attribute as attribute;
+object Base {}
+[From(Base)]
+object Leaf {}
+[Native]
+fn Observe(value: view Base) -> view Base;
+fn Entry() -> i32 {
+    let value = Leaf();
+    let alias: view Base = Observe(ref value);
+    return 0;
+}
