@@ -797,7 +797,7 @@ after POD/sequence/dictionary dependencies and published atomically.
 
 The automatic descriptor closure comes from concrete `AnyBox`, `is` and `fit`
 operations in the module, when native signatures use `any`. Eligible payloads
-are scalars, string, Unicode text, opaque, supported non-generic native POD,
+are scalars, string, Unicode text, opaque, qualified native POD,
 dynamic arrays and ordered/unordered dictionaries, including supported nested
 container shapes. Null `any` has a separate producer operation, not a fake
 boxed payload or nullable wire cell. VM default initialization and null type
@@ -838,7 +838,7 @@ Limits remain explicit:
 - Multiple Wio identities represented by the same producer C++ boxed type
   are rejected as ambiguous, not selected by hash-map iteration order.
   Source-alias canonicalization/tagging remains pending.
-- Object/interface/Box, arbitrary nullable wrappers, generic POD payloads,
+- Object/interface/Box, arbitrary nullable wrappers,
   nested `any` and any-bearing container adapters are not qualified here.
   Qualified synchronous object/interface payloads are described separately
   under "VM-created any object payloads" below.
@@ -1711,3 +1711,57 @@ no full-suite or local Linux pass is implied.
 
 The object-Any gate passed locally on Windows (1/1, 25.29 seconds), including
 generated C++, actual VM CLI execution and live-host negative/lifecycle checks.
+
+## Concrete generic POD payloads and containers
+
+Any payload and dynamic array/dictionary adapter selection now shares
+`WirNativePodEmitter::eligibleTypes` with physical POD layout emission. A POD
+specialization is eligible because its arguments are concrete and its fields
+are supported physical storage, not because its generic argument list is empty.
+The container emitter collects this inventory lazily, only when a native
+Any/container boundary actually needs a POD payload.
+
+Qualified shapes include type/const arguments, default arguments, zero extents,
+selected partial specializations, concrete variadic/empty argument packs, unused
+string/text template arguments and nested/fixed-array POD fields. Open type or
+extent parameters, pack-storage fields and string/non-POD physical fields remain
+excluded. Unused template arguments are not treated as physical fields.
+
+```wio
+// Buffer<T, N> is a native POD component with values: [T; N].
+let record = Buffer<i32>([1, 2, 3], Token());
+mut boxed: any = record;
+let alias: any = boxed;
+Mutate(boxed); // changes the shared producer Any payload, not record
+let changed = alias fit Buffer<i32, 3>;
+let records: Buffer<i32>[] = [record];
+let returned = EchoArray(records); // producer/VM value copies remain independent
+```
+
+Existing producer codecs and VM registered-layout checks materialize these
+values. There is no generic-only wire representation and no runtime type guessing.
+Stable specialization identities, opaque fields and immutable native prototypes
+preserve visible and hidden producer state. Direct container ref updates retain
+the existing same-length/same-key-set rule and update existing descendant cells;
+growth inside an Any payload is observed through an owned `fit` copy instead.
+
+The focused `wio_vm_native_any_generic` gate compares generated C++ and VM CLI
+execution over 30 rounds: shared boxed mutation, ref replacement, specialization
+identity, nested/zero-extent/variadic PODs, array/dictionary value isolation and
+ref/view aliases, existing field borrows and hidden native state. C++ selection
+checks reject unsupported/open POD Any and container adapters. Live-host checks
+verify that an escaped Any, decoded POD, opaque child and backing-only prototype
+each pin the producer library, with no lease left after final release.
+
+The nested-constructor fixture also exposed and fixes a Typed WIR stale-pointer
+bug: `buildExpressionAs` now reacquires its destination type after recursive
+expression building can grow/reallocate the type table. A valid nested generic
+POD-to-Any conversion must not fall into a spurious numeric-promotion diagnostic.
+
+This does not qualify arbitrary nullable payloads, Any-bearing containers,
+object containers, std::Box or callbacks/async ownership. Existing ABI/sidecar
+and bytecode format versions are unchanged. Only the new focused Windows gate
+is run; no full-suite or local Linux pass is implied.
+
+The generic-POD Any/container gate passed locally on Windows (1/1, 30.78 seconds),
+including generated C++, VM CLI, negative selection and live DLL-lease checks.

@@ -5593,6 +5593,10 @@ namespace wio::wir::typed
                 return ensureOwned(value, destinationType, expression.Get(), state);
 
             const Type* source = result_.module_.types.tryGet(sourceType);
+            // Recursive expression construction may intern additional types
+            // and reallocate the table. Never use the pre-build destination
+            // address after that point (notably nested generic POD -> Any).
+            destination = result_.module_.types.tryGet(destinationType);
             const auto packValue = [](const Type* type)
             {
                 return type && (type->kind == TypeKind::GenericParameterPack || type->kind == TypeKind::ValuePack ||

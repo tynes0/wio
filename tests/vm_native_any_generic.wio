@@ -1,0 +1,156 @@
+using cpp::header("vm_any_generic_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_any_generic::Buffer)]
+component Buffer<T, const N: usize = 3> {
+    public values: [T; N];
+    public token: opaque;
+}
+
+[Specialize(T, 4)]
+component Buffer<T> {
+    public values: [T; 4];
+    public bonus: i32;
+    public token: opaque;
+}
+
+[Native, CppName(vm_any_generic::Marker)]
+component Marker<Types...> {
+    public tag: i32;
+    public token: opaque;
+}
+
+[Native, CppName(vm_any_generic::Nested)]
+component Nested<T, const N: usize> {
+    public value: Buffer<T, N>;
+    public copies: [Buffer<T, N>; 2];
+}
+
+[Native, CppName(vm_any_generic::Echo)]
+fn Echo(value: any) -> any;
+[Native, CppName(vm_any_generic::Same)]
+fn Same(first: view any, second: ref any) -> bool;
+[Native, CppName(vm_any_generic::Mutate)]
+fn Mutate(value: any);
+[Native, CppName(vm_any_generic::Hidden), Instantiate(Buffer<i32, 3>), Instantiate(Buffer<f64, 2>),
+ Instantiate(Buffer<i32, 0>), Instantiate(Buffer<i32, 4>), Instantiate(Marker<string, text>)]
+fn Hidden<T>(value: view any) -> i32;
+[Native, CppName(vm_any_generic::Empty)]
+fn Empty() -> Marker;
+[Native, CppName(vm_any_generic::HiddenEmpty)]
+fn HiddenEmpty(value: view any) -> i32;
+[Native, CppName(vm_any_generic::Replace)]
+fn Replace(value: ref any);
+[Native, CppName(vm_any_generic::Make)]
+fn Make() -> any;
+[Native, CppName(vm_any_generic::Token)]
+fn Token() -> opaque;
+[Native, CppName(vm_any_generic::EchoArray)]
+fn EchoArray(value: Buffer<i32>[]) -> Buffer<i32>[];
+[Native, CppName(vm_any_generic::SameArray)]
+fn SameArray(first: view Buffer<i32>[], second: ref Buffer<i32>[]) -> bool;
+[Native, CppName(vm_any_generic::UpdateArray)]
+fn UpdateArray(value: ref Buffer<i32>[]);
+[Native, CppName(vm_any_generic::ArrayHidden)]
+fn ArrayHidden(value: view Buffer<i32>[]) -> i32;
+[Native, CppName(vm_any_generic::GrowAny)]
+fn GrowAny(value: any);
+[Native, CppName(vm_any_generic::EchoMap)]
+fn EchoMap(value: Dict<string, Buffer<i32>>) -> Dict<string, Buffer<i32>>;
+[Native, CppName(vm_any_generic::SameMap)]
+fn SameMap(first: view Dict<string, Buffer<i32>>, second: ref Dict<string, Buffer<i32>>) -> bool;
+[Native, CppName(vm_any_generic::UpdateMap)]
+fn UpdateMap(value: ref Dict<string, Buffer<i32>>);
+[Native, CppName(vm_any_generic::MapHidden)]
+fn MapHidden(value: view Dict<string, Buffer<i32>>) -> i32;
+[Native, CppName(vm_any_generic::GrowMapAny)]
+fn GrowMapAny(value: any);
+[Native, CppName(vm_any_generic::Print)]
+fn Print();
+
+fn Escape() -> any {
+    return Make();
+}
+
+fn Entry() -> i32 {
+    mut round = 0;
+    while (round < 30) {
+        let record = Buffer<i32>([1, 2, 3], Token());
+        mut boxed: any = record;
+        let alias: any = boxed;
+        let echoed = Echo(boxed);
+        if (!(echoed is Buffer<i32, 3>) or echoed is Buffer<f64, 2> or !Same(ref boxed, ref boxed)) {
+            return 1;
+        }
+        Mutate(boxed);
+        if ((alias fit Buffer<i32>).values[0usize] != 11 or record.values[0usize] != 1 or
+            Hidden<Buffer<i32>>(ref echoed) != 18 or (echoed fit Buffer<i32>).token != Token()) {
+            return 2;
+        }
+        Replace(ref boxed);
+        if (!(boxed is Buffer<f64, 2>) or (boxed fit Buffer<f64, 2>).values[1usize] != 2.5f64 or
+            Hidden<Buffer<f64, 2>>(ref boxed) != 73 or !(alias is Buffer<i32>)) {
+            return 3;
+        }
+        let empty: any = Buffer<i32, 0>([], Token());
+        let specialized: any = Buffer<i32, 4>([1, 2, 3, 4], 29, Token());
+        let marker: any = Marker<string, text>(31, Token());
+        let emptyMarker: any = Empty();
+        if ((Echo(empty) fit Buffer<i32, 0>).values.Count() != 0usize or
+            Hidden<Buffer<i32, 0>>(ref empty) != 17 or
+            (Echo(specialized) fit Buffer<i32, 4>).bonus != 29 or
+            Hidden<Buffer<i32, 4>>(ref specialized) != 27 or
+            (Echo(marker) fit Marker<string, text>).tag != 31 or
+            Hidden<Marker<string, text>>(ref marker) != 2 or HiddenEmpty(ref emptyMarker) != 0 or
+            (emptyMarker fit Marker).tag != 9) {
+            return 4;
+        }
+        let nested: any = Nested<i32, 3>(record, [record, record]);
+        let fitted = Echo(nested) fit Nested<i32, 3>;
+        if (fitted.value.values[2usize] != 3 or fitted.copies[1usize].token != Token()) {
+            return 5;
+        }
+        mut records: Buffer<i32>[] = [record];
+        let arrayCopy = EchoArray(records);
+        let borrowed: view i32 = ref records[0usize].values[0usize];
+        if (arrayCopy[0usize].values[0usize] != 101 or records[0usize].values[0usize] != 1 or
+            ArrayHidden(ref arrayCopy) != 117 or !SameArray(ref records, ref records)) {
+            return 6;
+        }
+        UpdateArray(ref records);
+        if (deref borrowed != 11 or ArrayHidden(ref records) != 18) {
+            return 7;
+        }
+        let arrayAny: any = records;
+        GrowAny(arrayAny);
+        let grown = Echo(arrayAny) fit Buffer<i32>[];
+        if (grown.Count() != 2usize or grown[1usize].values[0usize] != 41 or
+            grown[1usize].token != Token() or records.Count() != 1usize) {
+            return 8;
+        }
+        mut dictionary: Dict<string, Buffer<i32>> = { "local": record };
+        let dictionaryCopy = EchoMap(dictionary);
+        if (dictionaryCopy["local"].values[0usize] != 101 or dictionary["local"].values[0usize] != 1 or
+            MapHidden(ref dictionaryCopy) != 117 or !SameMap(ref dictionary, ref dictionary)) {
+            return 9;
+        }
+        UpdateMap(ref dictionary);
+        if (dictionary["local"].values[0usize] != 11 or MapHidden(ref dictionary) != 18) {
+            return 10;
+        }
+        let mapAny: any = dictionary;
+        GrowMapAny(mapAny);
+        let grownMap = Echo(mapAny) fit Dict<string, Buffer<i32>>;
+        if (!grownMap.ContainsKey("native") or grownMap["native"].values[2usize] != 53 or
+            grownMap["native"].token != Token() or dictionary.ContainsKey("native")) {
+            return 11;
+        }
+        let escaped = Escape();
+        if ((escaped fit Buffer<i32>).values[0usize] != 31 or Hidden<Buffer<i32>>(ref escaped) != 91) {
+            return 12;
+        }
+        round += 1;
+    }
+    Print();
+    return 0;
+}

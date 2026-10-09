@@ -8,19 +8,9 @@
 
 namespace wio::codegen
 {
-    std::string WirNativePodEmitter::emit(const wir::lowered::Module& module, const WirModuleEmitter::TypeSpelling& cpp)
+    std::vector<wir::TypeId> WirNativePodEmitter::eligibleTypes(const wir::lowered::Module& module)
     {
         using namespace wir;
-        std::ostringstream out;
-        const auto identity = [&](TypeId id)
-        {
-            for (const auto& reflected : module.contract.reflection)
-                if (reflected.type == id)
-                    return reflected.stableTypeId;
-            return stableModuleHash(nativeAbiTypeKey(module.types, id));
-        };
-        const auto codec = [&](TypeId id)
-        { return "wio::wir_backend::abi::Codec<" + cpp(id) + ", " + std::to_string(identity(id)) + "ULL>"; };
         const auto concreteArgument = [&](auto&& self, TypeId id, unsigned depth) -> bool
         {
             const auto* type = module.types.tryGet(id);
@@ -71,6 +61,27 @@ namespace wio::codegen
                 std::ranges::find(types, id) != types.end())
                 continue;
             types.push_back(id);
+        }
+        return types;
+    }
+
+    std::string WirNativePodEmitter::emit(const wir::lowered::Module& module, const WirModuleEmitter::TypeSpelling& cpp)
+    {
+        using namespace wir;
+        std::ostringstream out;
+        const auto identity = [&](TypeId id)
+        {
+            for (const auto& reflected : module.contract.reflection)
+                if (reflected.type == id)
+                    return reflected.stableTypeId;
+            return stableModuleHash(nativeAbiTypeKey(module.types, id));
+        };
+        const auto codec = [&](TypeId id)
+        { return "wio::wir_backend::abi::Codec<" + cpp(id) + ", " + std::to_string(identity(id)) + "ULL>"; };
+        const auto types = eligibleTypes(module);
+        for (const auto id : types)
+        {
+            const auto& type = module.types.get(id);
             const auto name = "_native_pod_" + std::to_string(id.value());
             out << "using " << name << " = " << cpp(id) << ";\n";
             for (const auto& field : type.fields)

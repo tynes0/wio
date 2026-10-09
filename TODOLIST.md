@@ -828,8 +828,19 @@ Rider, and CLion are defined in
    rejection and 30 rounds of exactly-once lifecycle checks. This does not
    qualify std::Box, arbitrary nullable/nested Any payloads or Any containers.
    The new object-Any gate passed locally on Windows (1/1, 25.29 seconds).
+   Concrete native POD Any/array/dictionary adapters now reuse physical-layout
+   eligibility instead of rejecting generic arguments. Type/const/default,
+   zero-extent, selected specialization, concrete variadic/empty-pack and nested
+   POD shapes preserve hidden native state and producer-library leases. Open
+   parameters and non-POD fields remain excluded. A focused 30-round C++/VM/host
+   gate checks shared Any mutation, ref replacement, copy isolation, aliases,
+   borrowed field updates, adapter selection and final library release. Nested
+   generic construction also fixes stale type-table pointers in Typed WIR
+   contextual conversion; no format change or broad native closure is implied.
+   The new generic-POD Any/container gate passed locally on Windows
+   (1/1, 30.78 seconds).
    Remaining native parity work includes broader VM-created object signatures,
-   std::Box and nullable/generic POD any payloads, any-bearing containers,
+   std::Box and arbitrary nullable any payloads, any-bearing containers,
    alias identity canonicalization; POD/object/container/nullable and
    ref/view callback signatures; consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See

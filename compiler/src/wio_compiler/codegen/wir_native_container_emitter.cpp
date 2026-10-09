@@ -1,5 +1,6 @@
 #include "wio/codegen/wir_native_container_emitter.h"
 #include "wio/codegen/wir_native_object_emitter.h"
+#include "wio/codegen/wir_native_pod_emitter.h"
 #include "wio/wir/native_abi_types.h"
 
 #include <algorithm>
@@ -12,6 +13,8 @@ namespace wio::codegen
                                                 const WirModuleEmitter::TypeSpelling& cpp)
     {
         using namespace wir;
+        std::set<TypeId> podTypes;
+        bool podsCollected = false;
         const auto supported = [&](auto&& self, TypeId id, unsigned depth) -> bool
         {
             const auto* type = module.types.tryGet(id);
@@ -38,9 +41,22 @@ namespace wio::codegen
                                                                            key.nominalKind == NominalKind::Flagset));
                 return keySupported && self(self, type->arguments.back(), depth + 1);
             }
-            return type->kind == TypeKind::Named && type->arguments.empty() &&
-                   (type->nominalKind == NominalKind::Enum || type->nominalKind == NominalKind::Flagset ||
-                    type->nominalRepresentation == NominalRepresentation::NativePod);
+            if (type->kind != TypeKind::Named)
+                return false;
+            if (type->arguments.empty() &&
+                (type->nominalKind == NominalKind::Enum || type->nominalKind == NominalKind::Flagset))
+                return true;
+            if (type->nominalRepresentation != NominalRepresentation::NativePod)
+                return false;
+            if (!podsCollected)
+            {
+                // Do not scan physical POD layouts for modules whose native
+                // Any/container boundaries never need a POD adapter.
+                const auto nativePods = WirNativePodEmitter::eligibleTypes(module);
+                podTypes.insert(nativePods.begin(), nativePods.end());
+                podsCollected = true;
+            }
+            return podTypes.contains(id);
         };
         std::set<TypeId> sequences;
         std::set<TypeId> dictionaries;

@@ -921,3 +921,19 @@ add_test(
 )
 wio_test_labels(wio_vm_native_object_any interop vm native native-object any generic differential release-gate)
 set_tests_properties(wio_vm_native_object_any PROPERTIES TIMEOUT 600)
+
+add_test(
+    NAME wio_vm_native_any_generic
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_any_generic.wio"
+        "-DWIO_EXPECTED_OUTPUT=native-any-generic-ok:30"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-any-generic"
+        "-DWIO_GENERIC_ANY_EXECUTABLE=$<TARGET_FILE:wio_vm_native_any_generic_test>"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_any_generic_test.cmake"
+)
+wio_test_labels(wio_vm_native_any_generic interop vm native any generic container differential release-gate)
+set_tests_properties(wio_vm_native_any_generic PROPERTIES TIMEOUT 600)

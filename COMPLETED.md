@@ -1312,3 +1312,21 @@ here as historical evidence rather than active work:
       The new focused Windows gate passed (1/1, 25.29 seconds).
       Broader nullable/Box/container/callback/async contracts remain open;
       this does not close native parity or claim a full-suite/Linux pass.
+
+## VM Native Concrete Generic POD Any and Containers
+
+- [x] Shared physical native POD eligibility between POD, Any, dynamic array
+      and dictionary producer adapters. Concrete generic arguments no longer
+      disqualify an otherwise supported layout; open/non-POD storage still does.
+- [x] Qualified type/const/default/zero-extent and selected-specialization shapes,
+      concrete variadic/empty packs, unused template types and nested POD fields.
+      Native hidden state, specialization identity and value/ref semantics remain
+      consistent between C++ and VM execution.
+- [x] Added a focused 30-round differential fixture and live-host selection/code-
+      lease checks, including escaped Any/POD/pointer/backing-only ownership.
+- [x] Fixed contextual Typed WIR conversion's stale destination pointer after
+      recursive generic expression building grows the interned type table.
+      Arbitrary nullable/Any-bearing/object container, Box and callback/async
+      contracts remain separate work; no broad native closure is claimed.
+      The new focused Windows gate passed (1/1, 30.78 seconds); no full-suite or
+      local Linux pass is claimed.
