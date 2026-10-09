@@ -232,23 +232,45 @@ template <std::uint64_t Id> struct Codec<runtime::Text, Id>
         WioNativeAbiValue v; v.kind = WIO_NATIVE_ABI_TEXT_UTF32; v.typeId = Id;
         v.flags = WIO_NATIVE_ABI_VALUE_OWNED;
         v.payload.slice = {box->value.data(), box->value.size() * sizeof(std::uint32_t)};
-        v.owner = {box, &Storage::ops, 1}; return v;
+        v.owner = {box, &Storage::ops, 1};
+        return v;
     }
 };
 
-template<class T, std::uint64_t Id> struct Codec<runtime::Ref<T>, Id> {
+// Exact transport remains independently addressable by generated polymorphic
+// codecs. Its operations identify the concrete pointer/ownership representation.
+template <class T, std::uint64_t Id> struct ExactObjectCodec
+{
     inline static const WioNativeAbiHandleOps ops{WIO_NATIVE_ABI_VERSION, 0,
-        [](void* p) noexcept { runtime::Ref<T> claim(static_cast<T*>(p)); (void)claim.Detach(); },
-        [](void* p) noexcept { if (p) runtime::RefDeleter<T>::Execute(static_cast<T*>(p)); },
-        [](const void*) noexcept { return Id; }};
-    static runtime::Ref<T> read(const WioNativeAbiValue& v) {
+                                                  [](void* p) noexcept
+                                                  {
+                                                      runtime::Ref<T> claim(static_cast<T*>(p));
+                                                      (void)claim.Detach();
+                                                  },
+                                                  [](void* p) noexcept
+                                                  {
+                                                      if (p)
+                                                          runtime::RefDeleter<T>::Execute(static_cast<T*>(p));
+                                                  },
+                                                  [](const void*) noexcept { return Id; }};
+    static runtime::Ref<T> read(const WioNativeAbiValue& v)
+    {
         require(v.kind == WIO_NATIVE_ABI_OBJECT && v.typeId == Id && v.payload.handle.ops == &ops);
         return runtime::Ref<T>(static_cast<T*>(v.payload.handle.state));
     }
-    static WioNativeAbiValue write(runtime::Ref<T> input) {
-        WioNativeAbiValue v; v.kind = WIO_NATIVE_ABI_OBJECT; v.typeId = Id; v.flags = WIO_NATIVE_ABI_VALUE_OWNED;
-        v.payload.handle = {input.Detach(), &ops, 1}; return v;
+    static WioNativeAbiValue write(runtime::Ref<T> input)
+    {
+        WioNativeAbiValue v;
+        v.kind = WIO_NATIVE_ABI_OBJECT;
+        v.typeId = Id;
+        v.flags = WIO_NATIVE_ABI_VALUE_OWNED;
+        v.payload.handle = {input.Detach(), &ops, 1};
+        return v;
     }
+};
+
+template <class T, std::uint64_t Id> struct Codec<runtime::Ref<T>, Id> : ExactObjectCodec<T, Id>
+{
 };
 
 // Nullable objects keep the ordinary object handle and type identity. Null is

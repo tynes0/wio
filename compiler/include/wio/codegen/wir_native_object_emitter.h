@@ -22,6 +22,11 @@ namespace wio::codegen
         // suppression, but do not necessarily need materialization adapters.
         [[nodiscard]] static std::set<wir::TypeId> hostedHierarchyTypes(const wir::lowered::Module& module,
                                                                         const std::set<wir::TypeId>& objects);
+        // Emit before any function instantiates native codecs. Views preserve
+        // concrete wire identity and use checked generated C++ upcasts.
+        [[nodiscard]] static std::string emitCodecs(const wir::lowered::Module& module,
+                                                   const std::set<wir::TypeId>& objects,
+                                                   const WirModuleEmitter::TypeSpelling& cpp);
         [[nodiscard]] static std::string emit(const wir::lowered::Module& module, const std::set<wir::TypeId>& objects,
                                               const WirModuleEmitter::TypeSpelling& cpp,
                                               const MethodSpelling& legacyMethod);

@@ -1506,3 +1506,78 @@ object-sidecar-v1 and WIOB 1.1 are unchanged. Only the new focused Windows gate
 was run; no full-suite or Linux result is claimed. The native sprint remains open.
 
 The final hierarchy/alias gate passed locally on Windows (1/1, 16.35 seconds).
+
+## By-value hosted Base/interface ABI round trips
+
+Qualified VM-created objects can now cross free-native parameters and results
+declared as a Wio base object or implemented interface, including nullable
+handles. This extends the concrete hierarchy slice above. Wio's explicit `fit`
+conversion rule is unchanged; this does not add implicit subtype coercion.
+
+```wio
+[Native, CppName(engine::EchoBase)]
+fn EchoBase(value: Base) -> Base;
+
+[Native, CppName(engine::EchoReader)]
+fn EchoReader(value: IRead) -> IRead;
+
+let leaf = Leaf();
+let base = EchoBase(leaf fit Base);
+let reader = EchoReader(leaf fit IRead);
+// Both returned handles still identify the same concrete Leaf.
+if (base is Leaf) {
+    let recovered = base fit Leaf;
+    recovered.Set(23);
+}
+```
+
+Boundary discovery walks a reverse inheritance graph to include qualified
+concrete descendants even when no free-native declaration names those concrete
+types. Abstract interfaces receive view codecs, not materialization adapters.
+Whole-surface proxy restrictions are still applied to every concrete candidate.
+Unrelated types are not included merely because an object boundary exists.
+
+The wire continues to identify the concrete object, not the static Base/interface
+view. Generated codecs validate the concrete producer handle operations before
+upcasting its C++ Ref. Result encoding selects the most-derived qualified
+concrete transport; it does not allocate a second object box, retag a Derived
+pointer with a Base codec, or copy base fields. Exact-object transport remains a
+separate `ExactObjectCodec` so polymorphic forwarding cannot recurse into its
+own view codec. Codec definitions precede function/sidecar instantiations.
+
+The VM checks cached concrete-owner layout membership against the declared
+object/interface, selects the concrete adapter, and uses its existing host
+recovery. Concrete stable ids have an indexed adapter lookup. The recovered
+Value retains its dynamic aggregate type and original intrusive identity; the
+weak proxy cache remains keyed by that identity rather than by each static view.
+Non-null object decoding does not scan the reflection inventory for its static
+view. Null remains tagged void with the nullable declaration's identity when
+present, never a fabricated non-null object handle.
+
+Native code can retain a Base Ref and an interface Ref beyond the caller's
+lexical scope. These keep the same hosted object alive; releasing one must not
+run lifecycle bodies while the other remains. Final release follows the normal
+retired-host cleanup path and tears down the concrete hierarchy once.
+
+`wio_vm_native_object_polymorphic` compares generated C++ and VM CLI execution
+over 30 rounds of Base/interface and nullable round trips, dynamic type tests,
+downcasts, shared pointer identity, interface writes, unrelated interface
+implementations, null results and native-held claims. The live host verifies
+unchanged VM identity/type, unchanged concrete wire operations/storage, virtual
+dispatch, rejection of wrong siblings and incompatible native results, a missing
+concrete adapter, and a forged typeId/operations pairing. The isolated producer
+wire checks use a qualification host that explicitly owns hierarchy cleanup.
+
+This slice is by-value transport of qualified hosted objects. Polymorphic
+`ref/view` handle-cell rebinding and borrowed results need their own alias and
+lifetime qualification. A returned producer-owned foreign subclass without a
+recoverable VM host is rejected instead of silently becoming a sliced VM base;
+existing exact foreign-object handling is unchanged. Cross-producer operation
+identity, broader signatures, foreign field synchronization, SDK routing,
+callbacks and async ownership remain separate work. Native wire-v2,
+object-sidecar-v1 and WIOB 1.1 layouts are unchanged; older producers without
+these codecs do not gain polymorphic support automatically. Only the new focused
+Windows gate was run; no full-suite or Linux pass is claimed.
+
+The polymorphic gate passed locally on Windows (1/1, 12.53 seconds), including
+generated C++, actual VM CLI and the live producer/host checks.

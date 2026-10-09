@@ -271,6 +271,8 @@ namespace wio::codegen
                     emitStructuralAliases();
                 }
                 cppTypeCacheEnabled_ = true;
+                output_ << WirNativeObjectEmitter::emitCodecs(module_, nativeProxyTypes_,
+                                                              [this](TypeId id) { return cppType(id); });
                 {
                     common::profiling::Scope scope("Backend.Cpp.EmitReflection");
                     output_ << WirReflectionEmitter::traits(module_, [this](TypeId id) { return cppType(id); });

@@ -166,6 +166,7 @@ namespace wio::codegen
     std::set<wir::TypeId> WirNativeObjectEmitter::eligibleTypes(const wir::lowered::Module& module)
     {
         std::set<TypeId> candidates;
+        std::set<TypeId> boundaries;
         std::vector<TypeId> pending;
         const auto collect = [&](TypeId id)
         {
@@ -178,10 +179,39 @@ namespace wio::codegen
         for (const auto& declaration : module.functions)
             if (declaration.nativeBinding && declaration.genericParameters.empty())
             {
+                const auto boundary = [&](TypeId id)
+                {
+                    if (const auto object = nativeAbiObjectType(module.types, id))
+                        boundaries.insert(object);
+                    collect(id);
+                };
                 for (const auto& parameter : declaration.nativeBinding->parameters)
-                    collect(parameter.type);
-                collect(declaration.nativeBinding->result.type);
+                    boundary(parameter.type);
+                boundary(declaration.nativeBinding->result.type);
             }
+        // A Base/interface-only boundary still needs concrete descendant
+        // adapters. Never materialize an abstract interface placeholder.
+        if (boundaries.empty())
+            return {};
+        std::vector<std::vector<TypeId>> descendants(module.types.size());
+        for (std::uint32_t index = 0; index < module.types.size(); ++index)
+        {
+            const TypeId id{index};
+            const auto& type = module.types.get(id);
+            if (type.kind == TypeKind::Named)
+                for (const auto base : type.baseTypes)
+                    if (module.types.tryGet(base))
+                        descendants[base.value()].push_back(id);
+        }
+        std::set<TypeId> family = boundaries;
+        std::vector<TypeId> familyPending(boundaries.begin(), boundaries.end());
+        for (std::size_t index = 0; index < familyPending.size(); ++index)
+        {
+            collect(familyPending[index]);
+            for (const auto child : descendants[familyPending[index].value()])
+                if (family.insert(child).second)
+                    familyPending.push_back(child);
+        }
         const auto roots = candidates;
         // Method-only object dependencies may never appear in a free native
         // declaration. Discover the full signature closure before qualification.
@@ -275,10 +305,52 @@ namespace wio::codegen
         std::set<wir::TypeId> result = objects;
         std::vector<wir::TypeId> pending(objects.begin(), objects.end());
         for (std::size_t index = 0; index < pending.size(); ++index)
-            for (const auto base : module.types.get(pending[index]).baseTypes)
-                if (result.insert(base).second)
-                    pending.push_back(base);
+            if (const auto* type = module.types.tryGet(pending[index]))
+                for (const auto base : type->baseTypes)
+                    if (result.insert(base).second)
+                        pending.push_back(base);
         return result;
+    }
+
+    std::string WirNativeObjectEmitter::emitCodecs(const wir::lowered::Module& module,
+                                                   const std::set<wir::TypeId>& objects,
+                                                   const WirModuleEmitter::TypeSpelling& cpp)
+    {
+        if (objects.empty())
+            return {};
+        const auto hierarchy = hostedHierarchyTypes(module, objects);
+        std::vector<TypeId> ordered(hierarchy.begin(), hierarchy.end());
+        std::vector<std::set<TypeId>> ancestors(module.types.size());
+        for (const auto id : hierarchy)
+            ancestors[id.value()] = hostedHierarchyTypes(module, {id});
+        // Concrete leaf definitions precede any ancestor codec that calls them.
+        std::ranges::sort(ordered, [&](TypeId left, TypeId right)
+                          { return ancestors[left.value()].size() > ancestors[right.value()].size(); });
+        std::ostringstream out;
+        out << "namespace wio::wir_backend::abi {\n";
+        for (const auto id : ordered)
+        {
+            const auto stableId = identity(module, id);
+            out << "template<> struct Codec<" << cpp(id) << ", " << stableId << "ULL>"
+                << " : ExactObjectCodec<typename " << cpp(id) << "::element_type, " << stableId << "ULL> {\n"
+                << "    using Handle = " << cpp(id) << ";\n"
+                << "    using Exact = ExactObjectCodec<typename Handle::element_type, " << stableId << "ULL>;\n"
+                << "    static Handle read(const WioNativeAbiValue& value) {\n";
+            for (const auto child : ordered)
+                if (child != id && objects.contains(child) && ancestors[child.value()].contains(id))
+                    out << "        if (value.typeId == " << identity(module, child) << "ULL) return Handle(Codec<"
+                        << cpp(child) << ", " << identity(module, child) << "ULL>::read(value));\n";
+            out << "        return Exact::read(value);\n    }\n"
+                << "    static WioNativeAbiValue write(Handle value) {\n";
+            for (const auto child : ordered)
+                if (child != id && objects.contains(child) && ancestors[child.value()].contains(id))
+                    out << "        if (auto* concrete = dynamic_cast<typename " << cpp(child)
+                        << "::element_type*>(value.Get())) return Codec<" << cpp(child) << ", "
+                        << identity(module, child) << "ULL>::write(" << cpp(child) << "(concrete));\n";
+            out << "        return Exact::write(std::move(value));\n    }\n};\n";
+        }
+        out << "} // namespace wio::wir_backend::abi\n";
+        return out.str();
     }
 
     std::string WirNativeObjectEmitter::emit(const wir::lowered::Module& module, const std::set<wir::TypeId>& objects,

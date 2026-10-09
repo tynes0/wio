@@ -33,6 +33,7 @@ namespace
     bool failObjectFactory = false;
     int objectFactoryCallsBeforeFailure = 0;
     WioNativeAbiValue malformedBorrowOutput{};
+    WioNativeAbiValue polymorphicWrongResult{};
 
     void check(bool passed, const char* message)
     {
@@ -360,9 +361,20 @@ namespace
             ++context->released;
             // This qualification host explicitly owns lifecycle cleanup.
             // Automatic Machine-managed lifecycle remains a separate step.
-            const auto destructor = context->module.types[object.aggregateType()].destructor;
-            if (destructor != bc::InvalidIndex)
+            bridge::ObjectLayouts layouts;
+            std::string error;
+            if (!layouts.build(context->module, error))
+                return;
+            const auto* layout = layouts.get(object.aggregateType());
+            if (!layout)
+                return;
+            for (auto iterator = layout->constructionOwners.rbegin(); iterator != layout->constructionOwners.rend();
+                 ++iterator)
             {
+                const auto owner = *iterator;
+                const auto destructor = context->module.types[owner].destructor;
+                if (destructor == bc::InvalidIndex)
+                    continue;
                 const std::array arguments{object};
                 const auto result = context->machine->invoke(destructor, arguments);
                 if (!result.succeeded())
@@ -1096,6 +1108,144 @@ namespace
         return 0;
     }
 
+    int qualifyPolymorphic(const char* bytecode, const char* producer)
+    {
+        std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
+        const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        auto decoded = bc::decode(std::as_bytes(std::span{bytes.data(), bytes.size()}));
+        check(decoded.succeeded(), "polymorphic bytecode decode failed");
+        auto library = std::make_shared<Library>(std::filesystem::u8path(producer));
+        const auto getObjects = library->symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
+        const auto getRegistry = library->symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
+        check(getObjects && getRegistry && getObjects()->typeCount == 4,
+              "base/interface-only boundaries did not discover all concrete descendants");
+        const auto& api = *getObjects();
+        const auto& registry = *getRegistry();
+        wio::vm::Machine machine{decoded.module};
+        std::string error;
+        check(machine.loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+        const auto function = [&](const char* name)
+        {
+            const auto found = std::ranges::find_if(decoded.module.functions, [&](const auto& item)
+                                                    { return decoded.module.string(item.name) == name; });
+            check(found != decoded.module.functions.end(), "polymorphic entry missing");
+            return found->id;
+        };
+        const auto entry = machine.invoke(function("Entry"));
+        check(entry.succeeded() && entry.value().asSignedInteger() == 0, "polymorphic lifecycle/identity gate failed");
+        const auto made = machine.invoke(function("MakeLeaf"));
+        check(made.succeeded(), "leaf construction failed");
+        const std::array arguments{made.value()};
+        const auto recovered = machine.invoke(function("Roundtrip"), arguments);
+        check(recovered.succeeded() && recovered.value().aggregateType() == made.value().aggregateType() &&
+                  recovered.value().objectIdentity() == made.value().objectIdentity(),
+              "base-returning native roundtrip erased concrete type or changed VM identity");
+        const auto sibling = machine.invoke(function("MakeSibling"));
+        check(sibling.succeeded(), "sibling construction failed");
+        const std::array siblingArguments{sibling.value()};
+        const auto rejected = machine.invoke(function("Roundtrip"), siblingArguments);
+        check(!rejected.succeeded() && rejected.error().code == "WVM1223" &&
+                  rejected.error().message.find("not assignable") != std::string::npos,
+              "unrelated VM sibling was accepted as a native Base parameter");
+
+        const auto leafType = made.value().aggregateType();
+        std::vector<WioNativeObjectDescriptor> missing;
+        for (const auto& adapter : std::span{api.types, api.typeCount})
+        {
+            const auto reflected =
+                std::ranges::find(decoded.module.contract.reflection, adapter.typeId, &bc::Reflection::stableTypeId);
+            if (reflected != decoded.module.contract.reflection.end() && reflected->type != leafType)
+                missing.push_back(adapter);
+        }
+        const WioNativeObjectApi missingApi{WIO_NATIVE_OBJECT_VERSION, static_cast<std::uint32_t>(missing.size()),
+                                            missing.data()};
+        wio::vm::Machine missingMachine{decoded.module};
+        check(missingMachine.registerNativeRegistry(registry, missingApi, &error), error.c_str());
+        const auto missingResult = missingMachine.invoke(function("Roundtrip"), arguments);
+        check(!missingResult.succeeded() && missingResult.error().code == "WVM1223" &&
+                  missingResult.error().message.find("concrete object has no qualified") != std::string::npos,
+              "missing concrete adapter silently sliced the object to Base");
+
+        const auto proxy = [&](const char* name, const char* make)
+        {
+            auto context = std::make_shared<Context>();
+            context->module = decoded.module;
+            context->machine = std::make_shared<wio::vm::Machine>(context->module);
+            context->library = library;
+            for (const auto& reflected : context->module.contract.reflection)
+                if (context->module.string(reflected.logicalName) == name)
+                    context->objectType = &reflected;
+            check(context->objectType, "polymorphic proxy reflection missing");
+            check(context->machine->loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+            auto object = context->machine->invoke(function(make));
+            check(object.succeeded(), "proxy host construction failed");
+            auto* host = new Host{.context = context, .object = object.value()};
+            WioNativeAbiHandle claim{host, &operations, 19};
+            const WioNativeObjectHost token{.typeId = context->objectType->stableTypeId,
+                                            .objectId = 801,
+                                            .generation = 19,
+                                            .owner = claim,
+                                            .invoke = &dispatch};
+            const auto adapters = std::span{api.types, api.typeCount};
+            const auto adapter = std::ranges::find(adapters, token.typeId, &WioNativeObjectDescriptor::typeId);
+            check(adapter != adapters.end(), "concrete proxy adapter missing");
+            auto wire = std::make_unique<Wire>();
+            const auto status = adapter->create(&token, &wire->value, nullptr);
+            WioNativeAbiRelease(&claim);
+            check(status == WIO_NATIVE_ABI_OK, "concrete proxy materialization failed");
+            return wire;
+        };
+        auto leafWire = proxy("Leaf", "MakeLeaf");
+        auto siblingWire = proxy("Sibling", "MakeSibling");
+        for (const char* symbol :
+             {"vm_object_polymorphic::EchoBase", "vm_object_polymorphic::EchoReader",
+              "vm_object_polymorphic::EchoNullableBase", "vm_object_polymorphic::EchoNullableReader"})
+        {
+            Wire output;
+            check(call(registry, symbol, std::span{&leafWire->value, 1}, output.value) == WIO_NATIVE_ABI_OK &&
+                      output.value.typeId == leafWire->value.typeId &&
+                      output.value.payload.handle.state == leafWire->value.payload.handle.state &&
+                      output.value.payload.handle.ops == leafWire->value.payload.handle.ops,
+                  "generated base/interface codec retagged or reallocated a concrete proxy");
+        }
+        check(scalar(registry, "vm_object_polymorphic::ReadBase", std::span{&leafWire->value, 1}) == 137 &&
+                  scalar(registry, "vm_object_polymorphic::ReadReader", std::span{&leafWire->value, 1}) == 137,
+              "generated polymorphic thunk lost concrete virtual dispatch");
+        Wire invalid;
+        check(call(registry, "vm_object_polymorphic::EchoBase", std::span{&siblingWire->value, 1}, invalid.value) ==
+                      WIO_NATIVE_ABI_TYPE_MISMATCH &&
+                  invalid.value.kind == WIO_NATIVE_ABI_VOID,
+              "generated Base codec accepted an unrelated concrete wire");
+        auto forged = leafWire->value;
+        forged.payload.handle.ops = siblingWire->value.payload.handle.ops;
+        check(call(registry, "vm_object_polymorphic::EchoReader", std::span{&forged, 1}, invalid.value) ==
+                  WIO_NATIVE_ABI_TYPE_MISMATCH,
+              "polymorphic codec trusted typeId without matching concrete handle operations");
+
+        std::vector<WioNativeAbiFunctionDescriptor> badFunctions(registry.functions,
+                                                                 registry.functions + registry.functionCount);
+        for (auto& descriptor : badFunctions)
+            if (std::string_view(descriptor.nativeSymbol) == "vm_object_polymorphic::EchoBase")
+                descriptor.thunk = [](const WioNativeAbiValue*, std::uint64_t, WioNativeAbiValue* result,
+                                      WioNativeAbiFailure*) noexcept
+                {
+                    *result = polymorphicWrongResult;
+                    WioNativeAbiRetain(result->payload.handle);
+                    return WIO_NATIVE_ABI_OK;
+                };
+        const WioNativeAbiRegistry badRegistry{WIO_NATIVE_ABI_VERSION, static_cast<std::uint32_t>(badFunctions.size()),
+                                               badFunctions.data()};
+        wio::vm::Machine badMachine{decoded.module};
+        check(badMachine.registerNativeRegistry(badRegistry, api, &error), error.c_str());
+        polymorphicWrongResult = siblingWire->value;
+        const auto badResult = badMachine.invoke(function("Roundtrip"), arguments);
+        polymorphicWrongResult = {};
+        check(!badResult.succeeded() && badResult.error().code == "WVM1224" &&
+                  badResult.error().message.find("not assignable") != std::string::npos,
+              "VM accepted an incompatible concrete native result as Base");
+        return 0;
+    }
+
     int qualifyConcreteGenerics(const char* bytecode, const char* producer)
     {
         std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
@@ -1824,6 +1974,8 @@ int main(int argc, char** argv)
     {
         check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4 && std::string_view(argv[3]) == "polymorphic")
+            return qualifyPolymorphic(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "hierarchy")
             return qualifyHierarchy(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "concrete-generics")

@@ -1870,12 +1870,6 @@ namespace wio::vm
             type < program_->module->types.size() && program_->module->types[type].kind == TypeNullable;
         if (nullable)
             type = program_->module->types[type].arguments.front();
-        const auto adapter = layouts.objects.find(type);
-        if (adapter == layouts.objects.end())
-        {
-            error = "VM-created object has no qualified producer proxy adapter";
-            return false;
-        }
         if (object.kind() == Value::Kind::Null)
         {
             if (!nullable)
@@ -1885,8 +1879,23 @@ namespace wio::vm
             }
             output = {};
             output.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
-            output.typeId = adapter->second.typeId;
+            for (const auto& reflected : program_->module->contract.reflection)
+                if (reflected.type == type)
+                    output.typeId = reflected.stableTypeId;
             return true;
+        }
+        const auto concrete = object.aggregateType();
+        const auto* layout = program_->objectLayouts.get(concrete);
+        if (!object.objectIdentity() || !layout || !layout->offsets.contains(type))
+        {
+            error = "VM object is not assignable to the declared native object/interface type";
+            return false;
+        }
+        const auto adapter = layouts.objects.find(concrete);
+        if (adapter == layouts.objects.end())
+        {
+            error = "VM-created concrete object has no qualified producer proxy adapter";
+            return false;
         }
         if (!program_->nativeObjects)
         {
@@ -1917,7 +1926,7 @@ namespace wio::vm
                         program->nativeLibraries);
                 });
         }
-        const bool encoded = program_->nativeObjects->encode(object, type, adapter->second, output, error);
+        const bool encoded = program_->nativeObjects->encode(object, concrete, adapter->second, output, error);
         if (encoded && nullable)
             output.flags |= WIO_NATIVE_ABI_VALUE_NULLABLE;
         return encoded;
@@ -1933,20 +1942,33 @@ namespace wio::vm
         const bool nullable = type < module.types.size() && module.types[type].kind == TypeNullable;
         if (nullable)
             type = module.types[type].arguments.front();
-        const auto adapter = layouts.objects.find(type);
         if (value.kind == WIO_NATIVE_ABI_VOID)
         {
+            std::uint64_t declaredIdentity = 0;
+            for (const auto& reflected : module.contract.reflection)
+                if (reflected.type == type)
+                    declaredIdentity = reflected.stableTypeId;
             if (!nullable || value.flags != WIO_NATIVE_ABI_VALUE_NULLABLE || value.owner.state || value.owner.ops ||
-                (value.typeId && adapter != layouts.objects.end() && value.typeId != adapter->second.typeId))
+                (value.typeId && value.typeId != declaredIdentity))
                 return {{}, "native object null does not match its nullable declaration or wire contract"};
             return {Value::null(), {}};
         }
-        if (program_->nativeObjects && adapter != layouts.objects.end())
+        const auto concrete = layouts.objectTypes.find(value.typeId);
+        if (concrete != layouts.objectTypes.end())
         {
-            bool matched = false;
-            auto result = program_->nativeObjects->recover(value, type, adapter->second, matched);
-            if (matched)
-                return result;
+            const auto* layout = program_->objectLayouts.get(concrete->second);
+            if (!layout || !layout->offsets.contains(type))
+                return {{}, "native concrete object is not assignable to the declared object/interface result"};
+            if (program_->nativeObjects)
+            {
+                bool matched = false;
+                auto result = program_->nativeObjects->recover(value, concrete->second,
+                                                               layouts.objects.at(concrete->second), matched);
+                if (matched)
+                    return result;
+            }
+            if (concrete->second != type)
+                return {{}, "polymorphic native result has no recoverable VM host identity"};
         }
         return detail::decodeNativeValue(module, value, declaredType, 6, &layouts);
     }

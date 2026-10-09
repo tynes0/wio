@@ -49,6 +49,7 @@ namespace wio::vm::detail
         };
         std::unordered_map<std::uint32_t, AnyLayout> any;
         std::unordered_map<std::uint32_t, WioNativeObjectDescriptor> objects;
+        std::unordered_map<std::uint64_t, std::uint32_t> objectTypes;
     };
 
     struct NativePodProjection

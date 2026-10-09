@@ -34,6 +34,9 @@ namespace wio::vm::detail
             const auto& type = module.types[reflected->type];
             if (type.kind != 28 || type.nominalKind != 2)
                 return reject("native object descriptor does not describe a concrete VM object");
+            const auto [identity, unique] = candidate.objectTypes.emplace(descriptor.typeId, reflected->type);
+            if (!unique && identity->second != reflected->type)
+                return reject("native object stable identity names multiple concrete VM types");
             const auto [found, inserted] = candidate.objects.emplace(reflected->type, descriptor);
             const auto& previous = found->second;
             if (!inserted && (previous.typeId != descriptor.typeId || previous.flags != descriptor.flags ||

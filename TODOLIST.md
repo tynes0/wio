@@ -789,8 +789,19 @@ Rider, and CLion are defined in
    The hierarchy gate passed locally on Windows (1/1, 16.35 seconds), comparing
    normal generated C++/VM execution and exercising the live host. Constructor
    failure injection is VM-host qualification, not differential C++ coverage.
-   Polymorphic Base/interface-typed ABI parameters/results, field synchronization
-   and SDK/reflection routing remain pending; this does not close object parity.
+   Qualified hosted objects now cross by-value Base/interface native parameters
+   and results, including nullable handles. Concrete adapters are discovered
+   from base/interface-only boundaries. Generated codecs perform checked
+   producer-local upcasts while preserving concrete wire identity, handle
+   operations and storage; the VM recovers the original concrete object rather
+   than slicing it. Native-held base and interface claims keep one shared host
+   alive until final release. The new C++/VM/host gate covers 30 lifecycle rounds,
+   dynamic type tests/downcasts, shared identity, nullable/null round trips,
+   native retention, incompatible siblings/results, missing concrete adapters
+   and forged handle operations. Polymorphic ref/view cells and borrowed results,
+   producer-owned foreign subclass synchronization, field synchronization and
+   SDK/reflection routing remain pending; this does not close object parity.
+   The polymorphic gate passed locally on Windows (1/1, 12.53 seconds).
    Remaining native parity work includes broader VM-created object signatures,
    object/interface/Box and nullable/generic any payloads, any-bearing containers,
    alias identity canonicalization; POD/object/container/nullable and
