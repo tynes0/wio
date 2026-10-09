@@ -100,6 +100,10 @@ namespace wio::vm
         // Producer backing is shared with the boxed cell, not with fitted
         // value copies. This preserves native AnyCell identity across calls.
         [[nodiscard]] Value nativeAnyBacking() const;
+        // Only the final owning VM cell may detach its producer claim. Cleanup
+        // releases it before children so native proxy claims cannot postpone
+        // the last child's Wio destructor past the enclosing scope.
+        [[nodiscard]] Value takeNativeAnyBackingForCleanup();
         // First-writer installation; subsequent aliases keep the original cell.
         void setNativeAnyBacking(const Value& backing) const;
         [[nodiscard]] std::uint32_t strongReferenceCount() const noexcept;

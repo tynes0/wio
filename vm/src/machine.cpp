@@ -1463,6 +1463,18 @@ namespace wio::vm
             }
         }
 
+        if (uniqueStorage && value.kind() == Value::Kind::Any)
+        {
+            auto backing = value.takeNativeAnyBackingForCleanup();
+            if (!backing.isEmpty())
+            {
+                // Release producer proxies while the child graph is still
+                // live. Retired host roots then give up their object claims
+                // before recursive Wio cleanup tests for a final owner.
+                backing = {};
+                cleanupNativeObjects();
+            }
+        }
         std::vector<Value> children = value.takeOwnedChildrenForCleanup();
         for (auto child = children.rbegin(); child != children.rend(); ++child)
             cleanupValue(*child, primaryError);
@@ -5306,7 +5318,7 @@ namespace wio::vm
                             {
                                 std::uint8_t callbackMarshalling = 0;
                                 if (!detail::callbackValueMarshalling(callbackModule, signature[argumentIndex],
-                                                                       callbackMarshalling))
+                                                                      callbackMarshalling))
                                     return WIO_NATIVE_ABI_TYPE_MISMATCH;
                                 detail::NativeValueResult converted =
                                     detail::decodeNativeValue(callbackModule, callbackArguments[argumentIndex],

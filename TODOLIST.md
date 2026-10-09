@@ -879,8 +879,19 @@ Rider, and CLion are defined in
    asynchronous borrows and exported SDK ref/view results remain unqualified.
    Only the ten new focused tests were run on Windows: 10/10 passed in 18.32
    seconds total (C++/VM/live-host gate: 17.12 seconds).
+   Explicitly boxed Any-in-Any payloads now preserve outer/inner cells through
+   native boundaries. `is any` tests for a nested payload and `fit any` unwraps
+   one layer; ordinary Any assignment stays a shared-cell copy. The generated
+   producer emits the self-payload adapter even at container-only boundaries.
+   Final native-backed Any cleanup releases producer proxy claims before child
+   cleanup, preventing object destruction from slipping beyond scope exit.
+   A new 30-round C++/VM/live-host gate covers mutation/rebind, nested null,
+   Unicode/containers/POD/object payloads, native retention, shared-cell races,
+   bounded/cyclic decoding, partial failure and escaped child DLL leases.
+   Only the new focused Windows gate was run: 1/1 passed in 14.76 seconds
+   (14.83 seconds total); no full-suite or local Linux pass is claimed.
    Remaining native parity work includes broader VM-created object signatures,
-   std::Box, boxed Any-in-Any and broader foreign/container ownership,
+   std::Box and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and
    ref/view callback signatures; nullable borrowed payload lifetime contracts;
    consumed arguments. Native-only bridge pruning

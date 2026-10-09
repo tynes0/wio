@@ -1407,3 +1407,24 @@ here as historical evidence rather than active work:
       Only the ten new tests were run on Windows: 10/10 passed in 18.32 seconds
       (differential/live-host gate: 17.12 seconds). No full-suite or local Linux
       qualification is claimed.
+
+## Explicit Native Any-in-Any Payloads
+
+- [x] Emitted a self-payload Any adapter at every qualified native Any boundary,
+      including container-only signatures without AnyBox instructions. Outer
+      and inner producer cells remain distinct; wire/sidecar/bytecode versions
+      are unchanged.
+- [x] Enabled checked `is any`, `fit any` and pattern-bound extraction of a nested
+      Any layer without changing ordinary shared-cell Any assignment semantics.
+      Null and ordinary scalar boxes do not become identity casts.
+- [x] Preserved nested cell mutation/rebinding, boxed null, Unicode, containers,
+      hidden native POD state and hosted object retention. Final VM Any cleanup
+      releases native proxy backing before child cleanup, fixing delayed scope
+      destruction while preserving shared cells and destructor failure reporting.
+- [x] Added a focused C++/VM/live-host gate with 30 lifecycle rounds, bounded and
+      cyclic conversion rejection, partial-failure ownership, concurrent packing,
+      malformed registration and independent escaped child/backing DLL leases.
+      Native Step 8 remains open; std::Box, arbitrary ownership and callback/async
+      contracts remain separate work. Only the new focused Windows gate was run:
+      1/1 passed in 14.76 seconds (14.83 seconds total). No full-suite or local
+      Linux pass is claimed.

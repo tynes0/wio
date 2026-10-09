@@ -220,7 +220,10 @@
                 return false;
 
             if (isAnyType(resolvedType))
-                return false;
+                // Explicit native/SDK boxing can store another Any cell.
+                // `fit any` unwraps one layer; ordinary Any assignment remains
+                // a shared-cell copy, not implicit recursive boxing.
+                return true;
 
             if (resolvedType->kind() == TypeKind::Struct)
             {

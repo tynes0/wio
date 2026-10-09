@@ -739,6 +739,20 @@ slice is now available for:
   `payload fit std::Box<i32>`,
 - std-backed event/context helpers through `std::event`.
 
+Explicit native/SDK boxing may store another `any` as the payload. `value is any`
+tests for that nested layer (it is **not** true for every value whose variable
+type is `any`), and `value fit any` unwraps exactly one layer. Casting an ordinary
+scalar box or null to `any` fails the checked cast. Ordinary `any` assignment
+shares the existing cell; it does not introduce another boxing layer.
+
+```wio
+// Nest is a native function returning C++ Any::Box(value).
+let leaf: any = 7;
+let nested = Nest(leaf);
+let inner = nested fit any;
+// nested is any == true; leaf is any == false; inner fit i32 == 7.
+```
+
 For the wider runtime model and the current std-backed `std::heap::box<T>`
 wrapper, see
 [`WIO_RUNTIME_TYPE_MODEL.md`](./WIO_RUNTIME_TYPE_MODEL.md).

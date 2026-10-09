@@ -110,6 +110,10 @@ namespace wio::codegen
         }
         if (anyType.isValid())
         {
+            // Native producers can explicitly box an Any even if no Wio
+            // AnyBox instruction mentions it. Keep the outer cell distinct
+            // from its inner cell; copying Any must never flatten that layer.
+            anyPayloads.insert(anyType);
             for (const auto& function : module.functions)
                 for (const auto& block : function.blocks)
                     for (const auto& instruction : block.instructions)
@@ -119,10 +123,6 @@ namespace wio::codegen
                         {
                             auto payload = instruction.targetType;
                             const auto* type = module.types.tryGet(payload);
-                            // Any elements are supported inside containers;
-                            // a boxed Any-in-Any needs a distinct contract.
-                            if (type && type->kind == TypeKind::Any)
-                                continue;
                             if (type && type->kind == TypeKind::Nullable && type->arguments.size() == 1)
                             {
                                 // Nullable object/opaque handles use the same

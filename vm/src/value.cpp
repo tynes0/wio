@@ -1224,6 +1224,18 @@ namespace wio::vm
         scalar_.aggregate->nativeBacking = backing.scalar_.foreign;
     }
 
+    Value Value::takeNativeAnyBackingForCleanup()
+    {
+        if (kind_ != Kind::Any || strongReferenceCount() != 1)
+            return {};
+        std::scoped_lock lock{scalar_.aggregate->nativeBackingMutex()};
+        if (!scalar_.aggregate->nativeBacking)
+            return {};
+        Value result{Kind::RuntimeValue};
+        result.scalar_.foreign = std::exchange(scalar_.aggregate->nativeBacking, nullptr);
+        return result;
+    }
+
     Value Value::nativePodBacking() const
     {
         if (kind_ != Kind::Component || !scalar_.aggregate->nativeBacking)

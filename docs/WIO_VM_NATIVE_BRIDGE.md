@@ -224,7 +224,7 @@ to the existing CI matrix; a local Windows pass is not a Linux pass claim.
 
 This gate qualifies the implemented bridge; it does **not** assert that every
 native C++ operation is supported by the VM. The remaining boundaries include
-executable negative cases for local `any` and structured callbacks:
+executable negative cases for unsupported structural payloads and callbacks:
 
 - Native PODs with fields outside the qualified
   scalar/pointer/fixed-array/nested-POD adapter surface still need qualification.
@@ -233,11 +233,11 @@ executable negative cases for local `any` and structured callbacks:
   below, including overlapping aggregate/field/array-element references.
   A producer without the layout sidecar retains raw-POD round-trips but does not
   support local-component materialization (`WVM1223`) or ordinary field places.
-- VM-created `any`/objects are not interchangeable with foreign
-  runtime/object handles. Native factories and their foreign values work;
-  structural VM-to-producer materialization still needs adapters (`WVM1223`).
-  Dynamic arrays/dictionaries now use the optional container adapters described below; this
-  does not imply arbitrary runtime-value, nullable-wrapper or object conversion.
+- VM-created Any, supported dynamic containers and method-only hosted objects
+  use the sidecar adapters qualified below, including explicit Any-in-Any cells.
+  This does not imply arbitrary foreign object interchange, public-field
+  synchronization, std::Box, nullable borrow wrappers or callback conversion.
+  Unsupported materialization still rejects explicitly (`WVM1223`/`WVM1225`).
 - POD/object/container callback signatures, nullable callback signatures, and
   callback `ref`/`view` parameters need signature-specific type identities and
   borrow/copy-back plans. Scalar, enum/flagset, string, text, and void callbacks
@@ -1955,3 +1955,65 @@ Linux qualification.
 
 Only the ten new focused tests were run locally on Windows: 10/10 passed in
 18.32 seconds total; the C++/VM/live-host gate took 17.12 seconds.
+
+## Explicit nested Any payloads
+
+A native producer can return `wio::runtime::Any::Box(innerAny)` without losing
+the outer boxing layer in the VM. Every generated native Any boundary now emits
+an `AnyPayloadAdapter<Any, AnyId, AnyId>` descriptor, including boundaries found
+only through arrays/dictionaries and programs without an AnyBox instruction.
+The existing sidecar and wire-v2 codecs carry the inner producer handle;
+registration supports this self-edge without changing ABI or bytecode versions.
+
+```cpp
+wio::runtime::Any Nest(wio::runtime::Any value)
+{
+    return wio::runtime::Any::Box(std::move(value));
+}
+```
+
+```wio
+using cpp::header("my_any_bridge.h");
+[Native, CppName(Nest)]
+fn Nest(value: any) -> any;
+
+let leaf: any = 7;
+let nested = Nest(leaf);
+let inner = nested fit any;
+// nested is any: true; leaf is any: false; inner fit i32: 7.
+```
+
+`is any` checks for a boxed Any payload; `fit any` performs a checked extraction
+of one layer, including `is any fit inner` bindings. Null and ordinary scalar
+boxes fail extraction instead of becoming an identity cast. Ordinary Any copies
+continue to share the same cell, not automatically wrap it. An outer box holding
+a null Any is non-null, and extracting its payload yields null.
+
+Copies of the outer producer cell share its inner Any slot. Mutating the inner
+payload remains visible through other copies; replacing the inner slot preserves
+the outer cell while independently extracted old cells retain their old payload.
+VM type tests/casts refresh nested producer backing using the existing bounded
+decoding path. The bridge's depth limit applies to the whole conversion graph;
+excessively deep and cyclic producer graphs reject without leaking partial wire
+outputs. This is a bounded interop policy, not cycle collection for intrusive RC.
+
+Final VM Any cleanup now transfers and releases its producer backing before
+recursively releasing payload children. Retired hosted proxy roots relinquish
+their claims while the Wio child graph is still live, so a last object destructor
+runs at scope cleanup rather than at the next native-call retirement checkpoint.
+Still-shared VM Any cells cannot detach their backing. Native retention continues
+to keep the object alive, and normal destructor-failure reporting is preserved.
+
+The focused `wio_vm_native_nested_any` gate compares generated C++ and actual VM
+CLI execution over 30 rounds. It covers scalar/string/Unicode, boxed null,
+arrays/maps containing nested Any, hidden native POD state and hosted-object
+retention/exactly-once destruction. Live-host checks exercise VM-created nested
+payloads through generated thunks, checked-cast rejection, destructor failure,
+recovery after depth overflow, partial outputs, cyclic decoding, concurrent
+materialization, emitter closure and independent escaped child/backing DLL leases.
+
+This does not qualify std::Box, nullable borrowed payloads, arbitrary foreign
+ownership, container projections, consumed arguments or callback/async signatures.
+Native Step 8 remains open. Only the new focused gate was run locally on Windows;
+1/1 passed in 14.76 seconds (14.83 seconds total). No full-suite or local Linux
+qualification is claimed.
