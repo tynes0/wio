@@ -840,6 +840,8 @@ Limits remain explicit:
   Source-alias canonicalization/tagging remains pending.
 - Object/interface/Box, arbitrary nullable wrappers, generic POD payloads,
   nested `any` and any-bearing container adapters are not qualified here.
+  Qualified synchronous object/interface payloads are described separately
+  under "VM-created any object payloads" below.
   Native structured callbacks and consumed parameters remain separate work.
 - Producer code must not concurrently mutate the same cell during VM
   extraction. This does not introduce synchronization for native data races.
@@ -1646,3 +1648,66 @@ is run for this slice; no full-suite or Linux pass is implied.
 
 The gate passed locally on Windows (1/1, 20.30 seconds), including generated
 C++, actual VM CLI execution, selection checks and live host dispatch.
+
+## VM-created any object payloads
+
+Direct synchronous native `any`, `ref any` and `view any` boundaries now
+support payloads whose Wio object family passes whole-surface hosted-object
+qualification. This includes base/interface-typed payloads and concrete generic
+objects with type and const arguments. An `any`-only native signature discovers
+object adapters from module boxing, type-test and checked-cast instructions;
+it does not require a redundant direct native object parameter.
+
+```wio
+[Native, CppName(host::Echo)]
+fn Echo(value: any) -> any;
+[Native, CppName(host::Rebind)]
+fn Rebind(target: ref any, source: any);
+
+let leaf = Leaf();
+mut value: any = leaf fit IRead;
+let alias: any = value;
+let echoed = Echo(value);
+// Downcasts recover the same concrete Leaf, not an interface placeholder.
+let sameLeaf = (echoed fit Leaf) == leaf;
+Rebind(ref value, Sibling() fit IRead);
+let replaced = value is Sibling;
+let aliasStillLeaf = (alias fit Leaf) == leaf;
+```
+
+The producer cell keeps its exact static payload storage type (Leaf, Base or
+IRead). Its inner object wire still carries concrete Leaf identity and operations.
+Payload descriptors match the exact producer cell type rather than competing
+dynamic casts, so Base and interface adapters cannot both claim the same cell.
+Decoded objects reconnect to their original VM host. Native-held Any cells keep
+that host alive until their final release, and object mutation remains shared.
+
+Object conversion context is explicit and call-local; it is not installed as
+global state or retained by Any adapters. Registration requires the matching
+object contracts before accepting object payload descriptors. Missing adapters,
+forged concrete identities and incompatible producer operations fail instead of
+creating foreign/sliced stand-ins.
+
+Borrowed VM Any loads no longer acquire an owning register claim. Place writes
+transfer an owned Any value, and replacement releases the previous value.
+Owned `fit` operands are released after an independent owned cast result is
+created; reference-valued casts keep their source lifetime dependency. These
+rules keep lexical cleanup aligned with generated C++ instead of deferring it
+until frame teardown.
+
+The focused `wio_vm_native_object_any` gate compares generated C++ and actual VM
+CLI execution, then exercises the live producer from a C++ host. It covers 30
+rounds of concrete/base/interface payloads, type and const generic objects,
+shared mutation, ref/view cell identity, whole-value replacement, self-assignment,
+native retention, escaping values, missing object registration, forged wire
+identity and exactly-once derived/base/generic destruction.
+
+This does not qualify `std::Box<T>` payloads (the fixture's `Box` is an ordinary
+user-defined object), arbitrary nullable payloads, nested Any or Any/object-bearing
+containers, alias canonicalization, consumed arguments or async/callback
+ownership. Native Step 8 remains open. Wire-v2, Any-sidecar-v1, object-sidecar-v1
+and WIOB 1.1 formats are unchanged. Only the new focused Windows gate is run;
+no full-suite or local Linux pass is implied.
+
+The object-Any gate passed locally on Windows (1/1, 25.29 seconds), including
+generated C++, actual VM CLI execution and live-host negative/lifecycle checks.

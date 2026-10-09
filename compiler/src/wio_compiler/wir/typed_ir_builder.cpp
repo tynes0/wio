@@ -4042,13 +4042,19 @@ namespace wio::wir::typed
                 const ValueId operand = buildExpression(fit->operand, state);
                 if (!operand)
                     return {};
-                return appendValue(Instruction{.opcode = anyCast      ? Opcode::AnyCheckedCast
-                                                         : objectLike ? Opcode::CheckedCast
-                                                                      : Opcode::Convert,
-                                               .operands = {operand},
-                                               .conversionKind = ConversionKind::NumericFit,
-                                               .targetType = destinationTypeId,
-                                               .source = SourceSpan::at(expression->location())});
+                const auto converted = appendValue(Instruction{.opcode = anyCast      ? Opcode::AnyCheckedCast
+                                                                         : objectLike ? Opcode::CheckedCast
+                                                                                      : Opcode::Convert,
+                                                               .operands = {operand},
+                                                               .conversionKind = ConversionKind::NumericFit,
+                                                               .targetType = destinationTypeId,
+                                                               .source = SourceSpan::at(expression->location())});
+                // Owned cast results have their own claim. Do not keep an
+                // owning any/object temporary alive until function teardown.
+                // Borrow results still depend on the operand's lifetime.
+                if (result_.module_.types.get(destinationTypeId).kind != TypeKind::Reference)
+                    releaseOwnedTemporary(operand, expression.Get(), state);
+                return converted;
             }
             if (const auto* identifier = expression->as<Identifier>())
             {

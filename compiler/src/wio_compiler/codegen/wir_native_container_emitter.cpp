@@ -1,4 +1,5 @@
 #include "wio/codegen/wir_native_container_emitter.h"
+#include "wio/codegen/wir_native_object_emitter.h"
 #include "wio/wir/native_abi_types.h"
 
 #include <algorithm>
@@ -77,18 +78,23 @@ namespace wio::codegen
             collect(collect, function.nativeBinding->result.type, 0);
         }
         if (anyType.isValid())
+        {
+            const auto objects = WirNativeObjectEmitter::eligibleTypes(module);
+            const auto objectContracts = WirNativeObjectEmitter::hostedHierarchyTypes(module, objects);
             for (const auto& function : module.functions)
                 for (const auto& block : function.blocks)
                     for (const auto& instruction : block.instructions)
                         if ((instruction.opcode == lowered::Opcode::AnyBox ||
                              instruction.opcode == lowered::Opcode::AnyCheckedCast ||
                              instruction.opcode == lowered::Opcode::AnyTypeTest) &&
-                            supported(supported, instruction.targetType, 0) &&
+                            (supported(supported, instruction.targetType, 0) ||
+                             objectContracts.contains(instruction.targetType)) &&
                             module.types.get(instruction.targetType).kind != TypeKind::Nullable)
                         {
                             anyPayloads.insert(instruction.targetType);
                             collect(collect, instruction.targetType, 0);
                         }
+        }
         if (sequences.empty() && dictionaries.empty() && !anyType.isValid())
             return {};
         const auto identity = [&](TypeId id)

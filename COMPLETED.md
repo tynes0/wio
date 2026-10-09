@@ -1295,3 +1295,20 @@ here as historical evidence rather than active work:
       reversed/nested/array/scalar/pointer/alias/copy scenarios, plus a real
       capability-disabled registry rejection. Both new focused Windows gates
       passed (2/2, 15.25 seconds). No full-suite or local Linux pass is claimed.
+
+## VM Native Any Object Payloads
+
+- [x] Qualified direct synchronous Any/ref-Any/view-Any boundaries for hosted
+      object families, base/interface payloads and concrete type/const generic
+      objects. Any-only boundaries discover their required object adapters.
+- [x] Preserved exact producer payload cell types, concrete object wire identity,
+      shared mutation and VM host identity across native retention and returns.
+      Missing object registration and forged identities reject explicitly.
+- [x] Removed extra owning claims from borrowed Any loads and owned place
+      transfers; release overwritten Any values and owned fit temporaries at
+      their lexical cleanup points rather than function teardown.
+- [x] Added a focused generated-C++/VM/live-host gate with 30 lifecycle rounds,
+      rebinding, self-assignment, escaping values and negative ABI checks.
+      The new focused Windows gate passed (1/1, 25.29 seconds).
+      Broader nullable/Box/container/callback/async contracts remain open;
+      this does not close native parity or claim a full-suite/Linux pass.

@@ -171,7 +171,7 @@ namespace wio::vm::detail
 
     bool encodeNativeValue(const bytecode::Module& module, const Value& value, const std::uint32_t declaredType,
                            const std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error,
-                           const NativePodLayouts* layouts, const unsigned depth)
+                           const NativePodLayouts* layouts, const unsigned depth, const NativeObjectAccess* objects)
     {
         output = {};
         if (depth > 64)
@@ -183,7 +183,7 @@ namespace wio::vm::detail
         {
             const auto type = scalarType(module, declaredType);
             if (marshalling == 8 && type < module.types.size() && module.types[type].kind == TypeAny && layouts)
-                return packNativeAny(module, value, type, *layouts, output, error, depth);
+                return packNativeAny(module, value, type, *layouts, output, error, depth, objects);
             if (!isNullable(module, declaredType))
             {
                 error = "null VM value does not match a nullable native ABI declaration";
@@ -321,12 +321,14 @@ namespace wio::vm::detail
         case 8:
         {
             const bool object = marshalling == 6;
+            if (object && layouts && objects && value.objectIdentity())
+                return objects->encode(objects->state, value, declaredType, output, error, *layouts);
             if (!object && kind == TypeArray && value.kind() == Value::Kind::Array && layouts)
                 return packNativeSequence(module, value, type, *layouts, output, error, depth);
             if (!object && kind == TypeDictionary && value.kind() == Value::Kind::Dictionary && layouts)
                 return packNativeDictionary(module, value, type, *layouts, output, error, depth);
             if (!object && kind == TypeAny && value.kind() == Value::Kind::Any && layouts)
-                return packNativeAny(module, value, type, *layouts, output, error, depth);
+                return packNativeAny(module, value, type, *layouts, output, error, depth, objects);
             const std::uint64_t expected = stableTypeId(module, declaredType);
             if (value.kind() != (object ? Value::Kind::ForeignObject : Value::Kind::RuntimeValue) ||
                 value.aggregateType() != type || value.foreignTypeId() != expected || expected == 0)
@@ -372,7 +374,8 @@ namespace wio::vm::detail
 
     NativeValueResult decodeNativeValue(const bytecode::Module& module, const WioNativeAbiValue& value,
                                         const std::uint32_t declaredType, const std::uint8_t marshalling,
-                                        const NativePodLayouts* layouts, const unsigned depth)
+                                        const NativePodLayouts* layouts, const unsigned depth,
+                                        const NativeObjectAccess* objects)
     {
         if (depth > 64)
             return {{}, "native POD nesting exceeds the bridge depth limit"};
@@ -469,6 +472,8 @@ namespace wio::vm::detail
         case 8:
         {
             const bool object = marshalling == 6;
+            if (object && layouts && objects)
+                return objects->decode(objects->state, value, declaredType, *layouts);
             std::string typeError;
             const std::uint64_t expected = stableTypeId(module, declaredType);
             if (value.kind != (object ? WIO_NATIVE_ABI_OBJECT : WIO_NATIVE_ABI_RUNTIME_VALUE) ||
@@ -482,7 +487,7 @@ namespace wio::vm::detail
             if (!object && kind == TypeDictionary && layouts && layouts->dictionaries.contains(type))
                 return unpackNativeDictionary(module, value, type, *layouts, depth);
             if (!object && kind == TypeAny && layouts && layouts->any.contains(type))
-                return unpackNativeAny(module, value, type, *layouts, depth);
+                return unpackNativeAny(module, value, type, *layouts, depth, objects);
             return {object ? Value::foreignObject(type, expected, value.payload.handle)
                            : Value::runtimeValue(type, expected, value.payload.handle),
                     {}};

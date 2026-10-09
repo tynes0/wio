@@ -60,7 +60,8 @@ namespace wio::vm::detail
                                                       { return entry.stableTypeId == descriptor.typeId; });
             if (payload == module.contract.reflection.end())
                 continue;
-            if (!supportedNativeContainerValue(module, payload->type, candidate))
+            if (!supportedNativeContainerValue(module, payload->type, candidate) &&
+                !candidate.objectContracts.contains(payload->type))
                 return reject("native any payload requires unsupported structural materialization");
             const auto [found, inserted] = target.payloads.emplace(payload->type, descriptor);
             if (!inserted && (found->second.typeId != descriptor.typeId || found->second.pack != descriptor.pack ||
@@ -72,7 +73,8 @@ namespace wio::vm::detail
     }
 
     bool packNativeAny(const bytecode::Module& module, const Value& value, std::uint32_t type,
-                       const NativePodLayouts& layouts, WioNativeAbiValue& output, std::string& error, unsigned depth)
+                       const NativePodLayouts& layouts, WioNativeAbiValue& output, std::string& error, unsigned depth,
+                       const NativeObjectAccess* objects)
     {
         const auto found = layouts.any.find(type);
         if (found == layouts.any.end() || depth > 64)
@@ -112,7 +114,7 @@ namespace wio::vm::detail
             std::uint8_t marshalling = 0;
             if (!nativeValueMarshalling(module, value.anyType(), marshalling) ||
                 !encodeNativeValue(module, *source, value.anyType(), marshalling, payload.value, error, &layouts,
-                                   depth + 1))
+                                   depth + 1, objects))
                 return false;
             status = descriptor->second.pack(&payload.value, &packed.value, &failure);
         }
@@ -143,7 +145,8 @@ namespace wio::vm::detail
     }
 
     NativeValueResult unpackNativeAny(const bytecode::Module& module, const WioNativeAbiValue& value,
-                                      std::uint32_t type, const NativePodLayouts& layouts, unsigned depth)
+                                      std::uint32_t type, const NativePodLayouts& layouts, unsigned depth,
+                                      const NativeObjectAccess* objects)
     {
         const auto found = layouts.any.find(type);
         if (found == layouts.any.end() || depth > 64 || !validNativeContainerWire(value, found->second.typeId))
@@ -173,7 +176,8 @@ namespace wio::vm::detail
             std::uint8_t marshalling = 0;
             if (!nativeValueMarshalling(module, payloadType, marshalling))
                 return {{}, "native any payload has no native marshalling contract"};
-            auto decoded = decodeNativeValue(module, payload.value, payloadType, marshalling, &layouts, depth + 1);
+            auto decoded =
+                decodeNativeValue(module, payload.value, payloadType, marshalling, &layouts, depth + 1, objects);
             if (!decoded.succeeded())
                 return decoded;
             result = {Value::any(payloadType, std::move(decoded.value)), {}};

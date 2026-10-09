@@ -47,6 +47,8 @@ namespace wio::wir_backend::abi
                                       auto payload = Codec<T, PayloadId>::read(*value);
                                       if constexpr (std::is_same_v<T, void*>)
                                           *result = Codec<runtime::Any, Id>::write(runtime::Any::FromOpaque(payload));
+                                      else if constexpr (runtime::IsRuntimeRefTypeV<T>)
+                                          *result = Codec<runtime::Any, Id>::write(runtime::Any::FromObject(payload));
                                       else
                                           *result =
                                               Codec<runtime::Any, Id>::write(runtime::Any::Box(std::move(payload)));
@@ -68,6 +70,15 @@ namespace wio::wir_backend::abi
                                           if (any.IsOpaque())
                                           {
                                               *result = Codec<T, PayloadId>::write(any.AsOpaque());
+                                              *matched = true;
+                                          }
+                                      }
+                                      else if constexpr (runtime::IsRuntimeRefTypeV<T>)
+                                      {
+                                          using Object = typename T::element_type;
+                                          if (any.template IsObject<Object>())
+                                          {
+                                              *result = Codec<T, PayloadId>::write(any.template AsObject<Object>());
                                               *matched = true;
                                           }
                                       }

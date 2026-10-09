@@ -817,8 +817,19 @@ Rider, and CLion are defined in
    The polymorphic-reference gate passed locally on Windows (1/1, 20.30 seconds).
    Explicit covariant receiver borrows, free-native borrowed
    results and broader foreign ownership remain unqualified.
+   Direct synchronous native any/ref-any/view-any payloads now preserve
+   qualified concrete/base/interface object identity and concrete generic
+   specializations. Any-only signatures discover the required object adapters;
+   producer cells retain exact static payload shape while object wires retain
+   concrete identity. Borrowed Any loads and owned place transfers no longer
+   defer lexical cleanup. Owned fit temporaries release after owned casts.
+   The focused C++/VM/host gate covers shared mutation, replacement and
+   self-assignment, native retention, escaping values, missing/forged adapter
+   rejection and 30 rounds of exactly-once lifecycle checks. This does not
+   qualify std::Box, arbitrary nullable/nested Any payloads or Any containers.
+   The new object-Any gate passed locally on Windows (1/1, 25.29 seconds).
    Remaining native parity work includes broader VM-created object signatures,
-   object/interface/Box and nullable/generic any payloads, any-bearing containers,
+   std::Box and nullable/generic POD any payloads, any-bearing containers,
    alias identity canonicalization; POD/object/container/nullable and
    ref/view callback signatures; consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See

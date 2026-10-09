@@ -29,6 +29,7 @@ namespace wio::vm
     {
         struct NativePodLayouts;
         struct NativeValueResult;
+        struct NativeObjectAccess;
     } // namespace detail
     enum class ExecutorKind : std::uint8_t
     {
@@ -227,6 +228,7 @@ namespace wio::vm
                                               const detail::NativePodLayouts&);
         [[nodiscard]] detail::NativeValueResult decodeNativeObject(const WioNativeAbiValue&, std::uint32_t,
                                                                    const detail::NativePodLayouts&);
+        [[nodiscard]] detail::NativeObjectAccess nativeObjectAccess();
         [[nodiscard]] bool scheduleTask(const std::shared_ptr<ExecutionState>& state, ExecutorKind executor);
         void wakeTask(std::weak_ptr<ExecutionState> state, AsyncTaskState terminalState, const Value& result,
                       const ExecutionError& error);

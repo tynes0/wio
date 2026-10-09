@@ -8,8 +8,8 @@ namespace wio::vm::detail
                                       NativePodLayouts& layouts, std::string& error);
     [[nodiscard]] bool packNativeAny(const bytecode::Module& module, const Value& value, std::uint32_t type,
                                      const NativePodLayouts& layouts, WioNativeAbiValue& output, std::string& error,
-                                     unsigned depth);
+                                     unsigned depth, const NativeObjectAccess* objects = nullptr);
     [[nodiscard]] NativeValueResult unpackNativeAny(const bytecode::Module& module, const WioNativeAbiValue& value,
-                                                    std::uint32_t type, const NativePodLayouts& layouts,
-                                                    unsigned depth);
+                                                    std::uint32_t type, const NativePodLayouts& layouts, unsigned depth,
+                                                    const NativeObjectAccess* objects = nullptr);
 } // namespace wio::vm::detail

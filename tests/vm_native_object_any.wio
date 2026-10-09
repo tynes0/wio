@@ -1,0 +1,185 @@
+using cpp::header("vm_object_any_fixture.h");
+use std::attribute as attribute;
+
+interface IRead {
+    fn Read() -> i32;
+}
+
+[From(IRead)]
+object Base {
+    seed: i32 = 7;
+    public OnConstruct() {
+        Constructed(0);
+    }
+    OnDestruct() {
+        Destroyed(0);
+    }
+    public fn Read() -> i32 {
+        return self.seed;
+    }
+}
+
+[From(Base)]
+object Leaf {
+    value: i32 = 37;
+    public OnConstruct() {
+        Constructed(1);
+    }
+    OnDestruct() {
+        Destroyed(1);
+    }
+    public fn Read() -> i32 {
+        return self.value + 100;
+    }
+    public fn Set(value: i32) {
+        self.value = value;
+    }
+}
+
+[From(IRead)]
+object Sibling {
+    public OnConstruct() {
+        Constructed(2);
+    }
+    OnDestruct() {
+        Destroyed(2);
+    }
+    public fn Read() -> i32 {
+        return 19;
+    }
+}
+
+object Box<T, const Tag: usize = 5> {
+    value: T;
+    public OnConstruct(seed: T) {
+        self.value = seed;
+        Constructed(3);
+    }
+    OnDestruct() {
+        Destroyed(3);
+    }
+    public fn Read() -> T {
+        return self.value;
+    }
+    public fn TagValue() -> usize {
+        return Tag;
+    }
+}
+
+[Native, CppName(vm_object_any::Constructed)]
+fn Constructed(kind: i32);
+[Native, CppName(vm_object_any::Destroyed)]
+fn Destroyed(kind: i32);
+[Native, CppName(vm_object_any::Constructions)]
+fn Constructions(kind: i32) -> i32;
+[Native, CppName(vm_object_any::Destructions)]
+fn Destructions(kind: i32) -> i32;
+[Native, CppName(vm_object_any::Echo)]
+fn Echo(value: any) -> any;
+[Native, CppName(vm_object_any::IsObject)]
+fn IsObject(value: view any) -> bool;
+[Native, CppName(vm_object_any::Same)]
+fn Same(first: view any, second: ref any) -> bool;
+[Native, CppName(vm_object_any::Rebind)]
+fn Rebind(target: ref any, source: any);
+[Native, CppName(vm_object_any::Hold)]
+fn Hold(value: any);
+[Native, CppName(vm_object_any::Held)]
+fn Held() -> any;
+[Native, CppName(vm_object_any::Clear)]
+fn Clear();
+[Native, CppName(vm_object_any::Read), Instantiate(Leaf)]
+fn ReadLeaf<T>(value: view any) -> i32;
+[Native, CppName(vm_object_any::Read), Instantiate(Base)]
+fn ReadBase<T>(value: view any) -> i32;
+[Native, CppName(vm_object_any::Read), Instantiate(IRead)]
+fn ReadInterface<T>(value: view any) -> i32;
+[Native, CppName(vm_object_any::Read), Instantiate(Box<i32, 7>)]
+fn ReadBox<T>(value: view any) -> i32;
+[Native, CppName(vm_object_any::ReadString), Instantiate(Box<string>)]
+fn ReadStringBox<T>(value: view any) -> string;
+[Native, CppName(vm_object_any::Set), Instantiate(Leaf)]
+fn SetLeaf<T>(value: any, next: i32);
+[Native, CppName(vm_object_any::Print)]
+fn Print();
+[Native, CppName(vm_object_any::DumpCounts)]
+fn DumpCounts();
+
+fn Escape() -> any {
+    return Echo(Leaf());
+}
+
+fn SafePoint() -> i32 {
+    return 0;
+}
+
+fn Entry() -> i32 {
+    mut round = 0;
+    while (round < 30) {
+        {
+            let leaf = Leaf();
+            mut value: any = leaf;
+            let alias: any = value;
+            let echoed = Echo(value);
+            if (!IsObject(ref value) or !(echoed is Leaf) or (echoed fit Leaf) != leaf) {
+                return 1;
+            }
+            if (!Same(ref value, ref value) or ReadLeaf<Leaf>(ref value) != 137) {
+                return 2;
+            }
+            SetLeaf<Leaf>(echoed, 23);
+            if (leaf.Read() != 123 or (alias fit Leaf).Read() != 123) {
+                return 3;
+            }
+            let base: any = leaf fit Base;
+            let reader: any = leaf fit IRead;
+            if (ReadBase<Base>(ref base) != 123 or ReadInterface<IRead>(ref reader) != 123 or
+                (Echo(base) fit Leaf) != leaf or (Echo(reader) fit Leaf) != leaf) {
+                return 4;
+            }
+            let sibling = Sibling();
+            let replacement: any = sibling fit IRead;
+            Rebind(ref value, replacement);
+            if (!(value is Sibling) or (value fit Sibling) != sibling or
+                !(alias is Leaf) or (alias fit Leaf) != leaf) {
+                return 5;
+            }
+            mut assigned: any = leaf;
+            assigned = value;
+            assigned = assigned;
+            if (!(assigned is Sibling) or (assigned fit Sibling) != sibling or
+                (alias fit Leaf) != leaf) {
+                return 9;
+            }
+            let integer = Box<i32, 7>(41);
+            let text = Box<string>("wio-any");
+            let integerAny: any = integer;
+            let textAny: any = text;
+            if (ReadBox<Box<i32, 7>>(ref integerAny) != 41 or
+                ReadStringBox<Box<string>>(ref textAny) != "wio-any" or
+                (Echo(integerAny) fit Box<i32, 7>) != integer or
+                (Echo(integerAny) fit Box<i32, 7>).TagValue() != 7usize or
+                (Echo(textAny) fit Box<string>) != text) {
+                return 6;
+            }
+            Hold(reader);
+        }
+        {
+            let heldValue = Held();
+            if (Destructions(1) != round or ReadLeaf<Leaf>(ref heldValue) != 123) {
+                return 7;
+            }
+        }
+        Clear();
+        round += 1;
+        if (Constructions(0) != round or Destructions(0) != round or
+            Constructions(1) != round or Destructions(1) != round or
+            Constructions(2) != round or Destructions(2) != round or
+            Constructions(3) != round * 2 or Destructions(3) != round * 2) {
+            DumpCounts();
+            return 8;
+        }
+    }
+    Print();
+    return 0;
+}

@@ -1108,6 +1108,92 @@ namespace
         return 0;
     }
 
+    int qualifyObjectAny(const char* bytecode, const char* producer)
+    {
+        std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
+        const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
+        auto decoded = bc::decode(std::as_bytes(std::span{bytes.data(), bytes.size()}));
+        check(decoded.succeeded(), "object any bytecode decode failed");
+        Library library{std::filesystem::u8path(producer)};
+        const auto getObjects = library.symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
+        const auto getAny = library.symbol<WioGetNativeAnyApiFn>("WioGetNativeAnyApi");
+        const auto getRegistry = library.symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
+        check(getObjects && getAny && getRegistry && getObjects()->typeCount == 5,
+              "any-only boundaries lost concrete/generic object adapters");
+        const auto& registry = *getRegistry();
+        const auto& objects = *getObjects();
+        const auto& any = *getAny();
+        wio::vm::Machine machine{decoded.module};
+        std::string error;
+        check(machine.loadNativeLibrary(std::filesystem::u8path(producer), &error), error.c_str());
+        const auto function = [&](const char* name)
+        {
+            const auto found = std::ranges::find_if(decoded.module.functions, [&](const auto& item)
+                                                    { return decoded.module.string(item.name) == name; });
+            check(found != decoded.module.functions.end(), "object any entry missing");
+            return found->id;
+        };
+        const auto reflection = [&](const char* name) -> const bc::Reflection&
+        {
+            const auto found = std::ranges::find_if(decoded.module.contract.reflection, [&](const auto& item)
+                                                    { return decoded.module.string(item.logicalName) == name; });
+            check(found != decoded.module.contract.reflection.end(), "object any metadata missing");
+            return *found;
+        };
+        const auto entry = machine.invoke(function("Entry"));
+        if (!entry.succeeded())
+            throw std::runtime_error(entry.error().code + ": " + entry.error().message);
+        check(entry.value().asSignedInteger() == 0, "object any lifecycle/identity entry failed");
+        {
+            const auto escaped = machine.invoke(function("Escape"));
+            check(escaped.succeeded() && escaped.value().kind() == wio::vm::Value::Kind::Any &&
+                      escaped.value().anyType() == reflection("Leaf").type && escaped.value().anyPayload() &&
+                      escaped.value().anyPayload()->kind() == wio::vm::Value::Kind::Object &&
+                      escaped.value().anyPayload()->aggregateType() == reflection("Leaf").type,
+                  "native any decoded a foreign/sliced object instead of its VM host");
+        }
+        check(machine.invoke(function("SafePoint")).succeeded(), "object any cleanup safe point failed");
+        wio::vm::Machine missing{decoded.module};
+        check(!missing.registerNativeRegistry(registry, any, &error) &&
+                  error.find("unsupported structural materialization") != std::string::npos,
+              "object any accepted registration without qualified object adapters");
+
+        std::vector<WioNativeAnyPayloadDescriptor> payloads(any.payloads, any.payloads + any.payloadCount);
+        const auto leaf =
+            std::ranges::find(payloads, reflection("Leaf").stableTypeId, &WioNativeAnyPayloadDescriptor::typeId);
+        check(leaf != payloads.end(), "object any payload descriptor missing");
+        static WioNativeAnyReadFn originalRead;
+        static std::uint64_t forgedType;
+        originalRead = leaf->read;
+        forgedType = reflection("Sibling").stableTypeId;
+        leaf->read = [](const WioNativeAbiValue* value, WioNativeAbiValue* result, bool* matched,
+                        WioNativeAbiFailure* failure) noexcept
+        {
+            const auto status = originalRead(value, result, matched, failure);
+            if (status == WIO_NATIVE_ABI_OK && matched && *matched)
+                result->typeId = forgedType;
+            return status;
+        };
+        auto forgedAny = any;
+        forgedAny.payloads = payloads.data();
+        wio::vm::Machine forged{decoded.module};
+        check(forged.registerNativeRegistry(registry, objects, &error, &forgedAny), error.c_str());
+        const auto invalid = forged.invoke(function("Escape"));
+        check(!invalid.succeeded() && invalid.error().code == "WVM1224",
+              "forged object any payload escaped concrete type/operations validation");
+        check(forged.invoke(function("SafePoint")).succeeded(), "forged any cleanup failed");
+        for (std::int32_t index = 0; index < 4; ++index)
+        {
+            WioNativeAbiValue kind{};
+            kind.kind = WIO_NATIVE_ABI_I64;
+            kind.payload.signedInteger = index;
+            check(scalar(registry, "vm_object_any::Constructions", std::span{&kind, 1}) ==
+                      scalar(registry, "vm_object_any::Destructions", std::span{&kind, 1}),
+                  "object any final release lost or repeated Wio lifecycle");
+        }
+        return 0;
+    }
+
     void qualifyPolymorphicReferenceSelection()
     {
         using namespace wio::wir;
@@ -2199,6 +2285,8 @@ int main(int argc, char** argv)
     {
         check(argc == 3 || argc == 4, "object proxy qualification requires bytecode and producer paths");
         qualifySelection();
+        if (argc == 4 && std::string_view(argv[3]) == "object-any")
+            return qualifyObjectAny(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "polymorphic-references")
             return qualifyPolymorphicReferences(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "polymorphic")

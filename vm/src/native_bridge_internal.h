@@ -22,12 +22,23 @@ namespace wio::vm::detail
         }
     };
 
+    // Call-local access to hosted objects. Never retained by a producer or
+    // installed in shared layouts; Any payload conversion uses this machine.
+    struct NativeObjectAccess
+    {
+        void* state;
+        bool (*encode)(void*, const Value&, std::uint32_t, WioNativeAbiValue&, std::string&, const NativePodLayouts&);
+        NativeValueResult (*decode)(void*, const WioNativeAbiValue&, std::uint32_t, const NativePodLayouts&);
+    };
+
     [[nodiscard]] bool encodeNativeValue(const bytecode::Module& module, const Value& value, std::uint32_t declaredType,
                                          std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error,
-                                         const NativePodLayouts* layouts = nullptr, unsigned depth = 0);
+                                         const NativePodLayouts* layouts = nullptr, unsigned depth = 0,
+                                         const NativeObjectAccess* objects = nullptr);
     [[nodiscard]] NativeValueResult decodeNativeValue(const bytecode::Module& module, const WioNativeAbiValue& value,
                                                       std::uint32_t declaredType, std::uint8_t marshalling,
-                                                      const NativePodLayouts* layouts = nullptr, unsigned depth = 0);
+                                                      const NativePodLayouts* layouts = nullptr, unsigned depth = 0,
+                                                      const NativeObjectAccess* objects = nullptr);
     // Slice results must outlive the callback's ExecutionResult. This transfers
     // one producer-owned storage claim to the native caller (wire-v2 owner).
     [[nodiscard]] bool encodeOwnedNativeValue(const bytecode::Module& module, const Value& value,

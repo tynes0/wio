@@ -167,6 +167,7 @@ namespace wio::codegen
     {
         std::set<TypeId> candidates;
         std::set<TypeId> boundaries;
+        bool anyBoundary = false;
         std::vector<TypeId> pending;
         const auto collect = [&](TypeId id)
         {
@@ -181,6 +182,11 @@ namespace wio::codegen
             {
                 const auto boundary = [&](TypeId id)
                 {
+                    auto value = id;
+                    const auto* type = module.types.tryGet(value);
+                    if (type && type->kind == TypeKind::Reference && type->arguments.size() == 1)
+                        type = module.types.tryGet(type->arguments.front());
+                    anyBoundary |= type && type->kind == TypeKind::Any;
                     if (const auto object = nativeAbiObjectType(module.types, id))
                         boundaries.insert(object);
                     collect(id);
@@ -189,6 +195,18 @@ namespace wio::codegen
                     boundary(parameter.type);
                 boundary(declaration.nativeBinding->result.type);
             }
+        if (anyBoundary)
+            for (const auto& declaration : module.functions)
+                for (const auto& block : declaration.blocks)
+                    for (const auto& instruction : block.instructions)
+                        if (instruction.opcode == lowered::Opcode::AnyBox ||
+                            instruction.opcode == lowered::Opcode::AnyCheckedCast ||
+                            instruction.opcode == lowered::Opcode::AnyTypeTest)
+                        {
+                            if (const auto object = nativeAbiObjectType(module.types, instruction.targetType))
+                                boundaries.insert(object);
+                            collect(instruction.targetType);
+                        }
         // A Base/interface-only boundary still needs concrete descendant
         // adapters. Never materialize an abstract interface placeholder.
         if (boundaries.empty())

@@ -215,6 +215,7 @@ namespace wio::vm
         {
             Value value;
             bool initialized = false;
+            bool borrowedValue = false;
         };
 
         enum class FrameCompletion : std::uint8_t
@@ -1869,6 +1870,17 @@ namespace wio::vm
         return WIO_NATIVE_ABI_OK;
     }
 
+    detail::NativeObjectAccess Machine::nativeObjectAccess()
+    {
+        return {
+            this,
+            [](void* state, const Value& value, std::uint32_t type, WioNativeAbiValue& output, std::string& error,
+               const detail::NativePodLayouts& layouts)
+            { return static_cast<Machine*>(state)->encodeNativeObject(value, type, output, error, layouts); },
+            [](void* state, const WioNativeAbiValue& value, std::uint32_t type, const detail::NativePodLayouts& layouts)
+            { return static_cast<Machine*>(state)->decodeNativeObject(value, type, layouts); }};
+    }
+
     bool Machine::encodeNativeObject(const Value& object, std::uint32_t type, WioNativeAbiValue& output,
                                      std::string& error, const detail::NativePodLayouts& layouts)
     {
@@ -2287,11 +2299,11 @@ namespace wio::vm
             if (dictionaries &&
                 !detail::mergeNativeDictionaries(*program_->module, *dictionaries, *layouts, layoutError, false))
                 return reject(std::move(layoutError));
+            if (objects && !detail::mergeNativeObjects(*program_->module, *objects, *layouts, layoutError))
+                return reject(std::move(layoutError));
             if (!detail::validateNativeContainers(*program_->module, *layouts, layoutError))
                 return reject(std::move(layoutError));
             if (any && !detail::mergeNativeAny(*program_->module, *any, *layouts, layoutError))
-                return reject(std::move(layoutError));
-            if (objects && !detail::mergeNativeObjects(*program_->module, *objects, *layouts, layoutError))
                 return reject(std::move(layoutError));
         }
         for (Program::NativeFunction& addition : additions)
@@ -2858,16 +2870,21 @@ namespace wio::vm
             };
             const auto read = [&](const std::uint32_t id) -> const Value*
             {
-                return id < frame.registers.size() && frame.registers[id].initialized ? &frame.registers[id].value
-                                                                                      : nullptr;
+                if (id >= frame.registers.size() || !frame.registers[id].initialized)
+                    return nullptr;
+                const auto& slot = frame.registers[id];
+                if (!slot.borrowedValue)
+                    return &slot.value;
+                const auto* place = slot.value.asPlace();
+                return place && place->initialized ? &place->storedValue() : nullptr;
             };
             const auto readRegister = [&](const std::uint32_t id) -> Register*
             { return id < frame.registers.size() && frame.registers[id].initialized ? &frame.registers[id] : nullptr; };
-            const auto write = [&](const std::uint32_t id, Value value) -> bool
+            const auto write = [&](const std::uint32_t id, Value value, bool borrowedValue = false) -> bool
             {
                 if (id >= frame.registers.size())
                     return false;
-                frame.registers[id] = Register{std::move(value), true};
+                frame.registers[id] = Register{std::move(value), true, borrowedValue};
                 return true;
             };
             const auto storedValue = [](const Value* value) -> const Value*
@@ -3869,7 +3886,9 @@ namespace wio::vm
                     wire.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
                     wire.typeId = backing.foreignTypeId();
                     wire.payload.handle = backing.foreignHandle();
-                    auto refreshed = detail::unpackNativeAny(module, wire, backing.aggregateType(), *layouts, 0);
+                    const auto objects = nativeObjectAccess();
+                    auto refreshed =
+                        detail::unpackNativeAny(module, wire, backing.aggregateType(), *layouts, 0, &objects);
                     if (!refreshed.succeeded())
                         return fail("WVM1224", "Native any payload refresh failed: " + refreshed.error);
                     if (refreshed.value.kind() == Value::Kind::RuntimeValue)
@@ -4371,7 +4390,8 @@ namespace wio::vm
                     retainedBorrow = source->retainObject();
                 if (place->initialized &&
                     (source->kind() == Value::Kind::Object || source->kind() == Value::Kind::ObjectBorrow ||
-                     place->storedValue().kind() == Value::Kind::Object))
+                     place->storedValue().kind() == Value::Kind::Object || source->kind() == Value::Kind::Any ||
+                     place->storedValue().kind() == Value::Kind::Any))
                 {
                     // Null replacement is still a release of the old object.
                     // Protect a borrowed self-assignment before dropping it.
@@ -4385,10 +4405,10 @@ namespace wio::vm
                         return failWithStack(std::move(cleanupError));
                     }
                 }
-                if (source->kind() == Value::Kind::Object)
+                if (source->kind() == Value::Kind::Object || source->kind() == Value::Kind::Any)
                 {
                     // WIR place writes transfer an owned handle. Keeping an
-                    // extra SSA-register claim would defer the Wio destructor
+                    // extra SSA-register or Any-cell claim would defer the Wio destructor
                     // past its lexical release until the entire frame ends.
                     Register* sourceRegister = readRegister(instruction.operands[1]);
                     place->storedValue() = std::move(sourceRegister->value);
@@ -4421,6 +4441,15 @@ namespace wio::vm
                 if (!place || !place->initialized)
                     return fail("WVM1043", "Load requires an initialized place");
                 const auto& loaded = place->storedValue();
+                if (instruction.resultOwnership == 1 && instruction.resultType < module.types.size() &&
+                    module.types[instruction.resultType].kind == TypeAny)
+                {
+                    // A borrowed Any load is a live cell reference, not an
+                    // intrusive claim held until this frame is destroyed.
+                    write(instruction.result, Value::place(place), true);
+                    ++frame.instruction;
+                    continue;
+                }
                 write(instruction.result, instruction.resultOwnership == 1 && loaded.kind() == Value::Kind::Object
                                               ? Value::objectBorrow(loaded.scalar_.aggregate)
                                               : loaded);
@@ -5011,13 +5040,14 @@ namespace wio::vm
                     }
                 } nativeFrame;
                 nativeFrame.cleanup = [this] { cleanupNativeObjects(); };
+                const auto objects = nativeObjectAccess();
                 const auto encodeArgument =
                     [&](const Value& value, const auto& abi, WioNativeAbiValue& wire, std::string& error)
                 {
                     if (abi.marshalling == 6 && value.objectIdentity())
                         return encodeNativeObject(value, abi.type, wire, error, *podLayouts);
                     return detail::encodeNativeValue(module, value, abi.type, abi.marshalling, wire, error,
-                                                     podLayouts.get());
+                                                     podLayouts.get(), 0, &objects);
                 };
                 nativeFrame.tokens.reserve(instruction.operands.size());
                 nativeFrame.arguments.reserve(instruction.operands.size());
@@ -5317,9 +5347,10 @@ namespace wio::vm
                         continue;
                     }
                     detail::NativeValueResult replacement =
-                        token.marshalling == 6 ? decodeNativeObject(token.wire, token.type, *podLayouts)
-                                               : detail::decodeNativeValue(module, token.wire, token.type,
-                                                                           token.marshalling, podLayouts.get());
+                        token.marshalling == 6
+                            ? decodeNativeObject(token.wire, token.type, *podLayouts)
+                            : detail::decodeNativeValue(module, token.wire, token.type, token.marshalling,
+                                                        podLayouts.get(), 0, &objects);
                     if (!replacement.succeeded())
                     {
                         if (copyBackError.empty())
@@ -5426,7 +5457,8 @@ namespace wio::vm
                     declaration.nativeBinding.result.marshalling == 6
                         ? decodeNativeObject(nativeFrame.result, declaration.nativeBinding.result.type, *podLayouts)
                         : detail::decodeNativeValue(module, nativeFrame.result, declaration.nativeBinding.result.type,
-                                                    declaration.nativeBinding.result.marshalling, podLayouts.get());
+                                                    declaration.nativeBinding.result.marshalling, podLayouts.get(), 0,
+                                                    &objects);
                 if (!result.succeeded())
                     return fail("WVM1224", "Native result conversion failed: " + result.error);
                 program_->pinNativeLibraries(result.value);
