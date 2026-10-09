@@ -100,15 +100,28 @@ namespace wio::codegen
             for (const auto& function : module.functions)
                 for (const auto& block : function.blocks)
                     for (const auto& instruction : block.instructions)
-                        if ((instruction.opcode == lowered::Opcode::AnyBox ||
-                             instruction.opcode == lowered::Opcode::AnyCheckedCast ||
-                             instruction.opcode == lowered::Opcode::AnyTypeTest) &&
-                            (supported(supported, instruction.targetType, 0) ||
-                             objectContracts.contains(instruction.targetType)) &&
-                            module.types.get(instruction.targetType).kind != TypeKind::Nullable)
+                        if (instruction.opcode == lowered::Opcode::AnyBox ||
+                            instruction.opcode == lowered::Opcode::AnyCheckedCast ||
+                            instruction.opcode == lowered::Opcode::AnyTypeTest)
                         {
-                            anyPayloads.insert(instruction.targetType);
-                            collect(collect, instruction.targetType, 0);
+                            auto payload = instruction.targetType;
+                            const auto* type = module.types.tryGet(payload);
+                            if (type && type->kind == TypeKind::Nullable && type->arguments.size() == 1)
+                            {
+                                // Nullable object/opaque handles use the same
+                                // Any cell as their present non-null value.
+                                // Other nullable kinds need separate lifetime
+                                // contracts (e.g. references and callbacks).
+                                payload = type->arguments.front();
+                                if (module.types.get(payload).kind != TypeKind::Opaque &&
+                                    !objectContracts.contains(payload))
+                                    continue;
+                            }
+                            if (supported(supported, payload, 0) || objectContracts.contains(payload))
+                            {
+                                anyPayloads.insert(payload);
+                                collect(collect, payload, 0);
+                            }
                         }
         }
         if (sequences.empty() && dictionaries.empty() && !anyType.isValid())

@@ -1,0 +1,5 @@
+fn Entry() -> i32 {
+    let borrowed: (view i32)? = null;
+    let erased: any = borrowed;
+    return 0;
+}

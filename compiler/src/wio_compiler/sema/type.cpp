@@ -94,10 +94,31 @@ namespace wio::sema
                p->name == "f32" || p->name == "f64";
     }
 
+    bool Type::isNullableAnyHandle(const Type* type)
+    {
+        while (type && type->kind() == TypeKind::Alias)
+            type = static_cast<const AliasType*>(type)->aliasedType.Get();
+        if (!type || type->kind() != TypeKind::Nullable)
+            return false;
+        type = static_cast<const NullableType*>(type)->valueType.Get();
+        while (type && type->kind() == TypeKind::Alias)
+            type = static_cast<const AliasType*>(type)->aliasedType.Get();
+        if (!type)
+            return false;
+        if (type->kind() == TypeKind::Primitive)
+            return static_cast<const PrimitiveType*>(type)->name == "opaque";
+        if (type->kind() != TypeKind::Struct)
+            return false;
+        const auto* object = static_cast<const StructType*>(type);
+        return object->isObject || object->isInterface;
+    }
+
     bool Type::isCompatibleWith(const Ref<Type>& other) const
     {
-        if (!other) return false;
-        if (this == other.Get()) return true;
+        if (!other)
+            return false;
+        if (this == other.Get())
+            return true;
 
         const Type* t1 = this;
         const Type* t2 = other.Get();
@@ -133,9 +154,6 @@ namespace wio::sema
             return nullable->valueType->isCompatibleWith(Ref<Type>(const_cast<Type*>(t2)));
         }
 
-        if (kind2 == TypeKind::Nullable)
-            return false;
-
         auto isAnyPrimitive = [](const Type* type) -> bool
         {
             return type &&
@@ -159,8 +177,9 @@ namespace wio::sema
             case TypeKind::Array:
             case TypeKind::Dictionary:
             case TypeKind::Struct:
-            case TypeKind::Nullable:
                 return true;
+            case TypeKind::Nullable:
+                return Type::isNullableAnyHandle(type);
             default:
                 return false;
             }
@@ -177,6 +196,9 @@ namespace wio::sema
 
             return isAnyStorableType(t2);
         }
+
+        if (kind2 == TypeKind::Nullable)
+            return false;
 
         if (kind1 != kind2)
         {

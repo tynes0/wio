@@ -839,10 +839,22 @@ Rider, and CLion are defined in
    contextual conversion; no format change or broad native closure is implied.
    The new generic-POD Any/container gate passed locally on Windows
    (1/1, 30.78 seconds).
+   Nullable owning object/interface/concrete generic object and opaque handles
+   now cross direct native Any boundaries with the existing C++ erasure rule:
+   null becomes null Any, while present handles use ordinary payload descriptors.
+   Base/interface storage shape and concrete object identity remain distinct.
+   Nullable type tests and checked casts accept qualified handle targets;
+   a null Any still fails checked casts rather than inventing a typed null cell.
+   Nullable reference/callback storage remains rejected. The focused gate covers
+   30 C++/VM lifecycle rounds, rebinding, native retention, escaping handles,
+   opaque pointers and live-host rejection checks. It also fixes flow-narrowed
+   object fit operands and nullable/inner opaque equality in Typed WIR.
+   The new nullable-Any gate passed locally on Windows (1/1, 25.39 seconds).
    Remaining native parity work includes broader VM-created object signatures,
-   std::Box and arbitrary nullable any payloads, any-bearing containers,
+   std::Box, nested Any and Any/object-bearing containers,
    alias identity canonicalization; POD/object/container/nullable and
-   ref/view callback signatures; consumed arguments. Native-only bridge pruning
+   ref/view callback signatures; nullable borrowed payload lifetime contracts;
+   consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.
 

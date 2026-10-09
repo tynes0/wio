@@ -1108,7 +1108,7 @@ namespace
         return 0;
     }
 
-    int qualifyObjectAny(const char* bytecode, const char* producer)
+    int qualifyObjectAny(const char* bytecode, const char* producer, bool nullable = false)
     {
         std::ifstream input(std::filesystem::u8path(bytecode), std::ios::binary);
         const std::string bytes{std::istreambuf_iterator<char>{input}, {}};
@@ -1118,7 +1118,7 @@ namespace
         const auto getObjects = library.symbol<WioGetNativeObjectApiFn>("WioGetNativeObjectApi");
         const auto getAny = library.symbol<WioGetNativeAnyApiFn>("WioGetNativeAnyApi");
         const auto getRegistry = library.symbol<WioGetNativeAbiRegistryFn>("WioGetNativeAbiRegistry");
-        check(getObjects && getAny && getRegistry && getObjects()->typeCount == 5,
+        check(getObjects && getAny && getRegistry && getObjects()->typeCount == (nullable ? 4u : 5u),
               "any-only boundaries lost concrete/generic object adapters");
         const auto& registry = *getRegistry();
         const auto& objects = *getObjects();
@@ -1153,6 +1153,18 @@ namespace
                   "native any decoded a foreign/sliced object instead of its VM host");
         }
         check(machine.invoke(function("SafePoint")).succeeded(), "object any cleanup safe point failed");
+        if (nullable)
+        {
+            const auto empty = machine.invoke(function("EscapeNull"));
+            check(empty.succeeded() && empty.value().kind() == wio::vm::Value::Kind::Null,
+                  "nullable null object became an invented typed Any cell");
+            for (const auto* name : {"NullCast", "NullOpaqueCast"})
+            {
+                const auto invalid = machine.invoke(function(name));
+                check(!invalid.succeeded() && invalid.error().code == "WVM1184",
+                      "null Any checked cast fabricated a nullable payload");
+            }
+        }
         wio::vm::Machine missing{decoded.module};
         check(!missing.registerNativeRegistry(registry, any, &error) &&
                   error.find("unsupported structural materialization") != std::string::npos,
@@ -2287,6 +2299,8 @@ int main(int argc, char** argv)
         qualifySelection();
         if (argc == 4 && std::string_view(argv[3]) == "object-any")
             return qualifyObjectAny(argv[1], argv[2]);
+        if (argc == 4 && std::string_view(argv[3]) == "nullable-any")
+            return qualifyObjectAny(argv[1], argv[2], true);
         if (argc == 4 && std::string_view(argv[3]) == "polymorphic-references")
             return qualifyPolymorphicReferences(argv[1], argv[2]);
         if (argc == 4 && std::string_view(argv[3]) == "polymorphic")

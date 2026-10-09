@@ -84,6 +84,7 @@ namespace wio::vm
         constexpr std::uint8_t TypeString = 17;
         constexpr std::uint8_t TypeText = 18;
         constexpr std::uint8_t TypeAny = 19;
+        constexpr std::uint8_t TypeOpaque = 20;
         constexpr std::uint8_t TypeNamed = 28;
         constexpr std::uint8_t TypeReference = 29;
         constexpr std::uint8_t TypeNullable = 30;
@@ -136,6 +137,21 @@ namespace wio::vm
         constexpr std::uint8_t BinaryShiftRight = 15;
 
         thread_local ExecutorKind activeExecutor = ExecutorKind::Inherit;
+
+        std::uint32_t anyHandlePayloadType(const bytecode::Module& module, std::uint32_t type)
+        {
+            if (type >= module.types.size())
+                return bytecode::InvalidIndex;
+            if (module.types[type].kind == TypeNullable && module.types[type].arguments.size() == 1)
+                type = module.types[type].arguments.front();
+            if (type >= module.types.size())
+                return bytecode::InvalidIndex;
+            const auto& target = module.types[type];
+            return target.kind == TypeOpaque || (target.kind == TypeNamed && (target.nominalKind == NominalObject ||
+                                                                              target.nominalKind == NominalInterface))
+                       ? type
+                       : bytecode::InvalidIndex;
+        }
 
         struct NativeCallbackState final
         {
@@ -3849,7 +3865,13 @@ namespace wio::vm
                     instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
                 if (!payload)
                     return fail("WVM1182", "Any boxing requires an available payload");
-                if (!write(instruction.result, Value::any(instruction.targetType, payload->cloneOwned())))
+                const auto handleType = anyHandlePayloadType(module, instruction.targetType);
+                const auto payloadType = handleType != bytecode::InvalidIndex ? handleType : instruction.targetType;
+                const bool nullHandle = handleType != bytecode::InvalidIndex &&
+                                        (payload->kind() == Value::Kind::Null ||
+                                         (payload->kind() == Value::Kind::Opaque && !payload->opaquePointer()));
+                if (!write(instruction.result,
+                           nullHandle ? Value::null() : Value::any(payloadType, payload->cloneOwned())))
                     return fail("WVM1009", "Any box result register is invalid");
                 ++frame.instruction;
                 continue;
@@ -3907,7 +3929,10 @@ namespace wio::vm
                 if (!boxed || boxed->kind() != Value::Kind::Any || !payload)
                     return fail("WVM1183", "Any test or cast requires a live boxed value");
 
-                bool matches = boxed->anyType() == instruction.targetType;
+                const auto handleTarget = anyHandlePayloadType(module, instruction.targetType);
+                const auto payloadTarget =
+                    handleTarget != bytecode::InvalidIndex ? handleTarget : instruction.targetType;
+                bool matches = boxed->anyType() == payloadTarget;
                 const std::uint32_t targetNominal = nominalType(instruction.targetType);
                 if (const Value* object = objectValue(payload); object && targetNominal != bytecode::InvalidIndex)
                     matches = isObjectType(object->aggregateType(), targetNominal);

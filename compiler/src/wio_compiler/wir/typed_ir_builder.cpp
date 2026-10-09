@@ -4039,7 +4039,7 @@ namespace wio::wir::typed
                            expression.Get());
                     return {};
                 }
-                const ValueId operand = buildExpression(fit->operand, state);
+                const ValueId operand = buildExpressionAs(fit->operand, sourceTypeId, state);
                 if (!operand)
                     return {};
                 const auto converted = appendValue(Instruction{.opcode = anyCast      ? Opcode::AnyCheckedCast
@@ -4548,7 +4548,19 @@ namespace wio::wir::typed
                     if (const auto commonKind = commonNumericTypeKind(leftTypeInfo->kind, rightTypeInfo->kind))
                         commonNumericType = result_.module_.types.intern(Type{.kind = *commonKind});
                 }
-                const TypeId operandType = numericResult ? expressionType : commonNumericType;
+                TypeId operandType = numericResult ? expressionType : commonNumericType;
+                // Equality between a nullable handle and its inner type needs
+                // a common nullable representation, including opaque handles.
+                if (!operandType && op && (*op == BinaryOperator::Equal || *op == BinaryOperator::NotEqual))
+                {
+                    if (leftTypeInfo && leftTypeInfo->kind == TypeKind::Nullable &&
+                        leftTypeInfo->arguments.size() == 1 && leftTypeInfo->arguments.front() == rightReadableType)
+                        operandType = leftReadableType;
+                    else if (rightTypeInfo && rightTypeInfo->kind == TypeKind::Nullable &&
+                             rightTypeInfo->arguments.size() == 1 &&
+                             rightTypeInfo->arguments.front() == leftReadableType)
+                        operandType = rightReadableType;
+                }
                 // Flow analysis can narrow a nullable local's AST type while
                 // its storage/SSA value remains nullable. Honor that narrowing
                 // explicitly before identity comparison; never relax verifier

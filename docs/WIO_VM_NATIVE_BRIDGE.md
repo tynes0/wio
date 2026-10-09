@@ -1765,3 +1765,50 @@ is run; no full-suite or local Linux pass is implied.
 
 The generic-POD Any/container gate passed locally on Windows (1/1, 30.78 seconds),
 including generated C++, VM CLI, negative selection and live DLL-lease checks.
+
+## Nullable owning handles in Any
+
+Direct synchronous native Any/ref-Any/view-Any boundaries now qualify nullable
+owning objects, interfaces, concrete generic objects and opaque handles. The
+existing generated-C++ erasure rule is preserved: a null handle becomes null Any,
+not a boxed typed-null payload. A present nullable handle uses the same payload
+descriptor as its ordinary non-null type. A zero opaque pointer also becomes
+null Any, even when returned through a non-nullable native `opaque` signature.
+
+```wio
+let missing: Leaf? = null;
+let absent: any = missing;       // null Any
+let present: Leaf? = Leaf();
+let boxed: any = present;        // ordinary Leaf object payload
+let returned = Echo(boxed);     // native Echo(any) -> any
+let handle = returned fit Leaf?;
+// absent is Leaf? is false; absent fit Leaf? fails rather than returning null.
+```
+
+Base/interface payloads retain their exact static producer cell type while the
+object wire retains concrete identity. Nullable and ordinary spellings do not
+emit competing descriptors for one cell. Checked casts/type tests canonicalize
+the handle target, including `opaque?`; a null Any checked cast still reports
+`WVM1184`. Semantic Any eligibility follows the same owning-handle rule.
+Nullable reference/callback payloads remain rejected: boxing them would need a
+separate borrow/callback lifetime contract. Scalar/string/component nullability
+is not introduced by this change.
+
+The fixture exposed two Typed WIR lowering gaps. Object `fit` now materializes
+flow narrowing before casting an SSA value from nullable storage. Equality
+between a nullable opaque handle and its inner type uses a common nullable
+representation. Verifier requirements remain strict.
+
+The focused `wio_vm_native_any_nullable` gate compares generated C++ and VM CLI
+execution over 30 lifecycle rounds: null/present transitions, generic objects,
+shared identity/mutation, base/interface payloads, ref rebinding, native retention
+and opaque pointer round trips. Live-host checks cover escaping original VM
+objects, null-Any cast failures, missing adapters, forged concrete identity and
+final lifecycle balance. Two new semantic rejection fixtures keep nullable
+reference/callback storage outside this surface.
+
+The new Windows gate passed (1/1, 25.39 seconds). Existing ABI, sidecar and
+bytecode format versions are unchanged. Any/object-bearing containers, nested
+Any, std::Box, alias canonicalization, consumed arguments and broader foreign,
+callback/async ownership remain separate work. Native Step 8 remains open;
+no full-suite or local Linux pass is implied.

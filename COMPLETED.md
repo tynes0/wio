@@ -1330,3 +1330,24 @@ here as historical evidence rather than active work:
       contracts remain separate work; no broad native closure is claimed.
       The new focused Windows gate passed (1/1, 30.78 seconds); no full-suite or
       local Linux pass is claimed.
+
+## VM Native Nullable Handle Any Payloads
+
+- [x] Qualified direct synchronous native Any/ref-Any/view-Any boundaries for
+      nullable owning object/interface/concrete generic object and opaque handles.
+      Null handles erase to null Any; present handles share the ordinary payload
+      descriptor, without duplicate nullable adapters or invented typed nulls.
+- [x] Preserved static Base/interface payload shape, concrete object identity,
+      native retention, alias mutation and exactly-once destruction. Nullable
+      type tests/casts use the canonical handle type; null Any checked casts
+      still fail with `WVM1184`. Zero opaque pointers erase consistently too.
+- [x] Unified nullable Any semantic eligibility for owning handles while keeping
+      borrowed references and callbacks out of Any storage. Added focused
+      rejection fixtures rather than widening their lifetime contracts.
+- [x] Fixed flow-narrowed object fit operands and nullable/inner opaque equality
+      lowering without relaxing Typed WIR verifier requirements.
+- [x] Added a focused 30-round generated-C++/VM/live-host gate, including generic
+      objects, null/present replacement, escaping values, missing adapters and
+      forged payload identity rejection. The new Windows gate passed
+      (1/1, 25.39 seconds). ABI/bytecode versions are unchanged; broader native
+      parity remains open. No full-suite or local Linux pass is claimed.

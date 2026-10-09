@@ -198,6 +198,8 @@
             case TypeKind::Array:
             case TypeKind::Dictionary:
                 return true;
+            case TypeKind::Nullable:
+                return Type::isNullableAnyHandle(resolvedType.Get());
             case TypeKind::Struct:
             {
                 auto structType = resolvedType.AsFast<StructType>();
