@@ -10,10 +10,12 @@ namespace wio::vm::detail
                                                bool validateElements = true);
     [[nodiscard]] bool packNativeDictionary(const bytecode::Module& module, const Value& value, std::uint32_t type,
                                             const NativePodLayouts& layouts, WioNativeAbiValue& output,
-                                            std::string& error, unsigned depth);
+                                            std::string& error, unsigned depth,
+                                            const NativeObjectAccess* objects = nullptr);
     [[nodiscard]] NativeValueResult unpackNativeDictionary(const bytecode::Module& module,
                                                            const WioNativeAbiValue& value, std::uint32_t type,
-                                                           const NativePodLayouts& layouts, unsigned depth);
+                                                           const NativePodLayouts& layouts, unsigned depth,
+                                                           const NativeObjectAccess* objects = nullptr);
     // Match by key, never by unordered producer iteration order. Does not move
     // or mutate either container; output is published only for a full match.
     [[nodiscard]] bool nativeDictionaryCopyBackOrder(const Value& target, const Value& replacement,

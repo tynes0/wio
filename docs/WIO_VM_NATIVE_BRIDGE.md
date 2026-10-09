@@ -1812,3 +1812,70 @@ bytecode format versions are unchanged. Any/object-bearing containers, nested
 Any, std::Box, alias canonicalization, consumed arguments and broader foreign,
 callback/async ownership remain separate work. Native Step 8 remains open;
 no full-suite or local Linux pass is implied.
+
+## Any and hosted object container values
+
+Direct synchronous native dynamic arrays and dictionaries can now materialize
+qualified Any cells and hosted object/interface/concrete generic object handles.
+Nullable object array elements and nested Any arrays use the existing codecs;
+dictionary keys retain their existing scalar/string/text/enum/flagset contract.
+Object qualification still rejects open generics, public fields requiring native
+synchronization and unsupported method/physical layouts. This is not an arbitrary
+foreign object marshaller.
+
+Object/Any discovery walks native container signatures iteratively, including
+container-only boundaries. Recursive sequence/dictionary conversion forwards the
+call-local `NativeObjectAccess` already used by direct Any payloads. Registration
+merges container, object and Any sidecars into one candidate and validates the
+complete graph before publishing it. A container of Any and an Any containing a
+container can therefore reference each other's type-level adapters without a
+partially registered graph.
+
+Container value copies remain independent, but copied Any cells and object
+handles retain their usual shared identity. Replacing an element in a copied
+container does not replace the source element; mutating the shared payload does.
+
+```wio
+// Copy is the fixture's native Copy(any[]) -> any[] function.
+let number: any = 20;
+let label: any = "local";
+mut values: any[] = [number, label, null];
+let copied = Copy(values);
+// Copy mutates the shared i32 cell and replaces only its own second element.
+// number fit i32 == 30; values[1] fit string == "local";
+// copied[1] fit i32 == 99.
+```
+
+Native container ref copy-back still requires matching sequence lengths and
+dictionary key sets, and commits into existing cells so pre-existing element
+borrows remain live. A container boxed in Any can grow; an owned `fit` observes
+the changed producer payload without resizing the original value-copy source.
+Independent container/element projection arguments remain a separate contract.
+
+The qualification uncovered cleanup gaps in both backends. Typed WIR now releases
+owned array/dictionary literal operands after the aggregate has acquired copies.
+VM place initialization/replacement transfers owned array/dictionary values and
+releases the overwritten container. Borrowed loads use live cell references,
+not intrusive claims retained until frame teardown. Caller-rooted projections
+are non-owning and are invalidated on root cleanup/unwind; an intrusive linked
+list tracks only each root's projections with no extra allocation. Temporary-root
+projection lifetime rules remain outside this new caller-rooted qualification.
+Nullable object equality uses `IdentityEqual`; its verifiers accept nullable
+object/interface operands without widening cast/type-test validation.
+
+The focused `wio_vm_native_handle_containers` gate compares generated C++ and
+actual VM CLI execution over 30 lifecycle rounds. It covers Any/nested arrays,
+ordered/unordered dictionaries, object/base/interface/generic/nullable elements,
+shared mutation versus container replacement, ref/view alias identity, existing
+element borrows, boxed growth and native retention. A live host checks
+container-only discovery, unsupported/open object selection, missing sidecars,
+atomic malformed registration, forged second-element wire/partial decoding,
+expired root borrows, original VM object recovery and final lifecycle balance.
+Escaped Any children and backing-only handles also retain and finally release
+their producer DLL lease.
+
+Boxed Any-in-Any, std::Box, alias canonicalization, consumed arguments, arbitrary
+foreign ownership and container/ref callback or async lifetime contracts remain
+separate work. Existing ABI, sidecar and bytecode versions are unchanged; Native
+Step 8 remains open. The new Windows gate passed (1/1, 35.08 seconds);
+no full-suite or local Linux qualification is claimed.

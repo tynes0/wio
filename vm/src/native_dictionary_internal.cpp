@@ -88,7 +88,7 @@ namespace wio::vm::detail
 
     bool packNativeDictionary(const bytecode::Module& module, const Value& value, std::uint32_t type,
                               const NativePodLayouts& layouts, WioNativeAbiValue& output, std::string& error,
-                              unsigned depth)
+                              unsigned depth, const NativeObjectAccess* objects)
     {
         const auto adapter = layouts.dictionaries.find(type);
         if (adapter == layouts.dictionaries.end())
@@ -115,9 +115,9 @@ namespace wio::vm::detail
         }
         for (std::size_t index = 0; index < value.dictionaryCount(); ++index)
             if (!encodeNativeValue(module, *value.dictionaryKey(index), arguments[0], keyMarshalling,
-                                   wires.entries[index * 2], error, &layouts, depth + 1) ||
+                                   wires.entries[index * 2], error, &layouts, depth + 1, objects) ||
                 !encodeNativeValue(module, *value.dictionaryValue(index), arguments[1], valueMarshalling,
-                                   wires.entries[index * 2 + 1], error, &layouts, depth + 1))
+                                   wires.entries[index * 2 + 1], error, &layouts, depth + 1, objects))
                 return false;
         WioNativeAbiFailure failure;
         const auto status =
@@ -140,7 +140,8 @@ namespace wio::vm::detail
     }
 
     NativeValueResult unpackNativeDictionary(const bytecode::Module& module, const WioNativeAbiValue& value,
-                                             std::uint32_t type, const NativePodLayouts& layouts, unsigned depth)
+                                             std::uint32_t type, const NativePodLayouts& layouts, unsigned depth,
+                                             const NativeObjectAccess* objects)
     {
         const auto adapter = layouts.dictionaries.find(type);
         if (adapter == layouts.dictionaries.end() || depth > 64)
@@ -176,12 +177,12 @@ namespace wio::vm::detail
         keys.reserve(static_cast<std::size_t>(count));
         for (std::size_t index = 0; index < count; ++index)
         {
-            auto key =
-                decodeNativeValue(module, wires.entries[index * 2], arguments[0], keyMarshalling, &layouts, depth + 1);
+            auto key = decodeNativeValue(module, wires.entries[index * 2], arguments[0], keyMarshalling, &layouts,
+                                         depth + 1, objects);
             if (!key.succeeded())
                 return key;
             auto mapped = decodeNativeValue(module, wires.entries[index * 2 + 1], arguments[1], valueMarshalling,
-                                            &layouts, depth + 1);
+                                            &layouts, depth + 1, objects);
             if (!mapped.succeeded())
                 return mapped;
             entries.push_back(std::move(key.value));

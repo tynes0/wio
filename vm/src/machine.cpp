@@ -42,8 +42,59 @@ namespace wio::vm
         Value value;
         Value owner;
         Value* alias = nullptr;
+        PlaceStorage* borrowedRoot = nullptr;
+        PlaceStorage* firstProjection = nullptr;
+        PlaceStorage* previousProjection = nullptr;
+        PlaceStorage* nextProjection = nullptr;
         bool initialized = false;
         bool mutableValue = true;
+
+        PlaceStorage() = default;
+        PlaceStorage(const PlaceStorage&) = delete;
+        PlaceStorage& operator=(const PlaceStorage&) = delete;
+
+        ~PlaceStorage()
+        {
+            detachProjection();
+            retireProjections();
+        }
+
+        void bindProjection(PlaceStorage* root) noexcept
+        {
+            borrowedRoot = root;
+            if (!root)
+                return;
+            nextProjection = root->firstProjection;
+            if (nextProjection)
+                nextProjection->previousProjection = this;
+            root->firstProjection = this;
+        }
+
+        void detachProjection() noexcept
+        {
+            if (!borrowedRoot)
+                return;
+            if (previousProjection)
+                previousProjection->nextProjection = nextProjection;
+            else
+                borrowedRoot->firstProjection = nextProjection;
+            if (nextProjection)
+                nextProjection->previousProjection = previousProjection;
+            borrowedRoot = nullptr;
+            previousProjection = nullptr;
+            nextProjection = nullptr;
+        }
+
+        void retireProjections() noexcept
+        {
+            while (firstProjection)
+            {
+                auto* projected = firstProjection;
+                projected->detachProjection();
+                projected->initialized = false;
+                projected->alias = nullptr;
+            }
+        }
 
         [[nodiscard]] Value& storedValue() noexcept
         {
@@ -57,6 +108,7 @@ namespace wio::vm
 
         void clear() noexcept
         {
+            retireProjections();
             storedValue() = {};
             initialized = false;
         }
@@ -1438,6 +1490,7 @@ namespace wio::vm
                 PlaceStorage& storage = **place;
                 if (!storage.alias && storage.initialized)
                 {
+                    storage.retireProjections();
                     cleanupValue(storage.value, error);
                     storage.initialized = false;
                 }
@@ -1483,6 +1536,7 @@ namespace wio::vm
         {
             if (!(*global)->initialized)
                 continue;
+            (*global)->retireProjections();
             cleanupValue((*global)->value, cleanupError);
             (*global)->initialized = false;
         }
@@ -2317,9 +2371,11 @@ namespace wio::vm
                 return reject(std::move(layoutError));
             if (objects && !detail::mergeNativeObjects(*program_->module, *objects, *layouts, layoutError))
                 return reject(std::move(layoutError));
-            if (!detail::validateNativeContainers(*program_->module, *layouts, layoutError))
-                return reject(std::move(layoutError));
             if (any && !detail::mergeNativeAny(*program_->module, *any, *layouts, layoutError))
+                return reject(std::move(layoutError));
+            // Any payloads can be containers, whose values can themselves be
+            // Any. Validate the complete candidate graph before publishing it.
+            if (!detail::validateNativeContainers(*program_->module, *layouts, layoutError))
                 return reject(std::move(layoutError));
         }
         for (Program::NativeFunction& addition : additions)
@@ -2910,6 +2966,12 @@ namespace wio::vm
                 PlaceStorage* const place = value->asPlace();
                 return place && place->initialized ? &place->storedValue() : nullptr;
             };
+            const auto projectionRoot = [&](std::uint32_t id) -> PlaceStorage*
+            {
+                const auto* source = readRegister(id);
+                auto* place = source ? source->value.asPlace() : nullptr;
+                return place ? (place->borrowedRoot ? place->borrowedRoot : place) : nullptr;
+            };
             const auto objectValue = [&](const Value* value) -> const Value*
             {
                 value = storedValue(value);
@@ -3257,8 +3319,10 @@ namespace wio::vm
                     return fail("WVM1082", "Dictionary place base is not an initialized dictionary");
 
                 auto storage = std::make_unique<PlaceStorage>();
-                storage->owner = *dictionary;
-                storage->alias = storage->owner.mutableDictionaryValue(*key);
+                storage->bindProjection(projectionRoot(instruction.operands[0]));
+                if (!storage->borrowedRoot)
+                    storage->owner = *dictionary;
+                storage->alias = const_cast<Value*>(dictionary)->mutableDictionaryValue(*key);
                 storage->initialized = storage->alias != nullptr;
                 storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
                 if (!storage->alias)
@@ -4410,16 +4474,28 @@ namespace wio::vm
                     return fail("WVM1041", "Place can only be initialized once");
                 if (instruction.opcode != bytecode::Opcode::PlaceInit && (!place->initialized || !place->mutableValue))
                     return fail("WVM1042", "Store requires an initialized mutable place");
+                Register* sourceRegister = readRegister(instruction.operands[1]);
+                const bool transferable = source->kind() == Value::Kind::Object || source->kind() == Value::Kind::Any ||
+                                          source->kind() == Value::Kind::Array ||
+                                          source->kind() == Value::Kind::Dictionary;
+                const bool objectBorrow = source->kind() == Value::Kind::ObjectBorrow;
                 Value retainedBorrow;
-                if (source->kind() == Value::Kind::ObjectBorrow)
+                if (objectBorrow)
                     retainedBorrow = source->retainObject();
+                else if (transferable && sourceRegister->borrowedValue)
+                    retainedBorrow = source->cloneOwned();
                 if (place->initialized &&
                     (source->kind() == Value::Kind::Object || source->kind() == Value::Kind::ObjectBorrow ||
                      place->storedValue().kind() == Value::Kind::Object || source->kind() == Value::Kind::Any ||
-                     place->storedValue().kind() == Value::Kind::Any))
+                     place->storedValue().kind() == Value::Kind::Any ||
+                     place->storedValue().kind() == Value::Kind::Array ||
+                     place->storedValue().kind() == Value::Kind::Dictionary))
                 {
                     // Null replacement is still a release of the old object.
                     // Protect a borrowed self-assignment before dropping it.
+                    if (place->storedValue().kind() == Value::Kind::Array ||
+                        place->storedValue().kind() == Value::Kind::Dictionary)
+                        place->retireProjections();
                     ExecutionError cleanupError;
                     cleanupValue(place->storedValue(), cleanupError);
                     if (!cleanupError.cleanupFailures.empty())
@@ -4430,16 +4506,20 @@ namespace wio::vm
                         return failWithStack(std::move(cleanupError));
                     }
                 }
-                if (source->kind() == Value::Kind::Object || source->kind() == Value::Kind::Any)
+                if (transferable)
                 {
                     // WIR place writes transfer an owned handle. Keeping an
-                    // extra SSA-register or Any-cell claim would defer the Wio destructor
+                    // extra SSA-register/container claim would defer the Wio destructor
                     // past its lexical release until the entire frame ends.
-                    Register* sourceRegister = readRegister(instruction.operands[1]);
-                    place->storedValue() = std::move(sourceRegister->value);
-                    sourceRegister->initialized = false;
+                    if (sourceRegister->borrowedValue)
+                        place->storedValue() = std::move(retainedBorrow);
+                    else
+                    {
+                        place->storedValue() = std::move(sourceRegister->value);
+                        sourceRegister->initialized = false;
+                    }
                 }
-                else if (source->kind() == Value::Kind::ObjectBorrow)
+                else if (objectBorrow)
                     place->storedValue() = std::move(retainedBorrow);
                 else
                     place->storedValue() = *source;
@@ -4467,9 +4547,11 @@ namespace wio::vm
                     return fail("WVM1043", "Load requires an initialized place");
                 const auto& loaded = place->storedValue();
                 if (instruction.resultOwnership == 1 && instruction.resultType < module.types.size() &&
-                    module.types[instruction.resultType].kind == TypeAny)
+                    (module.types[instruction.resultType].kind == TypeAny ||
+                     module.types[instruction.resultType].kind == TypeArray ||
+                     module.types[instruction.resultType].kind == TypeDictionary))
                 {
-                    // A borrowed Any load is a live cell reference, not an
+                    // A borrowed Any/container load is a live cell reference, not an
                     // intrusive claim held until this frame is destroyed.
                     write(instruction.result, Value::place(place), true);
                     ++frame.instruction;
@@ -4496,7 +4578,9 @@ namespace wio::vm
                     return fail("WVM1064", "Field place base is not initialized");
 
                 auto storage = std::make_unique<PlaceStorage>();
-                storage->owner = *aggregate;
+                storage->bindProjection(projectionRoot(instruction.operands[0]));
+                if (!storage->borrowedRoot)
+                    storage->owner = *aggregate;
                 std::size_t fieldIndex = instruction.projectionIndex;
                 if (aggregate->objectIdentity())
                 {
@@ -4509,7 +4593,7 @@ namespace wio::vm
                         return fail("WVM1065", "Field owner is outside the concrete object hierarchy");
                     fieldIndex += offset->second;
                 }
-                storage->alias = storage->owner.mutableField(fieldIndex);
+                storage->alias = const_cast<Value*>(aggregate)->mutableField(fieldIndex);
                 storage->initialized = storage->alias && !storage->alias->isEmpty();
                 storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
                 if (!storage->alias)
@@ -4537,8 +4621,10 @@ namespace wio::vm
                     return fail("WVM1067", "Array place base is not an initialized array");
 
                 auto storage = std::make_unique<PlaceStorage>();
-                storage->owner = *array;
-                storage->alias = storage->owner.mutableElement(*index);
+                storage->bindProjection(projectionRoot(instruction.operands[0]));
+                if (!storage->borrowedRoot)
+                    storage->owner = *array;
+                storage->alias = const_cast<Value*>(array)->mutableElement(*index);
                 storage->initialized = storage->alias != nullptr;
                 storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
                 if (!storage->alias)
@@ -4819,6 +4905,9 @@ namespace wio::vm
                 PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
                 if (!place || !place->initialized)
                     return fail("WVM1048", "Place cleanup requires an initialized place");
+                // Caller-rooted projections borrow the root, not its storage.
+                // Retire their cells before releasing the root's last claim.
+                place->retireProjections();
                 ExecutionError cleanupError;
                 cleanupValue(place->storedValue(), cleanupError);
                 place->initialized = false;

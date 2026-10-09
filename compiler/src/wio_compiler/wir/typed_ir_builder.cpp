@@ -3901,7 +3901,13 @@ namespace wio::wir::typed
                         return {};
                     instruction.operands.push_back(value);
                 }
-                return appendValue(std::move(instruction));
+                const auto operands = instruction.operands;
+                const ValueId created = appendValue(std::move(instruction));
+                // The aggregate has acquired its own copies. Literal operands
+                // must not retain extra object/Any claims until frame teardown.
+                for (const auto operand : operands)
+                    releaseOwnedTemporary(operand, expression.Get(), state);
+                return created;
             }
             if (const auto* dictionary = expression->as<DictionaryLiteral>())
             {
@@ -3931,7 +3937,11 @@ namespace wio::wir::typed
                     instruction.signatureTypes.push_back(keyType);
                     instruction.signatureTypes.push_back(valueType);
                 }
-                return appendValue(std::move(instruction));
+                const auto operands = instruction.operands;
+                const ValueId created = appendValue(std::move(instruction));
+                for (const auto operand : operands)
+                    releaseOwnedTemporary(operand, expression.Get(), state);
+                return created;
             }
             if (expression->is<NullExpression>())
             {
@@ -4565,9 +4575,16 @@ namespace wio::wir::typed
                 // its storage/SSA value remains nullable. Honor that narrowing
                 // explicitly before identity comparison; never relax verifier
                 // requirements or evaluate either operand a second time.
+                const auto objectComparisonType = [&](TypeId id)
+                {
+                    const Type* type = result_.module_.types.tryGet(id);
+                    if (type && type->kind == TypeKind::Nullable && type->arguments.size() == 1)
+                        id = type->arguments.front();
+                    return underlyingNominalType(id) != nullptr;
+                };
                 const bool identityComparison =
                     (binary->op.type == TokenType::opEqual || binary->op.type == TokenType::opNotEqual) &&
-                    underlyingNominalType(leftReadableType) && underlyingNominalType(rightReadableType);
+                    objectComparisonType(leftReadableType) && objectComparisonType(rightReadableType);
                 const ValueId left = identityComparison ? buildExpressionAs(binary->left, leftReadableType, state)
                                      : operandType      ? buildExpressionAs(binary->left, operandType, state)
                                      : leftLiteral && !rightLiteral

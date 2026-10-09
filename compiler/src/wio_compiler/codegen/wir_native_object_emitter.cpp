@@ -177,20 +177,33 @@ namespace wio::codegen
                 candidates.insert(id).second)
                 pending.push_back(id);
         };
+        std::set<TypeId> visitedBoundaries;
+        std::vector<TypeId> boundaryPending;
+        std::size_t boundaryCursor = 0;
+        const auto boundary = [&](TypeId id)
+        {
+            boundaryPending.push_back(id);
+            for (; boundaryCursor < boundaryPending.size(); ++boundaryCursor)
+            {
+                const auto value = boundaryPending[boundaryCursor];
+                const auto* type = module.types.tryGet(value);
+                if (!type || !visitedBoundaries.insert(value).second)
+                    continue;
+                anyBoundary |= type->kind == TypeKind::Any;
+                if (const auto object = nativeAbiObjectType(module.types, value))
+                    boundaries.insert(object);
+                collect(value);
+                // Walk value shapes iteratively, not nominal template fields.
+                // A container may be the only object/Any native boundary.
+                if (type->kind == TypeKind::Reference || type->kind == TypeKind::Nullable ||
+                    type->kind == TypeKind::AsyncTask || type->kind == TypeKind::Array ||
+                    type->kind == TypeKind::Dictionary)
+                    boundaryPending.insert(boundaryPending.end(), type->arguments.begin(), type->arguments.end());
+            }
+        };
         for (const auto& declaration : module.functions)
             if (declaration.nativeBinding && declaration.genericParameters.empty())
             {
-                const auto boundary = [&](TypeId id)
-                {
-                    auto value = id;
-                    const auto* type = module.types.tryGet(value);
-                    if (type && type->kind == TypeKind::Reference && type->arguments.size() == 1)
-                        type = module.types.tryGet(type->arguments.front());
-                    anyBoundary |= type && type->kind == TypeKind::Any;
-                    if (const auto object = nativeAbiObjectType(module.types, id))
-                        boundaries.insert(object);
-                    collect(id);
-                };
                 for (const auto& parameter : declaration.nativeBinding->parameters)
                     boundary(parameter.type);
                 boundary(declaration.nativeBinding->result.type);
@@ -203,9 +216,7 @@ namespace wio::codegen
                             instruction.opcode == lowered::Opcode::AnyCheckedCast ||
                             instruction.opcode == lowered::Opcode::AnyTypeTest)
                         {
-                            if (const auto object = nativeAbiObjectType(module.types, instruction.targetType))
-                                boundaries.insert(object);
-                            collect(instruction.targetType);
+                            boundary(instruction.targetType);
                         }
         // A Base/interface-only boundary still needs concrete descendant
         // adapters. Never materialize an abstract interface placeholder.

@@ -850,8 +850,22 @@ Rider, and CLion are defined in
    opaque pointers and live-host rejection checks. It also fixes flow-narrowed
    object fit operands and nullable/inner opaque equality in Typed WIR.
    The new nullable-Any gate passed locally on Windows (1/1, 25.39 seconds).
+   Direct synchronous dynamic arrays/dictionaries now materialize qualified
+   Any/object/interface/concrete generic object values, including nullable object
+   array elements and nested Any arrays. Object/Any discovery recurses through
+   container-only native boundaries; conversion carries call-local object access.
+   Any/container sidecars validate as one atomic candidate graph. Container copies
+   stay independent while their Any cells/object handles remain shared; native ref
+   copy-back preserves same-shape element borrows. Array/dictionary literal operand
+   claims release after construction, and VM owned container place writes transfer
+   rather than retain an extra register claim. Borrowed loads and caller-rooted
+   projections no longer keep containers alive until frame teardown; root cleanup
+   invalidates projections through an allocation-free linked list. Nullable object
+   equality uses the existing identity opcode in both WIR verification stages.
+   The new handle-container gate passed locally on Windows (1/1, 35.08 seconds),
+   including generated C++, actual VM CLI and live-host negative/lifecycle checks.
    Remaining native parity work includes broader VM-created object signatures,
-   std::Box, nested Any and Any/object-bearing containers,
+   std::Box, boxed Any-in-Any and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and
    ref/view callback signatures; nullable borrowed payload lifetime contracts;
    consumed arguments. Native-only bridge pruning

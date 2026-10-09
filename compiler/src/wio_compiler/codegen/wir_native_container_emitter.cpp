@@ -15,6 +15,18 @@ namespace wio::codegen
         using namespace wir;
         std::set<TypeId> podTypes;
         bool podsCollected = false;
+        std::set<TypeId> objectContracts;
+        bool objectsCollected = false;
+        const auto hostedObject = [&](TypeId id)
+        {
+            if (!objectsCollected)
+            {
+                const auto objects = WirNativeObjectEmitter::eligibleTypes(module);
+                objectContracts = WirNativeObjectEmitter::hostedHierarchyTypes(module, objects);
+                objectsCollected = true;
+            }
+            return objectContracts.contains(id);
+        };
         const auto supported = [&](auto&& self, TypeId id, unsigned depth) -> bool
         {
             const auto* type = module.types.tryGet(id);
@@ -22,11 +34,12 @@ namespace wio::codegen
                 return false;
             if (type->kind >= TypeKind::Bool && type->kind <= TypeKind::Text)
                 return true;
-            if (type->kind == TypeKind::Opaque)
+            if (type->kind == TypeKind::Opaque || type->kind == TypeKind::Any)
                 return true;
             if (type->kind == TypeKind::Nullable)
                 return type->arguments.size() == 1 &&
-                       module.types.get(type->arguments.front()).kind == TypeKind::Opaque;
+                       (module.types.get(type->arguments.front()).kind == TypeKind::Opaque ||
+                        hostedObject(type->arguments.front()));
             if (type->kind == TypeKind::Array)
                 return !type->staticExtent && !type->extentParameter && type->arguments.size() == 1 &&
                        self(self, type->arguments.front(), depth + 1);
@@ -43,6 +56,8 @@ namespace wio::codegen
             }
             if (type->kind != TypeKind::Named)
                 return false;
+            if (type->nominalKind == NominalKind::Object || type->nominalKind == NominalKind::Interface)
+                return hostedObject(id);
             if (type->arguments.empty() &&
                 (type->nominalKind == NominalKind::Enum || type->nominalKind == NominalKind::Flagset))
                 return true;
@@ -95,8 +110,6 @@ namespace wio::codegen
         }
         if (anyType.isValid())
         {
-            const auto objects = WirNativeObjectEmitter::eligibleTypes(module);
-            const auto objectContracts = WirNativeObjectEmitter::hostedHierarchyTypes(module, objects);
             for (const auto& function : module.functions)
                 for (const auto& block : function.blocks)
                     for (const auto& instruction : block.instructions)
@@ -106,6 +119,10 @@ namespace wio::codegen
                         {
                             auto payload = instruction.targetType;
                             const auto* type = module.types.tryGet(payload);
+                            // Any elements are supported inside containers;
+                            // a boxed Any-in-Any needs a distinct contract.
+                            if (type && type->kind == TypeKind::Any)
+                                continue;
                             if (type && type->kind == TypeKind::Nullable && type->arguments.size() == 1)
                             {
                                 // Nullable object/opaque handles use the same
@@ -113,11 +130,10 @@ namespace wio::codegen
                                 // Other nullable kinds need separate lifetime
                                 // contracts (e.g. references and callbacks).
                                 payload = type->arguments.front();
-                                if (module.types.get(payload).kind != TypeKind::Opaque &&
-                                    !objectContracts.contains(payload))
+                                if (module.types.get(payload).kind != TypeKind::Opaque && !hostedObject(payload))
                                     continue;
                             }
-                            if (supported(supported, payload, 0) || objectContracts.contains(payload))
+                            if (supported(supported, payload, 0))
                             {
                                 anyPayloads.insert(payload);
                                 collect(collect, payload, 0);

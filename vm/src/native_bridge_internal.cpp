@@ -324,9 +324,9 @@ namespace wio::vm::detail
             if (object && layouts && objects && value.objectIdentity())
                 return objects->encode(objects->state, value, declaredType, output, error, *layouts);
             if (!object && kind == TypeArray && value.kind() == Value::Kind::Array && layouts)
-                return packNativeSequence(module, value, type, *layouts, output, error, depth);
+                return packNativeSequence(module, value, type, *layouts, output, error, depth, objects);
             if (!object && kind == TypeDictionary && value.kind() == Value::Kind::Dictionary && layouts)
-                return packNativeDictionary(module, value, type, *layouts, output, error, depth);
+                return packNativeDictionary(module, value, type, *layouts, output, error, depth, objects);
             if (!object && kind == TypeAny && value.kind() == Value::Kind::Any && layouts)
                 return packNativeAny(module, value, type, *layouts, output, error, depth, objects);
             const std::uint64_t expected = stableTypeId(module, declaredType);
@@ -483,9 +483,9 @@ namespace wio::vm::detail
                 value.payload.handle.ops->typeId(value.payload.handle.state) != expected)
                 return {{}, "native handle result has invalid producer operations or type identity"};
             if (!object && kind == TypeArray && layouts && layouts->sequences.contains(type))
-                return unpackNativeSequence(module, value, type, *layouts, depth);
+                return unpackNativeSequence(module, value, type, *layouts, depth, objects);
             if (!object && kind == TypeDictionary && layouts && layouts->dictionaries.contains(type))
-                return unpackNativeDictionary(module, value, type, *layouts, depth);
+                return unpackNativeDictionary(module, value, type, *layouts, depth, objects);
             if (!object && kind == TypeAny && layouts && layouts->any.contains(type))
                 return unpackNativeAny(module, value, type, *layouts, depth, objects);
             return {object ? Value::foreignObject(type, expected, value.payload.handle)

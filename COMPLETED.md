@@ -1351,3 +1351,32 @@ here as historical evidence rather than active work:
       forged payload identity rejection. The new Windows gate passed
       (1/1, 25.39 seconds). ABI/bytecode versions are unchanged; broader native
       parity remains open. No full-suite or local Linux pass is claimed.
+
+## VM Native Any and Object Container Values
+
+- [x] Qualified direct synchronous dynamic arrays/dictionaries containing Any
+      cells and supported hosted object/interface/concrete generic object handles.
+      Container-only boundaries discover their object/Any dependencies; nested
+      conversion propagates call-local object access without a global bridge.
+- [x] Validated the full object/Any/container candidate graph atomically. Missing
+      sidecars, mismatched element metadata and forged nested object wires reject
+      explicitly; partial decoding does not lose object lifecycle cleanup.
+- [x] Preserved independent container value copies, shared Any cells/object handles,
+      nullable object elements, native-held containers and same-shape ref copy-back
+      into existing borrowed element cells.
+- [x] Fixed literal operand cleanup and VM owned container place transfers.
+      Borrowed container loads and caller-rooted projections no longer acquire
+      hidden frame-long ownership. Projection retirement is allocation-free and
+      only traverses a root's own linked descendants, including unwind/global
+      cleanup. Expired projections reject instead of reading released storage.
+- [x] Lowered nullable object equality through the existing identity opcode with
+      narrow Typed/Lowered WIR validation, without widening object cast rules.
+- [x] Added a focused 30-round generated-C++/VM/live-host gate covering arrays,
+      ordered/unordered dictionaries, generic/interface/nullable handles, boxed
+      container growth, ref aliases, retention, malformed metadata, partial decode
+      failure, expired borrows and escaped Any-child/backing DLL leases.
+      The new Windows gate passed (1/1, 35.08 seconds). No full-suite or local
+      Linux pass is claimed.
+      Existing ABI and bytecode versions are unchanged. Boxed Any-in-Any, std::Box,
+      arbitrary foreign/container ownership, projection arguments, callbacks,
+      consumed arguments and async lifetime contracts remain separate work.

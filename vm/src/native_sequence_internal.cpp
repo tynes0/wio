@@ -46,12 +46,17 @@ namespace wio::vm::detail
             return false;
         const auto& definition = module.types[type];
         if (definition.kind == 30)
-            return nativePodPointerType(module, type) != bytecode::InvalidIndex;
+            return nativePodPointerType(module, type) != bytecode::InvalidIndex ||
+                   (definition.arguments.size() == 1 && layouts.objectContracts.contains(definition.arguments.front()));
         std::uint8_t marshalling = 0;
         if (!nativeValueMarshalling(module, type, marshalling))
             return false;
         if (marshalling == 4)
             return layouts.types.contains(type);
+        if (marshalling == 6)
+            return layouts.objectContracts.contains(type);
+        if (definition.kind == 19)
+            return layouts.any.contains(type);
         return (marshalling >= 1 && marshalling <= 5) || (definition.kind == 31 && layouts.sequences.contains(type)) ||
                (definition.kind == 32 && layouts.dictionaries.contains(type));
     }
@@ -126,7 +131,7 @@ namespace wio::vm::detail
 
     bool packNativeSequence(const bytecode::Module& module, const Value& value, std::uint32_t type,
                             const NativePodLayouts& layouts, WioNativeAbiValue& output, std::string& error,
-                            unsigned depth)
+                            unsigned depth, const NativeObjectAccess* objects)
     {
         const auto adapter = layouts.sequences.find(type);
         if (adapter == layouts.sequences.end())
@@ -150,7 +155,7 @@ namespace wio::vm::detail
         elements.values.resize(value.elementCount());
         for (std::size_t index = 0; index < value.elementCount(); ++index)
             if (!encodeNativeValue(module, *value.element(index), elementType, marshalling, elements.values[index],
-                                   error, &layouts, depth + 1))
+                                   error, &layouts, depth + 1, objects))
                 return false;
         WireGuard result;
         WioNativeAbiFailure failure;
@@ -174,7 +179,8 @@ namespace wio::vm::detail
     }
 
     NativeValueResult unpackNativeSequence(const bytecode::Module& module, const WioNativeAbiValue& value,
-                                           std::uint32_t type, const NativePodLayouts& layouts, unsigned depth)
+                                           std::uint32_t type, const NativePodLayouts& layouts, unsigned depth,
+                                           const NativeObjectAccess* objects)
     {
         const auto adapter = layouts.sequences.find(type);
         if (adapter == layouts.sequences.end() || depth > 64)
@@ -206,7 +212,8 @@ namespace wio::vm::detail
                 failure.status = status;
                 return {{}, nativeFailureMessage(failure)};
             }
-            auto decoded = decodeNativeValue(module, element.value, elementType, marshalling, &layouts, depth + 1);
+            auto decoded =
+                decodeNativeValue(module, element.value, elementType, marshalling, &layouts, depth + 1, objects);
             if (!decoded.succeeded())
                 return decoded;
             elements.push_back(std::move(decoded.value));

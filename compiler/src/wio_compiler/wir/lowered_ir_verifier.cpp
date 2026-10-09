@@ -100,10 +100,16 @@ namespace wio::wir::lowered
             return nullptr;
         }
 
-        const Type* underlyingObjectType(const TypeTable& types, TypeId typeId, TypeId* nominalId = nullptr)
+        const Type* underlyingObjectType(const TypeTable& types, TypeId typeId, TypeId* nominalId = nullptr,
+                                         bool allowNullable = false)
         {
             const Type* type = types.tryGet(typeId);
             if (type && type->kind == TypeKind::Reference && type->arguments.size() == 1)
+            {
+                typeId = type->arguments.front();
+                type = types.tryGet(typeId);
+            }
+            if (allowNullable && type && type->kind == TypeKind::Nullable && type->arguments.size() == 1)
             {
                 typeId = type->arguments.front();
                 type = types.tryGet(typeId);
@@ -1745,8 +1751,8 @@ namespace wio::wir::lowered
                     else if (instruction.opcode == Opcode::IdentityEqual)
                     {
                         if (instruction.operands.size() != 2 ||
-                            !underlyingObjectType(module.types, valueType(instruction.operands[0])) ||
-                            !underlyingObjectType(module.types, valueType(instruction.operands[1])) ||
+                            !underlyingObjectType(module.types, valueType(instruction.operands[0]), nullptr, true) ||
+                            !underlyingObjectType(module.types, valueType(instruction.operands[1]), nullptr, true) ||
                             instruction.resultType != module.types.boolType() ||
                             (instruction.binaryOperator != typed::BinaryOperator::Equal &&
                              instruction.binaryOperator != typed::BinaryOperator::NotEqual))

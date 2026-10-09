@@ -14,10 +14,11 @@ namespace wio::vm::detail
     [[nodiscard]] bool validNativeContainerWire(const WioNativeAbiValue& value, std::uint64_t typeId);
     [[nodiscard]] bool packNativeSequence(const bytecode::Module& module, const Value& value, std::uint32_t type,
                                           const NativePodLayouts& layouts, WioNativeAbiValue& output,
-                                          std::string& error, unsigned depth);
+                                          std::string& error, unsigned depth,
+                                          const NativeObjectAccess* objects = nullptr);
     [[nodiscard]] NativeValueResult unpackNativeSequence(const bytecode::Module& module, const WioNativeAbiValue& value,
                                                          std::uint32_t type, const NativePodLayouts& layouts,
-                                                         unsigned depth);
+                                                         unsigned depth, const NativeObjectAccess* objects = nullptr);
     // Recurses through sequence/component cells by storage identity. Container
     // element projections have no producer-side address contract yet.
     [[nodiscard]] bool containsNativeSequencePlace(const Value& root, const Value& target, unsigned depth = 0);
