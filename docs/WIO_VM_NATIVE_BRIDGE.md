@@ -2651,3 +2651,78 @@ This does not qualify borrowed POD callbacks, object/interface/nullable or
 container callback values, callback return values that are themselves callable,
 callback/async borrowed lifetime, arbitrary foreign ownership or consumed
 arguments. Native Step 8 remains open; pruning and packaging remain separate.
+
+## Qualified By-Value Wio Object Callbacks
+
+Native free functions can accept callbacks with Wio object, concrete generic
+object, interface and nullable object/interface values. Register the producer's
+object proxy sidecar before callback creation. Missing proxy contracts fail as
+WVM1225 before native entry. The generator discovers object adapters through
+callback argument/result types, including concrete objects mentioned only as
+callback results. This extends the preceding POD callback slice's nullable
+object rejection; ref/view callback signatures remain unsupported.
+
+```wio
+using cpp::header("transforms.h");
+use std::attribute as attribute;
+
+[Native, CppName(Transform)]
+fn Transform(callback: fn(Item) -> Item, input: Item) -> Item;
+
+[Native, CppName(Store)]
+fn Store([attribute::NativeCallback("retained", "any")] callback: fn(Item) -> Item,
+         input: Item);
+
+let original = Item(7);
+let same = Transform((value) => value, original);
+// same and original share object identity; this is not a POD byte copy.
+Store((value) => Item(value.Read() + 2), original);
+```
+
+Generated C++ callbacks use the existing typed object proxy codecs. On VM entry,
+the proxy must resolve to an original object hosted by this machine and match
+the declared concrete/interface contract. A foreign-owned C++ object or another
+machine's proxy is rejected with `WIO_NATIVE_ABI_TYPE_MISMATCH`. Malformed kind,
+stable identity, generation or producer operations are also rejected. Nullable
+null requires the explicit nullable wire flag; a required parameter cannot
+receive that null. No wire, object-sidecar or bytecode version changes are needed.
+
+Returned object wires own a hosted claim. Release them with
+`WioNativeAbiReleaseValue` when finished; generated C++ codecs do this
+automatically. Identity and mutation remain visible to the original Wio object.
+Retained callbacks may return newly constructed objects after their originating
+Wio frame has exited. External result/callback wires can be released after
+machine destruction, but cannot invoke the destroyed machine. The producer's
+code must remain loaded for any wire operations that use its adapters; this
+slice does not add automatic code leases to manually registered host APIs.
+
+Callback captures now live in a dedicated lifetime domain. Final native lease
+release, including foreign-thread release, queues closure cleanup; it does not
+run Wio destructors on that foreign thread. A VM safe point drains the retired
+captures under the execution lock. Multiple native leases keep the capture
+alive until the last lease is released. Machine shutdown drops outstanding
+captures and later callback invocation returns `WIO_NATIVE_ABI_STALE_HANDLE`.
+Call-scoped expiry and caller-thread affinity retain their existing rules.
+
+Closure construction also releases its temporary capture-retain copies after
+copying them into the closure environment. This common Typed WIR fix applies
+to C++ and VM execution: capture staging no longer silently extends an object's
+lifetime until enclosing-function exit. Normal capture ownership remains live
+while the closure itself is retained. Destructor failures while draining native
+callbacks are attached to WVM1211; independent invocation can recover.
+
+The new `wio_vm_native_callback_object` gate compares C++ with actual VM CLI for
+30 rounds and qualifies a live host. It covers identity, mutation, replacement,
+concrete type/const generics, interfaces, nullable values, NUL/Unicode strings,
+callback-only object results, retained worker calls, multiple native leases,
+foreign-thread final release, six malformed argument variants, cross-machine
+rejection, wrong argument count/thread, missing sidecar, panic/recovery,
+destructor failure and outstanding callback/result wires during shutdown.
+Only this new Windows gate was run: 1/1 passed in 23.35 seconds (23.45 total).
+No full-suite or local Linux qualification is claimed.
+
+This does not qualify ref/view callback arguments/results, array/dictionary/Any
+callback values, callable-valued callback results, hosted-method callback
+signatures, async borrowed lifetime, arbitrary foreign ownership or consumed
+arguments. Native Step 8 remains open; pruning and artifact packaging remain
+separate work.

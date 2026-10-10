@@ -1014,7 +1014,22 @@ Rider, and CLion are defined in
    layouts and continued ref/view/nullable-object signature rejection.
    Only this new Windows gate was run: 1/1 passed in 16.61 seconds (16.69 total);
    no full-suite or local Linux qualification is claimed.
+   By-value callbacks through native free functions now also admit Wio objects,
+   concrete type/value generic objects, interfaces and their nullable variants
+   when object proxy contracts are registered. Adapter discovery walks callback
+   signatures, including types used only as callback results. A dedicated
+   callback lifetime domain queues final lease release for VM-safe Wio cleanup;
+   shutdown drops captures even when native code still retains stale leases.
+   Typed WIR now releases capture staging copies after closure construction,
+   fixing object lifetime extension in both C++ and VM execution. A new 30-round
+   C++/actual-VM/live-host gate covers identity/mutation, retained/worker calls,
+   foreign-thread final release, multiple leases, six malformed arguments,
+   cross-machine rejection, wrong count/affinity, nullable tags, panic/recovery,
+   destructor failure and outstanding callback/result wires at machine shutdown.
+   Only this new Windows gate was run: 1/1 passed in 23.35 seconds (23.45 total);
+   no full-suite or local Linux qualification is claimed.
    Remaining native parity work includes broader callback/async lifetime contracts,
+   array/dictionary/Any callback values and hosted-method callback signatures,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; borrowed POD/object/container/nullable and
    ref/view callback signatures; nullable borrowed payload lifetime contracts;

@@ -1,0 +1,277 @@
+using cpp::header("vm_callback_object_fixture.h");
+use std::attribute as attribute;
+
+interface IRead
+{
+    fn Read() -> i32;
+}
+[From(IRead)]
+object Item
+{
+    value: i32;
+    public OnConstruct(seed: i32)
+    {
+        self.value = seed;
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+    public fn Set(value: i32)
+    {
+        self.value = value;
+    }
+}
+[From(IRead)]
+object Other
+{
+    value: i32;
+    public OnConstruct(seed: i32)
+    {
+        self.value = seed;
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+}
+object Holder<T, const Tag: usize = 5>
+{
+    value: T;
+    public OnConstruct(seed: T)
+    {
+        self.value = seed;
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Read() -> T
+    {
+        return self.value;
+    }
+}
+// This type appears only inside a callback signature, never as a free native
+// parameter or result. Object adapter discovery must walk function types.
+object CallbackOnly
+{
+    public OnConstruct()
+    {
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Read() -> i32
+    {
+        return 37;
+    }
+}
+object FailingCapture
+{
+    public OnConstruct()
+    {
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+        Fail();
+    }
+    public fn Read() -> i32
+    {
+        return 5;
+    }
+}
+
+[Native, CppName(vm_callback_object::Constructed)] fn Constructed();
+[Native, CppName(vm_callback_object::Destroyed)] fn Destroyed();
+[Native, CppName(vm_callback_object::Balanced)] fn Balanced() -> bool;
+[Native, CppName(vm_callback_object::Live)] fn Live() -> i32;
+[Native, CppName(vm_callback_object::Fail)] fn Fail();
+[Native, CppName(vm_callback_object::Print)] fn Print();
+[Native, CppName(vm_callback_object::Call), Instantiate(Item), Instantiate(Item?), Instantiate(IRead), Instantiate(IRead?), Instantiate(Holder<i32, 7>), Instantiate(Holder<string, 9>)]
+fn Call<T>(callback: fn(T) -> T, value: T) -> T;
+[Native, CppName(vm_callback_object::Pair)]
+fn Pair(callback: fn(Item, Item) -> Item, first: Item, second: Item) -> Item;
+[Native, CppName(vm_callback_object::Factory)]
+fn Factory(callback: fn() -> CallbackOnly) -> i32;
+[Native, CppName(vm_callback_object::Mutate)]
+fn Mutate(callback: fn(Item), value: Item) -> i32;
+[Native, CppName(vm_callback_object::Store)]
+fn StoreCall(callback: fn(Item) -> Item, value: Item);
+[Native, CppName(vm_callback_object::Store)]
+fn StoreCaller([attribute::NativeCallback("retained", "caller")] callback: fn(Item) -> Item, value: Item);
+[Native, CppName(vm_callback_object::Store)]
+fn StoreAny([attribute::NativeCallback("retained", "any")] callback: fn(Item) -> Item, value: Item);
+[Native, CppName(vm_callback_object::Run)] fn Run() -> i32;
+[Native, CppName(vm_callback_object::Worker)] fn Worker() -> i32;
+[Native, CppName(vm_callback_object::Expired)] fn Expired() -> bool;
+[Native, CppName(vm_callback_object::Clear)] fn Clear();
+[Native, CppName(vm_callback_object::Capture)]
+fn Capture([attribute::NativeCallback("retained", "any")] callback: fn(Item) -> Item, value: Item);
+[Native, CppName(vm_callback_object::Capture)]
+fn CaptureCaller([attribute::NativeCallback("retained", "caller")] callback: fn(Item) -> Item, value: Item);
+[Native, CppName(vm_callback_object::Capture)]
+fn CaptureNullable([attribute::NativeCallback("retained", "any")] callback: fn(Item?) -> Item?, value: Item?);
+
+fn StoreCaptured()
+{
+    let captured = Item(43);
+    StoreAny((value) => Item(value.Read() + captured.Read()), Item(7));
+}
+fn HostCapture()
+{
+    let captured = Item(43);
+    Capture((value) => Item(value.Read() + captured.Read()), Item(7));
+}
+fn HostNullable()
+{
+    CaptureNullable((value) => value, null);
+}
+fn HostCaller()
+{
+    let captured = Item(43);
+    CaptureCaller((value) => Item(value.Read() + captured.Read()), Item(7));
+}
+fn PanicCapture()
+{
+    Capture((value) => {
+        Fail();
+        return value;
+    }, Item(7));
+}
+fn FailingCleanup()
+{
+    let captured = FailingCapture();
+    StoreAny((value) => Item(value.Read() + captured.Read()), Item(7));
+}
+fn ReleaseStored()
+{
+    Clear();
+}
+fn SafePoint() -> i32
+{
+    return 19;
+}
+fn LifecycleBalanced() -> bool
+{
+    return Balanced();
+}
+fn LifecycleLive() -> i32
+{
+    return Live();
+}
+fn Entry() -> i32
+{
+    for (mut round = 0; round < 30; round += 1)
+    {
+        {
+            let first = Item(7);
+            let second = Item(19);
+            let same = Call<Item>((value) => value, first);
+            if (same != first or same.Read() != 7)
+            {
+                return 1;
+            }
+            let chosen = Pair((left, right) => right, first, second);
+            if (chosen != second)
+            {
+                return 2;
+            }
+            if (Mutate((value) => value.Set(23), first) != 23 or first.Read() != 23)
+            {
+                return 3;
+            }
+            let created = Call<Item>((value) => Item(value.Read() + 2), first);
+            if (created == first or created.Read() != 25)
+            {
+                return 4;
+            }
+            let nullable: Item? = Call<Item?>((value) => value, null);
+            if (nullable != null)
+            {
+                return 5;
+            }
+            let next: Item? = Call<Item?>((value) => Item(29), null);
+            if (next == null or next.Read() != 29)
+            {
+                return 6;
+            }
+            let cleared = Call<Item?>((value) => null, next);
+            if (cleared != null)
+            {
+                return 7;
+            }
+            let reader = Other(31) fit IRead;
+            let echoed = Call<IRead>((value) => value, reader);
+            if (echoed != reader or echoed.Read() != 31)
+            {
+                return 8;
+            }
+            let swapped = Call<IRead>((value: IRead) => first fit IRead, reader);
+            if (swapped != (first fit IRead) or swapped.Read() != 23)
+            {
+                return 9;
+            }
+            let optionalReader: IRead? = Call<IRead?>((value: IRead?) => Other(41) fit IRead, null);
+            if (optionalReader == null or optionalReader.Read() != 41)
+            {
+                return 10;
+            }
+            if (Call<IRead?>((value) => null, optionalReader) != null)
+            {
+                return 11;
+            }
+            let integer = Holder<i32, 7>(47);
+            let textValue = Holder<string, 9>("a\0🌍");
+            if (Call<Holder<i32, 7>>((value) => value, integer) != integer)
+            {
+                return 12;
+            }
+            if (Call<Holder<string, 9>>((value) => value, textValue).Read() != "a\0🌍")
+            {
+                return 13;
+            }
+            if (Factory(() => CallbackOnly()) != 37)
+            {
+                return 14;
+            }
+            StoreCall((value) => value, first);
+            if (not Expired())
+            {
+                return 15;
+            }
+            StoreCaller((value) => value, second);
+            if (Run() != 19)
+            {
+                return 16;
+            }
+            Clear();
+        }
+        StoreCaptured();
+        if (Run() != 50 or Worker() != 50)
+        {
+            return 17;
+        }
+        Clear();
+        if (not Balanced())
+        {
+            return 18;
+        }
+    }
+    Print();
+    return 0;
+}

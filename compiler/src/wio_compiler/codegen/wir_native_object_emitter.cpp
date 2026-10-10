@@ -197,7 +197,7 @@ namespace wio::codegen
                 // A container may be the only object/Any native boundary.
                 if (type->kind == TypeKind::Reference || type->kind == TypeKind::Nullable ||
                     type->kind == TypeKind::AsyncTask || type->kind == TypeKind::Array ||
-                    type->kind == TypeKind::Dictionary)
+                    type->kind == TypeKind::Dictionary || type->kind == TypeKind::Function)
                     boundaryPending.insert(boundaryPending.end(), type->arguments.begin(), type->arguments.end());
             }
         };

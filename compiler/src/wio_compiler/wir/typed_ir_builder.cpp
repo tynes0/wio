@@ -3968,6 +3968,7 @@ namespace wio::wir::typed
                 std::vector<ValueId> operands;
                 std::vector<TypeId> signatureTypes;
                 std::vector<CaptureKind> captureKinds;
+                std::vector<ValueId> captureTemporaries;
                 for (const WeakRef<sema::Symbol>& weakSymbol : lambda->capturedSymbols)
                 {
                     const Ref<sema::Symbol> symbol = weakSymbol.Lock();
@@ -3992,7 +3993,12 @@ namespace wio::wir::typed
                                                  ? CaptureKind::Reference
                                                  : CaptureKind::Value;
                     if (kind == CaptureKind::Value)
+                    {
+                        const ValueId source = value;
                         value = ensureOwned(value, captureType, expression.Get(), state);
+                        if (value != source)
+                            captureTemporaries.push_back(value);
+                    }
                     captures.push_back(CaptureLayout{.name = symbol->name, .type = captureType, .kind = kind});
                     operands.push_back(value);
                     signatureTypes.push_back(captureType);
@@ -4015,12 +4021,18 @@ namespace wio::wir::typed
                     captureKinds.push_back(CaptureKind::RetainedSelf);
                 }
                 const FunctionId lambdaFunction = buildLambdaFunction(*lambda, captures, selfCaptureType);
-                return appendValue(Instruction{.opcode = Opcode::ClosureCreate,
-                                               .operands = std::move(operands),
-                                               .callee = lambdaFunction,
-                                               .signatureTypes = std::move(signatureTypes),
-                                               .captureKinds = std::move(captureKinds),
-                                               .source = SourceSpan::at(expression->location())});
+                const ValueId closure = appendValue(Instruction{.opcode = Opcode::ClosureCreate,
+                                                                .operands = std::move(operands),
+                                                                .callee = lambdaFunction,
+                                                                .signatureTypes = std::move(signatureTypes),
+                                                                .captureKinds = std::move(captureKinds),
+                                                                .source = SourceSpan::at(expression->location())});
+                // ClosureCreate copies captures into its own environment. The
+                // staging claims must not keep captured objects alive until
+                // the enclosing frame exits.
+                for (const ValueId temporary : captureTemporaries)
+                    releaseOwnedTemporary(temporary, expression.Get(), state);
+                return closure;
             }
             if (expression->is<SelfExpression>())
             {

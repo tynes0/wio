@@ -1645,3 +1645,32 @@ here as historical evidence rather than active work:
       total). No full-suite or local Linux qualification is claimed. Native
       Step 8 remains open for broader borrowed/object/container/nullable
       callbacks, async lifetime, foreign ownership, pruning and packaging.
+
+## Qualified By-Value Wio Object Callbacks and Capture Cleanup
+
+- [x] Added native free-function callback argument/result conversion for Wio
+      objects, concrete type/value generic objects, interfaces and nullable
+      variants, guarded by registered object proxy contracts. Object adapter
+      discovery now includes types reachable only through callback signatures.
+- [x] Preserved original VM identity and mutation visibility across C++ proxies;
+      wrong identities, malformed handles, untagged null, cross-machine and
+      arbitrary foreign-owned objects remain rejected rather than reinterpreted.
+      Existing wire/sidecar/bytecode versions are unchanged.
+- [x] Added a named callback lifetime domain: final native release retires a
+      closure without executing Wio on a foreign thread. VM safe points drain
+      captures through normal Wio cleanup; shutdown drains outstanding leases
+      and later callback entry returns stale-handle. Destructor failures are
+      reported as WVM1211 at the native call boundary.
+- [x] Fixed shared Typed WIR capture staging ownership. Closure creation copies
+      capture values, so its temporary retain is now released immediately;
+      objects no longer survive lexical cleanup until enclosing-frame teardown.
+- [x] Added a 30-round C++/actual-VM/live-host gate for identity/mutation,
+      multi-argument callbacks, callback-only result types, nullable interfaces,
+      generic strings with NUL/Unicode, call/retained and caller/any contracts,
+      multiple leases, foreign-thread final release, wrong count/thread, six
+      malformed arguments, cross-machine rejection, panic/recovery, cleanup
+      failure and external callback/result wires during owner shutdown.
+- [x] Only this new Windows gate was run: 1/1 passed in 23.35 seconds (23.45
+      total). No full-suite or local Linux qualification is claimed. Native
+      Step 8 remains open for borrowed/container/hosted-method callbacks,
+      async lifetime, broader foreign ownership, pruning and packaging.

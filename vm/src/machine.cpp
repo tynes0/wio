@@ -14,6 +14,7 @@
 #include "native_dictionary_internal.h"
 #include "native_any_internal.h"
 #include "native_object_internal.h"
+#include "native_callback_lifetime_internal.h"
 #include "object_layout_internal.h"
 #include "place_storage_internal.h"
 #include "string_intrinsics.h"
@@ -1063,6 +1064,7 @@ namespace wio::vm
         std::unordered_map<std::string, NativeFunction> nativeFunctions;
         std::shared_ptr<const detail::NativePodLayouts> nativePodLayouts = std::make_shared<detail::NativePodLayouts>();
         std::shared_ptr<detail::NativeObjectBridge> nativeObjects;
+        detail::NativeCallbackLifetimeDomain nativeCallbacks;
         std::vector<NativeFunction::TaskBridge> nativeTaskApis;
         std::mutex nativeTaskMutex;
         std::vector<std::shared_ptr<NativeTaskAdapter>> nativeTasks;
@@ -1609,16 +1611,20 @@ namespace wio::vm
         try
         {
             std::scoped_lock lock{program_->executionMutex};
-            if (!program_->nativeObjects)
-                return;
             ExecutionError cleanupError;
             auto& errors = primaryError ? *primaryError : cleanupError;
-            auto values = shutdown ? program_->nativeObjects->shutdown() : program_->nativeObjects->takeRetired();
-            while (!values.empty())
+            auto callbacks = program_->nativeCallbacks.takeRetired(shutdown);
+            for (auto& callable : callbacks)
+                cleanupValue(callable, errors);
+            if (program_->nativeObjects)
             {
-                for (auto& value : values)
-                    cleanupValue(value, errors);
-                values = program_->nativeObjects->takeRetired();
+                auto values = shutdown ? program_->nativeObjects->shutdown() : program_->nativeObjects->takeRetired();
+                while (!values.empty())
+                {
+                    for (auto& value : values)
+                        cleanupValue(value, errors);
+                    values = program_->nativeObjects->takeRetired();
+                }
             }
         }
         catch (...)
@@ -5199,6 +5205,15 @@ namespace wio::vm
                         }
                     }
 
+                    void releaseCallbackArguments() noexcept
+                    {
+                        expireCallCallbacks();
+                        callbacks.clear();
+                        for (auto& argument : arguments)
+                            if (argument.kind == WIO_NATIVE_ABI_CALLBACK)
+                                WioNativeAbiReleaseValue(&argument);
+                    }
+
                     ~NativeFrame()
                     {
                         expireCallCallbacks();
@@ -5324,7 +5339,7 @@ namespace wio::vm
                             std::uint8_t ignored = 0;
                             if (!detail::callbackValueMarshalling(module, callbackValueType, ignored, podLayouts.get()))
                                 return fail("WVM1225", "Native callbacks require scalar, string, text, qualified "
-                                                       "native POD or void signatures");
+                                                       "native POD, hosted object/interface or void value signatures");
                         }
 
                         auto callbackStateOwner = std::make_unique<NativeCallbackState>();
@@ -5332,15 +5347,20 @@ namespace wio::vm
                         callbackState->callerThread = std::this_thread::get_id();
                         callbackState->anyThread = abi.callbackThread == 1;
                         const std::shared_ptr<Program> callbackProgram = program_;
-                        if (callbackState->anyThread && abi.callbackLifetime == 1)
+                        const bool retainedForeign = callbackState->anyThread && abi.callbackLifetime == 1;
+                        const auto closure = callbackProgram->nativeCallbacks.retain(*direct);
+                        callbackState->onDestroy = [callbackProgram, closure, retainedForeign]
                         {
-                            callbackState->onDestroy = [callbackProgram]
-                            { callbackProgram->retainedForeignCallbacks.fetch_sub(1, std::memory_order_release); };
+                            callbackProgram->nativeCallbacks.retire(closure);
+                            if (retainedForeign)
+                                callbackProgram->retainedForeignCallbacks.fetch_sub(1, std::memory_order_release);
+                        };
+                        if (retainedForeign)
+                        {
                             callbackProgram->retainedForeignCallbacks.fetch_add(1, std::memory_order_relaxed);
                         }
-                        const Value callable = *direct;
                         const std::vector<std::uint32_t> signature = callbackType.arguments;
-                        callbackState->invoke = [callbackProgram, callable, podLayouts,
+                        callbackState->invoke = [callbackProgram, closure, podLayouts,
                                                  signature](const WioNativeAbiValue* callbackArguments,
                                                             const std::uint64_t callbackArgumentCount,
                                                             WioNativeAbiValue* callbackResult,
@@ -5361,9 +5381,28 @@ namespace wio::vm
                             }
                             const auto releaseOwner = [callbackProgram](Machine*) { callbackProgram->releaseOwner(); };
                             const std::unique_ptr<Machine, decltype(releaseOwner)> ownerGuard{owner, releaseOwner};
+                            std::scoped_lock executionLock{callbackProgram->executionMutex};
+                            const auto& callable = closure->callable;
                             const bytecode::Module& callbackModule = *callbackProgram->module;
 
                             std::vector<Value> values;
+                            const auto releaseValue = [owner](Value* value) noexcept
+                            {
+                                try
+                                {
+                                    ExecutionError error;
+                                    owner->cleanupValue(*value, error);
+                                }
+                                catch (...)
+                                {
+                                }
+                            };
+                            const auto releaseValues = [&values, &releaseValue](void*) noexcept
+                            {
+                                for (auto value = values.rbegin(); value != values.rend(); ++value)
+                                    releaseValue(&*value);
+                            };
+                            const std::unique_ptr<void, decltype(releaseValues)> valuesGuard{owner, releaseValues};
                             values.reserve(callable.captureCount() + callbackArgumentCount);
                             for (std::size_t captureIndex = 0; captureIndex < callable.captureCount(); ++captureIndex)
                             {
@@ -5382,9 +5421,18 @@ namespace wio::vm
                                 if (!detail::callbackValueMarshalling(callbackModule, signature[argumentIndex],
                                                                       callbackMarshalling, podLayouts.get()))
                                     return WIO_NATIVE_ABI_TYPE_MISMATCH;
-                                detail::NativeValueResult converted = detail::decodeNativeValue(
-                                    callbackModule, callbackArguments[argumentIndex], signature[argumentIndex],
-                                    callbackMarshalling, podLayouts.get());
+                                detail::NativeValueResult converted =
+                                    callbackMarshalling == 6
+                                        ? owner->decodeNativeObject(callbackArguments[argumentIndex],
+                                                                    signature[argumentIndex], *podLayouts)
+                                        : detail::decodeNativeValue(callbackModule, callbackArguments[argumentIndex],
+                                                                    signature[argumentIndex], callbackMarshalling,
+                                                                    podLayouts.get());
+                                if (converted.succeeded() && callbackMarshalling == 6 &&
+                                    converted.value.kind() != Value::Kind::Object &&
+                                    !(callbackModule.types[signature[argumentIndex]].kind == TypeNullable &&
+                                      converted.value.kind() == Value::Kind::Null))
+                                    converted.error = "callback argument requires an original object from this VM";
                                 if (!converted.succeeded())
                                 {
                                     setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, converted.error);
@@ -5393,7 +5441,9 @@ namespace wio::vm
                                 values.push_back(std::move(converted.value));
                             }
 
-                            const ExecutionResult execution = owner->invoke(callable.callableFunction(), values);
+                            auto execution = owner->invoke(callable.callableFunction(), values);
+                            const std::unique_ptr<Value, decltype(releaseValue)> resultGuard{&execution.value_,
+                                                                                             releaseValue};
                             if (!execution.succeeded())
                             {
                                 setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_PANIC,
@@ -5406,9 +5456,14 @@ namespace wio::vm
                                                                   podLayouts.get()))
                                 return WIO_NATIVE_ABI_TYPE_MISMATCH;
                             std::string conversionError;
-                            if (!detail::encodeOwnedNativeValue(callbackModule, execution.value(), resultType,
-                                                                resultMarshalling, *callbackResult, conversionError,
-                                                                podLayouts.get()))
+                            const bool encoded =
+                                resultMarshalling == 6
+                                    ? owner->encodeNativeObject(execution.value(), resultType, *callbackResult,
+                                                                conversionError, *podLayouts)
+                                    : detail::encodeOwnedNativeValue(callbackModule, execution.value(), resultType,
+                                                                     resultMarshalling, *callbackResult,
+                                                                     conversionError, podLayouts.get());
+                            if (!encoded)
                             {
                                 setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, conversionError);
                                 return WIO_NATIVE_ABI_TYPE_MISMATCH;
@@ -5680,7 +5735,15 @@ namespace wio::vm
                                  nativeFrame.arguments.size(), &nativeFrame.result, &nativeFailure);
                 if (permitsForeignThreadCallback)
                     executionLock.lock();
-                nativeFrame.expireCallCallbacks();
+                nativeFrame.releaseCallbackArguments();
+                ExecutionError callbackCleanup;
+                cleanupNativeObjects(false, &callbackCleanup);
+                if (!callbackCleanup.cleanupFailures.empty())
+                {
+                    ExecutionError error{"WVM1211", "Native callback cleanup failed while running a destructor"};
+                    error.cleanupFailures = std::move(callbackCleanup.cleanupFailures);
+                    return failWithStack(std::move(error));
+                }
 
                 std::string copyBackError;
                 std::vector<Value> replacements;

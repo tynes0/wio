@@ -523,14 +523,21 @@ namespace wio::vm::detail
     {
         // Callback borrows need explicit reference tokens and copy-back, not a
         // by-value slice. Do not silently classify them as their pointee type.
-        if (declaredType < module.types.size() &&
-            (module.types[declaredType].kind == TypeReference || module.types[declaredType].kind == TypeNullable))
+        if (declaredType < module.types.size() && module.types[declaredType].kind == TypeReference)
             return false;
         const std::uint32_t type = scalarType(module, declaredType);
         if (type >= module.types.size())
             return false;
         const std::uint8_t kind = module.types[type].kind;
-        if (kind == TypeVoid)
+        const bool hostedObject =
+            kind == TypeNamed &&
+            (module.types[type].nominalKind == NominalObject || module.types[type].nominalKind == NominalInterface) &&
+            layouts && layouts->objectContracts.contains(type);
+        if (isNullable(module, declaredType) && !hostedObject)
+            return false;
+        if (hostedObject)
+            marshalling = 6;
+        else if (kind == TypeVoid)
             marshalling = 0;
         else if (kind == TypeBool || (kind >= TypeI8 && kind <= TypeF64) || kind == TypeByte || kind == TypeChar)
             marshalling = 1;
