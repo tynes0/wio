@@ -15,6 +15,7 @@
 #include "native_any_internal.h"
 #include "native_object_internal.h"
 #include "object_layout_internal.h"
+#include "place_storage_internal.h"
 #include "string_intrinsics.h"
 #include "text_intrinsics.h"
 
@@ -39,161 +40,6 @@
 
 namespace wio::vm
 {
-    struct PlaceProjectionDomain final
-    {
-        PlaceStorage* first = nullptr;
-        ~PlaceProjectionDomain();
-        void retireCells(const Value& root, bool includeRoot = false) noexcept;
-        void remapCell(const Value* source, Value* destination, const Value& oldDictionary, const Value& newDictionary);
-    };
-
-    class PlaceStorage final
-    {
-    public:
-        Value value;
-        Value owner;
-        Value* alias = nullptr;
-        PlaceStorage* borrowedRoot = nullptr;
-        PlaceStorage* firstProjection = nullptr;
-        PlaceStorage* previousProjection = nullptr;
-        PlaceStorage* nextProjection = nullptr;
-        PlaceProjectionDomain* domain = nullptr;
-        PlaceStorage* previousDomainProjection = nullptr;
-        PlaceStorage* nextDomainProjection = nullptr;
-        bool initialized = false;
-        bool mutableValue = true;
-
-        PlaceStorage() = default;
-        PlaceStorage(const PlaceStorage&) = delete;
-        PlaceStorage& operator=(const PlaceStorage&) = delete;
-
-        ~PlaceStorage()
-        {
-            detachProjection();
-            retireProjections();
-        }
-
-        void bindProjection(PlaceStorage* root, PlaceProjectionDomain* projectionDomain = nullptr) noexcept
-        {
-            domain = projectionDomain;
-            if (domain)
-            {
-                nextDomainProjection = domain->first;
-                if (nextDomainProjection)
-                    nextDomainProjection->previousDomainProjection = this;
-                domain->first = this;
-            }
-            borrowedRoot = root;
-            if (!root)
-                return;
-            nextProjection = root->firstProjection;
-            if (nextProjection)
-                nextProjection->previousProjection = this;
-            root->firstProjection = this;
-        }
-
-        void detachProjection() noexcept
-        {
-            if (domain)
-            {
-                if (previousDomainProjection)
-                    previousDomainProjection->nextDomainProjection = nextDomainProjection;
-                else
-                    domain->first = nextDomainProjection;
-                if (nextDomainProjection)
-                    nextDomainProjection->previousDomainProjection = previousDomainProjection;
-                domain = nullptr;
-                previousDomainProjection = nullptr;
-                nextDomainProjection = nullptr;
-            }
-            if (!borrowedRoot)
-                return;
-            if (previousProjection)
-                previousProjection->nextProjection = nextProjection;
-            else
-                borrowedRoot->firstProjection = nextProjection;
-            if (nextProjection)
-                nextProjection->previousProjection = previousProjection;
-            borrowedRoot = nullptr;
-            previousProjection = nullptr;
-            nextProjection = nullptr;
-        }
-
-        void retireProjections() noexcept
-        {
-            while (firstProjection)
-            {
-                auto* projected = firstProjection;
-                projected->detachProjection();
-                projected->initialized = false;
-                projected->alias = nullptr;
-            }
-        }
-
-        [[nodiscard]] Value& storedValue() noexcept
-        {
-            return alias ? *alias : value;
-        }
-
-        [[nodiscard]] const Value& storedValue() const noexcept
-        {
-            return alias ? *alias : value;
-        }
-
-        void clear() noexcept
-        {
-            retireProjections();
-            storedValue() = {};
-            initialized = false;
-        }
-    };
-
-    PlaceProjectionDomain::~PlaceProjectionDomain()
-    {
-        // Escaped owner-backed places may outlive the Machine. Their physical
-        // storage remains owned, but the program's tracking list must not.
-        while (first)
-        {
-            auto* projected = first;
-            first = projected->nextDomainProjection;
-            projected->domain = nullptr;
-            projected->previousDomainProjection = nullptr;
-            projected->nextDomainProjection = nullptr;
-        }
-    }
-
-    void PlaceProjectionDomain::retireCells(const Value& root, bool includeRoot) noexcept
-    {
-        if (!includeRoot && root.kind() != Value::Kind::Array && root.kind() != Value::Kind::Dictionary &&
-            root.kind() != Value::Kind::Component)
-            return;
-        for (auto* projected = first; projected;)
-        {
-            auto* next = projected->nextDomainProjection;
-            if (projected->initialized && projected->alias && (includeRoot || projected->alias != &root) &&
-                detail::containsNativeContainerCell(root, projected->alias))
-            {
-                projected->detachProjection();
-                projected->initialized = false;
-                projected->alias = nullptr;
-            }
-            projected = next;
-        }
-    }
-
-    void PlaceProjectionDomain::remapCell(const Value* source, Value* destination, const Value& oldDictionary,
-                                          const Value& newDictionary)
-    {
-        for (auto* projected = first; projected; projected = projected->nextDomainProjection)
-            if (projected->initialized && projected->alias == source)
-            {
-                projected->alias = destination;
-                if (projected->owner.kind() == Value::Kind::Dictionary && projected->owner.dictionaryCount() &&
-                    projected->owner.dictionaryKey(0) == oldDictionary.dictionaryKey(0))
-                    projected->owner = newDictionary;
-            }
-    }
-
     namespace
     {
         // These values are part of the pinned bytecode semantic-enum ABI.
@@ -3610,6 +3456,37 @@ namespace wio::vm
                     return value ? valueIndex(*value) : std::nullopt;
                 };
 
+                ExecutionError dictionaryCleanup;
+                const auto replaceIntrinsicValue = [&](Value& target, Value replacement)
+                {
+                    const auto kind = target.kind();
+                    if (kind == replacement.kind() &&
+                        (kind == Value::Kind::Array || kind == Value::Kind::Dictionary ||
+                         kind == Value::Kind::Component || kind == Value::Kind::Any) &&
+                        target.scalar_.aggregate == replacement.scalar_.aggregate)
+                        return; // Actual self-assignment does not invalidate its descendants.
+                    program_->projections.retireCells(target);
+                    auto retired = std::move(target);
+                    target = std::move(replacement);
+                    cleanupValue(retired, dictionaryCleanup);
+                };
+                const auto setDictionary = [&](Value key, Value value)
+                {
+                    Value& target = receiverPlace->storedValue();
+                    if (auto* existing = target.mutableDictionaryValue(key))
+                    {
+                        // The entry cell survives assignment, but references
+                        // into its old value graph do not acquire the new graph.
+                        replaceIntrinsicValue(*existing, std::move(value));
+                    }
+                    else
+                    {
+                        DictionaryPlaceMutation mutation{program_->projections, target};
+                        target.dictionarySet(std::move(key), std::move(value));
+                        mutation.remap();
+                    }
+                };
+
                 // VM structural array operations must obey the same conservative
                 // descendant-expiry contract as native structural copy-back.
                 // Retire while the old cells are still addressable, before a
@@ -3949,7 +3826,7 @@ namespace wio::vm
                         return fail("WVM1085", "Dictionary TryGet requires a mutable initialized output place");
                     const Value* value = receiver->dictionaryValue(*key);
                     if (value)
-                        outPlace->storedValue() = *value;
+                        replaceIntrinsicValue(outPlace->storedValue(), *value);
                     result = Value::boolean(value != nullptr);
                 }
                 else if (instruction.intrinsicFamily == IntrinsicDictionary &&
@@ -3960,7 +3837,7 @@ namespace wio::vm
                     const Value* value = read(instruction.operands[2]);
                     if (!receiverPlace || !receiverPlace->mutableValue || !key || !value)
                         return fail("WVM1086", "Dictionary Set requires a mutable receiver and available operands");
-                    receiverPlace->storedValue().dictionarySet(*key, *value);
+                    setDictionary(*key, *value);
                 }
                 else if (instruction.intrinsicFamily == IntrinsicDictionary &&
                          receiver->kind() == Value::Kind::Dictionary && selector == "GetOrAdd" &&
@@ -3974,8 +3851,8 @@ namespace wio::vm
                         result = *existing;
                     else
                     {
-                        receiverPlace->storedValue().dictionarySet(*key, *fallback);
-                        result = *fallback;
+                        result = *fallback; // Capture before insertion can relocate a borrowed operand.
+                        setDictionary(*key, result);
                     }
                 }
                 else if (instruction.intrinsicFamily == IntrinsicDictionary &&
@@ -4010,16 +3887,35 @@ namespace wio::vm
                     if (!receiverPlace || !receiverPlace->mutableValue || !other ||
                         other->kind() != Value::Kind::Dictionary)
                         return fail("WVM1089", "Dictionary Extend requires a mutable receiver and dictionary");
+                    // Source may alias the target (including projected inputs).
+                    // Snapshot operands before any replacement/cleanup/reentry.
+                    std::vector<Value> entries;
+                    entries.reserve(other->dictionaryCount() * 2);
                     for (std::size_t index = 0; index < other->dictionaryCount(); ++index)
-                        receiverPlace->storedValue().dictionarySet(*other->dictionaryKey(index),
-                                                                   *other->dictionaryValue(index));
+                    {
+                        entries.push_back(*other->dictionaryKey(index));
+                        entries.push_back(*other->dictionaryValue(index));
+                    }
+                    for (std::size_t index = 0; index < entries.size(); index += 2)
+                        setDictionary(std::move(entries[index]), std::move(entries[index + 1]));
                 }
                 else if (instruction.intrinsicFamily == IntrinsicDictionary &&
                          receiver->kind() == Value::Kind::Dictionary && selector == "Clear")
                 {
                     if (!receiverPlace || !receiverPlace->mutableValue)
                         return fail("WVM1090", "Dictionary Clear requires a mutable receiver");
-                    receiverPlace->storedValue().dictionaryClear();
+                    Value& target = receiverPlace->storedValue();
+                    std::vector<Value> retired;
+                    retired.reserve(target.dictionaryCount() * 2);
+                    program_->projections.retireCells(target);
+                    for (std::size_t index = 0; index < target.dictionaryCount(); ++index)
+                    {
+                        retired.push_back(std::move(*const_cast<Value*>(target.dictionaryKey(index))));
+                        retired.push_back(std::move(*target.mutableDictionaryValue(index)));
+                    }
+                    target.dictionaryClear();
+                    for (auto cell = retired.rbegin(); cell != retired.rend(); ++cell)
+                        cleanupValue(*cell, dictionaryCleanup);
                 }
                 else if (instruction.intrinsicFamily == IntrinsicDictionary &&
                          receiver->kind() == Value::Kind::Dictionary && selector == "Remove" &&
@@ -4028,7 +3924,19 @@ namespace wio::vm
                     const Value* key = read(instruction.operands[1]);
                     if (!receiverPlace || !receiverPlace->mutableValue || !key)
                         return fail("WVM1091", "Dictionary Remove requires a mutable receiver and key");
-                    result = Value::boolean(receiverPlace->storedValue().dictionaryRemove(*key));
+                    Value savedKey = *key;
+                    Value& target = receiverPlace->storedValue();
+                    // Allocate the alias snapshots before moving any owned value.
+                    DictionaryPlaceMutation mutation{program_->projections, target};
+                    Value retired;
+                    if (auto* removed = target.mutableDictionaryValue(savedKey))
+                    {
+                        program_->projections.retireCells(*removed, true);
+                        retired = std::move(*removed);
+                    }
+                    result = Value::boolean(target.dictionaryRemove(savedKey));
+                    mutation.remap(); // Other entries must be live before destructor callbacks run.
+                    cleanupValue(retired, dictionaryCleanup);
                 }
                 else if (instruction.intrinsicFamily == IntrinsicDictionary &&
                          receiver->kind() == Value::Kind::Dictionary &&
@@ -4055,6 +3963,12 @@ namespace wio::vm
                 }
                 else
                     return fail("WVM1061", "Container or text intrinsic is not implemented: " + std::string{selector});
+                if (!dictionaryCleanup.cleanupFailures.empty())
+                {
+                    ExecutionError error{"WVM1211", "Dictionary mutation cleanup failed while running a destructor"};
+                    error.cleanupFailures = std::move(dictionaryCleanup.cleanupFailures);
+                    return failWithStack(std::move(error));
+                }
                 if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(result)))
                     return fail("WVM1009", "Intrinsic result register is invalid");
                 ++frame.instruction;

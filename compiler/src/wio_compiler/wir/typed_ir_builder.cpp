@@ -4754,14 +4754,25 @@ namespace wio::wir::typed
                         if (!appendCallArgument(instruction, argument, expectedType, state))
                             return {};
                     }
+                    // Dictionary operations copy their value inputs into the
+                    // container/result. Do not retain argument SSA owners until
+                    // function teardown after that copy has completed.
+                    const std::vector<ValueId> dictionaryArguments =
+                        instruction.intrinsicFamily == IntrinsicFamily::Dictionary
+                            ? std::vector<ValueId>{instruction.operands.begin() + 1, instruction.operands.end()}
+                            : std::vector<ValueId>{};
                     if (callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Void)
                     {
                         currentBlock(state).instructions.push_back(std::move(instruction));
+                        for (const ValueId argument : dictionaryArguments)
+                            releaseOwnedTemporary(argument, expression.Get(), state);
                         if (!mutating)
                             releaseOwnedTemporary(receiver, expression.Get(), state);
                         return {};
                     }
                     const ValueId result = appendValue(std::move(instruction));
+                    for (const ValueId argument : dictionaryArguments)
+                        releaseOwnedTemporary(argument, expression.Get(), state);
                     if (!mutating)
                         releaseOwnedTemporary(receiver, expression.Get(), state);
                     return result;

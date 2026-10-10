@@ -1140,6 +1140,15 @@ namespace wio::vm
             return false;
         }
         std::vector<Value>& entries = scalar_.aggregate->values();
+        // Keep pair insertion atomic with respect to allocation failure: neither
+        // key nor value is moved until space for both cells is available.
+        if (entries.capacity() - entries.size() < 2)
+        {
+            const auto required = entries.size() + 2;
+            const auto capacity = entries.capacity();
+            const auto growth = capacity <= entries.max_size() - capacity / 2 ? capacity + capacity / 2 : required;
+            entries.reserve((std::max)(required, growth));
+        }
         entries.push_back(std::move(key));
         entries.push_back(std::move(value));
         if (dictionaryIsOrdered())

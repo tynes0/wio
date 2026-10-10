@@ -975,8 +975,17 @@ Rider, and CLion are defined in
    1/1 passed in 17.01 seconds (17.08 total). Four older result expectations
    were updated but their gates were not run. Native Step 8 stays open;
    no full-suite or local Linux qualification is claimed.
-   Remaining native parity work includes dictionary-intrinsic borrow remapping,
-   projected Any/object/nullable result qualification, broader VM-created object signatures,
+   Dictionary intrinsic mutation now remaps surviving direct key/value aliases
+   by key, preserves repeated/owner-backed aliases and expires removed or
+   replaced container descendants. Set/GetOrAdd/Extend/TryGet/Remove/Clear
+   cleanup is qualified with mapped object and nullable-object borrowed results,
+   call-boundary argument release, exactly-once destruction, destructor failures
+   and recovery in a new 30-round C++/actual-VM/live-host gate. Place storage and
+   projection bookkeeping now live in named internal classes outside Machine.
+   Only this new Windows gate was run: 1/1 passed in 23.36 seconds (23.47 total);
+   no full-suite or local Linux qualification is claimed.
+   Remaining native parity work includes projected Any result qualification,
+   broader VM-created object and nullable signatures,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and
    ref/view callback signatures; nullable borrowed payload lifetime contracts;

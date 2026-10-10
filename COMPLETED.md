@@ -1548,3 +1548,28 @@ here as historical evidence rather than active work:
       dictionary intrinsic remapping, map-key/bool-proxy references and broader
       callback/foreign ownership remain separate work. No full-suite or local
       Linux qualification is claimed.
+
+## Dictionary Intrinsic Borrow and Cleanup Consistency
+
+- [x] Extracted VM Place storage/projection bookkeeping into named internal
+      classes. Added mutation guards that capture live direct key/value aliases
+      before relocation/reordering and rebind surviving cells by their keys.
+      Repeated and owner-backed aliases preserve identity; removed cells expire.
+- [x] Qualified Set/GetOrAdd/Extend/TryGet/Remove/Clear across intrinsic and native
+      projected borrows. Direct mapped-cell references survive value assignment;
+      replaced container descendants expire, and actual same-storage assignments
+      preserve descendants. Remove/reinsert never revives expired aliases.
+- [x] Added explicit VM cleanup for replaced/removed object claims, updated map
+      state before destructor callbacks and preserved cleanup errors/recovery.
+      Dictionary insertion reserves a whole key/value pair with geometric growth.
+- [x] Fixed Typed WIR dictionary intrinsic argument lifetime in both C++ and VM:
+      owning argument copies release after the call/result rather than retaining
+      objects until function teardown. Borrowed outputs remain borrowed.
+- [x] Added a focused 30-round C++/actual-VM/live-host gate covering ordered and
+      unordered mutation, repeated aliases, mapped scalar/string/array/POD/object/
+      nullable-object results, lexical/output/fallback/extension ownership,
+      direct key-cell unit checks, child expiry, three destructor-failure paths
+      and recovery. Native Step 8 stays open; native key-reference signatures,
+      projected Any results and broader ownership/callback work remain separate.
+- [x] Only the new Windows gate was run: 1/1 passed in 23.36 seconds (23.47
+      total). No full-suite or local Linux qualification is claimed.

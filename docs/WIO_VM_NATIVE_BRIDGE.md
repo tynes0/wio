@@ -2373,3 +2373,65 @@ Step 8 stays open. Projected Any/object/nullable result qualification, dictionar
 intrinsic remapping, map-key references, bool proxies, asynchronous borrows and
 broader callback/foreign ownership are not closed by this slice. No full-suite
 or local Linux qualification is claimed.
+
+## Dictionary Intrinsic Borrow and Cleanup Consistency
+
+VM dictionary intrinsic mutations now use the same key-based identity model as
+native dictionary copy-back. `Set`, inserting `GetOrAdd`, `Extend` and `Remove`
+capture live direct key/value Place aliases before entry-vector relocation or
+ordered-map sorting, then resolve surviving aliases by their original key.
+Repeated aliases and owner-backed Places still name the same surviving cell.
+Capture visits only tracked live projections, not a cloned dictionary graph;
+the owned key snapshots cannot become dangling during relocation.
+
+```wio
+using cpp::header("scores.h");
+
+[Native, CppName(scores::Borrow)]
+fn Borrow(values: ref Dict<string, i32>, value: ref i32) -> ref i32;
+
+mut scores: Dict<string, i32> = {"kept": 7, "other": 9};
+let kept: ref i32 = Borrow(ref scores, ref scores["kept"]);
+scores.Set("new", 11);
+scores.Remove("other");
+scores.Set("kept", 13);
+deref kept = 17; // Still the mapped cell of "kept", not an old vector address.
+```
+
+Assigning a mapped value preserves its direct cell borrow but expires projections
+into its replaced array/dictionary/component graph. An actual same-storage
+assignment, including `TryGet` into its source cell, preserves descendants.
+Owning argument copies are distinct storage: `Extend(values)` can replace nested
+value graphs even though the source expression names the receiver. Removed
+key/value cells and all their container descendants expire; reinserting the same
+key does not revive the old borrow. `Clear` expires entries, not the dictionary
+root. Reading an expired Place fails with `WVM1043`.
+
+`Set`, `Extend`, `TryGet`, `Remove` and `Clear` run VM-owned object cleanup for
+replaced/removed claims instead of merely destroying raw Value handles.
+Surviving aliases are rebound and the dictionary state is updated before
+destructor callbacks run. Destructor failures use `WVM1211` with attached
+cleanup failures, and invocation recovery remains usable. Pair insertion reserves
+both cells before moving either key/value, using geometric capacity growth.
+
+This gate also exposed a backend-neutral ownership bug: dictionary intrinsic
+argument copies were retained until function teardown. Typed WIR now emits
+cleanup after the call/result is materialized, so both C++ and VM release these
+temporary owners at the call boundary. Borrowed output parameters are not
+released. The test checks unused object fallbacks, lexical owners, output
+replacement, extension copies and exactly-once destruction.
+
+`wio_vm_native_dictionary_intrinsic` compares a C++ executable with actual VM CLI
+execution for 30 rounds, then qualifies a live native host and direct Place
+remapping unit. It covers unordered growth/erase, ordered reordering, repeated
+aliases, mapped scalar/string/array/POD/object/nullable-object borrowed results,
+same-cell output assignment, nested-child expiry, remove/reinsert and clear
+expiry, three destructor-failure paths and recovery. Native dictionary **key
+reference arguments/results** remain unqualified; the key-cell unit is internal
+VM storage coverage only. Projected Any results, broader nullable/callback
+lifetime contracts, bool proxies, shared iterator structural mutation, foreign
+ownership and artifact packaging remain separate work. Native Step 8 stays open.
+No ABI/sidecar/bytecode version changes are required by this slice.
+
+Only this new Windows gate was run: 1/1 passed in 23.36 seconds (23.47 total).
+No full-suite or local Linux qualification is claimed.

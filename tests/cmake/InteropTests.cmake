@@ -1081,3 +1081,19 @@ add_test(
 )
 wio_test_labels(wio_vm_native_projected_borrow interop vm native container pod projection borrowed-result differential release-gate)
 set_tests_properties(wio_vm_native_projected_borrow PROPERTIES TIMEOUT 600)
+
+add_test(
+    NAME wio_vm_native_dictionary_intrinsic
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_dictionary_intrinsic.wio"
+        "-DWIO_EXPECTED_OUTPUT=native-dictionary-intrinsic-ok:30"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-dictionary-intrinsic"
+        "-DWIO_DICTIONARY_HOST_EXECUTABLE=$<TARGET_FILE:wio_vm_native_dictionary_intrinsic_test>"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_dictionary_intrinsic_test.cmake"
+)
+wio_test_labels(wio_vm_native_dictionary_intrinsic interop vm native container dictionary projection borrowed-result cleanup differential release-gate)
+set_tests_properties(wio_vm_native_dictionary_intrinsic PROPERTIES TIMEOUT 600)
