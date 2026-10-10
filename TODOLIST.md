@@ -686,17 +686,19 @@ Rider, and CLion are defined in
    ref copy-back now permits dynamic array growth/shrink/clear with invalidation
    of replaced element storage. Overlapping dynamic-array/element arguments now
    use capability-gated logical index projections into one producer root slot;
-   registered POD field/fixed-array paths compose with those indices; dictionary
-   and bool-proxy paths remain unqualified.
+   registered POD field/fixed-array paths compose with those indices. Dictionary
+   value paths now use typed, capability-gated key lookups; key references and
+   bool-proxy paths remain unqualified.
    Dictionary adapters now cover ordered/unordered maps, portable key identities,
    string/text/native-POD/nullable-opaque values, nested dictionaries and mixed
    array/dictionary shapes. Bulk producer reads use one traversal; copy-back
    matches by key and updates existing cells despite unordered rehashing.
    Same-key-set ref updates and escaped producer-library lifetime have focused
    coverage. Structural key-set updates now remap surviving key/value places and
-   invalidate removed keys, including nested sequence changes. Shared iterator/
-   snapshot storage and dictionary/descendant arguments remain explicitly
-   unqualified.
+   invalidate removed keys, including nested sequence changes. Dictionary/value
+   arguments now share one producer slot, including mixed array/map/POD paths.
+   Shared iterator/snapshot structural storage and dictionary key references
+   remain explicitly unqualified.
    Any adapters now materialize VM-created value payloads and decode producer
    any results using stable payload identities. Producer cell backing preserves
    shared-copy mutation, while whole-value ref replacement leaves old aliases
@@ -929,13 +931,29 @@ Rider, and CLion are defined in
    POD element and field arguments share one outermost producer slot even in
    reverse order; mutable fields dirty readonly roots. Existing ABI structures
    keep their sizes and old producers require a new capability bit. Projected
-   results and dictionary/bool paths remain excluded; Native Step 8 stays open.
+   results and dictionary/bool paths remained excluded at this stage; the next
+   slice qualifies dictionary value paths. Native Step 8 stays open.
    A new 30-round C++/actual-VM/live-host gate also covers multiple Wio surfaces
    of one C++ POD, 18 malformed ABI variants, old capability rejection, expired
    descendants, unsupported standalone fixed arrays, native failures and recovery.
    Only this new Windows gate was run: 1/1 passed in 12.83 seconds (12.90 total).
    The old POD-field expectation was updated without running that old gate.
    No full-suite or local Linux qualification is claimed.
+   Dictionary value projections now resolve portable keys in typed producer maps,
+   never unordered entry positions. Mixed array/dictionary/nested-map/POD/fixed-array
+   paths preserve one outermost root, repeated aliases, reversed order and mutable
+   values under readonly roots. Typed child identities and key codecs validate
+   every step; owned key wires outlive source mutation and release with the frame.
+   Structural key updates preserve surviving VM borrows and expire removed cells.
+   Root-bound borrowed results remain supported; projected results, map-key
+   references, bool proxies and broader callback/foreign ownership stay excluded.
+   A new 30-round C++/actual-VM/live-host Windows gate covers scalar/NUL/string/
+   Unicode/enum/u64/char/bool keys, mixed paths, Any, generic/nullable object values,
+   hidden POD state, copy-back destruction failures, balanced ownership, 32 forged
+   path variants, old capability rejection and recovery. Only this new gate was
+   run: 1/1 passed in 33.27 seconds (33.34 total). The old overlap negative gate
+   expectation was updated but that gate was not run. Native Step 8 stays open;
+   no full-suite or local Linux qualification is claimed.
    Remaining native parity work includes broader VM-created object signatures,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and

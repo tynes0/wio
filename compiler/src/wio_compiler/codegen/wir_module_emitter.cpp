@@ -243,6 +243,7 @@ namespace wio::codegen
         out << "#if defined(_WIN32)\n#define WIO_WIR_EXPORT __declspec(dllexport)\n#else\n#define WIO_WIR_EXPORT "
                "__attribute__((visibility(\"default\")))\n#endif\n";
         out << WirNativePodEmitter::emitProjectionAccess(module, type);
+        out << WirNativeContainerEmitter::emit(module, type);
         const auto thunk = [&](const lowered::Function& f, const std::string& name)
         {
             out << "static WioNativeAbiStatus " << name
@@ -262,12 +263,12 @@ namespace wio::codegen
                     continue;
                 const auto base = parameter.arguments.front();
                 const auto& target = module.types.get(base);
-                if (target.kind == TypeKind::Array ||
+                if (target.kind == TypeKind::Array || target.kind == TypeKind::Dictionary ||
                     (target.kind == TypeKind::Named && target.nominalKind == NominalKind::Component &&
                      target.nominalRepresentation == NominalRepresentation::NativePod))
                     out << "    if (!(args[" << i
                         << "].flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED | "
-                           "WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED))) "
+                           "WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED | WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED))) "
                         << "(void)frame.borrow<" << type(base) << ", " << wireId(base) << "ULL>(args[" << i << "], "
                         << (parameter.isMutable ? "true" : "false") << ");\n";
             }
@@ -317,7 +318,7 @@ namespace wio::codegen
                     out << "    if (value.borrowIdentity() && value.borrowIdentity() == p" << i
                         << ".borrowIdentity() && !(args[" << i
                         << "].flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED | "
-                           "WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED))"
+                           "WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED | WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED))"
                         << (r.isMutable ? " && value.canRebind()" : "") << ") {\n"
                         << "      result->kind = WIO_NATIVE_ABI_REFERENCE; result->typeId = " << wireId(base)
                         << "ULL;\n      result->flags = WIO_NATIVE_ABI_VALUE_BORROWED"
@@ -360,7 +361,8 @@ namespace wio::codegen
                 const auto& b = *f->nativeBinding;
                 out << "{WIO_NATIVE_ABI_VERSION,WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES | "
                        "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS | "
-                       "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS,"
+                       "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS | "
+                       "WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS,"
                     << stableModuleHash(b.stableKey) << "ULL," << quoted(b.stableKey) << ',' << quoted(b.symbol) << ','
                     << quoted(b.thunkSymbol) << ",&" << b.thunkSymbol << "},\n";
             }
@@ -373,7 +375,6 @@ namespace wio::codegen
                "&_native_registry; }\n";
         out << WirApplicationEmitter::emit(module, type);
         out << WirNativePodEmitter::emit(module, type);
-        out << WirNativeContainerEmitter::emit(module, type);
         out << WirReflectionEmitter::emit(module, type, thunk);
         if (module.contract.kind != ModuleKind::WioLibrary && !nativeTaskSidecars)
             return out.str();

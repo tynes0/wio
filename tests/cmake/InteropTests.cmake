@@ -1049,3 +1049,19 @@ add_test(
 )
 wio_test_labels(wio_vm_native_sequence_pod_projection interop vm native container pod projection differential release-gate)
 set_tests_properties(wio_vm_native_sequence_pod_projection PROPERTIES TIMEOUT 600)
+
+add_test(
+    NAME wio_vm_native_dictionary_projection
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_dictionary_projection.wio"
+        "-DWIO_EXPECTED_OUTPUT=native-dictionary-projection-ok:30"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-dictionary-projection"
+        "-DWIO_PROJECTION_HOST_EXECUTABLE=$<TARGET_FILE:wio_vm_native_dictionary_projection_test>"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_dictionary_projection_test.cmake"
+)
+wio_test_labels(wio_vm_native_dictionary_projection interop vm native container dictionary projection differential release-gate)
+set_tests_properties(wio_vm_native_dictionary_projection PROPERTIES TIMEOUT 600)

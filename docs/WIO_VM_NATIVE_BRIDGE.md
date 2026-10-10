@@ -2199,7 +2199,8 @@ write through a field before vector growth, then stop using that native referenc
 Structural copy-back expires old VM descendants using the existing contract.
 
 Projected-field borrowed results remain rejected; their post-call lifetime
-contract is not defined yet. Dictionary paths, bool proxies, shared iterator
+contract is not defined yet. Dictionary paths remained separate at this stage
+and are extended by the next section. Bool proxies, shared iterator
 structural updates and broader foreign/callback/async ownership remain separate
 work. This slice does not close Native Step 8.
 
@@ -2216,3 +2217,69 @@ packing is permitted only when a containing POD projection is actually proven.
 Only this new Windows gate was run: 1/1 passed in 12.83 seconds (12.90 total).
 The older POD-field expectation was updated but that old gate was not run.
 Native Step 8 remains open; no full-suite or local Linux qualification is claimed.
+
+## Dictionary Value and Mixed Container Projections
+
+The additive `WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED` form carries typed array
+index steps and dictionary value lookup steps, followed optionally by a registered
+POD field projection. Its function capability is
+`WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS`. Existing wire-v2, sidecar-v1,
+bytecode versions and previous projection structure sizes are unchanged.
+
+```wio
+using cpp::header("scores.h");
+
+[Native, CppName(scores::Update)]
+fn Update(item: ref i32, values: view Dict<string, i32>);
+
+mut values: Dict<string, i32> = { "beta": 7 };
+let kept: view i32 = ref values["beta"];
+Update(ref values["beta"], ref values);
+// Native item aliases the actual mapped value, even with item-before-root order.
+// A same-key value update is visible through kept.
+```
+
+The VM identifies physical caller value cells and chooses the outermost root.
+Dictionary steps carry owned portable key wires, not VM cell addresses, C++ map
+node layouts or unordered iteration indices. String keys preserve embedded NUL
+and empty strings; Text keys preserve Unicode scalars. Scalar and native enum
+keys use their declared identities and checked codecs. The producer validates
+each container identity, step kind/reserved bits, key identity and representation,
+index bounds, existing-key lookup and terminal C++ type/identity. Optional POD
+paths use the preceding declared-field accessors; padding/hidden-field offsets
+are still rejected. Array-only projections retain their existing formats.
+
+Generated container accessors are declared before thunk instantiation. Array and
+dictionary roots are bound first, so reversed argument order works. A dictionary,
+its nested vector/map/POD, and several projected values all share one actual C++
+root slot; mutable children dirty readonly roots. Repeated references share an
+address, while distinct equal-valued entries do not. Only the outermost root
+copies back, and independently packed projected tokens are released before
+native body entry. This prevents stale object/Any claims from delaying cleanup.
+
+Mixed array -> dictionary -> value, dictionary -> array -> element, nested ordered
+and unordered maps, and dictionary -> POD -> fixed-array element/row paths are
+qualified. Native rehash/insert preserve mapped C++ references according to normal
+C++ rules. Erasing a referenced entry or resizing a nested vector invalidates
+that native reference: do not use it afterward. VM structural copy-back remaps
+surviving keys, preserves their borrows and expires removed descendants.
+
+Root-bound borrowed results still work with projected inputs. Returning a
+projected value itself remains rejected pending a post-call lifetime contract.
+Dictionary key references (as opposed to looking up mapped values by key),
+vector<bool> element proxies, shared iterator structural mutation, consumed
+arguments and broader callback/foreign ownership remain separate work.
+Native Step 8 is not closed by this slice.
+
+The new `wio_vm_native_dictionary_projection` gate compares a C++ executable
+with actual VM CLI execution over 30 rounds, then qualifies a live host. It
+covers key encodings, ordered/unordered rehash and key-set mutation, readonly roots,
+repeated aliases, reverse order, mixed paths, hidden POD state, Any replacement,
+generic/nullable object values, root-bound results and lifecycle balance.
+Host probes cover expired references, native/copy-back destructor failures,
+rejected projected results, missing capability, 23 malformed dictionary and
+9 malformed mixed-path variants, native-entry counters and recovery.
+
+Only this new Windows gate was run: 1/1 passed in 33.27 seconds (33.34 total).
+The old dictionary-overlap negative expectation was removed but that old gate
+was not run. No full-suite or local Linux qualification is claimed.

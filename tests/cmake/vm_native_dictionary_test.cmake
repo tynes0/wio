@@ -7,8 +7,8 @@ if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Dictionary producer lifetime qualification failed: ${output}\n${error}")
 endif()
 
-# Key-set changes and nested resize are qualified by wio_vm_native_container_shape.
-foreach(case IN ITEMS overlap failure)
+# Structural changes and overlapping values now have dedicated focused gates.
+foreach(case IN ITEMS failure)
     set(source "${WIO_ROOT}/tests/vm_native_dictionary_${case}.wio")
     set(bridge "${WIO_OUTPUT_DIR}/${case}${WIO_SHARED_SUFFIX}")
     set(bytecode "${WIO_OUTPUT_DIR}/${case}.wiob")
@@ -22,11 +22,7 @@ foreach(case IN ITEMS overlap failure)
     endif()
     execute_process(COMMAND "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}" --native-library "${bridge}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 30)
-    if(case STREQUAL "overlap")
-        set(expected "WVM1225.*sequence projections")
-    else()
-        set(expected "WVM1222.*dictionary failure oracle")
-    endif()
+    set(expected "WVM1222.*dictionary failure oracle")
     if("${result}" STREQUAL "0" OR NOT "${output}\n${error}" MATCHES "${expected}")
         message(FATAL_ERROR "Dictionary ${case} negative gate failed: ${result}\n${output}\n${error}")
     endif()

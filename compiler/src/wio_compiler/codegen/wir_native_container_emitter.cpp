@@ -4,11 +4,99 @@
 #include "wio/wir/native_abi_types.h"
 
 #include <algorithm>
+#include <map>
 #include <set>
 #include <sstream>
 
 namespace wio::codegen
 {
+    namespace
+    {
+        std::string projectionAccess(const wir::lowered::Module& module, const std::set<wir::TypeId>& sequences,
+                                     const std::set<wir::TypeId>& dictionaries,
+                                     const WirModuleEmitter::TypeSpelling& cpp)
+        {
+            using namespace wir;
+            const auto identity = [&](TypeId id)
+            {
+                for (const auto& reflected : module.contract.reflection)
+                    if (reflected.type == id)
+                        return reflected.stableTypeId;
+                return stableModuleHash(nativeAbiTypeKey(module.types, id));
+            };
+            const auto childIdentity = [&](TypeId id)
+            {
+                if (const auto object = nativeAbiObjectType(module.types, id))
+                    id = object;
+                return identity(id);
+            };
+            std::map<std::string, std::vector<TypeId>> groups;
+            for (const auto id : sequences)
+                groups[cpp(id)].push_back(id);
+            for (const auto id : dictionaries)
+                groups[cpp(id)].push_back(id);
+            if (groups.empty())
+                return {};
+            std::ostringstream out;
+            const std::string signature =
+                "void* storage, std::uint64_t nodeId, const WioNativeAbiContainerProjection& projection, "
+                "const WioNativeAbiContainerStep* steps, std::uint64_t count, const std::type_info& requested";
+            out << "namespace wio::wir_backend::abi {\n";
+            for (const auto& [spelling, ids] : groups)
+                out << "template<> struct NativeContainerProjectionAccess<" << spelling << "> { static void* resolve("
+                    << signature << "); };\n";
+            for (const auto& [spelling, ids] : groups)
+            {
+                out << "inline void* NativeContainerProjectionAccess<" << spelling << ">::resolve(" << signature
+                    << ") {\n"
+                    << "    using Container = " << spelling << ";\n"
+                    << "    if (!count) return resolveContainerTerminal<Container>(storage, nodeId, projection, count, "
+                       "requested);\n"
+                    << "    if (!storage || !steps || count > 64 || steps->reserved || steps->containerTypeId != "
+                       "nodeId) "
+                       "return nullptr;\n"
+                    << "    auto& value = *static_cast<Container*>(storage);\n";
+                for (const auto id : ids)
+                {
+                    const auto& type = module.types.get(id);
+                    out << "    if (nodeId == " << identity(id) << "ULL) {\n";
+                    if (type.kind == TypeKind::Array)
+                    {
+                        const auto element = type.arguments.front();
+                        if (module.types.get(element).kind == TypeKind::Bool)
+                            out << "        return nullptr; // vector<bool> has no addressable element.\n";
+                        else
+                            out << "        if (steps->kind != WIO_NATIVE_ABI_CONTAINER_INDEX || steps->index >= "
+                                   "value.size() || "
+                                   "steps->key.kind != WIO_NATIVE_ABI_VOID || steps->key.typeId || steps->key.flags || "
+                                   "steps->key.owner.state || steps->key.owner.ops) return nullptr;\n"
+                                << "        return NativeContainerProjectionAccess<" << cpp(element)
+                                << ">::resolve(std::addressof(value[steps->index]), " << childIdentity(element)
+                                << "ULL, projection, steps + 1, count - 1, requested);\n";
+                    }
+                    else
+                    {
+                        const auto key = type.arguments[0], mapped = type.arguments[1];
+                        out << "        if (steps->kind != WIO_NATIVE_ABI_CONTAINER_VALUE || steps->index || "
+                               "steps->key.typeId != "
+                            << identity(key) << "ULL) return nullptr;\n"
+                            << "        const auto key = Codec<" << cpp(key) << ", " << identity(key)
+                            << "ULL>::read(steps->key);\n"
+                            << "        const auto found = value.find(key);\n"
+                            << "        if (found == value.end()) return nullptr;\n"
+                            << "        return NativeContainerProjectionAccess<" << cpp(mapped)
+                            << ">::resolve(std::addressof(found->second), " << childIdentity(mapped)
+                            << "ULL, projection, steps + 1, count - 1, requested);\n";
+                    }
+                    out << "    }\n";
+                }
+                out << "    return nullptr;\n}\n";
+            }
+            out << "} // namespace wio::wir_backend::abi\n";
+            return out.str();
+        }
+    } // namespace
+
     std::string WirNativeContainerEmitter::emit(const wir::lowered::Module& module,
                                                 const WirModuleEmitter::TypeSpelling& cpp)
     {
@@ -150,6 +238,7 @@ namespace wio::codegen
             return stableModuleHash(nativeAbiTypeKey(module.types, id));
         };
         std::ostringstream out;
+        out << projectionAccess(module, sequences, dictionaries, cpp);
         out << "#include <wir_sequence_abi.h>\n";
         if (!dictionaries.empty())
             out << "#include <wir_dictionary_abi.h>\n";

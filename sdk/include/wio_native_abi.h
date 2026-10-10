@@ -52,7 +52,9 @@ enum WioNativeAbiValueFlag : std::uint32_t
     // Additive logical-index form; payload is WioNativeAbiSequenceProjection.
     WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED = 1u << 6u,
     // Logical array indices followed by a registered POD field projection.
-    WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED = 1u << 7u
+    WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED = 1u << 7u,
+    // Mixed dynamic-array indices / dictionary key lookups, optionally followed by POD fields.
+    WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED = 1u << 8u
 };
 
 struct WioNativeAbiSlice
@@ -162,7 +164,8 @@ enum WioNativeAbiFunctionFlag : std::uint32_t
 {
     WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES = 1u << 0u,
     WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS = 1u << 1u,
-    WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS = 1u << 2u
+    WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS = 1u << 2u,
+    WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS = 1u << 3u
 };
 
 // Additive form: the existing projection structures retain their exact sizes.
@@ -171,6 +174,35 @@ enum WioNativeAbiFunctionFlag : std::uint32_t
 struct WioNativeAbiSequencePodProjection
 {
     WioNativeAbiSequenceProjection sequence{};
+    std::uint64_t podTypeId = 0;
+    std::uint64_t offset = 0;
+    std::uint64_t size = 0;
+};
+
+enum WioNativeAbiContainerStepKind : std::uint32_t
+{
+    WIO_NATIVE_ABI_CONTAINER_INDEX = 0,
+    WIO_NATIVE_ABI_CONTAINER_VALUE = 1
+};
+
+// Key wires use portable scalar/string/text/enum contracts, never C++ map node
+// addresses or unordered iteration indices. INDEX steps carry an empty key.
+struct WioNativeAbiContainerStep
+{
+    std::uint32_t kind = WIO_NATIVE_ABI_CONTAINER_INDEX;
+    std::uint32_t reserved = 0;
+    std::uint64_t containerTypeId = 0;
+    std::uint64_t index = 0;
+    WioNativeAbiValue key{};
+};
+
+struct WioNativeAbiContainerProjection
+{
+    WioNativeAbiValue* root = nullptr;
+    std::uint64_t rootTypeId = 0;
+    std::uint64_t typeId = 0;
+    const WioNativeAbiContainerStep* steps = nullptr;
+    std::uint64_t count = 0;
     std::uint64_t podTypeId = 0;
     std::uint64_t offset = 0;
     std::uint64_t size = 0;

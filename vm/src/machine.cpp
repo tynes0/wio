@@ -9,6 +9,7 @@
 #include "native_pod_internal.h"
 #include "native_sequence_internal.h"
 #include "native_sequence_projection_internal.h"
+#include "native_container_projection_internal.h"
 #include "native_container_copy_back_internal.h"
 #include "native_dictionary_internal.h"
 #include "native_any_internal.h"
@@ -5226,6 +5227,8 @@ namespace wio::vm
                     std::vector<WioNativeAbiProjection> projections;
                     std::vector<WioNativeAbiSequenceProjection> sequenceProjections;
                     std::vector<WioNativeAbiSequencePodProjection> sequencePodProjections;
+                    std::vector<WioNativeAbiContainerProjection> containerProjections;
+                    std::vector<std::vector<WioNativeAbiContainerStep>> containerPaths;
                     std::vector<std::vector<std::uint64_t>> sequencePaths;
                     std::vector<CallbackLease> callbacks;
                     WioNativeAbiValue result;
@@ -5248,6 +5251,9 @@ namespace wio::vm
                         for (NativeToken& token : tokens)
                             WioNativeAbiReleaseValue(&token.wire);
                         WioNativeAbiReleaseValue(&result);
+                        for (auto& path : containerPaths)
+                            for (auto& step : path)
+                                WioNativeAbiReleaseValue(&step.key);
                         if (cleanup)
                             cleanup();
                     }
@@ -5267,6 +5273,8 @@ namespace wio::vm
                 nativeFrame.projections.reserve(instruction.operands.size());
                 nativeFrame.sequenceProjections.reserve(instruction.operands.size());
                 nativeFrame.sequencePodProjections.reserve(instruction.operands.size());
+                nativeFrame.containerProjections.reserve(instruction.operands.size());
+                nativeFrame.containerPaths.reserve(instruction.operands.size());
                 nativeFrame.sequencePaths.reserve(instruction.operands.size());
                 nativeFrame.callbacks.reserve(instruction.operands.size());
                 // Independently acquired places can name the same field cell.
@@ -5475,6 +5483,8 @@ namespace wio::vm
                     auto& child = nativeFrame.tokens[childIndex];
                     std::size_t rootIndex = (std::numeric_limits<std::size_t>::max)();
                     detail::NativeSequenceProjection location;
+                    detail::NativeContainerProjection containerLocation;
+                    std::size_t bestDepth = 0;
                     for (std::size_t candidate = 0; candidate < nativeFrame.tokens.size(); ++candidate)
                     {
                         const auto& root = nativeFrame.tokens[candidate];
@@ -5487,16 +5497,89 @@ namespace wio::vm
                         detail::NativeSequenceProjection found;
                         if (!detail::findNativeSequenceProjection(module, root.place->storedValue(), rootType,
                                                                   child.place->storedValue(), *podLayouts, found))
-                            return fail("WVM1225", "Overlapping native container/element references require qualified "
-                                                   "sequence projections (dictionary, bool or unsupported field path)");
-                        if (found.indices.size() > location.indices.size())
+                        {
+                            detail::NativeContainerProjection mixed;
+                            if (!detail::findNativeContainerProjection(module, root.place->storedValue(), rootType,
+                                                                       child.place->storedValue(), *podLayouts, mixed))
+                                return fail("WVM1225",
+                                            "Overlapping native container references require qualified "
+                                            "projections (map keys, bool proxies or unsupported field path)");
+                            if (mixed.steps.size() > bestDepth)
+                            {
+                                rootIndex = candidate;
+                                bestDepth = mixed.steps.size();
+                                containerLocation = std::move(mixed);
+                            }
+                            continue;
+                        }
+                        if (found.indices.size() > bestDepth)
                         {
                             rootIndex = candidate;
+                            bestDepth = found.indices.size();
                             location = std::move(found);
+                            containerLocation = {};
                         }
                     }
                     if (rootIndex == (std::numeric_limits<std::size_t>::max)())
                         continue;
+                    if (!containerLocation.steps.empty())
+                    {
+                        if (!(native.flags & WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS))
+                            return fail("WVM1225", "Native producer does not support dictionary/container projections");
+                        if (containerLocation.type != referenceBase(child.type))
+                            return fail("WVM1223", "Native container projection has an incompatible value type");
+                        if (child.marshalling == 6)
+                        {
+                            auto contractType = containerLocation.type;
+                            if (module.types[contractType].kind == TypeNullable)
+                                contractType = module.types[contractType].arguments.front();
+                            const auto reflected = std::ranges::find(module.contract.reflection, contractType,
+                                                                     &bytecode::Reflection::type);
+                            if (reflected == module.contract.reflection.end() || !reflected->stableTypeId)
+                                return fail("WVM1223", "Native container object projection has no contract identity");
+                            containerLocation.typeId = reflected->stableTypeId;
+                        }
+                        auto& root = nativeFrame.tokens[rootIndex];
+                        child.projectionRoot = rootIndex;
+                        root.mutableValue = root.mutableValue || child.mutableValue;
+                        nativeFrame.containerPaths.emplace_back(containerLocation.steps.size());
+                        auto& path = nativeFrame.containerPaths.back();
+                        for (std::size_t stepIndex = 0; stepIndex < path.size(); ++stepIndex)
+                        {
+                            const auto& step = containerLocation.steps[stepIndex];
+                            path[stepIndex].kind = step.kind;
+                            path[stepIndex].containerTypeId = step.containerTypeId;
+                            path[stepIndex].index = step.index;
+                            if (step.key)
+                            {
+                                std::uint8_t keyMarshalling = 0;
+                                std::string conversionError;
+                                if (!detail::nativeValueMarshalling(module, step.keyType, keyMarshalling) ||
+                                    !detail::encodeOwnedNativeValue(module, *step.key, step.keyType, keyMarshalling,
+                                                                    path[stepIndex].key, conversionError))
+                                    return fail("WVM1223",
+                                                "Native projection key conversion failed: " + conversionError);
+                                const auto reflected = std::ranges::find(module.contract.reflection, step.keyType,
+                                                                         &bytecode::Reflection::type);
+                                if (reflected == module.contract.reflection.end() || !reflected->stableTypeId)
+                                    return fail("WVM1223", "Native projection key has no contract identity");
+                                path[stepIndex].key.typeId = reflected->stableTypeId;
+                            }
+                        }
+                        nativeFrame.containerProjections.push_back(
+                            {&root.wire, root.wire.typeId, containerLocation.typeId, path.data(), path.size(),
+                             containerLocation.podTypeId, containerLocation.offset, containerLocation.size});
+                        for (auto& argument : nativeFrame.arguments)
+                            if (argument.kind == WIO_NATIVE_ABI_REFERENCE &&
+                                argument.payload.mutableSlice.data == &child.wire)
+                            {
+                                argument.flags |= WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED;
+                                argument.typeId = containerLocation.typeId;
+                                argument.payload.mutableSlice = {&nativeFrame.containerProjections.back(),
+                                                                 sizeof(WioNativeAbiContainerProjection)};
+                            }
+                        continue;
+                    }
                     if (!(native.flags & WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS))
                         return fail("WVM1225", "Native producer does not support sequence reference projections");
                     if (location.podTypeId && !(native.flags & WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS))

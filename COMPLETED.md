@@ -1496,3 +1496,25 @@ here as historical evidence rather than active work:
       Only this new Windows gate was run: 1/1 passed in 12.83 seconds (12.90 total).
       The old POD-field expectation was updated but its gate was not run.
       Native Step 8 remains open; no full-suite or local Linux pass is claimed.
+
+## Dictionary Value and Mixed Native Container Projections
+
+- [x] Added capability-gated mixed index/key projection payloads without changing
+      existing ABI/sidecar/bytecode or old projection structure sizes. Typed
+      producer accessors validate container/child/key identities and key codecs,
+      index bounds, existing-key lookup and terminal C++ type. Keys own their
+      portable wire storage for the call and release with the native frame.
+- [x] Preserved one outermost producer slot for array/map/nested-map/POD/fixed-array
+      paths, repeated aliases, reversed argument order and readonly roots with
+      mutable children. Key-based copy-back preserves surviving borrows after
+      rehash/insert/remove; removed descendants expire. Hidden POD state survives.
+- [x] Qualified Any and generic/nullable object mapped values, exactly-once
+      ownership cleanup and copy-back destructor failure reporting. Root-bound
+      results work; projected results, map-key references, bool proxies and broader
+      callback/foreign ownership remain excluded.
+- [x] Added a new 30-round C++/actual-VM/live-host gate with 32 forged dictionary/
+      mixed-path variants, native-entry counters, old capability rejection,
+      lifecycle balance and failure recovery. Only this new Windows gate was run:
+      1/1 passed in 33.27 seconds (33.34 total). The old overlap negative expectation
+      was updated but that gate was not run. Native Step 8 remains open;
+      no full-suite or local Linux qualification is claimed.
