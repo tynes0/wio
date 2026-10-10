@@ -181,7 +181,8 @@ namespace
             check(machine.invoke(function("SafePoint")).succeeded(), "VM failed to recover after invalid borrow");
         }
         const auto overlap = machine.invoke(function("OverlapProbe"));
-        check(!overlap.succeeded() && overlap.error().code == "WVM1225", "overlapping container projections escaped");
+        check(overlap.succeeded() && overlap.value().asSignedInteger() == 0,
+              "qualified array/element projection failed");
         const auto thrown = machine.invoke(function("FailureProbe"));
         check(!thrown.succeeded() && thrown.error().code == "WVM1222" &&
                   thrown.error().message.find("shape-failure-oracle") != std::string::npos,

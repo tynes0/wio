@@ -19,8 +19,8 @@ namespace wio::vm::detail
     [[nodiscard]] NativeValueResult unpackNativeSequence(const bytecode::Module& module, const WioNativeAbiValue& value,
                                                          std::uint32_t type, const NativePodLayouts& layouts,
                                                          unsigned depth, const NativeObjectAccess* objects = nullptr);
-    // Recurses through sequence/component cells by storage identity. Container
-    // element projections have no producer-side address contract yet.
+    // Recurses through sequence/component cells by storage identity. Broader
+    // overlaps still reject unless the producer has a qualified path contract.
     [[nodiscard]] bool containsNativeSequencePlace(const Value& root, const Value& target, unsigned depth = 0);
     // Address-only lookup: never dereference a possibly retired projection.
     [[nodiscard]] bool containsNativeContainerCell(const Value& root, const Value* cell, unsigned depth = 0);

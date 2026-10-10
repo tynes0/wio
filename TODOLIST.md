@@ -684,7 +684,9 @@ Rider, and CLion are defined in
    string/text/bool and native POD elements, by-value isolation, view/ref aliases,
    and same-shape ref copy-back have focused differential coverage. Structural
    ref copy-back now permits dynamic array growth/shrink/clear with invalidation
-   of replaced element storage. Overlapping array/element arguments still reject.
+   of replaced element storage. Overlapping dynamic-array/element arguments now
+   use capability-gated logical index projections into one producer root slot;
+   dictionary, bool-proxy and container-to-POD-field paths remain unqualified.
    Dictionary adapters now cover ordered/unordered maps, portable key identities,
    string/text/native-POD/nullable-opaque values, nested dictionaries and mixed
    array/dictionary shapes. Bulk producer reads use one traversal; copy-back
@@ -692,8 +694,8 @@ Rider, and CLion are defined in
    Same-key-set ref updates and escaped producer-library lifetime have focused
    coverage. Structural key-set updates now remap surviving key/value places and
    invalidate removed keys, including nested sequence changes. Shared iterator/
-   snapshot storage and overlapping container/descendant arguments remain
-   explicitly unqualified.
+   snapshot storage and dictionary/descendant arguments remain explicitly
+   unqualified.
    Any adapters now materialize VM-created value payloads and decode producer
    any results using stable payload identities. Producer cell backing preserves
    shared-copy mutation, while whole-value ref replacement leaves old aliases
@@ -901,10 +903,23 @@ Rider, and CLion are defined in
    A focused C++/VM/live-host gate covers scalar/string/text/bool/POD/Any/object
    elements, nested containers, independent heap-field borrows, malformed second
    outputs, native failures, cleanup failures and recovery. Shared iterator/
-   snapshot structural updates and overlapping projection arguments remain
+   snapshot structural updates and broader overlapping projection arguments remain
    rejected; this does not close Native Step 8. Only the new focused Windows
    gate was run: 1/1 passed in 23.63 seconds (23.71 seconds total); no full-suite
    or local Linux qualification is claimed.
+   Dynamic-array projection arguments now preserve producer address identity
+   across reversed parameter order, repeated/readonly/mutable element borrows,
+   and nested row/cell/root calls. Logical indices are resolved only by the
+   producer's C++ Frame; no vector layout or VM address crosses the ABI.
+   Outermost root copy-back handles nested growth; independent projected tokens
+   drop redundant object/Any claims before invocation. Nullable object elements
+   keep their exact storage type while using the static native handle contract ID.
+   Root-bound native borrow results remain supported; projected-element results,
+   dictionary key paths, bool proxies and container-to-POD-field paths reject.
+   Missing producer capability and malformed paths fail before native body entry.
+   Only the new 30-round C++/VM/live-host Windows gate was run: 1/1 passed in
+   21.56 seconds (21.64 seconds total). Native Step 8 remains open; no full-suite
+   or local Linux pass is claimed.
    Remaining native parity work includes broader VM-created object signatures,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and

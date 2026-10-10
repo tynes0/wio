@@ -2065,8 +2065,9 @@ without creating a dangling domain pointer on escaped owner-backed places.
 
 Structural updates require exclusive VM container storage. Shared iterator/
 snapshot claims reject with `WVM1224`; a separate iterator invalidation contract
-is still needed. Passing a container and its descendant as overlapping native
-arguments continues to reject with `WVM1225`. This is not the container
+is still needed. At this stage passing a container and its descendant as overlapping
+native arguments rejected with `WVM1225` (extended by the dynamic-array projection
+section below). This is not the general container
 projection ABI, a concurrency guarantee, or arbitrary foreign ownership support.
 
 The new `wio_vm_native_container_shape` gate compares C++ and VM execution over
@@ -2079,4 +2080,74 @@ mutable output uses observable VM globals to verify that neither caller root is
 partially committed. Unit checks cover mapping/planning and snapshot/depth/type
 rejection. Native Step 8 remains open. Only this new gate was run locally on
 Windows: 1/1 passed in 23.63 seconds (23.71 seconds total). No full-suite or
+local Linux qualification is claimed.
+
+## Dynamic-Array Reference Projections
+
+Native calls can now accept an array and its element (or nested array/cell) as
+overlapping `ref`/`view` arguments. Wire-v2 gains the additive
+`WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED` reference form and the function
+capability `WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS`. Existing sequence
+sidecar-v1 and bytecode versions are unchanged. Producers lacking the capability
+reject before invocation; no ABI-breaking std::vector layout is exposed.
+
+```wio
+using cpp::header("native_updates.h");
+
+[Native, CppName(native_updates::Update)]
+fn Update(item: ref i32, values: view i32[]);
+
+mut values: i32[] = [7, 11];
+let kept: view i32 = ref values[0usize];
+Update(ref values[0usize], ref values);
+// Update's item aliases values[0], even with element-before-root order.
+// With unchanged array shape, kept observes the same updated caller cell.
+```
+
+The VM discovers the outermost overlapping array root by physical cell identity
+and sends bounded logical indices rather than foreign offsets or VM Value-cell
+addresses. Generated thunks pre-bind unprojected array roots, then the producer
+Frame resolves nested indices against its real, typed C++ vector. Root identity,
+wire/target identity, path size/alignment, index bounds and terminal C++ type
+must match. A mutable projected element dirties its root even when the root
+parameter is a readonly view. Identical element arguments share one address;
+distinct value-equal elements remain distinct. Only the outer root commits.
+
+Projected token copies are released before native body entry, so independent
+packing cannot retain stale object/Any claims past root copy-back. Registered
+whole POD elements preserve hidden producer state; Any element rebinding leaves
+old shared-cell aliases intact. Nullable hosted-object elements keep their
+optional C++ storage while using the static native handle contract identity.
+Removed/replaced object cleanup preserves exactly-once destruction and reports
+failing destructors at the copy-back boundary.
+
+This is call-scoped aliasing, not safe reference rebasing inside arbitrary C++
+code. Native code must obey C++ reference invalidation rules: after a vector
+resize/reallocation, do not dereference invalidated element references. The
+nested-growth fixture writes through its element first, then grows its row,
+and never reads that old element reference afterward. VM caller descendants
+are invalidated during structural copy-back using the existing safety contract.
+
+Returning an unprojected caller root reference still works when the call also
+has projected element inputs. Returning the projected element itself remains
+rejected: result projections need their own post-call lifetime contract.
+Dictionary key/value paths, `vector<bool>` element proxies, container-to-POD-field
+paths, shared iterator structural mutation, foreign ownership and callback/async
+borrows remain unqualified. Existing standalone POD byte-offset projections
+remain separate and retain their capability flag.
+
+The new `wio_vm_native_sequence_projection` gate compares C++ and actual VM CLI
+execution over 30 rounds, then checks a live host. It covers scalar/string/Unicode,
+POD/hidden fields, Any, generic/nullable object handles, readonly roots with
+mutable children, repeated aliases, reversed argument order, nested row growth,
+stable sibling borrows, root-bound results and lifecycle balance. Host probes
+check expired descendants, native/destructor failures, rejected projected results,
+unqualified POD-field paths, missing capability, ten malformed wire/path variants
+and recovery. Forged projections are checked against a native-entry counter.
+Producer unit tests verify address identity, dirty-root commit, nested paths,
+bool-proxy/type mismatch and malformed contract rejection.
+
+Only this new Windows gate was run: 1/1 passed in 21.56 seconds (21.64 seconds
+total). Old gate expectations were updated for the now-supported array/element
+case but those gates were not run. Native Step 8 remains open; no full-suite or
 local Linux qualification is claimed.

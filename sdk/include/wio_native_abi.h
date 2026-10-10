@@ -48,7 +48,9 @@ enum WioNativeAbiValueFlag : std::uint32_t
     WIO_NATIVE_ABI_VALUE_CONSUMED = 1u << 3u,
     WIO_NATIVE_ABI_VALUE_OWNED = 1u << 4u,
     // Additive reference form; payload points to WioNativeAbiProjection.
-    WIO_NATIVE_ABI_VALUE_PROJECTED = 1u << 5u
+    WIO_NATIVE_ABI_VALUE_PROJECTED = 1u << 5u,
+    // Additive logical-index form; payload is WioNativeAbiSequenceProjection.
+    WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED = 1u << 6u
 };
 
 struct WioNativeAbiSlice
@@ -142,9 +144,22 @@ struct WioNativeAbiProjection
     std::uint64_t size = 0;
 };
 
+// Call-scoped logical indices into one producer-materialized dynamic array.
+// No std::vector layout or VM Value-cell address crosses the boundary. The producer
+// resolves the path against the root Frame slot before invoking native code.
+struct WioNativeAbiSequenceProjection
+{
+    WioNativeAbiValue* root = nullptr;
+    std::uint64_t rootTypeId = 0;
+    std::uint64_t typeId = 0;
+    const std::uint64_t* indices = nullptr;
+    std::uint64_t count = 0;
+};
+
 enum WioNativeAbiFunctionFlag : std::uint32_t
 {
-    WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES = 1u << 0u
+    WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES = 1u << 0u,
+    WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS = 1u << 1u
 };
 
 struct WioNativeAbiFailure

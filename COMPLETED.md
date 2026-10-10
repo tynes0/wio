@@ -1451,3 +1451,24 @@ here as historical evidence rather than active work:
       ABI and bytecode versions are unchanged. Native Step 8 remains open.
       Only the new focused Windows gate was run: 1/1 passed in 23.63 seconds
       (23.71 seconds total). No full-suite or local Linux pass is claimed.
+
+## Dynamic-Array Native Reference Projections
+
+- [x] Added capability-gated, call-scoped logical index projection references
+      without changing wire-v2, sequence sidecar-v1 or bytecode versions.
+      Producer Frame roots are bound first; nested index resolution preserves
+      actual C++ element/row address identity regardless of parameter order.
+- [x] Preserved repeated aliases, readonly roots with mutable elements, outermost
+      copy-back and structural nested-row growth. Redundant projected token
+      copies release object/Any claims before invocation; nullable object storage
+      and static native handle IDs remain distinct.
+- [x] Kept root-bound borrowed results working, while rejecting projected-element
+      results, missing producer capability and unqualified dictionary/bool-proxy/
+      container-to-POD-field paths. Native code still obeys C++ invalidation rules.
+- [x] Added a focused 30-round C++/VM/live-host gate plus producer contract tests
+      for scalar/string/text/POD/Any/generic/nullable-object elements, reversed
+      order, nested aliases/growth, stable siblings, lifecycle cleanup/failures,
+      ten malformed path/wire variants, capability rejection and recovery.
+      Only this new Windows gate was run: 1/1 passed in 21.56 seconds (21.64
+      seconds total). Old expectations were updated but old gates were not run.
+      Native Step 8 remains open; no full-suite or local Linux pass is claimed.
