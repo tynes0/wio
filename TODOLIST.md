@@ -992,7 +992,18 @@ Rider, and CLion are defined in
    escape, expiry, destructor failure, 18 forged/mutability variants, missing
    capability and recovery. Only this new Windows gate was run: 1/1 passed in
    14.18 seconds (14.25 total); no full-suite or local Linux pass is claimed.
-   Remaining native parity work includes broader VM-created object and nullable signatures,
+   Projected Wio object, concrete-generic object, interface and nullable handle
+   results are qualified across arrays/maps/mixed paths, wrapper rebind and
+   null transitions. The new 30-round C++/actual-VM/live-host gate checks distinct
+   cells holding one object, reverse readonly/repeated aliases, forwarding,
+   owning escape, native member entry, cleanup failures, 19 malformed/mutability/
+   nullable-contract result variants, missing capability and recovery with
+   balanced destruction after each failure. A new analyzer-negative gate pins
+   required-vs-nullable reference incompatibility. Expired object/interface
+   dispatch now diagnoses the uninitialized Place as WVM1043, not a null receiver.
+   Only these two new Windows gates were run: 2/2 passed in 30.08 and 0.09 seconds
+   (30.31 total); no full-suite or local Linux qualification is claimed.
+   Remaining native parity work includes broader callback/async lifetime contracts,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and
    ref/view callback signatures; nullable borrowed payload lifetime contracts;

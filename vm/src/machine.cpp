@@ -5921,8 +5921,15 @@ namespace wio::vm
             if (instruction.opcode == bytecode::Opcode::VirtualCall ||
                 instruction.opcode == bytecode::Opcode::InterfaceCall)
             {
-                const Value* receiver =
-                    instruction.operands.empty() ? nullptr : objectValue(read(instruction.operands.front()));
+                const Value* receiverOperand =
+                    instruction.operands.empty() ? nullptr : read(instruction.operands.front());
+                if (receiverOperand && receiverOperand->kind() == Value::Kind::Place)
+                {
+                    const auto* place = receiverOperand->asPlace();
+                    if (!place || !place->initialized)
+                        return fail("WVM1043", "Dynamic dispatch requires an initialized receiver place");
+                }
+                const Value* receiver = objectValue(receiverOperand);
                 if (!receiver)
                     return fail("WVM1161", "Dynamic dispatch requires a live object receiver");
                 const std::uint32_t target =

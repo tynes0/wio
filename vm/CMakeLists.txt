@@ -23,6 +23,9 @@ target_compile_options(wio_vm PRIVATE
 )
 
 if(BUILD_TESTING)
+    add_executable(wio_vm_native_projected_object_borrow_test "${CMAKE_SOURCE_DIR}/tests/vm_native_projected_object_borrow_test.cpp")
+    target_link_libraries(wio_vm_native_projected_object_borrow_test PRIVATE wio_vm ${CMAKE_DL_LIBS})
+
     add_executable(wio_vm_native_projected_any_borrow_test "${CMAKE_SOURCE_DIR}/tests/vm_native_projected_any_borrow_test.cpp")
     target_link_libraries(wio_vm_native_projected_any_borrow_test PRIVATE wio_vm ${CMAKE_DL_LIBS})
 

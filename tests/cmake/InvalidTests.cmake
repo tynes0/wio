@@ -2784,3 +2784,10 @@ add_wio_failure_test(
     "Text indexing is read-only"
 )
 wio_test_labels(wio_invalid_text_index_assignment invalid coherence)
+
+add_wio_failure_test(
+    wio_invalid_vm_native_borrow_nullable_mismatch
+    "${CMAKE_SOURCE_DIR}/tests/invalid/vm_native_borrow_nullable_mismatch.wio"
+    "without a compatible caller reference parameter"
+)
+wio_test_labels(wio_invalid_vm_native_borrow_nullable_mismatch invalid interop vm native borrowed-result release-gate)

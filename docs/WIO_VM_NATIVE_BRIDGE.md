@@ -2496,3 +2496,78 @@ Only this new Windows gate was run: 1/1 passed in 14.18 seconds (14.25 total).
 No full-suite or local Linux qualification is claimed. Native Step 8 remains
 open for broader object/nullable/callback lifetime, foreign ownership, map-key
 references, bool proxies, shared iterator mutation, pruning and packaging.
+
+## Caller-Bound Projected Object, Interface and Nullable Results
+
+The supplied-caller-cell result contract is now qualified for Wio object handles,
+concrete type/value-generic objects, interfaces and nullable variants in array,
+dictionary and mixed-container paths. This expands qualification of the existing
+bridge; it does not introduce a new object representation or ABI form/version.
+
+```cpp
+template <class T>
+T& Replace(std::vector<T>& values, T& cell, T next)
+{
+    if (&values.at(0) != &cell)
+        throw std::runtime_error("wrong handle cell");
+    cell = std::move(next);
+    return cell;
+}
+```
+
+```wio
+using cpp::header("handle_cells.h");
+
+[Native, CppName(handle_cells::Replace), Instantiate(Item?)]
+fn Replace<T>(values: ref T[], cell: ref T, next: T) -> ref T;
+
+let next: Item? = Item(29);
+mut values: Item?[] = [null];
+let cell: ref Item? = Replace<Item?>(ref values, ref values[0usize], next);
+let observed: view Item? = ref values[0usize];
+deref cell = null;
+// observed now reads null: it borrows the handle cell, not the former object.
+deref cell = next;
+let value = deref observed;
+if (value != null)
+{
+    value.Read();
+}
+```
+
+Object identity and handle-cell identity are distinct. Two slots can hold the
+same object and still be different native parameter/reference addresses.
+Rebinding one handle cell does not rebind another, while object member mutation
+is visible through every handle to that object. Repeated `ref/view` arguments
+to the same slot retain physical identity, but readonly parameter identity does
+not authorize a mutable result. Owning copies can escape a container/function
+scope; the borrowed cell itself does not acquire ownership of the container.
+
+Required and nullable caller reference types must match the result contract
+exactly. C++ parameter types must match the generated signature; an underlying
+object identity or wire ID does not authorize reinterpretation between required
+and nullable storage. The analyzer rejects a nullable borrowed result when no
+compatible nullable caller parameter exists. A host-forged result naming a
+nullable argument of a required-result function is rejected with WVM1224.
+Nullable member access in Wio still requires loading and checking the value.
+
+Array structural changes, root rebinding and map-entry expiry retain the
+preceding lifetime rules. Accessing an expired object/interface receiver Place
+now fails with WVM1043 before dynamic dispatch, rather than reporting a generic
+missing object (WVM1161). A live Place holding a null/non-object value still uses
+the preceding dispatch error. Destructor failures remain attached to WVM1211;
+unrelated invocations can recover without leaked object claims.
+
+`wio_vm_native_projected_object_borrow` compares C++ with actual VM CLI execution
+for 30 rounds, then qualifies a live host. It includes concrete integer/string
+generic objects with const tags, nullable interfaces, mixed map/array paths,
+reverse readonly/repeated aliases, distinct handles to one object, Wio forwarding,
+native-to-Wio member entry, owning escape, lifetime failures, two destructor
+failure paths and 19 forged/mutability/nullable-contract variants. The additional
+`wio_invalid_vm_native_borrow_nullable_mismatch` test pins analyzer rejection.
+Only these two new Windows gates were run: 2/2 passed, with the runtime matrix
+taking 30.08 seconds and the negative gate 0.09 seconds (30.31 total). No
+full-suite or local Linux qualification is claimed.
+This does not close broader callback/async borrowed lifetime, arbitrary
+foreign-owned object/resource, consumed argument, map-key/bool-proxy/iterator,
+pruning or packaging work. Native Step 8 remains open.

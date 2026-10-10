@@ -1593,3 +1593,28 @@ here as historical evidence rather than active work:
       total). No full-suite or local Linux qualification is claimed. Native
       Step 8 remains open for broader object/nullable/callback lifetime and
       foreign ownership, map-key/bool-proxy/iterator surfaces and packaging.
+
+## Caller-Bound Projected Object, Interface and Nullable Results
+
+- [x] Qualified existing supplied-handle `ref/view` result contracts across Wio
+      objects, concrete type/value generics, interfaces and nullable variants.
+      Array/map/mixed paths preserve direct cell identity through compatible
+      rebind/null transitions. Two cells holding one object do not collapse.
+- [x] Qualified reverse readonly inputs, repeated aliases, Wio forwarding,
+      owning return escape, native member entry and balanced intrusive cleanup.
+      The existing ABI/sidecar/bytecode forms and versions remain unchanged.
+- [x] Fixed virtual/interface dispatch diagnostics for expired receiver Places:
+      WVM1043 now reports lifetime expiry before resolving a live object.
+      Ordinary null/non-object receivers keep the preceding dispatch diagnostic.
+- [x] Added a 30-round C++/actual-VM/live-host gate with array/root/map expiry,
+      relocated/foreign/native-failure results, two copy-back destructor-failure
+      paths, 19 malformed/mutability/nullable-contract variants, missing
+      capability and recovery. Every host failure path checks object balance.
+- [x] Added an analyzer-negative gate for a nullable result without a compatible
+      nullable caller reference. Required and nullable reference contracts are
+      not interchangeable merely because they share an underlying object type.
+- [x] Only these two new Windows gates were run: 2/2 passed, with the runtime
+      matrix taking 30.08 seconds and the negative gate 0.09 seconds (30.31
+      total). No full-suite or local Linux qualification is claimed. Native
+      Step 8 remains open for callback/async lifetime, foreign ownership,
+      consumed arguments, remaining projection surfaces, pruning and packaging.
