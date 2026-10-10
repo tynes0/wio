@@ -984,8 +984,15 @@ Rider, and CLion are defined in
    projection bookkeeping now live in named internal classes outside Machine.
    Only this new Windows gate was run: 1/1 passed in 23.36 seconds (23.47 total);
    no full-suite or local Linux qualification is claimed.
-   Remaining native parity work includes projected Any result qualification,
-   broader VM-created object and nullable signatures,
+   Projected Any borrowed results are now qualified through the existing caller
+   argument-alias contract, without a new ABI form. A new 30-round C++/actual-VM/
+   live-host gate covers array/map/mixed paths, reversed readonly and repeated
+   aliases, distinct cells sharing a payload, scalar/string/text/POD/nested-Any/
+   object/nullable-object/null payload changes, forwarding, independent owning
+   escape, expiry, destructor failure, 18 forged/mutability variants, missing
+   capability and recovery. Only this new Windows gate was run: 1/1 passed in
+   14.18 seconds (14.25 total); no full-suite or local Linux pass is claimed.
+   Remaining native parity work includes broader VM-created object and nullable signatures,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and
    ref/view callback signatures; nullable borrowed payload lifetime contracts;

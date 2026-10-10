@@ -2435,3 +2435,64 @@ No ABI/sidecar/bytecode version changes are required by this slice.
 
 Only this new Windows gate was run: 1/1 passed in 23.36 seconds (23.47 total).
 No full-suite or local Linux qualification is claimed.
+
+## Caller-Bound Projected Any Results
+
+Supplied array/map/mixed-container `ref/view any` cells can be returned through
+the existing projected caller-argument identity contract. This is qualification
+of the existing generic bridge, not a new ABI form or a new runtime feature.
+Wire/sidecar/bytecode versions and structure sizes remain unchanged.
+
+```cpp
+using Any = wio::runtime::Any;
+
+inline Any& Replace(std::vector<Any>& values, Any& cell, Any next)
+{
+    if (&values.at(0) != &cell)
+        throw std::runtime_error("wrong caller cell");
+    cell = std::move(next);
+    return cell;
+}
+```
+
+```wio
+using cpp::header("boxed_values.h");
+
+[Native, CppName(boxed_values::Replace)]
+fn Replace(values: ref any[], cell: ref any, next: any) -> ref any;
+
+let seed: any = 7;
+mut values: any[] = [seed];
+let next: any = 13;
+let cell: ref any = Replace(ref values, ref values[0usize], next);
+deref cell = u"İstanbul 🚀";
+// values[0usize] is now text. seed still contains 7.
+```
+
+The borrowed result names the **Any wrapper cell**, not its boxed payload.
+Changing payload type leaves that cell borrow intact. Two wrappers can share
+one payload without being the same addressable cell; repeated references to the
+same wrapper do share the address. Payload mutation preserves Any's shared-cell
+semantics, whereas rebinding the wrapper does not rebind other owning copies.
+Boxed nullable-object absence follows the ordinary Any null representation.
+
+An owning copy of `deref cell` can survive container cleanup, including a Wio
+return boundary. The borrowed wrapper itself must not be used after root
+rebinding, array structural expiry or map removal/clear. Native rehash and
+erasure of unrelated keys preserve mapped-cell borrows. Returning a relocated
+freshly reselected or foreign/global Any wrapper does not manufacture a caller
+borrow. These rules do not permit arbitrary references into an Any payload or
+asynchronous borrowed results.
+
+The new `wio_vm_native_projected_any_borrow` gate compares C++ with actual VM CLI
+execution for 30 rounds, then qualifies a live native host. Payloads include
+scalar, embedded-NUL string, Unicode text, native POD, nested Any, Wio object,
+nullable object and null. Host probes cover expiry/rebinding, relocation/foreign
+results, native and copy-back destructor failure, missing result capability,
+17 malformed-result variants and one readonly alias upgrade (18 variants),
+plus invocation recovery and balanced object destruction.
+
+Only this new Windows gate was run: 1/1 passed in 14.18 seconds (14.25 total).
+No full-suite or local Linux qualification is claimed. Native Step 8 remains
+open for broader object/nullable/callback lifetime, foreign ownership, map-key
+references, bool proxies, shared iterator mutation, pruning and packaging.

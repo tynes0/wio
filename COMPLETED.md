@@ -1573,3 +1573,23 @@ here as historical evidence rather than active work:
       projected Any results and broader ownership/callback work remain separate.
 - [x] Only the new Windows gate was run: 1/1 passed in 23.36 seconds (23.47
       total). No full-suite or local Linux qualification is claimed.
+
+## Caller-Bound Projected Any Borrowed Results
+
+- [x] Qualified projected `ref/view any` results with the existing exact
+      caller-argument wire identity and live-path checks. No new ABI/sidecar/
+      bytecode version, compiler feature or runtime representation is needed.
+- [x] Qualified array/map/mixed paths, reverse readonly inputs, repeated aliases,
+      distinct Any wrapper cells sharing one payload, Wio-frame forwarding and
+      scalar/string/text/POD/nested-Any/object/nullable-object/null replacement.
+      Shared payload mutation and independent owning copies retain their
+      existing semantics; a borrowed wrapper does not own its container.
+- [x] Added a 30-round C++/actual-VM/live-host gate covering owning return escape,
+      array structural expiry, root rebinding, erased/cleared map entries,
+      relocated/foreign results, native/destructor failure and recovery.
+      Seventeen forged-result variants, readonly-to-mutable alias upgrade and
+      missing producer capability are rejected with the existing diagnostics.
+- [x] Only this new Windows gate was run: 1/1 passed in 14.18 seconds (14.25
+      total). No full-suite or local Linux qualification is claimed. Native
+      Step 8 remains open for broader object/nullable/callback lifetime and
+      foreign ownership, map-key/bool-proxy/iterator surfaces and packaging.
