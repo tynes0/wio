@@ -1618,3 +1618,30 @@ here as historical evidence rather than active work:
       total). No full-suite or local Linux qualification is claimed. Native
       Step 8 remains open for callback/async lifetime, foreign ownership,
       consumed arguments, remaining projection surfaces, pruning and packaging.
+
+## Qualified By-Value Native POD Callbacks
+
+- [x] Added VM callback argument/result conversion for registered native POD
+      components using the existing layout adapters, including concrete generic,
+      nested and fixed-array fields. Ref/view, nullable-object and unsupported
+      structured signatures remain rejected before native entry.
+- [x] Generated callback codecs now carry resolved argument/result identities,
+      including two Wio declarations backed by the same C++ struct. Same-symbol
+      call/retained and caller/any contracts have distinct native thunk keys;
+      default call/caller keys remain unchanged. Wire-v2 and sidecar versions
+      remain unchanged; non-default callback bridges must be rebuilt together
+      with their bytecode because their previously ambiguous keys are corrected.
+- [x] POD callback results own VM byte storage, not temporary frame or producer
+      storage. Data and hidden native fields survive callback, machine and DLL
+      teardown. Argument conversion cleanup is installed before creating owned
+      wire arguments, so a later conversion failure cannot leak earlier values.
+- [x] Added a new 30-round C++/actual-VM/live-host gate covering distinct contract
+      identities, multiple arguments, padding, hidden fields, native/local POD,
+      empty/generic POD, independent copies, retained/worker calls, signature
+      rejection, six malformed inputs, wrong argument count, native result type
+      validation, panic containment/recovery and stale-owner entry. The existing
+      differential gate's POD callback expectation is updated, but not run.
+- [x] Only this new Windows gate was run: 1/1 passed in 16.61 seconds (16.69
+      total). No full-suite or local Linux qualification is claimed. Native
+      Step 8 remains open for broader borrowed/object/container/nullable
+      callbacks, async lifetime, foreign ownership, pruning and packaging.

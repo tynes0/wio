@@ -63,7 +63,8 @@ namespace wio::vm::detail
                 if (owner->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
                     delete owner;
             },
-            [](const void*) noexcept { return std::uint64_t{0}; }};
+            [](const void* storage) noexcept
+            { return static_cast<const OwnedCallbackValue*>(storage)->value.foreignTypeId(); }};
 
         [[nodiscard]] bool signedScalarFits(const std::uint8_t kind, const std::int64_t value) noexcept
         {
@@ -356,14 +357,34 @@ namespace wio::vm::detail
     }
 
     bool encodeOwnedNativeValue(const bytecode::Module& module, const Value& value, const std::uint32_t declaredType,
-                                const std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error)
+                                const std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error,
+                                const NativePodLayouts* layouts)
     {
-        if (!encodeNativeValue(module, value, declaredType, marshalling, output, error))
+        if (!encodeNativeValue(module, value, declaredType, marshalling, output, error, layouts))
             return false;
-        if (output.kind != WIO_NATIVE_ABI_BYTES && output.kind != WIO_NATIVE_ABI_TEXT_UTF32)
+        if (output.kind != WIO_NATIVE_ABI_BYTES && output.kind != WIO_NATIVE_ABI_TEXT_UTF32 &&
+            output.kind != WIO_NATIVE_ABI_POD)
             return true;
 
-        auto owner = std::make_unique<OwnedCallbackValue>(value);
+        // A POD pack adapter can return producer-owned bytes. Copy those bytes
+        // into VM-owned storage so an escaped callback result does not depend
+        // on the producer DLL or the completed callback ExecutionResult.
+        Value owned = value;
+        if (output.kind == WIO_NATIVE_ABI_POD)
+        {
+            struct Release
+            {
+                WioNativeAbiValue& wire;
+                ~Release()
+                {
+                    WioNativeAbiReleaseValue(&wire);
+                }
+            } release{output};
+            owned = Value::nativePod(directType(module, declaredType), output.typeId,
+                                     {static_cast<const std::byte*>(output.payload.slice.data),
+                                      static_cast<std::size_t>(output.payload.slice.size)});
+        }
+        auto owner = std::make_unique<OwnedCallbackValue>(owned);
         // Encode from the owned copy: no slice may refer to temporary frame storage.
         if (!encodeNativeValue(module, owner->value, declaredType, marshalling, output, error))
             return false;
@@ -498,7 +519,7 @@ namespace wio::vm::detail
     }
 
     bool callbackValueMarshalling(const bytecode::Module& module, const std::uint32_t declaredType,
-                                  std::uint8_t& marshalling) noexcept
+                                  std::uint8_t& marshalling, const NativePodLayouts* layouts) noexcept
     {
         // Callback borrows need explicit reference tokens and copy-back, not a
         // by-value slice. Do not silently classify them as their pointee type.
@@ -517,6 +538,9 @@ namespace wio::vm::detail
             marshalling = 2;
         else if (kind == TypeText)
             marshalling = 3;
+        else if (kind == TypeNamed && module.types[type].nominalRepresentation == RepresentationNativePod && layouts &&
+                 layouts->types.contains(type))
+            marshalling = 4;
         else
             return false;
         return true;

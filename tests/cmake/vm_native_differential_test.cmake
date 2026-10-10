@@ -86,19 +86,7 @@ endfunction()
 
 compare_run("two words" TRUE)
 compare_run("throw" FALSE)
-function(expect_remaining_boundary argument diagnostic)
-    execute_process(COMMAND "${native}" "${argument}" RESULT_VARIABLE native_result
-        OUTPUT_VARIABLE native_output ERROR_VARIABLE native_error TIMEOUT 30)
-    execute_process(COMMAND "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}"
-        --native-library "${bridge}" -- "${argument}" RESULT_VARIABLE vm_result
-        OUTPUT_VARIABLE vm_output ERROR_VARIABLE vm_error TIMEOUT 30)
-    if(NOT "${native_result}" STREQUAL "0" OR NOT "${vm_result}" STREQUAL "1" OR
-       NOT vm_error MATCHES "${diagnostic}")
-        message(FATAL_ERROR "${argument} boundary changed: C++=${native_result}, VM=${vm_result}\n${native_output}\n${native_error}\n${vm_output}\n${vm_error}")
-    endif()
-endfunction()
-# These are explicit remaining VM/native conversions, not parity claims.
-# Fail deterministically instead of interpreting a VM aggregate as C++ bytes.
+# These surfaces use registered field-aware adapters, not VM aggregate bytes.
 execute_process(COMMAND "${WIO_EXECUTABLE}" --vm-run-bytecode "${bytecode}"
     --native-library "${bridge}" -- local-pod RESULT_VARIABLE local_pod_result
     OUTPUT_VARIABLE local_pod_output ERROR_VARIABLE local_pod_error TIMEOUT 30)
@@ -106,5 +94,5 @@ if(NOT "${local_pod_result}" STREQUAL "0")
     message(FATAL_ERROR "Local POD adapter regressed: ${local_pod_output}\n${local_pod_error}")
 endif()
 compare_run("local-any" TRUE "^$")
-expect_remaining_boundary("pod-callback" "WVM1225")
+compare_run("pod-callback" TRUE "^$")
 message(STATUS "C++/VM native differential gate passed: values, references, ownership, callbacks, async, failure")

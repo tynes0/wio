@@ -607,7 +607,6 @@ namespace wio::wir::typed
                                                                  : NativeReceiverKind::ConstReference)
                                                           : NativeReceiverKind::None};
             binding.stableKey = "cpp:" + binding.symbol + ":" + functionType.toString();
-            binding.thunkSymbol = nativeThunkSymbol(binding.stableKey);
             binding.explicitTemplateArguments =
                 !function.genericParameters.empty() &&
                 (functionType.paramTypes.empty() || binding.symbol == "wio::runtime::EnumCount" ||
@@ -668,6 +667,20 @@ namespace wio::wir::typed
                         report("WIR2402", "NativeCallback thread must be 'caller' or 'any'.", attribute.Get());
                 }
             }
+            // The same C++ symbol/signature may be declared with different
+            // callback leases or thread affinity. Those are different thunks:
+            // deduplication must not replace a retained callback with a call
+            // lease. Preserve existing keys for default call/caller contracts.
+            for (std::size_t index = 0; index < binding.parameters.size(); ++index)
+            {
+                const auto& parameter = binding.parameters[index];
+                if (parameter.callbackLifetime != NativeCallbackLifetime::Call ||
+                    parameter.callbackThread != NativeCallbackThread::Caller)
+                    binding.stableKey += ":callback[" + std::to_string(index) +
+                                         "]:" + std::string(nativeCallbackLifetimeName(parameter.callbackLifetime)) +
+                                         ":" + std::string(nativeCallbackThreadName(parameter.callbackThread));
+            }
+            binding.thunkSymbol = nativeThunkSymbol(binding.stableKey);
             binding.result = nativeAbiValue(function.returnType, true);
             const bool needsMarshalling =
                 std::ranges::any_of(binding.parameters,

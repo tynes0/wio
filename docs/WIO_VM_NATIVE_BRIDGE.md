@@ -2571,3 +2571,83 @@ full-suite or local Linux qualification is claimed.
 This does not close broader callback/async borrowed lifetime, arbitrary
 foreign-owned object/resource, consumed argument, map-key/bool-proxy/iterator,
 pruning or packaging work. Native Step 8 remains open.
+
+## Qualified By-Value Native POD Callbacks
+
+Callbacks may now receive and return native POD components by value, provided
+the producer's `WioNativePodLayoutApi` is registered before callback creation.
+Conversion uses the same field-aware pack/read adapters as ordinary native
+functions: the VM never treats its component layout as C++ bytes. Concrete
+generic and nested POD, supported fixed-array fields, empty structs, padding
+and unexposed native fields keep the preceding POD materialization rules.
+
+```cpp
+struct Point { float x; float y; };
+Point Transform(std::function<Point(Point)> callback, Point input)
+{
+    return callback(input);
+}
+```
+
+```wio
+using cpp::header("points.h");
+
+[Native, CppName(Point)]
+component Point
+{
+    public x: f32;
+    public y: f32;
+}
+[Native, CppName(Transform)]
+fn Transform(callback: fn(Point) -> Point, input: Point) -> Point;
+
+let offset = 2.0f32;
+let changed = Transform((value) => Point(value.x + offset, value.y), Point(1.0f32, 3.0f32));
+```
+
+Generated native callback codecs carry a separate resolved stable identity for
+each argument and the result. They no longer use identity zero for every nested
+callback value. Distinct Wio declarations mapping to the same C++ POD cannot
+masquerade as each other, even if their native layout and signature spelling
+match. The native result decoder checks this identity in the reverse direction.
+
+Callback lease and affinity are also part of native thunk identity. Declarations
+of one C++ symbol as call-scoped, retained/caller and retained/any no longer
+deduplicate into a thunk enforcing a different lease. Default call/caller keys
+remain unchanged. Non-default callback bridges and their bytecode must be
+rebuilt together, since their old keys did not distinguish those contracts.
+No wire-v2, layout sidecar or bytecode format version changes are introduced.
+
+The existing call/retained and caller/any rules apply to POD callbacks. A
+retained callback can be invoked after the originating native call; an
+any-thread callback can enter on a worker through the existing VM execution
+lock. Call-scoped expiry and destroyed-machine entry still fail deterministically.
+Callback panic is contained as `WIO_NATIVE_ABI_PANIC`, and independent invocation
+can recover. Missing POD layouts or unsupported signatures fail as WVM1225
+before exposing a callback to native code.
+
+POD input is a value copy, not a native borrow/copy-back contract. Result pack
+adapters run while the producer is live, then bytes are copied into VM-owned
+storage. The wire result owns that storage and may outlive the callback,
+machine and producer DLL. The native caller must release the owned wire value
+with `WioNativeAbiReleaseValue`; the generated C++ codec does so automatically.
+Hidden native fields and padding follow the original prototype when a callback
+copies/modifies a received POD. Owning a POD's bytes does not imply ownership
+of arbitrary memory pointed to by its opaque pointer fields.
+
+The new `wio_vm_native_callback_pod` gate compares C++ with actual VM CLI for
+30 rounds and qualifies a live host: same-C++-type/different-Wio identities,
+multi-argument callback signatures, nested/generic/fixed-array/padded/hidden/
+empty POD, independent copies, retained/worker invocation, six malformed input
+variants, wrong argument count, reverse native result identity, panic/recovery,
+stale-machine entry and result bytes after producer unload. Ref/view and
+nullable-object callback signatures remain explicitly rejected. The prior
+native differential gate's POD callback expectation is updated to success,
+but that existing gate was not run in this slice.
+Only the new Windows gate was run: 1/1 passed in 16.61 seconds (16.69 total).
+No full-suite or local Linux qualification is claimed.
+
+This does not qualify borrowed POD callbacks, object/interface/nullable or
+container callback values, callback return values that are themselves callable,
+callback/async borrowed lifetime, arbitrary foreign ownership or consumed
+arguments. Native Step 8 remains open; pruning and packaging remain separate.

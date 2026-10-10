@@ -5322,9 +5322,9 @@ namespace wio::vm
                         for (const std::uint32_t callbackValueType : callbackType.arguments)
                         {
                             std::uint8_t ignored = 0;
-                            if (!detail::callbackValueMarshalling(module, callbackValueType, ignored))
-                                return fail("WVM1225",
-                                            "Native callbacks require scalar, string, text or void signatures");
+                            if (!detail::callbackValueMarshalling(module, callbackValueType, ignored, podLayouts.get()))
+                                return fail("WVM1225", "Native callbacks require scalar, string, text, qualified "
+                                                       "native POD or void signatures");
                         }
 
                         auto callbackStateOwner = std::make_unique<NativeCallbackState>();
@@ -5340,7 +5340,7 @@ namespace wio::vm
                         }
                         const Value callable = *direct;
                         const std::vector<std::uint32_t> signature = callbackType.arguments;
-                        callbackState->invoke = [callbackProgram, callable,
+                        callbackState->invoke = [callbackProgram, callable, podLayouts,
                                                  signature](const WioNativeAbiValue* callbackArguments,
                                                             const std::uint64_t callbackArgumentCount,
                                                             WioNativeAbiValue* callbackResult,
@@ -5380,11 +5380,11 @@ namespace wio::vm
                             {
                                 std::uint8_t callbackMarshalling = 0;
                                 if (!detail::callbackValueMarshalling(callbackModule, signature[argumentIndex],
-                                                                      callbackMarshalling))
+                                                                      callbackMarshalling, podLayouts.get()))
                                     return WIO_NATIVE_ABI_TYPE_MISMATCH;
-                                detail::NativeValueResult converted =
-                                    detail::decodeNativeValue(callbackModule, callbackArguments[argumentIndex],
-                                                              signature[argumentIndex], callbackMarshalling);
+                                detail::NativeValueResult converted = detail::decodeNativeValue(
+                                    callbackModule, callbackArguments[argumentIndex], signature[argumentIndex],
+                                    callbackMarshalling, podLayouts.get());
                                 if (!converted.succeeded())
                                 {
                                     setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, converted.error);
@@ -5402,11 +5402,13 @@ namespace wio::vm
                             }
                             std::uint8_t resultMarshalling = 0;
                             const std::uint32_t resultType = signature.back();
-                            if (!detail::callbackValueMarshalling(callbackModule, resultType, resultMarshalling))
+                            if (!detail::callbackValueMarshalling(callbackModule, resultType, resultMarshalling,
+                                                                  podLayouts.get()))
                                 return WIO_NATIVE_ABI_TYPE_MISMATCH;
                             std::string conversionError;
                             if (!detail::encodeOwnedNativeValue(callbackModule, execution.value(), resultType,
-                                                                resultMarshalling, *callbackResult, conversionError))
+                                                                resultMarshalling, *callbackResult, conversionError,
+                                                                podLayouts.get()))
                             {
                                 setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, conversionError);
                                 return WIO_NATIVE_ABI_TYPE_MISMATCH;

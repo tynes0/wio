@@ -471,54 +471,134 @@ public:
     }
 };
 
-template<class R, class... A, std::uint64_t Id> struct Codec<std::function<R(A...)>, Id> {
-    struct Storage {
+// Callback argument/result identities belong to the concrete Wio signature,
+// not just its C++ spelling. Keep them even when two declarations share a POD.
+template <class Signature, std::uint64_t Id, std::uint64_t ResultId, std::uint64_t... ArgumentIds> struct CallbackCodec;
+
+template <class R, class... A, std::uint64_t Id, std::uint64_t ResultId, std::uint64_t... ArgumentIds>
+struct CallbackCodec<std::function<R(A...)>, Id, ResultId, ArgumentIds...>
+{
+    static_assert(sizeof...(A) == sizeof...(ArgumentIds));
+    inline static constexpr std::array<std::uint64_t, sizeof...(A)> argumentIds{ArgumentIds...};
+    struct Storage
+    {
         std::atomic<std::uint32_t> refs{1};
         std::function<R(A...)> fn;
-        std::thread::id thread=std::this_thread::get_id();
-        explicit Storage(std::function<R(A...)> value) : fn(std::move(value)) {}
+        std::thread::id thread = std::this_thread::get_id();
+        explicit Storage(std::function<R(A...)> value) : fn(std::move(value))
+        {
+        }
     };
-    template<std::size_t... I> static void invoke(Storage& storage, const WioNativeAbiValue* args, WioNativeAbiValue* result, std::index_sequence<I...>) {
-        if constexpr (std::is_void_v<R>) { storage.fn(Codec<A,0>::read(args[I])...); *result={}; }
-        else *result=Codec<R,0>::write(storage.fn(Codec<A,0>::read(args[I])...));
+    template <std::size_t... I>
+    static void invoke(Storage& storage, const WioNativeAbiValue* args, WioNativeAbiValue* result,
+                       std::index_sequence<I...>)
+    {
+        if constexpr (std::is_void_v<R>)
+        {
+            storage.fn(Codec<A, argumentIds[I]>::read(args[I])...);
+            *result = {};
+        }
+        else
+            *result = Codec<R, ResultId>::write(storage.fn(Codec<A, argumentIds[I]>::read(args[I])...));
     }
-    inline static const WioNativeAbiCallbackOps ops{WIO_NATIVE_ABI_VERSION,0,
-        [](void* p) noexcept { ++static_cast<Storage*>(p)->refs; },
-        [](void* p) noexcept { auto* s=static_cast<Storage*>(p); if (--s->refs==0) delete s; },
-        [](void* p,const WioNativeAbiValue* args,std::uint64_t count,WioNativeAbiValue* result,WioNativeAbiFailure* error) noexcept {
-            if (!p || !result || count!=sizeof...(A) || (count&&!args)) return WIO_NATIVE_ABI_INVALID_ARGUMENT;
-            *result={};
-            try { auto& storage=*static_cast<Storage*>(p); require(storage.thread==std::this_thread::get_id(),WIO_NATIVE_ABI_WRONG_THREAD);
-                invoke(storage,args,result,std::index_sequence_for<A...>{}); return WIO_NATIVE_ABI_OK;
-            } catch (const Error& e) { return failure(error,e.status,e.what()); }
-            catch (const std::exception& e) { return failure(error,WIO_NATIVE_ABI_EXCEPTION,e.what()); }
-            catch (...) { return failure(error,WIO_NATIVE_ABI_EXCEPTION,"callback failure"); }
+    inline static const WioNativeAbiCallbackOps ops{
+        WIO_NATIVE_ABI_VERSION, 0, [](void* p) noexcept { ++static_cast<Storage*>(p)->refs; },
+        [](void* p) noexcept
+        {
+            auto* s = static_cast<Storage*>(p);
+            if (--s->refs == 0)
+                delete s;
+        },
+        [](void* p, const WioNativeAbiValue* args, std::uint64_t count, WioNativeAbiValue* result,
+           WioNativeAbiFailure* error) noexcept
+        {
+            if (!p || !result || count != sizeof...(A) || (count && !args))
+                return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            *result = {};
+            try
+            {
+                auto& storage = *static_cast<Storage*>(p);
+                require(storage.thread == std::this_thread::get_id(), WIO_NATIVE_ABI_WRONG_THREAD);
+                invoke(storage, args, result, std::index_sequence_for<A...>{});
+                return WIO_NATIVE_ABI_OK;
+            }
+            catch (const Error& e)
+            {
+                return failure(error, e.status, e.what());
+            }
+            catch (const std::exception& e)
+            {
+                return failure(error, WIO_NATIVE_ABI_EXCEPTION, e.what());
+            }
+            catch (...)
+            {
+                return failure(error, WIO_NATIVE_ABI_EXCEPTION, "callback failure");
+            }
         }};
-    static WioNativeAbiValue write(std::function<R(A...)> fn) {
-        WioNativeAbiValue v; v.kind=WIO_NATIVE_ABI_CALLBACK; v.typeId=Id; v.flags=WIO_NATIVE_ABI_VALUE_OWNED;
-        v.payload.callback={new Storage(std::move(fn)),&ops}; return v;
+    static WioNativeAbiValue write(std::function<R(A...)> fn)
+    {
+        WioNativeAbiValue v;
+        v.kind = WIO_NATIVE_ABI_CALLBACK;
+        v.typeId = Id;
+        v.flags = WIO_NATIVE_ABI_VALUE_OWNED;
+        v.payload.callback = {new Storage(std::move(fn)), &ops};
+        return v;
     }
-    static std::function<R(A...)> read(const WioNativeAbiValue& value) {
+    static std::function<R(A...)> read(const WioNativeAbiValue& value)
+    {
         require(value.kind == WIO_NATIVE_ABI_CALLBACK && value.payload.callback.ops &&
-            value.payload.callback.ops->abiVersion == WIO_NATIVE_ABI_VERSION && value.payload.callback.ops->invoke);
+                value.payload.callback.ops->abiVersion == WIO_NATIVE_ABI_VERSION && value.payload.callback.ops->invoke);
         const auto callback = value.payload.callback;
         std::shared_ptr<void> owner;
-        if (callback.ops->retain && callback.ops->release) {
+        if (callback.ops->retain && callback.ops->release)
+        {
             callback.ops->retain(callback.userdata);
-            owner=std::shared_ptr<void>(callback.userdata,[ops=callback.ops](void* p) { ops->release(p); });
+            owner = std::shared_ptr<void>(callback.userdata, [ops = callback.ops](void* p) { ops->release(p); });
         }
         const auto thread = std::this_thread::get_id();
         const bool anyThread = (callback.ops->flags & WIO_NATIVE_ABI_CALLBACK_ANY_THREAD) != 0;
-        return [callback, thread, owner, anyThread](A... args) -> R {
+        return [callback, thread, owner, anyThread](A... args) -> R
+        {
             require(anyThread || thread == std::this_thread::get_id(), WIO_NATIVE_ABI_WRONG_THREAD);
-            std::vector<WioNativeAbiValue> arguments{Codec<A, 0>::write(args)...};
-            struct Guard { std::vector<WioNativeAbiValue>& values; ~Guard() { for (auto& v : values) WioNativeAbiReleaseValue(&v); } } guard{arguments};
-            WioNativeAbiValue result; WioNativeAbiFailure failure;
-            auto status = callback.ops->invoke(callback.userdata, arguments.data(), arguments.size(), &result, &failure);
-            struct ResultGuard { WioNativeAbiValue& value; ~ResultGuard() { WioNativeAbiReleaseValue(&value); } } resultGuard{result};
+            std::vector<WioNativeAbiValue> arguments;
+            arguments.reserve(sizeof...(A));
+            struct Guard
+            {
+                std::vector<WioNativeAbiValue>& values;
+                ~Guard()
+                {
+                    for (auto& v : values)
+                        WioNativeAbiReleaseValue(&v);
+                }
+            } guard{arguments};
+            // Install cleanup before converting the first owning argument;
+            // a later codec failure must release every preceding wire value.
+            [&]<std::size_t... I>(std::index_sequence<I...>)
+            { (arguments.push_back(Codec<A, argumentIds[I]>::write(args)), ...); }(std::index_sequence_for<A...>{});
+            WioNativeAbiValue result;
+            WioNativeAbiFailure failure;
+            auto status =
+                callback.ops->invoke(callback.userdata, arguments.data(), arguments.size(), &result, &failure);
+            struct ResultGuard
+            {
+                WioNativeAbiValue& value;
+                ~ResultGuard()
+                {
+                    WioNativeAbiReleaseValue(&value);
+                }
+            } resultGuard{result};
             require(status == WIO_NATIVE_ABI_OK, status);
-            if constexpr (!std::is_void_v<R>) return Codec<R, 0>::read(result);
+            if constexpr (!std::is_void_v<R>)
+                return Codec<R, ResultId>::read(result);
         };
     }
 };
-}
+
+// Legacy scalar callers do not carry nominal identities. Generated native
+// thunks use CallbackCodec with the resolved signature's stable identities.
+template <class R, class... A, std::uint64_t Id>
+struct Codec<std::function<R(A...)>, Id>
+    : CallbackCodec<std::function<R(A...)>, Id, 0, (sizeof(A) * std::uint64_t{0})...>
+{
+};
+} // namespace wio::wir_backend::abi

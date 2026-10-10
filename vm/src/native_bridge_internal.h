@@ -40,12 +40,15 @@ namespace wio::vm::detail
                                                       const NativePodLayouts* layouts = nullptr, unsigned depth = 0,
                                                       const NativeObjectAccess* objects = nullptr);
     // Slice results must outlive the callback's ExecutionResult. This transfers
-    // one producer-owned storage claim to the native caller (wire-v2 owner).
+    // one VM-owned storage claim to the native caller (wire-v2 owner). POD pack
+    // adapters are used only during conversion; returned bytes do not pin them.
     [[nodiscard]] bool encodeOwnedNativeValue(const bytecode::Module& module, const Value& value,
                                               std::uint32_t declaredType, std::uint8_t marshalling,
-                                              WioNativeAbiValue& output, std::string& error);
+                                              WioNativeAbiValue& output, std::string& error,
+                                              const NativePodLayouts* layouts = nullptr);
     [[nodiscard]] bool callbackValueMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
-                                                std::uint8_t& marshalling) noexcept;
+                                                std::uint8_t& marshalling,
+                                                const NativePodLayouts* layouts = nullptr) noexcept;
     [[nodiscard]] bool nativeValueMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                               std::uint8_t& marshalling) noexcept;
     [[nodiscard]] std::string nativeFailureMessage(const WioNativeAbiFailure& failure);

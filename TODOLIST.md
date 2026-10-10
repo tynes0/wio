@@ -1003,9 +1003,20 @@ Rider, and CLion are defined in
    dispatch now diagnoses the uninitialized Place as WVM1043, not a null receiver.
    Only these two new Windows gates were run: 2/2 passed in 30.08 and 0.09 seconds
    (30.31 total); no full-suite or local Linux qualification is claimed.
+   Native callbacks now admit by-value native POD component signatures when
+   their layout sidecar is registered. Concrete callback argument/result type
+   identities are preserved by generated C++ codecs; same-symbol callbacks with
+   different lease/thread contracts no longer deduplicate into one thunk.
+   POD returns use VM-owned bytes and survive callback/machine/producer teardown.
+   A new 30-round C++/actual-VM/live-host gate covers nested/generic/fixed-array/
+   padded/hidden-field/empty POD, multi-argument callbacks, independent value
+   copies, retained/worker calls, malformed identities, panic/recovery, missing
+   layouts and continued ref/view/nullable-object signature rejection.
+   Only this new Windows gate was run: 1/1 passed in 16.61 seconds (16.69 total);
+   no full-suite or local Linux qualification is claimed.
    Remaining native parity work includes broader callback/async lifetime contracts,
    std::Box and broader foreign/container ownership,
-   alias identity canonicalization; POD/object/container/nullable and
+   alias identity canonicalization; borrowed POD/object/container/nullable and
    ref/view callback signatures; nullable borrowed payload lifetime contracts;
    consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See

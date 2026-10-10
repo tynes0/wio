@@ -216,7 +216,17 @@ namespace wio::codegen
             return stableModuleHash(nativeAbiTypeKey(module.types, id));
         };
         const auto codec = [&](TypeId id)
-        { return "wio::wir_backend::abi::Codec<" + type(id) + ", " + std::to_string(wireId(id)) + "ULL>"; };
+        {
+            const auto& signature = module.types.get(id);
+            if (signature.kind != TypeKind::Function || signature.arguments.empty())
+                return "wio::wir_backend::abi::Codec<" + type(id) + ", " + std::to_string(wireId(id)) + "ULL>";
+            std::string result = "wio::wir_backend::abi::CallbackCodec<" + type(id) + ", " +
+                                 std::to_string(wireId(id)) + "ULL, " +
+                                 std::to_string(wireId(signature.arguments.back())) + "ULL";
+            for (std::size_t index = 0; index + 1 < signature.arguments.size(); ++index)
+                result += ", " + std::to_string(wireId(signature.arguments[index])) + "ULL";
+            return result + ">";
+        };
         std::function<bool(TypeId)> concrete = [&](TypeId id)
         {
             const auto& t = module.types.get(id);

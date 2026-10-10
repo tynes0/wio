@@ -1,0 +1,200 @@
+using cpp::header("vm_callback_pod_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_callback_pod::Point)]
+component Point
+{
+    public x: f32;
+    public y: f32;
+}
+[Native, CppName(vm_callback_pod::Cell)]
+component Cell<T>
+{
+    public value: T;
+}
+// Wio order is deliberately different from C++ order and padding.
+[Native, CppName(vm_callback_pod::Packet)]
+component Packet
+{
+    public energy: f64;
+    public position: Point;
+    public samples: [i32; 2];
+    public cell: Cell<i32>;
+    public tag: u8;
+    public marker: char;
+    public active: bool;
+}
+// Same C++ type, distinct Wio contract identity.
+[Native, CppName(vm_callback_pod::Packet)]
+component Twin
+{
+    public energy: f64;
+    public position: Point;
+    public samples: [i32; 2];
+    public cell: Cell<i32>;
+    public tag: u8;
+    public marker: char;
+    public active: bool;
+}
+[Native, CppName(vm_callback_pod::Empty)]
+component Empty {}
+
+extension PacketNative for Packet
+{
+    [Native, CppName(vm_callback_pod::Hidden)]
+    public view fn Hidden() -> i32;
+}
+[Native, CppName(vm_callback_pod::Call), Instantiate(Packet), Instantiate(Twin), Instantiate(Cell<u64>), Instantiate(Empty)]
+fn Call<T>(callback: fn(T) -> T, value: T) -> T;
+[Native, CppName(vm_callback_pod::Combine)]
+fn Combine(callback: fn(Point, Cell<i32>) -> Packet) -> Packet;
+[Native, CppName(vm_callback_pod::Notify)]
+fn Notify(callback: fn(Packet));
+[Native, CppName(vm_callback_pod::Make)]
+fn Make() -> Packet;
+[Native, CppName(vm_callback_pod::Store)]
+fn StoreCall(callback: fn(Packet) -> Packet);
+[Native, CppName(vm_callback_pod::Store)]
+fn StoreCaller([attribute::NativeCallback("retained", "caller")] callback: fn(Packet) -> Packet);
+[Native, CppName(vm_callback_pod::Store)]
+fn StoreAny([attribute::NativeCallback("retained", "any")] callback: fn(Packet) -> Packet);
+[Native, CppName(vm_callback_pod::Capture)]
+fn Capture([attribute::NativeCallback("retained", "any")] callback: fn(Packet) -> Packet);
+[Native, CppName(vm_callback_pod::Run)]
+fn Run() -> Packet;
+[Native, CppName(vm_callback_pod::Worker)]
+fn Worker() -> Packet;
+[Native, CppName(vm_callback_pod::Expired)]
+fn Expired() -> bool;
+[Native, CppName(vm_callback_pod::WrongThread)]
+fn WrongThread(callback: fn(Packet) -> Packet) -> bool;
+[Native, CppName(vm_callback_pod::Clear)]
+fn Clear();
+[Native, CppName(vm_callback_pod::Fail)]
+fn Fail();
+[Native, CppName(vm_callback_pod::Print)]
+fn Print();
+
+object Item {}
+[Native, CppName(vm_callback_pod::Ignore)]
+fn IgnoreRef(callback: fn(ref Packet));
+[Native, CppName(vm_callback_pod::Ignore)]
+fn IgnoreView(callback: fn(view Packet));
+[Native, CppName(vm_callback_pod::Ignore)]
+fn IgnoreNullable(callback: fn(Item?));
+fn AcceptRef(value: ref Packet)
+{
+}
+fn AcceptView(value: view Packet)
+{
+}
+fn AcceptNullable(value: Item?)
+{
+}
+fn RefProbe()
+{
+    IgnoreRef(AcceptRef);
+}
+fn ViewProbe()
+{
+    IgnoreView(AcceptView);
+}
+fn NullableProbe()
+{
+    IgnoreNullable(AcceptNullable);
+}
+
+fn Adjust(value: Packet, bias: i32) -> Packet
+{
+    mut copy = value;
+    copy.cell.value += bias;
+    copy.samples[0usize] += bias;
+    copy.position.x += 2.0f32;
+    copy.marker = 'W';
+    copy.active = true;
+    return copy;
+}
+fn HostCapture()
+{
+    let bias = 5;
+    Capture((value) => Adjust(value, bias));
+}
+fn PanicCapture()
+{
+    Capture((value) => {
+        Fail();
+        return value;
+    });
+}
+fn SafePoint() -> i32
+{
+    return 19;
+}
+fn Entry() -> i32
+{
+    for (mut round = 0; round < 30; round += 1)
+    {
+        let source = Make();
+        let bias = 5;
+        let changed = Call<Packet>((value) => Adjust(value, bias), source);
+        if (changed.cell.value != 16 or changed.samples[0usize] != 18 or
+            changed.samples[1usize] != 17 or changed.position.x != 3.25f32 or
+            changed.position.y != 2.5f32 or changed.energy != 4.5f64 or
+            changed.tag != 3u8 or changed.marker != 'W' or not changed.active)
+        {
+            return 1;
+        }
+        if (source.cell.value != 11 or source.samples[0usize] != 13 or source.active or
+            changed.Hidden() != 97)
+        {
+            return 2;
+        }
+        let local = Packet(8.5f64, Point(7.0f32, 9.0f32), [1, 2], Cell<i32>(23), 4u8, '\0', false);
+        let localCopy = Call<Packet>((value) => value, local);
+        if (localCopy.cell.value != 23 or localCopy.Hidden() != 71 or localCopy.samples[1usize] != 2)
+        {
+            return 3;
+        }
+        let twin = Twin(3.0f64, Point(4.0f32, 6.0f32), [7, 8], Cell<i32>(9), 2u8, 'T', true);
+        let twinCopy = Call<Twin>((value) => value, twin);
+        if (twinCopy.cell.value != 9 or twinCopy.marker != 'T')
+        {
+            return 4;
+        }
+        let maximum = Call<Cell<u64>>((value) => value, Cell<u64>(18446744073709551615u64));
+        if (maximum.value != 18446744073709551615u64)
+        {
+            return 5;
+        }
+        let combined = Combine((point, cell) => Packet(6.0f64, point, [4, 5], cell, 7u8, 'C', true));
+        if (combined.cell.value != 19 or combined.position.y != 3.0f32 or combined.Hidden() != 71)
+        {
+            return 9;
+        }
+        let empty = Call<Empty>((value) => value, Empty());
+        Notify((value) => {
+            if (value.cell.value != 11)
+            {
+                Fail();
+            }
+        });
+        StoreCall((value) => value);
+        if (not Expired() or not WrongThread((value) => value))
+        {
+            return 6;
+        }
+        StoreCaller((value) => Adjust(value, bias));
+        if (Run().cell.value != 16)
+        {
+            return 7;
+        }
+        StoreAny((value) => Adjust(value, bias));
+        if (Worker().samples[0usize] != 18 or Run().cell.value != 16)
+        {
+            return 8;
+        }
+        Clear();
+    }
+    Print();
+    return 0;
+}
