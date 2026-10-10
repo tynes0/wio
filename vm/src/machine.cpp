@@ -2942,6 +2942,27 @@ namespace wio::vm
 
         const auto completeFrame = [&](Value returned) -> std::optional<ExecutionResult>
         {
+            // A callee can create a projection into a caller-owned ref argument.
+            // The value stays borrowed, but its PlaceStorage metadata must not
+            // disappear with the callee frame. Move only that metadata, keeping
+            // its original root/expiry links and without retaining the value.
+            if (returned.kind() == Value::Kind::Place)
+            {
+                auto& current = frames.back();
+                const auto local = std::ranges::find_if(current.localPlaces, [&](const auto& place)
+                                                        { return place.get() == returned.asPlace(); });
+                if (local != current.localPlaces.end())
+                {
+                    if (frames.size() == 1)
+                        return failWithStack({"WVM1043", "VM host cannot export a frame-local borrowed projection"});
+                    if (current.continuation.completion == FrameCompletion::ReturnValue &&
+                        current.continuation.callerResult != bytecode::InvalidIndex)
+                    {
+                        frames[frames.size() - 2].localPlaces.push_back(std::move(*local));
+                        current.localPlaces.erase(local);
+                    }
+                }
+            }
             FrameContinuation continuation = std::move(frames.back().continuation);
             frames.pop_back();
             if (frames.empty())
@@ -3588,6 +3609,27 @@ namespace wio::vm
                     const Value* value = argument(index);
                     return value ? valueIndex(*value) : std::nullopt;
                 };
+
+                // VM structural array operations must obey the same conservative
+                // descendant-expiry contract as native structural copy-back.
+                // Retire while the old cells are still addressable, before a
+                // vector relocation/erase can leave dangling Place aliases.
+                if (program_->projections.first && instruction.intrinsicFamily == IntrinsicArray && mutableReceiver &&
+                    receiver->kind() == Value::Kind::Array)
+                {
+                    const auto reserve = selector == "Reserve" ? indexArgument(1) : std::nullopt;
+                    const auto* appended = selector == "Extend" ? argument(1) : nullptr;
+                    const auto* removed = selector == "Remove" ? argument(1) : nullptr;
+                    bool removesCell = false;
+                    for (std::size_t i = 0; removed && i < receiver->elementCount(); ++i)
+                        removesCell = removesCell || *receiver->element(i) == *removed;
+                    if (selector == "Push" || selector == "PushFront" || selector == "Pop" || selector == "PopFront" ||
+                        selector == "Insert" || selector == "RemoveAt" ||
+                        (selector == "Clear" && receiver->elementCount()) || removesCell ||
+                        (appended && appended->elementCount()) || (reserve && *reserve > receiver->elementCapacity()) ||
+                        (selector == "ShrinkToFit" && receiver->elementCapacity() > receiver->elementCount()))
+                        program_->projections.retireCells(*mutableReceiver);
+                }
 
                 if (instruction.intrinsicFamily == IntrinsicString)
                 {
@@ -5841,25 +5883,53 @@ namespace wio::vm
                     const auto& borrowed = nativeFrame.result;
                     const auto flags =
                         WIO_NATIVE_ABI_VALUE_BORROWED | (mutableResult ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
+                    const bool argumentAlias = (borrowed.flags & WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS) != 0;
                     if (reflected == module.contract.reflection.end() || !reflected->stableTypeId ||
-                        borrowed.kind != WIO_NATIVE_ABI_REFERENCE || borrowed.flags != flags ||
+                        borrowed.kind != WIO_NATIVE_ABI_REFERENCE ||
+                        borrowed.flags != (flags | (argumentAlias ? WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS : 0u)) ||
                         borrowed.typeId != reflected->stableTypeId || borrowed.owner.state || borrowed.owner.ops ||
                         borrowed.owner.generation || borrowed.payload.mutableSlice.size != sizeof(WioNativeAbiValue))
                         return fail("WVM1224", "Native borrowed result has an invalid reference contract");
                     PlaceStorage* caller = nullptr;
-                    for (const auto& token : nativeFrame.tokens)
-                        if (borrowed.payload.mutableSlice.data == &token.wire && referenceBase(token.type) == base &&
-                            token.marshalling == declaration.nativeBinding.result.marshalling &&
-                            token.projectionRoot == (std::numeric_limits<std::size_t>::max)() &&
-                            (!mutableResult || (token.mutableValue && token.place->mutableValue)))
+                    if (argumentAlias)
+                    {
+                        if (!(native.flags & WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS))
+                            return fail("WVM1224", "Native producer did not advertise projected borrowed results");
+                        for (std::size_t i = 0; i < nativeFrame.arguments.size(); ++i)
                         {
-                            caller = token.place;
+                            const auto& argument = nativeFrame.arguments[i];
+                            const auto& abi = declaration.nativeBinding.parameters[i];
+                            if (borrowed.payload.mutableSlice.data != &argument ||
+                                argument.kind != WIO_NATIVE_ABI_REFERENCE ||
+                                !(argument.flags &
+                                  (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED |
+                                   WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED |
+                                   WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED)) ||
+                                referenceBase(abi.type) != base ||
+                                abi.marshalling != declaration.nativeBinding.result.marshalling ||
+                                (mutableResult && abi.passing != 2))
+                                continue;
+                            const Value* operand = read(instruction.operands[i]);
+                            if (operand && operand->kind() == Value::Kind::Place)
+                                caller = operand->asPlace();
                             break;
                         }
+                    }
+                    else
+                        for (const auto& token : nativeFrame.tokens)
+                            if (borrowed.payload.mutableSlice.data == &token.wire &&
+                                referenceBase(token.type) == base &&
+                                token.marshalling == declaration.nativeBinding.result.marshalling &&
+                                token.projectionRoot == (std::numeric_limits<std::size_t>::max)() &&
+                                (!mutableResult || (token.mutableValue && token.place->mutableValue)))
+                            {
+                                caller = token.place;
+                                break;
+                            }
                     // Match addresses, never dereference a foreign result pointer.
                     // Returning the original caller Place also survives forwarding
                     // through Wio frames without acquiring any ownership claim.
-                    if (!caller || !caller->initialized)
+                    if (!caller || !caller->initialized || (mutableResult && !caller->mutableValue))
                         return fail("WVM1224", "Native borrowed result does not name a compatible caller reference");
                     if (instruction.result != bytecode::InvalidIndex &&
                         !write(instruction.result, Value::place(caller)))

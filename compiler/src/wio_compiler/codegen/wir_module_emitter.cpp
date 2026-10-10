@@ -316,14 +316,20 @@ namespace wio::codegen
                         (r.isMutable && !parameter.isMutable))
                         continue;
                     out << "    if (value.borrowIdentity() && value.borrowIdentity() == p" << i
-                        << ".borrowIdentity() && !(args[" << i
-                        << "].flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED | "
-                           "WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED | WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED))"
+                        << ".borrowIdentity() && frame.aliasesLiveBorrow<" << type(base) << ", " << wireId(base)
+                        << "ULL>(args[" << i << "], value.borrowIdentity())"
                         << (r.isMutable ? " && value.canRebind()" : "") << ") {\n"
                         << "      result->kind = WIO_NATIVE_ABI_REFERENCE; result->typeId = " << wireId(base)
                         << "ULL;\n      result->flags = WIO_NATIVE_ABI_VALUE_BORROWED"
                         << (r.isMutable ? " | WIO_NATIVE_ABI_VALUE_MUTABLE" : "") << ";\n"
-                        << "      result->payload.mutableSlice = args[" << i << "].payload.mutableSlice;\n"
+                        << "      if (args[" << i
+                        << "].flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED | "
+                           "WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED | WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED)) "
+                           "{\n"
+                        << "        result->flags |= WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS;\n"
+                        << "        result->payload.mutableSlice = {const_cast<WioNativeAbiValue*>(&args[" << i
+                        << "]), sizeof(WioNativeAbiValue)};\n"
+                        << "      } else result->payload.mutableSlice = args[" << i << "].payload.mutableSlice;\n"
                         << "      return WIO_NATIVE_ABI_OK;\n    }\n";
                 }
                 out << "    return wio::wir_backend::abi::failure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, "
@@ -362,7 +368,8 @@ namespace wio::codegen
                 out << "{WIO_NATIVE_ABI_VERSION,WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES | "
                        "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS | "
                        "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS | "
-                       "WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS,"
+                       "WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS | "
+                       "WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS,"
                     << stableModuleHash(b.stableKey) << "ULL," << quoted(b.stableKey) << ',' << quoted(b.symbol) << ','
                     << quoted(b.thunkSymbol) << ",&" << b.thunkSymbol << "},\n";
             }

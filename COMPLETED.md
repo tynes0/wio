@@ -1401,7 +1401,7 @@ here as historical evidence rather than active work:
       contracts and reads after caller root cleanup; object cleanup balances.
       Narrowed nullable/covariant input cells and implicit native receivers reject
       explicitly; borrowed-result bytecode cannot use owned-result view narrowing.
-      Existing ABI and bytecode formats are unchanged. Projected result mapping,
+      Existing ABI and bytecode formats were unchanged. At this stage, projected result mapping,
       arbitrary foreign storage, async/callback lifetime and SDK-exported borrow
       results remain separate work; Native Step 8 is still open.
       Only the ten new tests were run on Windows: 10/10 passed in 18.32 seconds
@@ -1489,7 +1489,7 @@ here as historical evidence rather than active work:
 - [x] Qualified fixed-array descendants only with a containing POD projection;
       standalone unsupported fixed-array references still reject explicitly.
       Native vector invalidation rules and VM descendant expiry remain enforced.
-      Projected borrowed results and dictionary/bool-proxy paths stay excluded.
+      At this stage, projected borrowed results and dictionary/bool-proxy paths were excluded.
 - [x] Added a new 30-round C++/actual-VM/live-host gate with 18 malformed ABI cases,
       missing capability, expired borrow/native failure/result rejection, native
       entry counters, hidden-state preservation, compatibility and recovery checks.
@@ -1510,11 +1510,41 @@ here as historical evidence rather than active work:
       rehash/insert/remove; removed descendants expire. Hidden POD state survives.
 - [x] Qualified Any and generic/nullable object mapped values, exactly-once
       ownership cleanup and copy-back destructor failure reporting. Root-bound
-      results work; projected results, map-key references, bool proxies and broader
-      callback/foreign ownership remain excluded.
+      results work; at this stage, projected results, map-key references, bool
+      proxies and broader callback/foreign ownership remain excluded.
 - [x] Added a new 30-round C++/actual-VM/live-host gate with 32 forged dictionary/
       mixed-path variants, native-entry counters, old capability rejection,
       lifecycle balance and failure recovery. Only this new Windows gate was run:
       1/1 passed in 33.27 seconds (33.34 total). The old overlap negative expectation
       was updated but that gate was not run. Native Step 8 remains open;
       no full-suite or local Linux qualification is claimed.
+
+## Caller-Bound Projected Native Borrowed Results
+
+- [x] Added a result-only input-argument alias flag and producer capability.
+      Existing ABI/sidecar/bytecode versions and structure sizes stay unchanged.
+      Generated thunks compare exact compatible ref/view addresses and re-resolve
+      the live producer path after native execution. VM results name only exact
+      caller argument wires; foreign pointers/descriptors are never dereferenced.
+- [x] Enforced exact type/marshalling, per-argument mutability, capability and
+      post-copy-back Place lifetime. Surviving dictionary values work after
+      insert/erase-other/rehash; structurally retired array elements reject.
+      Returning a newly selected relocated element or foreign/global address is
+      not a caller borrow. Native code must still obey ordinary C++ lifetimes;
+      this contract does not detect arbitrary foreign erase/reinsert ABA misuse.
+- [x] Fixed Wio-frame forwarding of projected references by moving only the
+      PlaceStorage metadata into the caller. Root links, invalidation and borrowed
+      ownership remain intact. Frame-local projection metadata cannot escape as
+      a direct public VM-host result.
+- [x] Fixed VM structural array intrinsic expiry before vector relocation/erase.
+      No-op reserve, missing-value remove and empty extend retain valid borrows.
+- [x] Added a new 30-round C++/actual-VM/live-host gate covering scalar/string/POD,
+      generic fields, fixed/dynamic rows, dictionary/mixed paths, readonly/repeated
+      aliases, forwarding, root rebinding, native failures, missing capability,
+      14 malformed/mutability result variants and 11 structural array operations.
+      Only the new Windows gate was run: 1/1 passed in 17.01 seconds (17.08 total).
+      Four old result expectations were updated but their gates were not run.
+      Native Step 8 stays open; projected Any/object/nullable result qualification,
+      dictionary intrinsic remapping, map-key/bool-proxy references and broader
+      callback/foreign ownership remain separate work. No full-suite or local
+      Linux qualification is claimed.

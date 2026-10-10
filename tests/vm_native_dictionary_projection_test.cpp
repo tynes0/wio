@@ -233,8 +233,11 @@ namespace
         if (!entry.succeeded())
             throw std::runtime_error(entry.error().code + ": " + entry.error().message);
         check(entry.value().asSignedInteger() == 0, "dictionary projection host entry failed");
-        for (const auto& [name, code] : std::array<std::pair<const char*, const char*>, 3>{
-                 {{"ExpiredProbe", "WVM1043"}, {"FailureProbe", "WVM1222"}, {"BorrowProbe", "WVM1222"}}})
+        const auto borrowed = machine.invoke(function("BorrowProbe"));
+        check(borrowed.succeeded() && borrowed.value().asSignedInteger() == 7,
+              "qualified dictionary borrowed result failed");
+        for (const auto& [name, code] : std::array<std::pair<const char*, const char*>, 2>{
+                 {{"ExpiredProbe", "WVM1043"}, {"FailureProbe", "WVM1222"}}})
         {
             const auto failed = machine.invoke(function(name));
             check(!failed.succeeded() && failed.error().code == code, name);

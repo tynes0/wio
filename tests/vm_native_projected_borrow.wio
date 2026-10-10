@@ -1,0 +1,297 @@
+using cpp::header("vm_projected_borrow_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_projected_borrow::Cell)]
+component Cell<T>
+{
+    public value: T;
+}
+
+[Native, CppName(vm_projected_borrow::Packet)]
+component Packet
+{
+    public row: [i32; 2];
+    public cell: Cell<i32>;
+    public tag: u8;
+}
+
+[Native, CppName(vm_projected_borrow::Scalar)]
+fn Scalar(values: ref i32[], value: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::View)]
+fn View(value: view i32, values: view i32[]) -> view i32;
+[Native, CppName(vm_projected_borrow::Repeat)]
+fn Repeat(values: view i32[], first: view i32, second: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::Field)]
+fn Field(values: view Packet[], value: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::Pod)]
+fn Pod(packet: ref Packet, value: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::Item)]
+fn Item(values: ref Packet[], item: ref Packet) -> ref Packet;
+[Native, CppName(vm_projected_borrow::Row)]
+fn Row(values: ref Packet[], row: ref [i32; 2]) -> ref [i32; 2];
+[Native, CppName(vm_projected_borrow::Nested)]
+fn Nested(values: ref i32[][], row: ref i32[]) -> ref i32[];
+[Native, CppName(vm_projected_borrow::Map)]
+fn Map(values: ref Dict<string, i32>, value: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::Mixed)]
+fn Mixed(values: ref Dict<string, Packet[]>, value: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::String)]
+fn String(values: ref Dict<string, string>, value: ref string) -> ref string;
+[Native, CppName(vm_projected_borrow::Root)]
+fn Root(values: ref i32[]) -> ref i32[];
+[Native, CppName(vm_projected_borrow::Shrink)]
+fn Shrink(values: ref i32[], first: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::Grow)]
+fn Grow(values: ref i32[], first: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::Erase)]
+fn Erase(values: ref Dict<string, i32>, value: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::Foreign)]
+fn Foreign(values: ref i32[], value: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::Fail)]
+fn Fail(values: ref i32[], value: ref i32) -> ref i32;
+[Native, CppName(vm_projected_borrow::Print)]
+fn Print();
+
+fn Forward(values: ref Packet[]) -> ref i32
+{
+    return Field(values, ref values[0usize].cell.value);
+}
+
+fn Probe() -> i32
+{
+    mut values: i32[] = [5, 9];
+    let value: ref i32 = Scalar(ref values, ref values[0usize]);
+    return deref value;
+}
+
+fn ShrinkProbe() -> i32
+{
+    mut values: i32[] = [5, 9];
+    return deref Shrink(ref values, ref values[0usize]);
+}
+
+fn AliasProbe() -> i32
+{
+    mut values: i32[] = [5];
+    return deref Repeat(ref values, ref values[0usize], ref values[0usize]);
+}
+
+fn GrowProbe() -> i32
+{
+    mut values: i32[] = [5];
+    return deref Grow(ref values, ref values[0usize]);
+}
+
+fn EraseProbe() -> i32
+{
+    mut values: Dict<string, i32> = {"kept": 5, "other": 9};
+    return deref Erase(ref values, ref values["kept"]);
+}
+
+fn ForeignProbe() -> i32
+{
+    mut values: i32[] = [5];
+    return deref Foreign(ref values, ref values[0usize]);
+}
+
+fn FailureProbe() -> i32
+{
+    mut values: i32[] = [5];
+    return deref Fail(ref values, ref values[0usize]);
+}
+
+fn ExpiredProbe() -> i32
+{
+    mut values: i32[] = [5, 9];
+    let old: view i32 = Scalar(ref values, ref values[0usize]);
+    let root: ref i32[] = Root(ref values);
+    root.Push(13);
+    return deref old;
+}
+
+fn ForwardExpiredProbe() -> i32
+{
+    mut values: Packet[] = [Packet()];
+    let old: view i32 = Forward(ref values);
+    values.Push(Packet());
+    return deref old;
+}
+
+fn ForwardReboundProbe() -> i32
+{
+    mut values: Packet[] = [Packet()];
+    let old: view i32 = Forward(ref values);
+    values = [Packet()];
+    return deref old;
+}
+
+fn StructuralProbe(action: i32) -> i32
+{
+    mut values: i32[] = [5, 9];
+    if (action == 10)
+    {
+        values.Reserve(128usize);
+    }
+    let old: view i32 = Scalar(ref values, ref values[0usize]);
+    if (action == 0)
+    {
+        values.Push(13);
+    }
+    if (action == 1)
+    {
+        values.PushFront(13);
+    }
+    if (action == 2)
+    {
+        values.Pop();
+    }
+    if (action == 3)
+    {
+        values.PopFront();
+    }
+    if (action == 4)
+    {
+        values.Insert(1usize, 13);
+    }
+    if (action == 5)
+    {
+        values.RemoveAt(1usize);
+    }
+    if (action == 6)
+    {
+        values.Remove(9);
+    }
+    if (action == 7)
+    {
+        values.Clear();
+    }
+    if (action == 8)
+    {
+        values.Extend([13]);
+    }
+    if (action == 9)
+    {
+        values.Reserve(256usize);
+    }
+    if (action == 10)
+    {
+        values.ShrinkToFit();
+    }
+    return deref old;
+}
+
+fn NoOpProbe() -> i32
+{
+    mut values: i32[] = [5, 9];
+    let old: view i32 = Scalar(ref values, ref values[0usize]);
+    values.Reserve(0usize);
+    values.Remove(999);
+    let empty: i32[] = [];
+    values.Extend(empty);
+    return deref old;
+}
+
+fn SafePoint() -> i32
+{
+    return 0;
+}
+
+fn Entry() -> i32
+{
+    if (NoOpProbe() != 7)
+    {
+        return 14;
+    }
+    mut round = 0;
+    while (round < 30)
+    {
+        mut values: i32[] = [5, 9];
+        let scalar: ref i32 = Scalar(ref values, ref values[0usize]);
+        if (deref scalar != 7)
+        {
+            return 1;
+        }
+        deref scalar = 17;
+        let observed: view i32 = View(ref values[0usize], ref values);
+        if (deref observed != 17 or values[0usize] != 17)
+        {
+            return 2;
+        }
+        let repeated: ref i32 = Repeat(ref values, ref values[0usize], ref values[0usize]);
+        if (deref repeated != 19 or deref scalar != 19)
+        {
+            return 13;
+        }
+
+        mut packets: Packet[] = [Packet()];
+        let field: ref i32 = Forward(ref packets);
+        deref field = 41;
+        let item: ref Packet = Item(ref packets, ref packets[0usize]);
+        if (item.cell.value != 41)
+        {
+            return 3;
+        }
+        let row: ref [i32; 2] = Row(ref packets, ref packets[0usize].row);
+        row[1usize] = 43;
+        if (packets[0usize].row[1usize] != 43)
+        {
+            return 4;
+        }
+        mut packet = Packet();
+        let pod: ref i32 = Pod(ref packet, ref packet.cell.value);
+        deref pod = 47;
+        if (packet.cell.value != 47)
+        {
+            return 5;
+        }
+
+        mut nested: i32[][] = [[1, 2]];
+        let inner: ref i32[] = Nested(ref nested, ref nested[0usize]);
+        inner[0usize] = 53;
+        if (nested[0usize][0usize] != 53)
+        {
+            return 6;
+        }
+
+        mut map: Dict<string, i32> = {"kept": 5, "removed": 9};
+        let mapped: ref i32 = Map(ref map, ref map["kept"]);
+        if (deref mapped != 31 or map.Count() != 81usize)
+        {
+            return 7;
+        }
+        deref mapped = 59;
+        if (map["kept"] != 59)
+        {
+            return 8;
+        }
+
+        mut mixed: Dict<string, Packet[]> = {"kept": [Packet()]};
+        let mixedField: ref i32 = Mixed(ref mixed, ref mixed["kept"][0usize].cell.value);
+        deref mixedField = 61;
+        if (mixed["kept"][0usize].cell.value != 61)
+        {
+            return 9;
+        }
+
+        mut strings: Dict<string, string> = {"kept": "wio"};
+        let text: ref string = String(ref strings, ref strings["kept"]);
+        if (deref text != "native")
+        {
+            return 10;
+        }
+        deref text = "caller";
+        if (strings["kept"] != "caller")
+        {
+            return 11;
+        }
+        let root: ref i32[] = Root(ref values);
+        root[1usize] = 67;
+        if (values[1usize] != 67)
+        {
+            return 12;
+        }
+        round += 1;
+    }
+    Print();
+    return 0;
+}

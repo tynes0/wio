@@ -54,7 +54,10 @@ enum WioNativeAbiValueFlag : std::uint32_t
     // Logical array indices followed by a registered POD field projection.
     WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED = 1u << 7u,
     // Mixed dynamic-array indices / dictionary key lookups, optionally followed by POD fields.
-    WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED = 1u << 8u
+    WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED = 1u << 8u,
+    // Result-only reference form. Payload names the exact input argument wire,
+    // not a producer address or a copied projection descriptor.
+    WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS = 1u << 9u
 };
 
 struct WioNativeAbiSlice
@@ -165,7 +168,8 @@ enum WioNativeAbiFunctionFlag : std::uint32_t
     WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES = 1u << 0u,
     WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS = 1u << 1u,
     WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS = 1u << 2u,
-    WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS = 1u << 3u
+    WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS = 1u << 3u,
+    WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS = 1u << 4u
 };
 
 // Additive form: the existing projection structures retain their exact sizes.

@@ -335,6 +335,7 @@ public:
     template <class T, std::uint64_t Id> T& borrow(const WioNativeAbiValue& wire, bool mutableAccess)
     {
         require(wire.kind == WIO_NATIVE_ABI_REFERENCE && (wire.flags & WIO_NATIVE_ABI_VALUE_BORROWED) &&
+                    !(wire.flags & WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS) &&
                     (!mutableAccess || (wire.flags & WIO_NATIVE_ABI_VALUE_MUTABLE)) && wire.payload.mutableSlice.data,
                 WIO_NATIVE_ABI_INVALID_ARGUMENT);
         if (wire.flags & WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED)
@@ -450,6 +451,15 @@ public:
         found->second.dirty = found->second.dirty || mutableAccess;
         return **storage;
     }
+    // Resolve against the live producer container again after the native call.
+    // Only compare addresses: the original/returned pointer may be invalidated
+    // by native structural mutation and must never be dereferenced here.
+    template <class T, std::uint64_t Id>
+    bool aliasesLiveBorrow(const WioNativeAbiValue& wire, const void* address)
+    {
+        return address && std::addressof(borrow<T, Id>(wire, false)) == address;
+    }
+
     void commit()
     {
         for (auto& [_, slot] : slots_)

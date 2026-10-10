@@ -882,7 +882,7 @@ Rider, and CLion are defined in
    The new qualification covers scalar/string/text/POD/Any/container, hosted
    object/interface/generic and nullable object/opaque cells, rebinding, field-only
    arguments, expired caller roots and malformed foreign result pointers/flags.
-   Returning projected overlap tokens, arbitrary producer/global/local storage,
+   At this stage, returning projected overlap tokens, arbitrary producer/global/local storage,
    asynchronous borrows and exported SDK ref/view results remain unqualified.
    Only the ten new focused tests were run on Windows: 10/10 passed in 18.32
    seconds total (C++/VM/live-host gate: 17.12 seconds).
@@ -917,7 +917,7 @@ Rider, and CLion are defined in
    Outermost root copy-back handles nested growth; independent projected tokens
    drop redundant object/Any claims before invocation. Nullable object elements
    keep their exact storage type while using the static native handle contract ID.
-   Root-bound native borrow results remain supported; projected-element results,
+   At this stage, root-bound native borrow results remain supported; projected-element results,
    dictionary key paths and bool proxies reject. Container-to-POD-field paths
    are qualified by the subsequent sequence/POD composition gate below.
    Missing producer capability and malformed paths fail before native body entry.
@@ -945,7 +945,7 @@ Rider, and CLion are defined in
    values under readonly roots. Typed child identities and key codecs validate
    every step; owned key wires outlive source mutation and release with the frame.
    Structural key updates preserve surviving VM borrows and expire removed cells.
-   Root-bound borrowed results remain supported; projected results, map-key
+   At this stage, root-bound borrowed results remain supported; projected results, map-key
    references, bool proxies and broader callback/foreign ownership stay excluded.
    A new 30-round C++/actual-VM/live-host Windows gate covers scalar/NUL/string/
    Unicode/enum/u64/char/bool keys, mixed paths, Any, generic/nullable object values,
@@ -954,7 +954,29 @@ Rider, and CLion are defined in
    run: 1/1 passed in 33.27 seconds (33.34 total). The old overlap negative gate
    expectation was updated but that gate was not run. Native Step 8 stays open;
    no full-suite or local Linux qualification is claimed.
-   Remaining native parity work includes broader VM-created object signatures,
+   Synchronous projected borrowed results now return an exact input-argument
+   identity, never a native address or copied projection descriptor. A new
+   additive result flag/capability preserves existing ABI/sidecar/bytecode sizes.
+   Producer thunks match the original compatible ref/view and re-resolve its
+   live path after the call. VM validation checks the advertised capability,
+   exact argument wire, type, marshalling, mutability and post-copy-back Place
+   lifetime. Dictionary rehash/key-set updates may preserve surviving values;
+   structural arrays conservatively retire descendant results. Foreign/global
+   storage and newly selected relocated elements cannot masquerade as inputs.
+   Wio forwarding now transfers projection metadata into the caller frame,
+   without owning the borrowed value or losing root/expiry links. Frame-local
+   projections cannot escape directly through the public VM host result.
+   VM structural array intrinsics also retire descendants before relocating
+   cells; no-op reserve/remove/extend preserve them. A new 30-round C++/actual-VM/
+   live-host gate covers scalar, string, POD/generic fields, fixed/dynamic rows,
+   readonly/repeated aliases, dictionary/mixed paths, forwarding, rebind/expiry,
+   14 malformed/mutability variants, missing capability, 11 array structural
+   operations and failure recovery. Only this new Windows gate was run:
+   1/1 passed in 17.01 seconds (17.08 total). Four older result expectations
+   were updated but their gates were not run. Native Step 8 stays open;
+   no full-suite or local Linux qualification is claimed.
+   Remaining native parity work includes dictionary-intrinsic borrow remapping,
+   projected Any/object/nullable result qualification, broader VM-created object signatures,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and
    ref/view callback signatures; nullable borrowed payload lifetime contracts;

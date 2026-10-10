@@ -139,8 +139,7 @@ namespace
         const auto foreign = good.invoke(function("GlobalProbe"));
         check(!foreign.succeeded() && foreign.error().code == "WVM1222", "unrelated producer/global storage escaped");
         const auto projected = good.invoke(function("ProjectProbe"));
-        check(!projected.succeeded() && projected.error().code == "WVM1222",
-              "projected result escaped its caller contract");
+        check(projected.succeeded(), "qualified POD borrowed result failed");
 
         auto expiredModule = module;
         auto& probe = expiredModule.functions[function("BorrowProbe")];

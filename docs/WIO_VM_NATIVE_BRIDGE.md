@@ -1946,9 +1946,10 @@ contract mismatch, direct/indirect local candidate escape, narrowed nullable/
 covariant cells and implicit native extension receivers. Bytecode verification
 also rejects owned-result-style view narrowing on borrowed-result calls.
 
-Projected overlap tokens still require a separate result projection mapping:
+At this stage, projected overlap tokens required a separate result projection mapping:
 an input POD root and overlapping field can be passed together, but its projected
-field token cannot be returned through this new free-native result contract.
+field token could not be returned through this initial free-native result contract.
+The later caller-bound projected-result section qualifies that mapping.
 Implicit native receivers, async borrowed results, arbitrary foreign storage and
 SDK-exported ref/view results remain unsupported. Existing wire/sidecar/bytecode
 versions are unchanged; this does not close Native Step 8 or claim full-suite/
@@ -2128,9 +2129,9 @@ nested-growth fixture writes through its element first, then grows its row,
 and never reads that old element reference afterward. VM caller descendants
 are invalidated during structural copy-back using the existing safety contract.
 
-Returning an unprojected caller root reference still works when the call also
-has projected element inputs. Returning the projected element itself remains
-rejected: result projections need their own post-call lifetime contract.
+At this stage, returning an unprojected caller root reference worked when the
+call also had projected element inputs. Returning the projected element itself
+was rejected pending the later caller-bound projected-result lifetime contract.
 At this stage container-to-POD-field paths were rejected; the next section
 extends this surface. Dictionary key/value paths, `vector<bool>` element proxies,
 shared iterator structural mutation, foreign ownership and callback/async
@@ -2198,8 +2199,8 @@ to use their existing form. Native code must still obey C++ invalidation rules:
 write through a field before vector growth, then stop using that native reference.
 Structural copy-back expires old VM descendants using the existing contract.
 
-Projected-field borrowed results remain rejected; their post-call lifetime
-contract is not defined yet. Dictionary paths remained separate at this stage
+At this stage, projected-field borrowed results were rejected pending the later
+caller-bound projected-result lifetime contract. Dictionary paths remained separate
 and are extended by the next section. Bool proxies, shared iterator
 structural updates and broader foreign/callback/async ownership remain separate
 work. This slice does not close Native Step 8.
@@ -2264,8 +2265,9 @@ C++ rules. Erasing a referenced entry or resizing a nested vector invalidates
 that native reference: do not use it afterward. VM structural copy-back remaps
 surviving keys, preserves their borrows and expires removed descendants.
 
-Root-bound borrowed results still work with projected inputs. Returning a
-projected value itself remains rejected pending a post-call lifetime contract.
+At this stage, root-bound borrowed results worked with projected inputs, but
+returning a projected value itself remained rejected. The next section adds the
+post-call lifetime contract for caller-bound projected results.
 Dictionary key references (as opposed to looking up mapped values by key),
 vector<bool> element proxies, shared iterator structural mutation, consumed
 arguments and broader callback/foreign ownership remain separate work.
@@ -2283,3 +2285,91 @@ rejected projected results, missing capability, 23 malformed dictionary and
 Only this new Windows gate was run: 1/1 passed in 33.27 seconds (33.34 total).
 The old dictionary-overlap negative expectation was removed but that old gate
 was not run. No full-suite or local Linux qualification is claimed.
+
+## Caller-Bound Projected Borrowed Results
+
+A synchronous free-native function can return a supplied projected `ref/view`
+when its exact type and mutability are compatible with the result:
+
+```cpp
+inline std::int32_t& Borrow(std::vector<std::int32_t>& values, std::int32_t& item)
+{
+    if (&values.at(0) != &item)
+        throw std::runtime_error("unexpected input alias");
+    item += 2;
+    return item;
+}
+```
+
+```wio
+using cpp::header("scores.h");
+
+[Native, CppName(scores::Borrow)]
+fn Borrow(values: ref i32[], item: ref i32) -> ref i32;
+
+mut values: i32[] = [5, 9];
+let item: ref i32 = Borrow(ref values, ref values[0usize]);
+deref item = 17;
+// values[0usize] is now 17. The result borrows caller storage, not a copy.
+```
+
+The additive result form uses `WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS` together with
+`BORROWED` and, for `ref`, `MUTABLE`. Its payload has exactly
+`sizeof(WioNativeAbiValue)` bytes and points to the **exact input argument wire**
+within the current call's argument array. It does not point to the native C++
+element, root token, an independent descriptor copy or a VM Value cell. The
+producer advertises `WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS`.
+Existing wire-v2, sidecar-v1, bytecode versions and structure sizes are unchanged.
+Unprojected caller-root results retain their preceding token-identity format.
+
+Generated thunks first match the returned address against a compatible original
+parameter. After native execution/copy-back encoding, they re-resolve the supplied
+projection in live producer storage and compare its current address too. These
+checks compare pointers without dereferencing a potentially invalid old pointer.
+The VM then validates the result tag/flags, static identity, empty owner, exact
+input wire, per-argument type/marshalling/mutability and advertised capability.
+It checks the original caller Place **after** transactional copy-back. A `view`
+parameter cannot become a mutable result merely because another parameter shares
+its physical cell. Missing capability or malformed/expired caller results fail
+with `WVM1224`; producer alias/native-call failures use `WVM1222`.
+
+Dictionary rehash, insertion and erasure of other keys can preserve a returned
+mapped-value borrow. VM dictionary copy-back remaps surviving key/value cells.
+Erasing the supplied entry or returning a freshly reselected vector element
+after relocation does not create a new caller borrow. Structural array copy-back
+conservatively retires descendants even when a particular C++ element address
+survived (for example, the first element after `pop_back`). Native code must obey
+ordinary C++ reference lifetimes: arbitrary erase/reinsert ABA or other foreign
+undefined behavior cannot be made safe by pointer comparison.
+
+When a Wio callee creates a projection into its caller's reference argument and
+forwards that borrow, its PlaceStorage metadata moves into the caller frame.
+The borrowed value is not retained/copied, and its original root/expiry links
+remain attached. Rebinding/cleaning the root therefore still invalidates it.
+Frame-local projection metadata cannot escape directly as a public `Machine`
+host result (`WVM1043`); an owning SDK/host reference surface is separate work.
+
+VM structural array intrinsics now expire descendants before changing physical
+storage: `Push`, `PushFront`, `Pop`, `PopFront`, `Insert`, `RemoveAt`, successful
+`Remove`, nonempty `Clear`/`Extend`, growing `Reserve`, and effective `ShrinkToFit`.
+No-op reserve, missing-value remove and empty extend preserve borrows. The root
+array itself remains usable; accessing an expired child fails with `WVM1043`.
+Dictionary **native copy-back** remapping is qualified here; dictionary-intrinsic
+borrow remapping still needs a separate consistency pass.
+
+The new `wio_vm_native_projected_borrow` gate compares a C++ executable with actual
+VM CLI execution over 30 rounds, then qualifies a live host. It covers scalar,
+string, standalone POD, generic POD fields, POD elements, fixed-array rows,
+dynamic rows, dictionary and mixed container paths, readonly/repeated aliases,
+legacy root results and Wio forwarding. Host checks cover structural result expiry,
+fresh relocated/foreign results, root rebinding, native failures, recovery,
+missing capability, 14 malformed/mutability result variants and 11 VM array
+structural operations. The test exposed and fixed both forwarding metadata
+use-after-free and missing array-intrinsic invalidation.
+
+Only this new Windows gate was run: 1/1 passed in 17.01 seconds (17.08 total).
+Four old result expectations were updated but their gates were not run. Native
+Step 8 stays open. Projected Any/object/nullable result qualification, dictionary
+intrinsic remapping, map-key references, bool proxies, asynchronous borrows and
+broader callback/foreign ownership are not closed by this slice. No full-suite
+or local Linux qualification is claimed.
