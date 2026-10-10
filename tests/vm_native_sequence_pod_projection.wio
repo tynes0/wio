@@ -1,0 +1,164 @@
+using cpp::header("vm_sequence_pod_projection_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_sequence_pod_projection::Cell)]
+component Cell<T>
+{
+    public value: T;
+}
+
+// Field order intentionally differs from the padded producer layout.
+[Native, CppName(vm_sequence_pod_projection::Packet)]
+component Packet
+{
+    public matrix: [[i32; 2]; 2];
+    public cells: [Cell<i32>; 2];
+    public cell: Cell<i32>;
+    public tag: u8;
+}
+
+// A second Wio surface over the same C++ POD types has distinct contract IDs.
+[Native, CppName(vm_sequence_pod_projection::Packet)]
+component OtherPacket
+{
+    public cells: [Cell<i32>; 2];
+}
+
+[Native, CppName(vm_sequence_pod_projection::Mutate)]
+fn Mutate(values: ref Packet[], field: ref i32) -> bool;
+[Native, CppName(vm_sequence_pod_projection::Reverse)]
+fn Reverse(field: ref i32, values: view Packet[]) -> bool;
+[Native, CppName(vm_sequence_pod_projection::Alias)]
+fn Alias(first: ref i32, item: ref Packet, values: ref Packet[], second: ref i32) -> bool;
+[Native, CppName(vm_sequence_pod_projection::Matrix)]
+fn Matrix(values: ref Packet[], field: ref i32, row: ref [i32; 2]) -> bool;
+[Native, CppName(vm_sequence_pod_projection::CellAlias)]
+fn CellAlias(values: view Packet[], cell: ref Cell<i32>, field: ref i32) -> bool;
+[Native, CppName(vm_sequence_pod_projection::RowOnly)]
+fn RowOnly(row: ref [i32; 2]);
+[Native, CppName(vm_sequence_pod_projection::Alternate)]
+fn Alternate(values: ref OtherPacket[], field: ref i32) -> bool;
+[Native, CppName(vm_sequence_pod_projection::Nested)]
+fn Nested(field: ref i32, row: ref Packet[], values: ref Packet[][]) -> bool;
+[Native, CppName(vm_sequence_pod_projection::Standalone)]
+fn Standalone(value: ref Packet, field: ref i32) -> bool;
+[Native, CppName(vm_sequence_pod_projection::Grow)]
+fn Grow(values: ref Packet[], field: ref i32);
+[Native, CppName(vm_sequence_pod_projection::Fail)]
+fn Fail(values: ref Packet[], field: ref i32);
+[Native, CppName(vm_sequence_pod_projection::Borrow)]
+fn Borrow(values: ref Packet[], field: ref i32) -> ref i32;
+[Native, CppName(vm_sequence_pod_projection::Hidden)]
+fn Hidden(value: view Packet) -> i32;
+[Native, CppName(vm_sequence_pod_projection::Calls)]
+fn Calls() -> i32;
+[Native, CppName(vm_sequence_pod_projection::Print)]
+fn Print();
+
+fn Probe() -> i32
+{
+    mut values: Packet[] = [Packet()];
+    return Mutate(ref values, ref values[0usize].cell.value) ? values[0usize].cell.value : -1;
+}
+
+fn ReadCalls() -> i32
+{
+    return Calls();
+}
+
+fn SafePoint() -> i32
+{
+    return 0;
+}
+
+fn ExpiredProbe() -> i32
+{
+    mut values: Packet[] = [Packet()];
+    let old: view i32 = ref values[0usize].cell.value;
+    Grow(ref values, ref values[0usize].cell.value);
+    return deref old;
+}
+
+fn FailureProbe() -> i32
+{
+    mut values: Packet[] = [Packet()];
+    Fail(ref values, ref values[0usize].cell.value);
+    return 0;
+}
+
+fn BorrowProbe() -> i32
+{
+    mut values: Packet[] = [Packet()];
+    let field: ref i32 = Borrow(ref values, ref values[0usize].cell.value);
+    return deref field;
+}
+
+fn RowOnlyProbe() -> i32
+{
+    mut row: [i32; 2] = [1, 2];
+    RowOnly(ref row);
+    return 0;
+}
+
+fn Entry() -> i32
+{
+    mut round = 0;
+    while (round < 30)
+    {
+        mut values: Packet[] = [Packet()];
+        let copy = values;
+        let stable: view i32 = ref values[0usize].cell.value;
+        if (!Mutate(ref values, ref values[0usize].cell.value) or deref stable != 19 or copy[0usize].cell.value != 7)
+        {
+            return 1;
+        }
+        if (!Reverse(ref values[0usize].cell.value, ref values) or deref stable != 23)
+        {
+            return 2;
+        }
+        if (!Alias(ref values[0usize].cells[1usize].value, ref values[0usize], ref values,
+                   ref values[0usize].cells[1usize].value) or values[0usize].cells[1usize].value != 31)
+        {
+            return 3;
+        }
+        if (!Matrix(ref values, ref values[0usize].matrix[1usize][0usize], ref values[0usize].matrix[1usize]) or
+            values[0usize].matrix[1usize][0usize] != 37 or values[0usize].matrix[1usize][1usize] != 41)
+        {
+            return 4;
+        }
+        if (Hidden(ref values[0usize]) != 195)
+        {
+            return 5;
+        }
+        if (!CellAlias(ref values, ref values[0usize].cell, ref values[0usize].cell.value) or deref stable != 79)
+        {
+            return 9;
+        }
+        mut alternate: OtherPacket[] = [OtherPacket()];
+        if (!Alternate(ref alternate, ref alternate[0usize].cells[1usize].value) or
+            alternate[0usize].cells[1usize].value != 97)
+        {
+            return 10;
+        }
+        let row: Packet[] = [Packet()];
+        mut nested: Packet[][] = [row];
+        if (!Nested(ref nested[0usize][0usize].cell.value, ref nested[0usize], ref nested) or
+            nested[0usize][0usize].cell.value != 53)
+        {
+            return 6;
+        }
+        mut packet = Packet();
+        if (!Standalone(ref packet, ref packet.cell.value) or packet.cell.value != 61)
+        {
+            return 7;
+        }
+        Grow(ref values, ref values[0usize].cell.value);
+        if (values.Count() != 2usize or values[0usize].cell.value != 67 or Hidden(ref values[0usize]) != 195)
+        {
+            return 8;
+        }
+        round += 1;
+    }
+    Print();
+    return 0;
+}

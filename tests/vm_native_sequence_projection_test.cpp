@@ -234,16 +234,14 @@ namespace
         if (!entry.succeeded())
             throw std::runtime_error(entry.error().code + ": " + entry.error().message);
         check(entry.value().asSignedInteger() == 0, "live projection host entry failed");
-        for (const auto& [name, code] :
-             std::array<std::pair<const char*, const char*>, 4>{{{"FailureProbe", "WVM1222"},
-                                                                 {"ExpiredProbe", "WVM1043"},
-                                                                 {"PodFieldProbe", "WVM1225"},
-                                                                 {"BorrowProbe", "WVM1222"}}})
+        for (const auto& [name, code] : std::array<std::pair<const char*, const char*>, 3>{
+                 {{"FailureProbe", "WVM1222"}, {"ExpiredProbe", "WVM1043"}, {"BorrowProbe", "WVM1222"}}})
         {
             const auto failed = machine.invoke(function(name));
             check(!failed.succeeded() && failed.error().code == code, name);
             check(machine.invoke(function("SafePoint")).succeeded(), "projection VM failed to recover");
         }
+        check(machine.invoke(function("PodFieldProbe")).succeeded(), "qualified POD field projection failed");
         const auto cleanup = machine.invoke(function("CleanupProbe"));
         check(!cleanup.succeeded() && cleanup.error().code == "WVM1211" &&
                   cleanup.error().message.find("Native copy-back cleanup") != std::string::npos &&

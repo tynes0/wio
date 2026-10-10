@@ -686,7 +686,8 @@ Rider, and CLion are defined in
    ref copy-back now permits dynamic array growth/shrink/clear with invalidation
    of replaced element storage. Overlapping dynamic-array/element arguments now
    use capability-gated logical index projections into one producer root slot;
-   dictionary, bool-proxy and container-to-POD-field paths remain unqualified.
+   registered POD field/fixed-array paths compose with those indices; dictionary
+   and bool-proxy paths remain unqualified.
    Dictionary adapters now cover ordered/unordered maps, portable key identities,
    string/text/native-POD/nullable-opaque values, nested dictionaries and mixed
    array/dictionary shapes. Bulk producer reads use one traversal; copy-back
@@ -915,11 +916,26 @@ Rider, and CLion are defined in
    drop redundant object/Any claims before invocation. Nullable object elements
    keep their exact storage type while using the static native handle contract ID.
    Root-bound native borrow results remain supported; projected-element results,
-   dictionary key paths, bool proxies and container-to-POD-field paths reject.
+   dictionary key paths and bool proxies reject. Container-to-POD-field paths
+   are qualified by the subsequent sequence/POD composition gate below.
    Missing producer capability and malformed paths fail before native body entry.
    Only the new 30-round C++/VM/live-host Windows gate was run: 1/1 passed in
    21.56 seconds (21.64 seconds total). Native Step 8 remains open; no full-suite
    or local Linux pass is claimed.
+   Sequence/POD projections now compose dynamic-array indices with validated
+   native POD field offsets, including nested generic components and fixed-array
+   elements/rows. Generated typed field accessors reject undeclared/hidden fields,
+   padding, wrong identities/types, invalid extents and misaligned paths. Array,
+   POD element and field arguments share one outermost producer slot even in
+   reverse order; mutable fields dirty readonly roots. Existing ABI structures
+   keep their sizes and old producers require a new capability bit. Projected
+   results and dictionary/bool paths remain excluded; Native Step 8 stays open.
+   A new 30-round C++/actual-VM/live-host gate also covers multiple Wio surfaces
+   of one C++ POD, 18 malformed ABI variants, old capability rejection, expired
+   descendants, unsupported standalone fixed arrays, native failures and recovery.
+   Only this new Windows gate was run: 1/1 passed in 12.83 seconds (12.90 total).
+   The old POD-field expectation was updated without running that old gate.
+   No full-suite or local Linux qualification is claimed.
    Remaining native parity work includes broader VM-created object signatures,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; POD/object/container/nullable and

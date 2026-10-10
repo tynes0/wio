@@ -50,7 +50,9 @@ enum WioNativeAbiValueFlag : std::uint32_t
     // Additive reference form; payload points to WioNativeAbiProjection.
     WIO_NATIVE_ABI_VALUE_PROJECTED = 1u << 5u,
     // Additive logical-index form; payload is WioNativeAbiSequenceProjection.
-    WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED = 1u << 6u
+    WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED = 1u << 6u,
+    // Logical array indices followed by a registered POD field projection.
+    WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED = 1u << 7u
 };
 
 struct WioNativeAbiSlice
@@ -159,7 +161,19 @@ struct WioNativeAbiSequenceProjection
 enum WioNativeAbiFunctionFlag : std::uint32_t
 {
     WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES = 1u << 0u,
-    WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS = 1u << 1u
+    WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS = 1u << 1u,
+    WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS = 1u << 2u
+};
+
+// Additive form: the existing projection structures retain their exact sizes.
+// The producer validates the terminal POD identity and declared field path;
+// offsets cannot address padding or undeclared fields.
+struct WioNativeAbiSequencePodProjection
+{
+    WioNativeAbiSequenceProjection sequence{};
+    std::uint64_t podTypeId = 0;
+    std::uint64_t offset = 0;
+    std::uint64_t size = 0;
 };
 
 struct WioNativeAbiFailure

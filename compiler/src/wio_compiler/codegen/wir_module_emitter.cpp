@@ -242,6 +242,7 @@ namespace wio::codegen
         { return module.types.get(id).nominalKind == NominalKind::Object ? nominalCppType(id) : type(id); };
         out << "#if defined(_WIN32)\n#define WIO_WIR_EXPORT __declspec(dllexport)\n#else\n#define WIO_WIR_EXPORT "
                "__attribute__((visibility(\"default\")))\n#endif\n";
+        out << WirNativePodEmitter::emitProjectionAccess(module, type);
         const auto thunk = [&](const lowered::Function& f, const std::string& name)
         {
             out << "static WioNativeAbiStatus " << name
@@ -265,7 +266,8 @@ namespace wio::codegen
                     (target.kind == TypeKind::Named && target.nominalKind == NominalKind::Component &&
                      target.nominalRepresentation == NominalRepresentation::NativePod))
                     out << "    if (!(args[" << i
-                        << "].flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED))) "
+                        << "].flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED | "
+                           "WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED))) "
                         << "(void)frame.borrow<" << type(base) << ", " << wireId(base) << "ULL>(args[" << i << "], "
                         << (parameter.isMutable ? "true" : "false") << ");\n";
             }
@@ -314,7 +316,8 @@ namespace wio::codegen
                         continue;
                     out << "    if (value.borrowIdentity() && value.borrowIdentity() == p" << i
                         << ".borrowIdentity() && !(args[" << i
-                        << "].flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED))"
+                        << "].flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED | "
+                           "WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED))"
                         << (r.isMutable ? " && value.canRebind()" : "") << ") {\n"
                         << "      result->kind = WIO_NATIVE_ABI_REFERENCE; result->typeId = " << wireId(base)
                         << "ULL;\n      result->flags = WIO_NATIVE_ABI_VALUE_BORROWED"
@@ -356,7 +359,8 @@ namespace wio::codegen
             {
                 const auto& b = *f->nativeBinding;
                 out << "{WIO_NATIVE_ABI_VERSION,WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES | "
-                       "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS,"
+                       "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS | "
+                       "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS,"
                     << stableModuleHash(b.stableKey) << "ULL," << quoted(b.stableKey) << ',' << quoted(b.symbol) << ','
                     << quoted(b.thunkSymbol) << ",&" << b.thunkSymbol << "},\n";
             }

@@ -3,6 +3,7 @@
 #include "wio/wir/native_abi_types.h"
 
 #include <algorithm>
+#include <map>
 #include <sstream>
 #include <vector>
 
@@ -63,6 +64,105 @@ namespace wio::codegen
             types.push_back(id);
         }
         return types;
+    }
+
+    std::string WirNativePodEmitter::emitProjectionAccess(const wir::lowered::Module& module,
+                                                          const WirModuleEmitter::TypeSpelling& cpp)
+    {
+        using namespace wir;
+        const auto pods = eligibleTypes(module);
+        if (pods.empty())
+            return {};
+        const auto identity = [&](TypeId id)
+        {
+            for (const auto& reflected : module.contract.reflection)
+                if (reflected.type == id)
+                    return reflected.stableTypeId;
+            return stableModuleHash(nativeAbiTypeKey(module.types, id));
+        };
+        std::vector<TypeId> arrays;
+        const auto collect = [&](auto&& self, TypeId id) -> void
+        {
+            const auto& type = module.types.get(id);
+            if (type.kind == TypeKind::Array && type.staticExtent && std::ranges::find(arrays, id) == arrays.end())
+            {
+                arrays.push_back(id);
+                self(self, type.arguments.front());
+            }
+            for (const auto& field : type.fields)
+                self(self, field.type);
+        };
+        for (const auto id : pods)
+            collect(collect, id);
+        // Multiple Wio declarations can expose different surfaces of one C++ POD.
+        // Specialize by C++ type once, then dispatch by the stable Wio identity.
+        std::map<std::string, std::vector<TypeId>> podGroups;
+        std::map<std::string, std::vector<TypeId>> arrayGroups;
+        for (const auto id : pods)
+            podGroups[cpp(id)].push_back(id);
+        for (const auto id : arrays)
+            arrayGroups[cpp(id)].push_back(id);
+        std::ostringstream out;
+        out << "namespace wio::wir_backend::abi {\n";
+        const std::string signature =
+            "void* storage, std::uint64_t nodeId, std::uint64_t targetId, std::uint64_t offset, "
+            "std::uint64_t size, const std::type_info& requested";
+        const auto declarations = [&](const auto& groups, const char* trait)
+        {
+            for (const auto& [spelling, ids] : groups)
+                out << "template<> struct " << trait << "<" << spelling << "> { static void* resolve(" << signature
+                    << ") noexcept; };\n";
+        };
+        declarations(podGroups, "NativePodProjectionAccess");
+        declarations(arrayGroups, "PodFieldProjectionAccess");
+        for (const auto& [spelling, ids] : arrayGroups)
+        {
+            out << "inline void* PodFieldProjectionAccess<" << spelling << ">::resolve(" << signature
+                << ") noexcept {\n"
+                << "    using Array = " << spelling << ";\n"
+                << "    using Element = typename Array::value_type;\n"
+                << "    if (!storage) return nullptr;\n";
+            for (const auto id : ids)
+            {
+                const auto& type = module.types.get(id);
+                out << "    if (nodeId == " << identity(id) << "ULL) {\n"
+                    << "        if (!offset && size == sizeof(Array) && targetId == nodeId && requested == "
+                       "typeid(Array)) "
+                       "return storage;\n"
+                    << "        const auto index = offset / sizeof(Element);\n"
+                    << "        if (index >= " << *type.staticExtent << "ULL) return nullptr;\n"
+                    << "        return PodFieldProjectionAccess<Element>::resolve("
+                       "std::addressof((*static_cast<Array*>(storage))[index]), "
+                    << identity(type.arguments.front())
+                    << "ULL, targetId, offset % sizeof(Element), size, requested);\n    }\n";
+            }
+            out << "    return nullptr;\n}\n";
+        }
+        for (const auto& [spelling, ids] : podGroups)
+        {
+            out << "inline void* NativePodProjectionAccess<" << spelling << ">::resolve(" << signature
+                << ") noexcept {\n"
+                << "    using Pod = " << spelling << ";\n"
+                << "    static_assert(std::is_trivially_copyable_v<Pod> && std::is_standard_layout_v<Pod>);\n"
+                << "    if (!storage) return nullptr;\n";
+            for (const auto id : ids)
+            {
+                out << "    if (nodeId == " << identity(id) << "ULL) {\n"
+                    << "        if (!offset && size == sizeof(Pod) && targetId == nodeId && requested == typeid(Pod)) "
+                       "return storage;\n";
+                for (const auto& field : module.types.get(id).fields)
+                    out << "        if (offset >= offsetof(Pod, " << field.name << ") && offset - offsetof(Pod, "
+                        << field.name << ") < sizeof(Pod{}." << field.name << "))\n"
+                        << "            return PodFieldProjectionAccess<std::remove_cvref_t<decltype(Pod{}."
+                        << field.name << ")>>::resolve(std::addressof(static_cast<Pod*>(storage)->" << field.name
+                        << "), " << identity(field.type) << "ULL, targetId, offset - offsetof(Pod, " << field.name
+                        << "), size, requested);\n";
+                out << "        return nullptr;\n    }\n";
+            }
+            out << "    return nullptr;\n}\n";
+        }
+        out << "} // namespace wio::wir_backend::abi\n";
+        return out.str();
     }
 
     std::string WirNativePodEmitter::emit(const wir::lowered::Module& module, const WirModuleEmitter::TypeSpelling& cpp)

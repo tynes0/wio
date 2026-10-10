@@ -2131,8 +2131,9 @@ are invalidated during structural copy-back using the existing safety contract.
 Returning an unprojected caller root reference still works when the call also
 has projected element inputs. Returning the projected element itself remains
 rejected: result projections need their own post-call lifetime contract.
-Dictionary key/value paths, `vector<bool>` element proxies, container-to-POD-field
-paths, shared iterator structural mutation, foreign ownership and callback/async
+At this stage container-to-POD-field paths were rejected; the next section
+extends this surface. Dictionary key/value paths, `vector<bool>` element proxies,
+shared iterator structural mutation, foreign ownership and callback/async
 borrows remain unqualified. Existing standalone POD byte-offset projections
 remain separate and retain their capability flag.
 
@@ -2151,3 +2152,67 @@ Only this new Windows gate was run: 1/1 passed in 21.56 seconds (21.64 seconds
 total). Old gate expectations were updated for the now-supported array/element
 case but those gates were not run. Native Step 8 remains open; no full-suite or
 local Linux qualification is claimed.
+
+## Dynamic-Array to Native POD Field Projections
+
+The additive `WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED` form composes bounded
+dynamic-array indices with registered POD field offsets. Its producer capability
+is `WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS`. Existing wire-v2,
+sequence-v1, bytecode versions and projection structure sizes are unchanged.
+Producers missing the new bit reject before invoking the native function.
+
+```wio
+using cpp::header("updates.h");
+
+[Native, CppName(updates::Cell)]
+component Cell
+{
+    public value: i32;
+}
+
+[Native, CppName(updates::Update)]
+fn Update(field: ref i32, values: view Cell[]);
+
+mut values: Cell[] = [Cell()];
+Update(ref values[0usize].value, ref values);
+// Native field aliases values[0].value, not a separately decoded scalar copy.
+```
+
+The VM first locates the outermost dynamic-array root, then reuses validated
+producer POD layout metadata to describe the declared field. Generated producer
+accessors independently validate the terminal POD identity, the declared field
+path, target identity, exact C++ type, offset/extent and alignment. An offset into
+padding or an undeclared producer-only field is rejected even if it lies within
+the POD's byte size. All POD accessors are declared before thunk instantiation;
+nested generic PODs and concrete fixed-array element/row paths compose recursively.
+Different Wio declarations of one C++ POD use one C++ accessor specialization but
+dispatch by their distinct stable identities and declared field surfaces.
+No vector layout or VM storage address crosses the ABI, and producer RTTI is
+used only inside the producer, not as an SDK identity.
+
+Array, whole POD element and multiple field arguments share the same outer root
+slot. Repeated aliases, reversed parameter order and readonly roots with mutable
+fields preserve address identity; only the outer root copies back. Hidden producer
+state remains in the root POD image. Standalone POD/field projections continue
+to use their existing form. Native code must still obey C++ invalidation rules:
+write through a field before vector growth, then stop using that native reference.
+Structural copy-back expires old VM descendants using the existing contract.
+
+Projected-field borrowed results remain rejected; their post-call lifetime
+contract is not defined yet. Dictionary paths, bool proxies, shared iterator
+structural updates and broader foreign/callback/async ownership remain separate
+work. This slice does not close Native Step 8.
+
+The new `wio_vm_native_sequence_pod_projection` gate compares a C++ executable
+with actual VM CLI execution over 30 rounds, then exercises a live host. It covers
+padded/reordered layouts, nested generic PODs, fixed-array rows/elements, repeated
+aliases, readonly roots, reversed order, nested dynamic-array roots, hidden state,
+standalone POD compatibility and structural growth. Host probes cover expired
+borrows, native failures, rejected projected results, missing producer capability,
+18 malformed wire/path/field variants, native-entry counters and recovery.
+An unsupported standalone fixed-array reference still rejects: deferring its
+packing is permitted only when a containing POD projection is actually proven.
+
+Only this new Windows gate was run: 1/1 passed in 12.83 seconds (12.90 total).
+The older POD-field expectation was updated but that old gate was not run.
+Native Step 8 remains open; no full-suite or local Linux qualification is claimed.

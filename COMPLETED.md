@@ -1464,11 +1464,35 @@ here as historical evidence rather than active work:
       and static native handle IDs remain distinct.
 - [x] Kept root-bound borrowed results working, while rejecting projected-element
       results, missing producer capability and unqualified dictionary/bool-proxy/
-      container-to-POD-field paths. Native code still obeys C++ invalidation rules.
+      container-to-POD-field paths at this stage (extended by the next slice).
+      Native code still obeys C++ invalidation rules.
 - [x] Added a focused 30-round C++/VM/live-host gate plus producer contract tests
       for scalar/string/text/POD/Any/generic/nullable-object elements, reversed
       order, nested aliases/growth, stable siblings, lifecycle cleanup/failures,
       ten malformed path/wire variants, capability rejection and recovery.
       Only this new Windows gate was run: 1/1 passed in 21.56 seconds (21.64
       seconds total). Old expectations were updated but old gates were not run.
+      Native Step 8 remains open; no full-suite or local Linux pass is claimed.
+
+## Dynamic-Array / Native POD Field Projection Composition
+
+- [x] Added an independent sequence/POD capability and projection payload without
+      changing existing wire, sidecar, bytecode or projection structure versions.
+      Logical indices select the producer POD; generated typed accessors validate
+      declared fields, stable identities, exact C++ types, offsets and extents.
+      Padding and undeclared hidden-field requests are rejected.
+- [x] Preserved one outermost producer address/copy-back slot across array, POD,
+      nested generic field, fixed-array element/row and repeated alias arguments.
+      Reverse order and mutable fields under readonly roots work. Different Wio
+      declarations of one C++ POD share a specialization but retain separate
+      contract identities and declared field surfaces.
+- [x] Qualified fixed-array descendants only with a containing POD projection;
+      standalone unsupported fixed-array references still reject explicitly.
+      Native vector invalidation rules and VM descendant expiry remain enforced.
+      Projected borrowed results and dictionary/bool-proxy paths stay excluded.
+- [x] Added a new 30-round C++/actual-VM/live-host gate with 18 malformed ABI cases,
+      missing capability, expired borrow/native failure/result rejection, native
+      entry counters, hidden-state preservation, compatibility and recovery checks.
+      Only this new Windows gate was run: 1/1 passed in 12.83 seconds (12.90 total).
+      The old POD-field expectation was updated but its gate was not run.
       Native Step 8 remains open; no full-suite or local Linux pass is claimed.

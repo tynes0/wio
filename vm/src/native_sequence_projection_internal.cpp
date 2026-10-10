@@ -22,6 +22,18 @@ namespace wio::vm::detail
                     }
                 return false;
             }
+            if (!output.indices.empty() && layouts.types.contains(type))
+            {
+                NativePodProjection field;
+                if (!findNativePodProjection(module, root, type, target, layouts, field, depth) || field.depth > 64)
+                    return false;
+                output.type = field.type;
+                output.typeId = field.typeId;
+                output.podTypeId = layouts.types.at(type).typeId;
+                output.offset = field.offset;
+                output.size = field.size;
+                return true;
+            }
             if (root.kind() != Value::Kind::Array || !layouts.sequences.contains(type) ||
                 module.types[type].kind != 31 || module.types[type].arguments.size() != 1)
                 return false;

@@ -5209,6 +5209,7 @@ namespace wio::vm
                     std::uint32_t type = bytecode::InvalidIndex;
                     std::uint8_t marshalling = 0;
                     bool mutableValue = false;
+                    bool requiresProjection = false;
                     std::size_t projectionRoot = (std::numeric_limits<std::size_t>::max)();
                     WioNativeAbiValue wire;
                 };
@@ -5224,6 +5225,7 @@ namespace wio::vm
                     std::vector<WioNativeAbiValue> arguments;
                     std::vector<WioNativeAbiProjection> projections;
                     std::vector<WioNativeAbiSequenceProjection> sequenceProjections;
+                    std::vector<WioNativeAbiSequencePodProjection> sequencePodProjections;
                     std::vector<std::vector<std::uint64_t>> sequencePaths;
                     std::vector<CallbackLease> callbacks;
                     WioNativeAbiValue result;
@@ -5264,6 +5266,7 @@ namespace wio::vm
                 nativeFrame.arguments.reserve(instruction.operands.size());
                 nativeFrame.projections.reserve(instruction.operands.size());
                 nativeFrame.sequenceProjections.reserve(instruction.operands.size());
+                nativeFrame.sequencePodProjections.reserve(instruction.operands.size());
                 nativeFrame.sequencePaths.reserve(instruction.operands.size());
                 nativeFrame.callbacks.reserve(instruction.operands.size());
                 // Independently acquired places can name the same field cell.
@@ -5306,7 +5309,15 @@ namespace wio::vm
                                               .mutableValue = abi.passing == 2};
                             std::string conversionError;
                             if (!encodeArgument(place->storedValue(), abi, token.wire, conversionError))
-                                return fail("WVM1223", "Native argument conversion failed: " + conversionError);
+                            {
+                                const auto base = referenceBase(abi.type);
+                                // Fixed-array descendants have no standalone dynamic sequence adapter.
+                                // Bind them only through a validated containing POD projection.
+                                if (base >= module.types.size() || module.types[base].kind != TypeArray ||
+                                    module.types[base].staticExtent == (std::numeric_limits<std::uint64_t>::max)())
+                                    return fail("WVM1223", "Native argument conversion failed: " + conversionError);
+                                token.requiresProjection = true;
+                            }
                             if (abi.marshalling == 6 && place->storedValue().objectIdentity())
                                 hostedObjects.push_back(&place->storedValue());
                             program_->pinNativeLibraries(place->storedValue());
@@ -5477,7 +5488,7 @@ namespace wio::vm
                         if (!detail::findNativeSequenceProjection(module, root.place->storedValue(), rootType,
                                                                   child.place->storedValue(), *podLayouts, found))
                             return fail("WVM1225", "Overlapping native container/element references require qualified "
-                                                   "sequence projections (dictionary, bool or POD-field path)");
+                                                   "sequence projections (dictionary, bool or unsupported field path)");
                         if (found.indices.size() > location.indices.size())
                         {
                             rootIndex = candidate;
@@ -5488,6 +5499,8 @@ namespace wio::vm
                         continue;
                     if (!(native.flags & WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS))
                         return fail("WVM1225", "Native producer does not support sequence reference projections");
+                    if (location.podTypeId && !(native.flags & WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS))
+                        return fail("WVM1225", "Native producer does not support sequence/POD field projections");
                     auto& root = nativeFrame.tokens[rootIndex];
                     if (location.type != referenceBase(child.type))
                         return fail("WVM1223", "Native sequence projection has an incompatible element type");
@@ -5506,16 +5519,34 @@ namespace wio::vm
                     root.mutableValue = root.mutableValue || child.mutableValue;
                     nativeFrame.sequencePaths.push_back(std::move(location.indices));
                     const auto& path = nativeFrame.sequencePaths.back();
-                    nativeFrame.sequenceProjections.push_back(
-                        {&root.wire, root.wire.typeId, location.typeId, path.data(), path.size()});
+                    WioNativeAbiMutableSlice projectionPayload;
+                    std::uint32_t projectionFlag;
+                    if (location.podTypeId)
+                    {
+                        nativeFrame.sequencePodProjections.push_back(
+                            {{&root.wire, root.wire.typeId, location.typeId, path.data(), path.size()},
+                             location.podTypeId,
+                             location.offset,
+                             location.size});
+                        projectionPayload = {&nativeFrame.sequencePodProjections.back(),
+                                             sizeof(WioNativeAbiSequencePodProjection)};
+                        projectionFlag = WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED;
+                    }
+                    else
+                    {
+                        nativeFrame.sequenceProjections.push_back(
+                            {&root.wire, root.wire.typeId, location.typeId, path.data(), path.size()});
+                        projectionPayload = {&nativeFrame.sequenceProjections.back(),
+                                             sizeof(WioNativeAbiSequenceProjection)};
+                        projectionFlag = WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED;
+                    }
                     for (auto& argument : nativeFrame.arguments)
                         if (argument.kind == WIO_NATIVE_ABI_REFERENCE &&
                             argument.payload.mutableSlice.data == &child.wire)
                         {
-                            argument.flags |= WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED;
+                            argument.flags |= projectionFlag;
                             argument.typeId = location.typeId;
-                            argument.payload.mutableSlice = {&nativeFrame.sequenceProjections.back(),
-                                                             sizeof(WioNativeAbiSequenceProjection)};
+                            argument.payload.mutableSlice = projectionPayload;
                         }
                 }
 
@@ -5588,8 +5619,12 @@ namespace wio::vm
                 // their independently packed copies before invoking native code:
                 // they must not retain old object/Any claims past root copy-back.
                 for (auto& token : nativeFrame.tokens)
+                {
+                    if (token.requiresProjection && token.projectionRoot == (std::numeric_limits<std::size_t>::max)())
+                        return fail("WVM1223", "Native fixed-array reference requires a containing POD projection");
                     if (token.projectionRoot != (std::numeric_limits<std::size_t>::max)())
                         WioNativeAbiReleaseValue(&token.wire);
+                }
 
                 WioNativeAbiFailure nativeFailure;
                 const bool permitsForeignThreadCallback =

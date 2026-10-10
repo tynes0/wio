@@ -322,6 +322,8 @@ class Frame
         std::size_t size;
         bool projectable;
         void* (*sequenceAddress)(void*, const std::uint64_t*, std::uint64_t, const std::type_info&) noexcept;
+        void* (*sequencePodAddress)(void*, const std::uint64_t*, std::uint64_t, std::uint64_t,
+                                    std::uint64_t, std::uint64_t, std::uint64_t, const std::type_info&) noexcept;
         bool dirty = false;
     };
     std::map<WioNativeAbiValue*, Slot> slots_;
@@ -332,6 +334,29 @@ public:
         require(wire.kind == WIO_NATIVE_ABI_REFERENCE && (wire.flags & WIO_NATIVE_ABI_VALUE_BORROWED) &&
                     (!mutableAccess || (wire.flags & WIO_NATIVE_ABI_VALUE_MUTABLE)) && wire.payload.mutableSlice.data,
                 WIO_NATIVE_ABI_INVALID_ARGUMENT);
+        if (wire.flags & WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED)
+        {
+            require(!(wire.flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED)) &&
+                        wire.typeId == Id && wire.payload.mutableSlice.size == sizeof(WioNativeAbiSequencePodProjection) &&
+                        reinterpret_cast<std::uintptr_t>(wire.payload.mutableSlice.data) %
+                                alignof(WioNativeAbiSequencePodProjection) == 0,
+                    WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            const auto& projection =
+                *static_cast<const WioNativeAbiSequencePodProjection*>(wire.payload.mutableSlice.data);
+            const auto& sequence = projection.sequence;
+            const auto found = slots_.find(sequence.root);
+            require(found != slots_.end() && found->second.type == sequence.rootTypeId && sequence.typeId == Id &&
+                        sequence.indices && sequence.count && sequence.count <= 64 && projection.size == sizeof(T) &&
+                        reinterpret_cast<std::uintptr_t>(sequence.indices) % alignof(std::uint64_t) == 0,
+                    WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            auto* address = found->second.sequencePodAddress(found->second.address, sequence.indices, sequence.count,
+                                                             projection.podTypeId, Id, projection.offset,
+                                                             projection.size, typeid(T));
+            require(address && reinterpret_cast<std::uintptr_t>(address) % alignof(T) == 0,
+                    WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            found->second.dirty = found->second.dirty || mutableAccess;
+            return *static_cast<T*>(address);
+        }
         if (wire.flags & WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED)
         {
             require(!(wire.flags & WIO_NATIVE_ABI_VALUE_PROJECTED) && wire.typeId == Id &&
@@ -388,7 +413,8 @@ public:
             };
             found = slots_
                         .emplace(token, Slot{Id, storage, std::move(commit), storage.get(), sizeof(T),
-                                             token->kind == WIO_NATIVE_ABI_POD, &SequenceProjectionAccess<T>::resolve})
+                                             token->kind == WIO_NATIVE_ABI_POD, &SequenceProjectionAccess<T>::resolve,
+                                             &SequenceProjectionAccess<T>::resolvePod})
                         .first;
         }
         require(found->second.type == Id);

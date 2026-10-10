@@ -10,6 +10,8 @@ namespace wio::codegen
     {
     public:
         [[nodiscard]] static std::vector<wir::TypeId> eligibleTypes(const wir::lowered::Module& module);
+        [[nodiscard]] static std::string emitProjectionAccess(const wir::lowered::Module& module,
+                                                              const WirModuleEmitter::TypeSpelling& cpp);
         [[nodiscard]] static std::string emit(const wir::lowered::Module& module,
                                               const WirModuleEmitter::TypeSpelling& cpp);
     };

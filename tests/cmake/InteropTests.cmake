@@ -1033,3 +1033,19 @@ add_test(
 )
 wio_test_labels(wio_vm_native_sequence_projection interop vm native container projection borrowed-result differential release-gate)
 set_tests_properties(wio_vm_native_sequence_projection PROPERTIES TIMEOUT 600)
+
+add_test(
+    NAME wio_vm_native_sequence_pod_projection
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_sequence_pod_projection.wio"
+        "-DWIO_EXPECTED_OUTPUT=native-sequence-pod-projection-ok:30"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-sequence-pod-projection"
+        "-DWIO_PROJECTION_HOST_EXECUTABLE=$<TARGET_FILE:wio_vm_native_sequence_pod_projection_test>"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_sequence_pod_projection_test.cmake"
+)
+wio_test_labels(wio_vm_native_sequence_pod_projection interop vm native container pod projection differential release-gate)
+set_tests_properties(wio_vm_native_sequence_pod_projection PROPERTIES TIMEOUT 600)
