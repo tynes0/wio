@@ -2,6 +2,26 @@
 
 namespace wio::wir
 {
+    bool nativeAbiCanConsume(const TypeTable& types, TypeId id)
+    {
+        for (unsigned depth = 0; depth < 64; ++depth)
+        {
+            const auto* type = types.tryGet(id);
+            if (!type)
+                return false;
+            if (type->kind == TypeKind::Nullable && type->arguments.size() == 1)
+            {
+                id = type->arguments.front();
+                continue;
+            }
+            return type->kind != TypeKind::Reference && type->kind != TypeKind::Opaque &&
+                   type->kind != TypeKind::Function && type->kind != TypeKind::Void &&
+                   type->kind != TypeKind::AsyncTask && type->kind != TypeKind::Invalid &&
+                   type->kind != TypeKind::Iterator;
+        }
+        return false;
+    }
+
     NativeMarshallingKind nativeAbiMarshalling(const TypeTable& types, TypeId id)
     {
         const auto& t = types.get(id);
@@ -63,7 +83,8 @@ namespace wio::wir
         const auto& t = types.get(value.type);
         value.marshalling = nativeAbiMarshalling(types, value.type);
         value.nullable = t.kind == TypeKind::Nullable;
-        value.passing = t.kind == TypeKind::Reference
+        value.passing = !result && value.passing == NativePassingMode::Consume ? NativePassingMode::Consume
+                        : t.kind == TypeKind::Reference
                             ? (t.isMutable ? NativePassingMode::BorrowMut : NativePassingMode::Borrow)
                         : result && t.cleanup != CleanupKind::None ? NativePassingMode::ReturnOwned
                                                                    : NativePassingMode::Value;

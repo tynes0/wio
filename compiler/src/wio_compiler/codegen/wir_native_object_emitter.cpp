@@ -77,6 +77,10 @@ namespace wio::codegen
             // stale native field projections, including inherited fields.
             // Private dynamic containers default to empty native storage; no
             // element lifecycle runs while constructing a host placeholder.
+            // std::Box deliberately exposes its value in Wio. Native proxies
+            // access that payload through Get/Set/Replace, never the placeholder
+            // field. Like private handles, it can default to an empty Ref.
+            const bool standardBox = type->name == "std_heap::box" || type->name == "std::heap::box";
             const bool supported =
                 type->kind == TypeKind::Named &&
                 (type->nominalKind == NominalKind::Object || type->nominalKind == NominalKind::Interface) &&
@@ -89,8 +93,11 @@ namespace wio::codegen
                                                                     storage.kind == TypeKind::Dictionary ||
                                                                     (storage.kind == TypeKind::Array &&
                                                                      !storage.staticExtent && !storage.extentParameter);
-                                        return field.visibility != FieldVisibility::Public &&
-                                               (wireValue(module, field.type) || emptyContainer);
+                                        const bool emptyHandle =
+                                            storage.kind == TypeKind::Opaque ||
+                                            static_cast<bool>(nativeAbiObjectType(module.types, field.type));
+                                        return (field.visibility != FieldVisibility::Public || standardBox) &&
+                                               (wireValue(module, field.type) || emptyContainer || emptyHandle);
                                     }) &&
                 std::ranges::all_of(type->baseTypes,
                                     [&](TypeId base) { return supportedHierarchy(module, base, path, heights); });
@@ -362,7 +369,10 @@ namespace wio::codegen
                 return contracts.contains(type.arguments.front()) ||
                        (module.types.get(type.arguments.front()).kind == TypeKind::Function &&
                         callbackValue(callbackValue, type.arguments.front()));
-            return wireValue(module, id, allowVoid) || contracts.contains(id);
+            // Box<T> and other hosted generic objects use the same owning
+            // container/POD/Any codecs as callbacks, not a scalar-only method
+            // subset. References remain restricted to proven object cells.
+            return (allowVoid || type.kind != TypeKind::Void) && callbackValue(callbackValue, id);
         };
         // Reject transitively: no proxy may advertise a method whose object
         // signature depends on a type that failed whole-surface qualification.

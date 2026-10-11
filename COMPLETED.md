@@ -1893,3 +1893,44 @@ here as historical evidence rather than active work:
       consumed arguments, alias identity canonicalization, native-only pruning
       and VM executable/shared/static packaging. These are not closed by the
       qualified callback/lifetime packages above.
+
+## Native Ownership And Alias Closure Packages 3 And 4
+
+- [x] Added `std::attribute::NativeConsume` for native parameters. Concrete WIR
+      specializations preserve consume policy in their ABI signature identity.
+      Borrow/opaque/callable/task values and non-native declarations reject.
+- [x] Added an ABI-v2 consumed-argument capability without changing descriptor
+      layout. Allocation-free thunk adoption and caller slot clearing balance
+      transferred claims on decoding, native exception and successful return.
+      Consumption transfers an invocation claim, not unique caller ownership;
+      the existing intrusive reference counter and Wio copy/value rules remain.
+- [x] Promoted borrowed foreign object handles to owning native claims correctly.
+      Foreign object scope release, place transfers and live borrowed loads now
+      follow the VM's existing ownership machinery. Constructor argument SSA
+      claims retire once their constructor frame has acquired them.
+- [x] Qualified hosted Box Get/Set/Replace/Clone/Swap for dynamic arrays/maps,
+      Any and resource-handle payloads, including native-created handles.
+      Method-only container signatures now receive producer and bytecode ABI
+      identities. Raw host-placeholder field access is not a qualified API.
+- [x] Canonicalized typed producer-cell identity across direct POD, sequence-POD
+      and mixed container projections. POD accesses validate registered declared
+      fields, never arbitrary padding/hidden storage. Repeated paths share one
+      root, exception copy-back and caller-bound borrowed result.
+- [x] Made unsupported callback aggregate/descendant overlap an explicit rejection
+      before invocation in native wrappers and VM encoding. Exact typed-cell
+      aliases and independent cells remain supported; use one aggregate borrow
+      for children. This does not claim a new callback projection protocol.
+- [x] Added focused C++/actual-VM/live-host resource and alias qualification,
+      a runtime claim/projection contract unit, and five invalid consume gates.
+      Host probes cover 40 cancellation/retention rounds and a producer-owned
+      result surviving Machine/loader shutdown until its final release.
+- [x] Increased Windows compiler stack reservation to demand-backed 16 MiB after
+      the deep mixed-projection fixture exposed large unoptimized lowering
+      frames on the default 1 MiB stack. No stackless-lowering claim is made.
+- [ ] General native task-parameter/std helper parity, native-only pruning and
+      VM executable/shared/static packaging remain outside these two packages.
+- [x] Only the seven new Windows tests were run: 7/7 passed in 47.09 seconds
+      total (45.37 for differential/live-host qualification). Forged consumed
+      reference/nullable-reference/opaque/callable bytecode also rejects.
+      The older manual POD-alias fixture was updated for registered field access
+      and built, not rerun. No full-suite or local Linux qualification is claimed.

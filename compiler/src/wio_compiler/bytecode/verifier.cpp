@@ -186,7 +186,23 @@ namespace wio::bytecode
                                                          parameterType < module.types.size() &&
                                                          module.types[parameterType].kind == 33 &&
                                                          !module.types[parameterType].arguments.empty();
-                    if (parameter.passing > 4 || parameter.marshalling > 9 || !callbackShape ||
+                    auto consumedType = parameter.type;
+                    if (parameter.passing == 3)
+                        for (unsigned depth = 0;
+                             depth < 32 && consumedType < module.types.size() && module.types[consumedType].kind == 30;
+                             ++depth)
+                            consumedType = module.types[consumedType].arguments.size() == 1
+                                               ? module.types[consumedType].arguments.front()
+                                               : InvalidIndex;
+                    const bool validConsume =
+                        parameter.passing != 3 ||
+                        (consumedType < module.types.size() && module.types[consumedType].kind != 29 &&
+                         module.types[consumedType].kind != 20 && module.types[consumedType].kind != 33 &&
+                         module.types[consumedType].kind != 0 && module.types[consumedType].kind != 1 &&
+                         parameter.marshalling != 0 && parameter.marshalling != 5 && parameter.marshalling != 7 &&
+                         parameterType < module.types.size() && module.types[parameterType].kind != 34 &&
+                         module.types[parameterType].kind != 35);
+                    if (parameter.passing > 4 || parameter.marshalling > 9 || !callbackShape || !validConsume ||
                         ((parameter.marshalling == 4 || parameter.marshalling == 6 || parameter.marshalling == 8) &&
                          !nativeTaskParameter && !hasStableAbiType(parameter.type)))
                         report("WBC1074",

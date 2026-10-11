@@ -32,6 +32,25 @@ namespace
         std::int32_t value = 7;
         std::int32_t hidden = 99;
     };
+} // namespace
+
+namespace wio::wir_backend::abi
+{
+    template <> struct NativePodProjectionAccess<Pod>
+    {
+        static void* resolve(void* storage, std::uint64_t rootId, std::uint64_t targetId, std::uint64_t offset,
+                             std::uint64_t size, const std::type_info& requested) noexcept
+        {
+            return storage && rootId == PodId && targetId == FieldId && offset == offsetof(Pod, value) &&
+                           size == sizeof(std::int32_t) && requested == typeid(std::int32_t)
+                       ? &static_cast<Pod*>(storage)->value
+                       : nullptr;
+        }
+    };
+} // namespace wio::wir_backend::abi
+
+namespace
+{
 
     struct WireGuard
     {

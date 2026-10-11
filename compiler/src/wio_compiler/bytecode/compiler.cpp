@@ -394,10 +394,15 @@ namespace wio::bytecode
                         instruction.opcode == wir::lowered::Opcode::AnyCheckedCast ||
                         instruction.opcode == wir::lowered::Opcode::AnyTypeTest)
                         addStructuralAbiIdentity(addStructuralAbiIdentity, instruction.targetType, 0);
-            if (function.isMethod)
+            if (function.isMethod && function.genericParameters.empty())
+            {
+                // Hosted object methods are ABI boundaries in their own right.
+                // A Box<Dict<...>> payload may never appear in a free native
+                // declaration; it still needs the producer's exact wire id.
+                addStructuralAbiIdentity(addStructuralAbiIdentity, function.returnType, 0);
                 for (const auto& parameter : function.parameters)
-                    if (source.types.get(parameter.type).kind == wir::TypeKind::Function)
-                        addStructuralAbiIdentity(addStructuralAbiIdentity, parameter.type, 0);
+                    addStructuralAbiIdentity(addStructuralAbiIdentity, parameter.type, 0);
+            }
             if (!function.nativeBinding)
                 continue;
             for (const wir::NativeAbiValue& parameter : function.nativeBinding->parameters)

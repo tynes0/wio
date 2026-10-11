@@ -1,6 +1,8 @@
 #pragma once
 #include <wio_native_abi.h>
 #include <array>
+#include <algorithm>
+#include <initializer_list>
 #include <bit>
 #include <atomic>
 #include <any>
@@ -15,12 +17,14 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <typeindex>
 #include <utility>
 #include "ref.h"
 #include "text.h"
 #include "std_async.h"
 #include "wir_sequence_projection.h"
 #include "wir_container_projection.h"
+#include "wir_borrow_identity.h"
 
 namespace wio::wir_backend
 {
@@ -526,6 +530,52 @@ namespace wio::wir_backend::abi
         }
     };
 
+    // A consumed argument transfers a wire claim, not unique ownership of the
+    // referenced object. Decode retains/materializes a typed invocation value;
+    // this guard retires the transferred wire claim on every exit path.
+    class ConsumedArguments
+    {
+        struct Claims
+        {
+            const WioNativeAbiValue* arguments;
+            std::size_t count;
+            ~Claims()
+            {
+                for (std::size_t index = 0; index < count; ++index)
+                    if ((arguments[index].flags & (WIO_NATIVE_ABI_VALUE_CONSUMED | WIO_NATIVE_ABI_VALUE_OWNED)) ==
+                        (WIO_NATIVE_ABI_VALUE_CONSUMED | WIO_NATIVE_ABI_VALUE_OWNED))
+                    {
+                        auto claim = arguments[index];
+                        WioNativeAbiReleaseValue(&claim);
+                    }
+            }
+        };
+        Claims claims_;
+
+    public:
+        ConsumedArguments(const ConsumedArguments&) = delete;
+        ConsumedArguments& operator=(const ConsumedArguments&) = delete;
+        ConsumedArguments(const WioNativeAbiValue* arguments, std::size_t count,
+                          std::initializer_list<std::size_t> consumed)
+            : claims_{arguments, count}
+        {
+            // Allocation-free adoption precedes all decoding. Member cleanup
+            // also runs when validation itself throws from this constructor.
+            for (auto index : consumed)
+                require(index < count, WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            for (std::size_t index = 0; index < count; ++index)
+            {
+                const bool expected = std::find(consumed.begin(), consumed.end(), index) != consumed.end();
+                const auto flags = arguments[index].flags;
+                require(expected ? (flags & WIO_NATIVE_ABI_VALUE_CONSUMED) && (flags & WIO_NATIVE_ABI_VALUE_OWNED) &&
+                                       !(flags & WIO_NATIVE_ABI_VALUE_BORROWED) &&
+                                       arguments[index].kind != WIO_NATIVE_ABI_REFERENCE
+                                 : !(flags & WIO_NATIVE_ABI_VALUE_CONSUMED),
+                        WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            }
+        }
+    };
+
     // A ref/view wire argument points at another tagged value, not a foreign C++
     // string/object layout. Repeated borrows of the same token share one local
     // storage cell, preserving aliasing. Copy-back runs even on a caught failure.
@@ -539,6 +589,8 @@ namespace wio::wir_backend::abi
             void* address;
             std::size_t size;
             bool projectable;
+            void* (*podAddress)(void*, std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t,
+                                const std::type_info&) noexcept;
             void* (*sequenceAddress)(void*, const std::uint64_t*, std::uint64_t, const std::type_info&) noexcept;
             void* (*sequencePodAddress)(void*, const std::uint64_t*, std::uint64_t, std::uint64_t, std::uint64_t,
                                         std::uint64_t, std::uint64_t, const std::type_info&) noexcept;
@@ -547,8 +599,23 @@ namespace wio::wir_backend::abi
             bool dirty = false;
         };
         std::map<WioNativeAbiValue*, Slot> slots_;
+        // All projection forms converge on the same typed producer cell. The
+        // representation of the path is not an identity. A struct and its
+        // first field can share an address, hence the explicit C++ type key.
+        std::map<std::pair<const void*, std::type_index>, std::uint64_t> identities_;
         std::shared_ptr<CallbackBorrowLifetime> lifetime_;
         std::shared_ptr<CallbackBorrowLifetime> previousLifetime_;
+
+        template <class T, std::uint64_t Id> T& bindCell(Slot& root, void* address, bool mutableAccess)
+        {
+            require(address && reinterpret_cast<std::uintptr_t>(address) % alignof(T) == 0,
+                    WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            const auto [found, inserted] =
+                identities_.emplace(std::pair<const void*, std::type_index>{address, typeid(T)}, Id);
+            require(inserted || found->second == Id, WIO_NATIVE_ABI_TYPE_MISMATCH);
+            root.dirty = root.dirty || mutableAccess;
+            return *static_cast<T*>(address);
+        }
 
     public:
         explicit Frame(bool callback = false)
@@ -595,10 +662,7 @@ namespace wio::wir_backend::abi
                         WIO_NATIVE_ABI_INVALID_ARGUMENT);
                 auto* address = found->second.containerAddress(found->second.address, found->second.type, projection,
                                                                projection.steps, projection.count, typeid(T));
-                require(address && reinterpret_cast<std::uintptr_t>(address) % alignof(T) == 0,
-                        WIO_NATIVE_ABI_INVALID_ARGUMENT);
-                found->second.dirty = found->second.dirty || mutableAccess;
-                return *static_cast<T*>(address);
+                return bindCell<T, Id>(found->second, address, mutableAccess);
             }
             if (wire.flags & WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED)
             {
@@ -621,10 +685,7 @@ namespace wio::wir_backend::abi
                 auto* address = found->second.sequencePodAddress(found->second.address, sequence.indices,
                                                                  sequence.count, projection.podTypeId, Id,
                                                                  projection.offset, projection.size, typeid(T));
-                require(address && reinterpret_cast<std::uintptr_t>(address) % alignof(T) == 0,
-                        WIO_NATIVE_ABI_INVALID_ARGUMENT);
-                found->second.dirty = found->second.dirty || mutableAccess;
-                return *static_cast<T*>(address);
+                return bindCell<T, Id>(found->second, address, mutableAccess);
             }
             if (wire.flags & WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED)
             {
@@ -644,10 +705,7 @@ namespace wio::wir_backend::abi
                         WIO_NATIVE_ABI_INVALID_ARGUMENT);
                 auto* address = found->second.sequenceAddress(found->second.address, projection.indices,
                                                               projection.count, typeid(T));
-                require(address && reinterpret_cast<std::uintptr_t>(address) % alignof(T) == 0,
-                        WIO_NATIVE_ABI_INVALID_ARGUMENT);
-                found->second.dirty = found->second.dirty || mutableAccess;
-                return *static_cast<T*>(address);
+                return bindCell<T, Id>(found->second, address, mutableAccess);
             }
             if (wire.flags & WIO_NATIVE_ABI_VALUE_PROJECTED)
             {
@@ -662,11 +720,9 @@ namespace wio::wir_backend::abi
                         found->second.type == projection.rootTypeId && projection.typeId == Id &&
                         projection.size == sizeof(T) && projection.offset <= found->second.size &&
                         projection.size <= found->second.size - projection.offset);
-                auto* address = static_cast<std::byte*>(found->second.address) + projection.offset;
-                require(reinterpret_cast<std::uintptr_t>(address) % alignof(T) == 0, WIO_NATIVE_ABI_INVALID_ARGUMENT);
-                if (mutableAccess)
-                    found->second.dirty = true;
-                return *reinterpret_cast<T*>(address);
+                auto* address = found->second.podAddress(found->second.address, projection.rootTypeId, Id,
+                                                         projection.offset, projection.size, typeid(T));
+                return bindCell<T, Id>(found->second, address, mutableAccess);
             }
             require(wire.payload.mutableSlice.size == sizeof(WioNativeAbiValue), WIO_NATIVE_ABI_INVALID_ARGUMENT);
             auto* token = static_cast<WioNativeAbiValue*>(wire.payload.mutableSlice.data);
@@ -684,17 +740,17 @@ namespace wio::wir_backend::abi
                 };
                 found =
                     slots_
-                        .emplace(token, Slot{Id, storage, std::move(commit), storage.get(), sizeof(T),
-                                             token->kind == WIO_NATIVE_ABI_POD, &SequenceProjectionAccess<T>::resolve,
-                                             &SequenceProjectionAccess<T>::resolvePod,
-                                             &NativeContainerProjectionAccess<T>::resolve})
+                        .emplace(token,
+                                 Slot{Id, storage, std::move(commit), storage.get(), sizeof(T),
+                                      token->kind == WIO_NATIVE_ABI_POD, &NativePodProjectionAccess<T>::resolve,
+                                      &SequenceProjectionAccess<T>::resolve, &SequenceProjectionAccess<T>::resolvePod,
+                                      &NativeContainerProjectionAccess<T>::resolve})
                         .first;
             }
             require(found->second.type == Id);
             const auto* storage = std::any_cast<std::shared_ptr<T>>(&found->second.storage);
             require(storage != nullptr);
-            found->second.dirty = found->second.dirty || mutableAccess;
-            return **storage;
+            return bindCell<T, Id>(found->second, storage->get(), mutableAccess);
         }
         // Resolve against the live producer container again after the native call.
         // Only compare addresses: the original/returned pointer may be invalidated
@@ -733,6 +789,7 @@ namespace wio::wir_backend::abi
         template <class T, std::uint64_t Id> void borrow(std::size_t index, Place<T> place, bool mutableAccess)
         {
             require(!mutableAccess || place.canRebind(), WIO_NATIVE_ABI_INVALID_ARGUMENT);
+            cells_.add(place);
             const auto* address = place.borrowIdentity();
             require(address != nullptr, WIO_NATIVE_ABI_INVALID_ARGUMENT);
             std::size_t slot = 0;
@@ -806,6 +863,7 @@ namespace wio::wir_backend::abi
         template <class T, std::uint64_t Id> inline static char contract = 0;
         std::array<WioNativeAbiValue, Count> tokens_{};
         std::array<const void*, Count> addresses_{};
+        CallbackBorrowCells<Count> cells_;
         std::array<const void*, Count> contracts_{};
         std::array<std::any, Count> places_{};
         std::array<bool, Count> writable_{};

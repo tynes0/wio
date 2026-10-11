@@ -1125,11 +1125,17 @@ Rider, and CLion are defined in
    VM capture cells preserve reference indirection and persistent mutable value
    captures. Completion/cancellation balance captured object lifecycle. Only
    these new Windows tests were run: 3/3 passed in 42.29 seconds total.
-   Remaining native parity work includes general native task-parameter/std task
-   helper parity (not arbitrary task-to-runtime-value conversion),
-   std::Box and broader foreign/container ownership,
-   alias identity canonicalization; broader foreign resource lifetime contracts;
-   consumed arguments. Native-only bridge pruning
+   Native closure packages 3 and 4 qualify consumed invocation claims, owned
+   foreign resource/container handles, std::Box method surfaces and canonical
+   native projection identity. Consumed arguments preserve caller value/copy
+   semantics and intrusive Ref ownership; failure/cancellation and producer
+   shutdown are covered by the focused ownership gate. Box qualification covers
+   scalar/string/text, dynamic container/Any and safely defaultable object-handle
+   payloads; it does not expose raw placeholder fields as a native API.
+   Exact callback cell aliases remain supported. Aggregate/descendant callback
+   overlap is explicitly rejected before invocation; use one aggregate borrow.
+   General native task-parameter/std task helper parity remains separate.
+   Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.
 

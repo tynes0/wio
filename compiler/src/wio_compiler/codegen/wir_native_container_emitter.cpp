@@ -202,14 +202,16 @@ namespace wio::codegen
                 collect(collect, parameter.type, 0);
             collect(collect, function.nativeBinding->result.type, 0);
         }
-        // Hosted method callback signatures are native boundaries too, even
-        // when no free native function directly takes their container types.
+        // Every hosted method signature is a native boundary, including Box<T>
+        // payloads not mentioned by a free native function.
         const auto hosted = WirNativeObjectEmitter::eligibleTypes(module);
         for (const auto& function : module.functions)
             if (function.isMethod && hosted.contains(function.ownerType))
+            {
+                collect(collect, function.returnType, 0);
                 for (const auto& parameter : function.parameters)
-                    if (module.types.get(parameter.type).kind == TypeKind::Function)
-                        collect(collect, parameter.type, 0);
+                    collect(collect, parameter.type, 0);
+            }
         if (anyType.isValid())
         {
             // Native producers can explicitly box an Any even if no Wio

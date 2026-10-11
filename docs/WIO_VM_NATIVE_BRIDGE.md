@@ -3233,3 +3233,70 @@ Local Windows qualification: only the three new gates were run; 3/3 passed in
 42.29 seconds total (41.54 seconds for the differential/live-host gate).
 The coroutine completion/cancellation probes also balance captured-object
 construction/destruction. No full-suite or local Linux result is claimed.
+
+## Native closure packages 3 and 4: ownership and cell identity
+
+The focused `wio_vm_native_ownership_alias` gate compares generated C++ with
+actual VM execution and then runs live-host qualification. It exercises:
+
+- `[attribute::NativeConsume]` on concrete generic specializations, temporary
+  and caller-owned resources, binary/Unicode strings, nullable object values,
+  dynamic arrays, dictionaries containing resource handles, and Any;
+- `std::heap::Box<T>` Get/Set/Replace/Clone/Swap through hosted methods for
+  dynamic arrays, dictionaries, Any and resource handles;
+- native-created resource handles round-tripped through containers and Box,
+  with original producer destruction, not a second VM resource destructor;
+- consumed resource/container cleanup on native exceptions; 40 live-host
+  coroutine cancellation/retention rounds with balanced resource counts;
+- an owning producer result kept after Machine/loader shutdown, producer ops
+  still callable, and exactly-once resource release after the last claim;
+- a mutable scalar reached through direct POD, row, dictionary and outer-array
+  paths, reversed/repeated ref/view arguments, caller-bound borrowed results,
+  and mutation copy-back on a native exception.
+
+The companion `wio_vm_native_ownership_contract` unit checks retain/release
+counts, transferred claim cleanup on validation/exception exits, different
+projection wire representations naming one cell, commit-once behavior, and
+rejection of undeclared POD storage. Five new negative gates cover consumed
+borrow/opaque/callable/nullable-callable arguments and non-native declarations.
+See `WIO_NATIVE_ABI.md` for the precise adoption boundary and caller behavior.
+
+Foreign-object borrowed loads now use the existing live-place register path;
+place initialization/replacement transfers an owned foreign claim like a VM
+object claim. Constructor argument registers are retired after the constructor
+frame has acquired its owned arguments. These prevent temporary SSA claims from
+postponing resource destruction beyond lexical scope.
+
+Hosted Box qualification uses its public **methods**, not direct C++ access to
+the host proxy's placeholder payload field. Eligible object private opaque/
+object-handle fields default to null without acquiring a native resource.
+Arbitrary native POD/fixed-array/component field defaults, unsupported method
+signatures and non-Box public-field proxy access are not newly qualified here.
+Foreign handles remain producer-backed values; the bridge does not reinterpret
+a producer's object as VM object storage.
+
+Call-frame identity is canonical by producer address and concrete C++ type,
+not by the encoding form of a projection. POD access always goes through the
+registered declared field accessor. Structural invalidation and returned borrow
+validation retain the existing call-local lifetime rules.
+
+Callbacks still use tagged-value cell snapshots, so simultaneous aggregate and
+descendant borrows are not representable in that protocol. They now fail
+explicitly before callback execution instead of silently splitting identities.
+Repeated exact typed cells and independent cells continue to work. Use one
+aggregate callback borrow and access its children inside the callback.
+
+Windows Debug compiler builds reserve a demand-backed 16 MiB stack: the deep
+mixed-projection fixture exposed large unoptimized Typed-WIR expression frames
+on the default 1 MiB Windows stack. This is not an assertion that recursive
+lowering has been made stackless or that all nesting depths are accepted.
+
+Native Step 8 is still open for general task-parameter/std task helper parity,
+native-only bridge pruning and VM executable/shared/static artifact packaging.
+These packages do not claim full-suite or local Linux qualification.
+
+Local Windows qualification: only these seven new tests were run; 7/7 passed
+in 47.09 seconds total (45.37 seconds for the differential/live-host gate).
+The host also forges consumed reference, nullable-reference, opaque and callable
+parameter metadata and verifies bytecode rejection (`WBC1074`). The older manual
+POD-alias unit was adapted to registered field access and built, but not rerun.

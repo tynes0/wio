@@ -651,6 +651,19 @@ namespace wio::wir::typed
                     const std::string_view name = attribute->canonicalName.empty()
                                                       ? std::string_view{attribute->qualifiedName}
                                                       : std::string_view{attribute->canonicalName};
+                    if (name == "std::attribute::NativeConsume" || name == "attribute::NativeConsume" ||
+                        name == "NativeConsume")
+                    {
+                        auto& parameter = binding.parameters[index];
+                        if (!nativeAbiCanConsume(result_.module_.types, parameter.type))
+                            report("WIR2403",
+                                   "NativeConsume requires an owning value, not ref/view, opaque, callback or task "
+                                   "storage.",
+                                   attribute.Get());
+                        else
+                            parameter.passing = NativePassingMode::Consume;
+                        continue;
+                    }
                     if (name != "std::attribute::NativeCallback" && name != "attribute::NativeCallback" &&
                         name != "NativeCallback")
                         continue;
@@ -674,6 +687,8 @@ namespace wio::wir::typed
             for (std::size_t index = 0; index < binding.parameters.size(); ++index)
             {
                 const auto& parameter = binding.parameters[index];
+                if (parameter.passing == NativePassingMode::Consume)
+                    binding.stableKey += ":consume[" + std::to_string(index) + "]";
                 if (parameter.callbackLifetime != NativeCallbackLifetime::Call ||
                     parameter.callbackThread != NativeCallbackThread::Caller)
                     binding.stableKey += ":callback[" + std::to_string(index) +
@@ -3168,6 +3183,19 @@ namespace wio::wir::typed
 
             if (hasBuiltinAttribute(declaration.attributes, Attribute::Native))
                 function.nativeBinding = makeNativeBinding(declaration, function, *functionType);
+            else
+                for (const auto& parameter : declaration.parameters)
+                    for (const auto& attribute : parameter.attributes)
+                        if (attribute)
+                        {
+                            const std::string_view name = attribute->canonicalName.empty()
+                                                              ? std::string_view{attribute->qualifiedName}
+                                                              : std::string_view{attribute->canonicalName};
+                            if (name == "std::attribute::NativeConsume" || name == "attribute::NativeConsume" ||
+                                name == "NativeConsume")
+                                report("WIR2404", "NativeConsume is only supported on native function parameters.",
+                                       attribute.Get());
+                        }
 
             if (!function.isExternal)
             {

@@ -437,6 +437,8 @@ namespace wio::vm
                 return Value::string({});
             if (kind == TypeText)
                 return Value::text({});
+            if (kind == TypeOpaque)
+                return Value::opaque(typeId, 0, nullptr);
             if (kind == TypeNullable || kind == TypeAny)
                 return Value::null();
             if (kind == TypeArray)
@@ -1839,8 +1841,9 @@ namespace wio::vm
                                : detail::decodeNativeValue(module, args[index], method->parameterTypes[index],
                                                            marshalling, layouts.get());
             if (decoded.succeeded() && marshalling == 6 && decoded.value.kind() != Value::Kind::Object &&
+                decoded.value.kind() != Value::Kind::ForeignObject &&
                 !(module.types[parameterType].kind == TypeNullable && decoded.value.kind() == Value::Kind::Null))
-                decoded.error = "hosted method argument requires an original VM object from this machine";
+                decoded.error = "hosted method argument requires a compatible owning object handle";
             if (!decoded.succeeded())
             {
                 setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, decoded.error);
@@ -2333,6 +2336,8 @@ namespace wio::vm
                     output.typeId = reflected.stableTypeId;
             return true;
         }
+        if (object.kind() == Value::Kind::ForeignObject)
+            return detail::encodeOwnedNativeValue(*program_->module, object, type, 6, output, error, &layouts);
         const auto concrete = object.aggregateType();
         const auto* layout = program_->objectLayouts.get(concrete);
         if (!object.objectIdentity() || !layout || !layout->offsets.contains(type))
@@ -4959,8 +4964,9 @@ namespace wio::vm
                 if (instruction.opcode != bytecode::Opcode::PlaceInit && (!place->initialized || !place->mutableValue))
                     return fail("WVM1042", "Store requires an initialized mutable place");
                 Register* sourceRegister = readRegister(instruction.operands[1]);
-                const bool transferable = source->kind() == Value::Kind::Object || source->kind() == Value::Kind::Any ||
-                                          source->kind() == Value::Kind::Array ||
+                const bool transferable = source->kind() == Value::Kind::Object ||
+                                          source->kind() == Value::Kind::ForeignObject ||
+                                          source->kind() == Value::Kind::Any || source->kind() == Value::Kind::Array ||
                                           source->kind() == Value::Kind::Dictionary;
                 const bool objectBorrow = source->kind() == Value::Kind::ObjectBorrow;
                 Value retainedBorrow;
@@ -4970,7 +4976,9 @@ namespace wio::vm
                     retainedBorrow = source->cloneOwned();
                 if (place->initialized &&
                     (source->kind() == Value::Kind::Object || source->kind() == Value::Kind::ObjectBorrow ||
-                     place->storedValue().kind() == Value::Kind::Object || source->kind() == Value::Kind::Any ||
+                     place->storedValue().kind() == Value::Kind::Object ||
+                     source->kind() == Value::Kind::ForeignObject ||
+                     place->storedValue().kind() == Value::Kind::ForeignObject || source->kind() == Value::Kind::Any ||
                      place->storedValue().kind() == Value::Kind::Any ||
                      place->storedValue().kind() == Value::Kind::Array ||
                      place->storedValue().kind() == Value::Kind::Dictionary))
@@ -5031,11 +5039,12 @@ namespace wio::vm
                     return fail("WVM1043", "Load requires an initialized place");
                 const auto& loaded = place->storedValue();
                 if (instruction.resultOwnership == 1 && instruction.resultType < module.types.size() &&
-                    (module.types[instruction.resultType].kind == TypeAny ||
+                    (loaded.kind() == Value::Kind::ForeignObject ||
+                     module.types[instruction.resultType].kind == TypeAny ||
                      module.types[instruction.resultType].kind == TypeArray ||
                      module.types[instruction.resultType].kind == TypeDictionary))
                 {
-                    // A borrowed Any/container load is a live cell reference, not an
+                    // A borrowed foreign-object/Any/container load is a live cell reference, not an
                     // intrusive claim held until this frame is destroyed.
                     write(instruction.result, Value::place(place), true);
                     ++frame.instruction;
@@ -5252,6 +5261,13 @@ namespace wio::vm
                 const bool invokeConstructor =
                     constructor != bytecode::InvalidIndex &&
                     (initializer == bytecode::InvalidIndex || module.functions[constructor].parameters.size() > 1);
+                const auto callerIndex = frames.size() - 1;
+                const auto consumeConstructorArguments = [&]
+                {
+                    if (invokeConstructor)
+                        consumeCallArguments(frames[callerIndex], module.functions[constructor], instruction.operands,
+                                             1);
+                };
                 ++frame.instruction;
                 if (object)
                 {
@@ -5276,6 +5292,7 @@ namespace wio::vm
                         auto pushed = pushFrame(module.functions[first], values, std::move(continuation));
                         if (!pushed.succeeded())
                             return pushed;
+                        consumeConstructorArguments();
                         continue;
                     }
                 }
@@ -5291,6 +5308,7 @@ namespace wio::vm
                         pushFrame(module.functions[initializer], initializerArguments, std::move(continuation));
                     if (!pushed.succeeded())
                         return pushed;
+                    consumeConstructorArguments();
                     continue;
                 }
                 if (invokeConstructor)
@@ -5299,6 +5317,7 @@ namespace wio::vm
                                                        FrameContinuation{.completion = FrameCompletion::Ignore});
                     if (!pushed.succeeded())
                         return pushed;
+                    consumeConstructorArguments();
                     continue;
                 }
                 continue;
@@ -5346,8 +5365,9 @@ namespace wio::vm
                 if (!released)
                     return fail("WVM1072", "Reference release reads an unavailable value");
                 if (released->kind() != Value::Kind::Null && released->kind() != Value::Kind::Object &&
-                    released->kind() != Value::Kind::Callable && released->kind() != Value::Kind::AsyncTask &&
-                    released->kind() != Value::Kind::Any && released->kind() != Value::Kind::Iterator)
+                    released->kind() != Value::Kind::ForeignObject && released->kind() != Value::Kind::Callable &&
+                    released->kind() != Value::Kind::AsyncTask && released->kind() != Value::Kind::Any &&
+                    released->kind() != Value::Kind::Iterator)
                     return fail("WVM1073", "Reference release requires an owned object or callable handle");
 
                 ExecutionError cleanupError;
@@ -5716,8 +5736,8 @@ namespace wio::vm
                     const Value* operand = read(instruction.operands[index]);
                     if (!operand)
                         return fail("WVM1223", "Native invocation reads an unavailable argument value");
-                    if (abi.passing == 3)
-                        return fail("WVM1225", "Consumed native arguments are not implemented by this VM bridge slice");
+                    if (abi.passing == 3 && !(native.flags & WIO_NATIVE_ABI_FUNCTION_CONSUMED_ARGUMENTS))
+                        return fail("WVM1225", "Native producer does not advertise consumed argument ownership");
 
                     if (abi.passing == 1 || abi.passing == 2)
                     {
@@ -5815,8 +5835,16 @@ namespace wio::vm
                     }
                     WioNativeAbiValue wire;
                     std::string conversionError;
-                    if (!encodeArgument(*direct, abi, wire, conversionError))
+                    const bool encoded =
+                        abi.passing == 3
+                            ? detail::encodeOwnedNativeValue(module, *direct, abi.type, abi.marshalling, wire,
+                                                             conversionError, podLayouts.get(), &objects)
+                            : encodeArgument(*direct, abi, wire, conversionError);
+                    if (!encoded)
                         return fail("WVM1223", "Native argument conversion failed: " + conversionError);
+                    if (abi.passing == 3)
+                        wire.flags = (wire.flags & ~WIO_NATIVE_ABI_VALUE_BORROWED) | WIO_NATIVE_ABI_VALUE_OWNED |
+                                     WIO_NATIVE_ABI_VALUE_CONSUMED;
                     if (abi.marshalling == 6 && direct->objectIdentity())
                         hostedObjects.push_back(direct);
                     program_->pinNativeLibraries(*direct);
@@ -6065,6 +6093,12 @@ namespace wio::vm
                 const WioNativeAbiStatus status =
                     native.thunk(nativeFrame.arguments.empty() ? nullptr : nativeFrame.arguments.data(),
                                  nativeFrame.arguments.size(), &nativeFrame.result, &nativeFailure);
+                // The advertised thunk owns these claims even on decode/throw
+                // failure. Clearing is not releasing; NativeFrame still owns
+                // every argument that was not transferred.
+                for (auto& argument : nativeFrame.arguments)
+                    if (argument.flags & WIO_NATIVE_ABI_VALUE_CONSUMED)
+                        argument = {};
                 if (permitsForeignThreadCallback)
                     executionLock.lock();
                 nativeFrame.releaseCallbackArguments();

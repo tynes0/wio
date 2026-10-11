@@ -2800,3 +2800,20 @@ add_wio_failure_test(
     "without a compatible caller reference parameter"
 )
 wio_test_labels(wio_invalid_vm_native_borrow_nullable_mismatch invalid interop vm native borrowed-result release-gate)
+
+foreach(surface IN ITEMS borrow opaque callback nullable_callback non_native)
+    set(consume_error WIR2403)
+    if(surface STREQUAL "non_native")
+        set(consume_error WIR2404)
+    endif()
+    add_test(
+        NAME wio_invalid_native_consume_${surface}
+        COMMAND ${CMAKE_COMMAND}
+            "-DWIO_EXE=$<TARGET_FILE:wio_app>"
+            "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/invalid/native_consume_${surface}.wio"
+            "-DWIO_EXPECT=${consume_error}"
+            "-DWIO_ARGS=--emit-typed-wir;--ir-output;${CMAKE_BINARY_DIR}/native-consume-${surface}.wir"
+            -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExpectFailure.cmake"
+    )
+    wio_test_labels(wio_invalid_native_consume_${surface} invalid interop vm native ownership release-gate)
+endforeach()

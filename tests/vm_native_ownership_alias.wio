@@ -1,0 +1,124 @@
+using cpp::header("vm_ownership_alias_fixture.h");
+use std::attribute as attribute;
+use std::heap as heap;
+use std::async as futures;
+
+object Resource
+{
+    token: opaque;
+    public OnConstruct(value: i32) { self.token = Open(value); }
+    OnDestruct() { Close(self.token); }
+    public fn Read() -> i32 { return ReadToken(self.token); }
+}
+
+[Native, CppName(vm_ownership_alias::Point)]
+component Point { public x: i32; public y: i32; }
+type Row = Point[];
+type Map = Dict<string, Row>;
+type Grid = Map[];
+
+[Native, CppName(vm_ownership_alias::Open)]
+fn Open(value: i32) -> opaque;
+[Native, CppName(vm_ownership_alias::Close)]
+fn Close(value: opaque);
+[Native, CppName(vm_ownership_alias::Read)]
+fn ReadToken(value: opaque) -> i32;
+[Native, CppName(vm_ownership_alias::Balanced)]
+fn Balanced() -> bool;
+[Native, CppName(vm_ownership_alias::Closed)]
+fn Closed() -> i32;
+[Native, CppName(vm_ownership_alias::Outstanding)]
+fn Outstanding() -> i32;
+[Native, CppName(vm_ownership_alias::MakeNative), Instantiate(Resource)]
+fn MakeNative<T>(value: i32) -> T;
+[Native, CppName(vm_ownership_alias::NativeRead), Instantiate(Resource)]
+fn NativeRead<T>([attribute::NativeConsume] value: T) -> i32;
+[Native, CppName(vm_ownership_alias::Consume), Instantiate(Resource)]
+fn Consume<T>([attribute::NativeConsume] value: T) -> i32;
+[Native, CppName(vm_ownership_alias::Clear), Instantiate(Resource)]
+fn Clear<T>();
+[Native, CppName(vm_ownership_alias::Echo), Instantiate(i32[]), Instantiate(Dict<string, Resource>),
+ Instantiate(Resource?), Instantiate(string), Instantiate(text), Instantiate(any)]
+fn Echo<T>([attribute::NativeConsume] value: T) -> T;
+[Native, CppName(vm_ownership_alias::Fail), Instantiate(Resource), Instantiate(Resource[])]
+fn Fail<T>([attribute::NativeConsume] value: T);
+[Native, CppName(vm_ownership_alias::Catch)]
+fn Catch(callback: fn()) -> i32;
+[Native, CppName(vm_ownership_alias::Box), Instantiate(heap::Box<i32[]>),
+ Instantiate(heap::Box<Dict<string, i32>>), Instantiate(heap::Box<any>), Instantiate(heap::Box<Resource>)]
+fn Box<T>([attribute::NativeConsume] value: T) -> i32;
+[Native, CppName(vm_ownership_alias::Aliases)]
+fn Aliases(first: ref i32, row: ref Row, grid: view Grid, point: ref Point,
+           map: ref Map, second: ref i32) -> bool;
+[Native, CppName(vm_ownership_alias::Borrow)]
+fn Borrow(first: ref i32, grid: ref Grid, second: ref i32) -> ref i32;
+[Native, CppName(vm_ownership_alias::AliasFailure)]
+fn AliasFailure(grid: ref Grid, first: ref i32, second: ref i32);
+[Native, CppName(vm_ownership_alias::CallbackOverlap)]
+fn CallbackOverlap(callback: fn(ref Row, ref i32)) -> i32;
+[Native, CppName(vm_ownership_alias::Print)]
+fn Print();
+
+fn HostFailure() { Fail<Resource>(Resource(41)); }
+fn HostContainerFailure() { Fail<Resource[]>([Resource(43), Resource(47)]); }
+fn HostBalanced() -> bool { Clear<Resource>(); return Balanced(); }
+fn HostOutstanding() -> i32 { return Outstanding(); }
+async fn Pending(resource: Resource) -> i32
+{
+    await futures::Sleep(1000);
+    return Consume<Resource>(resource);
+}
+fn HostPending() -> coroutine<i32> { return Pending(Resource(53)); }
+fn HostReady() -> i32 { return Consume<Resource>(Resource(59)); }
+fn HostMakeNative() -> Resource { return MakeNative<Resource>(67); }
+mut lastGrid: Grid = [{"key": [Point(7, 11)]}];
+fn HostAliasFailure() -> i32
+{
+    // Host invoke intentionally does not execute Entry or module initialization.
+    lastGrid = [{"key": [Point(7, 11)]}];
+    AliasFailure(ref lastGrid, ref lastGrid[0]["key"][0].x, ref lastGrid[0]["key"][0].x);
+    return lastGrid[0]["key"][0].x;
+}
+fn HostReadAlias() -> i32 { return lastGrid[0]["key"][0].x; }
+fn OverlappingCallback(row: ref Row, first: ref i32) { first = 99; }
+
+fn Entry() -> i32
+{
+    {
+        let resource = Resource(7);
+        if (Consume<Resource>(resource) != 7 || resource.Read() != 7) { return 1; }
+        Clear<Resource>();
+        if (Consume<Resource>(Resource(11)) != 11) { return 2; }
+        Clear<Resource>();
+        let numbers = Echo<i32[]>([7, 11]);
+        if (numbers[0] != 7 || numbers[1] != 11) { return 3; }
+        let resources = Echo<Dict<string, Resource>>({"key": Resource(13)});
+        if (resources["key"].Read() != 13) { return 4; }
+        let nothing: Resource? = null;
+        if (Echo<Resource?>(nothing) != null) { return 5; }
+        if (Echo<string>("a\0🌍") != "a\0🌍" || Echo<text>(u"İ🌍") != u"İ🌍") { return 6; }
+        let anyValue: any = 17;
+        if ((Echo<any>(anyValue) fit i32) != 17) { return 7; }
+        if (Box<heap::Box<i32[]>>(heap::Box<i32[]>([7, 11])) != 4) { return 8; }
+        if (Box<heap::Box<Dict<string, i32>>>(heap::Box<Dict<string, i32>>({"key": 7})) != 2) { return 9; }
+        if (Box<heap::Box<any>>(heap::Box<any>(anyValue)) != 17) { return 10; }
+        if (Box<heap::Box<Resource>>(heap::Box<Resource>(Resource(19))) != 38) { return 11; }
+        let foreign = MakeNative<Resource>(23);
+        if (NativeRead<Resource>(foreign) != 23) { return 16; }
+        let foreignMap = Echo<Dict<string, Resource>>({"key": foreign});
+        if (NativeRead<Resource>(foreignMap["key"]) != 23) { return 17; }
+        if (Box<heap::Box<Resource>>(heap::Box<Resource>(foreign)) != 46) { return 18; }
+    }
+    if (not Balanced()) { return 12; }
+    if (Catch(HostFailure) != 1 || Catch(HostContainerFailure) != 2 || not Balanced()) { return 15; }
+    if (CallbackOverlap(OverlappingCallback) != 0) { return 19; }
+    mut grid: Grid = [{"key": [Point(7, 11)]}];
+    mut first: ref i32 = ref grid[0]["key"][0].x;
+    if (not Aliases(first, ref grid[0]["key"], ref grid, ref grid[0]["key"][0],
+                    ref grid[0], ref grid[0]["key"][0].x)) { return 13; }
+    mut borrowed: ref i32 = Borrow(first, ref grid, ref grid[0]["key"][0].x);
+    borrowed = 31;
+    if (grid[0]["key"][0].x != 31 || deref first != 31) { return 14; }
+    Print();
+    return 0;
+}

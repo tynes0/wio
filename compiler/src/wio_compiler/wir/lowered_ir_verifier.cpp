@@ -1,6 +1,7 @@
 #include "wio/wir/lowered_ir_verifier.h"
 #include "wio/wir/dense_id_map.h"
 #include "wio/wir/hierarchy_lowering.h"
+#include "wio/wir/native_abi_types.h"
 
 #include <algorithm>
 #include <optional>
@@ -153,6 +154,8 @@ namespace wio::wir::lowered
         {
             const Type* type = types.tryGet(value.type);
             if (!type || value.nullable != (type->kind == TypeKind::Nullable))
+                return false;
+            if (value.passing == NativePassingMode::Consume && !nativeAbiCanConsume(types, value.type))
                 return false;
             if (value.passing == NativePassingMode::Borrow || value.passing == NativePassingMode::BorrowMut)
             {

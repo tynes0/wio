@@ -411,7 +411,7 @@ namespace wio::vm::detail
     {
         if (!encodeNativeValue(module, value, declaredType, marshalling, output, error, layouts, 0, objects))
             return false;
-        if (output.kind == WIO_NATIVE_ABI_RUNTIME_VALUE)
+        if (output.kind == WIO_NATIVE_ABI_RUNTIME_VALUE || output.kind == WIO_NATIVE_ABI_OBJECT)
         {
             // Any may reuse borrowed producer backing. A callback result must
             // acquire its own claim before the temporary ExecutionResult dies.

@@ -43,6 +43,17 @@ target_link_libraries(wio_app
         wio_vm
 )
 
+# Recursive typed lowering has substantially larger frames in unoptimized
+# Windows builds. The default 1 MiB stack fails on otherwise ordinary nested
+# container/borrow expressions. Reserve on demand; this is not committed RAM.
+if(WIN32)
+    if(MSVC)
+        target_link_options(wio_app PRIVATE /STACK:16777216)
+    else()
+        target_link_options(wio_app PRIVATE "-Wl,--stack,16777216")
+    endif()
+endif()
+
 target_include_directories(wio_app
     PRIVATE
         ${CMAKE_SOURCE_DIR}/compiler/include

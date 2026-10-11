@@ -362,6 +362,20 @@ namespace wio::codegen
                 << f.parameters.size()
                 << " || (count && !args) || !result) return WIO_NATIVE_ABI_INVALID_ARGUMENT;\n"
                    "  *result = {}; wio::wir_backend::abi::Frame frame;\n  try {\n";
+            out << "    wio::wir_backend::abi::ConsumedArguments consumed(args, count, {";
+            bool firstConsumed = true;
+            const auto hiddenParameters =
+                f.nativeBinding ? f.parameters.size() - f.nativeBinding->parameters.size() : 0;
+            if (f.nativeBinding)
+                for (std::size_t i = 0; i < f.nativeBinding->parameters.size(); ++i)
+                    if (f.nativeBinding->parameters[i].passing == NativePassingMode::Consume)
+                    {
+                        if (!firstConsumed)
+                            out << ", ";
+                        out << i + hiddenParameters;
+                        firstConsumed = false;
+                    }
+            out << "});\n";
             // Bind aggregate roots before projections, regardless of parameter
             // order. Projected nested POD arguments use their outer root slot.
             for (std::size_t i = 0; i < f.parameters.size(); ++i)
@@ -384,6 +398,14 @@ namespace wio::codegen
             {
                 auto id = f.parameters[i].type;
                 const auto& t = module.types.get(id);
+                const bool consume =
+                    f.nativeBinding && i >= hiddenParameters &&
+                    f.nativeBinding->parameters[i - hiddenParameters].passing == NativePassingMode::Consume;
+                const auto input = consume ? "input" + std::to_string(i) : "args[" + std::to_string(i) + "]";
+                if (consume)
+                    out << "    auto " << input << " = args[" << i << "]; " << input
+                        << ".flags &= ~WIO_NATIVE_ABI_VALUE_CONSUMED; if (" << input << ".kind == WIO_NATIVE_ABI_VOID) "
+                        << input << ".flags &= ~WIO_NATIVE_ABI_VALUE_OWNED;\n";
                 out << "    auto p" << i << " = ";
                 if (t.kind == TypeKind::Reference)
                 {
@@ -393,7 +415,7 @@ namespace wio::codegen
                         << "))";
                 }
                 else
-                    out << codec(id) << "::read(args[" << i << "])";
+                    out << codec(id) << "::read(" << input << ")";
                 out << ";\n";
             }
             const auto& r = module.types.get(f.returnType);
@@ -405,7 +427,10 @@ namespace wio::codegen
             {
                 if (i)
                     out << ',';
-                out << "p" << i;
+                const bool consume =
+                    f.nativeBinding && i >= hiddenParameters &&
+                    f.nativeBinding->parameters[i - hiddenParameters].passing == NativePassingMode::Consume;
+                out << (consume ? "std::move(p" : "p") << i << (consume ? ")" : "");
             }
             out << ");\n    frame.commit();\n";
             if (r.kind == TypeKind::AsyncTask)
@@ -477,7 +502,8 @@ namespace wio::codegen
                        "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS | "
                        "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS | "
                        "WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS | "
-                       "WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS,"
+                       "WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS | "
+                       "WIO_NATIVE_ABI_FUNCTION_CONSUMED_ARGUMENTS,"
                     << stableModuleHash(b.stableKey) << "ULL," << quoted(b.stableKey) << ',' << quoted(b.symbol) << ','
                     << quoted(b.thunkSymbol) << ",&" << b.thunkSymbol << "},\n";
             }

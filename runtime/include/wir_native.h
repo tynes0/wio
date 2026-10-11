@@ -84,6 +84,8 @@ namespace wio::wir_backend
                 if (!anyThread && lease->thread != std::this_thread::get_id())
                     throw std::runtime_error("Wio callback entered from the wrong thread");
                 const NativeCallableInvocationScope invocation{true};
+                CallbackBorrowCells<sizeof...(A)> cells;
+                (cells.add(args), ...);
                 constexpr bool borrowed = (requires(A value) { value.withCallbackLifetime(); } || ...);
                 abi::Frame frame{borrowed};
                 if constexpr (std::is_void_v<R>)

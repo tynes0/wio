@@ -1,5 +1,6 @@
 #include "wio/wir/typed_ir_verifier.h"
 #include "wio/wir/dense_id_map.h"
+#include "wio/wir/native_abi_types.h"
 
 #include <algorithm>
 #include <unordered_map>
@@ -260,6 +261,8 @@ namespace wio::wir::typed
             if (!type)
                 return false;
             if (value.nullable != (type->kind == TypeKind::Nullable))
+                return false;
+            if (value.passing == NativePassingMode::Consume && !nativeAbiCanConsume(types, value.type))
                 return false;
             if (value.passing == NativePassingMode::Borrow || value.passing == NativePassingMode::BorrowMut)
             {

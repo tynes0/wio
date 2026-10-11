@@ -1,4 +1,5 @@
 #include "native_callback_references_internal.h"
+#include "native_sequence_internal.h"
 
 #include <algorithm>
 
@@ -116,6 +117,15 @@ namespace wio::vm::detail
                                  { return item.original && &item.original->storedValue() == &place->storedValue(); });
         if (slot == slots_.end())
         {
+            for (const auto& previous : slots_)
+                if (previous.original &&
+                    (containsNativeSequencePlace(previous.original->storedValue(), place->storedValue()) ||
+                     containsNativeSequencePlace(place->storedValue(), previous.original->storedValue())))
+                {
+                    error =
+                        "overlapping callback aggregate/descendant borrows are unsupported; pass one aggregate borrow";
+                    return false;
+                }
             slots_.push_back({.original = place, .type = base, .marshalling = marshalling});
             slot = std::prev(slots_.end());
             if (!encodeOwnedNativeValue(module, place->storedValue(), base, marshalling, slot->outgoing, error, layouts,

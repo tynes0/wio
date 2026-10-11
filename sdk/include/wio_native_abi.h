@@ -169,7 +169,11 @@ enum WioNativeAbiFunctionFlag : std::uint32_t
     WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS = 1u << 1u,
     WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS = 1u << 2u,
     WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS = 1u << 3u,
-    WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS = 1u << 4u
+    WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS = 1u << 4u,
+    // The thunk adopts CONSUMED|OWNED argument claims after count validation,
+    // including when decoding or the native call fails. The caller then clears
+    // those wire slots without releasing them a second time.
+    WIO_NATIVE_ABI_FUNCTION_CONSUMED_ARGUMENTS = 1u << 5u
 };
 
 // Additive form: the existing projection structures retain their exact sizes.
