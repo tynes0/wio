@@ -1700,6 +1700,38 @@ namespace wio::vm
         for (std::size_t index = 0; index < count; ++index)
         {
             const auto parameterType = method->parameterTypes[index];
+            if (parameterType < module.types.size() && module.types[parameterType].kind == TypeFunction)
+            {
+                const auto& wire = args[index];
+                const auto& signature = module.types[parameterType].arguments;
+                const auto callback = wire.payload.callback;
+                const auto contract =
+                    std::ranges::find(module.contract.reflection, parameterType, &bytecode::Reflection::type);
+                bool supported = !signature.empty();
+                for (const auto type : signature)
+                {
+                    std::uint8_t codec = 0;
+                    supported &= detail::callbackValueMarshalling(module, type, codec, layouts.get());
+                }
+                if (!supported || wire.kind != WIO_NATIVE_ABI_CALLBACK ||
+                    contract == module.contract.reflection.end() || wire.typeId != contract->stableTypeId ||
+                    wire.typeId == 0 || !callback.userdata || !callback.ops ||
+                    callback.ops->abiVersion != WIO_NATIVE_ABI_VERSION || !callback.ops->invoke ||
+                    !callback.ops->retain || !callback.ops->release ||
+                    (callback.ops->flags &
+                     ~(WIO_NATIVE_ABI_CALLBACK_ANY_THREAD | WIO_NATIVE_ABI_CALLBACK_CALLER_THREAD)) ||
+                    (wire.flags != WIO_NATIVE_ABI_VALUE_OWNED && wire.flags != WIO_NATIVE_ABI_VALUE_BORROWED) ||
+                    wire.owner.state || wire.owner.ops)
+                {
+                    setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                                       "hosted method callback requires a typed owning callable contract");
+                    return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                }
+                auto value = Value::nativeCallable(parameterType, wire.typeId, callback);
+                program->pinNativeLibraries(value);
+                parameters.push_back(std::move(value));
+                continue;
+            }
             std::uint8_t marshalling = 0;
             if (!methodMarshalling(parameterType, marshalling))
             {
@@ -1888,6 +1920,60 @@ namespace wio::vm
             return WIO_NATIVE_ABI_TYPE_MISMATCH;
         }
         return WIO_NATIVE_ABI_OK;
+    }
+
+    ExecutionResult Machine::invokeNativeCallable(const Value& callable, std::span<const Value> arguments)
+    {
+        const auto callback = callable.nativeCallback();
+        const auto type = callable.nativeCallableType();
+        const auto& module = *program_->module;
+        const auto fail = [](std::string message)
+        { return ExecutionResult::failure(ExecutionError{"WVM1223", std::move(message)}); };
+        if (!callback.ops || type >= module.types.size() || module.types[type].kind != TypeFunction)
+            return fail("Native callable has no concrete signature");
+        const auto& signature = module.types[type].arguments;
+        if (signature.empty() || arguments.size() != signature.size() - 1)
+            return fail("Native callable argument count does not match its signature");
+        if (!callable.nativeCallableThreadAllowed())
+            return ExecutionResult::failure(ExecutionError{"WVM1222", "Native callable has caller-thread affinity"});
+        std::shared_ptr<const detail::NativePodLayouts> layouts;
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            layouts = program_->nativePodLayouts;
+        }
+        const auto objects = nativeObjectAccess(true);
+        std::vector<WioNativeAbiValue> wires(arguments.size());
+        WioNativeAbiValue result{};
+        const auto release = [&](void*) noexcept
+        {
+            WioNativeAbiReleaseValue(&result);
+            for (auto& wire : wires)
+                WioNativeAbiReleaseValue(&wire);
+        };
+        const std::unique_ptr<void, decltype(release)> guard{this, release};
+        std::string error;
+        for (std::size_t index = 0; index < arguments.size(); ++index)
+        {
+            std::uint8_t marshalling = 0;
+            if (!detail::callbackValueMarshalling(module, signature[index], marshalling, layouts.get()) ||
+                !detail::encodeNativeValue(module, arguments[index], signature[index], marshalling, wires[index], error,
+                                           layouts.get(), 0, &objects))
+                return fail(error.empty() ? "Unsupported native callable argument" : error);
+        }
+        WioNativeAbiFailure failure{};
+        const auto status = callback.ops->invoke(callback.userdata, wires.data(), wires.size(), &result, &failure);
+        if (status != WIO_NATIVE_ABI_OK)
+            return ExecutionResult::failure(
+                ExecutionError{"WVM1222", "Native callable failed with ABI status " + std::to_string(status)});
+        std::uint8_t marshalling = 0;
+        if (!detail::callbackValueMarshalling(module, signature.back(), marshalling, layouts.get()))
+            return fail("Unsupported native callable result");
+        auto decoded =
+            detail::decodeNativeValue(module, result, signature.back(), marshalling, layouts.get(), 0, &objects);
+        if (!decoded.succeeded())
+            return fail(decoded.error);
+        program_->pinNativeLibraries(decoded.value);
+        return ExecutionResult::success(std::move(decoded.value));
     }
 
     detail::NativeObjectAccess Machine::nativeObjectAccess(bool hostedOnly)
@@ -5057,6 +5143,26 @@ namespace wio::vm
                 const Value* callable = instruction.operands.empty() ? nullptr : read(instruction.operands.front());
                 if (!callable || callable->kind() != Value::Kind::Callable)
                     return fail("WVM1147", "Indirect call requires an available function value");
+                if (callable->nativeCallback().ops)
+                {
+                    std::vector<Value> nativeArguments;
+                    nativeArguments.reserve(instruction.operands.size() - 1);
+                    for (const auto operand : std::span{instruction.operands}.subspan(1))
+                    {
+                        const auto* argument = read(operand);
+                        if (!argument)
+                            return fail("WVM1150", "Native indirect call reads an unavailable argument");
+                        nativeArguments.push_back(*argument);
+                    }
+                    auto execution = invokeNativeCallable(*callable, nativeArguments);
+                    if (!execution.succeeded())
+                        return fail(execution.error().code, execution.error().message);
+                    if (instruction.result != bytecode::InvalidIndex &&
+                        !write(instruction.result, std::move(execution.value_)))
+                        return fail("WVM1146", "Native callable result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
                 const std::uint32_t target = callable->callableFunction();
                 if (target >= module.functions.size())
                     return fail("WVM1148", "Indirect call target is outside the module");
@@ -5455,7 +5561,9 @@ namespace wio::vm
                                 values.push_back(std::move(converted.value));
                             }
 
-                            auto execution = owner->invoke(callable.callableFunction(), values);
+                            auto execution = callable.nativeCallback().ops
+                                                 ? owner->invokeNativeCallable(callable, values)
+                                                 : owner->invoke(callable.callableFunction(), values);
                             const std::unique_ptr<Value, decltype(releaseValue)> resultGuard{&execution.value_,
                                                                                              releaseValue};
                             if (!execution.succeeded())

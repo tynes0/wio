@@ -230,6 +230,7 @@ namespace wio::vm
         [[nodiscard]] detail::NativeValueResult decodeNativeObject(const WioNativeAbiValue&, std::uint32_t,
                                                                    const detail::NativePodLayouts&);
         [[nodiscard]] detail::NativeObjectAccess nativeObjectAccess(bool hostedOnly = false);
+        [[nodiscard]] ExecutionResult invokeNativeCallable(const Value&, std::span<const Value>);
         [[nodiscard]] bool scheduleTask(const std::shared_ptr<ExecutionState>& state, ExecutorKind executor);
         void wakeTask(std::weak_ptr<ExecutionState> state, AsyncTaskState terminalState, const Value& result,
                       const ExecutionError& error);

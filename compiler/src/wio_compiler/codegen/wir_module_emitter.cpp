@@ -199,6 +199,29 @@ namespace wio::codegen
             std::optional<std::string> constValue;
         };
     } // namespace
+    std::string WirModuleEmitter::nativeValueCodec(const wir::lowered::Module& module, wir::TypeId id,
+                                                   const TypeSpelling& type)
+    {
+        using namespace wir;
+        const auto wireId = [&](TypeId value)
+        {
+            if (const auto object = nativeAbiObjectType(module.types, value))
+                value = object;
+            for (const auto& reflected : module.contract.reflection)
+                if (reflected.type == value)
+                    return reflected.stableTypeId;
+            return stableModuleHash(nativeAbiTypeKey(module.types, value));
+        };
+        const auto& signature = module.types.get(id);
+        if (signature.kind != TypeKind::Function || signature.arguments.empty())
+            return "wio::wir_backend::abi::Codec<" + type(id) + ", " + std::to_string(wireId(id)) + "ULL>";
+        std::string result = "wio::wir_backend::abi::CallbackCodec<" + type(id) + ", " + std::to_string(wireId(id)) +
+                             "ULL, " + std::to_string(wireId(signature.arguments.back())) + "ULL";
+        for (std::size_t index = 0; index + 1 < signature.arguments.size(); ++index)
+            result += ", " + std::to_string(wireId(signature.arguments[index])) + "ULL";
+        return result + ">";
+    }
+
     std::string WirModuleEmitter::emit(const wir::lowered::Module& module, const TypeSpelling& type,
                                        const bool nativeTaskSidecars)
     {
@@ -215,18 +238,7 @@ namespace wio::codegen
                     return reflected.stableTypeId;
             return stableModuleHash(nativeAbiTypeKey(module.types, id));
         };
-        const auto codec = [&](TypeId id)
-        {
-            const auto& signature = module.types.get(id);
-            if (signature.kind != TypeKind::Function || signature.arguments.empty())
-                return "wio::wir_backend::abi::Codec<" + type(id) + ", " + std::to_string(wireId(id)) + "ULL>";
-            std::string result = "wio::wir_backend::abi::CallbackCodec<" + type(id) + ", " +
-                                 std::to_string(wireId(id)) + "ULL, " +
-                                 std::to_string(wireId(signature.arguments.back())) + "ULL";
-            for (std::size_t index = 0; index + 1 < signature.arguments.size(); ++index)
-                result += ", " + std::to_string(wireId(signature.arguments[index])) + "ULL";
-            return result + ">";
-        };
+        const auto codec = [&](TypeId id) { return nativeValueCodec(module, id, type); };
         std::function<bool(TypeId)> concrete = [&](TypeId id)
         {
             const auto& t = module.types.get(id);

@@ -1703,3 +1703,33 @@ here as historical evidence rather than active work:
       total). No full-suite or local Linux qualification is claimed. Native
       Step 8 remains open for borrowed and hosted-method/callable-valued/fixed-
       array callbacks, async lifetime, foreign ownership, pruning and packaging.
+
+## Qualified Hosted-Method Native Callable Arguments
+
+- [x] Hosted Wio methods accept native callback function values for qualified
+      by-value scalar/string/text/POD/object/nullable/container signatures.
+      Method-only callback/container dependencies are discovered transitively
+      and structural callable IDs are preserved in bytecode reflection.
+- [x] Added named native callable backing using the aggregate's existing native
+      backing slot and intrusive retain/release. Normal Wio closures gain no
+      fields or allocations. Loaded producer libraries stay pinned by foreign
+      callables and captured native values; manual registries still require
+      host-managed producer lifetime.
+- [x] Added native indirect invocation and forwarding through free native
+      callback boundaries. Wio closures may capture the native function value;
+      retained caller-thread leases preserve it after hosted method return and
+      drop the owning claim at the normal VM safe point.
+- [x] Shared native codec spelling now retains exact callback signature IDs in
+      both free-function thunks and hosted object method adapters. Wrong type,
+      kind, operations, ownership/thread flags or missing sidecars reject entry;
+      callback errors and result mismatches stay inside the ABI boundary.
+- [x] Added a 30-round C++/actual-VM/live-host gate for direct/captured/retained
+      forwarding, NUL/Unicode, native POD hidden fields, independent array/map
+      storage, Any, nullable object identity, ten malformed contracts,
+      exception/result mismatch recovery, receiver affinity and stale shutdown.
+      Borrowed callback signatures remain unadvertised and rejected.
+- [x] Only this new Windows gate was run: 1/1 passed in 18.17 seconds (18.25
+      total). No full-suite or local Linux qualification is claimed. Native
+      Step 8 remains open for ref/view and callable-valued/fixed-array callbacks,
+      callable method results, async lifetime, foreign ownership, pruning and
+      artifact packaging.

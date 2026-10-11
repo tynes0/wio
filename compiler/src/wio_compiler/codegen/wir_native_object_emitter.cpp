@@ -1,4 +1,5 @@
 #include "wio/codegen/wir_native_object_emitter.h"
+#include "wio/codegen/wir_native_pod_emitter.h"
 #include "wio/wir/native_abi_types.h"
 
 #include <algorithm>
@@ -243,8 +244,18 @@ namespace wio::codegen
         }
         const auto roots = candidates;
         std::size_t familyCursor = familyPending.size();
-        const auto collectFamily = [&](TypeId id)
+        const auto collectFamily = [&](auto&& self, TypeId id, unsigned depth = 0) -> void
         {
+            const auto* shape = module.types.tryGet(id);
+            if (!shape || depth > 64)
+                return;
+            if (shape->kind == TypeKind::Function || shape->kind == TypeKind::Array ||
+                shape->kind == TypeKind::Dictionary)
+            {
+                for (const auto argument : shape->arguments)
+                    self(self, argument, depth + 1);
+                return;
+            }
             id = nativeAbiObjectType(module.types, id);
             if (!id)
                 return;
@@ -264,12 +275,35 @@ namespace wio::codegen
             for (const auto& method : module.types.get(pending[index]).methods)
                 if (const auto* implementation = function(module, method.function))
                 {
-                    collectFamily(implementation->returnType);
+                    collectFamily(collectFamily, implementation->returnType);
                     for (const auto& parameter : implementation->parameters | std::views::drop(1))
-                        collectFamily(parameter.type);
+                        collectFamily(collectFamily, parameter.type);
                 }
 
         std::set<TypeId> contracts;
+        const auto pods = WirNativePodEmitter::eligibleTypes(module);
+        const auto callbackValue = [&](auto&& self, TypeId id, unsigned depth = 0) -> bool
+        {
+            const auto& type = module.types.get(id);
+            if (depth > 64)
+                return false;
+            if (type.kind == TypeKind::Array)
+                return !type.staticExtent && !type.extentParameter && type.arguments.size() == 1 &&
+                       self(self, type.arguments.front(), depth + 1);
+            if (type.kind == TypeKind::Dictionary)
+            {
+                if (type.arguments.size() != 2)
+                    return false;
+                const auto& key = module.types.get(type.arguments.front());
+                return ((key.kind >= TypeKind::Bool && key.kind <= TypeKind::USize) ||
+                        (key.kind >= TypeKind::Byte && key.kind <= TypeKind::Text)) &&
+                       self(self, type.arguments.back(), depth + 1);
+            }
+            if (type.kind == TypeKind::Nullable && type.arguments.size() == 1)
+                return contracts.contains(type.arguments.front());
+            return wireValue(module, id, true) || contracts.contains(id) || type.kind == TypeKind::Any ||
+                   std::ranges::find(pods, id) != pods.end();
+        };
         const auto methodValue = [&](TypeId id, bool allowVoid = false, bool allowReference = false)
         {
             if (allowReference)
@@ -284,6 +318,10 @@ namespace wio::codegen
                 }
             }
             const auto& type = module.types.get(id);
+            if (type.kind == TypeKind::Function)
+                return !allowVoid && !type.arguments.empty() &&
+                       std::ranges::all_of(type.arguments, [&](TypeId argument)
+                                           { return callbackValue(callbackValue, argument); });
             if (type.kind == TypeKind::Nullable && type.arguments.size() == 1)
                 return contracts.contains(type.arguments.front());
             return wireValue(module, id, allowVoid) || contracts.contains(id);
@@ -329,8 +367,18 @@ namespace wio::codegen
             for (const auto contract : hostedHierarchyTypes(module, {candidate}))
                 contractObjects[contract.value()].push_back(candidate);
         pending.clear();
-        const auto include = [&](TypeId id)
+        const auto include = [&](auto&& self, TypeId id, unsigned depth = 0) -> void
         {
+            const auto* shape = module.types.tryGet(id);
+            if (!shape || depth > 64)
+                return;
+            if (shape->kind == TypeKind::Function || shape->kind == TypeKind::Array ||
+                shape->kind == TypeKind::Dictionary)
+            {
+                for (const auto argument : shape->arguments)
+                    self(self, argument, depth + 1);
+                return;
+            }
             if (const auto object = nativeAbiObjectType(module.types, id))
                 id = object;
             if (module.types.tryGet(id))
@@ -339,14 +387,14 @@ namespace wio::codegen
                         pending.push_back(candidate);
         };
         for (const auto root : roots)
-            include(root);
+            include(include, root);
         for (std::size_t index = 0; index < pending.size(); ++index)
             for (const auto& method : module.types.get(pending[index]).methods)
                 if (const auto* implementation = function(module, method.function))
                 {
-                    include(implementation->returnType);
+                    include(include, implementation->returnType);
                     for (const auto& parameter : implementation->parameters | std::views::drop(1))
-                        include(parameter.type);
+                        include(include, parameter.type);
                 }
         return reachable;
     }
@@ -457,10 +505,9 @@ namespace wio::codegen
                                 << (parameter.isMutable ? "true" : "false") << ");\n";
                             continue;
                         }
-                        out << "        arguments[" << (index - 1) << "] = wio::wir_backend::abi::Codec<"
-                            << cpp(method.parameters[index].type) << ", "
-                            << identity(module, method.parameters[index].type) << "ULL>::write(std::move(_a"
-                            << (index - 1) << "));\n";
+                        out << "        arguments[" << (index - 1)
+                            << "] = " << WirModuleEmitter::nativeValueCodec(module, method.parameters[index].type, cpp)
+                            << "::write(std::move(_a" << (index - 1) << "));\n";
                     }
                 }
                 const auto& resultType = module.types.get(method.returnType);

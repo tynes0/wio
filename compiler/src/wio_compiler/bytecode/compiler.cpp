@@ -393,6 +393,10 @@ namespace wio::bytecode
                         instruction.opcode == wir::lowered::Opcode::AnyCheckedCast ||
                         instruction.opcode == wir::lowered::Opcode::AnyTypeTest)
                         addStructuralAbiIdentity(addStructuralAbiIdentity, instruction.targetType, 0);
+            if (function.isMethod)
+                for (const auto& parameter : function.parameters)
+                    if (source.types.get(parameter.type).kind == wir::TypeKind::Function)
+                        addStructuralAbiIdentity(addStructuralAbiIdentity, parameter.type, 0);
             if (!function.nativeBinding)
                 continue;
             for (const wir::NativeAbiValue& parameter : function.nativeBinding->parameters)

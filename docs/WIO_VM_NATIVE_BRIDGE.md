@@ -2782,3 +2782,68 @@ It also exposed and pins a shared Typed WIR fix: receiver lowering may intern
 types, so method dispatch kind must survive type-table relocation.
 Only this new Windows gate was run: 1/1 passed in 43.22 seconds (43.43 total).
 No full-suite or local Linux qualification is claimed. Native Step 8 remains open.
+
+## Qualified Hosted-Method Native Callable Arguments
+
+Qualified hosted Wio object methods accept native callable parameters. C++ can
+pass a `std::function` to the generated object wrapper; Wio sees an ordinary
+typed function value and can call it, copy it, capture it in a Wio closure or
+forward it to a free native callback API.
+
+```wio
+object Processor
+{
+    public fn Apply(callback: fn(i32) -> i32) -> i32
+    {
+        let copy = callback;
+        return copy(7);
+    }
+}
+```
+
+```cpp
+template <class T>
+std::int32_t Invoke(wio::runtime::Ref<T> processor)
+{
+    std::function<std::int32_t(std::int32_t)> add = [](std::int32_t value)
+    {
+        return value + 2;
+    };
+    return processor->_WF_Apply_function(add); // 9, also through the VM proxy
+}
+```
+
+Supported callback arguments/results are the registered by-value scalar,
+string, text, native POD, hosted object/interface/nullable object, array,
+dictionary and Any shapes. The method itself must still satisfy whole-surface
+host proxy qualification. Method-only callback container types are discovered
+without adding dummy free native declarations. Callback-valued method results,
+callbacks returning callbacks, ref/view and top-level fixed-array callback
+signatures remain excluded. Ordinary hosted method container/POD parameters
+are not newly qualified by this callback slice.
+
+Incoming function wires need the exact structural signature ID, a supported
+wire/operations version, a non-null callable context and invoke/retain/release
+operations. Only owning/borrowed callback wire flags and known thread flags are
+accepted; a callback cannot carry a separate slice/POD owner. The VM retains
+the callable independently of its input wire. Native callable backing occupies
+the existing aggregate backing slot and does not enlarge normal Wio closures.
+Libraries loaded by the VM are pinned by that backing; manually registered or
+otherwise external producer code still requires host-managed lifetime.
+
+The callable may be forwarded using a retained native callback lease. That
+lease keeps the native function claim alive after method return; final release
+uses the ordinary VM callback retirement safe point. Caller-thread callable
+entry remains restricted to its admission thread; an ANY_THREAD contract does
+not override the hosted receiver's caller-thread affinity. This does not close
+the remaining async/borrowed lifetime contracts. Native callback errors and
+malformed results become Wio execution failures rather than crossing the ABI
+as C++ exceptions; hosted method execution failures report ABI PANIC.
+
+The new `wio_vm_native_hosted_callback` gate compares C++ and actual VM CLI for
+30 rounds, then checks live-host direct/captured/retained forwarding, NUL/Unicode,
+POD hidden fields, arrays/maps/Any, nullable object identity, ten malformed
+callback contracts, exception/result mismatch recovery, receiver affinity,
+stale shutdown and rejection of unqualified ref/view callback methods.
+Only this new Windows gate was run: 1/1 passed in 18.17 seconds (18.25 total).
+No full-suite or local Linux qualification is claimed. Native Step 8 remains open.

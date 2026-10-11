@@ -1041,8 +1041,22 @@ Rider, and CLion are defined in
    and result reads after machine/callback/manual-loader shutdown. Only this new
    Windows gate was run: 1/1 passed in 43.22 seconds (43.43 total); no full-suite
    or local Linux qualification is claimed.
+   Hosted Wio object methods now accept typed native callable values through
+   the same scalar/string/text/POD/object/nullable/container codecs. Native
+   callable backing uses intrusive ownership without enlarging ordinary Wio
+   closures; direct calls, Wio closure capture and forwarding to free native
+   functions (including retained caller-thread leases) preserve its claim.
+   Callback method-only structural identities and container adapters are
+   discovered automatically. Shared codec spelling now pins exact concrete
+   callback argument/result IDs for both free-function and hosted-method paths.
+   A new 30-round C++/actual-VM/live-host gate covers direct/captured/retained
+   forwarding, string/text/POD/array/map/Any/nullable object values, malformed
+   callback contracts, exceptions/result mismatches, recovery, receiver thread
+   affinity, stale shutdown and continued rejection of ref/view callbacks.
+   Only this new Windows gate was run: 1/1 passed in 18.17 seconds (18.25 total);
+   no full-suite or local Linux qualification is claimed.
    Remaining native parity work includes broader callback/async lifetime contracts,
-   hosted-method and callable-valued/fixed-array callback signatures,
+   callable-valued/fixed-array callback signatures and callable method results,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; borrowed POD/object/container/nullable and
    ref/view callback signatures; nullable borrowed payload lifetime contracts;

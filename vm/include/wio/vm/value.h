@@ -84,6 +84,11 @@ namespace wio::vm
         [[nodiscard]] static Value component(std::uint32_t type, std::vector<Value> fields);
         [[nodiscard]] static Value object(std::uint32_t type, std::vector<Value> fields);
         [[nodiscard]] static Value callable(std::uint32_t function, std::vector<Value> captures);
+        [[nodiscard]] static Value nativeCallable(std::uint32_t type, std::uint64_t stableTypeId,
+                                                  WioNativeAbiCallback callback);
+        [[nodiscard]] WioNativeAbiCallback nativeCallback() const noexcept;
+        [[nodiscard]] std::uint32_t nativeCallableType() const noexcept;
+        [[nodiscard]] bool nativeCallableThreadAllowed() const noexcept;
         [[nodiscard]] static Value asyncTask(std::uint32_t function, std::vector<Value> arguments);
         [[nodiscard]] static Value any(std::uint32_t type, Value payload);
         [[nodiscard]] static Value nativePod(std::uint32_t type, std::uint64_t stableTypeId,

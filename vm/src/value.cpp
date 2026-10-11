@@ -9,12 +9,47 @@
 #include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 #include <unordered_set>
 #include <vector>
 
 namespace wio::vm
 {
+    namespace
+    {
+        // Stored only for foreign callables, behind AggregateStorage's existing
+        // native backing slot. Ordinary closures gain no fields or allocations.
+        struct NativeCallableBacking final
+        {
+            std::atomic_uint32_t references{0};
+            WioNativeAbiCallback callback;
+            std::uint64_t typeId;
+            std::thread::id caller = std::this_thread::get_id();
+
+            NativeCallableBacking(WioNativeAbiCallback value, std::uint64_t identity)
+                : callback(value), typeId(identity)
+            {
+                callback.ops->retain(callback.userdata);
+            }
+            ~NativeCallableBacking()
+            {
+                callback.ops->release(callback.userdata);
+            }
+            static const WioNativeAbiHandleOps Operations;
+        };
+        const WioNativeAbiHandleOps NativeCallableBacking::Operations{
+            WIO_NATIVE_ABI_VERSION, 0, [](void* state) noexcept
+            { static_cast<NativeCallableBacking*>(state)->references.fetch_add(1, std::memory_order_relaxed); },
+            [](void* state) noexcept
+            {
+                auto* backing = static_cast<NativeCallableBacking*>(state);
+                if (backing->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                    delete backing;
+            },
+            [](const void* state) noexcept { return static_cast<const NativeCallableBacking*>(state)->typeId; }};
+    } // namespace
+
     class ForeignStorage final
     {
     public:
@@ -583,6 +618,43 @@ namespace wio::vm
         return result;
     }
 
+    Value Value::nativeCallable(std::uint32_t type, std::uint64_t stableTypeId, WioNativeAbiCallback callback)
+    {
+        if (!callback.ops || !callback.ops->retain || !callback.ops->release || !callback.ops->invoke)
+            throw std::invalid_argument("native callable requires an owning callback contract");
+        auto backing = std::make_unique<NativeCallableBacking>(callback, stableTypeId);
+        Value result = callable((std::numeric_limits<std::uint32_t>::max)(), {});
+        result.scalar_.aggregate->nativeBacking =
+            new ForeignStorage{Kind::Callable, type,
+                               stableTypeId,   {},
+                               backing.get(),  {backing.get(), &NativeCallableBacking::Operations, 1}};
+        backing.release();
+        return result;
+    }
+
+    WioNativeAbiCallback Value::nativeCallback() const noexcept
+    {
+        if (kind_ != Kind::Callable || !scalar_.aggregate->nativeBacking)
+            return {};
+        return static_cast<const NativeCallableBacking*>(scalar_.aggregate->nativeBacking->opaque())->callback;
+    }
+
+    std::uint32_t Value::nativeCallableType() const noexcept
+    {
+        return kind_ == Kind::Callable && scalar_.aggregate->nativeBacking
+                   ? scalar_.aggregate->nativeBacking->type()
+                   : (std::numeric_limits<std::uint32_t>::max)();
+    }
+
+    bool Value::nativeCallableThreadAllowed() const noexcept
+    {
+        if (kind_ != Kind::Callable || !scalar_.aggregate->nativeBacking)
+            return true;
+        const auto* backing = static_cast<const NativeCallableBacking*>(scalar_.aggregate->nativeBacking->opaque());
+        return (backing->callback.ops->flags & WIO_NATIVE_ABI_CALLBACK_ANY_THREAD) ||
+               backing->caller == std::this_thread::get_id();
+    }
+
     Value Value::asyncTask(const std::uint32_t function, std::vector<Value> arguments)
     {
         Value result{Kind::AsyncTask};
@@ -637,6 +709,13 @@ namespace wio::vm
                 dictionaryKey(index)->pinNativeLibrary(library);
                 dictionaryValue(index)->pinNativeLibrary(library);
             }
+        else if (kind_ == Kind::Callable)
+        {
+            if (scalar_.aggregate->nativeBacking)
+                scalar_.aggregate->nativeBacking->pinLibrary(library);
+            for (std::size_t index = 0; index < captureCount(); ++index)
+                capture(index)->pinNativeLibrary(library);
+        }
         else if (kind_ == Kind::Any)
         {
             if (const auto* payload = anyPayload())

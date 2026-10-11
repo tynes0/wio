@@ -1,0 +1,187 @@
+using cpp::header("vm_hosted_callback_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_hosted_callback::Point)]
+component Point
+{
+    public x: i32;
+}
+
+object Item
+{
+    value: i32;
+    public OnConstruct(value: i32)
+    {
+        self.value = value;
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+}
+
+object Processor
+{
+    seed: i32;
+    public OnConstruct()
+    {
+        self.seed = 7;
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Apply(callback: fn(i32) -> i32) -> i32
+    {
+        let copy = callback;
+        return copy(self.seed);
+    }
+    public fn Forwarded(callback: fn(i32) -> i32) -> i32
+    {
+        let relay = (value: i32) => callback(value);
+        return Forward(relay, self.seed);
+    }
+    public fn Utf8(callback: fn(string) -> string) -> string
+    {
+        return callback("a\0🌍");
+    }
+    public fn Remember(callback: fn(i32) -> i32)
+    {
+        RememberNative(callback);
+    }
+    public fn Unicode(callback: fn(text) -> text) -> text
+    {
+        return callback(u"İ🌍");
+    }
+    public fn Pod(callback: fn(Point) -> Point) -> i32
+    {
+        mut point: Point;
+        return callback(point).x;
+    }
+    public fn Array(callback: fn(i32[]) -> i32[]) -> i32
+    {
+        let original: i32[] = [7, 19];
+        let changed = callback(original);
+        if (original[0] != 7)
+        {
+            return -1;
+        }
+        return changed[0] + changed[1];
+    }
+    public fn Object(callback: fn(Item?) -> Item?, input: Item?) -> Item?
+    {
+        return callback(input);
+    }
+    public fn Map(callback: fn(Dict<string, i32[]>) -> Dict<string, i32[]>) -> i32
+    {
+        let input: Dict<string, i32[]> = {"key": [7, 19]};
+        let output = callback(input);
+        if (input["key"][0] != 7)
+        {
+            return -1;
+        }
+        return output["key"][0];
+    }
+    public fn Boxed(callback: fn(any) -> any) -> i32
+    {
+        let boxed: any = 19;
+        return callback(boxed) fit i32;
+    }
+}
+
+object BorrowedProcessor
+{
+    public fn Unsupported(callback: fn(ref i32) -> i32) -> i32
+    {
+        mut value: i32 = 7;
+        return callback(ref value);
+    }
+}
+
+[Native, CppName(vm_hosted_callback::Constructed)]
+fn Constructed();
+[Native, CppName(vm_hosted_callback::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_hosted_callback::Balanced)]
+fn Balanced() -> bool;
+[Native, CppName(vm_hosted_callback::CallbacksBalanced)]
+fn CallbacksBalanced() -> bool;
+[Native, CppName(vm_hosted_callback::Forward)]
+fn Forward(callback: fn(i32) -> i32, input: i32) -> i32;
+[Native, CppName(vm_hosted_callback::Remember)]
+fn RememberNative([attribute::NativeCallback("retained", "caller")] callback: fn(i32) -> i32);
+[Native, CppName(vm_hosted_callback::RunStored)]
+fn RunStored() -> i32;
+[Native, CppName(vm_hosted_callback::ClearStored)]
+fn ClearStored();
+[Native, CppName(vm_hosted_callback::Exercise)]
+fn Exercise(processor: Processor, item: Item) -> i32;
+[Native, CppName(vm_hosted_callback::Panic)]
+fn Panic(processor: Processor);
+[Native, CppName(vm_hosted_callback::Capture)]
+fn Capture(processor: Processor) -> u64;
+[Native, CppName(vm_hosted_callback::Capture)]
+fn CaptureBorrowed(processor: BorrowedProcessor) -> u64;
+[Native, CppName(vm_hosted_callback::Clear)]
+fn Clear();
+[Native, CppName(vm_hosted_callback::Print)]
+fn Print();
+
+fn HostCapture() -> u64
+{
+    return Capture(Processor());
+}
+fn HostPanic()
+{
+    Panic(Processor());
+}
+fn HostUnsupported() -> u64
+{
+    return CaptureBorrowed(BorrowedProcessor());
+}
+fn HostClear()
+{
+    Clear();
+}
+fn HostRunStored() -> i32
+{
+    return RunStored();
+}
+fn HostClearStored()
+{
+    ClearStored();
+}
+fn LifecycleBalanced() -> bool
+{
+    return Balanced() and CallbacksBalanced();
+}
+
+fn Entry() -> i32
+{
+    mut round: i32 = 0;
+    while (round < 30)
+    {
+        {
+            let processor = Processor();
+            let item = Item(23);
+            let code = Exercise(processor, item);
+            if (code != 0)
+            {
+                return code;
+            }
+        }
+        if (not Balanced() or not CallbacksBalanced())
+        {
+            return 20;
+        }
+        round += 1;
+    }
+    Print();
+    return 0;
+}
