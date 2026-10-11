@@ -112,7 +112,8 @@ namespace wio::vm::detail
                 return reject("native sequence descriptor references an invalid VM type");
             const auto& type = module.types[reflected->type];
             if (type.kind != 31 || type.arguments.size() != 1 ||
-                type.staticExtent != (std::numeric_limits<std::uint64_t>::max)() ||
+                (type.staticExtent != (std::numeric_limits<std::uint64_t>::max)() &&
+                 type.staticExtent > ElementLimit) ||
                 type.extentParameter != bytecode::InvalidIndex ||
                 identity(module, type.arguments.front()) != descriptor.elementTypeId)
                 return reject("native sequence descriptor does not match its VM array declaration");
@@ -142,6 +143,12 @@ namespace wio::vm::detail
         if (value.kind() != Value::Kind::Array || value.elementCount() > ElementLimit || depth > 64)
         {
             error = "VM native sequence has an invalid value kind, size, or nesting depth";
+            return false;
+        }
+        const auto extent = module.types[type].staticExtent;
+        if (extent != (std::numeric_limits<std::uint64_t>::max)() && value.elementCount() != extent)
+        {
+            error = "VM fixed sequence value does not match its declared extent";
             return false;
         }
         const auto elementType = module.types[type].arguments.front();
@@ -197,6 +204,9 @@ namespace wio::vm::detail
         }
         if (count > ElementLimit)
             return {{}, "native sequence result exceeds the bridge element limit"};
+        const auto extent = module.types[type].staticExtent;
+        if (extent != (std::numeric_limits<std::uint64_t>::max)() && count != extent)
+            return {{}, "native fixed sequence result does not match its declared extent"};
         const auto elementType = module.types[type].arguments.front();
         std::uint8_t marshalling = 0;
         if (!nativeValueMarshalling(module, elementType, marshalling))

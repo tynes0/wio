@@ -3059,3 +3059,76 @@ callback parameter and was not rerun. No full-suite or local Linux qualification
 is claimed. Borrowed callback results, callable-valued/fixed-array signatures,
 async lifetime, broader foreign/consumed ownership, pruning and artifact
 packaging remain open. Native Step 8 is not closed by this qualification.
+
+## Concrete Fixed Arrays At Native And Callback Boundaries
+
+Concrete `[T; N]` values now have sequence-sidecar-v1 adapters at standalone
+native and callback boundaries. This supersedes the earlier fixed-array
+signature exclusion, but does not qualify borrowed callback results.
+Unresolved generic extents still have no executable adapter. The VM retains
+its existing one-million-element and bounded-nesting bridge limits.
+
+```wio
+type Triple = [i32; 3];
+
+[Native, CppName(native::Borrow)]
+fn Borrow(callback: fn(view Triple, ref Triple) -> Triple,
+          initial: Triple) -> Triple;
+
+fn Change(readonly: view Triple, writable: ref Triple) -> Triple
+{
+    writable = [readonly[0] + 2, 23, 29];
+    return readonly;
+}
+```
+
+Both by-value callback arguments/results and invocation-scoped ref/view
+arguments work. The existing static cell identity, shared alias
+materialization, two-phase copy-back, lifecycle cleanup and code-lease rules
+also apply to fixed arrays. Hosted methods can accept callbacks with these
+signatures. Fixed arrays may recursively contain supported scalar/enum/opaque,
+string/text, native-POD, hosted object/interface/nullable-object, Any, dynamic
+or fixed array and dictionary payloads. Nested container sidecars are required;
+unsupported callable/component payloads are not silently materialized.
+
+The producer's structural array codec returns an owned runtime handle even
+when `std::array<T, N>` happens to be trivially copyable. Native POD array fields
+are different: their layout adapter explicitly uses physical POD bytes through
+`PodStorageCodec`. Thus the same `[i32; 3]` type can appear in a native struct
+field and a callback without either path misinterpreting the other's wire.
+Empty arrays remain fixed types, not dynamic arrays with an empty value.
+Structural packing constructs every element directly from its decoded value;
+it must not first default-construct and overwrite native POD elements, since
+their C++ member initializers may have observable side effects. The focused
+gate uses such an initializer counter to enforce this rule.
+
+The stable array identity includes its fixed extent. Packing requires exactly
+that number of elements; the VM validates both its outgoing value length and
+the count returned by the producer. Too short, too long and wrong-identity
+values are rejected before publication. Sidecar version and descriptor layout
+are unchanged; no raw foreign `std::array` layout is exposed by this API.
+
+Standalone native ref/view array parameters and element projections are also
+qualified. An array and its element can share a live native address in either
+argument order. Fixed bool cells are addressable `bool` values, unlike dynamic
+`vector<bool>` elements. C++ ArrayPlace generation now makes that distinction;
+the previous proxy path lost native writes to fixed bool cells.
+
+The new `wio_vm_native_callback_fixed_array` gate compares generated C++ and
+actual VM CLI for 30 rounds, then exercises live host callback admission and
+ownership. Coverage includes empty/nested arrays, binary and Unicode payloads,
+native PODs, object/interface/nullable identity, arrays in dictionaries and Any,
+dynamic/fixed nesting, shared root/element addresses, held element views,
+hosted native callbacks, producer extent checks, hidden/reordered native POD
+array fields, absent sidecars, malformed handles, wrong VM array lengths,
+malicious producer counts, recovery, balanced lifecycle and result reads after
+machine/callback/manual-loader shutdown. The host safe-point/code-lease
+retirement requirements remain unchanged.
+
+Only this new Windows gate was run: 1/1 passed in 31.21 seconds (31.28 total).
+The older row-only projection negative expectation was updated to success but
+its gate was not rerun. No full-suite or local Linux qualification is claimed.
+Callable-valued signatures and method results, borrowed callback results,
+async/broader foreign ownership, identity canonicalization, native-only bridge
+pruning and executable/shared/static packaging remain open. Native Step 8 is
+not closed by this update.

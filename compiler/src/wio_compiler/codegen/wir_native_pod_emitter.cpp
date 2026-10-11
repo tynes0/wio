@@ -177,7 +177,14 @@ namespace wio::codegen
             return stableModuleHash(nativeAbiTypeKey(module.types, id));
         };
         const auto codec = [&](TypeId id)
-        { return "wio::wir_backend::abi::Codec<" + cpp(id) + ", " + std::to_string(identity(id)) + "ULL>"; };
+        {
+            // Array fields are physical POD bytes, not standalone sequence
+            // handles. Preserve the native field layout even when the same
+            // array type also appears in a callback or container signature.
+            const auto name = module.types.get(id).kind == TypeKind::Array ? "PodStorageCodec" : "Codec";
+            return "wio::wir_backend::abi::" + std::string(name) + '<' + cpp(id) + ", " + std::to_string(identity(id)) +
+                   "ULL>";
+        };
         const auto types = eligibleTypes(module);
         for (const auto id : types)
         {

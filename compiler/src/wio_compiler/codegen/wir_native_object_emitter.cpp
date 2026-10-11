@@ -298,7 +298,7 @@ namespace wio::codegen
             if (depth > 64)
                 return false;
             if (type.kind == TypeKind::Array)
-                return !type.staticExtent && !type.extentParameter && type.arguments.size() == 1 &&
+                return !type.extentParameter && type.arguments.size() == 1 &&
                        self(self, type.arguments.front(), depth + 1);
             if (type.kind == TypeKind::Dictionary)
             {

@@ -1093,8 +1093,25 @@ Rider, and CLion are defined in
    rejection, staged copy-back, unsafe borrow capture, panic/recovery and
    balanced object destruction. Only this new Windows gate was run: 1/1 passed
    in 50.73 seconds (50.84 total); no full-suite or Linux qualification is claimed.
+   Concrete fixed arrays now use structural sequence sidecars at standalone
+   native and callback boundaries, including value and invocation-scoped ref/view
+   arguments/results by value. Recursive nested/dynamic arrays, dictionaries,
+   Any, string/text, native POD, hosted object/interface and nullable-object
+   elements are qualified; zero extents preserve their fixed identity.
+   Native POD fixed-array fields retain their physical byte ABI through a
+   separate storage codec. Structural packing initializes elements directly
+   without replaying native POD member initializers. Fixed bool elements now
+   borrow real C++ cells rather than vector<bool> proxies. Both producer and VM
+   reject wrong fixed extents.
+   A new 30-round C++/actual-VM/live-host gate covers array/element aliasing,
+   hosted native callbacks, hidden/reordered POD fields using the same array
+   types, malformed handles, absent sidecars, extent mismatches, recovery,
+   balanced object lifecycle and escaped owning results after loader shutdown.
+   Only this new Windows gate was run: 1/1 passed in 31.21 seconds (31.28 total).
+   The older row-only projection expectation was updated but not rerun; no
+   full-suite or local Linux qualification is claimed.
    Remaining native parity work includes broader callback/async lifetime contracts,
-   callable-valued/fixed-array callback signatures and callable method results,
+   callable-valued callback signatures and callable method results,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; broader POD/object/container/nullable borrow
    lifetime contracts;

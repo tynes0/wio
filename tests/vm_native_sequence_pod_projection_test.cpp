@@ -170,8 +170,10 @@ namespace
         const auto borrowed = machine.invoke(function("BorrowProbe"));
         check(borrowed.succeeded() && borrowed.value().asSignedInteger() == 7,
               "qualified sequence/POD borrowed result failed");
-        for (const auto& [name, code] : std::array<std::pair<const char*, const char*>, 3>{
-                 {{"ExpiredProbe", "WVM1043"}, {"FailureProbe", "WVM1222"}, {"RowOnlyProbe", "WVM1223"}}})
+        // Standalone concrete fixed-array references now have sequence sidecars.
+        check(machine.invoke(function("RowOnlyProbe")).succeeded(), "fixed row reference failed");
+        for (const auto& [name, code] : std::array<std::pair<const char*, const char*>, 2>{
+                 {{"ExpiredProbe", "WVM1043"}, {"FailureProbe", "WVM1222"}}})
         {
             const auto failed = machine.invoke(function(name));
             check(!failed.succeeded() && failed.error().code == code, name);

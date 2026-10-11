@@ -2934,13 +2934,14 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     const std::string index = operand(instruction.operands[1]);
                     const Type& elementType =
                         module_.types.get(module_.types.get(instruction.resultType).arguments.front());
-                    assignResult(instruction,
-                                 "wio::wir_backend::Place<" + placeValueType(instruction.resultType) +
-                                     (elementType.kind == TypeKind::Bool ? ">::borrowProxy(" : ">::borrow(") +
-                                     (instruction.boundsCheck == lowered::BoundsCheckMode::Required
-                                          ? "wio::intrinsics::Index(" + base + ", " + index + ")"
-                                          : base + "[" + index + "]") +
-                                     ")");
+                    const Type& arrayType = module_.types.get(nominalType(valueType(instruction.operands[0])));
+                    const bool bitProxy = elementType.kind == TypeKind::Bool && !arrayType.staticExtent;
+                    assignResult(instruction, "wio::wir_backend::Place<" + placeValueType(instruction.resultType) +
+                                                  (bitProxy ? ">::borrowProxy(" : ">::borrow(") +
+                                                  (instruction.boundsCheck == lowered::BoundsCheckMode::Required
+                                                       ? "wio::intrinsics::Index(" + base + ", " + index + ")"
+                                                       : base + "[" + index + "]") +
+                                                  ")");
                     break;
                 }
                 case lowered::Opcode::ConstructComponent:

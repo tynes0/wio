@@ -88,6 +88,31 @@ template <class T, std::uint64_t Id> struct Box
     // inline static initializer on MSVC. The owner contract is unchanged.
     inline static const WioNativeAbiHandleOps ops{WIO_NATIVE_ABI_VERSION, 0, &retain, &release, &typeId};
 };
+// Physical POD fields and structural sequence values are separate contracts.
+// In particular, std::array may be trivially copyable without being a POD wire.
+template <class T, std::uint64_t Id> struct PodStorageCodec
+{
+    static_assert(std::is_trivially_copyable_v<T>);
+    static T read(const WioNativeAbiValue& value)
+    {
+        require(value.kind == WIO_NATIVE_ABI_POD && value.typeId == Id && value.payload.slice.data &&
+                value.payload.slice.size == sizeof(T));
+        std::array<std::byte, sizeof(T)> bytes;
+        std::memcpy(bytes.data(), value.payload.slice.data, sizeof(T));
+        return std::bit_cast<T>(bytes);
+    }
+    static WioNativeAbiValue write(T input)
+    {
+        auto* box = new Box<T, Id>(std::move(input));
+        WioNativeAbiValue value{};
+        value.kind = WIO_NATIVE_ABI_POD;
+        value.typeId = Id;
+        value.flags = WIO_NATIVE_ABI_VALUE_OWNED;
+        value.payload.slice = {&box->value, sizeof(T)};
+        value.owner = {box, &Box<T, Id>::ops, 1};
+        return value;
+    }
+};
 template <class T, std::uint64_t Id> struct Codec
 {
     static T read(const WioNativeAbiValue& v)
@@ -142,13 +167,9 @@ template <class T, std::uint64_t Id> struct Codec
         }
         else if constexpr (std::is_trivially_copyable_v<T>)
         {
-            require(v.kind == WIO_NATIVE_ABI_POD && v.typeId == Id && v.payload.slice.data &&
-                    v.payload.slice.size == sizeof(T));
             // Materializing an existing POD must not execute its C++ member
             // default initializers before overwriting the object bytes.
-            std::array<std::byte, sizeof(T)> bytes;
-            std::memcpy(bytes.data(), v.payload.slice.data, sizeof(T));
-            return std::bit_cast<T>(bytes);
+            return PodStorageCodec<T, Id>::read(v);
         }
         else
         {
@@ -219,6 +240,26 @@ template <class T, std::uint64_t Id> struct Codec
             }
         }
         return v;
+    }
+};
+template <class T, std::size_t Extent, std::uint64_t Id> struct Codec<std::array<T, Extent>, Id>
+{
+    using Array = std::array<T, Extent>;
+    static Array read(const WioNativeAbiValue& value)
+    {
+        require(value.kind == WIO_NATIVE_ABI_RUNTIME_VALUE && value.typeId == Id && value.payload.handle.state &&
+                value.payload.handle.ops == &Box<Array, Id>::ops);
+        return static_cast<const Box<Array, Id>*>(value.payload.handle.state)->value;
+    }
+    static WioNativeAbiValue write(Array input)
+    {
+        auto* box = new Box<Array, Id>(std::move(input));
+        WioNativeAbiValue value{};
+        value.kind = WIO_NATIVE_ABI_RUNTIME_VALUE;
+        value.typeId = Id;
+        value.flags = WIO_NATIVE_ABI_VALUE_OWNED;
+        value.payload.handle = {box, &Box<Array, Id>::ops, 1};
+        return value;
     }
 };
 // UTF-32 slices use byte counts and contain Unicode scalar values, not wchar_t.

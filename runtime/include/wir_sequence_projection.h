@@ -86,4 +86,31 @@ namespace wio::wir_backend::abi
                                                                count - 1, podId, targetId, offset, size, requested);
         }
     };
+    template <class T, std::size_t Extent> struct SequenceProjectionAccess<std::array<T, Extent>>
+    {
+        using Sequence = std::array<T, Extent>;
+
+        static void* resolve(void* storage, const std::uint64_t* indices, std::uint64_t count,
+                             const std::type_info& requested) noexcept
+        {
+            if (count == 0)
+                return requested == typeid(Sequence) ? storage : nullptr;
+            if (!storage || !indices || count > 64 || indices[0] >= Extent)
+                return nullptr;
+            auto& sequence = *static_cast<Sequence*>(storage);
+            return SequenceProjectionAccess<T>::resolve(std::addressof(sequence[indices[0]]), indices + 1, count - 1,
+                                                        requested);
+        }
+
+        static void* resolvePod(void* storage, const std::uint64_t* indices, std::uint64_t count, std::uint64_t podId,
+                                std::uint64_t targetId, std::uint64_t offset, std::uint64_t size,
+                                const std::type_info& requested) noexcept
+        {
+            if (!storage || !indices || !count || count > 64 || indices[0] >= Extent)
+                return nullptr;
+            auto& sequence = *static_cast<Sequence*>(storage);
+            return SequenceProjectionAccess<T>::resolvePod(std::addressof(sequence[indices[0]]), indices + 1, count - 1,
+                                                           podId, targetId, offset, size, requested);
+        }
+    };
 } // namespace wio::wir_backend::abi

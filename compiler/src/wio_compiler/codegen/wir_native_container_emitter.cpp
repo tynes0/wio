@@ -63,7 +63,7 @@ namespace wio::codegen
                     if (type.kind == TypeKind::Array)
                     {
                         const auto element = type.arguments.front();
-                        if (module.types.get(element).kind == TypeKind::Bool)
+                        if (!type.staticExtent && module.types.get(element).kind == TypeKind::Bool)
                             out << "        return nullptr; // vector<bool> has no addressable element.\n";
                         else
                             out << "        if (steps->kind != WIO_NATIVE_ABI_CONTAINER_INDEX || steps->index >= "
@@ -129,7 +129,7 @@ namespace wio::codegen
                        (module.types.get(type->arguments.front()).kind == TypeKind::Opaque ||
                         hostedObject(type->arguments.front()));
             if (type->kind == TypeKind::Array)
-                return !type->staticExtent && !type->extentParameter && type->arguments.size() == 1 &&
+                return !type->extentParameter && type->arguments.size() == 1 &&
                        self(self, type->arguments.front(), depth + 1);
             if (type->kind == TypeKind::Dictionary)
             {

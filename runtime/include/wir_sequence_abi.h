@@ -11,6 +11,15 @@ namespace wio::wir_backend::abi
         using ContainerAdapter<T, Id>::boundary;
         using ContainerAdapter<T, Id>::storage;
 
+        template <std::size_t... Indices>
+        static T fixedValue(const WioNativeAbiValue* elements, std::index_sequence<Indices...>)
+        {
+            // Initialize each element directly. Default-constructing an array
+            // first would execute native POD member initializers before
+            // overwriting already materialized producer values.
+            return T{Codec<Element, ElementId>::read(elements[Indices])...};
+        }
+
         static WioNativeAbiStatus pack(const WioNativeAbiValue* elements, std::uint64_t count,
                                        WioNativeAbiValue* result, WioNativeAbiFailure* output) noexcept
         {
@@ -20,12 +29,22 @@ namespace wio::wir_backend::abi
                             [&]
                             {
                                 require(result && (!count || elements), WIO_NATIVE_ABI_INVALID_ARGUMENT);
-                                T value;
-                                require(count <= value.max_size(), WIO_NATIVE_ABI_INVALID_ARGUMENT);
-                                value.reserve(static_cast<std::size_t>(count));
-                                for (std::uint64_t index = 0; index < count; ++index)
-                                    value.push_back(Codec<Element, ElementId>::read(elements[index]));
-                                *result = Codec<T, Id>::write(std::move(value));
+                                if constexpr (requires(T value) { value.reserve(std::size_t{}); })
+                                {
+                                    T value;
+                                    require(count <= value.max_size(), WIO_NATIVE_ABI_INVALID_ARGUMENT);
+                                    value.reserve(static_cast<std::size_t>(count));
+                                    for (std::uint64_t index = 0; index < count; ++index)
+                                        value.push_back(Codec<Element, ElementId>::read(elements[index]));
+                                    *result = Codec<T, Id>::write(std::move(value));
+                                }
+                                else
+                                {
+                                    constexpr auto extent = std::tuple_size_v<T>;
+                                    require(count == extent, WIO_NATIVE_ABI_INVALID_ARGUMENT);
+                                    *result =
+                                        Codec<T, Id>::write(fixedValue(elements, std::make_index_sequence<extent>{}));
+                                }
                             });
         }
 

@@ -20,6 +20,9 @@ struct WioNativeSequenceDescriptor
     // pack copies elements and returns an owned runtime handle. read returns
     // an independent wire value. Release outputs, including partial failures,
     // with WioNativeAbiReleaseValue. Inputs are borrowed for the call only.
+    // For a concrete fixed array, typeId includes its extent: pack requires
+    // exactly that many elements and count must report that exact extent.
+    // Fixed-array fields inside native PODs retain their separate POD-byte ABI.
     WioNativeSequencePackFn pack;
     WioNativeSequenceCountFn count;
     WioNativeSequenceReadFn read;

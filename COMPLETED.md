@@ -1820,3 +1820,35 @@ here as historical evidence rather than active work:
       No full-suite or local Linux qualification is claimed. Native Step 8
       remains open for borrowed results, callable-valued/fixed-array signatures,
       async lifetime, broader foreign ownership, pruning and artifact packaging.
+
+## Qualified Fixed-Array Native And Callback Boundaries
+
+- [x] Added structural sequence transport for concrete fixed arrays, including
+      zero extents, standalone native arguments/results, callback values and
+      invocation-scoped ref/view callback arguments in both directions.
+      Recursive payloads include nested/dynamic arrays, dictionaries, Any,
+      string/text, native POD and hosted object/interface/nullable objects.
+- [x] Kept native POD fixed-array fields on their physical byte ABI using an
+      explicit PodStorageCodec. An identical array type can now be a physical
+      POD field and a standalone structural callback value in the same module.
+      Sequence-sidecar-v1 and wire-v2 layouts remain unchanged.
+- [x] Fixed-array packing constructs elements directly instead of default-
+      constructing then overwriting them. A side-effecting native POD member
+      initializer counter verifies that transporting existing elements does
+      not execute initializers again.
+- [x] Enforced exact fixed extents in producer packing and VM packing/decoding,
+      including empty arrays. Added real fixed-array element projection and
+      fixed bool addressability. Corrected C++ generation that incorrectly used
+      vector<bool> proxies for fixed bool cells, losing native ref writes.
+- [x] Added a 30-round generated-C++/actual-VM/live-host gate. It covers Unicode
+      and binary strings, nested containers, object identity and balanced
+      lifecycle, nullable transitions, hosted native callbacks, whole-array/
+      element aliases, hidden/reordered POD fields, malformed wire admission,
+      missing sidecars, producer count mismatches, wrong VM array extents,
+      recovery and owning result reads after machine/callback/loader shutdown.
+- [x] Only this new Windows gate was run: 1/1 passed in 31.21 seconds (31.28
+      total). The older row-only projection expectation was updated to success
+      but its gate was not rerun. No full-suite or local Linux qualification is
+      claimed. Native Step 8 remains open for callable-valued signatures and
+      method results, borrowed callback results, async/broader ownership,
+      identity canonicalization, pruning and VM artifact packaging.
