@@ -176,6 +176,9 @@ namespace wio::bytecode
                     if (!validType(parameter.type))
                         report("WBC1029", "Native parameter references an invalid type id", function.id);
                     const std::uint32_t parameterType = directType(parameter.type);
+                    const bool nativeTaskParameter = parameterType < module.types.size() &&
+                                                     module.types[parameterType].kind == 34 &&
+                                                     parameter.marshalling == 8;
                     const bool callbackShape = parameter.marshalling != 7
                                                    ? parameter.callbackLifetime == 0 && parameter.callbackThread == 0
                                                    : parameter.passing == 0 && parameter.callbackLifetime <= 1 &&
@@ -185,17 +188,25 @@ namespace wio::bytecode
                                                          !module.types[parameterType].arguments.empty();
                     if (parameter.passing > 4 || parameter.marshalling > 9 || !callbackShape ||
                         ((parameter.marshalling == 4 || parameter.marshalling == 6 || parameter.marshalling == 8) &&
-                         !hasStableAbiType(parameter.type)))
-                        report("WBC1074", "Native parameter has an invalid ABI mode or no stable type identity",
+                         !nativeTaskParameter && !hasStableAbiType(parameter.type)))
+                        report("WBC1074",
+                               "Native parameter has an invalid ABI mode or no stable type identity (" +
+                                   std::string(module.string(function.name)) + ", type #" +
+                                   std::to_string(parameter.type) + ", marshalling " +
+                                   std::to_string(parameter.marshalling) + ")",
                                function.id);
                 }
                 const std::uint32_t nativeResultType = directType(binding.result.type);
                 const bool nativeTaskResult =
                     nativeResultType < module.types.size() && module.types[nativeResultType].kind == 34;
-                if (binding.result.passing > 4 || binding.result.marshalling > 9 || binding.result.marshalling == 7 ||
+                const bool callbackResult =
+                    binding.result.marshalling != 7 ||
+                    (binding.result.passing == 4 && nativeResultType < module.types.size() &&
+                     module.types[nativeResultType].kind == 33 && !module.types[nativeResultType].arguments.empty());
+                if (binding.result.passing > 4 || binding.result.marshalling > 9 || !callbackResult ||
                     binding.result.callbackLifetime != 0 || binding.result.callbackThread != 0 ||
                     ((binding.result.marshalling == 4 || binding.result.marshalling == 6 ||
-                      binding.result.marshalling == 8) &&
+                      binding.result.marshalling == 7 || binding.result.marshalling == 8) &&
                      !nativeTaskResult && !hasStableAbiType(binding.result.type)))
                     report("WBC1074", "Native result has an invalid ABI mode or no stable type identity", function.id);
                 for (const std::uint32_t argument : binding.templateArguments)

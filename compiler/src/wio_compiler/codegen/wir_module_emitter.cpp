@@ -1,4 +1,5 @@
 #include "wio/codegen/wir_module_emitter.h"
+#include "wio/codegen/wir_native_object_emitter.h"
 #include "wio/codegen/wir_application_emitter.h"
 #include "wio/codegen/wir_cpp_text.h"
 #include "wio/codegen/wir_reflection_emitter.h"
@@ -205,7 +206,14 @@ namespace wio::codegen
         using namespace wir;
         const auto wireId = [&](TypeId value)
         {
+            if (module.types.get(value).kind == TypeKind::Nullable && module.types.get(value).arguments.size() == 1 &&
+                (module.types.get(module.types.get(value).arguments.front()).kind == TypeKind::Function ||
+                 module.types.get(module.types.get(value).arguments.front()).kind == TypeKind::Reference))
+                value = module.types.get(value).arguments.front();
             if (module.types.get(value).kind == TypeKind::Reference)
+                value = module.types.get(value).arguments.front();
+            if (module.types.get(value).kind == TypeKind::Nullable &&
+                module.types.get(module.types.get(value).arguments.front()).kind == TypeKind::Function)
                 value = module.types.get(value).arguments.front();
             if (const auto object = nativeAbiObjectType(module.types, value))
                 value = object;
@@ -217,18 +225,87 @@ namespace wio::codegen
         const auto& signature = module.types.get(id);
         if (signature.kind != TypeKind::Function || signature.arguments.empty())
             return "wio::wir_backend::abi::Codec<" + type(id) + ", " + std::to_string(wireId(id)) + "ULL>";
-        std::string result = "wio::wir_backend::abi::CallbackCodecWithBorrows<" + type(id) + ", " +
+        const auto reference = [&](TypeId value) -> const wir::Type&
+        {
+            const auto& shape = module.types.get(value);
+            return shape.kind == TypeKind::Nullable ? module.types.get(shape.arguments.front()) : shape;
+        };
+        std::string result = "wio::wir_backend::abi::CallbackCodecWithResultBorrow<" + type(id) + ", " +
                              std::to_string(wireId(id)) + "ULL, " + std::to_string(wireId(signature.arguments.back())) +
-                             "ULL, std::integer_sequence<bool";
+                             "ULL, " + (reference(signature.arguments.back()).isMutable ? "true" : "false") +
+                             ", std::integer_sequence<bool";
         for (std::size_t index = 0; index + 1 < signature.arguments.size(); ++index)
         {
-            const auto& argument = module.types.get(signature.arguments[index]);
+            const auto& argument = reference(signature.arguments[index]);
             result += argument.kind == TypeKind::Reference && argument.isMutable ? ", true" : ", false";
         }
         result += ">";
         for (std::size_t index = 0; index + 1 < signature.arguments.size(); ++index)
             result += ", " + std::to_string(wireId(signature.arguments[index])) + "ULL";
         return result + ">";
+    }
+
+    std::string WirModuleEmitter::emitCallableCodecs(const wir::lowered::Module& module, const TypeSpelling& cpp)
+    {
+        using namespace wir;
+        std::set<TypeId> visited;
+        std::vector<TypeId> ordered;
+        const auto concrete = [&](auto&& self, TypeId id, unsigned depth) -> bool
+        {
+            const auto* type = module.types.tryGet(id);
+            if (!type || depth > 64 || type->kind == TypeKind::GenericParameter ||
+                type->kind == TypeKind::ConstGenericParameter || type->kind == TypeKind::GenericParameterPack ||
+                type->kind == TypeKind::TypePack || type->kind == TypeKind::ValuePack)
+                return false;
+            return std::ranges::all_of(type->arguments, [&](TypeId child) { return self(self, child, depth + 1); });
+        };
+        const auto collect = [&](auto&& self, TypeId id) -> void
+        {
+            if (!visited.insert(id).second || !concrete(concrete, id, 0))
+                return;
+            const auto& type = module.types.get(id);
+            for (const auto child : type.arguments)
+                self(self, child);
+            if (type.kind == TypeKind::Function && !type.arguments.empty())
+                ordered.push_back(id);
+        };
+        for (const auto& function : module.functions)
+            if (function.nativeBinding && function.genericParameters.empty())
+            {
+                collect(collect, function.nativeBinding->result.type);
+                for (const auto& argument : function.nativeBinding->parameters)
+                    collect(collect, argument.type);
+            }
+        for (const auto owner : WirNativeObjectEmitter::eligibleTypes(module))
+            for (const auto& function : module.functions)
+                if (function.isMethod && function.ownerType == owner)
+                {
+                    collect(collect, function.returnType);
+                    for (const auto& argument : function.parameters)
+                        collect(collect, argument.type);
+                }
+        if (ordered.empty())
+            return {};
+        std::ostringstream out;
+        out << "namespace wio::wir_backend::abi {\n";
+        for (const auto id : ordered)
+        {
+            const auto reflected = std::ranges::find(module.contract.reflection, id, &ReflectionDescriptor::type);
+            const auto identity = reflected == module.contract.reflection.end()
+                                      ? stableModuleHash(nativeAbiTypeKey(module.types, id))
+                                      : reflected->stableTypeId;
+            out << "template<> struct Codec<" << cpp(id) << ", " << identity
+                << "ULL> : " << nativeValueCodec(module, id, cpp) << " {\n"
+                << "    using Base = " << nativeValueCodec(module, id, cpp) << ";\n"
+                << "    static " << cpp(id) << " read(const WioNativeAbiValue& value) {\n"
+                << "        require(value.kind == WIO_NATIVE_ABI_CALLBACK && value.typeId == " << identity
+                << "ULL && value.flags == WIO_NATIVE_ABI_VALUE_OWNED && !value.owner.state && !value.owner.ops && "
+                   "value.payload.callback.userdata && value.payload.callback.ops && "
+                   "value.payload.callback.ops->retain && value.payload.callback.ops->release);\n"
+                << "        return Base::read(value);\n    }\n};\n";
+        }
+        out << "} // namespace wio::wir_backend::abi\n";
+        return out.str();
     }
 
     std::string WirModuleEmitter::emit(const wir::lowered::Module& module, const TypeSpelling& type,

@@ -1852,3 +1852,44 @@ here as historical evidence rather than active work:
       claimed. Native Step 8 remains open for callable-valued signatures and
       method results, borrowed callback results, async/broader ownership,
       identity canonicalization, pruning and VM artifact packaging.
+
+## Native Callback Closure Packages 1 And 2
+
+- [x] Qualified recursive callable arguments/results and callback factories,
+      including nullable native results, nullable hosted method parameters and
+      callable/nullable-callable hosted method results. Concrete generated
+      codecs preserve nested signature identities and validate ownership/ops.
+- [x] Unwrapped function aliases consistently in semantic and Typed WIR
+      indirect-call resolution.
+- [x] Qualified synchronous ref/view callback results through an explicit
+      compatible caller argument. Both sides restore the original caller cell
+      before destroying callback materializations; readonly upgrades, unrelated
+      addresses and implicit local/projected result escapes are rejected.
+- [x] Covered scalar, string/text, native POD, fixed/dynamic array, dictionary,
+      Any, object/nullable-object and callable cells. Nullable cell contents do
+      not turn a live reference into an absent reference.
+- [x] Prevented direct/nested lexical borrowed captures from crossing the
+      native callable boundary. Invocation-scoped borrowed capture construction
+      and expired materialization reads are rejected. Callable environments are
+      checked again at native entry, including after mutation.
+- [x] Fixed VM closure environment addressing: reference captures have their
+      own hidden environment cell, and mutable value captures remain rooted in
+      the same closure rather than a fresh per-invocation clone. Local borrowing
+      closures remain usable while their caller cell is alive.
+- [x] Preserved call-scoped versus retained leases and caller-thread versus
+      any-thread entry. Retained ref results use fresh caller cells per call;
+      callbacks reject entry after machine shutdown without reading stale memory.
+- [x] Qualified owning callable/object captures across VM coroutine suspension,
+      completion and cancellation, plus native worker callback execution.
+      Captured object construction/destruction counts balance after completion
+      and cancellation. Async ref/view parameters/results remain forbidden.
+- [x] Added a 30-round generated-C++/actual-VM differential gate followed by
+      live-host lifetime tests, and two async borrowed-parameter/result negative
+      gates. Only these new Windows tests were run: 3/3 passed, 42.29 seconds
+      total (41.54 seconds for the differential/live-host gate). No full-suite
+      or local Linux qualification is claimed.
+- [ ] Native Step 8 remains open for general native task-parameter/std helper
+      parity, std::Box/broader foreign ownership and resource contracts,
+      consumed arguments, alias identity canonicalization, native-only pruning
+      and VM executable/shared/static packaging. These are not closed by the
+      qualified callback/lifetime packages above.

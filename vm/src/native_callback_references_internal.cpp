@@ -35,11 +35,18 @@ namespace wio::vm::detail
                                                      std::uint32_t type, const NativePodLayouts* layouts)
     {
         std::uint8_t marshalling = 0;
+        const auto declared = type;
+        type = callbackReferenceType(module, type);
         if (!callbackArgumentMarshalling(module, type, marshalling, layouts) ||
             module.types[type].kind != TypeReference || module.types[type].arguments.empty())
             return {{}, "unsupported callback borrow type"};
         const bool mutableAccess = (module.types[type].flags & 1u) != 0;
         const auto base = module.types[type].arguments.front();
+        if (module.types[declared].kind == TypeNullable && wire.kind == WIO_NATIVE_ABI_VOID)
+            return wire.flags == WIO_NATIVE_ABI_VALUE_NULLABLE && wire.typeId == identity(module, base) &&
+                           !wire.owner.state && !wire.owner.ops
+                       ? NativeValueResult{Value::null(), {}}
+                       : NativeValueResult{{}, "nullable callback borrow has an invalid null contract"};
         if (wire.kind != WIO_NATIVE_ABI_REFERENCE ||
             (wire.flags != WIO_NATIVE_ABI_VALUE_BORROWED &&
              wire.flags != (WIO_NATIVE_ABI_VALUE_BORROWED | WIO_NATIVE_ABI_VALUE_MUTABLE)) ||
@@ -85,6 +92,16 @@ namespace wio::vm::detail
     {
         std::uint8_t marshalling = 0;
         auto* place = value.asPlace();
+        const auto declared = type;
+        type = callbackReferenceType(module, type);
+        if (type < module.types.size() && module.types[declared].kind == TypeNullable &&
+            value.kind() == Value::Kind::Null)
+        {
+            wire = {};
+            wire.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+            wire.typeId = identity(module, module.types[type].arguments.front());
+            return true;
+        }
         if (!callbackArgumentMarshalling(module, type, marshalling, layouts) ||
             module.types[type].kind != TypeReference || !place || !place->initialized ||
             ((module.types[type].flags & 1u) && !place->mutableValue))
@@ -211,6 +228,67 @@ namespace wio::vm::detail
             if (access_ && access_->cleanup && !access_->cleanup(access_->state, value, error))
                 cleaned = false;
         return cleaned;
+    }
+
+    NativeValueResult NativeCallbackReferences::readResult(const bytecode::Module& module,
+                                                           const WioNativeAbiValue& wire, std::uint32_t type)
+    {
+        const auto declared = type;
+        type = callbackReferenceType(module, type);
+        if (type >= module.types.size() || module.types[type].kind != TypeReference ||
+            module.types[type].arguments.size() != 1)
+            return {{}, "callback result is not a qualified reference"};
+        const auto base = module.types[type].arguments.front();
+        if (module.types[declared].kind == TypeNullable && wire.kind == WIO_NATIVE_ABI_VOID)
+            return wire.flags == WIO_NATIVE_ABI_VALUE_NULLABLE && wire.typeId == identity(module, base) &&
+                           !wire.owner.state && !wire.owner.ops
+                       ? NativeValueResult{Value::null(), {}}
+                       : NativeValueResult{{}, "nullable callback result has an invalid null contract"};
+        const bool writable = (module.types[type].flags & 1u) != 0;
+        if (wire.kind != WIO_NATIVE_ABI_REFERENCE || wire.typeId != identity(module, base) ||
+            wire.payload.mutableSlice.size != sizeof(WioNativeAbiValue) || wire.owner.state || wire.owner.ops ||
+            (wire.flags != WIO_NATIVE_ABI_VALUE_BORROWED &&
+             wire.flags != (WIO_NATIVE_ABI_VALUE_BORROWED | WIO_NATIVE_ABI_VALUE_MUTABLE)) ||
+            (writable && !(wire.flags & WIO_NATIVE_ABI_VALUE_MUTABLE)))
+            return {{}, "callback result has an invalid borrow contract"};
+        for (auto& slot : slots_)
+            if (slot.original && wire.payload.mutableSlice.data == &slot.outgoing && slot.type == base &&
+                (!writable || slot.mutableAccess))
+                return {Value::place(slot.original), {}};
+        return {{}, "callback result must alias an explicit caller borrow"};
+    }
+
+    bool NativeCallbackReferences::writeResult(const bytecode::Module& module, const Value& value, std::uint32_t type,
+                                               WioNativeAbiValue& wire, std::string& error)
+    {
+        const auto declared = type;
+        type = callbackReferenceType(module, type);
+        if (type < module.types.size() && module.types[type].kind == TypeReference &&
+            module.types[type].arguments.size() == 1)
+        {
+            const auto base = module.types[type].arguments.front();
+            if (module.types[declared].kind == TypeNullable && value.kind() == Value::Kind::Null)
+            {
+                wire = {};
+                wire.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+                wire.typeId = identity(module, base);
+                return true;
+            }
+            const bool writable = (module.types[type].flags & 1u) != 0;
+            for (auto& slot : slots_)
+                if (slot.incoming && slot.local.get() == value.asPlace() && slot.type == base &&
+                    (!writable || slot.mutableAccess))
+                {
+                    wire = {};
+                    wire.kind = WIO_NATIVE_ABI_REFERENCE;
+                    wire.flags = WIO_NATIVE_ABI_VALUE_BORROWED | (writable ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
+                    wire.typeId = identity(module, base);
+                    wire.payload.mutableSlice = {slot.incoming, sizeof(WioNativeAbiValue)};
+                    return true;
+                }
+        }
+        error = "callback result must alias an explicit compatible caller borrow";
+        return false;
     }
 
     bool NativeCallbackReferences::finish(std::string& error)

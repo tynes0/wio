@@ -23,6 +23,8 @@ target_compile_options(wio_vm PRIVATE
 )
 
 if(BUILD_TESTING)
+    add_executable(wio_vm_native_callback_callable_results_test "${CMAKE_SOURCE_DIR}/tests/vm_native_callback_callable_results_test.cpp")
+    target_link_libraries(wio_vm_native_callback_callable_results_test PRIVATE wio_vm ${CMAKE_DL_LIBS})
     add_executable(wio_vm_native_callback_fixed_array_test "${CMAKE_SOURCE_DIR}/tests/vm_native_callback_fixed_array_test.cpp")
     target_link_libraries(wio_vm_native_callback_fixed_array_test PRIVATE wio_vm ${CMAKE_DL_LIBS})
     add_executable(wio_vm_native_callback_value_borrow_test "${CMAKE_SOURCE_DIR}/tests/vm_native_callback_value_borrow_test.cpp")

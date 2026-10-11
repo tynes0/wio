@@ -1,0 +1,11 @@
+type Borrowed = ref i32;
+
+async fn Unsafe(value: Borrowed) -> i32
+{
+    return value;
+}
+
+fn Entry() -> i32
+{
+    return 0;
+}

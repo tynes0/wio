@@ -2824,7 +2824,7 @@ void SemanticAnalyzer::visit(FunctionCallExpression& node)
         return;
     }
 
-    Ref<Type> calleeType = node.callee->refType.Lock();
+    Ref<Type> calleeType = unwrapAliasType(node.callee->refType.Lock());
     if (auto* memberAccess = node.callee->as<MemberAccessExpression>();
         memberAccess && !memberAccess->intrinsicOverloadMembers.empty())
     {
@@ -2930,7 +2930,7 @@ void SemanticAnalyzer::visit(FunctionCallExpression& node)
     }
 
     if (!calleeType || calleeType->kind() != TypeKind::Function)
-        calleeType = calleeSym->type;
+        calleeType = unwrapAliasType(calleeSym->type);
     if (!constructorGenericBindings.empty() || !constructorGenericBindingSet.packBindings.empty())
         calleeType = instantiateGenericType(calleeType, constructorGenericBindingSet);
 

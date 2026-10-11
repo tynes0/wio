@@ -34,6 +34,8 @@ namespace wio::vm::detail
         void (*pinValue)(void*, const Value&) = nullptr;
         void (*pinWire)(void*, WioNativeAbiValue&) = nullptr;
         bool (*cleanup)(void*, Value&, std::string&) noexcept = nullptr;
+        bool (*encodeCallable)(void*, const Value&, std::uint32_t, WioNativeAbiValue&, std::string&,
+                               const NativePodLayouts&) = nullptr;
     };
 
     [[nodiscard]] bool encodeNativeValue(const bytecode::Module& module, const Value& value, std::uint32_t declaredType,
@@ -64,10 +66,14 @@ namespace wio::vm::detail
                                                 std::uint8_t& marshalling,
                                                 const NativePodLayouts* layouts = nullptr) noexcept;
     // Arguments may borrow any qualified non-void value cell for this invocation.
-    // Results deliberately retain the stricter by-value contract.
+    // Borrowed results must map to an explicit compatible incoming caller cell;
+    // owning results use their concrete value codec, including nested callables.
     [[nodiscard]] bool callbackArgumentMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                                    std::uint8_t& marshalling,
                                                    const NativePodLayouts* layouts = nullptr) noexcept;
+    [[nodiscard]] bool callbackResultMarshalling(const bytecode::Module&, std::uint32_t, std::uint8_t&,
+                                                 const NativePodLayouts* = nullptr) noexcept;
+    [[nodiscard]] std::uint32_t callbackReferenceType(const bytecode::Module&, std::uint32_t) noexcept;
     [[nodiscard]] bool nativeValueMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                               std::uint8_t& marshalling) noexcept;
     [[nodiscard]] std::string nativeFailureMessage(const WioNativeAbiFailure& failure);

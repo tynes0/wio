@@ -34,6 +34,9 @@ namespace wio::codegen
 
         std::uint64_t identity(const lowered::Module& module, TypeId id)
         {
+            if (module.types.get(id).kind == TypeKind::Nullable && module.types.get(id).arguments.size() == 1 &&
+                module.types.get(module.types.get(id).arguments.front()).kind == TypeKind::Function)
+                id = module.types.get(id).arguments.front();
             if (const auto object = nativeAbiObjectType(module.types, id))
                 id = object;
             if (const auto* reflected = reflection(module, id))
@@ -297,6 +300,12 @@ namespace wio::codegen
             const auto& type = module.types.get(id);
             if (depth > 64)
                 return false;
+            if (type.kind == TypeKind::Function)
+                return !type.arguments.empty() && std::ranges::all_of(type.arguments, [&](TypeId argument)
+                                                                      { return self(self, argument, depth + 1); });
+            if (type.kind == TypeKind::Reference && type.arguments.size() == 1)
+                return module.types.get(type.arguments.front()).kind != TypeKind::Void &&
+                       self(self, type.arguments.front(), depth + 1);
             if (type.kind == TypeKind::Array)
                 return !type.extentParameter && type.arguments.size() == 1 &&
                        self(self, type.arguments.front(), depth + 1);
@@ -310,7 +319,8 @@ namespace wio::codegen
                        self(self, type.arguments.back(), depth + 1);
             }
             if (type.kind == TypeKind::Nullable && type.arguments.size() == 1)
-                return contracts.contains(type.arguments.front());
+                return contracts.contains(type.arguments.front()) ||
+                       module.types.get(type.arguments.front()).kind == TypeKind::Function;
             return wireValue(module, id, true) || contracts.contains(id) || type.kind == TypeKind::Any ||
                    std::ranges::find(pods, id) != pods.end();
         };
@@ -330,7 +340,7 @@ namespace wio::codegen
             const auto& type = module.types.get(id);
             if (type.kind == TypeKind::Function)
             {
-                if (allowVoid || type.arguments.empty() || !callbackValue(callbackValue, type.arguments.back()))
+                if (type.arguments.empty() || !callbackValue(callbackValue, type.arguments.back()))
                     return false;
                 for (std::size_t index = 0; index + 1 < type.arguments.size(); ++index)
                 {
@@ -349,7 +359,9 @@ namespace wio::codegen
                 return true;
             }
             if (type.kind == TypeKind::Nullable && type.arguments.size() == 1)
-                return contracts.contains(type.arguments.front());
+                return contracts.contains(type.arguments.front()) ||
+                       (module.types.get(type.arguments.front()).kind == TypeKind::Function &&
+                        callbackValue(callbackValue, type.arguments.front()));
             return wireValue(module, id, allowVoid) || contracts.contains(id);
         };
         // Reject transitively: no proxy may advertise a method whose object

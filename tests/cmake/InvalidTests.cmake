@@ -1,5 +1,14 @@
 # Invalid test registrations. Included in the app directory scope.
 
+add_wio_failure_test(wio_invalid_native_callback_async_borrow_contract
+    "${CMAKE_SOURCE_DIR}/tests/invalid/native_callback_async_borrow_contract.wio"
+    "cannot be ref/view because the borrow may outlive its caller")
+wio_test_labels(wio_invalid_native_callback_async_borrow_contract invalid native callback async lifetime)
+add_wio_failure_test(wio_invalid_native_callback_async_result_contract
+    "${CMAKE_SOURCE_DIR}/tests/invalid/native_callback_async_result_contract.wio"
+    "cannot return ref/view values across suspension points")
+wio_test_labels(wio_invalid_native_callback_async_result_contract invalid native callback async lifetime)
+
 add_wio_failure_test_clean(
     wio_invalid_imported_parser_error_no_cascade
     "${CMAKE_SOURCE_DIR}/tests/invalid/imported_parser_error_no_cascade.wio"

@@ -3132,3 +3132,104 @@ Callable-valued signatures and method results, borrowed callback results,
 async/broader foreign ownership, identity canonicalization, native-only bridge
 pruning and executable/shared/static packaging remain open. Native Step 8 is
 not closed by this update.
+
+## Callback closure packages 1 and 2: callable results and caller-bound borrows
+
+Concrete function-valued signatures now retain their identity recursively.
+Nested callbacks use generated signature-specific codecs, rather than falling
+back to identity-less argument/result codecs. Native free functions can return
+owning callbacks and nullable callbacks. Hosted object methods can return
+callbacks, callback factories and nullable callbacks, and receive nullable
+callback values. Function aliases are unwrapped consistently in semantic call
+resolution and Typed WIR indirect calls.
+
+```wio
+type Unary = fn(i32) -> i32;
+
+[Native, CppName(native::Relay)]
+fn Relay([std::attribute::NativeCallback("retained", "caller")]
+         callback: Unary) -> Unary;
+
+fn Add(value: ref i32) -> ref i32
+{
+    value += 2;
+    return value;
+}
+```
+
+A native function returning or storing its callback argument must declare that
+argument `retained`. The default `call` lease still expires at native return;
+returning a copy of a call-scoped callback does not upgrade its lifetime.
+Nested callable values/results own their callback operations, but they do not
+extend the lifetime of any invocation-scoped borrowed cell.
+
+Borrowed callback results follow an explicit caller-cell contract. The result
+must alias a compatible ref/view argument of the same concrete value type.
+Mutable results require a mutable caller capability. The bridge remaps the
+result to the original caller Place/tagged-value cell before temporary callback
+materializations are destroyed. It compares identities without dereferencing
+foreign returned addresses. Arbitrary globals, captured cells, frame locals,
+implicit receiver storage and newly created projections cannot be returned by
+this contract. To return an element, pass that element explicitly as a ref/view
+argument. A reference to a nullable object cell remains a live reference even
+when that cell contains null; it is not an absent reference.
+
+Qualified borrowed result pointees include scalars, binary strings, Unicode
+text, native PODs, fixed/dynamic arrays, dictionaries, Any, hosted objects and
+interfaces, nullable object cells, and qualified callable cells. Returned
+callable cells retain their own signature identity as well as the outer
+callback signature. Producer/VM wire validation rejects incompatible identities,
+missing ownership operations, malformed reference tokens, readonly upgrades
+and unrelated result addresses. Copy-back still occurs for valid writes made
+before a callback exception; failed result conversion never exports a temporary
+address.
+
+Direct generated-C++ native callbacks now enforce the same borrow-capture
+restriction as VM callbacks. A small invocation capability is propagated into
+callback Places. Closure construction rejects reference capture of callback
+borrows, and expired Place access fails before dereferencing its cell. Each
+retained invocation gets fresh materialization; no caller stack cell is stored
+in the callback's retained state. Caller-thread affinity and serialized
+any-thread entry remain distinct explicit policies. Callback invocation after
+machine destruction returns `WIO_NATIVE_ABI_STALE_HANDLE`.
+
+Ordinary lexical ref/view captures are also rejected when a callable crosses
+the native boundary, including captures hidden inside another callable. The C++
+closure environment preserves this provenance through function-value copies;
+the VM inspects retained closure environments without dereferencing borrowed
+addresses. Native entry rechecks callable captures, including environments
+changed by an earlier invocation. This is not a blanket ban on local borrowing
+closures: a local closure used while its caller cell is alive still works.
+For a retained native callback, use owning captures and explicit synchronous
+ref/view parameters instead of capturing a caller's stack cell.
+
+VM hidden reference-capture parameters point at an environment cell containing
+the borrowed Place, not at the pointee directly. Mutable value captures alias
+their existing environment cell across invocations. This matches generated
+C++ closure mutation semantics without giving a borrowed capture ownership of
+its caller's storage.
+
+Owning callable values may survive coroutine suspension and cancellation.
+Ref/view async parameters/results remain forbidden: borrowing is synchronous,
+not a promise that a caller cell will survive an arbitrary asynchronous operation.
+This gate exercises native-worker callback execution and VM host-driven
+coroutine completion/cancellation separately. It does not qualify arbitrary
+native task parameter conversion or all free std task helper calls; task sidecar
+and std/backend parity work remain separate Native Step 8 work.
+
+The new `wio_vm_native_callback_callable_results` gate compares generated C++
+and actual VM CLI for 30 rounds, then checks live-host retained callbacks, fresh
+cells, wrong identity/mutability/thread rejection, call-scoped expiry, any-thread
+borrowed results, owning callable suspension/cancellation and stale shutdown
+entry. Runtime probes check temporary-cell remapping, unrelated borrowed
+results, readonly upgrades, expired materialization access and exception
+copy-back. Two new negative gates freeze async borrow/return rejection through
+type aliases. Direct, nested and mutated borrowed closure escape probes also
+run in both backends. Native Step 8 remains open for broader foreign ownership,
+consumed arguments, task parameter/helper parity, alias canonicalization,
+native-only pruning and executable/shared/static artifact packaging.
+
+Local Windows qualification: only the three new gates were run; 3/3 passed in
+42.29 seconds total (41.54 seconds for the differential/live-host gate).
+The coroutine completion/cancellation probes also balance captured-object
+construction/destruction. No full-suite or local Linux result is claimed.

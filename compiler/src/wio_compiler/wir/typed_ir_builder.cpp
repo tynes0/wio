@@ -5056,7 +5056,9 @@ namespace wio::wir::typed
                     if (const Ref<sema::Symbol> directSymbol = call->callee->referencedSymbol.Lock())
                         calleeSymbol = directSymbol;
                 }
-                const Ref<sema::Type> selectedCallableType = call->callee ? call->callee->refType.Lock() : nullptr;
+                Ref<sema::Type> selectedCallableType = call->callee ? call->callee->refType.Lock() : nullptr;
+                while (selectedCallableType && selectedCallableType->kind() == sema::TypeKind::Alias)
+                    selectedCallableType = selectedCallableType.AsFast<sema::AliasType>()->aliasedType;
                 const auto visibleFunctionType =
                     selectedCallableType && selectedCallableType->kind() == sema::TypeKind::Function
                         ? selectedCallableType.AsFast<sema::FunctionType>()

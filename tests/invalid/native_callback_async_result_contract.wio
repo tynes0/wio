@@ -1,0 +1,12 @@
+type Borrowed = view i32;
+
+async fn Unsafe() -> Borrowed
+{
+    let value = 7;
+    return ref value;
+}
+
+fn Entry() -> i32
+{
+    return 0;
+}

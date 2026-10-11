@@ -213,9 +213,12 @@ namespace wio::vm
     private:
         struct ExecutionState;
 
+        [[nodiscard]] ExecutionResult invokeWithCaptures(std::uint32_t function, std::span<const Value> arguments,
+                                                         const Value* callable);
         [[nodiscard]] ExecutionResult execute(std::uint32_t function, std::span<const Value> arguments,
                                               const Value* activeTask,
-                                              std::shared_ptr<ExecutionState> resumedState = {});
+                                              std::shared_ptr<ExecutionState> resumedState = {},
+                                              const Value* callable = nullptr);
         void cleanupValue(Value& value, ExecutionError& primaryError);
         void cleanupTaskArguments(const Value& task, ExecutionError& primaryError);
         [[nodiscard]] ExecutionError unwind(ExecutionState& state, ExecutionError error);
@@ -231,6 +234,8 @@ namespace wio::vm
                                                                    const detail::NativePodLayouts&);
         [[nodiscard]] detail::NativeObjectAccess nativeObjectAccess(bool hostedOnly = false);
         [[nodiscard]] ExecutionResult invokeNativeCallable(const Value&, std::span<const Value>);
+        [[nodiscard]] bool encodeNativeCallable(const Value&, std::uint32_t, bool, WioNativeAbiValue&, std::string&,
+                                                const detail::NativePodLayouts&);
         [[nodiscard]] bool scheduleTask(const std::shared_ptr<ExecutionState>& state, ExecutorKind executor);
         void wakeTask(std::weak_ptr<ExecutionState> state, AsyncTaskState terminalState, const Value& result,
                       const ExecutionError& error);

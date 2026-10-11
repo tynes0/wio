@@ -1257,3 +1257,19 @@ add_test(
 )
 wio_test_labels(wio_vm_native_callback_fixed_array interop vm native callback array borrow ownership cleanup differential release-gate)
 set_tests_properties(wio_vm_native_callback_fixed_array PROPERTIES TIMEOUT 600)
+
+add_test(
+    NAME wio_vm_native_callback_callable_results
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_callback_callable_results.wio"
+        "-DWIO_EXPECTED_OUTPUT=native-callback-callable-results-ok:30"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-callback-callable-results"
+        "-DWIO_CALLBACK_HOST_EXECUTABLE=$<TARGET_FILE:wio_vm_native_callback_callable_results_test>"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_callback_callable_results_test.cmake"
+)
+wio_test_labels(wio_vm_native_callback_callable_results interop vm native callback callable borrow lifetime cleanup differential release-gate)
+set_tests_properties(wio_vm_native_callback_callable_results PROPERTIES TIMEOUT 600)

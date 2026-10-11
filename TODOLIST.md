@@ -1110,12 +1110,25 @@ Rider, and CLion are defined in
    Only this new Windows gate was run: 1/1 passed in 31.21 seconds (31.28 total).
    The older row-only projection expectation was updated but not rerun; no
    full-suite or local Linux qualification is claimed.
-   Remaining native parity work includes broader callback/async lifetime contracts,
-   callable-valued callback signatures and callable method results,
+   Callback closure packages 1 and 2 now qualify recursively typed callable
+   arguments/results, callable and nullable-callable hosted method results,
+   and caller-cell-bound ref/view callback results. C++ direct calls, generated
+   ABI callbacks and VM calls share the explicit caller-cell rule: no readonly
+   upgrade, frame-local/projected result escape, or borrowed closure capture.
+   Direct/nested lexical-reference captures cannot cross the native boundary;
+   changed callable environments are checked again at native invocation.
+   Retained callbacks accept fresh invocation cells, expire after shutdown,
+   and preserve caller/any-thread policy. Owning callables are qualified across
+   native worker calls and VM coroutine suspension/cancellation; async ref/view
+   parameters/results remain forbidden. See the focused closure gate and the
+   two new async borrow/result negative gates.
+   VM capture cells preserve reference indirection and persistent mutable value
+   captures. Completion/cancellation balance captured object lifecycle. Only
+   these new Windows tests were run: 3/3 passed in 42.29 seconds total.
+   Remaining native parity work includes general native task-parameter/std task
+   helper parity (not arbitrary task-to-runtime-value conversion),
    std::Box and broader foreign/container ownership,
-   alias identity canonicalization; broader POD/object/container/nullable borrow
-   lifetime contracts;
-   borrowed callback results; nullable borrowed payload lifetime contracts;
+   alias identity canonicalization; broader foreign resource lifetime contracts;
    consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.

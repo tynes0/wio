@@ -234,6 +234,8 @@ namespace wio::vm::detail
             }
             output.kind = WIO_NATIVE_ABI_VOID;
             output.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+            if (marshalling == 7)
+                output.typeId = stableTypeId(module, declaredType);
             return true;
         }
 
@@ -360,6 +362,11 @@ namespace wio::vm::detail
             output.payload.opaque = value.opaquePointer();
             return true;
         }
+        case 7:
+            if (layouts && objects && objects->encodeCallable)
+                return objects->encodeCallable(objects->state, value, type, output, error, *layouts);
+            error = "native callable conversion requires a live machine";
+            return false;
         case 6:
         case 8:
         {
@@ -498,6 +505,10 @@ namespace wio::vm::detail
             // as direct object arguments, not the generic null shortcut.
             if (marshalling == 6 && layouts && objects)
                 return objects->decode(objects->state, value, declaredType, *layouts);
+            if (marshalling == 7 &&
+                (value.flags != WIO_NATIVE_ABI_VALUE_NULLABLE || value.typeId != stableTypeId(module, declaredType) ||
+                 value.owner.state || value.owner.ops))
+                return {{}, "nullable callback requires an exact typed null"};
             return {Value::null(), {}};
         }
 
@@ -586,6 +597,22 @@ namespace wio::vm::detail
                 return {Value::null(), {}};
             return {Value::opaque(type, expected, value.payload.opaque, value.owner), {}};
         }
+        case 7:
+        {
+            const auto expected = stableTypeId(module, declaredType);
+            const auto& callback = value.payload.callback;
+            if (kind != TypeFunction || value.kind != WIO_NATIVE_ABI_CALLBACK || value.typeId != expected ||
+                value.flags != WIO_NATIVE_ABI_VALUE_OWNED || !callback.userdata || !callback.ops ||
+                callback.ops->abiVersion != WIO_NATIVE_ABI_VERSION || !callback.ops->retain || !callback.ops->release ||
+                !callback.ops->invoke ||
+                (callback.ops->flags & ~(WIO_NATIVE_ABI_CALLBACK_ANY_THREAD | WIO_NATIVE_ABI_CALLBACK_CALLER_THREAD)) ||
+                value.owner.state || value.owner.ops)
+                return {{}, "native callable requires an owning callback with the exact signature identity"};
+            std::uint8_t ignored = 0;
+            if (!callbackValueMarshalling(module, type, ignored, layouts))
+                return {{}, "native callable signature is not qualified"};
+            return {Value::nativeCallable(type, expected, callback), {}};
+        }
         case 6:
         case 8:
         {
@@ -630,7 +657,7 @@ namespace wio::vm::detail
             kind == TypeNamed &&
             (module.types[type].nominalKind == NominalObject || module.types[type].nominalKind == NominalInterface) &&
             layouts && layouts->objectContracts.contains(type);
-        if (isNullable(module, declaredType) && !hostedObject)
+        if (isNullable(module, declaredType) && !hostedObject && kind != TypeFunction)
             return false;
         if (hostedObject)
             marshalling = 6;
@@ -642,6 +669,23 @@ namespace wio::vm::detail
             marshalling = 2;
         else if (kind == TypeText)
             marshalling = 3;
+        else if (kind == TypeFunction)
+        {
+            // Type tables are verified acyclic. Also bound qualification so a
+            // malicious manual registry cannot recurse through an arbitrary ABI.
+            thread_local unsigned nesting = 0;
+            if (nesting >= 64 || module.types[type].arguments.empty())
+                return false;
+            ++nesting;
+            const auto& signature = module.types[type].arguments;
+            bool qualified = callbackResultMarshalling(module, signature.back(), marshalling, layouts);
+            for (std::size_t index = 0; qualified && index + 1 < signature.size(); ++index)
+                qualified = callbackArgumentMarshalling(module, signature[index], marshalling, layouts);
+            --nesting;
+            if (!qualified)
+                return false;
+            marshalling = 7;
+        }
         else if (kind == TypeNamed && module.types[type].nominalRepresentation == RepresentationNativePod && layouts &&
                  layouts->types.contains(type))
             marshalling = 4;
@@ -654,18 +698,35 @@ namespace wio::vm::detail
         return true;
     }
 
+    std::uint32_t callbackReferenceType(const bytecode::Module& module, std::uint32_t type) noexcept
+    {
+        if (type < module.types.size() && module.types[type].kind == TypeNullable &&
+            module.types[type].arguments.size() == 1)
+            type = module.types[type].arguments.front();
+        return type < module.types.size() && module.types[type].kind == TypeReference ? type : bytecode::InvalidIndex;
+    }
+
     bool callbackArgumentMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                      std::uint8_t& marshalling, const NativePodLayouts* layouts) noexcept
     {
         if (declaredType >= module.types.size())
             return false;
-        if (module.types[declaredType].kind != TypeReference)
-            return callbackValueMarshalling(module, declaredType, marshalling, layouts);
-        const auto& type = module.types[declaredType];
+        const auto reference = callbackReferenceType(module, declaredType);
+        if (reference == bytecode::InvalidIndex)
+            return callbackValueMarshalling(module, declaredType, marshalling, layouts) && marshalling != 0;
+        const auto& type = module.types[reference];
         if (type.arguments.size() != 1 ||
             !callbackValueMarshalling(module, type.arguments.front(), marshalling, layouts))
             return false;
-        return (marshalling >= 1 && marshalling <= 4) || marshalling == 6 || marshalling == 8;
+        return (marshalling >= 1 && marshalling <= 4) || marshalling == 6 || marshalling == 7 || marshalling == 8;
+    }
+
+    bool callbackResultMarshalling(const bytecode::Module& module, std::uint32_t type, std::uint8_t& marshalling,
+                                   const NativePodLayouts* layouts) noexcept
+    {
+        return callbackReferenceType(module, type) != bytecode::InvalidIndex
+                   ? callbackArgumentMarshalling(module, type, marshalling, layouts)
+                   : callbackValueMarshalling(module, type, marshalling, layouts);
     }
 
     bool nativeValueMarshalling(const bytecode::Module& module, const std::uint32_t declaredType,
