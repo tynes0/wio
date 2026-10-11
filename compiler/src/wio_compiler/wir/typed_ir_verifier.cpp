@@ -1370,11 +1370,12 @@ namespace wio::wir::typed
                     {
                         const Type* resultType = module.types.tryGet(instruction.resultType);
                         if (instruction.operands.size() != 1 || !resultType || resultType->kind != TypeKind::Any ||
-                            instruction.targetType != valueType(instruction.operands.front()) ||
+                            !isAnyPayloadTypeCompatible(module.types, valueType(instruction.operands.front()),
+                                                        instruction.targetType) ||
                             instruction.signatureTypes != std::vector<TypeId>{instruction.targetType})
                         {
                             report("WIR1461",
-                                   "Typed WIR any box requires one operand and preserves its concrete source type.",
+                                   "Typed WIR any box requires one operand and its materialized payload type.",
                                    instruction.source, function.id, block.id);
                         }
                     }

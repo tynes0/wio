@@ -5759,24 +5759,7 @@ namespace wio::wir::typed
 
             if (destination && destination->kind == TypeKind::Any)
             {
-                if (source && source->kind == TypeKind::Array && source->staticExtent && expression->is<ArrayLiteral>())
-                {
-                    Type dynamicArray = *source;
-                    dynamicArray.staticExtent.reset();
-                    dynamicArray.extentParameter = {};
-                    sourceType = result_.module_.types.intern(std::move(dynamicArray));
-                    source = result_.module_.types.tryGet(sourceType);
-                    for (auto instruction = currentBlock(state).instructions.rbegin();
-                         instruction != currentBlock(state).instructions.rend(); ++instruction)
-                    {
-                        if (instruction->result == value)
-                        {
-                            instruction->resultType = sourceType;
-                            break;
-                        }
-                    }
-                    rememberOwnership(state, value, ownershipForType(sourceType));
-                }
+                const TypeId payloadType = canonicalAnyPayloadType(result_.module_.types, sourceType);
                 value = ensureOwned(value, sourceType, expression.Get(), state);
                 const ValueId boxed{state.nextValue++};
                 currentBlock(state).instructions.push_back(
@@ -5784,8 +5767,8 @@ namespace wio::wir::typed
                                 .result = boxed,
                                 .resultType = destinationType,
                                 .operands = {value},
-                                .signatureTypes = {sourceType},
-                                .targetType = sourceType,
+                                .signatureTypes = {payloadType},
+                                .targetType = payloadType,
                                 .resultOwnership = ValueOwnership::Owned,
                                 .source = SourceSpan::at(expression->location())});
                 rememberOwnership(state, boxed, ValueOwnership::Owned);

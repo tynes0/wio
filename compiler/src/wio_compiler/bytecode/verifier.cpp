@@ -1,11 +1,45 @@
 #include "wio/bytecode/verifier.h"
 
 #include <algorithm>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
 
 namespace wio::bytecode
 {
+    namespace
+    {
+        bool compatibleAnyPayload(const Module& module, const std::uint32_t source, const std::uint32_t payload,
+                                  const unsigned depth = 0)
+        {
+            if (source >= module.types.size() || payload >= module.types.size())
+                return false;
+            if (source == payload)
+                return true;
+            const Type& from = module.types[source];
+            const Type& to = module.types[payload];
+            if (depth >= 64 || (from.kind != 31 && from.kind != 32) || from.kind != to.kind ||
+                from.arguments.size() != to.arguments.size())
+                return false;
+            Type expected = from;
+            if (from.kind == 31 && from.name < module.strings.size() && module.strings[from.name] == "literal")
+            {
+                if (to.name >= module.strings.size() || !module.strings[to.name].empty())
+                    return false;
+                expected.name = to.name;
+                expected.staticExtent = std::numeric_limits<std::uint64_t>::max();
+                expected.extentParameter = InvalidIndex;
+            }
+            expected.arguments = to.arguments;
+            if (expected != to)
+                return false;
+            for (std::size_t index = 0; index < from.arguments.size(); ++index)
+                if (!compatibleAnyPayload(module, from.arguments[index], to.arguments[index], depth + 1))
+                    return false;
+            return true;
+        }
+    } // namespace
+
     VerificationResult Verifier::verify(const Module& module) const
     {
         VerificationResult result;
@@ -483,10 +517,11 @@ namespace wio::bytecode
                         const bool valid =
                             instruction.operands.size() == 1 && instruction.resultType < module.types.size() &&
                             module.types[instruction.resultType].kind == 19 &&
-                            instruction.targetType == valueType(instruction.operands.front()) &&
+                            compatibleAnyPayload(module, valueType(instruction.operands.front()),
+                                                 instruction.targetType) &&
                             instruction.signatureTypes == std::vector<std::uint32_t>{instruction.targetType};
                         if (!valid)
-                            report("WBC1065", "Any box does not preserve its concrete source type", function.id,
+                            report("WBC1065", "Any box does not preserve its materialized payload type", function.id,
                                    block.id, instructionIndex);
                     }
                     else if (instruction.opcode == Opcode::AnyCheckedCast || instruction.opcode == Opcode::AnyTypeTest)

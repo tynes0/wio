@@ -481,4 +481,8 @@ namespace wio::wir
     [[nodiscard]] std::string_view nativeThunkKindName(NativeThunkKind kind);
     [[nodiscard]] std::string_view nativeReceiverKindName(NativeReceiverKind receiver);
     [[nodiscard]] bool requiresCleanup(const Type& type);
+    // Literal extents describe inference, not a fixed-size runtime value.
+    // Any stores the materialized container identity without changing SSA types.
+    [[nodiscard]] TypeId canonicalAnyPayloadType(TypeTable& types, TypeId source);
+    [[nodiscard]] bool isAnyPayloadTypeCompatible(const TypeTable& types, TypeId source, TypeId payload);
 } // namespace wio::wir

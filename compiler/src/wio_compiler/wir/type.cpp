@@ -573,4 +573,63 @@ namespace wio::wir
     {
         return type.cleanup != CleanupKind::None;
     }
+
+    namespace
+    {
+        TypeId canonicalAnyPayload(TypeTable& types, const TypeId source, const unsigned depth)
+        {
+            const Type* original = types.tryGet(source);
+            if (!original || depth >= 64 ||
+                (original->kind != TypeKind::Array && original->kind != TypeKind::Dictionary))
+                return source;
+            Type materialized = *original;
+            if (materialized.kind == TypeKind::Array && materialized.name == "literal")
+            {
+                materialized.name.clear();
+                materialized.staticExtent.reset();
+                materialized.extentParameter = {};
+            }
+            for (TypeId& argument : materialized.arguments)
+                argument = canonicalAnyPayload(types, argument, depth + 1);
+            return types.intern(std::move(materialized));
+        }
+
+        bool compatibleAnyPayload(const TypeTable& types, const TypeId source, const TypeId payload,
+                                  const unsigned depth)
+        {
+            const Type* from = types.tryGet(source);
+            const Type* to = types.tryGet(payload);
+            if (!from || !to)
+                return false;
+            if (source == payload)
+                return true;
+            if (depth >= 64 || (from->kind != TypeKind::Array && from->kind != TypeKind::Dictionary) ||
+                from->kind != to->kind || from->arguments.size() != to->arguments.size())
+                return false;
+            Type expected = *from;
+            if (expected.kind == TypeKind::Array && expected.name == "literal")
+            {
+                expected.name.clear();
+                expected.staticExtent.reset();
+                expected.extentParameter = {};
+            }
+            expected.arguments = to->arguments;
+            if (expected != *to)
+                return false;
+            for (std::size_t index = 0; index < from->arguments.size(); ++index)
+                if (!compatibleAnyPayload(types, from->arguments[index], to->arguments[index], depth + 1))
+                    return false;
+            return true;
+        }
+    } // namespace
+
+    TypeId canonicalAnyPayloadType(TypeTable& types, const TypeId source)
+    {
+        return canonicalAnyPayload(types, source, 0);
+    }
+
+    bool isAnyPayloadTypeCompatible(const TypeTable& types, const TypeId source, const TypeId payload)
+    {
+        return compatibleAnyPayload(types, source, payload, 0);
+    }
 } // namespace wio::wir

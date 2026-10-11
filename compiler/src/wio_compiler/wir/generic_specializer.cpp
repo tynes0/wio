@@ -1362,6 +1362,11 @@ namespace wio::wir
                         }
                         for (TypeId& type : instruction.signatureTypes)
                             type = replace(type);
+                        if (instruction.opcode == Opcode::AnyBox)
+                        {
+                            instruction.targetType = canonicalAnyPayloadType(module_.types, instruction.targetType);
+                            instruction.signatureTypes = {instruction.targetType};
+                        }
                         std::vector<TypeId> genericArguments;
                         for (const TypeId argument : instruction.genericArguments)
                         {

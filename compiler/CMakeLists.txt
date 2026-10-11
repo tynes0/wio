@@ -337,6 +337,13 @@ if(BUILD_TESTING)
         WIO_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
     add_test(NAME wio_wir_native_bridge_plan COMMAND wio_wir_native_bridge_plan_test)
     set_tests_properties(wio_wir_native_bridge_plan PROPERTIES LABELS "wir;cpp;native;pruning;release-gate")
+    add_executable(wio_wir_any_array_identity_test
+        "${CMAKE_SOURCE_DIR}/tests/wir_any_array_identity_test.cpp")
+    target_link_libraries(wio_wir_any_array_identity_test PRIVATE wio_compiler)
+    target_compile_definitions(wio_wir_any_array_identity_test PRIVATE
+        WIO_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    add_test(NAME wio_wir_any_array_identity COMMAND wio_wir_any_array_identity_test)
+    set_tests_properties(wio_wir_any_array_identity PROPERTIES LABELS "wir;bytecode;native;any;array;generic;release-gate")
     target_link_libraries(wio_wir_cpp_backend_test PRIVATE wio_compiler)
     target_compile_definitions(wio_wir_cpp_backend_test PRIVATE
         WIO_TEST_CXX_COMPILER="${WIO_BACKEND_CXX_COMPILER_CPP}"

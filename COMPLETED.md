@@ -1959,7 +1959,27 @@ here as historical evidence rather than active work:
       on the final run (0.42 plan, 22.40 differential, 4.64 project). Rebuilt the
       self-hosted CLI companion for the updated project invocation. No old
       suite or local Linux qualification is claimed.
-- [ ] General native task parameters, VM artifact packaging and unrestricted
-      inferred literal-array Any identity remain separate. The Any ambiguity
-      was exposed on both full/pruned producers and is explicitly tracked.
+- [ ] General native task parameters and VM artifact packaging remain separate.
+      The inferred literal-array Any ambiguity exposed here is fixed below.
       Final include/PCH/sharding/runtime cost work remains Backend item 9.
+
+## Canonical Any array payload identity
+
+- [x] Materialize compiler-internal literal-array shapes at AnyBox, recursively
+      through array/dictionary children and after generic specialization. Keep
+      source SSA types intact; declared fixed extents, nominal identities and
+      callable signatures remain distinct. No ABI/bytecode version or intrusive
+      Any cell layout change is needed.
+- [x] Typed WIR, Lowered WIR and bytecode verifiers permit only that precise
+      materialization, rejecting fixed-array and element-type identity forgery.
+- [x] Added new unit and native/full-VM/pruned-VM differential gates for inferred,
+      direct, nested, generic and declared fixed array payloads, independent
+      copies, native generic echo and identical full/pruned bytecode.
+- [x] Only the two new Windows gates were run: the final run passed 2/2 in
+      25.09 seconds (0.68 unit, 23.81 differential). No old suite or local Linux
+      qualification is claimed. Modified C++ ranges and new C++ files follow
+      the repository clang-format configuration.
+- [ ] Direct inferred-array arguments in generic Box/Echo probes expose a
+      separate WIR1422 conversion failure; explicit dynamic-array arguments
+      pass. Unconstrained T-to-Any boxing remains unsupported by semantic
+      analysis. These are not hidden by relaxing numeric verification.

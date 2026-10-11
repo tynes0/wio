@@ -3349,9 +3349,28 @@ requires at least 25% reduction. This is a source-size measurement, not a
 runtime speedup or universal compile-time claim. Header capability pruning,
 PCH/sharding and executable/runtime cost budgets remain Backend item 9 work.
 
-One existing Any limitation was exposed during qualification: an inferred
-array literal payload and an explicit dynamic-array cast can introduce two
-different Wio identities with the same erased C++ storage. Both full and pruned
-producers reject the ambiguous return instead of guessing an identity. The
-qualified array probe uses an explicit `i32[]` payload. Canonical literal-array
-Any identity needs a separate fix before claiming unrestricted Any parity.
+The inferred literal-array Any ambiguity exposed by that qualification is now
+fixed at the canonical WIR boundary, without changing the runtime Any cell,
+intrusive ownership protocol or serialized ABI format. `AnyBox.targetType`
+and its signature describe the materialized payload; its operand keeps its
+original SSA type. Only compiler-internal literal array extents are erased.
+Nested array/dictionary children are normalized recursively; explicit static
+array extents, nominal types and callable signatures are not erased. Generic
+specialization applies the same rule after substituting concrete arguments.
+
+The new `wio_wir_any_array_identity` and `wio_vm_native_any_array_identity`
+gates cover inferred/direct/nested array boxing, generic array boxing, a
+qualified native generic echo, fixed-vs-dynamic Any identity, independent
+container copies, and forged Typed WIR/Lowered WIR/bytecode payload metadata.
+The differential gate compares C++, full VM and pruned VM output and verifies
+identical full/pruned bytecode. Only these two new Windows tests are run;
+the final run passed 2/2 in 25.09 seconds (0.68 unit, 23.81 differential).
+No full-suite or local Linux qualification is claimed.
+
+This is not unrestricted generic conversion qualification. An unconstrained
+`T -> any` return remains rejected by semantic analysis. Passing inferred
+literal arrays directly through the generic `Box<T>(T[])`/native `Echo<T>`
+probe exposed a separate `WIR1422` conversion failure; explicit dynamic-array
+arguments pass. That inferred-argument conversion needs separate investigation,
+rather than accepting malformed numeric conversion metadata. General native
+task-parameter/std helper parity and VM artifact packaging also remain open.

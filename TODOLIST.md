@@ -1140,10 +1140,14 @@ Rider, and CLion are defined in
    The full bytecode and stable identities remain unchanged; project VM builds
    use the new opt-in compiler mode automatically. Final header/PCH/sharding
    cost work stays in Backend item 9. General task-parameter/std task helper
-   parity, canonical Any identity for inferred literal-array payloads versus
-   explicit dynamic-array casts, and VM host/executable/shared/static artifact
-   packaging remain. The Any ambiguity was reproduced in both full and pruned
-   producers; it is not introduced by selection. See
+   parity and VM host/executable/shared/static artifact packaging remain.
+   Canonical Any identity for inferred/direct/nested literal arrays is now
+   normalized at boxing, including generic substitution, without erasing
+   explicit fixed-size array identities or changing the ABI. The two new gates
+   qualify C++/full-VM/pruned-VM parity and reject forged payload metadata.
+   Direct inferred-array arguments in generic Box/Echo calls separately expose
+   WIR1422 conversion failures; dynamic-array arguments qualify. Unconstrained
+   T-to-Any boxing remains semantically unsupported. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.
 
 9. [ ] Close generated-native cost and build scalability before v1.
