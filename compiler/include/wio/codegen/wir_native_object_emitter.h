@@ -17,7 +17,8 @@ namespace wio::codegen
         // (or void results), plus
         // ref/view object (including nullable) parameters with alias-preserving
         // handle copy-back. Borrowed results require caller-rooted provenance.
-        [[nodiscard]] static std::set<wir::TypeId> eligibleTypes(const wir::lowered::Module& module);
+        [[nodiscard]] static std::set<wir::TypeId> eligibleTypes(const wir::lowered::Module& module,
+                                                                 std::span<const wir::TypeId> dynamicPayloadTypes = {});
         // Ancestors also need virtual native wrappers and hosted lifecycle
         // suppression, but do not necessarily need materialization adapters.
         [[nodiscard]] static std::set<wir::TypeId> hostedHierarchyTypes(const wir::lowered::Module& module,

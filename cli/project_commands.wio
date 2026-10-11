@@ -160,6 +160,7 @@ realm SelfHostedProject {
             compileArgs.Push(cppBackend);
         }
         if (backend == "vm") {
+            compileArgs.Push("--native-bridge-only");
             compileArgs.Push("--bytecode-sidecar");
             compileArgs.Push(info.vmBytecodeOutput);
         }

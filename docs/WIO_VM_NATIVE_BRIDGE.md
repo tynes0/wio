@@ -169,10 +169,11 @@ is only for dynamic modules exporting the Wio wire registry.
 
 This slice deliberately requires `wio.target = "exe"` and
 `host.enabled = false`. Hybrid SDK hosts and VM executable/shared/static
-packaging are separate artifact work. The generated bridge currently uses the
-canonical C++ backend for the full program with main emission disabled; it is
-not yet a native-only pruned translation unit, so a cold VM project build still
-incurs native C++ compilation. Incremental runs reuse both outputs.
+packaging are separate artifact work. VM project commands now request a
+native-only dependency-selected translation unit; unrelated Wio program bodies
+are no longer compiled a second time as C++. A cold build still compiles the
+native bridge/runtime headers. Incremental runs reuse both outputs. See the
+native-only selection contract below.
 
 The internal runner protocol is
 `wio --vm-run-bytecode FILE [--native-library PATH]... -- [args...]`.
@@ -3291,8 +3292,9 @@ mixed-projection fixture exposed large unoptimized Typed-WIR expression frames
 on the default 1 MiB Windows stack. This is not an assertion that recursive
 lowering has been made stackless or that all nesting depths are accepted.
 
-Native Step 8 is still open for general task-parameter/std task helper parity,
-native-only bridge pruning and VM executable/shared/static artifact packaging.
+Native Step 8 is still open for general task-parameter/std task helper parity
+and VM executable/shared/static artifact packaging. Native-only dependency
+selection is described below; it is not the final generated-code cost pass.
 These packages do not claim full-suite or local Linux qualification.
 
 Local Windows qualification: only these seven new tests were run; 7/7 passed
@@ -3300,3 +3302,56 @@ in 47.09 seconds total (45.37 seconds for the differential/live-host gate).
 The host also forges consumed reference, nullable-reference, opaque and callable
 parameter metadata and verifies bytecode rejection (`WBC1074`). The older manual
 POD-alias unit was adapted to registered field access and built, but not rerun.
+
+## Native-only bridge dependency selection
+
+`project build/run --backend vm` now adds `--native-bridge-only` when building
+the producer. The compiler-only option requires a compiled shared target with
+`--bytecode-sidecar`; executable targets, emit-only modes and dry runs are
+rejected. Existing sidecar callers without the new option retain the full
+producer behavior for compatibility.
+
+The full canonical module is serialized as bytecode first. `WirNativeBridgePlan`
+then creates a separate C++ emission view with the same module, function,
+global, nominal and ABI identities. Removed type slots are private void
+tombstones in that view, never in the serialized program. The selected view
+is verified again: selection must not leave dangling calls/layout contracts.
+When input verification is enabled, malformed VM-only input cannot be hidden
+by pruning.
+
+Selection preserves concrete native registry bindings, qualified physical POD
+layout descriptors and hosted object hierarchies conservatively. It follows
+method/constructor/destructor/field-initializer dispatch, callees, closure and
+function-reference targets, generic origins/specializations, referenced globals
+and initializers, coroutine layouts, reflection and attribute processors.
+Ordinary Entry/application/export dispatch stays in the VM, rather than rooting
+the C++ program. If a retained C++ body really depends on application storage,
+its complete lifecycle/schedule contract is retained conservatively.
+
+Native Any payload discovery examines the full VM program before selection and
+passes explicit payload roots to object/container/callback adapter emission.
+That discovery does not retain the VM callback or Entry body as C++. VM-only
+Any boxes do not root C++ code when there is no native Any boundary. Task and
+completion sidecars remain available for native async results.
+
+The three focused gates cover deterministic sparse identities, invalid options
+and invalid original input, no-native programs, hosted C++-constructed objects,
+destruction, method/global dependencies, scalar/captured callbacks, POD and
+generic POD, Any arrays and objects with callable methods, native task results,
+identical full/pruned bytecode, C++/full-VM/pruned-VM parity and incremental
+project build/run. Only these new tests are run for this change.
+The final local Windows run passed 3/3 in 27.64 seconds; the self-hosted CLI
+companion was rebuilt. No existing full suite or local Linux run is claimed.
+
+The synthetic 128-dead-function size probe selects 21 of 154 functions and
+reduces generated C++ from 167,393 to 81,462 bytes (51.3%). Its regression gate
+requires at least 25% reduction. This is a source-size measurement, not a
+runtime speedup or universal compile-time claim. Header capability pruning,
+PCH/sharding and executable/runtime cost budgets remain Backend item 9 work.
+
+One existing Any limitation was exposed during qualification: an inferred
+array literal payload and an explicit dynamic-array cast can introduce two
+different Wio identities with the same erased C++ storage. Both full and pruned
+producers reject the ambiguous return instead of guessing an identity. The
+qualified array probe uses an explicit `i32[]` payload. Canonical literal-array
+Any identity needs a separate fix before claiming unrestricted Any parity.

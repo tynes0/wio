@@ -1927,10 +1927,39 @@ here as historical evidence rather than active work:
 - [x] Increased Windows compiler stack reservation to demand-backed 16 MiB after
       the deep mixed-projection fixture exposed large unoptimized lowering
       frames on the default 1 MiB stack. No stackless-lowering claim is made.
-- [ ] General native task-parameter/std helper parity, native-only pruning and
-      VM executable/shared/static packaging remain outside these two packages.
+- [ ] General native task-parameter/std helper parity and VM executable/shared/
+      static packaging remain outside these two packages. The later native-only
+      dependency selection slice is recorded below.
 - [x] Only the seven new Windows tests were run: 7/7 passed in 47.09 seconds
       total (45.37 for differential/live-host qualification). Forged consumed
       reference/nullable-reference/opaque/callable bytecode also rejects.
       The older manual POD-alias fixture was updated for registered field access
       and built, not rerun. No full-suite or local Linux qualification is claimed.
+
+## Native-only bridge dependency selection
+
+- [x] Added an independent verified C++ emission view of Lowered WIR. Bytecode
+      remains the full original program; stable module/function/global/type/ABI
+      identities are not renumbered. A sparse dependency closure retains native
+      bindings, POD descriptors, hosted hierarchies, lifecycle, method dispatch,
+      callables, generic dependencies, globals, reflection and processors.
+- [x] Separated full-program dynamic Any discovery from C++ function selection.
+      Native payload/object/container/callback codecs remain available without
+      retaining VM Entry or callback bodies. VM-only Any boxes do not become
+      bridge roots without a native Any boundary.
+- [x] Added compiler `--native-bridge-only` with strict shared/sidecar validation;
+      VM project commands select it automatically. Ordinary sidecar and SDK
+      producer behavior remains unchanged without the flag.
+- [x] Added focused plan/size, native/full-VM/pruned-VM differential and project
+      incremental gates. The synthetic size probe selects 21/154 functions and
+      emits 81,462 rather than 167,393 bytes (51.3% smaller); a 25% minimum
+      reduction budget is enforced. No runtime or universal build-time gain
+      is inferred from this source-size measurement.
+- [x] Only the three new Windows gates were run: 3/3 passed in 27.64 seconds
+      on the final run (0.42 plan, 22.40 differential, 4.64 project). Rebuilt the
+      self-hosted CLI companion for the updated project invocation. No old
+      suite or local Linux qualification is claimed.
+- [ ] General native task parameters, VM artifact packaging and unrestricted
+      inferred literal-array Any identity remain separate. The Any ambiguity
+      was exposed on both full/pruned producers and is explicitly tracked.
+      Final include/PCH/sharding/runtime cost work remains Backend item 9.

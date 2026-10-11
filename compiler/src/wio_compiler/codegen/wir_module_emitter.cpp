@@ -245,7 +245,8 @@ namespace wio::codegen
         return result + ">";
     }
 
-    std::string WirModuleEmitter::emitCallableCodecs(const wir::lowered::Module& module, const TypeSpelling& cpp)
+    std::string WirModuleEmitter::emitCallableCodecs(const wir::lowered::Module& module, const TypeSpelling& cpp,
+                                                     const std::span<const wir::TypeId> dynamicPayloadTypes)
     {
         using namespace wir;
         std::set<TypeId> visited;
@@ -276,7 +277,7 @@ namespace wio::codegen
                 for (const auto& argument : function.nativeBinding->parameters)
                     collect(collect, argument.type);
             }
-        for (const auto owner : WirNativeObjectEmitter::eligibleTypes(module))
+        for (const auto owner : WirNativeObjectEmitter::eligibleTypes(module, dynamicPayloadTypes))
             for (const auto& function : module.functions)
                 if (function.isMethod && function.ownerType == owner)
                 {
@@ -309,7 +310,8 @@ namespace wio::codegen
     }
 
     std::string WirModuleEmitter::emit(const wir::lowered::Module& module, const TypeSpelling& type,
-                                       const bool nativeTaskSidecars)
+                                       const bool nativeTaskSidecars,
+                                       const std::span<const wir::TypeId> dynamicPayloadTypes)
     {
         std::ostringstream out;
         std::map<FunctionId, const lowered::Function*> functions;
@@ -351,7 +353,7 @@ namespace wio::codegen
         out << "#if defined(_WIN32)\n#define WIO_WIR_EXPORT __declspec(dllexport)\n#else\n#define WIO_WIR_EXPORT "
                "__attribute__((visibility(\"default\")))\n#endif\n";
         out << WirNativePodEmitter::emitProjectionAccess(module, type);
-        out << WirNativeContainerEmitter::emit(module, type);
+        out << WirNativeContainerEmitter::emit(module, type, dynamicPayloadTypes);
         const auto thunk = [&](const lowered::Function& f, const std::string& name)
         {
             out << "static WioNativeAbiStatus " << name

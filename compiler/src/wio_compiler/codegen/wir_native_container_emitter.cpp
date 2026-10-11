@@ -98,7 +98,8 @@ namespace wio::codegen
     } // namespace
 
     std::string WirNativeContainerEmitter::emit(const wir::lowered::Module& module,
-                                                const WirModuleEmitter::TypeSpelling& cpp)
+                                                const WirModuleEmitter::TypeSpelling& cpp,
+                                                const std::span<const wir::TypeId> dynamicPayloadTypes)
     {
         using namespace wir;
         std::set<TypeId> podTypes;
@@ -109,7 +110,7 @@ namespace wio::codegen
         {
             if (!objectsCollected)
             {
-                const auto objects = WirNativeObjectEmitter::eligibleTypes(module);
+                const auto objects = WirNativeObjectEmitter::eligibleTypes(module, dynamicPayloadTypes);
                 objectContracts = WirNativeObjectEmitter::hostedHierarchyTypes(module, objects);
                 objectsCollected = true;
             }
@@ -204,7 +205,7 @@ namespace wio::codegen
         }
         // Every hosted method signature is a native boundary, including Box<T>
         // payloads not mentioned by a free native function.
-        const auto hosted = WirNativeObjectEmitter::eligibleTypes(module);
+        const auto hosted = WirNativeObjectEmitter::eligibleTypes(module, dynamicPayloadTypes);
         for (const auto& function : module.functions)
             if (function.isMethod && hosted.contains(function.ownerType))
             {
@@ -214,6 +215,21 @@ namespace wio::codegen
             }
         if (anyType.isValid())
         {
+            for (auto payload : dynamicPayloadTypes)
+            {
+                const auto* type = module.types.tryGet(payload);
+                if (type && type->kind == TypeKind::Nullable && type->arguments.size() == 1)
+                {
+                    payload = type->arguments.front();
+                    if (module.types.get(payload).kind != TypeKind::Opaque && !hostedObject(payload))
+                        continue;
+                }
+                if (supported(supported, payload, 0))
+                {
+                    anyPayloads.insert(payload);
+                    collect(collect, payload, 0);
+                }
+            }
             // Native producers can explicitly box an Any even if no Wio
             // AnyBox instruction mentions it. Keep the outer cell distinct
             // from its inner cell; copying Any must never flatten that layer.

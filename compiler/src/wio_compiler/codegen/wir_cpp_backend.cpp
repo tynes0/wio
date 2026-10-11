@@ -1,6 +1,7 @@
 #include "wio/codegen/wir_cpp_backend.h"
 #include "wio/codegen/wir_intrinsics.h"
 #include "wio/codegen/wir_module_emitter.h"
+#include "wio/codegen/wir_native_bridge_plan.h"
 #include "wio/codegen/wir_native_object_emitter.h"
 #include "wio/codegen/wir_reflection_emitter.h"
 
@@ -183,8 +184,9 @@ namespace wio::codegen
         class Emitter final
         {
         public:
-            Emitter(const lowered::Module& module, WirCppGenerationResult& result, const WirCppBackendOptions& options)
-                : module_(module), result_(result), options_(options)
+            Emitter(const lowered::Module& module, WirCppGenerationResult& result, const WirCppBackendOptions& options,
+                    const std::span<const TypeId> dynamicPayloadTypes = {})
+                : module_(module), result_(result), options_(options), dynamicPayloadTypes_(dynamicPayloadTypes)
             {
                 functions_.reserve(module.functions.size());
                 for (const lowered::Function& function : module.functions)
@@ -261,7 +263,7 @@ namespace wio::codegen
                 }
                 {
                     common::profiling::Scope scope("Backend.Cpp.EmitNominals");
-                    nativeProxyTypes_ = WirNativeObjectEmitter::eligibleTypes(module_);
+                    nativeProxyTypes_ = WirNativeObjectEmitter::eligibleTypes(module_, dynamicPayloadTypes_);
                     nativeProxyHierarchyTypes_ =
                         WirNativeObjectEmitter::hostedHierarchyTypes(module_, nativeProxyTypes_);
                     emitNominalDeclarations();
@@ -273,7 +275,8 @@ namespace wio::codegen
                 cppTypeCacheEnabled_ = true;
                 output_ << WirNativeObjectEmitter::emitCodecs(module_, nativeProxyTypes_,
                                                               [this](TypeId id) { return cppType(id); });
-                output_ << WirModuleEmitter::emitCallableCodecs(module_, [this](TypeId id) { return cppType(id); });
+                output_ << WirModuleEmitter::emitCallableCodecs(
+                    module_, [this](TypeId id) { return cppType(id); }, dynamicPayloadTypes_);
                 {
                     common::profiling::Scope scope("Backend.Cpp.EmitReflection");
                     output_ << WirReflectionEmitter::traits(module_, [this](TypeId id) { return cppType(id); });
@@ -297,7 +300,8 @@ namespace wio::codegen
                 {
                     common::profiling::Scope scope("Backend.Cpp.EmitModule");
                     output_ << WirModuleEmitter::emit(
-                        module_, [this](TypeId id) { return cppType(id); }, options_.emitNativeTaskSidecars);
+                        module_, [this](TypeId id) { return cppType(id); }, options_.emitNativeTaskSidecars,
+                        dynamicPayloadTypes_);
                     output_ << WirNativeObjectEmitter::emit(
                         module_, nativeProxyTypes_, [this](TypeId id) { return cppType(id); },
                         [this](const MethodLayout& method, const lowered::Function& implementation)
@@ -317,6 +321,7 @@ namespace wio::codegen
             const lowered::Module& module_;
             WirCppGenerationResult& result_;
             const WirCppBackendOptions& options_;
+            std::span<const TypeId> dynamicPayloadTypes_;
             CppOutputBuffer output_;
             std::unordered_map<std::uint32_t, const lowered::Function*> functions_;
             std::unordered_map<std::uint32_t, const lowered::Global*> globals_;
@@ -3668,6 +3673,38 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                                    const WirCppBackendOptions& options) const
     {
         WirCppGenerationResult result;
+        if (options.nativeBridgeOnly)
+        {
+            if (options.emitMain || !options.emitNativeTaskSidecars)
+            {
+                WirCppResultSink::addDiagnostic(
+                    result,
+                    {.code = "WCPP1220", .message = "native-only bridge requires no main and native task sidecars"});
+                return result;
+            }
+            if (options.verifyInput)
+            {
+                const auto verification = wir::lowered::Verifier{}.verify(module);
+                for (const auto& diagnostic : verification.diagnostics())
+                    WirCppResultSink::addDiagnostic(
+                        result, {.code = "WCPP1000",
+                                 .message = "invalid Lowered WIR: " + diagnostic.code + ": " + diagnostic.message,
+                                 .source = diagnostic.source,
+                                 .function = diagnostic.function,
+                                 .block = diagnostic.block});
+                if (!verification.succeeded())
+                    return result;
+            }
+            common::profiling::Scope scope("Backend.Cpp.NativeBridgePlan");
+            const auto plan = WirNativeBridgePlan::build(module);
+            scope.stop();
+            auto bridgeOptions = options;
+            // Verify the dependency closure even when the caller has already
+            // verified the original full program. Missing edges are errors.
+            bridgeOptions.verifyInput = true;
+            Emitter{plan.module, result, bridgeOptions, plan.dynamicPayloadTypes}.run();
+            return result;
+        }
         Emitter{module, result, options}.run();
         return result;
     }

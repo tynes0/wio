@@ -184,7 +184,8 @@ namespace wio::codegen
         }
     } // namespace
 
-    std::set<wir::TypeId> WirNativeObjectEmitter::eligibleTypes(const wir::lowered::Module& module)
+    std::set<wir::TypeId> WirNativeObjectEmitter::eligibleTypes(const wir::lowered::Module& module,
+                                                                const std::span<const wir::TypeId> dynamicPayloadTypes)
     {
         std::set<TypeId> candidates;
         std::set<TypeId> boundaries;
@@ -239,6 +240,9 @@ namespace wio::codegen
                         {
                             boundary(instruction.targetType);
                         }
+        if (anyBoundary)
+            for (const auto payload : dynamicPayloadTypes)
+                boundary(payload);
         // A Base/interface-only boundary still needs concrete descendant
         // adapters. Never materialize an abstract interface placeholder.
         if (boundaries.empty())

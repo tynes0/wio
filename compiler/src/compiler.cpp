@@ -588,10 +588,14 @@ namespace wio
             const bool emitsWir = emitTyped || emitLowered;
             const bool emitsIntermediate = emitsWir || emitBytecode;
             const bool hasIrOutput = !gAppData.argParser.GetValuesOf<std::string>("IR-OUTPUT").empty();
-            const bool hasBytecodeOutput =
-                !gAppData.argParser.GetValuesOf<std::string>("BYTECODE-OUTPUT").empty();
-            const bool hasBytecodeSidecar =
-                !gAppData.argParser.GetValuesOf<std::string>("BYTECODE-SIDECAR").empty();
+            const bool hasBytecodeOutput = !gAppData.argParser.GetValuesOf<std::string>("BYTECODE-OUTPUT").empty();
+            const bool hasBytecodeSidecar = !gAppData.argParser.GetValuesOf<std::string>("BYTECODE-SIDECAR").empty();
+            const auto bridgeOnlyFlags = gAppData.argParser.GetValuesOf<bool>("NATIVE-BRIDGE-ONLY");
+            if (!bridgeOnlyFlags.empty() && bridgeOnlyFlags.front() && !hasBytecodeSidecar)
+            {
+                WIO_LOG_FATAL("--native-bridge-only requires --bytecode-sidecar and --target shared.");
+                return false;
+            }
 
             if (static_cast<unsigned>(emitTyped) + static_cast<unsigned>(emitLowered) +
                     static_cast<unsigned>(emitBytecode) >
@@ -2841,6 +2845,10 @@ namespace wio
                      .AddAlias("--bytecode-sidecar")
                      .SetDescription(
                          "Emits a verified .wiob module beside a native thunk library from the same Lowered WIR."))
+            .Add(Argonaut::Argument("NATIVE-BRIDGE-ONLY")
+                     .AddAlias("--native-bridge-only")
+                     .Flag()
+                     .SetDescription("Emits only native bridge dependencies; requires --bytecode-sidecar."))
             .Add(Argonaut::Argument("PROFILE-COMPILER")
                      .AddAlias("--profile-compiler")
                      .SetDescription("Writes a Chrome/Perfetto compiler phase trace to the selected JSON file."))
@@ -3323,6 +3331,8 @@ namespace wio
                 codegen::WirCppBackendOptions backendOptions;
                 backendOptions.emitMain = gAppData.buildTarget == BuildTarget::Executable;
                 backendOptions.emitNativeTaskSidecars = emitsBytecodeSidecar;
+                const auto bridgeOnlyFlags = gAppData.argParser.GetValuesOf<bool>("NATIVE-BRIDGE-ONLY");
+                backendOptions.nativeBridgeOnly = !bridgeOnlyFlags.empty() && bridgeOnlyFlags.front();
                 backendOptions.verifyInput = false;
                 common::profiling::Scope backendScope("Backend.Cpp.Generate");
                 codegen::WirCppGenerationResult generation =

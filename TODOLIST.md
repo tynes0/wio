@@ -1135,8 +1135,15 @@ Rider, and CLion are defined in
    Exact callback cell aliases remain supported. Aggregate/descendant callback
    overlap is explicitly rejected before invocation; use one aggregate borrow.
    General native task-parameter/std task helper parity remains separate.
-   Native-only bridge pruning
-   and VM host/executable/shared/static artifact packaging also remain. See
+   Native-only dependency selection now removes unrelated Wio C++ bodies while
+   preserving registry/POD/hosted-object, task and dynamic Any adapter roots.
+   The full bytecode and stable identities remain unchanged; project VM builds
+   use the new opt-in compiler mode automatically. Final header/PCH/sharding
+   cost work stays in Backend item 9. General task-parameter/std task helper
+   parity, canonical Any identity for inferred literal-array payloads versus
+   explicit dynamic-array casts, and VM host/executable/shared/static artifact
+   packaging remain. The Any ambiguity was reproduced in both full and pruned
+   producers; it is not introduced by selection. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.
 
 9. [ ] Close generated-native cost and build scalability before v1.

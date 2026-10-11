@@ -8,6 +8,7 @@ namespace wio::codegen
     {
     public:
         [[nodiscard]] static std::string emit(const wir::lowered::Module& module,
-                                              const WirModuleEmitter::TypeSpelling& cpp);
+                                              const WirModuleEmitter::TypeSpelling& cpp,
+                                              std::span<const wir::TypeId> dynamicPayloadTypes = {});
     };
 } // namespace wio::codegen

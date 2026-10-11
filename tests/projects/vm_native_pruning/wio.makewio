@@ -1,0 +1,14 @@
+name = "VM Native Pruning"
+template = "native-console"
+
+[wio]
+entry = "wio/main.wio"
+target = "exe"
+sourceRoots = ["wio"]
+includeDirs = ["../../native"]
+
+[host]
+enabled = false
+
+[outputs]
+baseName = "vm_native_pruning"

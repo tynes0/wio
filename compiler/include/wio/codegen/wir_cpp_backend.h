@@ -34,6 +34,7 @@ namespace wio::codegen
         bool emitComments = false;
         bool verifyInput = true;
         bool emitNativeTaskSidecars = false;
+        bool nativeBridgeOnly = false;
     };
 
     class WirCppGenerationResult final

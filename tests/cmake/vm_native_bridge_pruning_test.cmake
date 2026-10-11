@@ -1,0 +1,53 @@
+foreach(required WIO_EXECUTABLE WIO_ROOT WIO_OUTPUT_DIR WIO_SHARED_SUFFIX)
+    if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
+        message(FATAL_ERROR "Native bridge pruning test requires ${required}")
+    endif()
+endforeach()
+file(MAKE_DIRECTORY "${WIO_OUTPUT_DIR}")
+set(source "${WIO_ROOT}/tests/vm_native_bridge_pruning.wio")
+set(native "${WIO_OUTPUT_DIR}/native${WIO_EXECUTABLE_SUFFIX}")
+foreach(mode IN ITEMS native full pruned)
+    set(options --target exe --output "${native}")
+    if(NOT mode STREQUAL "native")
+        file(MAKE_DIRECTORY "${WIO_OUTPUT_DIR}/${mode}")
+        # Same basename preserves module identity across the two producers.
+        set(options --target shared --output "${WIO_OUTPUT_DIR}/${mode}/bridge${WIO_SHARED_SUFFIX}"
+            --bytecode-sidecar "${WIO_OUTPUT_DIR}/${mode}/program.wiob")
+        if(mode STREQUAL "pruned")
+            list(APPEND options --native-bridge-only)
+        endif()
+    endif()
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
+        "${WIO_EXECUTABLE}" "${source}" --include-dir "${WIO_ROOT}/tests/native" ${options}
+        WORKING_DIRECTORY "${WIO_ROOT}"
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 180)
+    if(NOT "${result}" STREQUAL "0")
+        message(FATAL_ERROR "${mode} compilation failed (${result}):\n${output}\n${error}")
+    endif()
+endforeach()
+file(SHA256 "${WIO_OUTPUT_DIR}/full/program.wiob" full_hash)
+file(SHA256 "${WIO_OUTPUT_DIR}/pruned/program.wiob" pruned_hash)
+if(NOT full_hash STREQUAL pruned_hash)
+    message(FATAL_ERROR "Native pruning changed serialized bytecode")
+endif()
+execute_process(COMMAND "${native}" RESULT_VARIABLE result
+    OUTPUT_VARIABLE native_output ERROR_VARIABLE native_error TIMEOUT 30)
+if(NOT "${result}" STREQUAL "0" OR NOT native_output MATCHES "native-bridge-pruning-ok")
+    message(FATAL_ERROR "Native baseline failed (${result}): ${native_output}\n${native_error}")
+endif()
+foreach(mode IN ITEMS full pruned)
+    execute_process(COMMAND "${WIO_EXECUTABLE}" --vm-run-bytecode "${WIO_OUTPUT_DIR}/${mode}/program.wiob"
+        --native-library "${WIO_OUTPUT_DIR}/${mode}/bridge${WIO_SHARED_SUFFIX}"
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 30)
+    if(NOT "${result}" STREQUAL "0" OR NOT output STREQUAL native_output OR NOT error STREQUAL native_error)
+        message(FATAL_ERROR "${mode} VM parity failed (${result}): ${output}\n${error}\nC++: ${native_output}")
+    endif()
+endforeach()
+foreach(options IN ITEMS "--target;exe" "--target;shared" "--emit-bytecode")
+    execute_process(COMMAND "${WIO_EXECUTABLE}" "${source}" --native-bridge-only ${options}
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 20)
+    if("${result}" STREQUAL "0" OR NOT "${output}${error}" MATCHES "requires --bytecode-sidecar")
+        message(FATAL_ERROR "Invalid native-only mode was accepted: ${output}\n${error}")
+    endif()
+endforeach()
+message(STATUS "Pruned/full/native parity and identical bytecode passed")

@@ -1,0 +1,67 @@
+using cpp::header("vm_native_bridge_pruning_fixture.h");
+
+mut offset: i32 = 40;
+fn Helper(value: i32) -> i32 { return value + offset; }
+object Meter {
+    value: i32;
+    public OnConstruct(value: i32) { self.value = value; }
+    OnDestruct() { Close(); }
+    public fn Read() -> i32 { return Helper(self.value); }
+}
+object Payload {
+    seed: i32;
+    public OnConstruct(seed: i32) { self.seed = seed; }
+    public fn Callback() -> fn(i32) -> i32 {
+        let seed = self.seed;
+        return (value: i32) => seed + value;
+    }
+}
+component UnusedComponent { public dead: string; }
+object UnusedObject {
+    public fn Marker() -> string { return "DEAD_OBJECT_BODY_MUST_NOT_BE_CPP"; }
+}
+fn UnusedBody() -> string { return "DEAD_FREE_BODY_MUST_NOT_BE_CPP"; }
+fn VmCallback(value: i32) -> i32 { return value + 6; }
+
+[Native, CppName(vm_bridge_pruning::Point)]
+component Point { public x: i32; public y: i32; }
+[Native, CppName(vm_bridge_pruning::Cell)]
+component Cell<T> { public value: T; }
+[Native, CppName(vm_bridge_pruning::Make), Instantiate(Meter)]
+fn Make<T>(value: i32) -> T;
+[Native, CppName(vm_bridge_pruning::Read), Instantiate(Meter)]
+fn Read<T>(value: T) -> i32;
+[Native, CppName(vm_bridge_pruning::Close)] fn Close();
+[Native, CppName(vm_bridge_pruning::Closed)] fn Closed() -> i32;
+[Native, CppName(vm_bridge_pruning::Adjust)] fn Adjust(point: Point) -> Point;
+[Native, CppName(vm_bridge_pruning::Echo), Instantiate(i32)] fn Echo<T>(value: Cell<T>) -> Cell<T>;
+[Native, CppName(vm_bridge_pruning::Callback)] fn Callback(callback: fn(i32) -> i32) -> i32;
+[Native, CppName(vm_bridge_pruning::Identity)] fn Identity(value: any) -> any;
+[Native, CppName(vm_bridge_pruning::Delayed)] async fn Delayed() -> i32;
+[Native, CppName(vm_bridge_pruning::Print)] fn Print(message: string);
+
+async fn Entry() -> i32 {
+    // This marker must survive in bytecode, never in the pruned C++ bridge.
+    let marker = "ENTRY_VM_ONLY_MARKER";
+    if (Callback(VmCallback) != 17) { return 1; }
+    let bias = 9;
+    if (Callback((value: i32) => value + bias) != 20) { return 2; }
+    let point = Adjust(Point(2, 4));
+    if (point.x != 5 or point.y != 9) { return 3; }
+    if (Echo<i32>(Cell<i32>(13)).value != 13) { return 4; }
+    let values: i32[] = [3, 5, 7];
+    let payload: any = values;
+    let restored = Identity(payload) fit i32[];
+    if (restored[2] != 7) { return 5; }
+    let boxedObject: any = Payload(19);
+    let restoredObject = Identity(boxedObject) fit Payload;
+    if (restoredObject.Callback()(4) != 23) { return 9; }
+    {
+        let meter = Make<Meter>(7);
+        if (Read<Meter>(meter) != 47) { return 6; }
+    }
+    if (Closed() != 1) { return 7; }
+    if (await Delayed() != 23) { return 8; }
+    Print("native-bridge-pruning-ok");
+    return 0;
+}
