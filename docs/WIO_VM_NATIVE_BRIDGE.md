@@ -2783,6 +2783,67 @@ types, so method dispatch kind must survive type-table relocation.
 Only this new Windows gate was run: 1/1 passed in 43.22 seconds (43.43 total).
 No full-suite or local Linux qualification is claimed. Native Step 8 remains open.
 
+## Qualified Scalar And Native POD Callback Reference Arguments
+
+This qualification extends the earlier by-value callback slices. Callback
+parameters may now use `ref` or `view` for non-nullable scalar values and
+qualified native POD components. It applies to free native callback boundaries,
+native callbacks supplied to hosted Wio methods, indirect calls and forwarding.
+Callback results remain by-value; reference results are not newly advertised.
+
+```wio
+fn Modify(readonly: view i32, writable: ref i32) -> i32
+{
+    writable = readonly + 5;
+    return readonly;
+}
+
+[Native, CppName(native::Run)]
+fn Run(callback: fn(view i32, ref i32) -> i32) -> i32;
+```
+
+Generated C++ function types continue to use `Place<T>` rather than a raw C++
+reference. The ABI carries a reference wire pointing at a tagged-value cell.
+Both the concrete pointee codec identity and signature mutability are preserved.
+Repeated arguments naming the same cell share one materialization. A `view`
+stays readonly even if another argument to that cell is mutable. POD copies
+preserve padding/hidden native storage through the registered layout adapters.
+
+The VM uses `NativeCallbackReferences` to validate and stage all mutable
+replacements before publishing copy-back. Completed writes are committed when
+the callback reports a contained Wio panic or native exception, matching the
+ordinary native reference boundary. Failed argument admission never executes
+the callback body. Wrong kind, ownership/mutability flags, null/misaligned token,
+wrong token size, incompatible identities, mixed concrete alias types and
+out-of-range scalar values are rejected. C++ callback failure wires are released
+and cleared before returning an error status.
+
+Borrow state belongs to one invocation, not the retained callable. A retained
+callback may be called later with fresh caller cells; it does not keep those
+stack addresses after the call. Existing caller-thread/any-thread and stale
+machine guards are unchanged. This does not qualify escaping reference results,
+async borrows, object/container/nullable/string/text reference parameters or
+callable-valued/fixed-array callback signatures.
+
+The new `wio_vm_native_callback_borrow` gate compares generated C++ and actual
+VM CLI execution for 30 rounds, including both alias orders, padded POD hidden
+fields, hosted scalar/POD native callables, forwarding and retained fresh-cell
+calls. Live-host probes cover malformed cells, conflicting alias types, range
+rejection, panic copy-back/recovery and stale shutdown. Native codec probes also
+check exception copy-back and view write rejection.
+
+The VM rejects closure capture of invocation-scoped borrowed places (including
+their projections) with `WVM1225`, even for a lambda that might not escape.
+Copy the scalar/POD value first when a capture is needed. General reference
+capture escape analysis and asynchronous retention are not qualified by this
+slice; the generated C++ language path's existing lexical capture rules are not
+expanded by this qualification.
+
+Only this new Windows gate was run: 1/1 passed in 13.07 seconds (13.16 total).
+Older negative fixtures were adjusted for newly qualified scalar/POD references
+but were not rerun. No full-suite or local Linux qualification is claimed.
+Native Step 8 remains open.
+
 ## Qualified Hosted-Method Native Callable Arguments
 
 Qualified hosted Wio object methods accept native callable parameters. C++ can
@@ -2818,8 +2879,10 @@ string, text, native POD, hosted object/interface/nullable object, array,
 dictionary and Any shapes. The method itself must still satisfy whole-surface
 host proxy qualification. Method-only callback container types are discovered
 without adding dummy free native declarations. Callback-valued method results,
-callbacks returning callbacks, ref/view and top-level fixed-array callback
-signatures remain excluded. Ordinary hosted method container/POD parameters
+callbacks returning callbacks, reference callback results and top-level fixed-array
+callback signatures remain excluded. Scalar/POD reference arguments are now
+qualified by the preceding reference-argument section; other reference payloads
+remain excluded. Ordinary hosted method container/POD parameters
 are not newly qualified by this callback slice.
 
 Incoming function wires need the exact structural signature ID, a supported

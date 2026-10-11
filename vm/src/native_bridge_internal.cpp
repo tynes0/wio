@@ -652,6 +652,20 @@ namespace wio::vm::detail
         return true;
     }
 
+    bool callbackArgumentMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
+                                     std::uint8_t& marshalling, const NativePodLayouts* layouts) noexcept
+    {
+        if (declaredType >= module.types.size())
+            return false;
+        if (module.types[declaredType].kind != TypeReference)
+            return callbackValueMarshalling(module, declaredType, marshalling, layouts);
+        const auto& type = module.types[declaredType];
+        if (type.arguments.size() != 1 ||
+            !callbackValueMarshalling(module, type.arguments.front(), marshalling, layouts))
+            return false;
+        return marshalling == 1 || marshalling == 4;
+    }
+
     bool nativeValueMarshalling(const bytecode::Module& module, const std::uint32_t declaredType,
                                 std::uint8_t& marshalling) noexcept
     {

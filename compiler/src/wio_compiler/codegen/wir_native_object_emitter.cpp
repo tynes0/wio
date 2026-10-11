@@ -319,9 +319,27 @@ namespace wio::codegen
             }
             const auto& type = module.types.get(id);
             if (type.kind == TypeKind::Function)
-                return !allowVoid && !type.arguments.empty() &&
-                       std::ranges::all_of(type.arguments, [&](TypeId argument)
-                                           { return callbackValue(callbackValue, argument); });
+            {
+                if (allowVoid || type.arguments.empty() || !callbackValue(callbackValue, type.arguments.back()))
+                    return false;
+                for (std::size_t index = 0; index + 1 < type.arguments.size(); ++index)
+                {
+                    auto argument = type.arguments[index];
+                    const auto& reference = module.types.get(argument);
+                    if (reference.kind == TypeKind::Reference && reference.arguments.size() == 1)
+                    {
+                        argument = reference.arguments.front();
+                        const auto& base = module.types.get(argument);
+                        if (!(base.kind >= TypeKind::Bool && base.kind <= TypeKind::F64) &&
+                            base.kind != TypeKind::Byte && base.kind != TypeKind::Char &&
+                            std::ranges::find(pods, argument) == pods.end())
+                            return false;
+                    }
+                    else if (!callbackValue(callbackValue, argument))
+                        return false;
+                }
+                return true;
+            }
             if (type.kind == TypeKind::Nullable && type.arguments.size() == 1)
                 return contracts.contains(type.arguments.front());
             return wireValue(module, id, allowVoid) || contracts.contains(id);

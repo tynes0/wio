@@ -161,7 +161,9 @@ namespace
             {
                 wio::vm::Machine machine{module};
                 check(machine.registerNativeRegistry(changed, *layouts, nullptr, nullptr, &error), error.c_str());
-                for (const auto* name : {"RefProbe", "ViewProbe", "NullableProbe"})
+                for (const auto* name : {"RefProbe", "ViewProbe"})
+                    check(machine.invoke(function(name)).succeeded(), "qualified POD callback borrow rejected");
+                for (const auto* name : {"NullableProbe"})
                 {
                     const auto rejected = machine.invoke(function(name));
                     check(!rejected.succeeded() && rejected.error().code == "WVM1225",

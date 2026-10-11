@@ -1733,3 +1733,28 @@ here as historical evidence rather than active work:
       Step 8 remains open for ref/view and callable-valued/fixed-array callbacks,
       callable method results, async lifetime, foreign ownership, pruning and
       artifact packaging.
+
+## Qualified Scalar And Native POD Callback Borrows
+
+- [x] Added invocation-scoped scalar and qualified native POD ref/view callback
+      arguments, both Wio-to-native and native-to-hosted-Wio. Direct invocation,
+      forwarding and retained leases use the same concrete pointee IDs and
+      mutability policy; no caller stack pointer is stored in a retained lease.
+- [x] Added named NativeCallbackReferences for VM materialization, alias reuse
+      and staged copy-back. Readonly and mutable aliases share one cell,
+      independent of argument order. Mutable writes commit after both success
+      and contained panic/exception; view access does not authorize writes.
+- [x] Added CallbackArguments and typed callback argument codecs in the C++
+      bridge. Owned wires are guarded before conversion and failure results
+      are cleared/released. Ordinary by-value callbacks avoid borrow allocation.
+- [x] Added a 30-round C++/actual-VM/live-host gate covering scalar and padded
+      POD aliasing, hidden fields, hosted forwarding, retained fresh-cell calls,
+      native exception copy-back, view write rejection, malformed token shape/
+      flags/identity, mixed scalar alias types, range rejection, unsafe VM
+      reference-capture rejection, Wio panic and
+      stale shutdown. Updated older negative expectations without rerunning
+      those gates, in accordance with the new-tests-only request.
+- [x] Only the new Windows gate was run: 1/1 passed in 13.07 seconds (13.16
+      total). No full-suite or local Linux qualification is claimed. Native
+      Step 8 remains open for other borrow payloads/results, callable-valued/
+      fixed-array signatures, async lifetime, ownership, pruning and packaging.

@@ -5,6 +5,7 @@
 #include "wio/vm/unicode.h"
 
 #include "native_bridge_internal.h"
+#include "native_callback_references_internal.h"
 #include "native_library.h"
 #include "native_pod_internal.h"
 #include "native_sequence_internal.h"
@@ -1708,10 +1709,14 @@ namespace wio::vm
                 const auto contract =
                     std::ranges::find(module.contract.reflection, parameterType, &bytecode::Reflection::type);
                 bool supported = !signature.empty();
-                for (const auto type : signature)
+                for (std::size_t signatureIndex = 0; signatureIndex < signature.size(); ++signatureIndex)
                 {
                     std::uint8_t codec = 0;
-                    supported &= detail::callbackValueMarshalling(module, type, codec, layouts.get());
+                    supported &=
+                        signatureIndex + 1 == signature.size()
+                            ? detail::callbackValueMarshalling(module, signature[signatureIndex], codec, layouts.get())
+                            : detail::callbackArgumentMarshalling(module, signature[signatureIndex], codec,
+                                                                  layouts.get());
                 }
                 if (!supported || wire.kind != WIO_NATIVE_ABI_CALLBACK ||
                     contract == module.contract.reflection.end() || wire.typeId != contract->stableTypeId ||
@@ -1952,16 +1957,25 @@ namespace wio::vm
         };
         const std::unique_ptr<void, decltype(release)> guard{this, release};
         std::string error;
+        detail::NativeCallbackReferences references;
         for (std::size_t index = 0; index < arguments.size(); ++index)
         {
             std::uint8_t marshalling = 0;
-            if (!detail::callbackValueMarshalling(module, signature[index], marshalling, layouts.get()) ||
+            if (module.types[signature[index]].kind == TypeReference)
+            {
+                if (!references.write(module, arguments[index], signature[index], wires[index], error, layouts.get()))
+                    return fail(error);
+                continue;
+            }
+            if (!detail::callbackArgumentMarshalling(module, signature[index], marshalling, layouts.get()) ||
                 !detail::encodeNativeValue(module, arguments[index], signature[index], marshalling, wires[index], error,
                                            layouts.get(), 0, &objects))
                 return fail(error.empty() ? "Unsupported native callable argument" : error);
         }
         WioNativeAbiFailure failure{};
         const auto status = callback.ops->invoke(callback.userdata, wires.data(), wires.size(), &result, &failure);
+        if (!references.commit(module, error, layouts.get()))
+            return fail("Native callable copy-back failed: " + error);
         if (status != WIO_NATIVE_ABI_OK)
             return ExecutionResult::failure(
                 ExecutionError{"WVM1222", "Native callable failed with ABI status " + std::to_string(status)});
@@ -5111,6 +5125,9 @@ namespace wio::vm
                     case CaptureReference:
                         if (source->kind() != Value::Kind::Place)
                             return fail("WVM1143", "Reference capture requires a live borrowed place");
+                        for (auto* place = source->asPlace(); place; place = place->borrowedRoot)
+                            if (place->callbackBorrow)
+                                return fail("WVM1225", "Invocation-scoped native callback borrows cannot be captured");
                         captures.push_back(*source);
                         break;
                     case CaptureRetainedSelf:
@@ -5454,13 +5471,19 @@ namespace wio::vm
                             return fail("WVM1223", "Native callback argument has an invalid callable ABI shape");
 
                         const bytecode::Type& callbackType = module.types[abi.type];
-                        for (const std::uint32_t callbackValueType : callbackType.arguments)
+                        for (std::size_t signatureIndex = 0; signatureIndex < callbackType.arguments.size();
+                             ++signatureIndex)
                         {
+                            const auto callbackValueType = callbackType.arguments[signatureIndex];
                             std::uint8_t ignored = 0;
-                            if (!detail::callbackValueMarshalling(module, callbackValueType, ignored, podLayouts.get()))
+                            if (!(signatureIndex + 1 == callbackType.arguments.size()
+                                      ? detail::callbackValueMarshalling(module, callbackValueType, ignored,
+                                                                         podLayouts.get())
+                                      : detail::callbackArgumentMarshalling(module, callbackValueType, ignored,
+                                                                            podLayouts.get())))
                                 return fail("WVM1225", "Native callbacks require scalar, string, text, qualified "
                                                        "native POD, hosted object/interface, registered container "
-                                                       "or void value signatures; unsupported callback type #" +
+                                                       "or scalar/POD ref/view arguments; unsupported callback type #" +
                                                            std::to_string(callbackValueType));
                         }
 
@@ -5538,8 +5561,22 @@ namespace wio::vm
                                 }
                                 values.push_back(*capture);
                             }
+                            detail::NativeCallbackReferences references;
                             for (std::size_t argumentIndex = 0; argumentIndex < callbackArgumentCount; ++argumentIndex)
                             {
+                                if (callbackModule.types[signature[argumentIndex]].kind == TypeReference)
+                                {
+                                    auto converted = references.read(callbackModule, callbackArguments[argumentIndex],
+                                                                     signature[argumentIndex], podLayouts.get());
+                                    if (!converted.succeeded())
+                                    {
+                                        setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                                                           converted.error);
+                                        return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                                    }
+                                    values.push_back(std::move(converted.value));
+                                    continue;
+                                }
                                 std::uint8_t callbackMarshalling = 0;
                                 if (!detail::callbackValueMarshalling(callbackModule, signature[argumentIndex],
                                                                       callbackMarshalling, podLayouts.get()))
@@ -5566,6 +5603,12 @@ namespace wio::vm
                                                  : owner->invoke(callable.callableFunction(), values);
                             const std::unique_ptr<Value, decltype(releaseValue)> resultGuard{&execution.value_,
                                                                                              releaseValue};
+                            std::string copyBackError;
+                            if (!references.commit(callbackModule, copyBackError, podLayouts.get()))
+                            {
+                                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, copyBackError);
+                                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                            }
                             if (!execution.succeeded())
                             {
                                 setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_PANIC,

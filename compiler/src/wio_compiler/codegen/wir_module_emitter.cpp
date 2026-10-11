@@ -205,6 +205,8 @@ namespace wio::codegen
         using namespace wir;
         const auto wireId = [&](TypeId value)
         {
+            if (module.types.get(value).kind == TypeKind::Reference)
+                value = module.types.get(value).arguments.front();
             if (const auto object = nativeAbiObjectType(module.types, value))
                 value = object;
             for (const auto& reflected : module.contract.reflection)
@@ -215,8 +217,15 @@ namespace wio::codegen
         const auto& signature = module.types.get(id);
         if (signature.kind != TypeKind::Function || signature.arguments.empty())
             return "wio::wir_backend::abi::Codec<" + type(id) + ", " + std::to_string(wireId(id)) + "ULL>";
-        std::string result = "wio::wir_backend::abi::CallbackCodec<" + type(id) + ", " + std::to_string(wireId(id)) +
-                             "ULL, " + std::to_string(wireId(signature.arguments.back())) + "ULL";
+        std::string result = "wio::wir_backend::abi::CallbackCodecWithBorrows<" + type(id) + ", " +
+                             std::to_string(wireId(id)) + "ULL, " + std::to_string(wireId(signature.arguments.back())) +
+                             "ULL, std::integer_sequence<bool";
+        for (std::size_t index = 0; index + 1 < signature.arguments.size(); ++index)
+        {
+            const auto& argument = module.types.get(signature.arguments[index]);
+            result += argument.kind == TypeKind::Reference && argument.isMutable ? ", true" : ", false";
+        }
+        result += ">";
         for (std::size_t index = 0; index + 1 < signature.arguments.size(); ++index)
             result += ", " + std::to_string(wireId(signature.arguments[index])) + "ULL";
         return result + ">";

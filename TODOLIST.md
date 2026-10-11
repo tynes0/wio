@@ -1055,11 +1055,26 @@ Rider, and CLion are defined in
    affinity, stale shutdown and continued rejection of ref/view callbacks.
    Only this new Windows gate was run: 1/1 passed in 18.17 seconds (18.25 total);
    no full-suite or local Linux qualification is claimed.
+   Callback arguments now additionally accept invocation-scoped scalar and
+   qualified native POD ref/view cells in both directions, including hosted
+   methods, forwarding and retained callbacks invoked with fresh cells.
+   Exact pointee identities and mutability are retained in generated codecs.
+   Repeated aliases share materialized storage; mutable copy-back is staged
+   before publication and completed writes survive a contained callback panic.
+   Native callbacks cannot write through view places. A new 30-round C++/
+   actual-VM/live-host gate covers reversed aliases, hidden/padded POD storage,
+   forwarding, native exceptions, malformed tokens, concrete-type disagreement,
+   scalar range failure, unsafe VM reference-capture rejection, panic/recovery
+   and stale machine shutdown. Only this
+   new Windows gate was run: 1/1 passed in 13.07 seconds (13.16 total); no full
+   suite or local Linux qualification is claimed.
    Remaining native parity work includes broader callback/async lifetime contracts,
    callable-valued/fixed-array callback signatures and callable method results,
    std::Box and broader foreign/container ownership,
-   alias identity canonicalization; borrowed POD/object/container/nullable and
-   ref/view callback signatures; nullable borrowed payload lifetime contracts;
+   alias identity canonicalization; broader POD/object/container/nullable borrow
+   lifetime contracts;
+   object/container/nullable/string/text ref/view callback arguments and borrowed
+   callback results; nullable borrowed payload lifetime contracts;
    consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.

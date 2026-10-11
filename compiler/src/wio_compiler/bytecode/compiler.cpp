@@ -350,7 +350,8 @@ namespace wio::bytecode
             // Sequence adapters need exact element codec identities, including
             // primitive and nested sequence types, not just the outer handle.
             if (type->kind == wir::TypeKind::Array || type->kind == wir::TypeKind::Dictionary ||
-                type->kind == wir::TypeKind::Nullable || type->kind == wir::TypeKind::Function)
+                type->kind == wir::TypeKind::Nullable || type->kind == wir::TypeKind::Function ||
+                type->kind == wir::TypeKind::Reference)
                 for (const auto argument : type->arguments)
                     self(self, argument, depth + 1);
         };

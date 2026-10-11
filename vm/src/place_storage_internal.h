@@ -29,6 +29,9 @@ namespace wio::vm
         PlaceStorage* nextDomainProjection = nullptr;
         bool initialized = false;
         bool mutableValue = true;
+        // ABI callback cells live only until the current invocation returns.
+        // A closure must not retain their raw PlaceStorage addresses.
+        bool callbackBorrow = false;
 
         PlaceStorage() = default;
         PlaceStorage(const PlaceStorage&) = delete;

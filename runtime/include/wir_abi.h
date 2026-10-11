@@ -15,11 +15,17 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include "ref.h"
 #include "text.h"
 #include "std_async.h"
 #include "wir_sequence_projection.h"
 #include "wir_container_projection.h"
+
+namespace wio::wir_backend
+{
+    template<class T> class Place;
+}
 
 namespace wio::wir_backend::abi {
 class Tasks {
@@ -473,13 +479,105 @@ public:
 
 // Callback argument/result identities belong to the concrete Wio signature,
 // not just its C++ spelling. Keep them even when two declarations share a POD.
-template <class Signature, std::uint64_t Id, std::uint64_t ResultId, std::uint64_t... ArgumentIds> struct CallbackCodec;
+template <std::size_t Count> class CallbackArguments
+{
+public:
+    CallbackArguments() = default;
+    CallbackArguments(const CallbackArguments&) = delete;
+    CallbackArguments& operator=(const CallbackArguments&) = delete;
+    ~CallbackArguments()
+    {
+        for (auto& value : values)
+            WioNativeAbiReleaseValue(&value);
+        for (auto& token : tokens_)
+            WioNativeAbiReleaseValue(&token);
+    }
+    template <class T, std::uint64_t Id> void borrow(std::size_t index, Place<T> place, bool mutableAccess)
+    {
+        require(!mutableAccess || place.canRebind(), WIO_NATIVE_ABI_INVALID_ARGUMENT);
+        const auto* address = place.borrowIdentity();
+        require(address != nullptr, WIO_NATIVE_ABI_INVALID_ARGUMENT);
+        std::size_t slot = 0;
+        while (slot < count_ && addresses_[slot] != address)
+            ++slot;
+        if (slot == count_)
+        {
+            tokens_[slot] = Codec<T, Id>::write(place.read());
+            addresses_[slot] = address;
+            contracts_[slot] = &contract<T, Id>;
+            ++count_;
+        }
+        require(contracts_[slot] == &contract<T, Id>);
+        if (mutableAccess && !commits_[slot])
+            commits_[slot] = [this, slot, place]() mutable { place.write(Codec<T, Id>::read(tokens_[slot])); };
+        auto& wire = values[index];
+        wire.kind = WIO_NATIVE_ABI_REFERENCE;
+        wire.flags = WIO_NATIVE_ABI_VALUE_BORROWED | (mutableAccess ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
+        wire.typeId = Id;
+        wire.payload.mutableSlice = {&tokens_[slot], sizeof(WioNativeAbiValue)};
+    }
+    void commit()
+    {
+        for (auto& commit : commits_)
+            if (commit)
+            {
+                commit();
+                commit = {};
+            }
+    }
+    std::array<WioNativeAbiValue, Count> values{};
 
-template <class R, class... A, std::uint64_t Id, std::uint64_t ResultId, std::uint64_t... ArgumentIds>
-struct CallbackCodec<std::function<R(A...)>, Id, ResultId, ArgumentIds...>
+private:
+    template <class T, std::uint64_t Id> inline static char contract = 0;
+    std::array<WioNativeAbiValue, Count> tokens_{};
+    std::array<const void*, Count> addresses_{};
+    std::array<const void*, Count> contracts_{};
+    std::array<std::function<void()>, Count> commits_{};
+    std::size_t count_ = 0;
+};
+
+template <class T, std::uint64_t Id> struct CallbackArgument
+{
+    static T read(Frame&, const WioNativeAbiValue& value, bool)
+    {
+        return Codec<T, Id>::read(value);
+    }
+    template <std::size_t Count>
+    static void write(CallbackArguments<Count>& arguments, std::size_t index, T value, bool)
+    {
+        arguments.values[index] = Codec<T, Id>::write(std::move(value));
+    }
+};
+template <class T, std::uint64_t Id> struct CallbackArgument<Place<T>, Id>
+{
+    static Place<T> read(Frame& frame, const WioNativeAbiValue& value, bool mutableAccess)
+    {
+        require((value.flags == WIO_NATIVE_ABI_VALUE_BORROWED ||
+                 value.flags == (WIO_NATIVE_ABI_VALUE_BORROWED | WIO_NATIVE_ABI_VALUE_MUTABLE)) &&
+                    !value.owner.state && !value.owner.ops,
+                WIO_NATIVE_ABI_INVALID_ARGUMENT);
+        require(value.typeId == 0 || value.typeId == Id);
+        auto& cell = frame.borrow<T, Id>(value, mutableAccess);
+        return mutableAccess ? Place<T>::borrow(cell) : Place<T>::borrowView(cell);
+    }
+    template <std::size_t Count>
+    static void write(CallbackArguments<Count>& arguments, std::size_t index, Place<T> value, bool mutableAccess)
+    {
+        arguments.template borrow<T, Id>(index, std::move(value), mutableAccess);
+    }
+};
+
+template <class Signature, std::uint64_t Id, std::uint64_t ResultId, class Mutability, std::uint64_t... ArgumentIds>
+struct CallbackCodecWithBorrows;
+
+template <class R, class... A, std::uint64_t Id, std::uint64_t ResultId, bool... Mutable, std::uint64_t... ArgumentIds>
+struct CallbackCodecWithBorrows<std::function<R(A...)>, Id, ResultId, std::integer_sequence<bool, Mutable...>,
+                                ArgumentIds...>
 {
     static_assert(sizeof...(A) == sizeof...(ArgumentIds));
+    static_assert(sizeof...(A) == sizeof...(Mutable));
     inline static constexpr std::array<std::uint64_t, sizeof...(A)> argumentIds{ArgumentIds...};
+    inline static constexpr std::array<bool, sizeof...(A)> mutableArguments{Mutable...};
     struct Storage
     {
         std::atomic<std::uint32_t> refs{1};
@@ -493,13 +591,24 @@ struct CallbackCodec<std::function<R(A...)>, Id, ResultId, ArgumentIds...>
     static void invoke(Storage& storage, const WioNativeAbiValue* args, WioNativeAbiValue* result,
                        std::index_sequence<I...>)
     {
-        if constexpr (std::is_void_v<R>)
+        Frame frame;
+        try
         {
-            storage.fn(Codec<A, argumentIds[I]>::read(args[I])...);
-            *result = {};
+            if constexpr (std::is_void_v<R>)
+            {
+                storage.fn(CallbackArgument<A, argumentIds[I]>::read(frame, args[I], mutableArguments[I])...);
+                *result = {};
+            }
+            else
+                *result = Codec<R, ResultId>::write(
+                    storage.fn(CallbackArgument<A, argumentIds[I]>::read(frame, args[I], mutableArguments[I])...));
         }
-        else
-            *result = Codec<R, ResultId>::write(storage.fn(Codec<A, argumentIds[I]>::read(args[I])...));
+        catch (...)
+        {
+            frame.commit();
+            throw;
+        }
+        frame.commit();
     }
     inline static const WioNativeAbiCallbackOps ops{
         WIO_NATIVE_ABI_VERSION, 0, [](void* p) noexcept { ++static_cast<Storage*>(p)->refs; },
@@ -524,14 +633,20 @@ struct CallbackCodec<std::function<R(A...)>, Id, ResultId, ArgumentIds...>
             }
             catch (const Error& e)
             {
+                WioNativeAbiReleaseValue(result);
+                *result = {};
                 return failure(error, e.status, e.what());
             }
             catch (const std::exception& e)
             {
+                WioNativeAbiReleaseValue(result);
+                *result = {};
                 return failure(error, WIO_NATIVE_ABI_EXCEPTION, e.what());
             }
             catch (...)
             {
+                WioNativeAbiReleaseValue(result);
+                *result = {};
                 return failure(error, WIO_NATIVE_ABI_EXCEPTION, "callback failure");
             }
         }};
@@ -560,25 +675,17 @@ struct CallbackCodec<std::function<R(A...)>, Id, ResultId, ArgumentIds...>
         return [callback, thread, owner, anyThread](A... args) -> R
         {
             require(anyThread || thread == std::this_thread::get_id(), WIO_NATIVE_ABI_WRONG_THREAD);
-            std::vector<WioNativeAbiValue> arguments;
-            arguments.reserve(sizeof...(A));
-            struct Guard
-            {
-                std::vector<WioNativeAbiValue>& values;
-                ~Guard()
-                {
-                    for (auto& v : values)
-                        WioNativeAbiReleaseValue(&v);
-                }
-            } guard{arguments};
+            CallbackArguments<sizeof...(A)> arguments;
             // Install cleanup before converting the first owning argument;
             // a later codec failure must release every preceding wire value.
             [&]<std::size_t... I>(std::index_sequence<I...>)
-            { (arguments.push_back(Codec<A, argumentIds[I]>::write(args)), ...); }(std::index_sequence_for<A...>{});
-            WioNativeAbiValue result;
-            WioNativeAbiFailure failure;
-            auto status =
-                callback.ops->invoke(callback.userdata, arguments.data(), arguments.size(), &result, &failure);
+            {
+                (CallbackArgument<A, argumentIds[I]>::write(arguments, I, args, mutableArguments[I]), ...);
+            }(std::index_sequence_for<A...>{});
+            WioNativeAbiValue result{};
+            WioNativeAbiFailure failure{};
+            auto status = callback.ops->invoke(callback.userdata, arguments.values.data(), arguments.values.size(),
+                                               &result, &failure);
             struct ResultGuard
             {
                 WioNativeAbiValue& value;
@@ -587,11 +694,20 @@ struct CallbackCodec<std::function<R(A...)>, Id, ResultId, ArgumentIds...>
                     WioNativeAbiReleaseValue(&value);
                 }
             } resultGuard{result};
+            arguments.commit();
             require(status == WIO_NATIVE_ABI_OK, status);
             if constexpr (!std::is_void_v<R>)
                 return Codec<R, ResultId>::read(result);
         };
     }
+};
+
+template <class Signature, std::uint64_t Id, std::uint64_t ResultId, std::uint64_t... ArgumentIds> struct CallbackCodec;
+template <class R, class... A, std::uint64_t Id, std::uint64_t ResultId, std::uint64_t... ArgumentIds>
+struct CallbackCodec<std::function<R(A...)>, Id, ResultId, ArgumentIds...>
+    : CallbackCodecWithBorrows<std::function<R(A...)>, Id, ResultId,
+                               std::integer_sequence<bool, (sizeof(A) && false)...>, ArgumentIds...>
+{
 };
 
 // Legacy scalar callers do not carry nominal identities. Generated native
