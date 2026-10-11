@@ -6,6 +6,7 @@
 #include <wio_native_abi.h>
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
 namespace wio::vm::detail
@@ -45,7 +46,16 @@ namespace wio::vm::detail
     [[nodiscard]] bool encodeOwnedNativeValue(const bytecode::Module& module, const Value& value,
                                               std::uint32_t declaredType, std::uint8_t marshalling,
                                               WioNativeAbiValue& output, std::string& error,
-                                              const NativePodLayouts* layouts = nullptr);
+                                              const NativePodLayouts* layouts = nullptr,
+                                              const NativeObjectAccess* objects = nullptr);
+    // Pins adapter code until an escaped owning callback result is released,
+    // preserving any pre-existing wire owner. Manual registries still require
+    // the host to keep their producer code loaded.
+    void pinNativeCallbackResult(WioNativeAbiValue& value, std::shared_ptr<void> codeLease,
+                                 const std::shared_ptr<void>& scope);
+    // A live machine can drain its own leases while its loader still pins code.
+    // Without a scope, call only at a host safe point after producer calls return.
+    void collectNativeCallbackResultLeases(const std::shared_ptr<void>& scope = {});
     [[nodiscard]] bool callbackValueMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                                 std::uint8_t& marshalling,
                                                 const NativePodLayouts* layouts = nullptr) noexcept;

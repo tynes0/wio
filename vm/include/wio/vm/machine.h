@@ -191,7 +191,8 @@ namespace wio::vm
         // machine has cancelled tasks and released all foreign values.
         [[nodiscard]] bool loadNativeLibrary(const std::filesystem::path& path, std::string* error = nullptr);
         // Host safe point after external producer calls have returned. Releases
-        // delayed code leases from proxies disposed after their VM was closed.
+        // delayed code leases from proxies/callback results disposed after
+        // their VM was closed. Call after producer ABI frames have returned.
         static void collectNativeObjectRetirements();
 
         // Main-executor continuations run only on the bound thread. wait()
@@ -228,7 +229,7 @@ namespace wio::vm
                                               const detail::NativePodLayouts&);
         [[nodiscard]] detail::NativeValueResult decodeNativeObject(const WioNativeAbiValue&, std::uint32_t,
                                                                    const detail::NativePodLayouts&);
-        [[nodiscard]] detail::NativeObjectAccess nativeObjectAccess();
+        [[nodiscard]] detail::NativeObjectAccess nativeObjectAccess(bool hostedOnly = false);
         [[nodiscard]] bool scheduleTask(const std::shared_ptr<ExecutionState>& state, ExecutorKind executor);
         void wakeTask(std::weak_ptr<ExecutionState> state, AsyncTaskState terminalState, const Value& result,
                       const ExecutionError& error);

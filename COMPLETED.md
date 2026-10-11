@@ -1674,3 +1674,32 @@ here as historical evidence rather than active work:
       total). No full-suite or local Linux qualification is claimed. Native
       Step 8 remains open for borrowed/container/hosted-method callbacks,
       async lifetime, broader foreign ownership, pruning and packaging.
+
+## Qualified By-Value Native Container Callbacks
+
+- [x] Added native free-function callback arguments/results for arrays,
+      dictionaries and Any through registered sidecars. Discovery includes
+      callback-only structural signatures and their nested codec identities.
+      Wire, sidecar and bytecode versions remain unchanged.
+- [x] Recursive callbacks preserve hosted object/interface identity and reject
+      another machine's objects. Nullable object elements require explicit
+      nullable tags, just like direct callback parameters.
+- [x] Cached Any results now acquire an independent owning claim. Owning
+      container callback results retain libraries loaded by the VM, including
+      any pre-existing wire owner. Final release retires the code lease rather
+      than unloading producer code while returning through its ABI frame;
+      live-machine and explicit host safe points drain retired leases.
+      Manually registered APIs still require host-managed producer lifetime.
+- [x] Fixed Typed WIR method dispatch across type-table growth: complex receiver
+      lowering could invalidate a type pointer and emit a direct call to an
+      abstract interface method. Dispatch kind is now captured by value.
+- [x] Added a 30-round C++/actual-VM/live-host gate covering empty/bool/string/
+      Unicode/POD/nested/object/interface/nullable arrays, ordered/unordered maps,
+      nested Any, callback-only map factories, retained worker invocation,
+      missing sidecars, malformed input/tag rejection, cross-machine isolation,
+      panic/recovery and balanced destruction. Escaped array/map/Any results are
+      read after the machine, callback and manual loader have closed.
+- [x] Only this new Windows gate was run: 1/1 passed in 43.22 seconds (43.43
+      total). No full-suite or local Linux qualification is claimed. Native
+      Step 8 remains open for borrowed and hosted-method/callable-valued/fixed-
+      array callbacks, async lifetime, foreign ownership, pruning and packaging.

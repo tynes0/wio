@@ -170,6 +170,12 @@ namespace wio::codegen
             const auto* type = module.types.tryGet(id);
             if (!type || depth > 64)
                 return;
+            if (type->kind == TypeKind::Function)
+            {
+                for (const auto argument : type->arguments)
+                    self(self, argument, depth + 1);
+                return;
+            }
             if ((type->kind == TypeKind::Reference || type->kind == TypeKind::AsyncTask) && type->arguments.size() == 1)
             {
                 self(self, type->arguments.front(), depth + 1);

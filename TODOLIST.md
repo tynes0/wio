@@ -1028,8 +1028,21 @@ Rider, and CLion are defined in
    destructor failure and outstanding callback/result wires at machine shutdown.
    Only this new Windows gate was run: 1/1 passed in 23.35 seconds (23.45 total);
    no full-suite or local Linux qualification is claimed.
+   By-value array/dictionary/Any callback signatures now use registered container
+   sidecars, including callback-only structural types, nested POD/object/interface
+   and nullable object elements. Cached Any results acquire their own owning
+   handle; escaped results pin loaded producer libraries until a host safe point
+   after final release. Recursive decoding rejects malformed nullable tags and
+   objects from another machine. Typed WIR preserves receiver dispatch kind
+   across type-table growth while lowering complex receiver expressions.
+   A new 30-round C++/actual-VM/live-host gate covers empty/bool/nested arrays,
+   ordered/unordered maps, Any nesting, retained worker calls, missing sidecars,
+   malformed inputs, cross-machine rejection, panic/recovery, balanced lifecycle
+   and result reads after machine/callback/manual-loader shutdown. Only this new
+   Windows gate was run: 1/1 passed in 43.22 seconds (43.43 total); no full-suite
+   or local Linux qualification is claimed.
    Remaining native parity work includes broader callback/async lifetime contracts,
-   array/dictionary/Any callback values and hosted-method callback signatures,
+   hosted-method and callable-valued/fixed-array callback signatures,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; borrowed POD/object/container/nullable and
    ref/view callback signatures; nullable borrowed payload lifetime contracts;

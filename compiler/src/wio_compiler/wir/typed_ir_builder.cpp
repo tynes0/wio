@@ -4972,6 +4972,10 @@ namespace wio::wir::typed
                     const std::optional<MethodLayout> method = findMethodLayout(receiverNominalType, calleeSymbol);
                     if (receiverOwner && functionIt != functionsBySymbol_.end() && method)
                     {
+                        // Building the receiver may intern new types and relocate
+                        // the type table. Keep dispatch identity by value, not a
+                        // pointer into that table across expression lowering.
+                        const NominalKind receiverKind = receiverOwner->nominalKind;
                         const Type* methodResultType = result_.module_.types.tryGet(callResultType);
                         const bool borrowedResult = methodResultType && methodResultType->kind == TypeKind::Reference;
                         const bool temporaryReceiver = memberCallee->object->is<FunctionCallExpression>();
@@ -4981,8 +4985,7 @@ namespace wio::wir::typed
                         // Temporaries still use their tracked backing place.
                         const bool lexicalObjectReceiver =
                             borrowedResult &&
-                            (receiverOwner->nominalKind == NominalKind::Object ||
-                             receiverOwner->nominalKind == NominalKind::Interface) &&
+                            (receiverKind == NominalKind::Object || receiverKind == NominalKind::Interface) &&
                             (memberCallee->object->is<Identifier>() || memberCallee->object->is<SelfExpression>() ||
                              memberCallee->object->is<SuperExpression>());
                         const ValueId receiver = borrowedResult && temporaryReceiver
@@ -4996,9 +4999,9 @@ namespace wio::wir::typed
                             .opcode = memberCallee->object->is<SuperExpression>() ||
                                               (calleeSymbol && !calleeSymbol->genericParameterTypes.empty())
                                           ? Opcode::MethodCall
-                                      : receiverOwner->nominalKind == NominalKind::Interface ? Opcode::InterfaceCall
-                                      : receiverOwner->nominalKind == NominalKind::Object    ? Opcode::VirtualCall
-                                                                                             : Opcode::MethodCall,
+                                      : receiverKind == NominalKind::Interface ? Opcode::InterfaceCall
+                                      : receiverKind == NominalKind::Object    ? Opcode::VirtualCall
+                                                                               : Opcode::MethodCall,
                             .operands = {receiver},
                             .callee = functionIt->second,
                             .selector = method->name,

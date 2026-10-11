@@ -2726,3 +2726,59 @@ callback values, callable-valued callback results, hosted-method callback
 signatures, async borrowed lifetime, arbitrary foreign ownership or consumed
 arguments. Native Step 8 remains open; pruning and artifact packaging remain
 separate work.
+
+## Qualified By-Value Native Container Callbacks
+
+Native free-function callbacks also accept and return arrays, dictionaries and
+`any` when the matching sequence/dictionary/Any sidecars are registered. Nested
+arrays, POD components, hosted Wio objects, interfaces and nullable object
+elements use the same recursive codecs as ordinary native value calls.
+Callback-only container types receive structural identities in bytecode as well
+as generated adapter discovery; no dummy ordinary native call is required.
+
+```wio
+using cpp::header("transforms.h");
+
+[Native, CppName(TransformValues)]
+fn TransformValues(callback: fn(i32[]) -> i32[], input: i32[]) -> i32[];
+
+let input: i32[] = [7, 19];
+let output = TransformValues((values) => [values[0] + 2, values[1] + 2], input);
+// output is [9, 21]; input remains [7, 19].
+```
+
+Arrays and dictionaries are passed by value, but an object element still
+carries shared object identity. A recursively encountered proxy
+must belong to the callback's original VM. Another machine's object or an
+untagged nullable null is rejected with `WIO_NATIVE_ABI_TYPE_MISMATCH`. Missing
+container sidecars reject the signature before native entry with WVM1225.
+Ref/view callback signatures, top-level fixed-array signatures, callback-valued
+results and hosted-method callbacks are not qualified by this slice.
+
+Callback results are owning wire values: release them with
+`WioNativeAbiReleaseValue`. Reused Any backing acquires an independent handle
+claim rather than escaping as a borrow of a temporary execution result. For
+libraries loaded through `Machine::loadNativeLibrary`, owning container results
+also pin producer code needed by their handles and sidecar operations. Their
+bytes/values remain readable after machine and callback shutdown. This does not
+make an embedded object callable after its VM closes.
+
+Final result release queues the code lease; it must not unload the producer
+while native code is returning through a producer frame. Live-machine safe
+points drain leases from that machine while its loader still holds the code.
+After machine shutdown, the host calls
+`Machine::collectNativeObjectRetirements()` only after all producer ABI frames
+have returned and no thread is executing the code to be unloaded. APIs installed
+only through manual registry registration still require a host-owned library
+lease; the VM cannot infer which DLL owns an arbitrary function pointer.
+
+The new `wio_vm_native_callback_container` gate compares C++ with actual VM CLI
+for 30 rounds and exercises a live host. It covers empty/bool/nested arrays,
+NUL/Unicode data, POD/object/interface/nullable elements, ordered/unordered maps,
+Any nesting, callback-only map factories, retained worker calls, missing
+sidecars, malformed input/tag rejection, cross-machine isolation, panic/recovery,
+balanced destruction and reads after machine/callback/manual-loader shutdown.
+It also exposed and pins a shared Typed WIR fix: receiver lowering may intern
+types, so method dispatch kind must survive type-table relocation.
+Only this new Windows gate was run: 1/1 passed in 43.22 seconds (43.43 total).
+No full-suite or local Linux qualification is claimed. Native Step 8 remains open.

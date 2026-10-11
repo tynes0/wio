@@ -1602,6 +1602,7 @@ namespace wio::vm
     void Machine::collectNativeObjectRetirements()
     {
         detail::NativeObjectBridge::collectRetiredCode();
+        detail::collectNativeCallbackResultLeases();
     }
 
     void Machine::cleanupNativeObjects(bool shutdown, ExecutionError* primaryError) noexcept
@@ -1611,6 +1612,8 @@ namespace wio::vm
         try
         {
             std::scoped_lock lock{program_->executionMutex};
+            if (!shutdown)
+                detail::collectNativeCallbackResultLeases(program_);
             ExecutionError cleanupError;
             auto& errors = primaryError ? *primaryError : cleanupError;
             auto callbacks = program_->nativeCallbacks.takeRetired(shutdown);
@@ -1887,15 +1890,26 @@ namespace wio::vm
         return WIO_NATIVE_ABI_OK;
     }
 
-    detail::NativeObjectAccess Machine::nativeObjectAccess()
+    detail::NativeObjectAccess Machine::nativeObjectAccess(bool hostedOnly)
     {
-        return {
+        detail::NativeObjectAccess access{
             this,
             [](void* state, const Value& value, std::uint32_t type, WioNativeAbiValue& output, std::string& error,
                const detail::NativePodLayouts& layouts)
             { return static_cast<Machine*>(state)->encodeNativeObject(value, type, output, error, layouts); },
             [](void* state, const WioNativeAbiValue& value, std::uint32_t type, const detail::NativePodLayouts& layouts)
             { return static_cast<Machine*>(state)->decodeNativeObject(value, type, layouts); }};
+        if (hostedOnly)
+            access.decode = [](void* state, const WioNativeAbiValue& value, std::uint32_t type,
+                               const detail::NativePodLayouts& layouts)
+            {
+                auto result = static_cast<Machine*>(state)->decodeNativeObject(value, type, layouts);
+                if (result.succeeded() && result.value.kind() != Value::Kind::Object &&
+                    result.value.kind() != Value::Kind::Null)
+                    result.error = "callback argument requires an original object from this VM";
+                return result;
+            };
+        return access;
     }
 
     bool Machine::encodeNativeObject(const Value& object, std::uint32_t type, WioNativeAbiValue& output,
@@ -5339,7 +5353,9 @@ namespace wio::vm
                             std::uint8_t ignored = 0;
                             if (!detail::callbackValueMarshalling(module, callbackValueType, ignored, podLayouts.get()))
                                 return fail("WVM1225", "Native callbacks require scalar, string, text, qualified "
-                                                       "native POD, hosted object/interface or void value signatures");
+                                                       "native POD, hosted object/interface, registered container "
+                                                       "or void value signatures; unsupported callback type #" +
+                                                           std::to_string(callbackValueType));
                         }
 
                         auto callbackStateOwner = std::make_unique<NativeCallbackState>();
@@ -5384,6 +5400,7 @@ namespace wio::vm
                             std::scoped_lock executionLock{callbackProgram->executionMutex};
                             const auto& callable = closure->callable;
                             const bytecode::Module& callbackModule = *callbackProgram->module;
+                            const auto callbackObjects = owner->nativeObjectAccess(true);
 
                             std::vector<Value> values;
                             const auto releaseValue = [owner](Value* value) noexcept
@@ -5423,21 +5440,18 @@ namespace wio::vm
                                     return WIO_NATIVE_ABI_TYPE_MISMATCH;
                                 detail::NativeValueResult converted =
                                     callbackMarshalling == 6
-                                        ? owner->decodeNativeObject(callbackArguments[argumentIndex],
-                                                                    signature[argumentIndex], *podLayouts)
+                                        ? callbackObjects.decode(callbackObjects.state,
+                                                                 callbackArguments[argumentIndex],
+                                                                 signature[argumentIndex], *podLayouts)
                                         : detail::decodeNativeValue(callbackModule, callbackArguments[argumentIndex],
                                                                     signature[argumentIndex], callbackMarshalling,
-                                                                    podLayouts.get());
-                                if (converted.succeeded() && callbackMarshalling == 6 &&
-                                    converted.value.kind() != Value::Kind::Object &&
-                                    !(callbackModule.types[signature[argumentIndex]].kind == TypeNullable &&
-                                      converted.value.kind() == Value::Kind::Null))
-                                    converted.error = "callback argument requires an original object from this VM";
+                                                                    podLayouts.get(), 0, &callbackObjects);
                                 if (!converted.succeeded())
                                 {
                                     setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, converted.error);
                                     return WIO_NATIVE_ABI_TYPE_MISMATCH;
                                 }
+                                callbackProgram->pinNativeLibraries(converted.value);
                                 values.push_back(std::move(converted.value));
                             }
 
@@ -5460,13 +5474,23 @@ namespace wio::vm
                                 resultMarshalling == 6
                                     ? owner->encodeNativeObject(execution.value(), resultType, *callbackResult,
                                                                 conversionError, *podLayouts)
-                                    : detail::encodeOwnedNativeValue(callbackModule, execution.value(), resultType,
-                                                                     resultMarshalling, *callbackResult,
-                                                                     conversionError, podLayouts.get());
+                                    : detail::encodeOwnedNativeValue(
+                                          callbackModule, execution.value(), resultType, resultMarshalling,
+                                          *callbackResult, conversionError, podLayouts.get(), &callbackObjects);
                             if (!encoded)
                             {
                                 setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, conversionError);
                                 return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                            }
+                            if (resultMarshalling == 8)
+                            {
+                                std::scoped_lock lock{callbackProgram->nativeMutex};
+                                if (!callbackProgram->nativeLibraries.empty())
+                                    detail::pinNativeCallbackResult(
+                                        *callbackResult,
+                                        std::make_shared<std::vector<std::shared_ptr<detail::NativeLibrary>>>(
+                                            callbackProgram->nativeLibraries),
+                                        callbackProgram);
                             }
                             return WIO_NATIVE_ABI_OK;
                         };

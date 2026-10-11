@@ -9,6 +9,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <string_view>
 
 namespace wio::vm::detail
@@ -65,6 +66,47 @@ namespace wio::vm::detail
             },
             [](const void* storage) noexcept
             { return static_cast<const OwnedCallbackValue*>(storage)->value.foreignTypeId(); }};
+
+        struct CallbackResultCodeLease final
+        {
+            std::atomic_uint32_t references{1};
+            std::shared_ptr<void> code;
+            WioNativeAbiHandle previousOwner;
+            std::uint64_t typeId;
+            std::weak_ptr<void> scope;
+            CallbackResultCodeLease* nextRetired = nullptr;
+            inline static std::mutex retiredMutex;
+            inline static CallbackResultCodeLease* retired = nullptr;
+
+            CallbackResultCodeLease(std::shared_ptr<void> lease, WioNativeAbiHandle owner, std::uint64_t identity,
+                                    const std::shared_ptr<void>& lifetime)
+                : code(std::move(lease)), previousOwner(owner), typeId(identity), scope(lifetime)
+            {
+            }
+            ~CallbackResultCodeLease()
+            {
+                // The producer must still be loaded while its old owner drops.
+                WioNativeAbiRelease(&previousOwner);
+            }
+            static const WioNativeAbiHandleOps Operations;
+        };
+
+        const WioNativeAbiHandleOps CallbackResultCodeLease::Operations{
+            WIO_NATIVE_ABI_VERSION, 0, [](void* storage) noexcept
+            { static_cast<CallbackResultCodeLease*>(storage)->references.fetch_add(1, std::memory_order_relaxed); },
+            [](void* storage) noexcept
+            {
+                auto* lease = static_cast<CallbackResultCodeLease*>(storage);
+                if (lease->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                {
+                    // A native caller can release while returning through
+                    // producer code. Retire without unloading that DLL here.
+                    std::scoped_lock lock{CallbackResultCodeLease::retiredMutex};
+                    lease->nextRetired = CallbackResultCodeLease::retired;
+                    CallbackResultCodeLease::retired = lease;
+                }
+            },
+            [](const void* storage) noexcept { return static_cast<const CallbackResultCodeLease*>(storage)->typeId; }};
 
         [[nodiscard]] bool signedScalarFits(const std::uint8_t kind, const std::int64_t value) noexcept
         {
@@ -358,10 +400,19 @@ namespace wio::vm::detail
 
     bool encodeOwnedNativeValue(const bytecode::Module& module, const Value& value, const std::uint32_t declaredType,
                                 const std::uint8_t marshalling, WioNativeAbiValue& output, std::string& error,
-                                const NativePodLayouts* layouts)
+                                const NativePodLayouts* layouts, const NativeObjectAccess* objects)
     {
-        if (!encodeNativeValue(module, value, declaredType, marshalling, output, error, layouts))
+        if (!encodeNativeValue(module, value, declaredType, marshalling, output, error, layouts, 0, objects))
             return false;
+        if (output.kind == WIO_NATIVE_ABI_RUNTIME_VALUE)
+        {
+            // Any may reuse borrowed producer backing. A callback result must
+            // acquire its own claim before the temporary ExecutionResult dies.
+            if (!(output.flags & WIO_NATIVE_ABI_VALUE_OWNED))
+                output.payload.handle.ops->retain(output.payload.handle.state);
+            output.flags = (output.flags & ~WIO_NATIVE_ABI_VALUE_BORROWED) | WIO_NATIVE_ABI_VALUE_OWNED;
+            return true;
+        }
         if (output.kind != WIO_NATIVE_ABI_BYTES && output.kind != WIO_NATIVE_ABI_TEXT_UTF32 &&
             output.kind != WIO_NATIVE_ABI_POD)
             return true;
@@ -393,6 +444,44 @@ namespace wio::vm::detail
         return true;
     }
 
+    void pinNativeCallbackResult(WioNativeAbiValue& value, std::shared_ptr<void> codeLease,
+                                 const std::shared_ptr<void>& scope)
+    {
+        if (!codeLease || !(value.flags & WIO_NATIVE_ABI_VALUE_OWNED))
+            return;
+        auto lease = std::make_unique<CallbackResultCodeLease>(std::move(codeLease), value.owner, value.typeId, scope);
+        value.owner = {lease.release(), &CallbackResultCodeLease::Operations, 1};
+    }
+
+    void collectNativeCallbackResultLeases(const std::shared_ptr<void>& scope)
+    {
+        CallbackResultCodeLease* selected = nullptr;
+        {
+            std::scoped_lock lock{CallbackResultCodeLease::retiredMutex};
+            auto** cursor = &CallbackResultCodeLease::retired;
+            while (*cursor)
+            {
+                auto* lease = *cursor;
+                // Compare control blocks without reviving another Program
+                // under this mutex (its last release could retire more wires).
+                if (!scope || (!lease->scope.owner_before(scope) && !scope.owner_before(lease->scope)))
+                {
+                    *cursor = lease->nextRetired;
+                    lease->nextRetired = selected;
+                    selected = lease;
+                }
+                else
+                    cursor = &lease->nextRetired;
+            }
+        }
+        while (selected)
+        {
+            auto* lease = selected;
+            selected = lease->nextRetired;
+            delete lease;
+        }
+    }
+
     NativeValueResult decodeNativeValue(const bytecode::Module& module, const WioNativeAbiValue& value,
                                         const std::uint32_t declaredType, const std::uint8_t marshalling,
                                         const NativePodLayouts* layouts, const unsigned depth,
@@ -402,7 +491,13 @@ namespace wio::vm::detail
             return {{}, "native POD nesting exceeds the bridge depth limit"};
         const bool nullable = isNullable(module, declaredType);
         if (value.kind == WIO_NATIVE_ABI_VOID && nullable)
+        {
+            // Nested callback object values need the same nullable tag checks
+            // as direct object arguments, not the generic null shortcut.
+            if (marshalling == 6 && layouts && objects)
+                return objects->decode(objects->state, value, declaredType, *layouts);
             return {Value::null(), {}};
+        }
 
         const std::uint32_t type = scalarType(module, declaredType);
         if (type >= module.types.size())
@@ -548,6 +643,10 @@ namespace wio::vm::detail
         else if (kind == TypeNamed && module.types[type].nominalRepresentation == RepresentationNativePod && layouts &&
                  layouts->types.contains(type))
             marshalling = 4;
+        else if (layouts && ((kind == TypeArray && layouts->sequences.contains(type)) ||
+                             (kind == TypeDictionary && layouts->dictionaries.contains(type)) ||
+                             (kind == TypeAny && layouts->any.contains(type))))
+            marshalling = 8;
         else
             return false;
         return true;
