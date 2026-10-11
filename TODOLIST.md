@@ -1068,12 +1068,22 @@ Rider, and CLion are defined in
    and stale machine shutdown. Only this
    new Windows gate was run: 1/1 passed in 13.07 seconds (13.16 total); no full
    suite or local Linux qualification is claimed.
+   Callback ref/view arguments now also accept byte strings and Unicode text in
+   both directions, including hosted methods and retained fresh-cell calls.
+   Owning slice copy-back carries matching wire/owner identities. Both C++ and
+   VM stage returned values before publication, rejecting invalid UTF-32 or a
+   mismatched later pointee identity without partially changing earlier cells.
+   A new 30-round C++/actual-VM/live-host gate covers aliases, append, empty/large
+   values, embedded NUL, emoji/ZWJ/combining text, malformed cells, unaligned
+   UTF-32 data, panic copy-back, producer ownership and escaped result lifetime.
+   Only this new Windows gate was run: 1/1 passed in 17.52 seconds (17.61 total);
+   no full-suite or local Linux qualification is claimed.
    Remaining native parity work includes broader callback/async lifetime contracts,
    callable-valued/fixed-array callback signatures and callable method results,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; broader POD/object/container/nullable borrow
    lifetime contracts;
-   object/container/nullable/string/text ref/view callback arguments and borrowed
+   object/container/nullable ref/view callback arguments and borrowed
    callback results; nullable borrowed payload lifetime contracts;
    consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See

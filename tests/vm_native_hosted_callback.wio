@@ -97,9 +97,9 @@ object Processor
 
 object BorrowedProcessor
 {
-    public fn Unsupported(callback: fn(ref string) -> i32) -> i32
+    public fn Unsupported(callback: fn(ref i32[]) -> i32) -> i32
     {
-        mut value: string = "unsupported";
+        mut value: i32[] = [7];
         return callback(ref value);
     }
 }

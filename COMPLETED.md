@@ -1758,3 +1758,31 @@ here as historical evidence rather than active work:
       total). No full-suite or local Linux qualification is claimed. Native
       Step 8 remains open for other borrow payloads/results, callable-valued/
       fixed-array signatures, async lifetime, ownership, pruning and packaging.
+
+## Qualified String And Unicode Text Callback Borrows
+
+- [x] Added invocation-scoped string/text ref/view callback arguments in both
+      directions, including hosted Wio methods, forwarding and retained
+      callbacks invoked later with fresh caller cells. Aliases retain shared
+      storage and readonly access does not authorize mutation.
+- [x] Owning string/text callback values now carry canonical identities in both
+      their wire and owner operations. Mutable copy-back releases the previous
+      owning claim exactly once; escaped results survive machine/callback and
+      manual-loader shutdown.
+- [x] C++ callback copy-back now decodes every replacement before writing any
+      caller cell. C++ and VM reject mismatched pointee identities and invalid
+      UTF-32 without committing earlier valid replacements. Completed valid
+      writes still survive a contained callback panic.
+- [x] Added a 30-round C++/actual-VM/live-host gate covering empty and 32 KiB
+      strings, append, embedded NUL, emoji/ZWJ/combining text, both alias orders,
+      hosted forwarding, retained fresh-cell calls, malformed reference/slice
+      contracts, unaligned UTF-32 data, invalid Unicode, ownership, recovery and
+      stale machine shutdown. Byte strings remain binary-safe rather than
+      receiving Unicode validation.
+- [x] Only this new Windows gate was run: 1/1 passed in 17.52 seconds (17.61
+      total). The older unsupported hosted callback fixture now uses container
+      references instead of newly supported string references; it was not rerun.
+      No full-suite or local Linux qualification is claimed. Native Step 8
+      remains open for object/container/nullable reference arguments, borrowed
+      results, callable-valued/fixed-array signatures, async lifetime, broader
+      ownership, pruning and artifact packaging.

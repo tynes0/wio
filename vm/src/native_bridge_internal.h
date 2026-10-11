@@ -59,7 +59,7 @@ namespace wio::vm::detail
     [[nodiscard]] bool callbackValueMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                                 std::uint8_t& marshalling,
                                                 const NativePodLayouts* layouts = nullptr) noexcept;
-    // Arguments may additionally borrow scalar/POD cells for this invocation.
+    // Arguments may additionally borrow scalar/string/text/POD cells for this invocation.
     // Results deliberately retain the stricter by-value contract.
     [[nodiscard]] bool callbackArgumentMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                                    std::uint8_t& marshalling,

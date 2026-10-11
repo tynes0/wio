@@ -332,6 +332,7 @@ namespace wio::codegen
                         const auto& base = module.types.get(argument);
                         if (!(base.kind >= TypeKind::Bool && base.kind <= TypeKind::F64) &&
                             base.kind != TypeKind::Byte && base.kind != TypeKind::Char &&
+                            base.kind != TypeKind::String && base.kind != TypeKind::Text &&
                             std::ranges::find(pods, argument) == pods.end())
                             return false;
                     }

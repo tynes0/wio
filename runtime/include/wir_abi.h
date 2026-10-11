@@ -508,8 +508,15 @@ public:
             ++count_;
         }
         require(contracts_[slot] == &contract<T, Id>);
-        if (mutableAccess && !commits_[slot])
-            commits_[slot] = [this, slot, place]() mutable { place.write(Codec<T, Id>::read(tokens_[slot])); };
+        if (mutableAccess && !prepares_[slot])
+            prepares_[slot] = [this, slot, place]() mutable -> std::function<void()>
+            {
+                // Decode every returned cell before writing any caller place.
+                // A malformed later UTF-32 slice must not partially commit.
+                require(tokens_[slot].typeId == 0 || tokens_[slot].typeId == Id);
+                auto replacement = Codec<T, Id>::read(tokens_[slot]);
+                return [place, replacement = std::move(replacement)]() mutable { place.write(std::move(replacement)); };
+            };
         auto& wire = values[index];
         wire.kind = WIO_NATIVE_ABI_REFERENCE;
         wire.flags = WIO_NATIVE_ABI_VALUE_BORROWED | (mutableAccess ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
@@ -518,12 +525,19 @@ public:
     }
     void commit()
     {
-        for (auto& commit : commits_)
+        if (count_ == 0)
+            return;
+        std::array<std::function<void()>, Count> commits;
+        for (std::size_t index = 0; index < Count; ++index)
+            if (prepares_[index])
+                commits[index] = prepares_[index]();
+        for (auto& commit : commits)
             if (commit)
             {
                 commit();
-                commit = {};
             }
+        for (auto& prepare : prepares_)
+            prepare = {};
     }
     std::array<WioNativeAbiValue, Count> values{};
 
@@ -532,7 +546,7 @@ private:
     std::array<WioNativeAbiValue, Count> tokens_{};
     std::array<const void*, Count> addresses_{};
     std::array<const void*, Count> contracts_{};
-    std::array<std::function<void()>, Count> commits_{};
+    std::array<std::function<std::function<void()>()>, Count> prepares_{};
     std::size_t count_ = 0;
 };
 
@@ -557,6 +571,12 @@ template <class T, std::uint64_t Id> struct CallbackArgument<Place<T>, Id>
                     !value.owner.state && !value.owner.ops,
                 WIO_NATIVE_ABI_INVALID_ARGUMENT);
         require(value.typeId == 0 || value.typeId == Id);
+        require(value.kind == WIO_NATIVE_ABI_REFERENCE && value.payload.mutableSlice.data &&
+                    value.payload.mutableSlice.size == sizeof(WioNativeAbiValue) &&
+                    reinterpret_cast<std::uintptr_t>(value.payload.mutableSlice.data) % alignof(WioNativeAbiValue) == 0,
+                WIO_NATIVE_ABI_INVALID_ARGUMENT);
+        const auto* token = static_cast<const WioNativeAbiValue*>(value.payload.mutableSlice.data);
+        require(token->typeId == 0 || token->typeId == Id);
         auto& cell = frame.borrow<T, Id>(value, mutableAccess);
         return mutableAccess ? Place<T>::borrow(cell) : Place<T>::borrowView(cell);
     }

@@ -5481,10 +5481,12 @@ namespace wio::vm
                                                                          podLayouts.get())
                                       : detail::callbackArgumentMarshalling(module, callbackValueType, ignored,
                                                                             podLayouts.get())))
-                                return fail("WVM1225", "Native callbacks require scalar, string, text, qualified "
-                                                       "native POD, hosted object/interface, registered container "
-                                                       "or scalar/POD ref/view arguments; unsupported callback type #" +
-                                                           std::to_string(callbackValueType));
+                                return fail(
+                                    "WVM1225",
+                                    "Native callbacks require scalar, string, text, qualified "
+                                    "native POD, hosted object/interface, registered container "
+                                    "or scalar/string/text/POD ref/view arguments; unsupported callback type #" +
+                                        std::to_string(callbackValueType));
                         }
 
                         auto callbackStateOwner = std::make_unique<NativeCallbackState>();

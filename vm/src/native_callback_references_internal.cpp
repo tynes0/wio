@@ -137,10 +137,19 @@ namespace wio::vm::detail
                         error = "callback cleared a borrowed cell";
                     return false;
                 }
-                replacement.wire.typeId = slot.incoming->typeId;
+                // Owned slice leases carry their canonical identity. Only
+                // identity-less legacy scalar tokens keep their original tag.
+                if (slot.marshalling == 1)
+                    replacement.wire.typeId = slot.incoming->typeId;
             }
             else
             {
+                const auto expected = identity(module, slot.type);
+                if (slot.outgoing.typeId && slot.outgoing.typeId != expected)
+                {
+                    error = "native callback copy-back identity disagrees with its pointee type";
+                    return false;
+                }
                 auto decoded = decodeNativeValue(module, slot.outgoing, slot.type, slot.marshalling, layouts);
                 if (!decoded.succeeded())
                 {

@@ -47,8 +47,9 @@ namespace wio::vm::detail
         {
             std::atomic<std::uint32_t> references{1};
             Value value;
+            std::uint64_t typeId;
 
-            explicit OwnedCallbackValue(const Value& input) : value(input)
+            OwnedCallbackValue(const Value& input, std::uint64_t identity) : value(input), typeId(identity)
             {
             }
 
@@ -64,8 +65,7 @@ namespace wio::vm::detail
                 if (owner->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
                     delete owner;
             },
-            [](const void* storage) noexcept
-            { return static_cast<const OwnedCallbackValue*>(storage)->value.foreignTypeId(); }};
+            [](const void* storage) noexcept { return static_cast<const OwnedCallbackValue*>(storage)->typeId; }};
 
         struct CallbackResultCodeLease final
         {
@@ -435,11 +435,13 @@ namespace wio::vm::detail
                                      {static_cast<const std::byte*>(output.payload.slice.data),
                                       static_cast<std::size_t>(output.payload.slice.size)});
         }
-        auto owner = std::make_unique<OwnedCallbackValue>(owned);
+        const auto identity = output.typeId ? output.typeId : stableTypeId(module, declaredType);
+        auto owner = std::make_unique<OwnedCallbackValue>(owned, identity);
         // Encode from the owned copy: no slice may refer to temporary frame storage.
         if (!encodeNativeValue(module, owner->value, declaredType, marshalling, output, error))
             return false;
         output.flags = WIO_NATIVE_ABI_VALUE_OWNED;
+        output.typeId = identity;
         output.owner = {owner.release(), &OwnedCallbackValue::Operations, 1};
         return true;
     }
@@ -663,7 +665,7 @@ namespace wio::vm::detail
         if (type.arguments.size() != 1 ||
             !callbackValueMarshalling(module, type.arguments.front(), marshalling, layouts))
             return false;
-        return marshalling == 1 || marshalling == 4;
+        return marshalling >= 1 && marshalling <= 4;
     }
 
     bool nativeValueMarshalling(const bytecode::Module& module, const std::uint32_t declaredType,

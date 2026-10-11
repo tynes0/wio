@@ -2822,8 +2822,9 @@ Borrow state belongs to one invocation, not the retained callable. A retained
 callback may be called later with fresh caller cells; it does not keep those
 stack addresses after the call. Existing caller-thread/any-thread and stale
 machine guards are unchanged. This does not qualify escaping reference results,
-async borrows, object/container/nullable/string/text reference parameters or
-callable-valued/fixed-array callback signatures.
+async borrows, object/container/nullable reference parameters or callable-valued/
+fixed-array callback signatures. String/text reference parameters are qualified
+by the later string/text reference-argument section.
 
 The new `wio_vm_native_callback_borrow` gate compares generated C++ and actual
 VM CLI execution for 30 rounds, including both alias orders, padded POD hidden
@@ -2880,9 +2881,9 @@ dictionary and Any shapes. The method itself must still satisfy whole-surface
 host proxy qualification. Method-only callback container types are discovered
 without adding dummy free native declarations. Callback-valued method results,
 callbacks returning callbacks, reference callback results and top-level fixed-array
-callback signatures remain excluded. Scalar/POD reference arguments are now
-qualified by the preceding reference-argument section; other reference payloads
-remain excluded. Ordinary hosted method container/POD parameters
+callback signatures remain excluded. Scalar/POD and string/text reference
+arguments are now qualified by the reference-argument sections; other reference
+payloads remain excluded. Ordinary hosted method container/POD parameters
 are not newly qualified by this callback slice.
 
 Incoming function wires need the exact structural signature ID, a supported
@@ -2910,3 +2911,69 @@ callback contracts, exception/result mismatch recovery, receiver affinity,
 stale shutdown and rejection of unqualified ref/view callback methods.
 Only this new Windows gate was run: 1/1 passed in 18.17 seconds (18.25 total).
 No full-suite or local Linux qualification is claimed. Native Step 8 remains open.
+
+## Qualified String And Text Callback Reference Arguments
+
+Callback parameters now accept invocation-scoped `ref string`, `view string`,
+`ref text` and `view text` through free native boundaries and hosted Wio methods.
+This extends the earlier scalar/POD borrow qualification; callback results
+remain by-value. Retaining the callable does not retain caller stack cells:
+each later invocation supplies fresh places.
+
+```wio
+fn ModifyBytes(readonly: view string, writable: ref string) -> string
+{
+    writable = readonly + "\0z";
+    return readonly;
+}
+
+fn ModifyText(readonly: view text, writable: ref text) -> text
+{
+    writable = readonly + u"\0z";
+    return readonly;
+}
+
+[Native, CppName(native::RunBytes)]
+fn RunBytes(callback: fn(view string, ref string) -> string) -> i32;
+```
+
+The generated C++ signature uses `Place<std::string>` or
+`Place<wio::runtime::Text>`. Both directions preserve alias identity when the
+same tagged cell/place is passed more than once, including either view/ref
+order. A view still cannot write. VM closure capture of invocation-scoped
+borrowed places remains rejected with WVM1225; copy the value before capturing.
+This does not expand the C++ language path's lexical capture rules.
+
+Mutable string/text replacements and callback results are owning slice wires.
+Their canonical type ID agrees with the owner's `typeId` operation; copy-back
+releases the prior owner once. Escaped results remain readable after callback,
+machine and manual-loader shutdown. This does not extend hosted object lifetime
+or qualify borrowed callback results.
+
+C++ and VM validate/decode all mutable returned cells before publishing any
+replacement. A malformed later Unicode slice or mismatched pointee identity
+does not partially update earlier caller values. Valid completed writes survive
+a contained Wio panic. Invalid argument admission never runs the callback body.
+Reference tokens require tagged-value size/alignment, compatible type IDs and
+correct borrowed/mutable flags with no separate owner on the reference wire.
+
+`string` is binary-safe: embedded NUL and arbitrary bytes are accepted. `text`
+uses UTF-32 scalar values at this ABI boundary; surrogate code points, values
+above U+10FFFF, non-multiple-of-four byte lengths and null nonempty slices are
+rejected. The UTF-32 data pointer itself may be unaligned because decoding uses
+byte copies; the enclosing tagged reference token must still be aligned.
+
+The new `wio_vm_native_callback_string_borrow` gate compares generated C++ and
+actual VM CLI execution for 30 rounds, then exercises a live host. Cases include
+empty/32 KiB strings, append, embedded NUL, emoji/ZWJ/combining text, reverse
+aliases, retained fresh-cell calls, hosted forwarding, malformed cells/slices,
+invalid Unicode/identities, staged copy-back, panic/recovery, producer release,
+stale shutdown and escaped results read after owner shutdown. Host Unicode
+seeds use explicit code points so MSVC source encoding does not affect them.
+
+Only this new Windows gate was run: 1/1 passed in 17.52 seconds (17.61 total).
+The older hosted negative fixture now uses unsupported container references and
+was not rerun. No full-suite or local Linux qualification is claimed. Object/
+container/nullable reference arguments, borrowed results, callable-valued and
+fixed-array signatures, async lifetime and broader ownership/pruning/packaging
+remain outside this qualification. Native Step 8 remains open.
