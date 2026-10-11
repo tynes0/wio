@@ -12,7 +12,9 @@ namespace wio::vm::detail
     class NativeCallbackReferences final
     {
     public:
-        NativeCallbackReferences() = default;
+        explicit NativeCallbackReferences(const NativeObjectAccess* access = nullptr) : access_(access)
+        {
+        }
         NativeCallbackReferences(const NativeCallbackReferences&) = delete;
         NativeCallbackReferences& operator=(const NativeCallbackReferences&) = delete;
         ~NativeCallbackReferences();
@@ -21,6 +23,8 @@ namespace wio::vm::detail
         bool write(const bytecode::Module& module, const Value& value, std::uint32_t type, WioNativeAbiValue& wire,
                    std::string& error, const NativePodLayouts* layouts);
         bool commit(const bytecode::Module& module, std::string& error, const NativePodLayouts* layouts);
+        // Keep materializations alive until the callback result has been encoded.
+        bool finish(std::string& error);
 
     private:
         struct Slot
@@ -34,5 +38,6 @@ namespace wio::vm::detail
             bool mutableAccess = false;
         };
         std::deque<Slot> slots_;
+        const NativeObjectAccess* access_;
     };
 } // namespace wio::vm::detail

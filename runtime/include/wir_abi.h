@@ -513,7 +513,10 @@ public:
             {
                 // Decode every returned cell before writing any caller place.
                 // A malformed later UTF-32 slice must not partially commit.
-                require(tokens_[slot].typeId == 0 || tokens_[slot].typeId == Id);
+                // Object tokens name the concrete dynamic type. Their codec
+                // validates assignability to this statically typed place.
+                require(tokens_[slot].kind == WIO_NATIVE_ABI_OBJECT || tokens_[slot].typeId == 0 ||
+                        tokens_[slot].typeId == Id);
                 auto replacement = Codec<T, Id>::read(tokens_[slot]);
                 return [place, replacement = std::move(replacement)]() mutable { place.write(std::move(replacement)); };
             };
@@ -576,7 +579,7 @@ template <class T, std::uint64_t Id> struct CallbackArgument<Place<T>, Id>
                     reinterpret_cast<std::uintptr_t>(value.payload.mutableSlice.data) % alignof(WioNativeAbiValue) == 0,
                 WIO_NATIVE_ABI_INVALID_ARGUMENT);
         const auto* token = static_cast<const WioNativeAbiValue*>(value.payload.mutableSlice.data);
-        require(token->typeId == 0 || token->typeId == Id);
+        require(token->kind == WIO_NATIVE_ABI_OBJECT || token->typeId == 0 || token->typeId == Id);
         auto& cell = frame.borrow<T, Id>(value, mutableAccess);
         return mutableAccess ? Place<T>::borrow(cell) : Place<T>::borrowView(cell);
     }

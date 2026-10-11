@@ -72,13 +72,23 @@ namespace wio::codegen
                 return false;
             // Proxy placeholders must not run nested Wio lifecycle or expose
             // stale native field projections, including inherited fields.
+            // Private dynamic containers default to empty native storage; no
+            // element lifecycle runs while constructing a host placeholder.
             const bool supported =
                 type->kind == TypeKind::Named &&
                 (type->nominalKind == NominalKind::Object || type->nominalKind == NominalKind::Interface) &&
                 type->nominalRepresentation == NominalRepresentation::Wio && concreteArguments(module.types, id) &&
-                std::ranges::all_of(
-                    type->fields, [&](const auto& field)
-                    { return field.visibility != FieldVisibility::Public && wireValue(module, field.type); }) &&
+                std::ranges::all_of(type->fields,
+                                    [&](const auto& field)
+                                    {
+                                        const auto& storage = module.types.get(field.type);
+                                        const bool emptyContainer = storage.kind == TypeKind::Any ||
+                                                                    storage.kind == TypeKind::Dictionary ||
+                                                                    (storage.kind == TypeKind::Array &&
+                                                                     !storage.staticExtent && !storage.extentParameter);
+                                        return field.visibility != FieldVisibility::Public &&
+                                               (wireValue(module, field.type) || emptyContainer);
+                                    }) &&
                 std::ranges::all_of(type->baseTypes,
                                     [&](TypeId base) { return supportedHierarchy(module, base, path, heights); });
             if (supported)
@@ -329,11 +339,8 @@ namespace wio::codegen
                     if (reference.kind == TypeKind::Reference && reference.arguments.size() == 1)
                     {
                         argument = reference.arguments.front();
-                        const auto& base = module.types.get(argument);
-                        if (!(base.kind >= TypeKind::Bool && base.kind <= TypeKind::F64) &&
-                            base.kind != TypeKind::Byte && base.kind != TypeKind::Char &&
-                            base.kind != TypeKind::String && base.kind != TypeKind::Text &&
-                            std::ranges::find(pods, argument) == pods.end())
+                        if (module.types.get(argument).kind == TypeKind::Void ||
+                            !callbackValue(callbackValue, argument))
                             return false;
                     }
                     else if (!callbackValue(callbackValue, argument))

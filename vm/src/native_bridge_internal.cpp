@@ -665,7 +665,7 @@ namespace wio::vm::detail
         if (type.arguments.size() != 1 ||
             !callbackValueMarshalling(module, type.arguments.front(), marshalling, layouts))
             return false;
-        return marshalling >= 1 && marshalling <= 4;
+        return (marshalling >= 1 && marshalling <= 4) || marshalling == 6 || marshalling == 8;
     }
 
     bool nativeValueMarshalling(const bytecode::Module& module, const std::uint32_t declaredType,

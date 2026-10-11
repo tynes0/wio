@@ -1,0 +1,442 @@
+using cpp::header("vm_callback_value_borrow_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_callback_value_borrow::Point)]
+component Point
+{
+    public x: i32;
+}
+
+interface IRead
+{
+    fn Read() -> i32;
+}
+[From(IRead)]
+object Item
+{
+    value: i32;
+    public OnConstruct(value: i32)
+    {
+        self.value = value;
+        Constructed();
+    }
+
+    OnDestruct()
+    {
+        Destroyed();
+    }
+
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+
+    public fn Set(value: i32)
+    {
+        self.value = value;
+    }
+}
+object Processor
+{
+    first: i32[];
+    second: i32[];
+    held: Item[];
+    public OnConstruct()
+    {
+        self.first = [7];
+        self.second = [19];
+        self.held = [Item(31)];
+    }
+
+    public fn Apply(callback: fn(view i32[], ref i32[]) -> i32[]) -> i32
+    {
+        mut values: i32[] = [7];
+        let result = callback(ref values, ref values);
+        if (result.Count() != values.Count())
+        {
+            return -1;
+        }
+        return values[1];
+    }
+    public fn Forward(callback: fn(view i32[], ref i32[]) -> i32[]) -> i32
+    {
+        return Call<i32[]>(callback, [7])[1];
+    }
+    public fn Pair(callback: fn(ref i32[], ref i32[]) -> i32) -> i32
+    {
+        return callback(ref self.first, ref self.second);
+    }
+    public fn First() -> i32
+    {
+        return self.first[0];
+    }
+
+    public fn Second() -> i32
+    {
+        return self.second[0];
+    }
+}
+
+[Native, CppName(vm_callback_value_borrow::Constructed)]
+fn Constructed();
+[Native, CppName(vm_callback_value_borrow::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_callback_value_borrow::Balanced)]
+fn Balanced() -> bool;
+[Native, CppName(vm_callback_value_borrow::Live)]
+fn Live() -> i32;
+[Native, CppName(vm_callback_value_borrow::Fail)]
+fn Fail();
+[Native, CppName(vm_callback_value_borrow::Print)]
+fn Print();
+[Native, CppName(vm_callback_value_borrow::Call),
+ Instantiate(i32[]), Instantiate(bool[]), Instantiate(string[]), Instantiate(text[]),
+ Instantiate(Point[]), Instantiate(i32[][]), Instantiate(Item[]), Instantiate(Item?[]),
+ Instantiate(Dict<string, i32[]>), Instantiate(Tree<string, Item>), Instantiate(any),
+ Instantiate(Item), Instantiate(IRead), Instantiate(Item?)]
+fn Call<T>(callback: fn(view T, ref T) -> T, initial: T) -> T;
+[Native, CppName(vm_callback_value_borrow::View), Instantiate(Item), Instantiate(Item[]), Instantiate(any)]
+fn View<T>(callback: fn(view T) -> i32, initial: T) -> i32;
+[Native, CppName(vm_callback_value_borrow::Reverse)]
+fn Reverse(callback: fn(ref i32[], view i32[]) -> i32[], initial: i32[]) -> i32[];
+[Native, CppName(vm_callback_value_borrow::Store)]
+fn Store([attribute::NativeCallback("retained", "caller")] callback: fn(view i32[], ref i32[]) -> i32[], initial: i32[]);
+[Native, CppName(vm_callback_value_borrow::Run)]
+fn Run() -> i32;
+[Native, CppName(vm_callback_value_borrow::Clear)]
+fn Clear();
+[Native, CppName(vm_callback_value_borrow::Hosted)]
+fn Hosted(value: Processor) -> i32;
+[Native, CppName(vm_callback_value_borrow::CaptureHost)]
+fn CaptureHost(value: Processor) -> u64;
+[Native, CppName(vm_callback_value_borrow::ClearHost)]
+fn ClearHost();
+[Native, CppName(vm_callback_value_borrow::AtomicProbe)]
+fn AtomicProbe(callback: fn(ref i32[], ref i32[]) -> i32) -> i32;
+[Native, CppName(vm_callback_value_borrow::Capture)]
+fn CaptureArray([attribute::NativeCallback("retained", "caller")] callback: fn(view i32[], ref i32[]) -> i32[], initial: i32[]);
+[Native, CppName(vm_callback_value_borrow::Capture)]
+fn CaptureMap([attribute::NativeCallback("retained", "caller")] callback: fn(view Dict<string, i32[]>, ref Dict<string, i32[]>) -> Dict<string, i32[]>, initial: Dict<string, i32[]>);
+[Native, CppName(vm_callback_value_borrow::Capture)]
+fn CaptureAny([attribute::NativeCallback("retained", "caller")] callback: fn(view any, ref any) -> any, initial: any);
+[Native, CppName(vm_callback_value_borrow::Capture)]
+fn CaptureObject([attribute::NativeCallback("retained", "caller")] callback: fn(view Item, ref Item) -> Item, initial: Item);
+[Native, CppName(vm_callback_value_borrow::Capture)]
+fn CaptureNullable([attribute::NativeCallback("retained", "caller")] callback: fn(view Item?, ref Item?) -> Item?, initial: Item?);
+
+fn Change(readonly: view i32[], writable: ref i32[]) -> i32[]
+{
+    writable = [readonly[0] + 2, 23];
+    return readonly;
+}
+fn HostArray()
+{
+    CaptureArray(Change, [7]);
+}
+
+fn HostMap()
+{
+    let initial: Dict<string, i32[]> = {"key": [7]};
+    CaptureMap((readonly, writable) =>
+    {
+        writable = {"key": [9, 23]};
+        return readonly;
+    }, initial);
+}
+fn HostAny()
+{
+    let initial: any = 7;
+    CaptureAny((readonly, writable) =>
+    {
+        writable = "changed\0🌍";
+        return readonly;
+    }, initial);
+}
+fn HostObject()
+{
+    CaptureObject((readonly, writable) =>
+    {
+        writable = Item(readonly.Read() + 2);
+        return deref readonly;
+    }, Item(7));
+}
+fn HostNullable()
+{
+    CaptureNullable((readonly, writable) =>
+    {
+        writable = Item(9);
+        return deref readonly;
+    }, null);
+}
+fn HostPanic()
+{
+    CaptureArray((readonly, writable) =>
+    {
+        writable = [99];
+        Fail();
+        return readonly;
+    }, [7]);
+}
+
+fn HostBorrowCapture()
+{
+    CaptureArray((readonly, writable) =>
+    {
+        writable = [99];
+        let escaped = () => readonly[0];
+        let ignored = escaped();
+        return readonly;
+    }, [7]);
+}
+
+fn HostReceiver() -> u64
+{
+    return CaptureHost(Processor());
+}
+
+fn HostClear()
+{
+    ClearHost();
+}
+
+fn SafePoint() -> i32
+{
+    return 7;
+}
+
+fn LifecycleBalanced() -> bool
+{
+    return Balanced();
+}
+
+fn LifecycleLive() -> i32
+{
+    return Live();
+}
+
+fn Entry() -> i32
+{
+    for (mut round = 0; round < 30; round += 1)
+    {
+        {
+            if (Call<i32[]>(Change, [7])[0] != 9)
+            {
+                return 1;
+            }
+            let reversed = Reverse((writable, readonly) =>
+            {
+                writable = [readonly[0] + 2];
+                return readonly;
+            }, [7]);
+            if (reversed[0] != 9)
+            {
+                return 2;
+            }
+            let empty = Call<i32[]>((readonly, writable) =>
+            {
+                writable = [23];
+                return readonly;
+            }, []);
+            if (empty[0] != 23)
+            {
+                return 3;
+            }
+            let bits = Call<bool[]>((readonly, writable) =>
+            {
+                writable = [not readonly[0], true];
+                return readonly;
+            }, [true]);
+            if (bits[0] or not bits[1])
+            {
+                return 4;
+            }
+            let words = Call<string[]>((readonly, writable) =>
+            {
+                writable = [readonly[0] + "\0z"];
+                return readonly;
+            }, ["🌍"]);
+            if (words[0] != "🌍\0z")
+            {
+                return 5;
+            }
+            let texts = Call<text[]>((readonly, writable) =>
+            {
+                writable = [readonly[0] + u"\0z"];
+                return readonly;
+            }, [u"👩‍💻"]);
+            if (texts[0] != u"👩‍💻\0z")
+            {
+                return 6;
+            }
+            let points = Call<Point[]>((readonly, writable) =>
+            {
+                writable = [Point(readonly[0].x + 2)];
+                return readonly;
+            }, [Point(7)]);
+            if (points[0].x != 9)
+            {
+                return 7;
+            }
+            let nested = Call<i32[][]>((readonly, writable) =>
+            {
+                writable = [[readonly[0][0] + 2], [23]];
+                return readonly;
+            }, [[7]]);
+            if (nested[0][0] != 9 or nested[1][0] != 23)
+            {
+                return 8;
+            }
+            let map: Dict<string, i32[]> = {"key": [7]};
+            let changed = Call<Dict<string, i32[]>>((readonly, writable) =>
+            {
+                writable = {"key": [readonly["key"][0] + 2]};
+                return readonly;
+            }, map);
+            if (changed["key"][0] != 9 or map["key"][0] != 7)
+            {
+                return 9;
+            }
+            let original = Item(7);
+            let items = Call<Item[]>((readonly, writable) =>
+            {
+                writable = [Item(9), readonly[0]];
+                return readonly;
+            }, [original]);
+            if (items[0].Read() != 9 or items[1] != original)
+            {
+                return 10;
+            }
+            let nullable: Item?[] = [null, original];
+            let echo = Call<Item?[]>((readonly, writable) =>
+            {
+                writable = [readonly[1], null];
+                return readonly;
+            }, nullable);
+            if (echo[0] != original or echo[1] != null)
+            {
+                return 11;
+            }
+            let tree: Tree<string, Item> = {< "key": original >};
+            let ordered = Call<Tree<string, Item>>((readonly, writable) =>
+            {
+                writable = {< "key": Item(9) >};
+                return readonly;
+            }, tree);
+            if (ordered["key"].Read() != 9)
+            {
+                return 12;
+            }
+            let scalar: any = 7;
+            let boxed = Call<any>((readonly, writable) =>
+            {
+                writable = "changed\0🌍";
+                return readonly;
+            }, scalar);
+            if ((boxed fit string) != "changed\0🌍")
+            {
+                return 13;
+            }
+            let item = Call<Item>((readonly, writable) =>
+            {
+                writable = Item(readonly.Read() + 2);
+                return deref readonly;
+            }, original);
+            if (item.Read() != 9 or item == original)
+            {
+                return 14;
+            }
+            let reader = Call<IRead>((readonly, writable) =>
+            {
+                writable = Item(9) fit IRead;
+                return deref readonly;
+            }, original fit IRead);
+            if (reader.Read() != 9)
+            {
+                return 15;
+            }
+            let present: Item? = original;
+            let none = Call<Item?>((readonly: view Item?, writable: ref Item?) =>
+            {
+                writable = null;
+                return deref readonly;
+            }, present);
+            if (none != null)
+            {
+                return 16;
+            }
+            let some = Call<Item?>((readonly: view Item?, writable: ref Item?) =>
+            {
+                writable = Item(9);
+                return deref readonly;
+            }, null);
+            if (some == null)
+            {
+                return 17;
+            }
+            Store(Change, [7]);
+            if (Run() != 2 or Run() != 2)
+            {
+                return 18;
+            }
+            Clear();
+            if (Hosted(Processor()) != 0)
+            {
+                return 19;
+            }
+            let appended = Call<i32[]>((readonly, writable) =>
+            {
+                writable.Push(23);
+                return readonly;
+            }, [7]);
+            if (appended.Count() != 2usize or appended[1] != 23)
+            {
+                return 22;
+            }
+            let assigned = Call<Dict<string, i32[]>>((readonly, writable) =>
+            {
+                writable["key"] = [23];
+                return readonly;
+            }, map);
+            if (assigned["key"][0] != 23 or map["key"][0] != 7)
+            {
+                return 23;
+            }
+            let objectBox: any = original;
+            let changedBox = Call<any>((readonly, writable) =>
+            {
+                writable = Item(9);
+                return readonly;
+            }, objectBox);
+            if ((changedBox fit Item).Read() != 9 or (objectBox fit Item) != original)
+            {
+                return 24;
+            }
+            mut blank: any;
+            let nulled = Call<any>((readonly, writable) =>
+            {
+                writable = blank;
+                return readonly;
+            }, scalar);
+            if (nulled != null)
+            {
+                return 25;
+            }
+            if (View<Item>((readonly: view Item) => readonly.Read(), original) != 7
+                or View<Item[]>((readonly: view Item[]) => readonly[0].Read(), [original]) != 7
+                or View<any>((readonly: view any) => ((deref readonly) fit Item).Read(), objectBox) != 7)
+            {
+                return 26;
+            }
+        }
+        if (not Balanced())
+        {
+            return 20;
+        }
+    }
+    if (AtomicProbe((first, second) => 0) != 0)
+    {
+        return 21;
+    }
+    Print();
+    return 0;
+}

@@ -1957,7 +1957,7 @@ namespace wio::vm
         };
         const std::unique_ptr<void, decltype(release)> guard{this, release};
         std::string error;
-        detail::NativeCallbackReferences references;
+        detail::NativeCallbackReferences references{&objects};
         for (std::size_t index = 0; index < arguments.size(); ++index)
         {
             std::uint8_t marshalling = 0;
@@ -2009,6 +2009,36 @@ namespace wio::vm
                     result.error = "callback argument requires an original object from this VM";
                 return result;
             };
+        access.pinValue = [](void* state, const Value& value)
+        { static_cast<Machine*>(state)->program_->pinNativeLibraries(value); };
+        access.pinWire = [](void* state, WioNativeAbiValue& value)
+        {
+            if (value.kind != WIO_NATIVE_ABI_RUNTIME_VALUE)
+                return;
+            const auto& program = static_cast<Machine*>(state)->program_;
+            std::scoped_lock lock{program->nativeMutex};
+            if (!program->nativeLibraries.empty())
+                detail::pinNativeCallbackResult(
+                    value,
+                    std::make_shared<std::vector<std::shared_ptr<detail::NativeLibrary>>>(program->nativeLibraries),
+                    program);
+        };
+        access.cleanup = [](void* state, Value& value, std::string& message) noexcept
+        {
+            try
+            {
+                ExecutionError error;
+                static_cast<Machine*>(state)->cleanupValue(value, error);
+                if (error.cleanupFailures.empty())
+                    return true;
+                message = "callback borrow cleanup failed: " + error.cleanupFailures.front().message;
+            }
+            catch (...)
+            {
+                message = "callback borrow cleanup threw";
+            }
+            return false;
+        };
         return access;
     }
 
@@ -2045,7 +2075,8 @@ namespace wio::vm
         const auto adapter = layouts.objects.find(concrete);
         if (adapter == layouts.objects.end())
         {
-            error = "VM-created concrete object has no qualified producer proxy adapter";
+            error = "VM-created concrete object type #" + std::to_string(concrete) +
+                    " has no qualified producer proxy adapter (declared type #" + std::to_string(type) + ")";
             return false;
         }
         if (!program_->nativeObjects)
@@ -5485,7 +5516,7 @@ namespace wio::vm
                                     "WVM1225",
                                     "Native callbacks require scalar, string, text, qualified "
                                     "native POD, hosted object/interface, registered container "
-                                    "or scalar/string/text/POD ref/view arguments; unsupported callback type #" +
+                                    "or qualified value ref/view arguments; unsupported callback type #" +
                                         std::to_string(callbackValueType));
                         }
 
@@ -5563,7 +5594,7 @@ namespace wio::vm
                                 }
                                 values.push_back(*capture);
                             }
-                            detail::NativeCallbackReferences references;
+                            detail::NativeCallbackReferences references{&callbackObjects};
                             for (std::size_t argumentIndex = 0; argumentIndex < callbackArgumentCount; ++argumentIndex)
                             {
                                 if (callbackModule.types[signature[argumentIndex]].kind == TypeReference)
@@ -5644,6 +5675,13 @@ namespace wio::vm
                                         std::make_shared<std::vector<std::shared_ptr<detail::NativeLibrary>>>(
                                             callbackProgram->nativeLibraries),
                                         callbackProgram);
+                            }
+                            if (!references.finish(copyBackError))
+                            {
+                                WioNativeAbiReleaseValue(callbackResult);
+                                *callbackResult = {};
+                                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_PANIC, copyBackError);
+                                return WIO_NATIVE_ABI_PANIC;
                             }
                             return WIO_NATIVE_ABI_OK;
                         };

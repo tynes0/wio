@@ -30,6 +30,10 @@ namespace wio::vm::detail
         void* state;
         bool (*encode)(void*, const Value&, std::uint32_t, WioNativeAbiValue&, std::string&, const NativePodLayouts&);
         NativeValueResult (*decode)(void*, const WioNativeAbiValue&, std::uint32_t, const NativePodLayouts&);
+        // Optional invocation-local lifetime hooks for materialized callback cells.
+        void (*pinValue)(void*, const Value&) = nullptr;
+        void (*pinWire)(void*, WioNativeAbiValue&) = nullptr;
+        bool (*cleanup)(void*, Value&, std::string&) noexcept = nullptr;
     };
 
     [[nodiscard]] bool encodeNativeValue(const bytecode::Module& module, const Value& value, std::uint32_t declaredType,
@@ -59,7 +63,7 @@ namespace wio::vm::detail
     [[nodiscard]] bool callbackValueMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                                 std::uint8_t& marshalling,
                                                 const NativePodLayouts* layouts = nullptr) noexcept;
-    // Arguments may additionally borrow scalar/string/text/POD cells for this invocation.
+    // Arguments may borrow any qualified non-void value cell for this invocation.
     // Results deliberately retain the stricter by-value contract.
     [[nodiscard]] bool callbackArgumentMarshalling(const bytecode::Module& module, std::uint32_t declaredType,
                                                    std::uint8_t& marshalling,

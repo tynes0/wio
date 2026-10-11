@@ -1786,3 +1786,37 @@ here as historical evidence rather than active work:
       remains open for object/container/nullable reference arguments, borrowed
       results, callable-valued/fixed-array signatures, async lifetime, broader
       ownership, pruning and artifact packaging.
+
+## Qualified Container And Hosted Object Callback Borrows
+
+- [x] Added invocation-scoped ref/view callback arguments for qualified dynamic
+      arrays, ordered/unordered dictionaries, Any, hosted objects/interfaces
+      and nullable hosted objects in both directions. Borrowed results and
+      callable-valued/fixed-array signatures remain excluded.
+- [x] Separated static cell identity from dynamic object token identity.
+      Object codecs validate assignability and original-machine provenance;
+      nullable transitions preserve the underlying nominal identity and tag.
+      Aliases share materialization only when their static cell types agree.
+- [x] Added invocation-local lifecycle hooks to callback materialization.
+      Decoded backing pins producer libraries; mutable container copy-back
+      receives an owning code lease. Replaced values and staged failures use
+      normal Wio cleanup rather than only dropping storage references.
+      Materializations remain alive until callback result encoding completes.
+- [x] Hosted proxy qualification now accepts private dynamic array/dictionary/
+      Any fields that default to empty native storage. Public fields, fixed
+      arrays and lifecycle-bearing component storage remain unqualified.
+      The new processor fixture owns an Item array and checks balanced
+      destruction without constructing elements in native host placeholders.
+- [x] Added a 30-round C++/actual-VM/live-host gate for nested arrays, bool/string/
+      text/native-POD/object/nullable elements, maps, Any payload replacement,
+      object/interface rebinding, null transitions, readonly-only access,
+      reversed aliases, retained fresh-cell calls, hosted forwarding, malformed
+      handles and missing sidecars, cross-machine rejection, two-cell validation
+      before publication, unsafe VM borrow capture, panic/recovery and reads of
+      escaped container results after machine/callback/manual-loader shutdown.
+- [x] Only this new Windows gate was run: 1/1 passed in 50.73 seconds (50.84
+      total). The older negative hosted fixture now uses a callable-valued
+      callback signature, which remains unsupported; that gate was not rerun.
+      No full-suite or local Linux qualification is claimed. Native Step 8
+      remains open for borrowed results, callable-valued/fixed-array signatures,
+      async lifetime, broader foreign ownership, pruning and artifact packaging.

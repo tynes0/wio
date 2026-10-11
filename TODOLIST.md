@@ -1078,13 +1078,27 @@ Rider, and CLion are defined in
    UTF-32 data, panic copy-back, producer ownership and escaped result lifetime.
    Only this new Windows gate was run: 1/1 passed in 17.52 seconds (17.61 total);
    no full-suite or local Linux qualification is claimed.
+   Qualified callback arguments now additionally accept invocation-scoped
+   array/dictionary/Any and hosted object/interface/nullable-object ref/view
+   cells. Recursive sidecars preserve nested object identity; polymorphic
+   tokens keep dynamic object identity separate from the static cell contract.
+   Borrow materializations use normal Wio cleanup and survive until result
+   encoding; copy-back pins producer code for escaping container wires.
+   Hosted placeholders now allow private empty-default dynamic container/Any
+   fields without running element lifecycle or exposing native projections.
+   A new 30-round C++/actual-VM/live-host gate covers value replacement and
+   in-place mutation, nested POD/object/nullable containers, object/interface
+   rebinding, nullable transitions, Any payload changes, readonly-only and
+   retained fresh-cell calls, malformed/missing sidecars, cross-machine
+   rejection, staged copy-back, unsafe borrow capture, panic/recovery and
+   balanced object destruction. Only this new Windows gate was run: 1/1 passed
+   in 50.73 seconds (50.84 total); no full-suite or Linux qualification is claimed.
    Remaining native parity work includes broader callback/async lifetime contracts,
    callable-valued/fixed-array callback signatures and callable method results,
    std::Box and broader foreign/container ownership,
    alias identity canonicalization; broader POD/object/container/nullable borrow
    lifetime contracts;
-   object/container/nullable ref/view callback arguments and borrowed
-   callback results; nullable borrowed payload lifetime contracts;
+   borrowed callback results; nullable borrowed payload lifetime contracts;
    consumed arguments. Native-only bridge pruning
    and VM host/executable/shared/static artifact packaging also remain. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.

@@ -7,8 +7,13 @@ namespace wio::vm::detail
     namespace
     {
         constexpr std::uint8_t TypeReference = 29;
+        constexpr std::uint8_t TypeNullable = 30;
         std::uint64_t identity(const bytecode::Module& module, std::uint32_t type)
         {
+            // Nullable object codecs carry the underlying nominal identity.
+            if (type < module.types.size() && module.types[type].kind == TypeNullable &&
+                module.types[type].arguments.size() == 1)
+                type = module.types[type].arguments.front();
             const auto found = std::ranges::find(module.contract.reflection, type, &bytecode::Reflection::type);
             return found == module.contract.reflection.end() ? 0 : found->stableTypeId;
         }
@@ -16,7 +21,14 @@ namespace wio::vm::detail
     NativeCallbackReferences::~NativeCallbackReferences()
     {
         for (auto& slot : slots_)
+        {
             WioNativeAbiReleaseValue(&slot.outgoing);
+            if (slot.local && access_ && access_->cleanup)
+            {
+                std::string ignored;
+                access_->cleanup(access_->state, slot.local->value, ignored);
+            }
+        }
     }
 
     NativeValueResult NativeCallbackReferences::read(const bytecode::Module& module, const WioNativeAbiValue& wire,
@@ -38,14 +50,17 @@ namespace wio::vm::detail
             return {{}, "callback borrow requires a compatible tagged-value cell"};
         auto* token = static_cast<WioNativeAbiValue*>(wire.payload.mutableSlice.data);
         const auto expected = identity(module, base);
-        if ((wire.typeId && wire.typeId != expected) || (token->typeId && token->typeId != expected))
+        if ((wire.typeId && wire.typeId != expected) ||
+            (marshalling != 6 && token->typeId && token->typeId != expected))
             return {{}, "callback reference and token identities disagree"};
         auto slot = std::ranges::find(slots_, token, &Slot::incoming);
         if (slot == slots_.end())
         {
-            auto decoded = decodeNativeValue(module, *token, base, marshalling, layouts);
+            auto decoded = decodeNativeValue(module, *token, base, marshalling, layouts, 0, access_);
             if (!decoded.succeeded())
                 return decoded;
+            if (access_ && access_->pinValue)
+                access_->pinValue(access_->state, decoded.value);
             auto local = std::make_unique<PlaceStorage>();
             local->value = std::move(decoded.value);
             local->initialized = true;
@@ -86,10 +101,11 @@ namespace wio::vm::detail
         {
             slots_.push_back({.original = place, .type = base, .marshalling = marshalling});
             slot = std::prev(slots_.end());
-            if (!encodeOwnedNativeValue(module, place->storedValue(), base, marshalling, slot->outgoing, error,
-                                        layouts))
+            if (!encodeOwnedNativeValue(module, place->storedValue(), base, marshalling, slot->outgoing, error, layouts,
+                                        access_))
                 return false;
-            slot->outgoing.typeId = identity(module, base);
+            if (marshalling != 6)
+                slot->outgoing.typeId = identity(module, base);
         }
         if (slot->type != base)
         {
@@ -99,7 +115,7 @@ namespace wio::vm::detail
         slot->mutableAccess |= mutableAccess;
         wire.kind = WIO_NATIVE_ABI_REFERENCE;
         wire.flags = WIO_NATIVE_ABI_VALUE_BORROWED | (mutableAccess ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
-        wire.typeId = slot->outgoing.typeId;
+        wire.typeId = identity(module, base);
         wire.payload.mutableSlice = {&slot->outgoing, sizeof(WioNativeAbiValue)};
         return true;
     }
@@ -118,7 +134,14 @@ namespace wio::vm::detail
         const auto release = [&](void*) noexcept
         {
             for (auto& item : staged)
+            {
                 WioNativeAbiReleaseValue(&item.wire);
+                if (access_ && access_->cleanup)
+                {
+                    std::string ignored;
+                    access_->cleanup(access_->state, item.value, ignored);
+                }
+            }
         };
         const std::unique_ptr<void, decltype(release)> guard{this, release};
         for (auto& slot : slots_)
@@ -131,7 +154,7 @@ namespace wio::vm::detail
             {
                 if (!slot.local->initialized ||
                     !encodeOwnedNativeValue(module, slot.local->storedValue(), slot.type, slot.marshalling,
-                                            replacement.wire, error, layouts))
+                                            replacement.wire, error, layouts, access_))
                 {
                     if (error.empty())
                         error = "callback cleared a borrowed cell";
@@ -141,25 +164,32 @@ namespace wio::vm::detail
                 // identity-less legacy scalar tokens keep their original tag.
                 if (slot.marshalling == 1)
                     replacement.wire.typeId = slot.incoming->typeId;
+                if (access_ && access_->pinWire)
+                    access_->pinWire(access_->state, replacement.wire);
             }
             else
             {
                 const auto expected = identity(module, slot.type);
-                if (slot.outgoing.typeId && slot.outgoing.typeId != expected)
+                if (slot.marshalling != 6 && slot.outgoing.typeId && slot.outgoing.typeId != expected)
                 {
                     error = "native callback copy-back identity disagrees with its pointee type";
                     return false;
                 }
-                auto decoded = decodeNativeValue(module, slot.outgoing, slot.type, slot.marshalling, layouts);
+                auto decoded =
+                    decodeNativeValue(module, slot.outgoing, slot.type, slot.marshalling, layouts, 0, access_);
                 if (!decoded.succeeded())
                 {
                     error = std::move(decoded.error);
                     return false;
                 }
                 replacement.value = std::move(decoded.value);
+                if (access_ && access_->pinValue)
+                    access_->pinValue(access_->state, replacement.value);
             }
         }
         // Validate every replacement before publishing any copy-back.
+        std::vector<Value> retired;
+        retired.reserve(staged.size());
         for (auto& replacement : staged)
         {
             auto& slot = *replacement.slot;
@@ -170,8 +200,26 @@ namespace wio::vm::detail
                 replacement.wire = {};
             }
             else
+            {
+                slot.original->retireProjections();
+                retired.push_back(std::move(slot.original->storedValue()));
                 slot.original->storedValue() = std::move(replacement.value);
+            }
         }
-        return true;
+        bool cleaned = true;
+        for (auto& value : retired)
+            if (access_ && access_->cleanup && !access_->cleanup(access_->state, value, error))
+                cleaned = false;
+        return cleaned;
+    }
+
+    bool NativeCallbackReferences::finish(std::string& error)
+    {
+        bool cleaned = true;
+        for (auto& slot : slots_)
+            if (slot.local && access_ && access_->cleanup &&
+                !access_->cleanup(access_->state, slot.local->value, error))
+                cleaned = false;
+        return cleaned;
     }
 } // namespace wio::vm::detail

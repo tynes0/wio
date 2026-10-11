@@ -2822,9 +2822,9 @@ Borrow state belongs to one invocation, not the retained callable. A retained
 callback may be called later with fresh caller cells; it does not keep those
 stack addresses after the call. Existing caller-thread/any-thread and stale
 machine guards are unchanged. This does not qualify escaping reference results,
-async borrows, object/container/nullable reference parameters or callable-valued/
-fixed-array callback signatures. String/text reference parameters are qualified
-by the later string/text reference-argument section.
+async borrows or callable-valued/fixed-array callback signatures. String/text
+and object/container/nullable-object reference parameters are qualified by the
+later reference-argument sections.
 
 The new `wio_vm_native_callback_borrow` gate compares generated C++ and actual
 VM CLI execution for 30 rounds, including both alias orders, padded POD hidden
@@ -2882,8 +2882,9 @@ host proxy qualification. Method-only callback container types are discovered
 without adding dummy free native declarations. Callback-valued method results,
 callbacks returning callbacks, reference callback results and top-level fixed-array
 callback signatures remain excluded. Scalar/POD and string/text reference
-arguments are now qualified by the reference-argument sections; other reference
-payloads remain excluded. Ordinary hosted method container/POD parameters
+arguments are now qualified by the reference-argument sections, which also
+cover registered containers and hosted object/interface/nullable-object cells.
+Other reference payloads remain excluded. Ordinary hosted method container/POD parameters
 are not newly qualified by this callback slice.
 
 Incoming function wires need the exact structural signature ID, a supported
@@ -2972,8 +2973,89 @@ stale shutdown and escaped results read after owner shutdown. Host Unicode
 seeds use explicit code points so MSVC source encoding does not affect them.
 
 Only this new Windows gate was run: 1/1 passed in 17.52 seconds (17.61 total).
-The older hosted negative fixture now uses unsupported container references and
-was not rerun. No full-suite or local Linux qualification is claimed. Object/
-container/nullable reference arguments, borrowed results, callable-valued and
-fixed-array signatures, async lifetime and broader ownership/pruning/packaging
-remain outside this qualification. Native Step 8 remains open.
+The older hosted negative fixture was changed to container references for this
+slice and was not rerun; the following slice qualifies those arguments and
+updates that negative fixture again. No full-suite or local Linux qualification
+is claimed. Borrowed results, callable-valued/fixed-array signatures, async
+lifetime and broader ownership/pruning/packaging remain outside this
+qualification. Native Step 8 remains open.
+
+## Qualified Container And Hosted Object Callback Reference Arguments
+
+Invocation-scoped callback `ref/view` arguments now cover every currently
+qualified non-void callback value shape: scalar/string/text/native POD plus
+dynamic arrays, ordered/unordered dictionaries, Any and hosted Wio
+object/interface/nullable-object cells. Required recursive container/object
+sidecars must be installed. This is not a general arbitrary-component,
+fixed-array, opaque, callable-valued or asynchronous borrow contract.
+
+```wio
+fn Grow(readonly: view i32[], writable: ref i32[]) -> i32[]
+{
+    writable.Push(23);
+    return readonly;
+}
+
+fn Replace(readonly: view Item, writable: ref Item) -> Item
+{
+    writable = Item(readonly.Read() + 2);
+    return deref readonly;
+}
+
+[Native, CppName(native::Run)]
+fn Run(callback: fn(view i32[], ref i32[]) -> i32[], initial: i32[]) -> i32[];
+```
+
+Native C++ receives `Place<T>` cells. A readonly and mutable argument naming the
+same typed cell share one materialization in either order. Containers retain
+their Wio by-value storage semantics while nested objects keep shared identity.
+Any can change payload type or become empty. Object/interface handles may be
+rebound to compatible original Wio objects; nullable objects can transition
+between null and a value. `view` prevents rebinding/mutation through that place,
+not arbitrary method effects on a shared object graph.
+
+The outer reference wire identifies the static cell contract. An object token
+inside it identifies the dynamic object type, which can differ for an interface
+or base cell. Object codecs validate assignability, ownership and machine
+provenance rather than demanding equality of these two identities. Nullable
+null requires its explicit tag and the underlying nominal identity. Incompatible
+static alias types and unrelated/foreign-machine objects remain rejected.
+
+Callback materializations now use invocation-local Wio lifecycle hooks.
+Decoded producer backing pins its code; replacements and failed staged values
+use normal Wio cleanup so nested objects are not silently dropped without
+destructors. Local materializations survive result encoding. An owning container
+copy-back wire pins producer code just like an owning callback result, allowing
+the host to read escaped arrays/maps/Any after machine and callback shutdown.
+Final lease retirement still requires the established host safe point. APIs
+installed only through a manual registry still need a host-managed DLL lease.
+
+Both directions validate all mutable replacement values before publishing
+cell rebinding. A later malformed handle, kind or identity leaves earlier cells
+unchanged. Completed valid writes survive a contained panic. This is not a
+transaction over method side effects on shared objects; those effects are not
+rolled back. Capturing an invocation-scoped VM borrow into a closure remains
+rejected with WVM1225, including container places. Copy a value before capture.
+Retained callbacks must receive fresh live cells on each later invocation.
+
+Hosted proxy placeholders may now contain private dynamic array/dictionary/Any
+fields, whose native default storage is empty. Constructing a placeholder must
+not run nested element lifecycle; public native projections, fixed arrays and
+lifecycle-bearing component fields remain excluded. Ordinary hosted method
+container parameters/results are not newly qualified by this callback update.
+
+The new `wio_vm_native_callback_value_borrow` gate compares generated C++ and
+actual VM CLI for 30 rounds, then runs a live host. Cases include nested/POD/
+object/nullable arrays, bool and Unicode payloads, maps, in-place append/index
+assignment, Any object/string/null changes, object/interface rebinding, nullable
+transitions, readonly-only calls, reversed aliases, retained fresh cells,
+hosted forwarding, missing sidecars, malformed handles, foreign-machine object
+rejection, C++/VM staged two-cell copy-back, panic and borrow-capture recovery,
+balanced lifecycle and reads after machine/callback/manual-loader shutdown.
+
+Only this new Windows gate was run: 1/1 passed in 50.73 seconds (50.84 total).
+The older negative hosted fixture now uses an unsupported callable-valued
+callback parameter and was not rerun. No full-suite or local Linux qualification
+is claimed. Borrowed callback results, callable-valued/fixed-array signatures,
+async lifetime, broader foreign/consumed ownership, pruning and artifact
+packaging remain open. Native Step 8 is not closed by this qualification.
