@@ -41,6 +41,8 @@ That path gives you:
 - [Interop guide](./WIO_INTEROP_GUIDE.md)
 - [Examples guide](./WIO_EXAMPLES.md)
 - [Troubleshooting](./WIO_TROUBLESHOOTING.md)
+- [Known issues and qualification gaps](./WIO_KNOWN_ISSUES.md)
+- [Error and status code reference](./WIO_ERROR_CODES.md)
 - [FAQ](./WIO_FAQ.md)
 
 These documents answer practical workflow questions such as:

@@ -3,6 +3,11 @@
 This file contains only unfinished work. Completed milestones live in
 `COMPLETED.md`.
 
+The current consolidated defect/limitation/qualification register is
+[`docs/WIO_KNOWN_ISSUES.md`](docs/WIO_KNOWN_ISSUES.md). It distinguishes observed
+bugs from pending features and missing test evidence; it is not an error-code
+catalog or a replacement for this backlog.
+
 Status markers:
 
 - `[ ]` not started
