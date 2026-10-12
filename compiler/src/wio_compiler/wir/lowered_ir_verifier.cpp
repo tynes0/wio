@@ -1506,8 +1506,11 @@ namespace wio::wir::lowered
                         const Type* copiedType = module.types.tryGet(instruction.resultType);
                         const bool expectsReferenceCounted = instruction.opcode == Opcode::Retain;
                         if (instruction.operands.size() != 1 ||
-                            valueType(instruction.operands.front()) != instruction.resultType || !copiedType ||
-                            !requiresCleanup(*copiedType) ||
+                            (expectsReferenceCounted
+                                 ? valueType(instruction.operands.front()) != instruction.resultType
+                                 : !isAnyPayloadTypeCompatible(module.types, valueType(instruction.operands.front()),
+                                                               instruction.resultType)) ||
+                            !copiedType || !requiresCleanup(*copiedType) ||
                             (expectsReferenceCounted != (copiedType->cleanup == CleanupKind::ReleaseReference)) ||
                             instruction.resultOwnership != typed::ValueOwnership::Owned)
                         {

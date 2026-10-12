@@ -512,6 +512,20 @@ namespace wio::bytecode
                             report("WBC1064", "Enum constant does not match a declared enum/flagset case", function.id,
                                    block.id, instructionIndex);
                     }
+                    else if (instruction.opcode == Opcode::CopyValue || instruction.opcode == Opcode::Retain)
+                    {
+                        const bool retain = instruction.opcode == Opcode::Retain;
+                        const bool valid =
+                            instruction.operands.size() == 1 && instruction.resultType < module.types.size() &&
+                            instruction.resultOwnership == 2 &&
+                            module.types[instruction.resultType].cleanup == (retain ? 2 : 1) &&
+                            (retain ? instruction.resultType == valueType(instruction.operands.front())
+                                    : compatibleAnyPayload(module, valueType(instruction.operands.front()),
+                                                           instruction.resultType));
+                        if (!valid)
+                            report("WBC1119", "Retain/copy-value must preserve the owned type cleanup protocol",
+                                   function.id, block.id, instructionIndex);
+                    }
                     else if (instruction.opcode == Opcode::AnyBox)
                     {
                         const bool valid =

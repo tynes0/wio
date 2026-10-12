@@ -36,14 +36,23 @@ implement the future structured diagnostic registry.
 
 ## 1. Defects and observed implementation problems
 
-### KI-001 — Inferred-array generic calls can produce WIR1422 (P1)
+### KI-001 — Inferred-array generic calls produced WIR1422 (closed)
+
+Fixed by the current inferred-container-copy change. The builder now emits
+owned Copy/CopyValue materialization instead of a numeric Convert; literal SSA
+types stay intact. Type-kind equality alone is no longer numeric compatibility.
+Typed/Lowered/bytecode verification rejects forged element identities and
+retains strict numeric-conversion rejection. The two new Windows gates passed
+2/2 in 15.03 seconds; no old suite or local Linux run is claimed.
+
+The reproducer below is retained as historical evidence, not an open bug.
 
 Observed during the Any identity qualification at the baseline revision. The
 generic/native array calls followed by an Any cast fail Typed WIR verification
 with `WIR1422: Typed WIR numeric conversion requires one numeric operand and a
 numeric result`. Semantic analysis accepts the array call. The exact inference/
-contextual-typing cause has **not** yet been isolated; do not weaken the verifier
-to accept a nonnumeric conversion.
+contextual-typing cause was the builder's nonnumeric same-kind conversion
+fallback. The verifier was not weakened to accept nonnumeric conversion.
 
 The failing forms were:
 
@@ -64,11 +73,11 @@ This excerpt is a reproducer fragment, not a standalone program; `Identity`,
 native headers and Entry are supplied by the
 [focused fixture](../tests/vm_native_any_array_identity.wio). Replace its
 explicit dynamic-array arguments with the forms above to reproduce the failure.
-Explicit dynamic `i32[]` arguments pass that fixture. Inferred/direct/nested
+Explicit dynamic `i32[]` arguments passed that fixture. Inferred/direct/nested
 arrays boxed directly as Any now work; that separate identity bug is fixed.
 
-Close when direct inferred and nested inferred arguments pass generic/native
-calls, casts and both backends with positive and malformed-metadata tests.
+The new [inferred-call fixture](../tests/wir_inferred_array_calls.wio) and
+[copy verifier](../tests/wir_inferred_array_calls_test.cpp) cover that closure.
 
 ### KI-002 — Growing StringBuilder appends repeatedly copy the prefix (P1)
 
@@ -241,7 +250,7 @@ Routing belongs to [post-v1 roadmap](WIO_POST_V1_ROADMAP.md) and the
 
 ## 8. Triage and maintenance
 
-Suggested execution order: KI-001; native task/std helper parity; VM artifacts;
+Suggested execution order: native task/std helper parity; VM artifacts;
 SDK and platform/installed-toolchain acceptance; backend cost work; Rider/tooling
 and remaining v1 contracts; final integrated optimization before beta.
 Fix catastrophic KI-002/KI-003 costs earlier when needed; the final optimization

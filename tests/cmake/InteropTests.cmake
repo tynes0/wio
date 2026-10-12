@@ -1322,3 +1322,16 @@ add_test(NAME wio_vm_native_any_array_identity
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_bridge_pruning_test.cmake")
 wio_test_labels(wio_vm_native_any_array_identity interop vm native any array generic differential release-gate)
 set_tests_properties(wio_vm_native_any_array_identity PROPERTIES TIMEOUT 600)
+
+add_test(NAME wio_wir_inferred_array_calls
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/wir_inferred_array_calls.wio"
+        "-DWIO_EXPECTED_OUTPUT=inferred-array-calls-ok"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/wir-inferred-array-calls"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_bridge_pruning_test.cmake")
+wio_test_labels(wio_wir_inferred_array_calls interop wir vm native array generic differential release-gate)
+set_tests_properties(wio_wir_inferred_array_calls PROPERTIES TIMEOUT 600)

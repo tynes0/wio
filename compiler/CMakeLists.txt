@@ -344,6 +344,11 @@ if(BUILD_TESTING)
         WIO_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
     add_test(NAME wio_wir_any_array_identity COMMAND wio_wir_any_array_identity_test)
     set_tests_properties(wio_wir_any_array_identity PROPERTIES LABELS "wir;bytecode;native;any;array;generic;release-gate")
+    add_executable(wio_wir_inferred_array_calls_test "${CMAKE_SOURCE_DIR}/tests/wir_inferred_array_calls_test.cpp")
+    target_link_libraries(wio_wir_inferred_array_calls_test PRIVATE wio_compiler)
+    target_compile_definitions(wio_wir_inferred_array_calls_test PRIVATE WIO_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    add_test(NAME wio_wir_inferred_array_copy_verifier COMMAND wio_wir_inferred_array_calls_test)
+    set_tests_properties(wio_wir_inferred_array_copy_verifier PROPERTIES LABELS "wir;bytecode;array;generic;release-gate")
     target_link_libraries(wio_wir_cpp_backend_test PRIVATE wio_compiler)
     target_compile_definitions(wio_wir_cpp_backend_test PRIVATE
         WIO_TEST_CXX_COMPILER="${WIO_BACKEND_CXX_COMPILER_CPP}"

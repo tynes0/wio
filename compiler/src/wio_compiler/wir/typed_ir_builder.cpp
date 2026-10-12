@@ -5776,6 +5776,26 @@ namespace wio::wir::typed
                 return boxed;
             }
 
+            // Literal array extents are inference metadata, not std::array
+            // storage. Materialization copies the value into its canonical
+            // container type; it must never become a numeric Convert or retag
+            // the source place (which may still have live aliases).
+            if (source && destination && (source->kind == TypeKind::Array || source->kind == TypeKind::Dictionary) &&
+                isAnyPayloadTypeCompatible(result_.module_.types, sourceType, destinationType))
+            {
+                const ValueId materialized{state.nextValue++};
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::Copy,
+                                .result = materialized,
+                                .resultType = destinationType,
+                                .operands = {value},
+                                .resultOwnership = ValueOwnership::Owned,
+                                .source = SourceSpan::at(expression->location())});
+                rememberOwnership(state, materialized, ValueOwnership::Owned);
+                releaseOwnedTemporary(value, expression.Get(), state);
+                return materialized;
+            }
+
             if (source && destination && destination->kind == TypeKind::Nullable &&
                 destination->arguments.size() == 1 && destination->arguments.front() == sourceType)
             {
@@ -7455,7 +7475,7 @@ namespace wio::wir::typed
         static bool isImplicitNumericConversion(const TypeKind sourceKind, const TypeKind destinationKind)
         {
             if (sourceKind == destinationKind)
-                return true;
+                return numericTypeInfo(sourceKind).has_value();
             const auto source = numericTypeInfo(sourceKind);
             const auto destination = numericTypeInfo(destinationKind);
             if (!source || !destination)

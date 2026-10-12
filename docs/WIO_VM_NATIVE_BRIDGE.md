@@ -3370,7 +3370,8 @@ No full-suite or local Linux qualification is claimed.
 This is not unrestricted generic conversion qualification. An unconstrained
 `T -> any` return remains rejected by semantic analysis. Passing inferred
 literal arrays directly through the generic `Box<T>(T[])`/native `Echo<T>`
-probe exposed a separate `WIR1422` conversion failure; explicit dynamic-array
-arguments pass. That inferred-argument conversion needs separate investigation,
-rather than accepting malformed numeric conversion metadata. General native
+probe exposed a separate `WIR1422` conversion failure, now fixed through
+owned container Copy/CopyValue materialization. The inferred/nested generic
+argument and malformed-copy gates pass 2/2 on Windows in 15.03 seconds.
+Numeric conversion verification remains strict. General native
 task-parameter/std helper parity and VM artifact packaging also remain open.

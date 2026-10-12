@@ -1979,7 +1979,10 @@ here as historical evidence rather than active work:
       25.09 seconds (0.68 unit, 23.81 differential). No old suite or local Linux
       qualification is claimed. Modified C++ ranges and new C++ files follow
       the repository clang-format configuration.
-- [ ] Direct inferred-array arguments in generic Box/Echo probes expose a
-      separate WIR1422 conversion failure; explicit dynamic-array arguments
-      pass. Unconstrained T-to-Any boxing remains unsupported by semantic
-      analysis. These are not hidden by relaxing numeric verification.
+- [x] Direct/nested inferred-array argument WIR1422 is fixed by canonical owned
+      container-copy materialization. Removed the nonnumeric same-TypeKind
+      numeric-promotion shortcut without retagging source places or weakening
+      numeric verification. Unconstrained T-to-Any remains unsupported.
+- [x] New copy-verifier and C++/full-VM/pruned-VM gates passed 2/2 on Windows in
+      15.03 seconds. Typed/Lowered/bytecode reject forged element identities;
+      numeric Convert on array values still rejects. No old suite/Linux run.

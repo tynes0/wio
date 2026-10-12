@@ -1150,8 +1150,10 @@ Rider, and CLion are defined in
    normalized at boxing, including generic substitution, without erasing
    explicit fixed-size array identities or changing the ABI. The two new gates
    qualify C++/full-VM/pruned-VM parity and reject forged payload metadata.
-   Direct inferred-array arguments in generic Box/Echo calls separately expose
-   WIR1422 conversion failures; dynamic-array arguments qualify. Unconstrained
+   Direct/nested inferred-array arguments now materialize through owned
+   Copy/CopyValue instead of invalid numeric conversion. Two new verifier and
+   C++/full-VM/pruned-VM gates qualify that fix; forged element identities reject.
+   Unconstrained
    T-to-Any boxing remains semantically unsupported. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.
 

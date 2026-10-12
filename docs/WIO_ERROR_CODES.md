@@ -16,7 +16,7 @@ This is the current development-source inventory, not a promise that every code 
 Regenerate: `pwsh -File tools/Update-DiagnosticReference.ps1`.
 Check freshness: `pwsh -File tools/Update-DiagnosticReference.ps1 -Check`.
 
-Distinct diagnostic IDs: **692**.
+Distinct diagnostic IDs: **693**.
 
 ## Diagnostic families
 
@@ -26,7 +26,7 @@ Distinct diagnostic IDs: **692**.
 | [LIR](#lir) | 129 | Lowered WIR verification and canonical ownership/control-flow invariants. |
 | [WIRN](#wirn) | 6 | Native ABI/thunk planning invariants. |
 | [WCPP](#wcpp) | 25 | Lowered WIR C++ backend validation and emission. |
-| [WBC](#wbc) | 93 | Bytecode compilation, format decoding and verification. |
+| [WBC](#wbc) | 94 | Bytecode compilation, format decoding and verification. |
 | [WVM](#wvm) | 218 | VM loading/execution, intrinsics, native transport and lifetime failures. |
 
 ## WIR
@@ -385,73 +385,73 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1131](../compi
 
 - Typed WIR select requires bool condition and matching result arms.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1792](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1792).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1794](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1794).
 
 ### WIR1409
 
 - Typed WIR call references an unknown function.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2046](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2046).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2048](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2048).
 
 ### WIR1410
 
 - Typed WIR call argument count does not match its callee.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2065](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2065).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2067](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2067).
 
 ### WIR1411
 
 - Typed WIR call argument type does not match its parameter (operand={dynamic context}, signature={dynamic context}, parameter={dynamic context}).
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2087](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2087).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2089](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2089).
 
 ### WIR1412
 
 - Typed WIR call result does not match its callee return type.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2104](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2104).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2106](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2106).
 
 ### WIR1413
 
 - Typed WIR return value does not match its function return type.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2153](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2153).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2155](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2155).
 
 ### WIR1414
 
 - Typed WIR branch requires exactly one target.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2160](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2160).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2162](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2162).
 
 ### WIR1415
 
 - Typed WIR conditional branch requires a bool condition and two targets.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2188](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2188).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2190](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2190).
 
 ### WIR1416
 
 - Typed WIR instruction references an unknown block.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2209](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2209).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2211](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2211).
 
 ### WIR1417
 
 - Typed WIR branch argument count does not match its target block.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2167](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2167).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2169](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2169).
 
 ### WIR1418
 
 - Typed WIR branch argument type does not match its target block parameter.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2176](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2176).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2178](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2178).
 
 ### WIR1419
 
 - Typed WIR conditional branch targets cannot require block arguments.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2198](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2198).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2200](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2200).
 
 ### WIR1420
 
@@ -571,31 +571,31 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1729](../compi
 
 - Typed WIR drop requires a place containing a cleanup-bearing value.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1781](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1781).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1783](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1783).
 
 ### WIR1440
 
 - Typed WIR method dispatch must match its owner slot, receiver, signature, and callee (selector='{dynamic context}', slot={dynamic context}, owner={dynamic context}, receiver={dynamic context}, callee=#{dynamic context}, operands={dynamic context}, signatures={dynamic context}, dispatch-valid={dynamic context}true{dynamic context}false{dynamic context}, callee-found={dynamic context}true{dynamic context}false{dynamic context}, method-found={dynamic context}true{dynamic context}false{dynamic context}, result={dynamic context}, method-result={dynamic context}, callee-result={dynamic context}, callee-generic={dynamic context}true{dynamic context}false{dynamic context}).
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1968](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1968).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1970](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1970).
 
 ### WIR1441
 
 - Typed WIR object cast requires compatible object/interface source and target types.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2009](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2009).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2011](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2011).
 
 ### WIR1442
 
 - Typed WIR type test requires an object/interface value, target type, and bool result.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2021](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2021).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2023](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2023).
 
 ### WIR1443
 
 - Typed WIR identity equality requires two object/interface values and a bool result.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2036](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2036).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2038](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2038).
 
 ### WIR1444
 
@@ -607,25 +607,25 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1072](../compi
 
 - Typed WIR function reference must pin a known callable declaration and callable type.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1807](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1807).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1809](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1809).
 
 ### WIR1446
 
 - Typed WIR closure creation must match its closure body capture layout exactly.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1836](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1836).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1838](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1838).
 
 ### WIR1447
 
 - Typed WIR indirect call must match its function value signature.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1867](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1867).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1869](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1869).
 
 ### WIR1448
 
 - Typed WIR extension call must pin its implementation, receiver, signature, and specialization.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1899](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1899).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1901](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1901).
 
 ### WIR1455
 
@@ -700,63 +700,63 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1582](../compi
 
 - Typed WIR copy must create one owned claim for a cleanup-bearing value.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1742](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1742).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1744](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1744).
 
 ### WIR1467
 
 - Typed WIR move must transfer a cleanup-bearing place into one owned value.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1756](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1756).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1758](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1758).
 
 ### WIR1468
 
 - Typed WIR release requires one cleanup-bearing owned value.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1767](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1767).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1769](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1769).
 
 ### WIR1469
 
 - Cleanup-bearing place is initialized while already live.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2257](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2257).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2259](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2259).
 
 ### WIR1470
 
 - Typed WIR native calls and ordinary calls must match the callee ABI binding.
 - Cleanup-bearing place is moved or dropped more than once.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2055](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2055), [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2265](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2265).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2057](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2057), [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2267](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2267).
 
 ### WIR1471
 
 - Replace requires an initialized cleanup-bearing place.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2272](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2272).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2274](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2274).
 
 ### WIR1472
 
 - Function exit leaves cleanup-bearing local places live.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2276](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2276).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2278](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2278).
 
 ### WIR1473
 
 - Typed WIR async metadata is attached to an unsupported instruction.
 - Control-flow merge disagrees on live cleanup-bearing places.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1080](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1080), [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2290](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2290).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1080](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1080), [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2292](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2292).
 
 ### WIR1474
 
 - Typed WIR await requires an async function, one coroutine&lt;T&gt;, and its exact payload result.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2126](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2126).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2128](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2128).
 
 ### WIR1475
 
 - Typed WIR executor switch requires an async function and an explicit destination executor.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2138](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2138).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2140](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2140).
 
 ### WIR1477
 
@@ -985,37 +985,37 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3339](../compil
 
 - Default initialization for type '{dynamic context}' is not supported by Typed WIR.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5903](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5903).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5923](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5923).
 
 ### WIR2204
 
 - Loop-carried local value is unavailable on a control-flow edge.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6788](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6788).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6808](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6808).
 
 ### WIR2205
 
 Definition: Break statement has no active Typed WIR loop target.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6801](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6801).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6821](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6821).
 
 ### WIR2206
 
 Definition: Continue statement has no active Typed WIR loop target.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6801](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6801).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6821](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6821).
 
 ### WIR2210
 
 - For-in requires a range, array, or dictionary iterator source.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6990](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6990).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:7010](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L7010).
 
 ### WIR2211
 
 - For-in binding is missing its semantic symbol.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:7080](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L7080).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:7100](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L7100).
 
 ### WIR2300
 
@@ -1097,31 +1097,31 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4101](../compil
 - Duration literal cannot be represented by Typed WIR.
 - Expression requires a conversion that is not allowed by Wio numeric promotion.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3920](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3920), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5834](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5834).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3920](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3920), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5854](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5854).
 
 ### WIR2315
 
 - Match expression requires at least one case.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6071](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6071).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6091](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6091).
 
 ### WIR2316
 
 - Typed WIR does not recognize destructuring variant '{dynamic context}'.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5959](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5959).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5979](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5979).
 
 ### WIR2317
 
 - Value-producing Typed WIR match cases require expression bodies.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6085](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6085).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6105](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6105).
 
 ### WIR2319
 
 - Match binding is missing its semantic symbol.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5983](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5983).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6003](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6003).
 
 ### WIR2320
 
@@ -1657,61 +1657,61 @@ Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:952](../comp
 
 - Lowered WIR call references an unknown function.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1773](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1773).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1776](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1776).
 
 ### LIR1408
 
 - Lowered WIR call argument count does not match its callee.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1789](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1789).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1792](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1792).
 
 ### LIR1409
 
 - Lowered WIR call argument type does not match its parameter.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1813](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1813).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1816](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1816).
 
 ### LIR1410
 
 - Lowered WIR call result does not match its callee.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1825](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1825).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1828](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1828).
 
 ### LIR1411
 
 - Lowered WIR return value does not match its function.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1921](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1921).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1924](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1924).
 
 ### LIR1412
 
 - Lowered WIR jump shape is invalid.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1932](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1932).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1935](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1935).
 
 ### LIR1413
 
 - Lowered WIR conditional jump condition must be bool.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1938](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1938).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1941](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1941).
 
 ### LIR1414
 
 - Lowered WIR jump references an unknown block.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1949](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1949).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1952](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1952).
 
 ### LIR1415
 
 - Lowered WIR jump argument count does not match target block parameters.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1956](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1956).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1959](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1959).
 
 ### LIR1416
 
 - Lowered WIR jump argument type does not match target block parameter.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1964](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1964).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1967](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1967).
 
 ### LIR1417
 
@@ -1819,61 +1819,61 @@ Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1498](../com
 
 - Lowered WIR release/drop-place must match the stored value cleanup protocol.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1558](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1558).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1561](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1561).
 
 ### LIR1435
 
 - Lowered WIR method dispatch must match its owner slot, receiver, signature, and callee.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1719](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1719).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1722](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1722).
 
 ### LIR1436
 
 - Lowered WIR object cast requires compatible object/interface source and target types.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1741](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1741).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1744](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1744).
 
 ### LIR1437
 
 - Lowered WIR dictionary creation requires alternating key/value operands matching its concrete type.
 - Lowered WIR type test requires an object/interface value, target type, and bool result.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1086](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1086), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1751](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1751).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1086](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1086), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1754](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1754).
 
 ### LIR1438
 
 - Lowered WIR dictionary get requires matching dictionary, key, and mapped result types.
 - Lowered WIR identity equality requires object/interface operands and bool result.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1101](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1101), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1764](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1764).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1101](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1101), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1767](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1767).
 
 ### LIR1439
 
 - Lowered WIR interpolation requires string/text identity, segments, and concrete signatures.
 - Lowered WIR function reference must pin a known callable declaration.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1125](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1125), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1570](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1570).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1125](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1125), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1573](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1573).
 
 ### LIR1440
 
 - Lowered WIR enum constant requires a named enum/flagset result and stable selector.
 - Lowered WIR closure creation must match its capture layout.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1141](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1141), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1596](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1596).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1141](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1141), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1599](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1599).
 
 ### LIR1441
 
 - Lowered WIR intrinsic call requires a family, selector, receiver, target, and concrete signature.
 - Lowered WIR indirect call must match its function value signature.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1163](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1163), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1624](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1624).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1163](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1163), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1627](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1627).
 
 ### LIR1442
 
 - Lowered WIR any box requires one operand and its materialized payload type.
 - Lowered WIR extension call must pin its implementation and concrete signature.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1177](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1177), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1656](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1656).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1177](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1177), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1659](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1659).
 
 ### LIR1443
 
@@ -1899,25 +1899,25 @@ Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1241](../com
 - Lowered WIR iterator operation requires one iterator and a canonical result.
 - Lowered WIR retain/copy-value must match the type cleanup protocol.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1258](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1258), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1514](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1514).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1258](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1258), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1517](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1517).
 
 ### LIR1447
 
 - Lowered WIR move-value must transfer one cleanup-bearing place.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1528](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1528).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1531](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1531).
 
 ### LIR1448
 
 - Lowered WIR release/drop-value must match the value cleanup protocol.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1541](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1541).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1544](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1544).
 
 ### LIR1450
 
 - Lowered native-invoke and ordinary call must match the callee ABI binding.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1780](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1780).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1783](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1783).
 
 ### LIR1451
 
@@ -1941,31 +1941,31 @@ Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:826](../comp
 
 - Cancellation check must immediately precede its coroutine suspension point.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1837](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1837).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1840](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1840).
 
 ### LIR1455
 
 - Coroutine suspension must match one canonical state and resume target.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1876](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1876).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1879](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1879).
 
 ### LIR1456
 
 - Coroutine resume must materialize the payload declared by its canonical state.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1890](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1890).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1893](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1893).
 
 ### LIR1457
 
 - Coroutine completion value must match the async payload type.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1905](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1905).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1908](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1908).
 
 ### LIR1458
 
 - Async Lowered WIR must use coroutine-complete instead of return.
 
-Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1912](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1912).
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1915](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1915).
 
 ### LIR1466
 
@@ -2655,19 +2655,19 @@ Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:446](../compiler/s
 
 - Function reference does not match a known callable declaration
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:689](../compiler/src/wio_compiler/bytecode/verifier.cpp#L689).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:703](../compiler/src/wio_compiler/bytecode/verifier.cpp#L703).
 
 ### WBC1050
 
 - Closure creation does not match its callable capture layout
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:718](../compiler/src/wio_compiler/bytecode/verifier.cpp#L718).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:732](../compiler/src/wio_compiler/bytecode/verifier.cpp#L732).
 
 ### WBC1051
 
 - Indirect call does not match its function value signature
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:751](../compiler/src/wio_compiler/bytecode/verifier.cpp#L751).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:765](../compiler/src/wio_compiler/bytecode/verifier.cpp#L765).
 
 ### WBC1052
 
@@ -2685,19 +2685,19 @@ Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:161](../compiler/s
 
 - Dynamic call does not match its receiver, contract, slot, or declaration
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:789](../compiler/src/wio_compiler/bytecode/verifier.cpp#L789).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:803](../compiler/src/wio_compiler/bytecode/verifier.cpp#L803).
 
 ### WBC1056
 
 - Object cast or type-test has invalid source or target metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:808](../compiler/src/wio_compiler/bytecode/verifier.cpp#L808).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:822](../compiler/src/wio_compiler/bytecode/verifier.cpp#L822).
 
 ### WBC1057
 
 - Object identity comparison has invalid operand or operator metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:818](../compiler/src/wio_compiler/bytecode/verifier.cpp#L818).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:832](../compiler/src/wio_compiler/bytecode/verifier.cpp#L832).
 
 ### WBC1058
 
@@ -2709,25 +2709,25 @@ Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:350](../compiler/s
 
 - Cancellation check must precede its matching coroutine suspension
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:828](../compiler/src/wio_compiler/bytecode/verifier.cpp#L828).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:842](../compiler/src/wio_compiler/bytecode/verifier.cpp#L842).
 
 ### WBC1060
 
 - Coroutine suspension does not match its canonical state and resume edge
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:860](../compiler/src/wio_compiler/bytecode/verifier.cpp#L860).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:874](../compiler/src/wio_compiler/bytecode/verifier.cpp#L874).
 
 ### WBC1061
 
 - Coroutine resume does not materialize its canonical state payload
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:871](../compiler/src/wio_compiler/bytecode/verifier.cpp#L871).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:885](../compiler/src/wio_compiler/bytecode/verifier.cpp#L885).
 
 ### WBC1062
 
 - Coroutine completion does not match its async payload type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:884](../compiler/src/wio_compiler/bytecode/verifier.cpp#L884).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:898](../compiler/src/wio_compiler/bytecode/verifier.cpp#L898).
 
 ### WBC1063
 
@@ -2745,49 +2745,49 @@ Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:512](../compiler/s
 
 - Any box does not preserve its materialized payload type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:524](../compiler/src/wio_compiler/bytecode/verifier.cpp#L524).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:538](../compiler/src/wio_compiler/bytecode/verifier.cpp#L538).
 
 ### WBC1066
 
 - Any test/cast has invalid source, target, or result metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:537](../compiler/src/wio_compiler/bytecode/verifier.cpp#L537).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:551](../compiler/src/wio_compiler/bytecode/verifier.cpp#L551).
 
 ### WBC1067
 
 - Nullable wrap does not match its payload type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:550](../compiler/src/wio_compiler/bytecode/verifier.cpp#L550).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:564](../compiler/src/wio_compiler/bytecode/verifier.cpp#L564).
 
 ### WBC1068
 
 - Nullable unwrap does not match its payload result type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:561](../compiler/src/wio_compiler/bytecode/verifier.cpp#L561).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:575](../compiler/src/wio_compiler/bytecode/verifier.cpp#L575).
 
 ### WBC1069
 
 - Variant operation does not match its option/result layout
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:585](../compiler/src/wio_compiler/bytecode/verifier.cpp#L585).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:599](../compiler/src/wio_compiler/bytecode/verifier.cpp#L599).
 
 ### WBC1070
 
 - Iterator creation has invalid source or signature metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:626](../compiler/src/wio_compiler/bytecode/verifier.cpp#L626).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:640](../compiler/src/wio_compiler/bytecode/verifier.cpp#L640).
 
 ### WBC1071
 
 - Iterator operation has invalid cursor or result metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:647](../compiler/src/wio_compiler/bytecode/verifier.cpp#L647).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:661](../compiler/src/wio_compiler/bytecode/verifier.cpp#L661).
 
 ### WBC1072
 
 - Result operation does not match its canonical result layout
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:676](../compiler/src/wio_compiler/bytecode/verifier.cpp#L676).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:690](../compiler/src/wio_compiler/bytecode/verifier.cpp#L690).
 
 ### WBC1073
 
@@ -2812,115 +2812,121 @@ Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:291](../compiler/s
 
 - Module import contains invalid identity or string metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:895](../compiler/src/wio_compiler/bytecode/verifier.cpp#L895).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:909](../compiler/src/wio_compiler/bytecode/verifier.cpp#L909).
 
 ### WBC1101
 
 - Module import symbol references an invalid string id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:899](../compiler/src/wio_compiler/bytecode/verifier.cpp#L899).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:913](../compiler/src/wio_compiler/bytecode/verifier.cpp#L913).
 
 ### WBC1102
 
 - Module export contains invalid identity, symbol, or target metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:908](../compiler/src/wio_compiler/bytecode/verifier.cpp#L908).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:922](../compiler/src/wio_compiler/bytecode/verifier.cpp#L922).
 
 ### WBC1103
 
 - Module export parameter references an invalid type id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:912](../compiler/src/wio_compiler/bytecode/verifier.cpp#L912).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:926](../compiler/src/wio_compiler/bytecode/verifier.cpp#L926).
 
 ### WBC1104
 
 - Attribute application contains invalid identity or target metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:920](../compiler/src/wio_compiler/bytecode/verifier.cpp#L920).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:934](../compiler/src/wio_compiler/bytecode/verifier.cpp#L934).
 
 ### WBC1105
 
 - Attribute argument contains invalid string or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:924](../compiler/src/wio_compiler/bytecode/verifier.cpp#L924).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:938](../compiler/src/wio_compiler/bytecode/verifier.cpp#L938).
 
 ### WBC1106
 
 - Attribute processor contains invalid identity or hook metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:932](../compiler/src/wio_compiler/bytecode/verifier.cpp#L932).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:946](../compiler/src/wio_compiler/bytecode/verifier.cpp#L946).
 
 ### WBC1107
 
 - Reflection descriptor contains invalid identity or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:938](../compiler/src/wio_compiler/bytecode/verifier.cpp#L938).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:952](../compiler/src/wio_compiler/bytecode/verifier.cpp#L952).
 
 ### WBC1108
 
 - Reflection generic parameter references an invalid string id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:942](../compiler/src/wio_compiler/bytecode/verifier.cpp#L942).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:956](../compiler/src/wio_compiler/bytecode/verifier.cpp#L956).
 
 ### WBC1109
 
 - Reflected field contains invalid identity or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:947](../compiler/src/wio_compiler/bytecode/verifier.cpp#L947).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:961](../compiler/src/wio_compiler/bytecode/verifier.cpp#L961).
 
 ### WBC1110
 
 - Reflected method contains invalid identity or callable metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:953](../compiler/src/wio_compiler/bytecode/verifier.cpp#L953).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:967](../compiler/src/wio_compiler/bytecode/verifier.cpp#L967).
 
 ### WBC1111
 
 - Reflected case contains invalid identity or string metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:958](../compiler/src/wio_compiler/bytecode/verifier.cpp#L958).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:972](../compiler/src/wio_compiler/bytecode/verifier.cpp#L972).
 
 ### WBC1112
 
 - System descriptor contains invalid lifecycle metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:965](../compiler/src/wio_compiler/bytecode/verifier.cpp#L965).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:979](../compiler/src/wio_compiler/bytecode/verifier.cpp#L979).
 
 ### WBC1113
 
 - Application descriptor contains invalid lifecycle metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:974](../compiler/src/wio_compiler/bytecode/verifier.cpp#L974).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:988](../compiler/src/wio_compiler/bytecode/verifier.cpp#L988).
 
 ### WBC1114
 
 - Application stage contains invalid identity or string metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:978](../compiler/src/wio_compiler/bytecode/verifier.cpp#L978).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:992](../compiler/src/wio_compiler/bytecode/verifier.cpp#L992).
 
 ### WBC1115
 
 - Application stage run contains invalid target metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:983](../compiler/src/wio_compiler/bytecode/verifier.cpp#L983).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:997](../compiler/src/wio_compiler/bytecode/verifier.cpp#L997).
 
 ### WBC1116
 
 - Application resource contains invalid string or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:987](../compiler/src/wio_compiler/bytecode/verifier.cpp#L987).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1001](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1001).
 
 ### WBC1117
 
 - Module lifecycle references an invalid function id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:996](../compiler/src/wio_compiler/bytecode/verifier.cpp#L996).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1010](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1010).
 
 ### WBC1118
 
 - SDK call table identity or export cardinality is invalid
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:999](../compiler/src/wio_compiler/bytecode/verifier.cpp#L999).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1013](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1013).
+
+### WBC1119
+
+- Retain/copy-value must preserve the owned type cleanup protocol
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:526](../compiler/src/wio_compiler/bytecode/verifier.cpp#L526).
 
 ## WVM
 

@@ -1,0 +1,24 @@
+using cpp::header("vm_any_array_identity_fixture.h");
+[Native, CppName(vm_any_array_identity::Identity)] fn Identity(value: any) -> any;
+[Native, CppName(vm_any_array_identity::Echo), Instantiate(i32[])] fn Echo<T>(value: T) -> T;
+[Native, CppName(vm_any_array_identity::Print)] fn Print(message: string);
+
+fn Box<T>(value: T[]) -> any { return value; }
+fn Sum(values: i32[]) -> i32 { return values[0] + values[1]; }
+
+fn Entry() -> i32 {
+    let values = [3, 5, 7];
+    let copied: i32[] = values;
+    if (Sum(values) != 8 or copied[2] != 7) { return 1; }
+    let generic = Identity(Box(values)) fit i32[];
+    let echoed: any = Echo<i32[]>(values);
+    if (generic[0] != 3 or (Identity(echoed) fit i32[])[1] != 5) { return 2; }
+    let nested = [[11, 13], [17, 19]];
+    let nestedBox = Identity(Box(nested)) fit i32[][];
+    if (nestedBox[1][0] != 17) { return 3; }
+    mut changed: i32[] = values;
+    changed[0] = 101;
+    if (values[0] != 3) { return 4; }
+    Print("inferred-array-calls-ok");
+    return 0;
+}
