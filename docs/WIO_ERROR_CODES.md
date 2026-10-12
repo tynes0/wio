@@ -4619,3 +4619,249 @@ Source: [runtime/include/std_console.h](../runtime/include/std_console.h#L49).
 | `Posix` | 4 | posix |
 | `Terminal` | 5 | terminal |
 | `Formatting` | 6 | formatting |
+
+### TaskStatus — std/async.wio
+
+Source: [std/async.wio](../std/async.wio#L17).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `pending` | 0 | pending |
+| `ready` | 1 | ready |
+| `failed` | 2 | failed |
+| `cancelled` | 3 | cancelled |
+
+### ChannelSendStatus — std/async.wio
+
+Source: [std/async.wio](../std/async.wio#L320).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `accepted` | 0 | accepted |
+| `backpressured` | 1 | backpressured |
+| `closed` | 2 | closed |
+
+### ChannelReceiveStatus — std/async.wio
+
+Source: [std/async.wio](../std/async.wio#L326).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `available` | 0 | available |
+| `empty` | 1 | empty |
+| `closed` | 2 | closed |
+
+### Status — std/console.wio
+
+Source: [std/console.wio](../std/console.wio#L12).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `Ok` | 0 | ok |
+| `Unsupported` | 1 | unsupported |
+| `Unavailable` | 2 | unavailable |
+| `InvalidArgument` | 3 | invalid argument |
+| `InvalidRange` | 4 | invalid range |
+| `NullArgument` | 5 | null argument |
+| `InputRedirected` | 6 | input redirected |
+| `OutputRedirected` | 7 | output redirected |
+| `ErrorRedirected` | 8 | error redirected |
+| `IoError` | 9 | io error |
+| `PartialIo` | 10 | partial io |
+| `EndOfFile` | 11 | end of file |
+| `EncodingError` | 12 | encoding error |
+| `FormatError` | 13 | format error |
+| `PermissionDenied` | 14 | permission denied |
+| `PlatformError` | 15 | platform error |
+| `UnknownError` | 16 | unknown error |
+
+### ErrorDomain — std/console.wio
+
+Source: [std/console.wio](../std/console.wio#L35).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `None` | 0 | none |
+| `Generic` | 1 | generic |
+| `Stdio` | 2 | stdio |
+| `Win32` | 3 | win32 |
+| `Posix` | 4 | posix |
+| `Terminal` | 5 | terminal |
+| `Formatting` | 6 | formatting |
+
+### Error — std/fs.wio
+
+Source: [std/fs.wio](../std/fs.wio#L11).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `fs_none` | 0 | fs none |
+| `fs_invalid_path` | 1 | fs invalid path |
+| `fs_not_found` | 2 | fs not found |
+| `fs_already_exists` | 3 | fs already exists |
+| `fs_not_directory` | 4 | fs not directory |
+| `fs_is_directory` | 5 | fs is directory |
+| `fs_permission_denied` | 6 | fs permission denied |
+| `fs_io` | 7 | fs io |
+| `fs_unsupported` | 8 | fs unsupported |
+| `fs_unknown` | 9 | fs unknown |
+| `fs_cancelled` | 10 | fs cancelled |
+
+### FileError — std/io.wio
+
+Source: [std/io.wio](../std/io.wio#L40).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `null_path` | 1 | null path |
+| `empty_path` | 2 | empty path |
+| `invalid_path` | 3 | invalid path |
+| `invalid_utf8` | 4 | invalid utf8 |
+| `allocation_failed` | 5 | allocation failed |
+| `invalid_argument` | 6 | invalid argument |
+| `invalid_mode` | 7 | invalid mode |
+| `unsupported_mode` | 8 | unsupported mode |
+| `already_open` | 9 | already open |
+| `not_open` | 10 | not open |
+| `open_failed` | 11 | open failed |
+| `close_failed` | 12 | close failed |
+| `sync_failed` | 13 | sync failed |
+| `seek_failed` | 14 | seek failed |
+| `tell_failed` | 15 | tell failed |
+| `size_failed` | 16 | size failed |
+
+### ReadError — std/io.wio
+
+Source: [std/io.wio](../std/io.wio#L72).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `null_file` | 1 | null file |
+| `invalid_argument` | 2 | invalid argument |
+| `eof` | 3 | eof |
+| `io_error` | 4 | io error |
+| `partial_read` | 5 | partial read |
+| `platform_error` | 6 | platform error |
+
+### WriteError — std/io.wio
+
+Source: [std/io.wio](../std/io.wio#L85).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `null_file` | 1 | null file |
+| `null_data` | 2 | null data |
+| `size_overflow` | 3 | size overflow |
+| `io_error` | 4 | io error |
+| `partial_write` | 5 | partial write |
+
+### ParseError — std/convert.wio
+
+Source: [std/convert.wio](../std/convert.wio#L14).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `empty` | 1 | empty |
+| `invalid_format` | 2 | invalid format |
+| `trailing_characters` | 3 | trailing characters |
+| `out_of_range` | 4 | out of range |
+| `invalid_base` | 5 | invalid base |
+
+### Error — std/process.wio
+
+Source: [std/process.wio](../std/process.wio#L12).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `empty_program` | 1 | empty program |
+| `invalid_working_directory` | 2 | invalid working directory |
+| `launch_failed` | 3 | launch failed |
+| `pipe_failed` | 4 | pipe failed |
+| `process_closed` | 5 | process closed |
+| `wait_failed` | 6 | wait failed |
+| `terminate_failed` | 7 | terminate failed |
+| `cancelled` | 8 | cancelled |
+
+### ResultDomain — std/result.wio
+
+Source: [std/result.wio](../std/result.wio#L9).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `console` | 1 | console |
+| `io` | 2 | io |
+| `fs` | 3 | fs |
+| `runtime` | 4 | runtime |
+| `custom` | 5 | custom |
+
+### Error — std/regex.wio
+
+Source: [std/regex.wio](../std/regex.wio#L10).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `invalid_pattern` | 1 | invalid pattern |
+| `runtime_error` | 2 | runtime error |
+| `limit_exceeded` | 3 | limit exceeded |
+
+## Standard Result error construction sites
+
+This section inventories MakeResultError calls in committed std sources. The std sections deliberately read Git HEAD, not unrelated uncommitted user edits; commit std changes before regenerating their reference. Custom numeric codes are module-local conventions, not globally unique diagnostic IDs. Variable codes/messages forward an upstream error; platform nativeCode values remain platform-defined. Function declarations are not error sites.
+
+| Source | Domain | Code expression | Message / definition template |
+| --- | --- | --- | --- |
+| [std/binary.wio:41](../std/binary.wio#L41) | `std::ResultDomain::custom` | `1` | Binary frame header is truncated. |
+| [std/binary.wio:45](../std/binary.wio#L45) | `std::ResultDomain::custom` | `2` | Binary frame magic is invalid. |
+| [std/binary.wio:50](../std/binary.wio#L50) | `std::ResultDomain::custom` | `3` | Binary frame payload length is invalid. |
+| [std/binary.wio:55](../std/binary.wio#L55) | `std::ResultDomain::custom` | `4` | Binary frame contains malformed trailing data. |
+| [std/compression.wio:25](../std/compression.wio#L25) | `std::ResultDomain::custom` | `1` | Malformed RLE payload. |
+| [std/compression.wio:33](../std/compression.wio#L33) | `std::ResultDomain::custom` | `2` | RLE output limit exceeded. |
+| [std/config.wio:32](../std/config.wio#L32) | `std::ResultDomain::custom` | `1` | Invalid INI assignment at line ${lineNumber}. |
+| [std/config.wio:39](../std/config.wio#L39) | `std::ResultDomain::custom` | `1` | Empty INI key at line ${lineNumber}. |
+| [std/console.wio:423](../std/console.wio#L423) | `ResultDomain::console` | `StatusCodeValue(error.status)` | Forwarded/dynamic message: message |
+| [std/convert.wio:145](../std/convert.wio#L145) | `std::ResultDomain::custom` | `ErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/csv.wio:41](../std/csv.wio#L41) | `std::ResultDomain::custom` | `1` | CSV contains an unterminated quoted field. |
+| [std/fs.wio:129](../std/fs.wio#L129) | `std::ResultDomain::fs` | `code` | Forwarded/dynamic message: message |
+| [std/fs.wio:238](../std/fs.wio#L238) | `std::ResultDomain::fs` | `code` | Forwarded/dynamic message: message |
+| [std/io.wio:353](../std/io.wio#L353) | `ResultDomain::io` | `FileErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/io.wio:357](../std/io.wio#L357) | `ResultDomain::io` | `ReadErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/io.wio:361](../std/io.wio#L361) | `ResultDomain::io` | `WriteErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/json.wio:76](../std/json.wio#L76) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:83](../std/json.wio#L83) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:90](../std/json.wio#L90) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:97](../std/json.wio#L97) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:104](../std/json.wio#L104) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:111](../std/json.wio#L111) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:118](../std/json.wio#L118) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:125](../std/json.wio#L125) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:132](../std/json.wio#L132) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:139](../std/json.wio#L139) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:427](../std/json.wio#L427) | `std::ResultDomain::custom` | `2` | JSON input exceeds the configured byte limit. |
+| [std/json.wio:431](../std/json.wio#L431) | `std::ResultDomain::custom` | `2` | JSON input is not valid UTF-8. |
+| [std/json.wio:440](../std/json.wio#L440) | `std::ResultDomain::custom` | `1` | Forwarded/dynamic message: self.failure |
+| [std/net.wio:26](../std/net.wio#L26) | `std::ResultDomain::runtime` | `1` | URI requires a scheme and authority. |
+| [std/net.wio:40](../std/net.wio#L40) | `std::ResultDomain::runtime` | `1` | URI host cannot be empty. |
+| [std/net.wio:47](../std/net.wio#L47) | `std::ResultDomain::runtime` | `1` | Invalid bracketed IPv6 authority. |
+| [std/net.wio:144](../std/net.wio#L144) | `std::ResultDomain::runtime` | `1` | Forwarded/dynamic message: message |
+| [std/os.wio:102](../std/os.wio#L102) | `std::ResultDomain::runtime` | `1` | File watcher stopped unexpectedly. |
+| [std/path.wio:70](../std/path.wio#L70) | `std::ResultDomain::fs` | `code` | Forwarded/dynamic message: message |
+| [std/process.wio:159](../std/process.wio#L159) | `std::ResultDomain::runtime` | `ErrorCode(error)` | Forwarded/dynamic message: finalMessage |
+| [std/regex.wio:139](../std/regex.wio#L139) | `std::ResultDomain::runtime` | `3` | Regular-expression input limit exceeded. |
+| [std/regex.wio:143](../std/regex.wio#L143) | `std::ResultDomain::runtime` | `4` | Potentially unsafe regular-expression pattern rejected. |
+| [std/regex.wio:160](../std/regex.wio#L160) | `std::ResultDomain::runtime` | `ErrorCode(error)` | Forwarded/dynamic message: finalMessage |
+| [std/result.wio:229](../std/result.wio#L229) | `domain` | `code` | Forwarded/dynamic message: message |
+| [std/result.wio:233](../std/result.wio#L233) | `domain` | `code` | Forwarded/dynamic message: message |
+| [std/unicode.wio:75](../std/unicode.wio#L75) | `std::ResultDomain::runtime` | `5` | Unicode normalization failed: invalid UTF-8 or form. |
+| [std/unicode.wio:109](../std/unicode.wio#L109) | `std::ResultDomain::runtime` | `1` | Invalid UTF-8 text. |
+| [std/unicode.wio:120](../std/unicode.wio#L120) | `std::ResultDomain::runtime` | `3` | Invalid UTF-16 at code-unit index ${errorIndex}. |
+| [std/unicode.wio:137](../std/unicode.wio#L137) | `std::ResultDomain::runtime` | `4` | Invalid UTF-32 scalar at index ${errorIndex}. |
+| [std/unicode.wio:154](../std/unicode.wio#L154) | `std::ResultDomain::runtime` | `1` | Invalid UTF-8 at byte ${errorOffset}. |
+| [std/unicode.wio:167](../std/unicode.wio#L167) | `std::ResultDomain::runtime` | `2` | Invalid Unicode scalar at index ${errorIndex}. |
+| [std/unicode.wio:178](../std/unicode.wio#L178) | `std::ResultDomain::runtime` | `2` | Invalid Unicode scalar value. |

@@ -43,6 +43,7 @@ That path gives you:
 - [Troubleshooting](./WIO_TROUBLESHOOTING.md)
 - [Known issues and qualification gaps](./WIO_KNOWN_ISSUES.md)
 - [Error and status code reference](./WIO_ERROR_CODES.md)
+- [Branch maintenance and recovery record](./WIO_BRANCH_MAINTENANCE.md)
 - [FAQ](./WIO_FAQ.md)
 
 These documents answer practical workflow questions such as:

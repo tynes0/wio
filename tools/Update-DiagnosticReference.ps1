@@ -217,11 +217,25 @@ $taskEnumFiles = [ordered]@{
     'runtime/include/std_process.h' = @('ProcessError')
     'runtime/include/std_regex.h' = @('RegexError')
     'runtime/include/std_console.h' = @('ConsoleStatus', 'ConsoleErrorDomain')
+    'std/async.wio' = @('TaskStatus', 'ChannelSendStatus', 'ChannelReceiveStatus')
+    'std/console.wio' = @('Status', 'ErrorDomain')
+    'std/fs.wio' = @('Error')
+    'std/io.wio' = @('FileError', 'ReadError', 'WriteError')
+    'std/convert.wio' = @('ParseError')
+    'std/process.wio' = @('Error')
+    'std/result.wio' = @('ResultDomain')
+    'std/regex.wio' = @('Error')
 }
 foreach ($taskEnumFile in $taskEnumFiles.Keys) {
-    $taskSource = Get-Content -LiteralPath (Join-Path $taskRoot $taskEnumFile) -Raw
+    if ($taskEnumFile.StartsWith('std/')) {
+        # Do not publish the user's unrelated uncommitted std edits. For std,
+        # the reference intentionally follows the committed source snapshot.
+        $taskSource = (git -C $taskRoot show "HEAD:$taskEnumFile") -join "`n"
+        if ($LASTEXITCODE -ne 0) { throw "Cannot read committed std source: $taskEnumFile" }
+    }
+    else { $taskSource = Get-Content -LiteralPath (Join-Path $taskRoot $taskEnumFile) -Raw }
     foreach ($taskEnum in $taskEnumFiles[$taskEnumFile]) {
-        $taskMatch = [regex]::Match($taskSource, "(?s)enum\s+(?:class\s+)?$taskEnum\b[^\{]*\{(?<body>.*?)\};")
+        $taskMatch = [regex]::Match($taskSource, "(?s)enum\s+(?:class\s+)?$taskEnum\b[^\{]*\{(?<body>.*?)\}\s*;?")
         if (!$taskMatch.Success) { throw "Missing enum $taskEnum in $taskEnumFile" }
         $taskLines.Add('')
         $taskLines.Add("### $taskEnum — $taskEnumFile")
@@ -232,7 +246,9 @@ foreach ($taskEnumFile in $taskEnumFiles.Keys) {
         $taskLines.Add('| Name | Value | Meaning / category |')
         $taskLines.Add('| --- | ---: | --- |')
         $taskValue = 0
-        foreach ($taskEntry in [regex]::Matches($taskMatch.Groups['body'].Value, '(?m)^\s*(?<name>\w+)\s*(?:=\s*(?<value>\d+))?\s*,?\s*$')) {
+        $taskEntries = @([regex]::Matches($taskMatch.Groups['body'].Value, '(?m)^\s*(?<name>\w+)\s*(?:=\s*(?<value>\d+)(?:[iu](?:8|16|32|64|size)?)?)?\s*,?\s*$'))
+        if (!$taskEntries.Count) { throw "No entries extracted for $taskEnum in $taskEnumFile" }
+        foreach ($taskEntry in $taskEntries) {
             if ($taskEntry.Groups['value'].Success) { $taskValue = [int]$taskEntry.Groups['value'].Value }
             $taskName = $taskEntry.Groups['name'].Value
             $taskMeaning = ($taskName -replace '^WIO_(NATIVE_ABI|INVOKE|CALLBACK|APPLICATION|ASYNC_TASK|ASYNC)_', '')
@@ -241,6 +257,44 @@ foreach ($taskEnumFile in $taskEnumFiles.Keys) {
             $taskLines.Add("| ``$taskName`` | $taskValue | $taskMeaning |")
             ++$taskValue
         }
+    }
+}
+
+$taskLines.Add('')
+$taskLines.Add('## Standard Result error construction sites')
+$taskLines.Add('')
+$taskLines.Add('This section inventories MakeResultError calls in committed std sources. The std sections deliberately read Git HEAD, not unrelated uncommitted user edits; commit std changes before regenerating their reference. Custom numeric codes are module-local conventions, not globally unique diagnostic IDs. Variable codes/messages forward an upstream error; platform nativeCode values remain platform-defined. Function declarations are not error sites.')
+$taskLines.Add('')
+$taskLines.Add('| Source | Domain | Code expression | Message / definition template |')
+$taskLines.Add('| --- | --- | --- | --- |')
+$taskStdSites = 0
+foreach ($taskFile in @(Get-ChildItem -LiteralPath (Join-Path $taskRoot 'std') -Recurse -File -Filter '*.wio' | Sort-Object FullName)) {
+    $taskRelative = [IO.Path]::GetRelativePath($taskRoot, $taskFile.FullName).Replace('\', '/')
+    $taskSource = (git -C $taskRoot show "HEAD:$taskRelative") -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "Cannot read committed std source: $taskRelative" }
+    foreach ($taskMatch in [regex]::Matches($taskSource, '\bMakeResultError\s*\(')) {
+        $taskPrefixStart = [Math]::Max(0, $taskMatch.Index - 10)
+        if ($taskSource.Substring($taskPrefixStart, $taskMatch.Index - $taskPrefixStart) -match '\bfn\s*$') { continue }
+        $taskPosition = $taskMatch.Index + $taskMatch.Length
+        $taskArguments = [Collections.Generic.List[string]]::new()
+        while ($taskPosition -lt $taskSource.Length) {
+            $taskEnd = Get-ExpressionEnd $taskSource $taskPosition
+            $taskArguments.Add($taskSource.Substring($taskPosition, $taskEnd - $taskPosition).Trim())
+            if ($taskEnd -ge $taskSource.Length -or $taskSource[$taskEnd] -ne ',') { break }
+            $taskPosition = $taskEnd + 1
+        }
+        if ($taskArguments.Count -lt 3) { throw "Malformed Result error site: $taskRelative" }
+        $taskMessage = $taskArguments[$taskArguments.Count - 1]
+        $taskLiterals = @([regex]::Matches($taskMessage, $taskStringPattern))
+        if ($taskLiterals.Count) {
+            $taskDefinition = ($taskLiterals | ForEach-Object { $_.Groups['value'].Value.Replace('\"', '"') }) -join ' {dynamic context} '
+        }
+        else { $taskDefinition = 'Forwarded/dynamic message: ' + ($taskMessage -replace '\s+', ' ') }
+        $taskLine = 1 + [regex]::Matches($taskSource.Substring(0, $taskMatch.Index), "`n").Count
+        $taskDomain = Escape-Markdown ($taskArguments[0] -replace '\s+', ' ')
+        $taskCodeExpression = Escape-Markdown ($taskArguments[1] -replace '\s+', ' ')
+        $taskLines.Add("| [$($taskRelative):$taskLine](../$taskRelative#L$taskLine) | ``$taskDomain`` | ``$taskCodeExpression`` | $(Escape-Markdown $taskDefinition) |")
+        ++$taskStdSites
     }
 }
 
@@ -255,4 +309,5 @@ else {
     [IO.File]::WriteAllText($taskOutput, $taskText, [Text.UTF8Encoding]::new($false))
 }
 Write-Output "Diagnostic reference: $($taskCodes.Count) IDs, $($taskDynamic.Count) dynamic-only definitions; check=$Check."
+Write-Output "Committed std Result construction sites: $taskStdSites."
 if ($taskDynamic.Count) { Write-Output ('Dynamic-only IDs: ' + ($taskDynamic -join ', ')) }
