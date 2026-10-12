@@ -125,6 +125,10 @@ namespace wio::codegen
                 return true;
             if (type->kind == TypeKind::Opaque || type->kind == TypeKind::Any)
                 return true;
+            if (type->kind == TypeKind::AsyncTask)
+                return type->arguments.size() == 1 &&
+                       (module.types.get(type->arguments.front()).kind == TypeKind::Void ||
+                        self(self, type->arguments.front(), depth + 1));
             if (type->kind == TypeKind::Nullable)
                 return type->arguments.size() == 1 &&
                        (module.types.get(type->arguments.front()).kind == TypeKind::Opaque ||

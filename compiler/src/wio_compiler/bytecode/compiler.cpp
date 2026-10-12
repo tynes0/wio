@@ -351,7 +351,7 @@ namespace wio::bytecode
             // primitive and nested sequence types, not just the outer handle.
             if (type->kind == wir::TypeKind::Array || type->kind == wir::TypeKind::Dictionary ||
                 type->kind == wir::TypeKind::Nullable || type->kind == wir::TypeKind::Function ||
-                type->kind == wir::TypeKind::Reference)
+                type->kind == wir::TypeKind::Reference || type->kind == wir::TypeKind::AsyncTask)
                 for (const auto argument : type->arguments)
                     self(self, argument, depth + 1);
         };
@@ -377,10 +377,8 @@ namespace wio::bytecode
             }
             if (type && type->kind == wir::TypeKind::AsyncTask && type->arguments.size() == 1)
             {
-                typeId = type->arguments.front();
-                type = source.types.tryGet(typeId);
-                if (wir::nativeAbiMarshalling(source.types, typeId) != wir::NativeMarshallingKind::RuntimeValue)
-                    return;
+                addStructuralAbiIdentity(addStructuralAbiIdentity, typeId, 0);
+                return;
             }
             if (!type || type->kind == wir::TypeKind::Named || type->kind == wir::TypeKind::AsyncTask)
                 return;

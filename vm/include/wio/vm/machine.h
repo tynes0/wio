@@ -230,6 +230,9 @@ namespace wio::vm
                                                                     WioNativeAbiValue*, WioNativeAbiFailure*);
         [[nodiscard]] bool encodeNativeObject(const Value&, std::uint32_t, WioNativeAbiValue&, std::string&,
                                               const detail::NativePodLayouts&);
+        [[nodiscard]] bool encodeNativeTask(const Value&, std::uint32_t, WioNativeAbiValue&, std::string&,
+                                            const detail::NativePodLayouts&);
+        [[nodiscard]] detail::NativeValueResult decodeNativeTask(const WioNativeAbiValue&, std::uint32_t);
         [[nodiscard]] detail::NativeValueResult decodeNativeObject(const WioNativeAbiValue&, std::uint32_t,
                                                                    const detail::NativePodLayouts&);
         [[nodiscard]] detail::NativeObjectAccess nativeObjectAccess(bool hostedOnly = false);

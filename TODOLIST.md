@@ -1139,13 +1139,13 @@ Rider, and CLion are defined in
    payloads; it does not expose raw placeholder fields as a native API.
    Exact callback cell aliases remain supported. Aggregate/descendant callback
    overlap is explicitly rejected before invocation; use one aggregate borrow.
-   General native task-parameter/std task helper parity remains separate.
+   Native task-input/helper qualification is recorded in the closure below.
    Native-only dependency selection now removes unrelated Wio C++ bodies while
    preserving registry/POD/hosted-object, task and dynamic Any adapter roots.
    The full bytecode and stable identities remain unchanged; project VM builds
    use the new opt-in compiler mode automatically. Final header/PCH/sharding
-   cost work stays in Backend item 9. General task-parameter/std task helper
-   parity and VM host/executable/shared/static artifact packaging remain.
+   cost work stays in Backend item 9. VM host/executable/shared/static artifact
+   packaging remains; task-parameter/helper closure is recorded below.
    Canonical Any identity for inferred/direct/nested literal arrays is now
    normalized at boxing, including generic substitution, without erasing
    explicit fixed-size array identities or changing the ABI. The two new gates
@@ -1153,6 +1153,14 @@ Rider, and CLion are defined in
    Direct/nested inferred-array arguments now materialize through owned
    Copy/CopyValue instead of invalid numeric conversion. Two new verifier and
    C++/full-VM/pruned-VM gates qualify that fix; forged element identities reject.
+   Owning native task parameters now use a typed task-source capability,
+   cancellation/completion operations and cooperative main-thread waits. Start
+   and collection copies preserve VM task identity, and older producers without
+   the capability reject before entry. Qualified scalar/string/text/container,
+   native POD/object/Any and nested task payloads, task callbacks and free std
+   helpers have focused native/full-VM/pruned-VM coverage. Real std Poll/Select
+   and timeout wrappers exercise enum field defaults and pending producer inputs.
+   Ref/view async storage and consumed task arguments remain forbidden.
    Unconstrained
    T-to-Any boxing remains semantically unsupported. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.

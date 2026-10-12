@@ -36,6 +36,10 @@ namespace wio::vm::detail
         bool (*cleanup)(void*, Value&, std::string&) noexcept = nullptr;
         bool (*encodeCallable)(void*, const Value&, std::uint32_t, WioNativeAbiValue&, std::string&,
                                const NativePodLayouts&) = nullptr;
+        bool (*encodeTask)(void*, const Value&, std::uint32_t, WioNativeAbiValue&, std::string&,
+                           const NativePodLayouts&) = nullptr;
+        NativeValueResult (*decodeTask)(void*, const WioNativeAbiValue&, std::uint32_t,
+                                        const NativePodLayouts&) = nullptr;
     };
 
     [[nodiscard]] bool encodeNativeValue(const bytecode::Module& module, const Value& value, std::uint32_t declaredType,

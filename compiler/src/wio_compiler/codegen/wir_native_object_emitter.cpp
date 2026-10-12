@@ -273,8 +273,8 @@ namespace wio::codegen
             const auto* shape = module.types.tryGet(id);
             if (!shape || depth > 64)
                 return;
-            if (shape->kind == TypeKind::Function || shape->kind == TypeKind::Array ||
-                shape->kind == TypeKind::Dictionary)
+            if (shape->kind == TypeKind::Function || shape->kind == TypeKind::AsyncTask ||
+                shape->kind == TypeKind::Array || shape->kind == TypeKind::Dictionary)
             {
                 for (const auto argument : shape->arguments)
                     self(self, argument, depth + 1);
@@ -424,8 +424,8 @@ namespace wio::codegen
             const auto* shape = module.types.tryGet(id);
             if (!shape || depth > 64)
                 return;
-            if (shape->kind == TypeKind::Function || shape->kind == TypeKind::Array ||
-                shape->kind == TypeKind::Dictionary)
+            if (shape->kind == TypeKind::Function || shape->kind == TypeKind::AsyncTask ||
+                shape->kind == TypeKind::Array || shape->kind == TypeKind::Dictionary)
             {
                 for (const auto argument : shape->arguments)
                     self(self, argument, depth + 1);

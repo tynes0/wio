@@ -581,6 +581,7 @@ namespace wio::wir_backend::abi
     // storage cell, preserving aliasing. Copy-back runs even on a caught failure.
     class Frame
     {
+        runtime::detail::AsyncForeignWaitScope foreignWait_;
         struct Slot
         {
             std::uint64_t type;

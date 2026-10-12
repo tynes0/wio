@@ -379,6 +379,9 @@ namespace wio::vm::detail
                 return packNativeDictionary(module, value, type, *layouts, output, error, depth, objects);
             if (!object && kind == TypeAny && value.kind() == Value::Kind::Any && layouts)
                 return packNativeAny(module, value, type, *layouts, output, error, depth, objects);
+            if (!object && kind == TypeAsyncTask && value.kind() == Value::Kind::AsyncTask && layouts && objects &&
+                objects->encodeTask)
+                return objects->encodeTask(objects->state, value, type, output, error, *layouts);
             const std::uint64_t expected = stableTypeId(module, declaredType);
             if (value.kind() != (object ? Value::Kind::ForeignObject : Value::Kind::RuntimeValue) ||
                 value.aggregateType() != type || value.foreignTypeId() != expected || expected == 0)
@@ -619,6 +622,9 @@ namespace wio::vm::detail
             const bool object = marshalling == 6;
             if (object && layouts && objects)
                 return objects->decode(objects->state, value, declaredType, *layouts);
+            if (!object && kind == TypeAsyncTask && (value.flags & WIO_NATIVE_ABI_VALUE_TASK_SOURCE) && layouts &&
+                objects && objects->decodeTask)
+                return objects->decodeTask(objects->state, value, type, *layouts);
             std::string typeError;
             const std::uint64_t expected = stableTypeId(module, declaredType);
             if (value.kind != (object ? WIO_NATIVE_ABI_OBJECT : WIO_NATIVE_ABI_RUNTIME_VALUE) ||
@@ -633,6 +639,8 @@ namespace wio::vm::detail
                 return unpackNativeDictionary(module, value, type, *layouts, depth, objects);
             if (!object && kind == TypeAny && layouts && layouts->any.contains(type))
                 return unpackNativeAny(module, value, type, *layouts, depth, objects);
+            if (!object && kind == TypeAsyncTask && layouts && objects && objects->decodeTask)
+                return objects->decodeTask(objects->state, value, type, *layouts);
             return {object ? Value::foreignObject(type, expected, value.payload.handle)
                            : Value::runtimeValue(type, expected, value.payload.handle),
                     {}};
@@ -669,6 +677,19 @@ namespace wio::vm::detail
             marshalling = 2;
         else if (kind == TypeText)
             marshalling = 3;
+        else if (kind == TypeAsyncTask)
+        {
+            thread_local unsigned nesting = 0;
+            if (nesting >= 64 || module.types[type].arguments.size() != 1)
+                return false;
+            ++nesting;
+            const bool qualified =
+                callbackValueMarshalling(module, module.types[type].arguments.front(), marshalling, layouts);
+            --nesting;
+            if (!qualified)
+                return false;
+            marshalling = 8;
+        }
         else if (kind == TypeFunction)
         {
             // Type tables are verified acyclic. Also bound qualification so a

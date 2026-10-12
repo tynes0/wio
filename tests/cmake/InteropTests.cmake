@@ -1335,3 +1335,30 @@ add_test(NAME wio_wir_inferred_array_calls
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_bridge_pruning_test.cmake")
 wio_test_labels(wio_wir_inferred_array_calls interop wir vm native array generic differential release-gate)
 set_tests_properties(wio_wir_inferred_array_calls PROPERTIES TIMEOUT 600)
+
+add_test(NAME wio_vm_native_task_inputs
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_native_task_inputs.wio"
+        "-DWIO_EXPECTED_OUTPUT=native-task-inputs-ok"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-task-inputs"
+        "-DWIO_TASK_INPUT_HOST_EXECUTABLE=$<TARGET_FILE:wio_vm_native_task_inputs_host_test>"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_task_inputs_test.cmake")
+wio_test_labels(wio_vm_native_task_inputs interop vm native async task std ownership lifetime differential release-gate)
+set_tests_properties(wio_vm_native_task_inputs PROPERTIES TIMEOUT 600)
+
+add_test(NAME wio_vm_std_async_task_inputs
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_std_async_task_inputs.wio"
+        "-DWIO_EXPECTED_OUTPUT=std-async-task-inputs-ok"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-std-async-task-inputs"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_bridge_pruning_test.cmake")
+wio_test_labels(wio_vm_std_async_task_inputs interop vm native async task std differential release-gate)
+set_tests_properties(wio_vm_std_async_task_inputs PROPERTIES TIMEOUT 600)

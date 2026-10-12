@@ -57,7 +57,10 @@ enum WioNativeAbiValueFlag : std::uint32_t
     WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED = 1u << 8u,
     // Result-only reference form. Payload names the exact input argument wire,
     // not a producer address or a copied projection descriptor.
-    WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS = 1u << 9u
+    WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS = 1u << 9u,
+    // Owning runtime-value input. Slice contains WioNativeTaskSource, never a
+    // producer AsyncTask address. Send only to task-source-aware thunks.
+    WIO_NATIVE_ABI_VALUE_TASK_SOURCE = 1u << 10u
 };
 
 struct WioNativeAbiSlice
@@ -173,7 +176,8 @@ enum WioNativeAbiFunctionFlag : std::uint32_t
     // The thunk adopts CONSUMED|OWNED argument claims after count validation,
     // including when decoding or the native call fails. The caller then clears
     // those wire slots without releasing them a second time.
-    WIO_NATIVE_ABI_FUNCTION_CONSUMED_ARGUMENTS = 1u << 5u
+    WIO_NATIVE_ABI_FUNCTION_CONSUMED_ARGUMENTS = 1u << 5u,
+    WIO_NATIVE_ABI_FUNCTION_TASK_SOURCES = 1u << 6u
 };
 
 // Additive form: the existing projection structures retain their exact sizes.
@@ -270,6 +274,25 @@ struct WioNativeTaskCompletionApi
 };
 using WioGetNativeTaskCompletionApiFn = const WioNativeTaskCompletionApi* (*)();
 
+// VM/host task input protocol. All callbacks contain exceptions. A successful
+// onComplete subscription owns exactly one callback delivery, including on
+// cancellation; delivery may be synchronous or on a foreign thread.
+struct WioNativeTaskSource
+{
+    std::uint32_t abiVersion = WIO_NATIVE_ABI_VERSION;
+    std::uint32_t reserved = 0;
+    std::uint64_t taskTypeId = 0;
+    std::uint64_t resultTypeId = 0;
+    void* state = nullptr;
+    WioNativeAbiStatus (*ready)(void*, bool*) noexcept = nullptr;
+    WioNativeAbiStatus (*cancel)(void*) noexcept = nullptr;
+    WioNativeAbiStatus (*read)(void*, WioNativeAbiValue*, WioNativeAbiFailure*) noexcept = nullptr;
+    WioNativeAbiStatus (*onComplete)(void*, WioNativeTaskCompletionFn, void*) noexcept = nullptr;
+    // Cooperative blocking waits call this on the waiting thread. Only the
+    // owning main thread drains main-affined work; foreign workers return zero.
+    WioNativeAbiStatus (*pumpMain)(void*, std::uint64_t*) noexcept = nullptr;
+};
+
 inline void WioNativeAbiRetain(WioNativeAbiHandle handle) noexcept
 {
     if (handle.state != nullptr && handle.ops != nullptr && handle.ops->retain != nullptr)
@@ -286,13 +309,26 @@ inline void WioNativeAbiRelease(WioNativeAbiHandle* handle) noexcept
         owned.ops->release(owned.state);
 }
 
+inline void WioNativeAbiRetainValue(WioNativeAbiValue* value) noexcept
+{
+    if (!value || !(value->flags & WIO_NATIVE_ABI_VALUE_OWNED))
+        return;
+    if ((value->kind == WIO_NATIVE_ABI_OBJECT || value->kind == WIO_NATIVE_ABI_RUNTIME_VALUE) &&
+        !(value->flags & WIO_NATIVE_ABI_VALUE_TASK_SOURCE))
+        WioNativeAbiRetain(value->payload.handle);
+    if (value->kind == WIO_NATIVE_ABI_CALLBACK && value->payload.callback.ops && value->payload.callback.ops->retain)
+        value->payload.callback.ops->retain(value->payload.callback.userdata);
+    WioNativeAbiRetain(value->owner);
+}
+
 inline void WioNativeAbiReleaseValue(WioNativeAbiValue* value) noexcept
 {
     if (!value)
         return;
     if (value->flags & WIO_NATIVE_ABI_VALUE_OWNED)
     {
-        if (value->kind == WIO_NATIVE_ABI_OBJECT || value->kind == WIO_NATIVE_ABI_RUNTIME_VALUE)
+        if ((value->kind == WIO_NATIVE_ABI_OBJECT || value->kind == WIO_NATIVE_ABI_RUNTIME_VALUE) &&
+            !(value->flags & WIO_NATIVE_ABI_VALUE_TASK_SOURCE))
             WioNativeAbiRelease(&value->payload.handle);
         if (value->kind == WIO_NATIVE_ABI_CALLBACK && value->payload.callback.ops &&
             value->payload.callback.ops->release)

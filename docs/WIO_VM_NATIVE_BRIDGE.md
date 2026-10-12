@@ -3292,8 +3292,9 @@ mixed-projection fixture exposed large unoptimized Typed-WIR expression frames
 on the default 1 MiB Windows stack. This is not an assertion that recursive
 lowering has been made stackless or that all nesting depths are accepted.
 
-Native Step 8 is still open for general task-parameter/std task helper parity
-and VM executable/shared/static artifact packaging. Native-only dependency
+Native Step 8 at that checkpoint was still open for task-input/helper parity
+and VM executable/shared/static artifact packaging. The task-input closure
+below supersedes that first gap. Native-only dependency
 selection is described below; it is not the final generated-code cost pass.
 These packages do not claim full-suite or local Linux qualification.
 
@@ -3373,5 +3374,91 @@ literal arrays directly through the generic `Box<T>(T[])`/native `Echo<T>`
 probe exposed a separate `WIR1422` conversion failure, now fixed through
 owned container Copy/CopyValue materialization. The inferred/nested generic
 argument and malformed-copy gates pass 2/2 on Windows in 15.03 seconds.
-Numeric conversion verification remains strict. General native
-task-parameter/std helper parity and VM artifact packaging also remain open.
+Numeric conversion verification remains strict. VM artifact packaging remains
+open; native task-input/helper qualification is described below.
+
+## Owning native task inputs and std helper parity
+
+VM-created tasks can cross concrete native `coroutine<T>` parameters without
+reinterpreting VM storage as a producer's C++ `AsyncTask<T>`. The additive
+`WIO_NATIVE_ABI_VALUE_TASK_SOURCE` runtime-value wire contains a
+`WioNativeTaskSource` slice with task/result identities and readiness,
+cancellation, result-read, exactly-once completion and cooperative main-pump
+operations. Its owner is retained/released independently of the payload union.
+Existing value, registry and task sidecar layouts and ABI version 2 stay intact.
+
+Generated thunks advertise `WIO_NATIVE_ABI_FUNCTION_TASK_SOURCES`. The VM rejects
+task inputs to older producers before entering their thunk, rather than exposing
+a new slice union shape to old handle-release code. Rebuild a producer to enable
+this capability. Failed subscription must not deliver a callback; successful
+subscription delivers exactly once, including inline completion or cancellation.
+
+`wir_task_abi.h` materializes an owning producer task and preserves cancellation
+and failure state. A weak origin table lets identity-preserving helpers such as
+Start and task collection copies return the original VM task. It does not keep
+tasks or producers alive by itself. Source cells retain VM task claims; foreign
+release only retires those claims, and Machine cleanup executes Wio destruction.
+Shutdown cancels retained sources and rejects later entry through stale owners.
+Source recovery also rejects a different Machine/generation.
+
+Pending producer/external tasks are never synchronously waited while encoding an
+argument. Native blocking waits temporarily allow VM execution to progress and
+cooperatively pump main-affined work on its owning thread. Composed C++ task
+waits inherit this capability from the native call frame. Ordinary C++ waits
+without host sources keep their existing condition-variable path. This is not
+permission to execute main-affined work on arbitrary worker threads.
+
+Example Wio declaration and call:
+
+```wio
+using cpp::header("task_bridge.h");
+[Native, CppName(tasks::Forward), Instantiate(i32)]
+fn Forward<T>(task: coroutine<T>) -> coroutine<T>;
+
+async fn Compute() -> i32 { return 23; }
+async fn Entry() -> i32 { return await Forward<i32>(Compute()); }
+```
+
+Matching native implementation:
+
+```cpp
+#include "std_async.h"
+namespace tasks {
+    template <class T>
+    wio::runtime::AsyncTask<T> Forward(wio::runtime::AsyncTask<T> task) {
+        co_return co_await task;
+    }
+}
+```
+
+The focused fixtures qualify scalar, string, Unicode text, array, void, native
+POD, qualified hosted-object, Any and nested-task payloads; arrays of tasks;
+and task-valued callbacks. Existing whole-surface object/proxy qualification
+still applies: this does not enable arbitrary public-field placeholders or
+unqualified generic object methods. Async ref/view parameters/results and
+NativeConsume task storage remain forbidden (`WIR2403` for consumption).
+
+The helper gate exercises Start/status/failure, BlockOn and composed blocking
+waits, WaitFor, Cancel/CancelAfter/Detach, All including void, Any, Race, Timeout
+including void, Run/RunBlocking and scope spawn/join/cancel/destruction.
+The separate real `std::async` gate covers Poll, Select, TimeoutOption and
+TimeoutCompleted, as well as native producer-task inputs. Poll exposed missing
+enum field defaults in the VM; enums/flagsets now initialize through their
+underlying zero value. TimeoutOption races boolean readiness tasks and creates
+its Option result in Wio, avoiding an unnecessary native generic-Option proxy.
+This preserves its public result/cancellation contract; it does not migrate the
+future Result-first std surface.
+
+The codec unit covers inline and already-terminal completion, 100 foreign-thread
+completion races, pending cancellation, failure messages, malformed wire/header
+identity and ownership balance. The live-host gate covers task identity, Machine
+move, generation isolation, retained native task cancellation after shutdown,
+and a legacy producer without the new capability. Differential gates compare
+C++, full VM and pruned VM and require identical full/pruned bytecode.
+
+The final focused Windows run passed 4/4 in 91.81 seconds. Only the four newly
+added task-input gates were run, not the old/full suite or a local Linux matrix.
+
+VM executable/shared/static packaging and the generated/runtime cost pass remain
+separate backend work. Product-wide SDK/platform acceptance and v1 language/std
+surface consolidation are not closed by these focused tests.

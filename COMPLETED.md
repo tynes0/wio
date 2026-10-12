@@ -1986,3 +1986,32 @@ here as historical evidence rather than active work:
 - [x] New copy-verifier and C++/full-VM/pruned-VM gates passed 2/2 on Windows in
       15.03 seconds. Typed/Lowered/bytecode reject forged element identities;
       numeric Convert on array values still rejects. No old suite/Linux run.
+
+## Native task inputs and standard async helper closure
+
+- [x] Added owning VM/host task-source wires and concrete producer TaskCodec
+      materialization, stable task/result identities and cancellation/failure
+      preservation. Retain/release handles source owners separately from their
+      slice payload. ABI-v2 thunk capability flags protect older producers.
+- [x] Identity-preserving native helpers recover the original VM task through
+      weak origins. Native source retirement, shutdown cancellation, Machine
+      movement and different-Machine/generation rejection have live-host gates.
+- [x] Blocking native waits, including composed tasks, cooperatively progress
+      the owning VM main executor. Pending external/producer tasks are not
+      synchronously waited during native argument conversion.
+- [x] Qualified POD/object/Any/container/nested-task payloads and task callbacks
+      are covered. Native object reachability follows task payloads; existing
+      whole-surface proxy and async borrow constraints are preserved.
+- [x] Free std task status/start/wait/cancellation, array combinators, worker/
+      blocking calls and scope helpers have native/full-VM/pruned-VM parity.
+      A real std::async fixture also covers Poll/Select and timeout wrappers.
+      VM enum/flagset defaults initialize through the underlying zero value.
+      TimeoutOption races boolean readiness and constructs Option in Wio.
+- [x] Codec probes include inline/terminal completion, 100 foreign-thread
+      races, cancellation/failure, malformed headers/ownership and balanced
+      source claims. NativeConsume task storage remains a negative gate.
+- [x] Only these four new Windows tests were run for task-input closure: 4/4
+      passed in 91.81 seconds total (54.03 native differential/live-host,
+      37.02 real std differential). Full/pruned bytecode remains identical.
+      No old suite or local Linux qualification is claimed. VM artifact
+      packaging and backend cost/optimization work remain open.

@@ -1225,7 +1225,8 @@ namespace wio::codegen
                        "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
                        "#include <any.h>\n#include <entry_args.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include "
                        "<std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n";
-                output_ << "#include <wir_abi.h>\n#include <wir_native.h>\n#include <module_api.h>\n#include "
+                output_ << "#include <wir_abi.h>\n#include <wir_task_abi.h>\n#include <wir_native.h>\n#include "
+                           "<module_api.h>\n#include "
                            "<wio_values.h>\n#include "
                            "<wio_module_contract.h>\n";
                 std::set<std::string> headers;

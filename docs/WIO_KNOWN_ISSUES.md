@@ -148,7 +148,7 @@ because it is approved. Close with a versioned contract/docs consistency pass.
 
 | ID | Priority / state | Current boundary and closure requirement |
 | --- | --- | --- |
-| NI-001 | P1 qualification gap | General native task parameters and all free std task helpers are not qualified. Native task **results** and producer completion sidecars already exist. Require task-input conversion, helper parity, cancellation and shutdown tests. |
+| NI-001 | Closed within qualified native payload boundaries | Owning task inputs, free std task helpers, completion/cancellation, blocking main progress and retained-source shutdown now have focused codec, C++/full-VM/pruned-VM and live-host gates. See [native task-input closure](WIO_VM_NATIVE_BRIDGE.md#owning-native-task-inputs-and-std-helper-parity). Existing unsupported object surfaces and async borrows are not enabled by this closure. |
 | NI-002 | P1 implementation gap | VM-hosted executable/shared/static packaging is not closed. `.wiob` execution and paired producer DLLs do not establish distributable `.exe`, `.dll`/`.so` and `.lib`/`.a` products. Do not interpret this as removal of the existing C++ backend artifact targets. |
 | NI-003 | P2 limitation | Async ref/view parameters/results remain forbidden. Native escaping closures may not capture invocation-scoped borrowed Places; copy/retain values instead. No arbitrary suspension-lifetime promise is made. |
 | NI-004 | P2 limitation | Exact qualified callback aliases work, but aggregate/descendant callback overlap is rejected before invocation. Use one aggregate borrow and access its children. Rejection is a safety boundary, not a memory-corruption bug. |
@@ -250,7 +250,7 @@ Routing belongs to [post-v1 roadmap](WIO_POST_V1_ROADMAP.md) and the
 
 ## 8. Triage and maintenance
 
-Suggested execution order: native task/std helper parity; VM artifacts;
+Suggested execution order: VM artifacts;
 SDK and platform/installed-toolchain acceptance; backend cost work; Rider/tooling
 and remaining v1 contracts; final integrated optimization before beta.
 Fix catastrophic KI-002/KI-003 costs earlier when needed; the final optimization

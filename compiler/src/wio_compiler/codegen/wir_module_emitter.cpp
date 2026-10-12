@@ -267,7 +267,7 @@ namespace wio::codegen
             const auto& type = module.types.get(id);
             for (const auto child : type.arguments)
                 self(self, child);
-            if (type.kind == TypeKind::Function && !type.arguments.empty())
+            if ((type.kind == TypeKind::Function || type.kind == TypeKind::AsyncTask) && !type.arguments.empty())
                 ordered.push_back(id);
         };
         for (const auto& function : module.functions)
@@ -295,6 +295,20 @@ namespace wio::codegen
             const auto identity = reflected == module.contract.reflection.end()
                                       ? stableModuleHash(nativeAbiTypeKey(module.types, id))
                                       : reflected->stableTypeId;
+            if (module.types.get(id).kind == TypeKind::AsyncTask)
+            {
+                auto payload = module.types.get(id).arguments.front();
+                if (const auto object = nativeAbiObjectType(module.types, payload))
+                    payload = object;
+                const auto result = std::ranges::find(module.contract.reflection, payload, &ReflectionDescriptor::type);
+                const auto resultIdentity = result == module.contract.reflection.end()
+                                                ? stableModuleHash(nativeAbiTypeKey(module.types, payload))
+                                                : result->stableTypeId;
+                out << "template<> struct Codec<" << cpp(id) << ", " << identity << "ULL> : TaskCodec<"
+                    << cpp(module.types.get(id).arguments.front()) << ", " << identity << "ULL, " << resultIdentity
+                    << "ULL> {};\n";
+                continue;
+            }
             out << "template<> struct Codec<" << cpp(id) << ", " << identity
                 << "ULL> : " << nativeValueCodec(module, id, cpp) << " {\n"
                 << "    using Base = " << nativeValueCodec(module, id, cpp) << ";\n"
@@ -505,7 +519,7 @@ namespace wio::codegen
                        "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS | "
                        "WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS | "
                        "WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS | "
-                       "WIO_NATIVE_ABI_FUNCTION_CONSUMED_ARGUMENTS,"
+                       "WIO_NATIVE_ABI_FUNCTION_CONSUMED_ARGUMENTS | WIO_NATIVE_ABI_FUNCTION_TASK_SOURCES,"
                     << stableModuleHash(b.stableKey) << "ULL," << quoted(b.stableKey) << ',' << quoted(b.symbol) << ','
                     << quoted(b.thunkSymbol) << ",&" << b.thunkSymbol << "},\n";
             }
@@ -522,9 +536,22 @@ namespace wio::codegen
         if (module.contract.kind != ModuleKind::WioLibrary && !nativeTaskSidecars)
             return out.str();
         std::set<TypeId> taskTypes;
+        const auto collectTasks = [&](auto&& self, TypeId id) -> void
+        {
+            const auto& shape = module.types.get(id);
+            if (!concrete(id))
+                return;
+            if (shape.kind == TypeKind::AsyncTask)
+                taskTypes.insert(id);
+            for (auto child : shape.arguments)
+                self(self, child);
+        };
         for (const auto& f : module.functions)
-            if (module.types.get(f.returnType).kind == TypeKind::AsyncTask && concrete(f.returnType))
-                taskTypes.insert(f.returnType);
+        {
+            collectTasks(collectTasks, f.returnType);
+            for (const auto& parameter : f.parameters)
+                collectTasks(collectTasks, parameter.type);
+        }
         for (const std::string action : {"ready", "cancel", "read"})
         {
             out << "static WioNativeAbiStatus _task_" << action << "(const WioNativeAbiValue* task"

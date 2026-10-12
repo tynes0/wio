@@ -23,6 +23,15 @@ target_compile_options(wio_vm PRIVATE
 )
 
 if(BUILD_TESTING)
+    add_executable(wio_vm_native_task_inputs_host_test "${CMAKE_SOURCE_DIR}/tests/vm_native_task_inputs_host_test.cpp")
+    target_link_libraries(wio_vm_native_task_inputs_host_test PRIVATE wio_vm ${CMAKE_DL_LIBS})
+    add_executable(wio_native_task_source_codec_test "${CMAKE_SOURCE_DIR}/tests/native_task_source_codec_test.cpp")
+    target_include_directories(wio_native_task_source_codec_test PRIVATE
+        "${CMAKE_SOURCE_DIR}/runtime/include" "${CMAKE_SOURCE_DIR}/sdk/include")
+    target_link_libraries(wio_native_task_source_codec_test PRIVATE wio_vm)
+    add_test(NAME wio_native_task_source_codec COMMAND wio_native_task_source_codec_test)
+    set_tests_properties(wio_native_task_source_codec PROPERTIES
+        TIMEOUT 30 LABELS "vm;native;async;task;ownership;release-gate")
     add_executable(wio_vm_native_ownership_contract_test "${CMAKE_SOURCE_DIR}/tests/vm_native_ownership_contract_test.cpp")
     target_include_directories(wio_vm_native_ownership_contract_test PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/runtime/include")

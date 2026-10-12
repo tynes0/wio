@@ -57,6 +57,10 @@ namespace wio::vm::detail
             return layouts.objectContracts.contains(type);
         if (definition.kind == 19)
             return layouts.any.contains(type);
+        if (definition.kind == 34)
+            return definition.arguments.size() == 1 &&
+                   (module.types[definition.arguments.front()].kind == 1 ||
+                    supportedNativeContainerValue(module, definition.arguments.front(), layouts));
         return (marshalling >= 1 && marshalling <= 5) || (definition.kind == 31 && layouts.sequences.contains(type)) ||
                (definition.kind == 32 && layouts.dictionaries.contains(type));
     }

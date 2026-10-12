@@ -2801,7 +2801,7 @@ add_wio_failure_test(
 )
 wio_test_labels(wio_invalid_vm_native_borrow_nullable_mismatch invalid interop vm native borrowed-result release-gate)
 
-foreach(surface IN ITEMS borrow opaque callback nullable_callback non_native)
+foreach(surface IN ITEMS borrow opaque callback nullable_callback non_native task)
     set(consume_error WIR2403)
     if(surface STREQUAL "non_native")
         set(consume_error WIR2404)
