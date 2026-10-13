@@ -53,6 +53,7 @@ add_subdirectory(libs/frenum)
 # --- Main Project ---
 add_subdirectory(sdk)
 add_subdirectory(runtime)
+add_subdirectory(bytecode)
 add_subdirectory(compiler)
 add_subdirectory(vm)
 if (WIO_BUILD_APP)
@@ -100,7 +101,7 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/docs/"
 )
 
 if (WIO_BUILD_APP)
-    set(WIO_DIST_DEPENDENCIES wio_app wio_runtime_backend)
+    set(WIO_DIST_DEPENDENCIES wio_app wio_runtime_backend wio_vm_runner)
     if (TARGET wio_selfhost_cli)
         list(APPEND WIO_DIST_DEPENDENCIES wio_selfhost_cli)
     endif()

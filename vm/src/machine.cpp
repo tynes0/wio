@@ -2980,7 +2980,11 @@ namespace wio::vm
             }
         }
         if (!library->registerWith(*this, libraryError))
-            return reject("could not register native VM module '" + library->path().string() + "': " + libraryError);
+        {
+            const auto encoded = library->path().u8string();
+            return reject("could not register native VM module '" + std::string(encoded.begin(), encoded.end()) +
+                          "': " + libraryError);
+        }
 
         {
             std::scoped_lock lock{program_->nativeMutex};

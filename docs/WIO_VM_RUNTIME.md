@@ -1,6 +1,6 @@
 # Wio VM Runtime
 
-Status: Sprint 19 implementation in progress.
+Status: runtime milestone implemented; native/artifact closure in progress.
 
 ## Architecture
 
@@ -9,10 +9,18 @@ model. It does not re-run parsing, semantic analysis, or WIR lowering. A
 machine borrows one immutable bytecode module, verifies it once during load,
 and builds reusable per-function register counts and block lookup tables.
 
-During Sprint 19 the target links the compiler-owned bytecode model and codec.
-Before the VM package is installed as a public runtime, that format/loader core
-will be extracted into a small shared library so embedding the VM never pulls
-in the parser, analyzer, or native backend.
+The runtime-only model, codec, verifier and disassembler now live in the
+`wio_bytecode_core` static target. WIR-to-bytecode compilation and semantic enum
+encoding remain in `wio_compiler`; neither the VM nor its standalone runner
+links that target. CMake rejects a transitive compiler dependency in the runner.
+The source/header paths remain under `compiler/` for now, but the installed
+runtime headers are independent of AST/WIR headers.
+
+`wio-vm` executes `.wiob` files without the compiler or self-hosted CLI. It can
+also package its own runtime and a verified module into an executable. See
+[VM executable artifacts](WIO_VM_ARTIFACTS.md) for commands, deployment and the
+remaining shared/static module work. These are VM-interpreted executables, not
+JIT or ahead-of-time compilation of Wio bodies to machine code.
 
 Execution uses typed SSA value registers and an explicit call-frame stack.
 Branch arguments are copied to the target block parameters before control is

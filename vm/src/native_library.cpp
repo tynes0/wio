@@ -122,6 +122,8 @@ namespace wio::vm::detail
             path = std::filesystem::absolute(input).make_preferred();
         else
             path.make_preferred();
+        const auto encodedPath = path.u8string();
+        const std::string displayPath(encodedPath.begin(), encodedPath.end());
 
         if (const auto found = cache.find(path); found != cache.end())
         {
@@ -149,7 +151,7 @@ namespace wio::vm::detail
 
         if (!std::filesystem::is_regular_file(path, pathError) || pathError)
         {
-            error = "native VM module does not exist: " + path.string();
+            error = "native VM module does not exist: " + displayPath;
             return {};
         }
 
@@ -160,7 +162,7 @@ namespace wio::vm::detail
         library->state_->handle = handle;
         if (!handle)
         {
-            error = "could not load native VM module '" + path.string() + "': " + loaderError();
+            error = "could not load native VM module '" + displayPath + "': " + loaderError();
             return {};
         }
 
@@ -172,17 +174,16 @@ namespace wio::vm::detail
 
         const auto getRegistry = loadSymbol<WioGetNativeAbiRegistryFn>(handle, "WioGetNativeAbiRegistry");
         if (!getRegistry)
-            return fail("native VM module '" + path.string() + "' does not export WioGetNativeAbiRegistry");
+            return fail("native VM module '" + displayPath + "' does not export WioGetNativeAbiRegistry");
         const WioNativeAbiRegistry* registry = getRegistry();
         if (!registry)
-            return fail("native VM module '" + path.string() + "' returned a null native ABI registry");
+            return fail("native VM module '" + displayPath + "' returned a null native ABI registry");
 
         const auto getTasks = loadSymbol<WioGetNativeTaskApiFn>(handle, "WioGetNativeTaskApi");
         const auto getCompletions =
             loadSymbol<WioGetNativeTaskCompletionApiFn>(handle, "WioGetNativeTaskCompletionApi");
         if (!getTasks && getCompletions)
-            return fail("native VM module '" + path.string() +
-                        "' exports task completions without the native task API");
+            return fail("native VM module '" + displayPath + "' exports task completions without the native task API");
 
         library->state_->registry = registry;
         if (const auto getPods = loadSymbol<WioGetNativePodLayoutApiFn>(handle, "WioGetNativePodLayoutApi"))

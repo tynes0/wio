@@ -512,7 +512,8 @@ namespace wio::runtime::std_process
             if (copied < buffer.size())
             {
                 buffer.resize(copied);
-                return std::filesystem::path(buffer).lexically_normal().generic_string();
+                const auto encoded = std::filesystem::path(buffer).lexically_normal().generic_u8string();
+                return std::string(encoded.begin(), encoded.end());
             }
             buffer.resize(buffer.size() * 2u);
         }

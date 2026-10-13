@@ -1161,6 +1161,14 @@ Rider, and CLion are defined in
    helpers have focused native/full-VM/pruned-VM coverage. Real std Poll/Select
    and timeout wrappers exercise enum field defaults and pending producer inputs.
    Ref/view async storage and consumed task arguments remain forbidden.
+   The runtime-only bytecode core is now separated from the compiler. Standalone
+   wio-vm embeds verified bytecode into an executable and deploys relative native
+   producers beside it; pure applications need no compiler, source or .wiob at
+   runtime. New codec/publication and pure/native/async/Unicode deployment gates
+   cover this slice. Project CLI packaging, VM-backed shared/static Wio modules,
+   SDK host/lifecycle packaging and cross-platform qualification remain open.
+   See `docs/WIO_VM_ARTIFACTS.md`; the installed VM archive alone does not close
+   the static Wio-module requirement.
    Unconstrained
    T-to-Any boxing remains semantically unsupported. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.

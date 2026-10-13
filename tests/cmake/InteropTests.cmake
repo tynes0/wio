@@ -1362,3 +1362,19 @@ add_test(NAME wio_vm_std_async_task_inputs
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_bridge_pruning_test.cmake")
 wio_test_labels(wio_vm_std_async_task_inputs interop vm native async task std differential release-gate)
 set_tests_properties(wio_vm_std_async_task_inputs PROPERTIES TIMEOUT 600)
+
+add_test(NAME wio_vm_executable_artifact
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_VM_RUNNER=$<TARGET_FILE:wio_vm_runner>"
+        "-DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}"
+        "-DWIO_CONFIG=$<CONFIG>"
+        "-DWIO_VM_ARCHIVE=$<TARGET_FILE_NAME:wio_vm>"
+        "-DWIO_BYTECODE_ARCHIVE=$<TARGET_FILE_NAME:wio_bytecode_core>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-executable-artifact"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_executable_artifact_test.cmake")
+wio_test_labels(wio_vm_executable_artifact interop vm artifact executable deployment native async release-gate)
+set_tests_properties(wio_vm_executable_artifact PROPERTIES TIMEOUT 240)

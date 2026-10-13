@@ -45,6 +45,7 @@ function(wio_add_solution_catalogs)
     )
     file(GLOB_RECURSE wio_cmake_project_files CONFIGURE_DEPENDS LIST_DIRECTORIES false
         "${CMAKE_SOURCE_DIR}/app/CMakeLists.txt"
+        "${CMAKE_SOURCE_DIR}/bytecode/CMakeLists.txt"
         "${CMAKE_SOURCE_DIR}/compiler/CMakeLists.txt"
         "${CMAKE_SOURCE_DIR}/examples/CMakeLists.txt"
         "${CMAKE_SOURCE_DIR}/libs/CMakeLists.txt"
@@ -166,7 +167,7 @@ function(wio_apply_solution_layout)
             _wio_test_folder(${target} folder)
         elseif(target STREQUAL "wio_compiler")
             set(folder "Wio/Compiler")
-        elseif(target STREQUAL "wio_vm")
+        elseif(target STREQUAL "wio_vm" OR target STREQUAL "wio_bytecode_core")
             set(folder "Wio/VM")
         else()
             get_target_property(target_source_dir ${target} SOURCE_DIR)

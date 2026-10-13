@@ -65,23 +65,25 @@ namespace wio::app
 
         bool readModule(const std::filesystem::path& path, bytecode::Module& module, std::string& error)
         {
+            const auto encoded = path.u8string();
+            const std::string displayPath(encoded.begin(), encoded.end());
             std::ifstream stream(path, std::ios::binary | std::ios::ate);
             if (!stream)
             {
-                error = "could not open bytecode module: " + path.string();
+                error = "could not open bytecode module: " + displayPath;
                 return false;
             }
             const auto size = stream.tellg();
             if (size <= 0 || static_cast<std::uint64_t>(size) > bytecode::DecodeLimits{}.maximumFileBytes)
             {
-                error = "bytecode module is empty or exceeds the decoder size limit: " + path.string();
+                error = "bytecode module is empty or exceeds the decoder size limit: " + displayPath;
                 return false;
             }
             std::vector<char> data(static_cast<std::size_t>(size));
             stream.seekg(0);
             if (!stream.read(data.data(), static_cast<std::streamsize>(data.size())))
             {
-                error = "could not read complete bytecode module: " + path.string();
+                error = "could not read complete bytecode module: " + displayPath;
                 return false;
             }
             const auto bytes = std::span{reinterpret_cast<const std::byte*>(data.data()), data.size()};
@@ -145,6 +147,13 @@ namespace wio::app
             return EXIT_FAILURE;
         }
 
+        return runVmModule(module, options.bytecode, options.nativeLibraries, std::move(options.arguments));
+    }
+
+    int runVmModule(const bytecode::Module& module, const std::filesystem::path& argumentPath,
+                    std::span<const std::filesystem::path> libraries, std::vector<std::string> applicationArguments)
+    {
+        std::string error;
         const std::uint32_t entry = findEntry(module);
         if (entry == bytecode::InvalidIndex || entry >= module.functions.size())
         {
@@ -153,7 +162,7 @@ namespace wio::app
         }
 
         vm::Machine machine{module};
-        for (const std::filesystem::path& library : options.nativeLibraries)
+        for (const std::filesystem::path& library : libraries)
         {
             if (!machine.loadNativeLibrary(library, &error))
             {
@@ -182,10 +191,10 @@ namespace wio::app
                 return EXIT_FAILURE;
             }
             std::vector<vm::Value> values;
-            values.reserve(options.arguments.size() + 1);
-            const auto modulePath = options.bytecode.u8string();
+            values.reserve(applicationArguments.size() + 1);
+            const auto modulePath = argumentPath.u8string();
             values.push_back(vm::Value::string(std::string(modulePath.begin(), modulePath.end())));
-            for (std::string& argument : options.arguments)
+            for (std::string& argument : applicationArguments)
                 values.push_back(vm::Value::string(std::move(argument)));
             arguments.push_back(vm::Value::array(std::move(values)));
         }

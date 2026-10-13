@@ -2015,3 +2015,35 @@ here as historical evidence rather than active work:
       37.02 real std differential). Full/pruned bytecode remains identical.
       No old suite or local Linux qualification is claimed. VM artifact
       packaging and backend cost/optimization work remain open.
+
+## Runtime-only VM and embedded executable packaging
+
+- [x] Extracted the bytecode model/codec/verifier/disassembler into the
+      compiler-independent `wio_bytecode_core` archive. WIR conversion remains
+      in the compiler; runtime targets do not transitively link it. CMake checks
+      target dependency closure, including aliases and static LINK_ONLY edges.
+- [x] Added standalone `wio-vm` raw-module execution and verified bytecode
+      embedding into an executable. Embedded options are application arguments;
+      exit codes and async entry completion preserve VM runner semantics.
+- [x] Native producers are deployed beside the executable and located relative
+      to it. Unicode executable/library names and argument paths use UTF-8 on
+      Windows; fixed CurrentExecutablePath's ANSI-code-page conversion.
+- [x] Bounded versioned footer/metadata, corruption checksum, strict UTF-8
+      basenames, bytecode verification and executable entry validation reject
+      malformed or library-only inputs before publication/execution.
+- [x] Existing outputs and conflicting libraries are not overwritten. Completed
+      executables publish exclusively; cleanup does not remove existing files
+      or required libraries after successful publication. Deployment-directory
+      locks serialize cooperating packagers and qualify interrupted-lock refusal.
+- [x] Added the `WioVmRuntime` install component for runner/core/VM archives and
+      public wire/runtime headers, and included the runner in CLI distribution
+      builds. Rebuilt the self-hosted CLI companion.
+- [x] Only the two new Windows gates were run: 2/2 passed in 6.55 seconds on the
+      final run (0.13 codec/guards; 6.14 installed pure/native/async deployment).
+      They cover no-compiler installation, source/bytecode-independent execution,
+      relocatable native libraries, Unicode names/arguments, missing libraries,
+      entry requirements, corrupt metadata and publication collisions. Added
+      the gates to Windows/Linux CI; no local Linux qualification is claimed.
+- [ ] Project-command packaging integration, SDK-backed shared/static Wio module
+      artifacts and final backend cost/optimization work remain open. Installing
+      a runtime archive is not equivalent to shipping a Wio `.lib` module.

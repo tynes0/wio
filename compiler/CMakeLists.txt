@@ -17,6 +17,13 @@ file(TO_CMAKE_PATH "${WIO_BACKEND_CXX_COMPILER}" WIO_BACKEND_CXX_COMPILER_CPP)
 file(TO_CMAKE_PATH "${WIO_BACKEND_AR}" WIO_BACKEND_AR_CPP)
 file(TO_CMAKE_PATH "${WIO_BACKEND_RUNTIME_LIBRARY}" WIO_BACKEND_RUNTIME_LIBRARY_CPP)
 
+list(REMOVE_ITEM WIO_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/wio_compiler/bytecode/codec.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/wio_compiler/bytecode/module.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/wio_compiler/bytecode/format.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/wio_compiler/bytecode/verifier.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/wio_compiler/bytecode/disassembler.cpp")
+
 add_library(wio_compiler STATIC 
     ${WIO_SOURCES}
     ${WIO_HEADERS}
@@ -36,6 +43,7 @@ PRIVATE
 
 target_link_libraries(wio_compiler
 PUBLIC
+    wio_bytecode_core
     dtlog
     frenum
     coco

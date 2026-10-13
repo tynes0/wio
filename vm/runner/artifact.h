@@ -1,0 +1,21 @@
+#pragma once
+
+#include <cstddef>
+#include <filesystem>
+#include <span>
+#include <string>
+#include <vector>
+
+namespace wio::vm::artifact
+{
+    struct Payload
+    {
+        std::vector<std::byte> bytecode;
+        std::vector<std::string> libraries;
+    };
+    // No footer means an ordinary runner. A recognized but malformed footer
+    // throws; it must never fall through to command-line tooling.
+    bool read(const std::filesystem::path& executable, Payload& payload);
+    void package(const std::filesystem::path& runner, const std::filesystem::path& bytecode,
+                 std::span<const std::filesystem::path> libraries, const std::filesystem::path& output);
+} // namespace wio::vm::artifact

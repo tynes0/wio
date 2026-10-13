@@ -15,7 +15,12 @@ add_library(wio_vm STATIC
 add_library(wio-vm ALIAS wio_vm)
 
 target_include_directories(wio_vm PUBLIC include)
-target_link_libraries(wio_vm PUBLIC wio_compiler wio_sdk PRIVATE ${CMAKE_DL_LIBS})
+find_package(Threads REQUIRED)
+target_link_libraries(wio_vm PUBLIC wio_bytecode_core wio_sdk PRIVATE ${CMAKE_DL_LIBS} Threads::Threads)
+set_target_properties(wio_vm PROPERTIES POSITION_INDEPENDENT_CODE ON)
+install(TARGETS wio_vm ARCHIVE DESTINATION lib COMPONENT WioVmRuntime)
+install(DIRECTORY include/wio/vm DESTINATION include/wio COMPONENT WioVmRuntime FILES_MATCHING PATTERN "*.h")
+install(FILES "${CMAKE_SOURCE_DIR}/sdk/include/wio_native_abi.h" DESTINATION sdk/include COMPONENT WioVmRuntime)
 
 target_compile_options(wio_vm PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
@@ -365,3 +370,63 @@ if(BUILD_TESTING)
         wio_vm_native_invalid_module_1 wio_vm_native_invalid_module_2 wio_vm_native_invalid_module_3)
     add_test(NAME wio_vm_native_library_discovery COMMAND wio_vm_native_library_discovery_test)
 endif()
+
+# Compiler-pipeline tests need the frontend explicitly; the published runtime
+# and standalone runner must not regain that dependency transitively.
+get_property(wio_vm_local_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(wio_vm_local_target IN LISTS wio_vm_local_targets)
+    if(wio_vm_local_target MATCHES "_test$")
+        target_link_libraries(${wio_vm_local_target} PRIVATE wio_compiler)
+    endif()
+endforeach()
+
+add_executable(wio_vm_runner
+    runner/main.cpp
+    runner/artifact.cpp
+    "${CMAKE_SOURCE_DIR}/app/vm_runner.cpp")
+target_include_directories(wio_vm_runner PRIVATE "${CMAKE_SOURCE_DIR}/app" "${CMAKE_SOURCE_DIR}/runtime/include")
+target_link_libraries(wio_vm_runner PRIVATE wio_vm wio_runtime_host)
+set_target_properties(wio_vm_runner PROPERTIES
+    OUTPUT_NAME "wio-vm" FOLDER "runtime"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/app/$<CONFIG>")
+install(TARGETS wio_vm_runner RUNTIME DESTINATION bin COMPONENT WioVmRuntime)
+
+if(BUILD_TESTING)
+    add_executable(wio_vm_artifact_codec_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_artifact_codec_test.cpp"
+        runner/artifact.cpp)
+    target_include_directories(wio_vm_artifact_codec_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/runner")
+    target_link_libraries(wio_vm_artifact_codec_test PRIVATE wio_bytecode_core)
+    add_test(NAME wio_vm_artifact_codec COMMAND wio_vm_artifact_codec_test "${CMAKE_BINARY_DIR}/vm-artifact-codec")
+    set_tests_properties(wio_vm_artifact_codec PROPERTIES LABELS "vm;artifact;codec;deployment;release-gate")
+endif()
+
+# Fail configuration if an accidental transitive dependency pulls the compiler
+# back into the published runtime. Inspect targets, not generated project names.
+function(wio_assert_runtime_only target)
+    get_target_property(aliased "${target}" ALIASED_TARGET)
+    if(aliased)
+        set(target "${aliased}")
+    endif()
+    get_property(visited GLOBAL PROPERTY WIO_RUNTIME_DEPENDENCY_VISITED)
+    if(target IN_LIST visited)
+        return()
+    endif()
+    set_property(GLOBAL APPEND PROPERTY WIO_RUNTIME_DEPENDENCY_VISITED "${target}")
+    if(target STREQUAL "wio_compiler")
+        message(FATAL_ERROR "Standalone VM runtime must not link wio_compiler")
+    endif()
+    foreach(property IN ITEMS LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
+        get_target_property(dependencies "${target}" "${property}")
+        foreach(dependency IN LISTS dependencies)
+            # Static libraries expose private dependencies using LINK_ONLY.
+            if(dependency MATCHES "^\\$<LINK_ONLY:(.+)>$")
+                set(dependency "${CMAKE_MATCH_1}")
+            endif()
+            if(TARGET "${dependency}")
+                wio_assert_runtime_only("${dependency}")
+            endif()
+        endforeach()
+    endforeach()
+endfunction()
+wio_assert_runtime_only(wio_vm_runner)

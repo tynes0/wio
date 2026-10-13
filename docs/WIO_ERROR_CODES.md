@@ -2935,7 +2935,7 @@ Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:526](../compiler/s
 - The virtual machine has no loaded module
 - Timer scheduling requires a loaded VM program
 
-Definitions: [vm/src/machine.cpp:1732](../vm/src/machine.cpp#L1732), [vm/src/machine.cpp:3141](../vm/src/machine.cpp#L3141), [vm/src/machine.cpp:3463](../vm/src/machine.cpp#L3463).
+Definitions: [vm/src/machine.cpp:1732](../vm/src/machine.cpp#L1732), [vm/src/machine.cpp:3145](../vm/src/machine.cpp#L3145), [vm/src/machine.cpp:3467](../vm/src/machine.cpp#L3467).
 
 ### WVM1001
 
@@ -2947,43 +2947,43 @@ Definitions: [vm/src/machine.cpp:1637](../vm/src/machine.cpp#L1637).
 
 - Entry function id is outside the module
 
-Definitions: [vm/src/machine.cpp:1736](../vm/src/machine.cpp#L1736), [vm/src/machine.cpp:3469](../vm/src/machine.cpp#L3469).
+Definitions: [vm/src/machine.cpp:1736](../vm/src/machine.cpp#L1736), [vm/src/machine.cpp:3473](../vm/src/machine.cpp#L3473).
 
 ### WVM1003
 
 - External function requires the Sprint 20 native bridge
 
-Definitions: [vm/src/machine.cpp:3492](../vm/src/machine.cpp#L3492).
+Definitions: [vm/src/machine.cpp:3496](../vm/src/machine.cpp#L3496).
 
 ### WVM1004
 
 - Call argument count does not match the function signature
 
-Definitions: [vm/src/machine.cpp:3495](../vm/src/machine.cpp#L3495).
+Definitions: [vm/src/machine.cpp:3499](../vm/src/machine.cpp#L3499).
 
 ### WVM1005
 
 - VM call depth limit exceeded
 
-Definitions: [vm/src/machine.cpp:3497](../vm/src/machine.cpp#L3497).
+Definitions: [vm/src/machine.cpp:3501](../vm/src/machine.cpp#L3501).
 
 ### WVM1006
 
 - Function register limit exceeded
 
-Definitions: [vm/src/machine.cpp:3500](../vm/src/machine.cpp#L3500).
+Definitions: [vm/src/machine.cpp:3504](../vm/src/machine.cpp#L3504).
 
 ### WVM1007
 
 - Instruction cursor escaped its basic block
 
-Definitions: [vm/src/machine.cpp:3637](../vm/src/machine.cpp#L3637).
+Definitions: [vm/src/machine.cpp:3641](../vm/src/machine.cpp#L3641).
 
 ### WVM1008
 
 - VM instruction limit exceeded
 
-Definitions: [vm/src/machine.cpp:3639](../vm/src/machine.cpp#L3639).
+Definitions: [vm/src/machine.cpp:3643](../vm/src/machine.cpp#L3643).
 
 ### WVM1009
 
@@ -3010,206 +3010,206 @@ Definitions: [vm/src/machine.cpp:3639](../vm/src/machine.cpp#L3639).
 - Iterator value result register is invalid
 - Aggregate result register is invalid
 
-Definitions: [vm/src/machine.cpp:3753](../vm/src/machine.cpp#L3753), [vm/src/machine.cpp:3779](../vm/src/machine.cpp#L3779), [vm/src/machine.cpp:3979](../vm/src/machine.cpp#L3979), [vm/src/machine.cpp:4020](../vm/src/machine.cpp#L4020), [vm/src/machine.cpp:4112](../vm/src/machine.cpp#L4112), [vm/src/machine.cpp:4198](../vm/src/machine.cpp#L4198), [vm/src/machine.cpp:4295](../vm/src/machine.cpp#L4295), [vm/src/machine.cpp:4313](../vm/src/machine.cpp#L4313), [vm/src/machine.cpp:4740](../vm/src/machine.cpp#L4740), [vm/src/machine.cpp:4757](../vm/src/machine.cpp#L4757), [vm/src/machine.cpp:4771](../vm/src/machine.cpp#L4771), [vm/src/machine.cpp:4824](../vm/src/machine.cpp#L4824), [vm/src/machine.cpp:4841](../vm/src/machine.cpp#L4841), [vm/src/machine.cpp:4852](../vm/src/machine.cpp#L4852), [vm/src/machine.cpp:4865](../vm/src/machine.cpp#L4865), [vm/src/machine.cpp:4886](../vm/src/machine.cpp#L4886), [vm/src/machine.cpp:4891](../vm/src/machine.cpp#L4891), [vm/src/machine.cpp:4903](../vm/src/machine.cpp#L4903), [vm/src/machine.cpp:4928](../vm/src/machine.cpp#L4928), [vm/src/machine.cpp:4949](../vm/src/machine.cpp#L4949), [vm/src/machine.cpp:5021](../vm/src/machine.cpp#L5021), [vm/src/machine.cpp:5048](../vm/src/machine.cpp#L5048), [vm/src/machine.cpp:5114](../vm/src/machine.cpp#L5114), [vm/src/machine.cpp:5117](../vm/src/machine.cpp#L5117), [vm/src/machine.cpp:5539](../vm/src/machine.cpp#L5539).
+Definitions: [vm/src/machine.cpp:3757](../vm/src/machine.cpp#L3757), [vm/src/machine.cpp:3783](../vm/src/machine.cpp#L3783), [vm/src/machine.cpp:3983](../vm/src/machine.cpp#L3983), [vm/src/machine.cpp:4024](../vm/src/machine.cpp#L4024), [vm/src/machine.cpp:4116](../vm/src/machine.cpp#L4116), [vm/src/machine.cpp:4202](../vm/src/machine.cpp#L4202), [vm/src/machine.cpp:4299](../vm/src/machine.cpp#L4299), [vm/src/machine.cpp:4317](../vm/src/machine.cpp#L4317), [vm/src/machine.cpp:4744](../vm/src/machine.cpp#L4744), [vm/src/machine.cpp:4761](../vm/src/machine.cpp#L4761), [vm/src/machine.cpp:4775](../vm/src/machine.cpp#L4775), [vm/src/machine.cpp:4828](../vm/src/machine.cpp#L4828), [vm/src/machine.cpp:4845](../vm/src/machine.cpp#L4845), [vm/src/machine.cpp:4856](../vm/src/machine.cpp#L4856), [vm/src/machine.cpp:4869](../vm/src/machine.cpp#L4869), [vm/src/machine.cpp:4890](../vm/src/machine.cpp#L4890), [vm/src/machine.cpp:4895](../vm/src/machine.cpp#L4895), [vm/src/machine.cpp:4907](../vm/src/machine.cpp#L4907), [vm/src/machine.cpp:4932](../vm/src/machine.cpp#L4932), [vm/src/machine.cpp:4953](../vm/src/machine.cpp#L4953), [vm/src/machine.cpp:5025](../vm/src/machine.cpp#L5025), [vm/src/machine.cpp:5052](../vm/src/machine.cpp#L5052), [vm/src/machine.cpp:5118](../vm/src/machine.cpp#L5118), [vm/src/machine.cpp:5121](../vm/src/machine.cpp#L5121), [vm/src/machine.cpp:5543](../vm/src/machine.cpp#L5543).
 
 ### WVM1010
 
 - Default value is not implemented for this bytecode type
 
-Definitions: [vm/src/machine.cpp:3777](../vm/src/machine.cpp#L3777).
+Definitions: [vm/src/machine.cpp:3781](../vm/src/machine.cpp#L3781).
 
 ### WVM1011
 
 - Unary instruction reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:3787](../vm/src/machine.cpp#L3787).
+Definitions: [vm/src/machine.cpp:3791](../vm/src/machine.cpp#L3791).
 
 ### WVM1012
 
 - Unary operator is invalid for the runtime value kind
 
-Definitions: [vm/src/machine.cpp:3802](../vm/src/machine.cpp#L3802).
+Definitions: [vm/src/machine.cpp:3806](../vm/src/machine.cpp#L3806).
 
 ### WVM1013
 
 - Binary instruction requires two available values of the same kind
 
-Definitions: [vm/src/machine.cpp:3822](../vm/src/machine.cpp#L3822).
+Definitions: [vm/src/machine.cpp:3826](../vm/src/machine.cpp#L3826).
 
 ### WVM1014
 
 - Integer division by zero
 
-Definitions: [vm/src/machine.cpp:3842](../vm/src/machine.cpp#L3842), [vm/src/machine.cpp:3895](../vm/src/machine.cpp#L3895).
+Definitions: [vm/src/machine.cpp:3846](../vm/src/machine.cpp#L3846), [vm/src/machine.cpp:3899](../vm/src/machine.cpp#L3899).
 
 ### WVM1015
 
 - Signed integer division overflow
 
-Definitions: [vm/src/machine.cpp:3844](../vm/src/machine.cpp#L3844).
+Definitions: [vm/src/machine.cpp:3848](../vm/src/machine.cpp#L3848).
 
 ### WVM1016
 
 - Integer shift count is outside [0, 63]
 
-Definitions: [vm/src/machine.cpp:3856](../vm/src/machine.cpp#L3856), [vm/src/machine.cpp:3907](../vm/src/machine.cpp#L3907).
+Definitions: [vm/src/machine.cpp:3860](../vm/src/machine.cpp#L3860), [vm/src/machine.cpp:3911](../vm/src/machine.cpp#L3911).
 
 ### WVM1017
 
 - Signed integer binary operator is not implemented
 
-Definitions: [vm/src/machine.cpp:3868](../vm/src/machine.cpp#L3868).
+Definitions: [vm/src/machine.cpp:3872](../vm/src/machine.cpp#L3872).
 
 ### WVM1018
 
 - Unsigned integer binary operator is not implemented
 
-Definitions: [vm/src/machine.cpp:3911](../vm/src/machine.cpp#L3911).
+Definitions: [vm/src/machine.cpp:3915](../vm/src/machine.cpp#L3915).
 
 ### WVM1019
 
 - Floating-point binary operator is not implemented
 
-Definitions: [vm/src/machine.cpp:3930](../vm/src/machine.cpp#L3930).
+Definitions: [vm/src/machine.cpp:3934](../vm/src/machine.cpp#L3934).
 
 ### WVM1020
 
 - String binary operator is not implemented
 
-Definitions: [vm/src/machine.cpp:3943](../vm/src/machine.cpp#L3943).
+Definitions: [vm/src/machine.cpp:3947](../vm/src/machine.cpp#L3947).
 
 ### WVM1021
 
 - Binary operator is invalid for the runtime value kind
 
-Definitions: [vm/src/machine.cpp:3960](../vm/src/machine.cpp#L3960).
+Definitions: [vm/src/machine.cpp:3964](../vm/src/machine.cpp#L3964).
 
 ### WVM1022
 
 - Range instruction has an invalid operand shape
 
-Definitions: [vm/src/machine.cpp:5183](../vm/src/machine.cpp#L5183).
+Definitions: [vm/src/machine.cpp:5187](../vm/src/machine.cpp#L5187).
 
 ### WVM1023
 
 - Range instruction reads incompatible values
 
-Definitions: [vm/src/machine.cpp:5188](../vm/src/machine.cpp#L5188).
+Definitions: [vm/src/machine.cpp:5192](../vm/src/machine.cpp#L5192).
 
 ### WVM1024
 
 - Range containment requires numeric runtime values
 
-Definitions: [vm/src/machine.cpp:5204](../vm/src/machine.cpp#L5204).
+Definitions: [vm/src/machine.cpp:5208](../vm/src/machine.cpp#L5208).
 
 ### WVM1025
 
 - Conversion reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:5213](../vm/src/machine.cpp#L5213).
+Definitions: [vm/src/machine.cpp:5217](../vm/src/machine.cpp#L5217).
 
 ### WVM1026
 
 - Numeric conversion is out of range or invalid
 
-Definitions: [vm/src/machine.cpp:5228](../vm/src/machine.cpp#L5228), [vm/src/machine.cpp:5242](../vm/src/machine.cpp#L5242), [vm/src/machine.cpp:5255](../vm/src/machine.cpp#L5255).
+Definitions: [vm/src/machine.cpp:5232](../vm/src/machine.cpp#L5232), [vm/src/machine.cpp:5246](../vm/src/machine.cpp#L5246), [vm/src/machine.cpp:5259](../vm/src/machine.cpp#L5259).
 
 ### WVM1027
 
 - Conversion target is not a numeric bytecode type
 
-Definitions: [vm/src/machine.cpp:5260](../vm/src/machine.cpp#L5260).
+Definitions: [vm/src/machine.cpp:5264](../vm/src/machine.cpp#L5264).
 
 ### WVM1028
 
 - Call target is outside the module
 
-Definitions: [vm/src/machine.cpp:6684](../vm/src/machine.cpp#L6684).
+Definitions: [vm/src/machine.cpp:6688](../vm/src/machine.cpp#L6688).
 
 ### WVM1029
 
 - Call reads an unavailable argument value
 - Dynamic call reads an unavailable argument value
 
-Definitions: [vm/src/machine.cpp:6691](../vm/src/machine.cpp#L6691), [vm/src/machine.cpp:6739](../vm/src/machine.cpp#L6739).
+Definitions: [vm/src/machine.cpp:6695](../vm/src/machine.cpp#L6695), [vm/src/machine.cpp:6743](../vm/src/machine.cpp#L6743).
 
 ### WVM1030
 
 - Conditional jump requires an available bool value
 
-Definitions: [vm/src/machine.cpp:6930](../vm/src/machine.cpp#L6930).
+Definitions: [vm/src/machine.cpp:6934](../vm/src/machine.cpp#L6934).
 
 ### WVM1031
 
 - Branch target block does not exist
 
-Definitions: [vm/src/machine.cpp:6937](../vm/src/machine.cpp#L6937).
+Definitions: [vm/src/machine.cpp:6941](../vm/src/machine.cpp#L6941).
 
 ### WVM1032
 
 - Branch reads an unavailable argument value
 
-Definitions: [vm/src/machine.cpp:6945](../vm/src/machine.cpp#L6945).
+Definitions: [vm/src/machine.cpp:6949](../vm/src/machine.cpp#L6949).
 
 ### WVM1033
 
 - Return reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:6962](../vm/src/machine.cpp#L6962).
+Definitions: [vm/src/machine.cpp:6966](../vm/src/machine.cpp#L6966).
 
 ### WVM1034
 
 - Call result register is invalid
 
-Definitions: [vm/src/machine.cpp:3590](../vm/src/machine.cpp#L3590).
+Definitions: [vm/src/machine.cpp:3594](../vm/src/machine.cpp#L3594).
 
 ### WVM1035
 
 - Execution reached an unreachable instruction
 
-Definitions: [vm/src/machine.cpp:6970](../vm/src/machine.cpp#L6970).
+Definitions: [vm/src/machine.cpp:6974](../vm/src/machine.cpp#L6974).
 
 ### WVM1036
 
 - Opcode is not implemented by this VM runtime slice: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:6972](../vm/src/machine.cpp#L6972).
+Definitions: [vm/src/machine.cpp:6976](../vm/src/machine.cpp#L6976).
 
 ### WVM1037
 
 - VM exited without producing a result
 
-Definitions: [vm/src/machine.cpp:6975](../vm/src/machine.cpp#L6975).
+Definitions: [vm/src/machine.cpp:6979](../vm/src/machine.cpp#L6979).
 
 ### WVM1038
 
 - Local place result register is invalid
 
-Definitions: [vm/src/machine.cpp:5272](../vm/src/machine.cpp#L5272).
+Definitions: [vm/src/machine.cpp:5276](../vm/src/machine.cpp#L5276).
 
 ### WVM1039
 
 - Global place id or result register is invalid
 
-Definitions: [vm/src/machine.cpp:5280](../vm/src/machine.cpp#L5280).
+Definitions: [vm/src/machine.cpp:5284](../vm/src/machine.cpp#L5284).
 
 ### WVM1040
 
 - Place write requires an available place and source value
 
-Definitions: [vm/src/machine.cpp:5291](../vm/src/machine.cpp#L5291).
+Definitions: [vm/src/machine.cpp:5295](../vm/src/machine.cpp#L5295).
 
 ### WVM1041
 
 - Place can only be initialized once
 
-Definitions: [vm/src/machine.cpp:5293](../vm/src/machine.cpp#L5293).
+Definitions: [vm/src/machine.cpp:5297](../vm/src/machine.cpp#L5297).
 
 ### WVM1042
 
 - Store requires an initialized mutable place
 
-Definitions: [vm/src/machine.cpp:5295](../vm/src/machine.cpp#L5295).
+Definitions: [vm/src/machine.cpp:5299](../vm/src/machine.cpp#L5299).
 
 ### WVM1043
 
@@ -3217,97 +3217,97 @@ Definitions: [vm/src/machine.cpp:5295](../vm/src/machine.cpp#L5295).
 - Load requires an initialized place
 - Dynamic dispatch requires an initialized receiver place
 
-Definitions: [vm/src/machine.cpp:3570](../vm/src/machine.cpp#L3570), [vm/src/machine.cpp:5369](../vm/src/machine.cpp#L5369), [vm/src/machine.cpp:6721](../vm/src/machine.cpp#L6721).
+Definitions: [vm/src/machine.cpp:3574](../vm/src/machine.cpp#L3574), [vm/src/machine.cpp:5373](../vm/src/machine.cpp#L5373), [vm/src/machine.cpp:6725](../vm/src/machine.cpp#L6725).
 
 ### WVM1044
 
 - Borrow requires an available place or object value
 
-Definitions: [vm/src/machine.cpp:5465](../vm/src/machine.cpp#L5465), [vm/src/machine.cpp:5471](../vm/src/machine.cpp#L5471).
+Definitions: [vm/src/machine.cpp:5469](../vm/src/machine.cpp#L5469), [vm/src/machine.cpp:5475](../vm/src/machine.cpp#L5475).
 
 ### WVM1045
 
 - Copy/retain reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:5659](../vm/src/machine.cpp#L5659).
+Definitions: [vm/src/machine.cpp:5663](../vm/src/machine.cpp#L5663).
 
 ### WVM1046
 
 - Move requires an initialized place
 
-Definitions: [vm/src/machine.cpp:5671](../vm/src/machine.cpp#L5671).
+Definitions: [vm/src/machine.cpp:5675](../vm/src/machine.cpp#L5675).
 
 ### WVM1047
 
 - Value cleanup reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:5723](../vm/src/machine.cpp#L5723).
+Definitions: [vm/src/machine.cpp:5727](../vm/src/machine.cpp#L5727).
 
 ### WVM1048
 
 - Place cleanup requires an initialized place
 
-Definitions: [vm/src/machine.cpp:5741](../vm/src/machine.cpp#L5741).
+Definitions: [vm/src/machine.cpp:5745](../vm/src/machine.cpp#L5745).
 
 ### WVM1049
 
 - Unicode text constant is not valid UTF-8
 
-Definitions: [vm/src/machine.cpp:3751](../vm/src/machine.cpp#L3751).
+Definitions: [vm/src/machine.cpp:3755](../vm/src/machine.cpp#L3755).
 
 ### WVM1050
 
 - Unicode text binary operator is not implemented
 
-Definitions: [vm/src/machine.cpp:3957](../vm/src/machine.cpp#L3957).
+Definitions: [vm/src/machine.cpp:3961](../vm/src/machine.cpp#L3961).
 
 ### WVM1051
 
 - Array creation result type is not an array
 
-Definitions: [vm/src/machine.cpp:3968](../vm/src/machine.cpp#L3968).
+Definitions: [vm/src/machine.cpp:3972](../vm/src/machine.cpp#L3972).
 
 ### WVM1052
 
 - Array creation reads an unavailable element
 
-Definitions: [vm/src/machine.cpp:3975](../vm/src/machine.cpp#L3975).
+Definitions: [vm/src/machine.cpp:3979](../vm/src/machine.cpp#L3979).
 
 ### WVM1053
 
 - Array length requires an available array
 
-Definitions: [vm/src/machine.cpp:3987](../vm/src/machine.cpp#L3987).
+Definitions: [vm/src/machine.cpp:3991](../vm/src/machine.cpp#L3991).
 
 ### WVM1054
 
 - Array index is invalid or outside the array bounds
 
-Definitions: [vm/src/machine.cpp:4000](../vm/src/machine.cpp#L4000).
+Definitions: [vm/src/machine.cpp:4004](../vm/src/machine.cpp#L4004).
 
 ### WVM1055
 
 - Interpolation segment shape is invalid
 
-Definitions: [vm/src/machine.cpp:4068](../vm/src/machine.cpp#L4068).
+Definitions: [vm/src/machine.cpp:4072](../vm/src/machine.cpp#L4072).
 
 ### WVM1056
 
 - Interpolation reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:4077](../vm/src/machine.cpp#L4077).
+Definitions: [vm/src/machine.cpp:4081](../vm/src/machine.cpp#L4081).
 
 ### WVM1057
 
 - Unicode interpolation produced invalid UTF-8
 
-Definitions: [vm/src/machine.cpp:4089](../vm/src/machine.cpp#L4089).
+Definitions: [vm/src/machine.cpp:4093](../vm/src/machine.cpp#L4093).
 
 ### WVM1058
 
 - Intrinsic call has no available receiver
 
-Definitions: [vm/src/machine.cpp:4209](../vm/src/machine.cpp#L4209).
+Definitions: [vm/src/machine.cpp:4213](../vm/src/machine.cpp#L4213).
 
 ### WVM1059
 
@@ -3328,25 +3328,25 @@ Definitions: [vm/src/text_intrinsics.cpp:166](../vm/src/text_intrinsics.cpp#L166
 - Text intrinsic is not implemented: {dynamic context}
 - Container or text intrinsic is not implemented: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:4290](../vm/src/machine.cpp#L4290), [vm/src/machine.cpp:4308](../vm/src/machine.cpp#L4308), [vm/src/machine.cpp:4732](../vm/src/machine.cpp#L4732).
+Definitions: [vm/src/machine.cpp:4294](../vm/src/machine.cpp#L4294), [vm/src/machine.cpp:4312](../vm/src/machine.cpp#L4312), [vm/src/machine.cpp:4736](../vm/src/machine.cpp#L4736).
 
 ### WVM1062
 
 - Interpolation value has no VM string representation
 
-Definitions: [vm/src/machine.cpp:4080](../vm/src/machine.cpp#L4080).
+Definitions: [vm/src/machine.cpp:4084](../vm/src/machine.cpp#L4084).
 
 ### WVM1063
 
 - Field place reads an unavailable base
 
-Definitions: [vm/src/machine.cpp:5393](../vm/src/machine.cpp#L5393).
+Definitions: [vm/src/machine.cpp:5397](../vm/src/machine.cpp#L5397).
 
 ### WVM1064
 
 - Field place base is not initialized
 
-Definitions: [vm/src/machine.cpp:5401](../vm/src/machine.cpp#L5401).
+Definitions: [vm/src/machine.cpp:5405](../vm/src/machine.cpp#L5405).
 
 ### WVM1065
 
@@ -3354,37 +3354,37 @@ Definitions: [vm/src/machine.cpp:5401](../vm/src/machine.cpp#L5401).
 - Field owner is outside the concrete object hierarchy
 - Field projection is outside the aggregate layout
 
-Definitions: [vm/src/machine.cpp:5412](../vm/src/machine.cpp#L5412), [vm/src/machine.cpp:5416](../vm/src/machine.cpp#L5416), [vm/src/machine.cpp:5423](../vm/src/machine.cpp#L5423).
+Definitions: [vm/src/machine.cpp:5416](../vm/src/machine.cpp#L5416), [vm/src/machine.cpp:5420](../vm/src/machine.cpp#L5420), [vm/src/machine.cpp:5427](../vm/src/machine.cpp#L5427).
 
 ### WVM1066
 
 - Array place requires an available base and non-negative index
 
-Definitions: [vm/src/machine.cpp:5436](../vm/src/machine.cpp#L5436).
+Definitions: [vm/src/machine.cpp:5440](../vm/src/machine.cpp#L5440).
 
 ### WVM1067
 
 - Array place base is not an initialized array
 
-Definitions: [vm/src/machine.cpp:5444](../vm/src/machine.cpp#L5444).
+Definitions: [vm/src/machine.cpp:5448](../vm/src/machine.cpp#L5448).
 
 ### WVM1068
 
 - Array place index is outside the array bounds
 
-Definitions: [vm/src/machine.cpp:5454](../vm/src/machine.cpp#L5454).
+Definitions: [vm/src/machine.cpp:5458](../vm/src/machine.cpp#L5458).
 
 ### WVM1069
 
 - Aggregate construction references an invalid type
 
-Definitions: [vm/src/machine.cpp:5479](../vm/src/machine.cpp#L5479).
+Definitions: [vm/src/machine.cpp:5483](../vm/src/machine.cpp#L5483).
 
 ### WVM1070
 
 - Aggregate construction kind does not match its result type
 
-Definitions: [vm/src/machine.cpp:5484](../vm/src/machine.cpp#L5484).
+Definitions: [vm/src/machine.cpp:5488](../vm/src/machine.cpp#L5488).
 
 ### WVM1071
 
@@ -3392,19 +3392,19 @@ Definitions: [vm/src/machine.cpp:5484](../vm/src/machine.cpp#L5484).
 - Component aggregate reads an unavailable field argument
 - Aggregate constructor reads an unavailable argument
 
-Definitions: [vm/src/machine.cpp:5547](../vm/src/machine.cpp#L5547), [vm/src/machine.cpp:5552](../vm/src/machine.cpp#L5552), [vm/src/machine.cpp:5579](../vm/src/machine.cpp#L5579).
+Definitions: [vm/src/machine.cpp:5551](../vm/src/machine.cpp#L5551), [vm/src/machine.cpp:5556](../vm/src/machine.cpp#L5556), [vm/src/machine.cpp:5583](../vm/src/machine.cpp#L5583).
 
 ### WVM1072
 
 - Reference release reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:5696](../vm/src/machine.cpp#L5696).
+Definitions: [vm/src/machine.cpp:5700](../vm/src/machine.cpp#L5700).
 
 ### WVM1073
 
 - Reference release requires an owned object or callable handle
 
-Definitions: [vm/src/machine.cpp:5701](../vm/src/machine.cpp#L5701).
+Definitions: [vm/src/machine.cpp:5705](../vm/src/machine.cpp#L5705).
 
 ### WVM1074
 
@@ -3412,235 +3412,235 @@ Definitions: [vm/src/machine.cpp:5701](../vm/src/machine.cpp#L5701).
 - Construction continuation references an invalid function
 - Component construction references an invalid lifecycle function
 
-Definitions: [vm/src/machine.cpp:3606](../vm/src/machine.cpp#L3606), [vm/src/machine.cpp:3620](../vm/src/machine.cpp#L3620), [vm/src/machine.cpp:5587](../vm/src/machine.cpp#L5587).
+Definitions: [vm/src/machine.cpp:3610](../vm/src/machine.cpp#L3610), [vm/src/machine.cpp:3624](../vm/src/machine.cpp#L3624), [vm/src/machine.cpp:5591](../vm/src/machine.cpp#L5591).
 
 ### WVM1078
 
 - Dictionary creation has an invalid result type or entry shape
 
-Definitions: [vm/src/machine.cpp:4008](../vm/src/machine.cpp#L4008).
+Definitions: [vm/src/machine.cpp:4012](../vm/src/machine.cpp#L4012).
 
 ### WVM1079
 
 - Dictionary creation reads an unavailable key or value
 
-Definitions: [vm/src/machine.cpp:4015](../vm/src/machine.cpp#L4015).
+Definitions: [vm/src/machine.cpp:4019](../vm/src/machine.cpp#L4019).
 
 ### WVM1080
 
 - Dictionary key was not found
 
-Definitions: [vm/src/machine.cpp:4030](../vm/src/machine.cpp#L4030), [vm/src/machine.cpp:4058](../vm/src/machine.cpp#L4058), [vm/src/machine.cpp:4571](../vm/src/machine.cpp#L4571).
+Definitions: [vm/src/machine.cpp:4034](../vm/src/machine.cpp#L4034), [vm/src/machine.cpp:4062](../vm/src/machine.cpp#L4062), [vm/src/machine.cpp:4575](../vm/src/machine.cpp#L4575).
 
 ### WVM1081
 
 - Dictionary place requires an available base and key
 
-Definitions: [vm/src/machine.cpp:4040](../vm/src/machine.cpp#L4040).
+Definitions: [vm/src/machine.cpp:4044](../vm/src/machine.cpp#L4044).
 
 ### WVM1082
 
 - Dictionary place base is not an initialized dictionary
 
-Definitions: [vm/src/machine.cpp:4048](../vm/src/machine.cpp#L4048).
+Definitions: [vm/src/machine.cpp:4052](../vm/src/machine.cpp#L4052).
 
 ### WVM1083
 
 - Array Contains reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:4330](../vm/src/machine.cpp#L4330).
+Definitions: [vm/src/machine.cpp:4334](../vm/src/machine.cpp#L4334).
 
 ### WVM1084
 
 - Dictionary GetOr reads unavailable operands
 
-Definitions: [vm/src/machine.cpp:4581](../vm/src/machine.cpp#L4581).
+Definitions: [vm/src/machine.cpp:4585](../vm/src/machine.cpp#L4585).
 
 ### WVM1085
 
 - Dictionary TryGet requires a mutable initialized output place
 
-Definitions: [vm/src/machine.cpp:4593](../vm/src/machine.cpp#L4593).
+Definitions: [vm/src/machine.cpp:4597](../vm/src/machine.cpp#L4597).
 
 ### WVM1086
 
 - Dictionary Set requires a mutable receiver and available operands
 
-Definitions: [vm/src/machine.cpp:4606](../vm/src/machine.cpp#L4606).
+Definitions: [vm/src/machine.cpp:4610](../vm/src/machine.cpp#L4610).
 
 ### WVM1087
 
 - Dictionary GetOrAdd requires a mutable receiver and operands
 
-Definitions: [vm/src/machine.cpp:4616](../vm/src/machine.cpp#L4616).
+Definitions: [vm/src/machine.cpp:4620](../vm/src/machine.cpp#L4620).
 
 ### WVM1088
 
 - Dictionary Merge requires another dictionary
 
-Definitions: [vm/src/machine.cpp:4644](../vm/src/machine.cpp#L4644).
+Definitions: [vm/src/machine.cpp:4648](../vm/src/machine.cpp#L4648).
 
 ### WVM1089
 
 - Dictionary Extend requires a mutable receiver and dictionary
 
-Definitions: [vm/src/machine.cpp:4656](../vm/src/machine.cpp#L4656).
+Definitions: [vm/src/machine.cpp:4660](../vm/src/machine.cpp#L4660).
 
 ### WVM1090
 
 - Dictionary Clear requires a mutable receiver
 
-Definitions: [vm/src/machine.cpp:4673](../vm/src/machine.cpp#L4673).
+Definitions: [vm/src/machine.cpp:4677](../vm/src/machine.cpp#L4677).
 
 ### WVM1091
 
 - Dictionary Remove requires a mutable receiver and key
 
-Definitions: [vm/src/machine.cpp:4693](../vm/src/machine.cpp#L4693).
+Definitions: [vm/src/machine.cpp:4697](../vm/src/machine.cpp#L4697).
 
 ### WVM1092
 
 - Ordered dictionary endpoint requires a non-empty ordered dictionary
 
-Definitions: [vm/src/machine.cpp:4714](../vm/src/machine.cpp#L4714).
+Definitions: [vm/src/machine.cpp:4718](../vm/src/machine.cpp#L4718).
 
 ### WVM1093
 
 - Ordered dictionary bound lookup has invalid operands
 
-Definitions: [vm/src/machine.cpp:4726](../vm/src/machine.cpp#L4726).
+Definitions: [vm/src/machine.cpp:4730](../vm/src/machine.cpp#L4730).
 
 ### WVM1094
 
 - Array index search reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:4344](../vm/src/machine.cpp#L4344).
+Definitions: [vm/src/machine.cpp:4348](../vm/src/machine.cpp#L4348).
 
 ### WVM1095
 
 - Array endpoint intrinsic requires a non-empty array
 
-Definitions: [vm/src/machine.cpp:4374](../vm/src/machine.cpp#L4374).
+Definitions: [vm/src/machine.cpp:4378](../vm/src/machine.cpp#L4378).
 
 ### WVM1096
 
 - Array intrinsic index is outside the array bounds
 
-Definitions: [vm/src/machine.cpp:4383](../vm/src/machine.cpp#L4383).
+Definitions: [vm/src/machine.cpp:4387](../vm/src/machine.cpp#L4387).
 
 ### WVM1097
 
 - Array GetOr reads an unavailable fallback
 
-Definitions: [vm/src/machine.cpp:4392](../vm/src/machine.cpp#L4392).
+Definitions: [vm/src/machine.cpp:4396](../vm/src/machine.cpp#L4396).
 
 ### WVM1098
 
 - Array Slice requires non-negative start and count operands
 
-Definitions: [vm/src/machine.cpp:4407](../vm/src/machine.cpp#L4407).
+Definitions: [vm/src/machine.cpp:4411](../vm/src/machine.cpp#L4411).
 
 ### WVM1099
 
 - Array Take/Skip requires a non-negative count
 
-Definitions: [vm/src/machine.cpp:4415](../vm/src/machine.cpp#L4415).
+Definitions: [vm/src/machine.cpp:4419](../vm/src/machine.cpp#L4419).
 
 ### WVM1100
 
 - Array Concat requires another array
 
-Definitions: [vm/src/machine.cpp:4424](../vm/src/machine.cpp#L4424).
+Definitions: [vm/src/machine.cpp:4428](../vm/src/machine.cpp#L4428).
 
 ### WVM1101
 
 - Array Join requires a string separator
 
-Definitions: [vm/src/machine.cpp:4438](../vm/src/machine.cpp#L4438).
+Definitions: [vm/src/machine.cpp:4442](../vm/src/machine.cpp#L4442).
 
 ### WVM1102
 
 - Array Join requires string elements
 
-Definitions: [vm/src/machine.cpp:4444](../vm/src/machine.cpp#L4444).
+Definitions: [vm/src/machine.cpp:4448](../vm/src/machine.cpp#L4448).
 
 ### WVM1103
 
 - Array Push requires a mutable receiver and available value
 
-Definitions: [vm/src/machine.cpp:4456](../vm/src/machine.cpp#L4456).
+Definitions: [vm/src/machine.cpp:4460](../vm/src/machine.cpp#L4460).
 
 ### WVM1104
 
 - Array Pop requires a mutable non-empty array
 
-Definitions: [vm/src/machine.cpp:4463](../vm/src/machine.cpp#L4463).
+Definitions: [vm/src/machine.cpp:4467](../vm/src/machine.cpp#L4467).
 
 ### WVM1105
 
 - Array Insert index is invalid or receiver is not mutable
 
-Definitions: [vm/src/machine.cpp:4471](../vm/src/machine.cpp#L4471).
+Definitions: [vm/src/machine.cpp:4475](../vm/src/machine.cpp#L4475).
 
 ### WVM1106
 
 - Array RemoveAt index is invalid or receiver is not mutable
 
-Definitions: [vm/src/machine.cpp:4478](../vm/src/machine.cpp#L4478).
+Definitions: [vm/src/machine.cpp:4482](../vm/src/machine.cpp#L4482).
 
 ### WVM1107
 
 - Array Remove requires a mutable receiver and available value
 
-Definitions: [vm/src/machine.cpp:4485](../vm/src/machine.cpp#L4485).
+Definitions: [vm/src/machine.cpp:4489](../vm/src/machine.cpp#L4489).
 
 ### WVM1108
 
 - Array Clear requires a mutable receiver
 
-Definitions: [vm/src/machine.cpp:4492](../vm/src/machine.cpp#L4492).
+Definitions: [vm/src/machine.cpp:4496](../vm/src/machine.cpp#L4496).
 
 ### WVM1109
 
 - Array Extend requires a mutable receiver and another array
 
-Definitions: [vm/src/machine.cpp:4500](../vm/src/machine.cpp#L4500).
+Definitions: [vm/src/machine.cpp:4504](../vm/src/machine.cpp#L4504).
 
 ### WVM1110
 
 - Array Reserve requires a mutable receiver and valid capacity
 
-Definitions: [vm/src/machine.cpp:4507](../vm/src/machine.cpp#L4507).
+Definitions: [vm/src/machine.cpp:4511](../vm/src/machine.cpp#L4511).
 
 ### WVM1111
 
 - Array ShrinkToFit requires a mutable receiver
 
-Definitions: [vm/src/machine.cpp:4513](../vm/src/machine.cpp#L4513).
+Definitions: [vm/src/machine.cpp:4517](../vm/src/machine.cpp#L4517).
 
 ### WVM1112
 
 - Array Fill requires a mutable receiver and available value
 
-Definitions: [vm/src/machine.cpp:4521](../vm/src/machine.cpp#L4521).
+Definitions: [vm/src/machine.cpp:4525](../vm/src/machine.cpp#L4525).
 
 ### WVM1113
 
 - Array Reverse requires a mutable receiver
 
-Definitions: [vm/src/machine.cpp:4528](../vm/src/machine.cpp#L4528).
+Definitions: [vm/src/machine.cpp:4532](../vm/src/machine.cpp#L4532).
 
 ### WVM1114
 
 - Array Sort requires a mutable array of orderable values
 
-Definitions: [vm/src/machine.cpp:4535](../vm/src/machine.cpp#L4535).
+Definitions: [vm/src/machine.cpp:4539](../vm/src/machine.cpp#L4539).
 
 ### WVM1115
 
 - Array Sorted requires orderable values
 
-Definitions: [vm/src/machine.cpp:4542](../vm/src/machine.cpp#L4542).
+Definitions: [vm/src/machine.cpp:4546](../vm/src/machine.cpp#L4546).
 
 ### WVM1116
 
@@ -3790,159 +3790,159 @@ Definitions: [vm/src/text_intrinsics.cpp:204](../vm/src/text_intrinsics.cpp#L204
 
 - Function reference requires a known function and callable type
 
-Definitions: [vm/src/machine.cpp:5761](../vm/src/machine.cpp#L5761).
+Definitions: [vm/src/machine.cpp:5765](../vm/src/machine.cpp#L5765).
 
 ### WVM1140
 
 - Function reference result register is invalid
 
-Definitions: [vm/src/machine.cpp:5763](../vm/src/machine.cpp#L5763).
+Definitions: [vm/src/machine.cpp:5767](../vm/src/machine.cpp#L5767).
 
 ### WVM1141
 
 - Closure creation does not match a known callable capture layout
 
-Definitions: [vm/src/machine.cpp:5772](../vm/src/machine.cpp#L5772).
+Definitions: [vm/src/machine.cpp:5776](../vm/src/machine.cpp#L5776).
 
 ### WVM1142
 
 - Closure creation reads an unavailable capture value
 
-Definitions: [vm/src/machine.cpp:5780](../vm/src/machine.cpp#L5780).
+Definitions: [vm/src/machine.cpp:5784](../vm/src/machine.cpp#L5784).
 
 ### WVM1143
 
 - Reference capture requires a live borrowed place
 
-Definitions: [vm/src/machine.cpp:5789](../vm/src/machine.cpp#L5789).
+Definitions: [vm/src/machine.cpp:5793](../vm/src/machine.cpp#L5793).
 
 ### WVM1144
 
 - Retained-self capture requires a live component or object
 
-Definitions: [vm/src/machine.cpp:5807](../vm/src/machine.cpp#L5807).
+Definitions: [vm/src/machine.cpp:5811](../vm/src/machine.cpp#L5811).
 
 ### WVM1145
 
 - Closure creation contains an unknown capture kind
 
-Definitions: [vm/src/machine.cpp:5812](../vm/src/machine.cpp#L5812).
+Definitions: [vm/src/machine.cpp:5816](../vm/src/machine.cpp#L5816).
 
 ### WVM1146
 
 - Closure result register is invalid
 - Native callable result register is invalid
 
-Definitions: [vm/src/machine.cpp:5816](../vm/src/machine.cpp#L5816), [vm/src/machine.cpp:5843](../vm/src/machine.cpp#L5843).
+Definitions: [vm/src/machine.cpp:5820](../vm/src/machine.cpp#L5820), [vm/src/machine.cpp:5847](../vm/src/machine.cpp#L5847).
 
 ### WVM1147
 
 - Indirect call requires an available function value
 
-Definitions: [vm/src/machine.cpp:5824](../vm/src/machine.cpp#L5824).
+Definitions: [vm/src/machine.cpp:5828](../vm/src/machine.cpp#L5828).
 
 ### WVM1148
 
 - Indirect call target is outside the module
 
-Definitions: [vm/src/machine.cpp:5849](../vm/src/machine.cpp#L5849).
+Definitions: [vm/src/machine.cpp:5853](../vm/src/machine.cpp#L5853).
 
 ### WVM1149
 
 - Indirect call lost a closure capture
 
-Definitions: [vm/src/machine.cpp:5857](../vm/src/machine.cpp#L5857).
+Definitions: [vm/src/machine.cpp:5861](../vm/src/machine.cpp#L5861).
 
 ### WVM1150
 
 - Native indirect call reads an unavailable argument
 - Indirect call reads an unavailable argument value
 
-Definitions: [vm/src/machine.cpp:5835](../vm/src/machine.cpp#L5835), [vm/src/machine.cpp:5864](../vm/src/machine.cpp#L5864).
+Definitions: [vm/src/machine.cpp:5839](../vm/src/machine.cpp#L5839), [vm/src/machine.cpp:5868](../vm/src/machine.cpp#L5868).
 
 ### WVM1151
 
 - Object cast requires a live object value
 
-Definitions: [vm/src/machine.cpp:5893](../vm/src/machine.cpp#L5893).
+Definitions: [vm/src/machine.cpp:5897](../vm/src/machine.cpp#L5897).
 
 ### WVM1152
 
 Definition: Upcast target is incompatible with the concrete object type.
 
-Definitions: [vm/src/machine.cpp:5895](../vm/src/machine.cpp#L5895).
+Definitions: [vm/src/machine.cpp:5899](../vm/src/machine.cpp#L5899).
 
 ### WVM1153
 
 Definition: Checked object cast failed for the concrete object type.
 
-Definitions: [vm/src/machine.cpp:5895](../vm/src/machine.cpp#L5895).
+Definitions: [vm/src/machine.cpp:5899](../vm/src/machine.cpp#L5899).
 
 ### WVM1154
 
 - Object cast result register is invalid
 
-Definitions: [vm/src/machine.cpp:5907](../vm/src/machine.cpp#L5907).
+Definitions: [vm/src/machine.cpp:5911](../vm/src/machine.cpp#L5911).
 
 ### WVM1155
 
 - Object type-test result register is invalid
 
-Definitions: [vm/src/machine.cpp:5917](../vm/src/machine.cpp#L5917).
+Definitions: [vm/src/machine.cpp:5921](../vm/src/machine.cpp#L5921).
 
 ### WVM1156
 
 - Object identity comparison requires two operands
 
-Definitions: [vm/src/machine.cpp:5924](../vm/src/machine.cpp#L5924).
+Definitions: [vm/src/machine.cpp:5928](../vm/src/machine.cpp#L5928).
 
 ### WVM1157
 
 - Object identity comparison reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:5928](../vm/src/machine.cpp#L5928).
+Definitions: [vm/src/machine.cpp:5932](../vm/src/machine.cpp#L5932).
 
 ### WVM1158
 
 - Object identity comparison requires object or null operands
 
-Definitions: [vm/src/machine.cpp:5935](../vm/src/machine.cpp#L5935).
+Definitions: [vm/src/machine.cpp:5939](../vm/src/machine.cpp#L5939).
 
 ### WVM1159
 
 - Object identity comparison has an invalid comparison operator
 
-Definitions: [vm/src/machine.cpp:5942](../vm/src/machine.cpp#L5942).
+Definitions: [vm/src/machine.cpp:5946](../vm/src/machine.cpp#L5946).
 
 ### WVM1160
 
 - Object identity comparison result register is invalid
 
-Definitions: [vm/src/machine.cpp:5944](../vm/src/machine.cpp#L5944).
+Definitions: [vm/src/machine.cpp:5948](../vm/src/machine.cpp#L5948).
 
 ### WVM1161
 
 - Dynamic dispatch requires a live object receiver
 
-Definitions: [vm/src/machine.cpp:6725](../vm/src/machine.cpp#L6725).
+Definitions: [vm/src/machine.cpp:6729](../vm/src/machine.cpp#L6729).
 
 ### WVM1162
 
 - Concrete object type has no implementation for the requested method slot
 
-Definitions: [vm/src/machine.cpp:6729](../vm/src/machine.cpp#L6729).
+Definitions: [vm/src/machine.cpp:6733](../vm/src/machine.cpp#L6733).
 
 ### WVM1163
 
 - Dynamic dispatch resolved outside the module function table
 
-Definitions: [vm/src/machine.cpp:6731](../vm/src/machine.cpp#L6731).
+Definitions: [vm/src/machine.cpp:6735](../vm/src/machine.cpp#L6735).
 
 ### WVM1164
 
 - Wait requires an async task value
 
-Definitions: [vm/src/machine.cpp:3185](../vm/src/machine.cpp#L3185).
+Definitions: [vm/src/machine.cpp:3189](../vm/src/machine.cpp#L3189).
 
 ### WVM1165
 
@@ -3952,85 +3952,85 @@ Definitions: [vm/src/machine.cpp:3185](../vm/src/machine.cpp#L3185).
 - Async task was cancelled before its continuation resumed
 - Async task was cancelled at a cooperative suspension point
 
-Definitions: [vm/src/machine.cpp:1604](../vm/src/machine.cpp#L1604), [vm/src/machine.cpp:2776](../vm/src/machine.cpp#L2776), [vm/src/machine.cpp:2807](../vm/src/machine.cpp#L2807), [vm/src/machine.cpp:3199](../vm/src/machine.cpp#L3199), [vm/src/machine.cpp:3214](../vm/src/machine.cpp#L3214), [vm/src/machine.cpp:3243](../vm/src/machine.cpp#L3243), [vm/src/machine.cpp:3255](../vm/src/machine.cpp#L3255), [vm/src/machine.cpp:3275](../vm/src/machine.cpp#L3275), [vm/src/machine.cpp:3339](../vm/src/machine.cpp#L3339), [vm/src/machine.cpp:3401](../vm/src/machine.cpp#L3401), [vm/src/machine.cpp:6763](../vm/src/machine.cpp#L6763), [vm/src/machine.cpp:6799](../vm/src/machine.cpp#L6799).
+Definitions: [vm/src/machine.cpp:1604](../vm/src/machine.cpp#L1604), [vm/src/machine.cpp:2776](../vm/src/machine.cpp#L2776), [vm/src/machine.cpp:2807](../vm/src/machine.cpp#L2807), [vm/src/machine.cpp:3203](../vm/src/machine.cpp#L3203), [vm/src/machine.cpp:3218](../vm/src/machine.cpp#L3218), [vm/src/machine.cpp:3247](../vm/src/machine.cpp#L3247), [vm/src/machine.cpp:3259](../vm/src/machine.cpp#L3259), [vm/src/machine.cpp:3279](../vm/src/machine.cpp#L3279), [vm/src/machine.cpp:3343](../vm/src/machine.cpp#L3343), [vm/src/machine.cpp:3405](../vm/src/machine.cpp#L3405), [vm/src/machine.cpp:6767](../vm/src/machine.cpp#L6767), [vm/src/machine.cpp:6803](../vm/src/machine.cpp#L6803).
 
 ### WVM1166
 
 - Async task is already running or has an invalid state
 
-Definitions: [vm/src/machine.cpp:3218](../vm/src/machine.cpp#L3218).
+Definitions: [vm/src/machine.cpp:3222](../vm/src/machine.cpp#L3222).
 
 ### WVM1167
 
 - Async task lost a captured argument
 
-Definitions: [vm/src/machine.cpp:3227](../vm/src/machine.cpp#L3227), [vm/src/machine.cpp:3229](../vm/src/machine.cpp#L3229).
+Definitions: [vm/src/machine.cpp:3231](../vm/src/machine.cpp#L3231), [vm/src/machine.cpp:3233](../vm/src/machine.cpp#L3233).
 
 ### WVM1168
 
 - Async indirect-call result register is invalid
 
-Definitions: [vm/src/machine.cpp:5875](../vm/src/machine.cpp#L5875).
+Definitions: [vm/src/machine.cpp:5879](../vm/src/machine.cpp#L5879).
 
 ### WVM1169
 
 - Async call result register is invalid
 
-Definitions: [vm/src/machine.cpp:6698](../vm/src/machine.cpp#L6698).
+Definitions: [vm/src/machine.cpp:6702](../vm/src/machine.cpp#L6702).
 
 ### WVM1170
 
 - Async dynamic-call result register is invalid
 
-Definitions: [vm/src/machine.cpp:6746](../vm/src/machine.cpp#L6746).
+Definitions: [vm/src/machine.cpp:6750](../vm/src/machine.cpp#L6750).
 
 ### WVM1171
 
 - Coroutine suspension does not match its function state table
 
-Definitions: [vm/src/machine.cpp:6772](../vm/src/machine.cpp#L6772).
+Definitions: [vm/src/machine.cpp:6776](../vm/src/machine.cpp#L6776).
 
 ### WVM1172
 
 - Coroutine suspension state does not match its resume edge
 
-Definitions: [vm/src/machine.cpp:6777](../vm/src/machine.cpp#L6777).
+Definitions: [vm/src/machine.cpp:6781](../vm/src/machine.cpp#L6781).
 
 ### WVM1173
 
 - Coroutine await requires an async task operand
 
-Definitions: [vm/src/machine.cpp:6786](../vm/src/machine.cpp#L6786).
+Definitions: [vm/src/machine.cpp:6790](../vm/src/machine.cpp#L6790).
 
 ### WVM1174
 
 - Coroutine suspension carries an unsupported async operation
 
-Definitions: [vm/src/machine.cpp:6862](../vm/src/machine.cpp#L6862).
+Definitions: [vm/src/machine.cpp:6866](../vm/src/machine.cpp#L6866).
 
 ### WVM1175
 
 - Coroutine resume block does not exist
 
-Definitions: [vm/src/machine.cpp:3366](../vm/src/machine.cpp#L3366), [vm/src/machine.cpp:6866](../vm/src/machine.cpp#L6866).
+Definitions: [vm/src/machine.cpp:3370](../vm/src/machine.cpp#L3370), [vm/src/machine.cpp:6870](../vm/src/machine.cpp#L6870).
 
 ### WVM1176
 
 - Coroutine resume has no matching suspended payload
 
-Definitions: [vm/src/machine.cpp:6890](../vm/src/machine.cpp#L6890).
+Definitions: [vm/src/machine.cpp:6894](../vm/src/machine.cpp#L6894).
 
 ### WVM1177
 
 - Coroutine resume result register is invalid
 
-Definitions: [vm/src/machine.cpp:6892](../vm/src/machine.cpp#L6892).
+Definitions: [vm/src/machine.cpp:6896](../vm/src/machine.cpp#L6896).
 
 ### WVM1178
 
 - Enum constant does not match its canonical type metadata
 
-Definitions: [vm/src/machine.cpp:4106](../vm/src/machine.cpp#L4106).
+Definitions: [vm/src/machine.cpp:4110](../vm/src/machine.cpp#L4110).
 
 ### WVM1179
 
@@ -4038,31 +4038,31 @@ Definitions: [vm/src/machine.cpp:4106](../vm/src/machine.cpp#L4106).
 - Enum intrinsic target metadata is invalid
 - Enum intrinsic receiver is not an integer value
 
-Definitions: [vm/src/machine.cpp:4122](../vm/src/machine.cpp#L4122), [vm/src/machine.cpp:4127](../vm/src/machine.cpp#L4127), [vm/src/machine.cpp:4139](../vm/src/machine.cpp#L4139).
+Definitions: [vm/src/machine.cpp:4126](../vm/src/machine.cpp#L4126), [vm/src/machine.cpp:4131](../vm/src/machine.cpp#L4131), [vm/src/machine.cpp:4143](../vm/src/machine.cpp#L4143).
 
 ### WVM1180
 
 - Flagset intrinsic requires an integer mask operand
 
-Definitions: [vm/src/machine.cpp:4174](../vm/src/machine.cpp#L4174).
+Definitions: [vm/src/machine.cpp:4178](../vm/src/machine.cpp#L4178).
 
 ### WVM1181
 
 - Enum or flagset intrinsic is not implemented: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:4190](../vm/src/machine.cpp#L4190).
+Definitions: [vm/src/machine.cpp:4194](../vm/src/machine.cpp#L4194).
 
 ### WVM1182
 
 - Any boxing requires an available payload
 
-Definitions: [vm/src/machine.cpp:4749](../vm/src/machine.cpp#L4749).
+Definitions: [vm/src/machine.cpp:4753](../vm/src/machine.cpp#L4753).
 
 ### WVM1183
 
 - Any test or cast requires a live boxed value
 
-Definitions: [vm/src/machine.cpp:4812](../vm/src/machine.cpp#L4812).
+Definitions: [vm/src/machine.cpp:4816](../vm/src/machine.cpp#L4816).
 
 ### WVM1184
 
@@ -4070,86 +4070,86 @@ Definitions: [vm/src/machine.cpp:4812](../vm/src/machine.cpp#L4812).
 - Checked any cast failed for the requested target type
 - Checked any cast cannot borrow a non-object payload
 
-Definitions: [vm/src/machine.cpp:4769](../vm/src/machine.cpp#L4769), [vm/src/machine.cpp:4829](../vm/src/machine.cpp#L4829), [vm/src/machine.cpp:4837](../vm/src/machine.cpp#L4837).
+Definitions: [vm/src/machine.cpp:4773](../vm/src/machine.cpp#L4773), [vm/src/machine.cpp:4833](../vm/src/machine.cpp#L4833), [vm/src/machine.cpp:4841](../vm/src/machine.cpp#L4841).
 
 ### WVM1185
 
 - Nullable wrapping requires an available payload
 
-Definitions: [vm/src/machine.cpp:4850](../vm/src/machine.cpp#L4850).
+Definitions: [vm/src/machine.cpp:4854](../vm/src/machine.cpp#L4854).
 
 ### WVM1186
 
 - Nullable unwrap requires an available value
 
-Definitions: [vm/src/machine.cpp:4861](../vm/src/machine.cpp#L4861).
+Definitions: [vm/src/machine.cpp:4865](../vm/src/machine.cpp#L4865).
 
 ### WVM1187
 
 - Nullable value does not contain a payload
 
-Definitions: [vm/src/machine.cpp:4863](../vm/src/machine.cpp#L4863).
+Definitions: [vm/src/machine.cpp:4867](../vm/src/machine.cpp#L4867).
 
 ### WVM1188
 
 - Variant operation requires canonical option/result storage
 
-Definitions: [vm/src/machine.cpp:4879](../vm/src/machine.cpp#L4879).
+Definitions: [vm/src/machine.cpp:4883](../vm/src/machine.cpp#L4883).
 
 ### WVM1189
 
 - Result does not contain a success value
 
-Definitions: [vm/src/machine.cpp:4898](../vm/src/machine.cpp#L4898).
+Definitions: [vm/src/machine.cpp:4902](../vm/src/machine.cpp#L4902).
 
 ### WVM1190
 
 - Variant payload is outside its canonical field layout
 
-Definitions: [vm/src/machine.cpp:4901](../vm/src/machine.cpp#L4901).
+Definitions: [vm/src/machine.cpp:4905](../vm/src/machine.cpp#L4905).
 
 ### WVM1191
 
 - Iterator creation result type is not an iterator
 
-Definitions: [vm/src/machine.cpp:4913](../vm/src/machine.cpp#L4913).
+Definitions: [vm/src/machine.cpp:4917](../vm/src/machine.cpp#L4917).
 
 ### WVM1192
 
 - Range iterator requires three compatible integer values
 
-Definitions: [vm/src/machine.cpp:4921](../vm/src/machine.cpp#L4921).
+Definitions: [vm/src/machine.cpp:4925](../vm/src/machine.cpp#L4925).
 
 ### WVM1193
 
 - Range iterator step cannot be zero
 
-Definitions: [vm/src/machine.cpp:4925](../vm/src/machine.cpp#L4925).
+Definitions: [vm/src/machine.cpp:4929](../vm/src/machine.cpp#L4929).
 
 ### WVM1194
 
 - Container iterator source does not match its selector
 - Container iterator has an invalid operand shape
 
-Definitions: [vm/src/machine.cpp:4936](../vm/src/machine.cpp#L4936), [vm/src/machine.cpp:4947](../vm/src/machine.cpp#L4947).
+Definitions: [vm/src/machine.cpp:4940](../vm/src/machine.cpp#L4940), [vm/src/machine.cpp:4951](../vm/src/machine.cpp#L4951).
 
 ### WVM1195
 
 - Container iterator step must be a positive integer
 
-Definitions: [vm/src/machine.cpp:4943](../vm/src/machine.cpp#L4943).
+Definitions: [vm/src/machine.cpp:4947](../vm/src/machine.cpp#L4947).
 
 ### WVM1196
 
 - Iterator selector is not implemented: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:4952](../vm/src/machine.cpp#L4952).
+Definitions: [vm/src/machine.cpp:4956](../vm/src/machine.cpp#L4956).
 
 ### WVM1197
 
 - Iterator operation requires a live iterator value
 
-Definitions: [vm/src/machine.cpp:4964](../vm/src/machine.cpp#L4964).
+Definitions: [vm/src/machine.cpp:4968](../vm/src/machine.cpp#L4968).
 
 ### WVM1198
 
@@ -4158,7 +4158,7 @@ Definitions: [vm/src/machine.cpp:4964](../vm/src/machine.cpp#L4964).
 - Range iterator state is not integer-compatible
 - Container iterator source is unavailable
 
-Definitions: [vm/src/machine.cpp:5019](../vm/src/machine.cpp#L5019), [vm/src/machine.cpp:5133](../vm/src/machine.cpp#L5133), [vm/src/machine.cpp:5160](../vm/src/machine.cpp#L5160), [vm/src/machine.cpp:5166](../vm/src/machine.cpp#L5166).
+Definitions: [vm/src/machine.cpp:5023](../vm/src/machine.cpp#L5023), [vm/src/machine.cpp:5137](../vm/src/machine.cpp#L5137), [vm/src/machine.cpp:5164](../vm/src/machine.cpp#L5164), [vm/src/machine.cpp:5170](../vm/src/machine.cpp#L5170).
 
 ### WVM1199
 
@@ -4166,19 +4166,19 @@ Definitions: [vm/src/machine.cpp:5019](../vm/src/machine.cpp#L5019), [vm/src/mac
 - Container iterator has no current value
 - Iterator current value is unavailable
 
-Definitions: [vm/src/machine.cpp:5034](../vm/src/machine.cpp#L5034), [vm/src/machine.cpp:5043](../vm/src/machine.cpp#L5043), [vm/src/machine.cpp:5098](../vm/src/machine.cpp#L5098).
+Definitions: [vm/src/machine.cpp:5038](../vm/src/machine.cpp#L5038), [vm/src/machine.cpp:5047](../vm/src/machine.cpp#L5047), [vm/src/machine.cpp:5102](../vm/src/machine.cpp#L5102).
 
 ### WVM1200
 
 - Array iterator field projection is invalid
 
-Definitions: [vm/src/machine.cpp:5070](../vm/src/machine.cpp#L5070), [vm/src/machine.cpp:5075](../vm/src/machine.cpp#L5075).
+Definitions: [vm/src/machine.cpp:5074](../vm/src/machine.cpp#L5074), [vm/src/machine.cpp:5079](../vm/src/machine.cpp#L5079).
 
 ### WVM1201
 
 - Dictionary iterator projection is invalid
 
-Definitions: [vm/src/machine.cpp:5094](../vm/src/machine.cpp#L5094).
+Definitions: [vm/src/machine.cpp:5098](../vm/src/machine.cpp#L5098).
 
 ### WVM1202
 
@@ -4186,33 +4186,33 @@ Definitions: [vm/src/machine.cpp:5094](../vm/src/machine.cpp#L5094).
 - Result propagation target has no canonical result layout
 - Result propagation target fields are unavailable
 
-Definitions: [vm/src/machine.cpp:6906](../vm/src/machine.cpp#L6906), [vm/src/machine.cpp:6911](../vm/src/machine.cpp#L6911), [vm/src/machine.cpp:6916](../vm/src/machine.cpp#L6916).
+Definitions: [vm/src/machine.cpp:6910](../vm/src/machine.cpp#L6910), [vm/src/machine.cpp:6915](../vm/src/machine.cpp#L6915), [vm/src/machine.cpp:6920](../vm/src/machine.cpp#L6920).
 
 ### WVM1204
 
 - Async task failure lost its terminal-state race
 - Async task completion lost its terminal-state race
 
-Definitions: [vm/src/machine.cpp:3258](../vm/src/machine.cpp#L3258), [vm/src/machine.cpp:3278](../vm/src/machine.cpp#L3278).
+Definitions: [vm/src/machine.cpp:3262](../vm/src/machine.cpp#L3262), [vm/src/machine.cpp:3282](../vm/src/machine.cpp#L3282).
 
 ### WVM1205
 
 - VM execution was aborted by the debug observer
 
-Definitions: [vm/src/machine.cpp:3663](../vm/src/machine.cpp#L3663).
+Definitions: [vm/src/machine.cpp:3667](../vm/src/machine.cpp#L3667).
 
 ### WVM1206
 
 - VM debug observer threw across the runtime boundary
 
-Definitions: [vm/src/machine.cpp:3656](../vm/src/machine.cpp#L3656).
+Definitions: [vm/src/machine.cpp:3660](../vm/src/machine.cpp#L3660).
 
 ### WVM1207
 
 - VM executor owner dispatch failed
 - VM executor continuation threw across the runtime boundary
 
-Definitions: [vm/src/machine.cpp:3314](../vm/src/machine.cpp#L3314), [vm/src/machine.cpp:3446](../vm/src/machine.cpp#L3446), [vm/src/machine.cpp:3451](../vm/src/machine.cpp#L3451).
+Definitions: [vm/src/machine.cpp:3318](../vm/src/machine.cpp#L3318), [vm/src/machine.cpp:3450](../vm/src/machine.cpp#L3450), [vm/src/machine.cpp:3455](../vm/src/machine.cpp#L3455).
 
 ### WVM1208
 
@@ -4220,14 +4220,14 @@ Definitions: [vm/src/machine.cpp:3314](../vm/src/machine.cpp#L3314), [vm/src/mac
 - Coroutine executor switch has no runnable target
 - Coroutine executor queue rejected its continuation
 
-Definitions: [vm/src/machine.cpp:3386](../vm/src/machine.cpp#L3386), [vm/src/machine.cpp:6875](../vm/src/machine.cpp#L6875), [vm/src/machine.cpp:6879](../vm/src/machine.cpp#L6879).
+Definitions: [vm/src/machine.cpp:3390](../vm/src/machine.cpp#L3390), [vm/src/machine.cpp:6879](../vm/src/machine.cpp#L6879), [vm/src/machine.cpp:6883](../vm/src/machine.cpp#L6883).
 
 ### WVM1209
 
 - Await continuation lost its VM frame
 - Coroutine await has no owning async task
 
-Definitions: [vm/src/machine.cpp:3356](../vm/src/machine.cpp#L3356), [vm/src/machine.cpp:6814](../vm/src/machine.cpp#L6814).
+Definitions: [vm/src/machine.cpp:3360](../vm/src/machine.cpp#L3360), [vm/src/machine.cpp:6818](../vm/src/machine.cpp#L6818).
 
 ### WVM1210
 
@@ -4235,7 +4235,7 @@ Definitions: [vm/src/machine.cpp:3356](../vm/src/machine.cpp#L3356), [vm/src/mac
 - VM destructor threw a non-standard exception while unwinding
 - VM await continuation dispatch failed
 
-Definitions: [vm/src/machine.cpp:1513](../vm/src/machine.cpp#L1513), [vm/src/machine.cpp:1518](../vm/src/machine.cpp#L1518), [vm/src/machine.cpp:6844](../vm/src/machine.cpp#L6844).
+Definitions: [vm/src/machine.cpp:1513](../vm/src/machine.cpp#L1513), [vm/src/machine.cpp:1518](../vm/src/machine.cpp#L1518), [vm/src/machine.cpp:6848](../vm/src/machine.cpp#L6848).
 
 ### WVM1211
 
@@ -4246,13 +4246,13 @@ Definitions: [vm/src/machine.cpp:1513](../vm/src/machine.cpp#L1513), [vm/src/mac
 - Native callback cleanup failed while running a destructor
 - Native copy-back cleanup failed while running a destructor
 
-Definitions: [vm/src/machine.cpp:4735](../vm/src/machine.cpp#L4735), [vm/src/machine.cpp:5326](../vm/src/machine.cpp#L5326), [vm/src/machine.cpp:5707](../vm/src/machine.cpp#L5707), [vm/src/machine.cpp:5728](../vm/src/machine.cpp#L5728), [vm/src/machine.cpp:5750](../vm/src/machine.cpp#L5750), [vm/src/machine.cpp:6455](../vm/src/machine.cpp#L6455), [vm/src/machine.cpp:6547](../vm/src/machine.cpp#L6547).
+Definitions: [vm/src/machine.cpp:4739](../vm/src/machine.cpp#L4739), [vm/src/machine.cpp:5330](../vm/src/machine.cpp#L5330), [vm/src/machine.cpp:5711](../vm/src/machine.cpp#L5711), [vm/src/machine.cpp:5732](../vm/src/machine.cpp#L5732), [vm/src/machine.cpp:5754](../vm/src/machine.cpp#L5754), [vm/src/machine.cpp:6459](../vm/src/machine.cpp#L6459), [vm/src/machine.cpp:6551](../vm/src/machine.cpp#L6551).
 
 ### WVM1212
 
 - Async argument cleanup failed while running a destructor
 
-Definitions: [vm/src/machine.cpp:3264](../vm/src/machine.cpp#L3264), [vm/src/machine.cpp:3435](../vm/src/machine.cpp#L3435).
+Definitions: [vm/src/machine.cpp:3268](../vm/src/machine.cpp#L3268), [vm/src/machine.cpp:3439](../vm/src/machine.cpp#L3439).
 
 ### WVM1220
 
@@ -4260,13 +4260,13 @@ Definitions: [vm/src/machine.cpp:3264](../vm/src/machine.cpp#L3264), [vm/src/mac
 - Native invocation target has no native binding metadata
 - Native function is not registered: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:5951](../vm/src/machine.cpp#L5951), [vm/src/machine.cpp:5954](../vm/src/machine.cpp#L5954), [vm/src/machine.cpp:5965](../vm/src/machine.cpp#L5965).
+Definitions: [vm/src/machine.cpp:5955](../vm/src/machine.cpp#L5955), [vm/src/machine.cpp:5958](../vm/src/machine.cpp#L5958), [vm/src/machine.cpp:5969](../vm/src/machine.cpp#L5969).
 
 ### WVM1221
 
 - Native invocation argument count does not match its ABI plan
 
-Definitions: [vm/src/machine.cpp:5956](../vm/src/machine.cpp#L5956).
+Definitions: [vm/src/machine.cpp:5960](../vm/src/machine.cpp#L5960).
 
 ### WVM1222
 
@@ -4274,7 +4274,7 @@ Definitions: [vm/src/machine.cpp:5956](../vm/src/machine.cpp#L5956).
 - Native callable failed with ABI status {dynamic context}
 - Native invocation '{dynamic context}' failed: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:2097](../vm/src/machine.cpp#L2097), [vm/src/machine.cpp:2135](../vm/src/machine.cpp#L2135), [vm/src/machine.cpp:6556](../vm/src/machine.cpp#L6556).
+Definitions: [vm/src/machine.cpp:2097](../vm/src/machine.cpp#L2097), [vm/src/machine.cpp:2135](../vm/src/machine.cpp#L2135), [vm/src/machine.cpp:6560](../vm/src/machine.cpp#L6560).
 
 ### WVM1223
 
@@ -4296,7 +4296,7 @@ Definitions: [vm/src/machine.cpp:2097](../vm/src/machine.cpp#L2097), [vm/src/mac
 - Native thunk does not advertise task-source input support; rebuild its producer
 - Native callable result requires a task-source-aware producer
 
-Definitions: [vm/src/machine.cpp:2090](../vm/src/machine.cpp#L2090), [vm/src/machine.cpp:3772](../vm/src/machine.cpp#L3772), [vm/src/machine.cpp:5509](../vm/src/machine.cpp#L5509), [vm/src/machine.cpp:5517](../vm/src/machine.cpp#L5517), [vm/src/machine.cpp:5531](../vm/src/machine.cpp#L5531), [vm/src/machine.cpp:6068](../vm/src/machine.cpp#L6068), [vm/src/machine.cpp:6075](../vm/src/machine.cpp#L6075), [vm/src/machine.cpp:6078](../vm/src/machine.cpp#L6078), [vm/src/machine.cpp:6098](../vm/src/machine.cpp#L6098), [vm/src/machine.cpp:6113](../vm/src/machine.cpp#L6113), [vm/src/machine.cpp:6129](../vm/src/machine.cpp#L6129), [vm/src/machine.cpp:6135](../vm/src/machine.cpp#L6135), [vm/src/machine.cpp:6174](../vm/src/machine.cpp#L6174), [vm/src/machine.cpp:6233](../vm/src/machine.cpp#L6233), [vm/src/machine.cpp:6242](../vm/src/machine.cpp#L6242), [vm/src/machine.cpp:6263](../vm/src/machine.cpp#L6263), [vm/src/machine.cpp:6268](../vm/src/machine.cpp#L6268), [vm/src/machine.cpp:6292](../vm/src/machine.cpp#L6292), [vm/src/machine.cpp:6301](../vm/src/machine.cpp#L6301), [vm/src/machine.cpp:6382](../vm/src/machine.cpp#L6382), [vm/src/machine.cpp:6410](../vm/src/machine.cpp#L6410), [vm/src/machine.cpp:6435](../vm/src/machine.cpp#L6435), [vm/src/machine.cpp:6565](../vm/src/machine.cpp#L6565).
+Definitions: [vm/src/machine.cpp:2090](../vm/src/machine.cpp#L2090), [vm/src/machine.cpp:3776](../vm/src/machine.cpp#L3776), [vm/src/machine.cpp:5513](../vm/src/machine.cpp#L5513), [vm/src/machine.cpp:5521](../vm/src/machine.cpp#L5521), [vm/src/machine.cpp:5535](../vm/src/machine.cpp#L5535), [vm/src/machine.cpp:6072](../vm/src/machine.cpp#L6072), [vm/src/machine.cpp:6079](../vm/src/machine.cpp#L6079), [vm/src/machine.cpp:6082](../vm/src/machine.cpp#L6082), [vm/src/machine.cpp:6102](../vm/src/machine.cpp#L6102), [vm/src/machine.cpp:6117](../vm/src/machine.cpp#L6117), [vm/src/machine.cpp:6133](../vm/src/machine.cpp#L6133), [vm/src/machine.cpp:6139](../vm/src/machine.cpp#L6139), [vm/src/machine.cpp:6178](../vm/src/machine.cpp#L6178), [vm/src/machine.cpp:6237](../vm/src/machine.cpp#L6237), [vm/src/machine.cpp:6246](../vm/src/machine.cpp#L6246), [vm/src/machine.cpp:6267](../vm/src/machine.cpp#L6267), [vm/src/machine.cpp:6272](../vm/src/machine.cpp#L6272), [vm/src/machine.cpp:6296](../vm/src/machine.cpp#L6296), [vm/src/machine.cpp:6305](../vm/src/machine.cpp#L6305), [vm/src/machine.cpp:6386](../vm/src/machine.cpp#L6386), [vm/src/machine.cpp:6414](../vm/src/machine.cpp#L6414), [vm/src/machine.cpp:6439](../vm/src/machine.cpp#L6439), [vm/src/machine.cpp:6569](../vm/src/machine.cpp#L6569).
 
 ### WVM1224
 
@@ -4314,7 +4314,7 @@ Definitions: [vm/src/machine.cpp:2090](../vm/src/machine.cpp#L2090), [vm/src/mac
 - Native result conversion failed: {dynamic context}
 - Native result register is invalid
 
-Definitions: [vm/src/machine.cpp:4797](../vm/src/machine.cpp#L4797), [vm/src/machine.cpp:4799](../vm/src/machine.cpp#L4799), [vm/src/machine.cpp:4803](../vm/src/machine.cpp#L4803), [vm/src/machine.cpp:6560](../vm/src/machine.cpp#L6560), [vm/src/machine.cpp:6586](../vm/src/machine.cpp#L6586), [vm/src/machine.cpp:6591](../vm/src/machine.cpp#L6591), [vm/src/machine.cpp:6627](../vm/src/machine.cpp#L6627), [vm/src/machine.cpp:6630](../vm/src/machine.cpp#L6630), [vm/src/machine.cpp:6640](../vm/src/machine.cpp#L6640), [vm/src/machine.cpp:6643](../vm/src/machine.cpp#L6643), [vm/src/machine.cpp:6661](../vm/src/machine.cpp#L6661), [vm/src/machine.cpp:6673](../vm/src/machine.cpp#L6673), [vm/src/machine.cpp:6676](../vm/src/machine.cpp#L6676).
+Definitions: [vm/src/machine.cpp:4801](../vm/src/machine.cpp#L4801), [vm/src/machine.cpp:4803](../vm/src/machine.cpp#L4803), [vm/src/machine.cpp:4807](../vm/src/machine.cpp#L4807), [vm/src/machine.cpp:6564](../vm/src/machine.cpp#L6564), [vm/src/machine.cpp:6590](../vm/src/machine.cpp#L6590), [vm/src/machine.cpp:6595](../vm/src/machine.cpp#L6595), [vm/src/machine.cpp:6631](../vm/src/machine.cpp#L6631), [vm/src/machine.cpp:6634](../vm/src/machine.cpp#L6634), [vm/src/machine.cpp:6644](../vm/src/machine.cpp#L6644), [vm/src/machine.cpp:6647](../vm/src/machine.cpp#L6647), [vm/src/machine.cpp:6665](../vm/src/machine.cpp#L6665), [vm/src/machine.cpp:6677](../vm/src/machine.cpp#L6677), [vm/src/machine.cpp:6680](../vm/src/machine.cpp#L6680).
 
 ### WVM1225
 
@@ -4332,7 +4332,7 @@ Definitions: [vm/src/machine.cpp:4797](../vm/src/machine.cpp#L4797), [vm/src/mac
 - Native async result requires a registered task bridge and one payload
 - Native async payload cannot be represented by the VM ABI bridge
 
-Definitions: [vm/src/machine.cpp:1224](../vm/src/machine.cpp#L1224), [vm/src/machine.cpp:5792](../vm/src/machine.cpp#L5792), [vm/src/machine.cpp:5826](../vm/src/machine.cpp#L5826), [vm/src/machine.cpp:6070](../vm/src/machine.cpp#L6070), [vm/src/machine.cpp:6148](../vm/src/machine.cpp#L6148), [vm/src/machine.cpp:6159](../vm/src/machine.cpp#L6159), [vm/src/machine.cpp:6207](../vm/src/machine.cpp#L6207), [vm/src/machine.cpp:6231](../vm/src/machine.cpp#L6231), [vm/src/machine.cpp:6287](../vm/src/machine.cpp#L6287), [vm/src/machine.cpp:6289](../vm/src/machine.cpp#L6289), [vm/src/machine.cpp:6345](../vm/src/machine.cpp#L6345), [vm/src/machine.cpp:6376](../vm/src/machine.cpp#L6376), [vm/src/machine.cpp:6650](../vm/src/machine.cpp#L6650), [vm/src/machine.cpp:6654](../vm/src/machine.cpp#L6654).
+Definitions: [vm/src/machine.cpp:1224](../vm/src/machine.cpp#L1224), [vm/src/machine.cpp:5796](../vm/src/machine.cpp#L5796), [vm/src/machine.cpp:5830](../vm/src/machine.cpp#L5830), [vm/src/machine.cpp:6074](../vm/src/machine.cpp#L6074), [vm/src/machine.cpp:6152](../vm/src/machine.cpp#L6152), [vm/src/machine.cpp:6163](../vm/src/machine.cpp#L6163), [vm/src/machine.cpp:6211](../vm/src/machine.cpp#L6211), [vm/src/machine.cpp:6235](../vm/src/machine.cpp#L6235), [vm/src/machine.cpp:6291](../vm/src/machine.cpp#L6291), [vm/src/machine.cpp:6293](../vm/src/machine.cpp#L6293), [vm/src/machine.cpp:6349](../vm/src/machine.cpp#L6349), [vm/src/machine.cpp:6380](../vm/src/machine.cpp#L6380), [vm/src/machine.cpp:6654](../vm/src/machine.cpp#L6654), [vm/src/machine.cpp:6658](../vm/src/machine.cpp#L6658).
 
 ### WVM1226
 
@@ -4349,7 +4349,7 @@ Definitions: [vm/src/machine.cpp:1252](../vm/src/machine.cpp#L1252), [vm/src/mac
 
 - Generic declaration requires a concrete function specialization
 
-Definitions: [vm/src/machine.cpp:1739](../vm/src/machine.cpp#L1739), [vm/src/machine.cpp:3489](../vm/src/machine.cpp#L3489).
+Definitions: [vm/src/machine.cpp:1739](../vm/src/machine.cpp#L1739), [vm/src/machine.cpp:3493](../vm/src/machine.cpp#L3493).
 
 ### WVM1241
 

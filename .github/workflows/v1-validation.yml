@@ -83,6 +83,11 @@ jobs:
           ctest --test-dir build --output-on-failure
           -L "^native-differential$"
 
+      - name: Validate standalone VM executable artifacts
+        run: >
+          ctest --test-dir build --output-on-failure
+          -R "^wio_vm_(artifact_codec|executable_artifact)$"
+
   sanitizers:
     runs-on: ubuntu-latest
 
