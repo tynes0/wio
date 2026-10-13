@@ -3,6 +3,8 @@
 Status: **accepted pre-v1 release blockers; implementation pending**.
 Decision recorded on **2026-10-07**. This document changes the intended v1
 contract, not the behavior of the current compiler or released std.
+The std source-style and explicit-visibility requirements below were added on
+**2026-10-13**; they are accepted cleanup requirements, not a completed migration.
 
 These requirements refine the existing language-coherence, std-correctness,
 migration, tooling, SDK-parity and performance gates. They do not renumber the
@@ -126,19 +128,88 @@ attachment spelling changed.
 - Produce a module-by-module inventory of canonical operations, names,
   overloads, parameter conventions, return types, mutability/ownership,
   bounds behavior, errors, Unicode units and native requirements.
-- Apply the Result-first contract throughout that inventory. Remove redundant
-  `Try...`, `...Result`, `...Raw` and other duplicate compatibility surfaces
-  when they exist only to expose a second failure/unwrap convention.
-- A distinct nonblocking, probing or low-level operation is not automatically
-  redundant because its name starts with `Try`. Audit its actual semantics;
-  either expose one clear canonical operation or keep the necessary primitive
-  internal. Preserve capabilities, not accidental naming duplicates.
+- Apply the Result-first contract throughout that inventory. Remove `Try...`
+  function/method spellings from the canonical std surface and migrate their
+  consumers to ordinary names with the fixed Result-based failure contract.
+  Remove redundant `...Result`, `...Raw` and other duplicate compatibility
+  surfaces when they only expose a second failure/unwrap convention.
+- Preserve distinct nonblocking, probing or low-level capabilities, but do not
+  keep `Try...` as an alternative public failure model. Give necessary operations
+  meaningful canonical names or consolidate their implementation internally.
+  Pending/readiness is not itself an error; keep its semantics separate from
+  completed failure. Infallible operations still return their values directly.
 - Remove unused modules/helpers, duplicated wrappers and obsolete convenience
   APIs only after checking consumers and publishing a replacement/migration
   path. Consolidate shared implementations and avoid layering overhead.
 - Treat compiled-in methods as part of the same std-facing contract. Keep the
   builtin-method reference synchronized with implementation; document each
   surviving operation once with its complete signature and failure behavior.
+
+### Std source-style and readability requirements
+
+These are mandatory acceptance criteria for the std cleanup, including native
+declarations. They are std source conventions, not new syntax restrictions on
+user Wio projects. Source migration, formatter support, generated std-facing
+declarations and maintained std API examples must agree on the rules.
+
+1. **No one-line function or method bodies.** Expand every function/method body
+   over multiple lines, even if it only returns a value or is empty. The early
+   return exception in rule 8 applies to an `if` statement, not a function body.
+2. **One blank line after closing a block.** Follow every function, method and
+   control-flow block's closing brace with exactly one empty line before the
+   next source line. This also applies between nested closing braces and before
+   an `else` continuation; do not write `} else {` on one line. A required
+   semicolon remains attached to its closing declaration. Literal/initializer
+   delimiters are not control-flow blocks and must not be reformatted as such.
+3. **Private object defaults and explicit access.** Std objects keep the private
+   member default; do not override it to public/protected. Write `private` or
+   `public` explicitly on every function/method signature and object member,
+   including native signatures, so access is visible at the declaration. Keep
+   intended public APIs explicitly public and helpers explicitly private; this
+   rule is not blanket privatization or an excuse to widen access silently.
+4. **Bracket-only attributes on separate lines.** Use only `[Attribute]`
+   attachment, never legacy `@...` or postfix attribute `with ...`. When short
+   enough, group the declaration's attributes in one bracket list; split long
+   groups across multiple bracket lists. Attribute lists precede the declaration
+   on their own lines, never share the signature's line, and remain attached to
+   that declaration. Scoped `using cpp::header(...)` is unchanged.
+5. **Width-based parameter wrapping.** Keep parameters on the signature line
+   when they fit the configured line-width limit. Otherwise wrap deterministically
+   between parameters into indented continuation lines, continuing to respect
+   the limit. Never split tokens or damage generic/type/attribute expressions.
+6. **One Result-based fallible API, no Try family.** Remove `Try...` std API
+   spellings and parallel failure conventions. Canonical fallible operations
+   return `Result<T>` and support ordinary, `!()` and `?()` calls. Keep infallible
+   operations direct and Option as an explicit user utility, as in section 1.
+7. **Separate all declarations.** Put exactly one blank line between definitions
+   and declarations, even when they are bodyless native functions. Treat an
+   attribute group and its following declaration as one declaration unit; the
+   separating blank line goes before the next unit, not inside the group.
+8. **Braced blocks with one narrow exception.** Every control-flow body uses
+   braces, including `if`, `else`, loops and block-valued match branches. Only a
+   single-statement early-return `if` is written without braces, on one line:
+   `if (condition) return value;`. Multi-statement branches, `else`, loop bodies,
+   and break/continue/throw cases do not inherit this exception. Function/method
+   bodies still follow rule 1.
+9. **Space before control-flow parentheses.** Where parentheses are used after
+   a control-flow keyword, use `if (...)`, `match (...)`, `for (...)`,
+   `while (...)`, etc., never `if(...)`. This is not a request to add parentheses
+   where the Wio grammar does not require them, or to write `Function (...)`.
+
+The numeric line-width limit is not frozen yet. **120 columns** is the initial
+proposal, consistent with the repository's C++ `.clang-format` setting, for both
+parameter wrapping and attribute grouping. The Wio formatter needs its own std
+profile: the C++ formatter does not implement these Wio-specific blank-line,
+visibility, attribute and early-return rules. Additional style decisions can be
+recorded later; this note does not quietly introduce more mandatory conventions.
+
+Acceptance: audit all std modules and native declaration groups against all nine
+rules; add focused syntax-aware style/formatter fixtures for nested blocks,
+`else`, early returns, grouped/stacked attributes, generic/multiline signatures
+and explicit visibility. Formatting must be deterministic and idempotent, while
+the API/access/Result migration must preserve intended semantics, produce useful
+migration diagnostics and pass both-backend/SDK acceptance. Do not use a blind
+brace or declaration regex to rewrite strings, interpolation, comments or literals.
 
 ### Performance requirements
 
@@ -159,7 +230,8 @@ attachment spelling changed.
   performance ratio without evidence.
 
 Acceptance: the canonical std inventory, migration guide, docs and editor/SDK
-surface agree; focused positive/negative, lifetime and cross-platform
+surface agree, and the std source-style requirements above are satisfied;
+focused positive/negative, lifetime and cross-platform
 conformance tests pass; both backends agree on errors and results; measured
 hotspots are addressed and reviewed budgets pass. The final pre-beta heavy
 optimization stage requalifies the combined compiler/runtime/std product.

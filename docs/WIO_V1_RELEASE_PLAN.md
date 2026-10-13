@@ -85,9 +85,15 @@ work within the existing coherence, std, migration and performance gates:
 - **Bracket-only attachment syntax:** migrate maintained source, then remove
   compiler acceptance of `@Attribute(...)` and postfix attribute `with ...`.
   Keep `[Attribute]` and scoped `using`, including `using cpp::header(...)`.
-- **Comprehensive std pass:** standardize the public API, remove redundant
-  Try/Result/Raw aliases and obsolete implementations, and optimize measured
+- **Comprehensive std pass:** standardize the public API, remove the Try API
+  family, redundant Result/Raw aliases and obsolete implementations, and optimize measured
   std/native/VM hotspots with explicit correctness and performance evidence.
+  The 2026-10-13 cleanup decision also requires the nine std source-style rules:
+  multiline bodies, post-block/declaration spacing, private object defaults and
+  explicit visibility, separate-line bracket attributes, width-based signatures,
+  no Try API family, braced control flow with the early-return exception, and
+  spaced control-flow parentheses. See the consolidation plan's std style section;
+  these are implementation-pending acceptance criteria, not completed cleanup.
 
 These are accepted blockers, not completed work. Full scope, migration rules
 and acceptance criteria are in

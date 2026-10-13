@@ -282,12 +282,22 @@ here does not by itself mean that v1 cannot ship.
     user optional-value utility, not an automatic standard-operation return.
     Audit intrinsic methods and every std module, async payloads, both WIR
     backends, SDK descriptors, CLI consumers and examples together. Remove
-    redundant `Try...`/`...Result`/`...Raw` aliases, obsolete helpers/modules
+    the `Try...` API family, redundant `...Result`/`...Raw` aliases, obsolete helpers/modules
     and duplicated implementations without deleting distinct capabilities.
     Standardize naming, overloads, ownership, Unicode/bounds/error behavior;
     profile and optimize allocations/copies, algorithms, containers, builders
     and byte/buffer I/O with reproducible native/VM performance gates.
     Publish migration diagnostics/docs and keep IDE/SDK interfaces aligned.
+    Std cleanup also has nine accepted source-style/access requirements:
+    multiline function/method bodies; one blank line after each block closing
+    brace; private object defaults with explicit public/private signatures and
+    members; separate-line grouped/stacked bracket attributes; width-based
+    parameter wrapping; no Try API family and one Result-based fallible model;
+    one blank line between all declarations, including native ones; braced
+    control-flow bodies except a single-line `if (...) return value;`; and a
+    space before control-flow parentheses. The initial proposed wrap width is
+    120 columns, not yet frozen. These are std conventions, not user-language
+    restrictions; source migration and syntax-aware formatter checks must agree.
     This is an accepted v1 blocker; final integrated optimization still follows.
     Scope and acceptance: `docs/WIO_V1_SURFACE_CONSOLIDATION_PLAN.md`, sections 1/3.
 
