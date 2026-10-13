@@ -4643,7 +4643,7 @@ Source: [std/async.wio](../std/async.wio#L17).
 
 ### ChannelSendStatus — std/async.wio
 
-Source: [std/async.wio](../std/async.wio#L320).
+Source: [std/async.wio](../std/async.wio#L330).
 
 | Name | Value | Meaning / category |
 | --- | ---: | --- |
@@ -4653,7 +4653,7 @@ Source: [std/async.wio](../std/async.wio#L320).
 
 ### ChannelReceiveStatus — std/async.wio
 
-Source: [std/async.wio](../std/async.wio#L326).
+Source: [std/async.wio](../std/async.wio#L336).
 
 | Name | Value | Meaning / category |
 | --- | ---: | --- |
