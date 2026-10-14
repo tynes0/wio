@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cctype>
@@ -622,6 +623,58 @@ namespace wio::runtime::std_process
             return false;
         }
 
+#if defined(_WIN32)
+        const auto application = widenProcessText(program);
+        auto commandLine = joinWindowsProcessCommand(program, args);
+        const auto directory = widenProcessText(workingDirectory);
+        if (application.empty() || commandLine.empty() || (!workingDirectory.empty() && directory.empty()))
+        {
+            error = ProcessError::launch_failed;
+            message = "process command or working directory contains invalid UTF-8";
+            return false;
+        }
+        if (!workingDirectory.empty())
+        {
+            std::error_code pathError;
+            if (!std::filesystem::is_directory(std::filesystem::path(directory), pathError))
+            {
+                error = ProcessError::invalid_working_directory;
+                nativeError = static_cast<int>(pathError.value());
+                message = "working directory does not exist: " + std::string(workingDirectory);
+                return false;
+            }
+        }
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+        startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+        PROCESS_INFORMATION child{};
+        if (!CreateProcessW(application.c_str(), commandLine.data(), nullptr, nullptr, TRUE, 0, nullptr,
+                            directory.empty() ? nullptr : directory.c_str(), &startup, &child))
+        {
+            error = ProcessError::launch_failed;
+            nativeError = static_cast<int>(GetLastError());
+            message = "process launch failed for: " + std::string(program);
+            return false;
+        }
+        const auto waited = WaitForSingleObject(child.hProcess, INFINITE);
+        DWORD code = EXIT_FAILURE;
+        const bool completed = waited == WAIT_OBJECT_0 && GetExitCodeProcess(child.hProcess, &code);
+        if (!completed)
+            nativeError = static_cast<int>(GetLastError());
+        CloseHandle(child.hThread);
+        CloseHandle(child.hProcess);
+        if (!completed)
+        {
+            error = ProcessError::wait_failed;
+            message = "could not wait for process exit";
+            return false;
+        }
+        exitCode = static_cast<int>(code);
+        return true;
+#else
         std::error_code pathError;
         std::optional<ScopedCurrentPath> pathGuard;
         if (!workingDirectory.empty())
@@ -667,6 +720,7 @@ namespace wio::runtime::std_process
 #endif
 
         return true;
+#endif
     }
 
     bool TryRunCapture(const std::string_view program, const std::vector<std::string>& args,
@@ -684,6 +738,87 @@ namespace wio::runtime::std_process
             message = "process program cannot be empty";
             return false;
         }
+#if defined(_WIN32)
+        const auto application = widenProcessText(program);
+        auto commandLine = joinWindowsProcessCommand(program, args);
+        const auto directory = widenProcessText(workingDirectory);
+        if (application.empty() || commandLine.empty() || (!workingDirectory.empty() && directory.empty()))
+        {
+            error = ProcessError::launch_failed;
+            message = "process command or working directory contains invalid UTF-8";
+            return false;
+        }
+        if (!workingDirectory.empty())
+        {
+            std::error_code pathError;
+            if (!std::filesystem::is_directory(std::filesystem::path(directory), pathError))
+            {
+                error = ProcessError::invalid_working_directory;
+                nativeError = static_cast<int>(pathError.value());
+                message = "working directory does not exist: " + std::string(workingDirectory);
+                return false;
+            }
+        }
+        SECURITY_ATTRIBUTES attributes{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+        HANDLE reader = nullptr;
+        HANDLE writer = nullptr;
+        if (!CreatePipe(&reader, &writer, &attributes, 0))
+        {
+            error = ProcessError::pipe_failed;
+            nativeError = static_cast<int>(GetLastError());
+            message = "could not create process capture pipe";
+            return false;
+        }
+        if (!SetHandleInformation(reader, HANDLE_FLAG_INHERIT, 0))
+        {
+            nativeError = static_cast<int>(GetLastError());
+            CloseHandle(reader);
+            CloseHandle(writer);
+            error = ProcessError::pipe_failed;
+            message = "could not protect process capture pipe";
+            return false;
+        }
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdOutput = writer;
+        startup.hStdError = writer;
+        startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+        PROCESS_INFORMATION child{};
+        const bool launched =
+            CreateProcessW(application.c_str(), commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
+                           directory.empty() ? nullptr : directory.c_str(), &startup, &child);
+        const auto launchError = launched ? 0 : static_cast<int>(GetLastError());
+        CloseHandle(writer);
+        if (!launched)
+        {
+            CloseHandle(reader);
+            error = ProcessError::launch_failed;
+            nativeError = launchError;
+            message = "process capture launch failed";
+            return false;
+        }
+        std::array<char, 4096> buffer{};
+        DWORD count = 0;
+        while (ReadFile(reader, buffer.data(), static_cast<DWORD>(buffer.size()), &count, nullptr) && count != 0)
+            output.append(buffer.data(), count);
+        CloseHandle(reader);
+        const auto waited = WaitForSingleObject(child.hProcess, INFINITE);
+        DWORD code = EXIT_FAILURE;
+        const bool completed = waited == WAIT_OBJECT_0 && GetExitCodeProcess(child.hProcess, &code);
+        if (!completed)
+            nativeError = static_cast<int>(GetLastError());
+        CloseHandle(child.hThread);
+        CloseHandle(child.hProcess);
+        if (!completed)
+        {
+            error = ProcessError::wait_failed;
+            message = "could not wait for captured process exit";
+            return false;
+        }
+        exitCode = static_cast<int>(code);
+        return true;
+#else
         std::error_code pathError;
         std::optional<ScopedCurrentPath> pathGuard;
         if (!workingDirectory.empty())
@@ -728,6 +863,7 @@ namespace wio::runtime::std_process
         exitCode = WIFEXITED(rawExitCode) ? WEXITSTATUS(rawExitCode) : rawExitCode;
 #endif
         return true;
+#endif
     }
 
     bool Spawn(const std::string_view program, const std::vector<std::string>& args,

@@ -465,4 +465,10 @@ if(BUILD_TESTING)
         TIMEOUT 30
         LABELS "async;process;runtime;ownership"
     )
+    add_executable(wio_process_utf8_project_test "${CMAKE_SOURCE_DIR}/tests/process_utf8_project_test.cpp")
+    target_link_libraries(wio_process_utf8_project_test PRIVATE wio_runtime_host)
+    add_test(NAME wio_process_utf8_project COMMAND wio_process_utf8_project_test "${CMAKE_BINARY_DIR}/process-utf8-project")
+    set_tests_properties(wio_process_utf8_project PROPERTIES
+        TIMEOUT 30 LABELS "process;runtime;unicode;project;release-gate"
+        ENVIRONMENT "WIO_UTF8_ARG=must-not-expand")
 endif()

@@ -295,8 +295,9 @@ Useful run options:
 - `--no-manifest-args` omits `[run].args`
 - `--cwd DIR` overrides the manifest working directory
 - `--print-command` prints the resolved working directory and launch command
-- `--backend vm` runs bytecode with manifest-resolved native registries;
-  `--no-build` requires both the bytecode and bridge to exist
+- `--backend vm` executes the standalone VM image with manifest-resolved,
+  content-versioned native registries; `--no-build` requires the image and its
+  deployed libraries, not the build-only bytecode/bridge intermediates
 
 The child program's exit code is returned unchanged by Wio.
 
@@ -325,14 +326,21 @@ regular expression matched against project-relative test paths.
 wio project package
 wio project package --output-dir .\artifacts --clean
 wio project package --no-build --output-dir .\artifacts --clean
+wio project package --backend vm --output-dir .\artifacts
 ```
 
 This creates a distributable directory named after the project. Executables
 are placed under `bin/`, libraries under `lib/`, default project assets under
 `assets/`, a platform launcher is emitted for runnable targets, and
-`wio-package.json` records the entrypoint, required arguments, and packaged
-artifacts. Existing package directories are preserved unless `--clean` is
+`wio-package.json` records project/configuration, target, backend and entrypoint.
+Existing package directories are preserved unless `--clean` is
 supplied.
+
+VM packages put the embedded executable and only its active content-versioned
+native registry libraries together under `bin/`; they do not ship `.wiob`, the
+compiler or obsolete build generations. Package metadata records the selected
+backend. `--no-build` can deploy without source/build intermediates, but requires
+the verified executable and its libraries. See [VM artifacts](WIO_VM_ARTIFACTS.md).
 
 Use `[package].assets` to choose asset files/directories and `[package].files`
 for additional files that should retain their project-relative layout.

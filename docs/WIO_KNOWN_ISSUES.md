@@ -149,7 +149,7 @@ because it is approved. Close with a versioned contract/docs consistency pass.
 | ID | Priority / state | Current boundary and closure requirement |
 | --- | --- | --- |
 | NI-001 | Closed within qualified native payload boundaries | Owning task inputs, free std task helpers, completion/cancellation, blocking main progress and retained-source shutdown now have focused codec, C++/full-VM/pruned-VM and live-host gates. See [native task-input closure](WIO_VM_NATIVE_BRIDGE.md#owning-native-task-inputs-and-std-helper-parity). Existing unsupported object surfaces and async borrows are not enabled by this closure. |
-| NI-002 | P1 remaining packaging gap | Runtime-only `wio-vm` and embedded executable packaging now have focused Windows pure/native/async/Unicode deployment gates. Pure modules need no external `.wiob`; native producer libraries are copied beside the executable. Project CLI package integration and SDK-hosted `.dll`/`.so` plus `.lib`/`.a` Wio module artifacts remain open. Installing the VM core archive is not closure of the Wio static-module product. See [artifact contract](WIO_VM_ARTIFACTS.md). Existing C++ backend artifact targets are unchanged. |
+| NI-002 | P1 remaining packaging gap | Runtime-only `wio-vm`, embedded executables and manifest-aware project build/run/package now have focused Windows native/async/Unicode deployment gates. Versioned native copies and guarded executable replacement preserve previous generations; no-build deployment does not need source or `.wiob` intermediates. SDK-hosted `.dll`/`.so` plus `.lib`/`.a` Wio module artifacts and broader platform acceptance remain open. Installing the VM core archive is not closure of the Wio static-module product. See [artifact contract](WIO_VM_ARTIFACTS.md). Existing C++ backend artifact targets are unchanged. |
 | NI-003 | P2 limitation | Async ref/view parameters/results remain forbidden. Native escaping closures may not capture invocation-scoped borrowed Places; copy/retain values instead. No arbitrary suspension-lifetime promise is made. |
 | NI-004 | P2 limitation | Exact qualified callback aliases work, but aggregate/descendant callback overlap is rejected before invocation. Use one aggregate borrow and access its children. Rejection is a safety boundary, not a memory-corruption bug. |
 | NI-005 | P2 limitation | Box support is bounded to the qualified scalar/string/text/container/Any/defaultable handle families. Arbitrary native POD/fixed-array/component defaults, unsupported method payloads and lifecycle-bearing fields are not automatically materialized. Qualified native POD **default factories** are a separate supported facility. |
@@ -202,10 +202,11 @@ Evidence: [release gates](WIO_V1_RELEASE_PLAN.md),
 
 ## 5. Missing evidence, not automatically failing behavior
 
-- **QA-001 (P1):** No full current native/C++/VM/SDK/std corpus run is claimed for
-  this snapshot. The most recent change ran only its two new Windows gates:
-  `wio_wir_any_array_identity` and `wio_vm_native_any_array_identity`, 2/2 in
-  25.09 seconds. Earlier narrow gates are evidence for their own revision/scope.
+- **QA-001 (P1):** No full current native/C++/VM/SDK/std corpus run is claimed.
+  The project-artifact closure on 2026-10-14 ran only three new Windows gates:
+  `wio_process_utf8_project`, `wio_vm_artifact_generation` and
+  `wio_vm_project_artifact`, 3/3 in 15.69 seconds. Earlier narrow gates are
+  evidence for their own revision/scope, not a fresh full-suite pass.
 - **QA-002 (P1):** The unpushed development baseline had no GitHub Actions runs
   on its performance branch. The current workflow auto-runs on main,
   `releases/**` and PRs, not an arbitrary feature-branch push. Pushing alone is

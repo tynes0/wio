@@ -1175,8 +1175,14 @@ Rider, and CLion are defined in
    wio-vm embeds verified bytecode into an executable and deploys relative native
    producers beside it; pure applications need no compiler, source or .wiob at
    runtime. New codec/publication and pure/native/async/Unicode deployment gates
-   cover this slice. Project CLI packaging, VM-backed shared/static Wio modules,
-   SDK host/lifecycle packaging and cross-platform qualification remain open.
+   cover this slice. Project CLI build/run/package now use the embedded image,
+   content-versioned native copies and verified replacement. Compilation and
+   packaging reuse are separate; no-build run/package needs no source or .wiob
+   intermediates. Source/native/toolchain output collisions are rejected, and
+   packaging verifies before cleaning an existing distribution. VM-backed
+   shared/static Wio modules, SDK host/lifecycle packaging and cross-platform
+   qualification remain open. Old native generations are retained deliberately;
+   safe garbage collection and final artifact/build/runtime costs remain pending.
    See `docs/WIO_VM_ARTIFACTS.md`; the installed VM archive alone does not close
    the static Wio-module requirement.
    Unconstrained

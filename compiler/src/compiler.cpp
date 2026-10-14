@@ -16,6 +16,7 @@
 #include <optional>
 #include <regex>
 #include <sstream>
+#include <stdexcept>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -86,7 +87,7 @@ namespace wio
         std::filesystem::path getCompileTimeDefaultRootDir()
         {
 #ifdef WIO_DEFAULT_ROOT_DIR
-            return {WIO_DEFAULT_ROOT_DIR};
+            return filesystem::fromUtf8(WIO_DEFAULT_ROOT_DIR);
 #else
             return {};
 #endif
@@ -102,7 +103,7 @@ namespace wio
                     continue;
 
                 std::filesystem::path candidate =
-                    std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred();
+                    std::filesystem::absolute(filesystem::fromUtf8(rawValue)).make_preferred();
                 std::error_code ec;
                 if (std::filesystem::exists(candidate, ec) && !ec)
                     return candidate;
@@ -271,7 +272,7 @@ namespace wio
         {
             return resolveToolchainDirectory(
 #ifdef WIO_RUNTIME_INCLUDE_DIR
-                std::filesystem::path{WIO_RUNTIME_INCLUDE_DIR},
+                filesystem::fromUtf8(WIO_RUNTIME_INCLUDE_DIR),
 #else
                 std::filesystem::path{},
 #endif
@@ -282,7 +283,7 @@ namespace wio
         {
             return resolveToolchainDirectory(
 #ifdef WIO_SDK_INCLUDE_DIR
-                std::filesystem::path{WIO_SDK_INCLUDE_DIR},
+                filesystem::fromUtf8(WIO_SDK_INCLUDE_DIR),
 #else
                 std::filesystem::path{},
 #endif
@@ -295,7 +296,7 @@ namespace wio
             {
                 std::filesystem::path resolved = resolveToolchainDirectory(
 #ifdef WIO_STD_SOURCE_DIR
-                    std::filesystem::path{WIO_STD_SOURCE_DIR},
+                    filesystem::fromUtf8(WIO_STD_SOURCE_DIR),
 #else
                     std::filesystem::path{},
 #endif
@@ -311,7 +312,7 @@ namespace wio
                 return std::nullopt;
 
             std::error_code ec;
-            const std::filesystem::path configuredPath = std::filesystem::path(executableName);
+            const std::filesystem::path configuredPath = filesystem::fromUtf8(executableName);
             if (configuredPath.is_absolute() && std::filesystem::exists(configuredPath, ec) &&
                 std::filesystem::is_regular_file(configuredPath, ec) && !ec)
             {
@@ -319,9 +320,10 @@ namespace wio
             }
 
 #if defined(_WIN32)
-            std::vector<char> buffer(MAX_PATH, '\0');
-            const DWORD copied = SearchPathA(nullptr, executableName.c_str(), nullptr,
-                                             static_cast<DWORD>(buffer.size()), buffer.data(), nullptr);
+            const auto wideName = filesystem::fromUtf8(executableName).native();
+            std::vector<wchar_t> buffer(MAX_PATH, L'\0');
+            const DWORD copied = SearchPathW(nullptr, wideName.c_str(), nullptr, static_cast<DWORD>(buffer.size()),
+                                             buffer.data(), nullptr);
             if (copied > 0 && copied < buffer.size())
                 return std::filesystem::path(buffer.data()).make_preferred();
 #endif
@@ -341,7 +343,7 @@ namespace wio
             if (auto fromPath = tryResolveExecutableFromPath(configuredValue); fromPath.has_value())
                 return fromPath->make_preferred();
 
-            return std::filesystem::path(configuredValue).make_preferred();
+            return filesystem::fromUtf8(configuredValue).make_preferred();
         }
 
         std::filesystem::path getBackendCompilerPath()
@@ -378,19 +380,19 @@ namespace wio
 
         std::string getBackendCompiler()
         {
-            return getBackendCompilerPath().string();
+            return filesystem::toUtf8(getBackendCompilerPath());
         }
 
         std::string getBackendArchiver()
         {
-            return getBackendArchiverPath().string();
+            return filesystem::toUtf8(getBackendArchiverPath());
         }
 
         std::filesystem::path getRuntimeLibraryFile()
         {
             return resolveToolchainFile(
 #ifdef WIO_RUNTIME_LIBRARY_FILE
-                std::filesystem::path{WIO_RUNTIME_LIBRARY_FILE},
+                filesystem::fromUtf8(WIO_RUNTIME_LIBRARY_FILE),
 #else
                 std::filesystem::path{},
 #endif
@@ -704,18 +706,19 @@ namespace wio
                 intermediateDirs.empty()
                     ? std::nullopt
                     : std::optional<std::filesystem::path>(
-                          std::filesystem::absolute(std::filesystem::path(intermediateDirs.front())).make_preferred());
+                          std::filesystem::absolute(filesystem::fromUtf8(intermediateDirs.front())).make_preferred());
             const std::vector<std::string> configuredOutputs = gAppData.argParser.GetValuesOf<std::string>("IR-OUTPUT");
             const std::filesystem::path outputPath =
                 configuredOutputs.empty()
                     ? makeDefaultWirPath(sourcePath, intermediateDir, kind)
-                    : std::filesystem::absolute(std::filesystem::path(configuredOutputs.front())).make_preferred();
+                    : std::filesystem::absolute(filesystem::fromUtf8(configuredOutputs.front())).make_preferred();
 
             wir::typed::BuildOptions buildOptions;
             const std::vector<std::string> configuredBinaries = gAppData.argParser.GetValuesOf<std::string>("OUTPUT");
             buildOptions.logicalModuleName =
-                configuredBinaries.empty() ? sourcePath.filename().generic_string()
-                                           : std::filesystem::path(configuredBinaries.front()).stem().generic_string();
+                configuredBinaries.empty()
+                    ? filesystem::toGenericUtf8(sourcePath.filename())
+                    : filesystem::toGenericUtf8(filesystem::fromUtf8(configuredBinaries.front()).stem());
             buildOptions.moduleKind = Compiler::get().getBuildTarget() == BuildTarget::Executable
                                           ? wir::ModuleKind::Program
                                           : wir::ModuleKind::WioLibrary;
@@ -756,16 +759,16 @@ namespace wio
             if (directoryError)
             {
                 WIO_LOG_FATAL("{} output directory could not be created: {}", outputName,
-                              outputPath.parent_path().string());
+                              filesystem::toUtf8(outputPath.parent_path()));
                 return EXIT_FAILURE;
             }
             if (!filesystem::writeFilepath(output, outputPath))
             {
-                WIO_LOG_FATAL("{} output could not be written to: {}", outputName, outputPath.string());
+                WIO_LOG_FATAL("{} output could not be written to: {}", outputName, filesystem::toUtf8(outputPath));
                 return EXIT_FAILURE;
             }
 
-            WIO_LOG_INFO("Generated {} output: {}", outputName, outputPath.generic_string());
+            WIO_LOG_INFO("Generated {} output: {}", outputName, filesystem::toGenericUtf8(outputPath));
             return EXIT_SUCCESS;
         }
 
@@ -789,14 +792,15 @@ namespace wio
                 std::filesystem::create_directories(outputPath.parent_path(), directoryError);
             if (directoryError)
             {
-                WIO_LOG_FATAL("Bytecode output directory could not be created: {}", outputPath.parent_path().string());
+                WIO_LOG_FATAL("Bytecode output directory could not be created: {}",
+                              filesystem::toUtf8(outputPath.parent_path()));
                 return EXIT_FAILURE;
             }
             const std::string binary{reinterpret_cast<const char*>(encoded.data()), encoded.size()};
             const std::filesystem::path stagingPath = makeBackendStagingPath(outputPath);
             if (!filesystem::writeFilepath(binary, stagingPath))
             {
-                WIO_LOG_FATAL("Bytecode staging output could not be written to: {}", stagingPath.string());
+                WIO_LOG_FATAL("Bytecode staging output could not be written to: {}", filesystem::toUtf8(stagingPath));
                 return EXIT_FAILURE;
             }
             std::string replaceError;
@@ -804,11 +808,12 @@ namespace wio
             {
                 std::error_code cleanupError;
                 std::filesystem::remove(stagingPath, cleanupError);
-                WIO_LOG_FATAL("Bytecode output could not atomically replace {}: {}", outputPath.string(), replaceError);
+                WIO_LOG_FATAL("Bytecode output could not atomically replace {}: {}", filesystem::toUtf8(outputPath),
+                              replaceError);
                 return EXIT_FAILURE;
             }
             if (logOutput)
-                WIO_LOG_INFO("Generated bytecode output: {}", outputPath.generic_string());
+                WIO_LOG_INFO("Generated bytecode output: {}", filesystem::toGenericUtf8(outputPath));
             return EXIT_SUCCESS;
         }
 
@@ -820,7 +825,7 @@ namespace wio
             const std::filesystem::path root =
                 intermediateDirs.empty()
                     ? sourcePath.parent_path().make_preferred()
-                    : std::filesystem::absolute(std::filesystem::path(intermediateDirs.front())).make_preferred();
+                    : std::filesystem::absolute(filesystem::fromUtf8(intermediateDirs.front())).make_preferred();
             const std::vector<std::string> configuredOutputs =
                 gAppData.argParser.GetValuesOf<std::string>("BYTECODE-OUTPUT");
             std::filesystem::path outputPath;
@@ -831,12 +836,12 @@ namespace wio
             }
             else
             {
-                outputPath = std::filesystem::absolute(std::filesystem::path(configuredOutputs.front()));
+                outputPath = std::filesystem::absolute(filesystem::fromUtf8(configuredOutputs.front()));
             }
             outputPath.make_preferred();
 
             wir::typed::BuildOptions buildOptions;
-            buildOptions.logicalModuleName = outputPath.stem().generic_string();
+            buildOptions.logicalModuleName = filesystem::toGenericUtf8(outputPath.stem());
             buildOptions.moduleKind = Compiler::get().getBuildTarget() == BuildTarget::Executable
                                           ? wir::ModuleKind::Program
                                           : wir::ModuleKind::WioLibrary;
@@ -855,7 +860,7 @@ namespace wio
             const std::string binary = filesystem::readFile(inputPath);
             if (binary.empty())
             {
-                WIO_LOG_FATAL("Bytecode file is empty or could not be read: {}", inputPath.string());
+                WIO_LOG_FATAL("Bytecode file is empty or could not be read: {}", filesystem::toUtf8(inputPath));
                 return EXIT_FAILURE;
             }
             const auto bytes = std::span{
@@ -879,7 +884,7 @@ namespace wio
 
         std::string quotePath(const std::filesystem::path& path)
         {
-            return "\"" + path.string() + "\"";
+            return "\"" + filesystem::toUtf8(path) + "\"";
         }
 
         std::string pathToDisplayString(const std::filesystem::path& path)
@@ -887,7 +892,7 @@ namespace wio
             if (path.empty())
                 return "<not-found>";
 
-            return path.generic_string();
+            return filesystem::toGenericUtf8(path);
         }
 
         std::string quoteCommand(const std::string& value)
@@ -899,6 +904,21 @@ namespace wio
         }
 
 #if defined(_WIN32)
+        std::wstring widenUtf8(const std::string& value)
+        {
+            if (value.empty())
+                return {};
+            const int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+                                                 static_cast<int>(value.size()), nullptr, 0);
+            if (size <= 0)
+                throw std::runtime_error("Compiler process command contains invalid UTF-8");
+            std::wstring result(size, L'\0');
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), static_cast<int>(value.size()),
+                                    result.data(), size) != size)
+                throw std::runtime_error("Compiler process command UTF-8 conversion failed");
+            return result;
+        }
+
         std::string quoteRunArgument(const std::string& value)
         {
             if (value.empty())
@@ -952,28 +972,27 @@ namespace wio
         int runExecutable(const std::filesystem::path& executablePath, const std::vector<std::string>& arguments)
         {
 #if defined(_WIN32)
-            std::string commandLineText = quoteRunArgument(executablePath.string());
+            std::string commandLineText = quoteRunArgument(filesystem::toUtf8(executablePath));
             for (const auto& argument : arguments)
             {
                 commandLineText.push_back(' ');
                 commandLineText += quoteRunArgument(argument);
             }
 
-            std::vector<char> commandLine(commandLineText.begin(), commandLineText.end());
-            commandLine.push_back('\0');
+            const auto wideCommand = widenUtf8(commandLineText);
+            std::vector<wchar_t> commandLine(wideCommand.begin(), wideCommand.end());
+            commandLine.push_back(L'\0');
 
-            STARTUPINFOA startupInfo{};
+            STARTUPINFOW startupInfo{};
             startupInfo.cb = sizeof(startupInfo);
             PROCESS_INFORMATION processInfo{};
-            const std::string executable = executablePath.string();
-
-            const BOOL created = CreateProcessA(executable.c_str(), commandLine.data(), nullptr, nullptr, TRUE, 0,
+            const BOOL created = CreateProcessW(executablePath.c_str(), commandLine.data(), nullptr, nullptr, TRUE, 0,
                                                 nullptr, nullptr, &startupInfo, &processInfo);
 
             if (created == FALSE)
             {
-                WIO_LOG_ERROR("Could not launch generated executable '{}'. Windows error: {}", executablePath.string(),
-                              static_cast<unsigned long>(GetLastError()));
+                WIO_LOG_ERROR("Could not launch generated executable '{}'. Windows error: {}",
+                              filesystem::toUtf8(executablePath), static_cast<unsigned long>(GetLastError()));
                 return EXIT_FAILURE;
             }
 
@@ -988,14 +1007,14 @@ namespace wio
             const pid_t processId = fork();
             if (processId < 0)
             {
-                WIO_LOG_ERROR("Could not fork generated executable '{}': {}", executablePath.string(),
+                WIO_LOG_ERROR("Could not fork generated executable '{}': {}", filesystem::toUtf8(executablePath),
                               std::strerror(errno));
                 return EXIT_FAILURE;
             }
 
             if (processId == 0)
             {
-                const std::string executable = executablePath.string();
+                const std::string executable = filesystem::toUtf8(executablePath);
                 std::vector<std::string> ownedArguments;
                 ownedArguments.reserve(arguments.size() + 1);
                 ownedArguments.push_back(executable);
@@ -1019,7 +1038,7 @@ namespace wio
                 if (errno == EINTR)
                     continue;
 
-                WIO_LOG_ERROR("Could not wait for generated executable '{}': {}", executablePath.string(),
+                WIO_LOG_ERROR("Could not wait for generated executable '{}': {}", filesystem::toUtf8(executablePath),
                               std::strerror(errno));
                 return EXIT_FAILURE;
             }
@@ -1056,7 +1075,7 @@ namespace wio
                     continue;
 
                 normalizedValues.push_back(
-                    std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
+                    filesystem::toUtf8(std::filesystem::absolute(filesystem::fromUtf8(rawValue)).make_preferred()));
             }
 
             return normalizedValues;
@@ -1074,7 +1093,7 @@ namespace wio
 
                 if (isSourceFilePath(rawValue))
                     normalizedValues.push_back(
-                        std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
+                        filesystem::toUtf8(std::filesystem::absolute(filesystem::fromUtf8(rawValue)).make_preferred()));
                 else
                     normalizedValues.push_back(rawValue);
             }
@@ -1099,7 +1118,7 @@ namespace wio
                 }
 
                 normalizedValues.push_back(
-                    std::filesystem::absolute(std::filesystem::path(rawValue)).make_preferred().string());
+                    filesystem::toUtf8(std::filesystem::absolute(filesystem::fromUtf8(rawValue)).make_preferred()));
             }
 
             return normalizedValues;
@@ -1116,7 +1135,7 @@ namespace wio
                 if (i > 0)
                     formatted += ", ";
 
-                formatted += std::filesystem::path(values[i]).generic_string();
+                formatted += filesystem::toGenericUtf8(filesystem::fromUtf8(values[i]));
             }
 
             return formatted;
@@ -1184,7 +1203,7 @@ namespace wio
         {
             for (const auto& includeDir : includeDirs)
             {
-                cmd << " -I" << quotePath(includeDir);
+                cmd << " -I" << quotePath(filesystem::fromUtf8(includeDir));
             }
         }
 
@@ -1200,7 +1219,7 @@ namespace wio
         {
             for (const auto& linkDir : linkDirs)
             {
-                cmd << " -L" << quotePath(linkDir);
+                cmd << " -L" << quotePath(filesystem::fromUtf8(linkDir));
             }
         }
 
@@ -1266,12 +1285,12 @@ namespace wio
                 if (extraPathEntries.empty())
                     return;
 
-                std::string existingPath;
-                DWORD requiredLength = GetEnvironmentVariableA("Path", nullptr, 0);
+                std::wstring existingPath;
+                DWORD requiredLength = GetEnvironmentVariableW(L"Path", nullptr, 0);
                 if (requiredLength > 0)
                 {
-                    existingPath.assign(requiredLength, '\0');
-                    const DWORD copiedLength = GetEnvironmentVariableA("Path", existingPath.data(), requiredLength);
+                    existingPath.assign(requiredLength, L'\0');
+                    const DWORD copiedLength = GetEnvironmentVariableW(L"Path", existingPath.data(), requiredLength);
                     if (copiedLength > 0 && copiedLength < requiredLength)
                         existingPath.resize(copiedLength);
                     else if (copiedLength == 0)
@@ -1281,7 +1300,7 @@ namespace wio
                 originalPath_ = existingPath;
                 hadOriginalPath_ = requiredLength > 0;
 
-                std::string overriddenPath;
+                std::wstring overriddenPath;
                 for (const auto& pathEntry : extraPathEntries)
                 {
                     if (pathEntry.empty())
@@ -1289,7 +1308,7 @@ namespace wio
 
                     if (!overriddenPath.empty())
                         overriddenPath += ';';
-                    overriddenPath += pathEntry.string();
+                    overriddenPath += pathEntry.native();
                 }
 
                 if (!existingPath.empty())
@@ -1301,7 +1320,7 @@ namespace wio
 
                 if (!overriddenPath.empty())
                 {
-                    SetEnvironmentVariableA("Path", overriddenPath.c_str());
+                    SetEnvironmentVariableW(L"Path", overriddenPath.c_str());
                     active_ = true;
                 }
             }
@@ -1315,15 +1334,15 @@ namespace wio
                     return;
 
                 if (hadOriginalPath_)
-                    SetEnvironmentVariableA("Path", originalPath_.c_str());
+                    SetEnvironmentVariableW(L"Path", originalPath_.c_str());
                 else
-                    SetEnvironmentVariableA("Path", nullptr);
+                    SetEnvironmentVariableW(L"Path", nullptr);
             }
 
         private:
             bool active_ = false;
             bool hadOriginalPath_ = false;
-            std::string originalPath_;
+            std::wstring originalPath_;
         };
 #endif
 
@@ -1334,6 +1353,7 @@ namespace wio
             result.command = command;
 
 #if defined(_WIN32)
+            const auto wideCommand = widenUtf8(command);
             SECURITY_ATTRIBUTES securityAttributes{};
             securityAttributes.nLength = sizeof(securityAttributes);
             securityAttributes.bInheritHandle = TRUE;
@@ -1350,7 +1370,7 @@ namespace wio
 
             SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
 
-            STARTUPINFOA startupInfo{};
+            STARTUPINFOW startupInfo{};
             startupInfo.cb = sizeof(startupInfo);
             startupInfo.dwFlags = STARTF_USESTDHANDLES;
             startupInfo.hStdOutput = writePipe;
@@ -1358,11 +1378,11 @@ namespace wio
             startupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
 
             PROCESS_INFORMATION processInfo{};
-            std::vector<char> commandLine(command.begin(), command.end());
-            commandLine.push_back('\0');
+            std::vector<wchar_t> commandLine(wideCommand.begin(), wideCommand.end());
+            commandLine.push_back(L'\0');
             ScopedWindowsPathOverride scopedPathOverride(extraPathEntries);
 
-            const BOOL created = CreateProcessA(nullptr, commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
+            const BOOL created = CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
                                                 nullptr, nullptr, &startupInfo, &processInfo);
 
             CloseHandle(writePipe);
@@ -1524,12 +1544,12 @@ namespace wio
                 return pathText;
 
             std::error_code ec;
-            std::filesystem::path path(pathText);
+            std::filesystem::path path = filesystem::fromUtf8(pathText);
             std::filesystem::path absolutePath = std::filesystem::absolute(path, ec);
             if (!ec)
-                return absolutePath.make_preferred().string();
+                return filesystem::toUtf8(absolutePath.make_preferred());
 
-            return path.make_preferred().string();
+            return filesystem::toUtf8(path.make_preferred());
         }
 
         std::string unescapeCppLineDirectiveString(std::string_view rawValue)
@@ -2394,7 +2414,7 @@ namespace wio
                 appendRoot(systemIncludeDir);
 
             for (const auto& includeDir : includeDirs)
-                appendRoot(includeDir);
+                appendRoot(filesystem::fromUtf8(includeDir));
 
             return roots;
         }
@@ -2404,7 +2424,7 @@ namespace wio
             std::string formattedRoots;
             for (size_t i = 0; i < roots.size(); ++i)
             {
-                formattedRoots += roots[i].string();
+                formattedRoots += filesystem::toUtf8(roots[i]);
                 if (i + 1 < roots.size())
                     formattedRoots += ", ";
             }
@@ -2469,7 +2489,7 @@ namespace wio
 
         bool canResolveCppHeader(const std::string& header, const std::vector<std::filesystem::path>& searchRoots)
         {
-            std::filesystem::path headerPath(header);
+            std::filesystem::path headerPath = filesystem::fromUtf8(header);
             std::error_code ec;
 
             if (headerPath.is_absolute())
@@ -2502,14 +2522,15 @@ namespace wio
             {
                 if (isBuiltinStdSourcePath(header.sourcePath))
                 {
-                    std::filesystem::path headerPath(header.header);
+                    std::filesystem::path headerPath = filesystem::fromUtf8(header.header);
                     if (headerPath.is_absolute() || hasParentTraversal(headerPath))
                     {
                         WIO_LOG_ADD_ERROR(
                             header.location,
                             "Builtin std module '{}' references non-public header '{}'. Builtin std modules may only "
                             "use toolchain public runtime/sdk headers by logical include name.",
-                            header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(), header.header);
+                            header.sourcePath.empty() ? "<unknown>" : filesystem::toUtf8(header.sourcePath),
+                            header.header);
                         isValid = false;
                         continue;
                     }
@@ -2520,7 +2541,7 @@ namespace wio
                     WIO_LOG_ADD_ERROR(header.location,
                                       "Builtin std module '{}' references C++ header '{}' via {} but it was not found "
                                       "in toolchain public include paths: {}",
-                                      header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(),
+                                      header.sourcePath.empty() ? "<unknown>" : filesystem::toUtf8(header.sourcePath),
                                       header.header, header.origin.empty() ? "@CppHeader" : header.origin,
                                       formattedSystemRoots);
                     isValid = false;
@@ -2534,7 +2555,7 @@ namespace wio
                     header.location,
                     "Native C++ header '{}' referenced by {} in '{}' was not found in include search paths: {}",
                     header.header, header.origin.empty() ? "@CppHeader" : header.origin,
-                    header.sourcePath.empty() ? "<unknown>" : header.sourcePath.string(), formattedRoots);
+                    header.sourcePath.empty() ? "<unknown>" : filesystem::toUtf8(header.sourcePath), formattedRoots);
                 isValid = false;
             }
 
@@ -2559,7 +2580,7 @@ namespace wio
                 {
                     Logger::get().addError(
                         "Required backend include directory '{}' was not found or is not a directory.",
-                        resolvedPath.string());
+                        filesystem::toUtf8(resolvedPath));
                     isValid = false;
                 }
             }
@@ -2577,7 +2598,7 @@ namespace wio
                     continue;
 
                 std::filesystem::path resolvedPath =
-                    std::filesystem::absolute(std::filesystem::path(rawPath)).make_preferred();
+                    std::filesystem::absolute(filesystem::fromUtf8(rawPath)).make_preferred();
                 std::error_code ec;
                 const bool exists = std::filesystem::exists(resolvedPath, ec) && !ec;
                 const bool isDirectory = exists && std::filesystem::is_directory(resolvedPath, ec) && !ec;
@@ -2585,7 +2606,7 @@ namespace wio
                 if (!exists || !isDirectory)
                 {
                     Logger::get().addError("{} '{}' was not found or is not a directory.", label,
-                                           resolvedPath.string());
+                                           filesystem::toUtf8(resolvedPath));
                     isValid = false;
                 }
             }
@@ -2604,14 +2625,14 @@ namespace wio
                     continue;
 
                 std::filesystem::path resolvedPath =
-                    std::filesystem::absolute(std::filesystem::path(backendArg)).make_preferred();
+                    std::filesystem::absolute(filesystem::fromUtf8(backendArg)).make_preferred();
                 std::error_code ec;
                 const bool exists = std::filesystem::exists(resolvedPath, ec) && !ec;
                 const bool isRegularFile = exists && std::filesystem::is_regular_file(resolvedPath, ec) && !ec;
 
                 if (!exists || !isRegularFile)
                 {
-                    Logger::get().addError("Backend source file '{}' was not found.", resolvedPath.string());
+                    Logger::get().addError("Backend source file '{}' was not found.", filesystem::toUtf8(resolvedPath));
                     isValid = false;
                 }
             }
@@ -2622,14 +2643,14 @@ namespace wio
                     continue;
 
                 std::filesystem::path resolvedPath =
-                    std::filesystem::absolute(std::filesystem::path(linkLibrary)).make_preferred();
+                    std::filesystem::absolute(filesystem::fromUtf8(linkLibrary)).make_preferred();
                 std::error_code ec;
                 const bool exists = std::filesystem::exists(resolvedPath, ec) && !ec;
                 const bool isRegularFile = exists && std::filesystem::is_regular_file(resolvedPath, ec) && !ec;
 
                 if (!exists || !isRegularFile)
                 {
-                    Logger::get().addError("Linked library file '{}' was not found.", resolvedPath.string());
+                    Logger::get().addError("Linked library file '{}' was not found.", filesystem::toUtf8(resolvedPath));
                     isValid = false;
                 }
             }
@@ -2669,7 +2690,7 @@ namespace wio
                 if (configuredDir.empty())
                     continue;
 
-                searchDirs.push_back(std::filesystem::absolute(std::filesystem::path(configuredDir)).make_preferred());
+                searchDirs.push_back(std::filesystem::absolute(filesystem::fromUtf8(configuredDir)).make_preferred());
             }
 
             return searchDirs;
@@ -2711,15 +2732,14 @@ namespace wio
             if (!isStdLib)
             {
                 cacheKey += '\x1f';
-                cacheKey += currentDir.lexically_normal().generic_string();
+                cacheKey += filesystem::toGenericUtf8(currentDir.lexically_normal());
             }
 
             if (const auto cached = gAppData.resolvedModulePaths.find(cacheKey);
                 cached != gAppData.resolvedModulePaths.end())
                 return cached->second;
 
-            const std::filesystem::path relativeModulePath =
-                std::filesystem::path(modulePath + ".wio").make_preferred();
+            const std::filesystem::path relativeModulePath = filesystem::fromUtf8(modulePath + ".wio").make_preferred();
 
             for (const auto& searchRoot : buildModuleSearchRoots(isStdLib, currentDir))
             {
@@ -2748,7 +2768,7 @@ namespace wio
 
             for (size_t i = 0; i < roots.size(); ++i)
             {
-                formattedRoots += roots[i].string();
+                formattedRoots += filesystem::toUtf8(roots[i]);
                 if (i + 1 < roots.size())
                     formattedRoots += ", ";
             }
@@ -2887,10 +2907,9 @@ namespace wio
             {
                 std::error_code ec;
                 gAppData.executablePath =
-                    std::filesystem::weakly_canonical(std::filesystem::absolute(std::filesystem::path(argv[0])), ec);
+                    std::filesystem::weakly_canonical(std::filesystem::absolute(filesystem::fromUtf8(argv[0])), ec);
                 if (ec)
-                    gAppData.executablePath =
-                        std::filesystem::absolute(std::filesystem::path(argv[0])).make_preferred();
+                    gAppData.executablePath = std::filesystem::absolute(filesystem::fromUtf8(argv[0])).make_preferred();
                 else
                     gAppData.executablePath = gAppData.executablePath.make_preferred();
             }
@@ -2974,7 +2993,7 @@ namespace wio
             std::vector<std::string> filePaths = gAppData.argParser.GetValuesOf<std::string>("FILE");
             std::string filePathStr = filePaths.at(0);
             std::filesystem::path sourcePath =
-                std::filesystem::absolute(std::filesystem::path(filePathStr)).make_preferred();
+                std::filesystem::absolute(filesystem::fromUtf8(filePathStr)).make_preferred();
             gAppData.basePath = sourcePath.parent_path();
 
             const std::vector<std::string> profilePaths =
@@ -2983,20 +3002,20 @@ namespace wio
             if (!profilePaths.empty())
             {
                 const std::filesystem::path profilePath =
-                    std::filesystem::absolute(std::filesystem::path(profilePaths.front())).make_preferred();
+                    std::filesystem::absolute(filesystem::fromUtf8(profilePaths.front())).make_preferred();
                 std::error_code profileDirectoryError;
                 if (profilePath.has_parent_path())
                     std::filesystem::create_directories(profilePath.parent_path(), profileDirectoryError);
                 if (profileDirectoryError)
                 {
                     WIO_LOG_FATAL("Compiler profile directory could not be created: {}",
-                                  profilePath.parent_path().string());
+                                  filesystem::toUtf8(profilePath.parent_path()));
                     return EXIT_FAILURE;
                 }
                 profileSession.emplace("Wio compiler", profilePath);
                 if (!profileSession->active())
                 {
-                    WIO_LOG_FATAL("Compiler profile could not be opened: {}", profilePath.string());
+                    WIO_LOG_FATAL("Compiler profile could not be opened: {}", filesystem::toUtf8(profilePath));
                     return EXIT_FAILURE;
                 }
             }
@@ -3027,7 +3046,8 @@ namespace wio
             filesystem::stripBOM(source);
 
             // 1. Lexer
-            const std::string sourceDisplayPath = std::filesystem::absolute(sourcePath).make_preferred().string();
+            const std::string sourceDisplayPath =
+                filesystem::toUtf8(std::filesystem::absolute(sourcePath).make_preferred());
             common::profiling::Scope lexerScope("Frontend.Lexer");
             Lexer lexer(source, sourceDisplayPath);
             auto tokens = lexer.lex();
@@ -3059,7 +3079,7 @@ namespace wio
             gAppData.moduleDeclaresTopLevelRealms.clear();
             gAppData.requiredCppHeaders.clear();
             gAppData.loadedModules.insert(sourceDisplayPath);
-            collectRequiredCppHeaders(program->statements, std::filesystem::path(sourceDisplayPath),
+            collectRequiredCppHeaders(program->statements, filesystem::fromUtf8(sourceDisplayPath),
                                       gAppData.requiredCppHeaders);
 
             validateSearchDirectories(gAppData.argParser.GetValuesOf<std::string>("MODULE-DIR"),
@@ -3232,7 +3252,7 @@ namespace wio
 
             outputPath = outputPaths.empty()
                              ? makeDefaultOutputPath(sourcePath, gAppData.buildTarget)
-                             : std::filesystem::absolute(std::filesystem::path(outputPaths.front())).make_preferred();
+                             : std::filesystem::absolute(filesystem::fromUtf8(outputPaths.front())).make_preferred();
 
             outputPath = std::filesystem::absolute(outputPath).make_preferred();
 
@@ -3240,7 +3260,7 @@ namespace wio
                 intermediateDirs.empty()
                     ? std::nullopt
                     : std::optional<std::filesystem::path>(
-                          std::filesystem::absolute(std::filesystem::path(intermediateDirs.front())).make_preferred());
+                          std::filesystem::absolute(filesystem::fromUtf8(intermediateDirs.front())).make_preferred());
 
             cppPath =
                 makeDefaultGeneratedCppPath(sourcePath, outputPath, intermediateDir, gAppData.flags.get_EmitCpp());
@@ -3294,7 +3314,7 @@ namespace wio
             if (gAppData.cppBackend == "wir")
             {
                 wir::typed::BuildOptions buildOptions;
-                buildOptions.logicalModuleName = outputPath.stem().generic_string();
+                buildOptions.logicalModuleName = filesystem::toGenericUtf8(outputPath.stem());
                 const bool emitsBytecodeSidecar =
                     !gAppData.argParser.GetValuesOf<std::string>("BYTECODE-SIDECAR").empty();
                 buildOptions.moduleKind = gAppData.buildTarget == BuildTarget::Executable || emitsBytecodeSidecar
@@ -3314,7 +3334,7 @@ namespace wio
                 if (emitsBytecodeSidecar)
                 {
                     const auto sidecarPath = gAppData.argParser.GetValuesOf<std::string>("BYTECODE-SIDECAR").front();
-                    bytecodeOutputPath = std::filesystem::absolute(std::filesystem::path(sidecarPath)).make_preferred();
+                    bytecodeOutputPath = std::filesystem::absolute(filesystem::fromUtf8(sidecarPath)).make_preferred();
                     const auto normalizedSidecar = bytecodeOutputPath.lexically_normal();
                     if (normalizedSidecar == outputPath.lexically_normal() ||
                         normalizedSidecar == cppPath.lexically_normal() ||
@@ -3354,14 +3374,14 @@ namespace wio
             if (intermediateDirEc)
             {
                 WIO_LOG_FATAL("Generated C++ output directory could not be created: {}",
-                              cppPath.parent_path().string());
+                              filesystem::toUtf8(cppPath.parent_path()));
                 return EXIT_FAILURE;
             }
 
             common::profiling::Scope generatedWriteScope("Backend.Cpp.Write");
             if (!filesystem::writeFilepath(cppCode, cppPath))
             {
-                WIO_LOG_FATAL("Generated C++ output could not be written to: {}", cppPath.string());
+                WIO_LOG_FATAL("Generated C++ output could not be written to: {}", filesystem::toUtf8(cppPath));
                 return EXIT_FAILURE;
             }
             generatedWriteScope.stop();
@@ -3376,13 +3396,15 @@ namespace wio
                 common::profiling::Scope nativeBackendScope("Backend.NativeCompiler");
                 if (runtimeIncludeDir.empty() || !std::filesystem::exists(runtimeIncludeDir))
                 {
-                    WIO_LOG_FATAL("Runtime headers were not found. Expected directory: {}", runtimeIncludeDir.string());
+                    WIO_LOG_FATAL("Runtime headers were not found. Expected directory: {}",
+                                  filesystem::toUtf8(runtimeIncludeDir));
                     return EXIT_FAILURE;
                 }
 
                 if (sdkIncludeDir.empty() || !std::filesystem::exists(sdkIncludeDir))
                 {
-                    WIO_LOG_FATAL("SDK headers were not found. Expected directory: {}", sdkIncludeDir.string());
+                    WIO_LOG_FATAL("SDK headers were not found. Expected directory: {}",
+                                  filesystem::toUtf8(sdkIncludeDir));
                     return EXIT_FAILURE;
                 }
 
@@ -3390,7 +3412,8 @@ namespace wio
                      gAppData.buildTarget == BuildTarget::SharedLibrary) &&
                     (runtimeLibraryPath.empty() || !std::filesystem::exists(runtimeLibraryPath)))
                 {
-                    WIO_LOG_FATAL("Runtime library was not found. Expected file: {}", runtimeLibraryPath.string());
+                    WIO_LOG_FATAL("Runtime library was not found. Expected file: {}",
+                                  filesystem::toUtf8(runtimeLibraryPath));
                     return EXIT_FAILURE;
                 }
 
@@ -3403,7 +3426,7 @@ namespace wio
                 std::filesystem::create_directories(outputPath.parent_path());
 
                 const std::filesystem::path backendCompilerPath = getBackendCompilerPath();
-                const std::string backendCompiler = backendCompilerPath.string();
+                const std::string backendCompiler = filesystem::toUtf8(backendCompilerPath);
                 int exitCode = EXIT_SUCCESS;
 
                 if (gAppData.buildTarget == BuildTarget::StaticLibrary)
@@ -3423,10 +3446,10 @@ namespace wio
 
                     auto buildObjectPath = [&](const std::filesystem::path& inputPath, size_t index)
                     {
-                        std::string stem = inputPath.stem().string();
+                        std::string stem = filesystem::toUtf8(inputPath.stem());
                         std::filesystem::path objectPath =
                             outputPath.parent_path() /
-                            (outputPath.stem().string() + "." + stem + "." + std::to_string(index) + ".o");
+                            (filesystem::toUtf8(outputPath.stem()) + "." + stem + "." + std::to_string(index) + ".o");
                         return objectPath.make_preferred();
                     };
 
@@ -3457,7 +3480,7 @@ namespace wio
                     {
                         for (size_t i = 0; i < backendSourceFiles.size(); ++i)
                         {
-                            compileResult = compileObject(std::filesystem::path(backendSourceFiles[i]), i + 1);
+                            compileResult = compileObject(filesystem::fromUtf8(backendSourceFiles[i]), i + 1);
                             exitCode = compileResult.exitCode;
                             if (exitCode != 0)
                                 break;
@@ -3549,8 +3572,8 @@ namespace wio
                     {
                         std::error_code cleanupError;
                         std::filesystem::remove(stagingOutputPath, cleanupError);
-                        WIO_LOG_FATAL("Generated backend output could not replace '{}': {}", outputPath.string(),
-                                      replaceError);
+                        WIO_LOG_FATAL("Generated backend output could not replace '{}': {}",
+                                      filesystem::toUtf8(outputPath), replaceError);
                         return EXIT_FAILURE;
                     }
                 }
@@ -3559,7 +3582,7 @@ namespace wio
 
                 if (gAppData.flags.get_Run())
                 {
-                    WIO_LOG_INFO("Running {} ...", outputPath.filename().string());
+                    WIO_LOG_INFO("Running {} ...", filesystem::toUtf8(outputPath.filename()));
 
                     const int runExitCode =
                         runExecutable(outputPath, gAppData.argParser.GetValuesOf<std::string>("RUN-ARG"));
@@ -3577,7 +3600,7 @@ namespace wio
             std::filesystem::remove(cppPath, cleanupEc);
             if (cleanupEc)
             {
-                WIO_LOG_WARN("Could not remove generated intermediate C++ file '{}': {}", cppPath.string(),
+                WIO_LOG_WARN("Could not remove generated intermediate C++ file '{}': {}", filesystem::toUtf8(cppPath),
                              cleanupEc.message());
             }
 
@@ -3586,11 +3609,11 @@ namespace wio
                 std::string replaceError;
                 if (!replaceBackendOutputWithRetry(bytecodeStaging.path, bytecodeOutputPath, replaceError))
                 {
-                    WIO_LOG_FATAL("Bytecode sidecar could not replace '{}': {}", bytecodeOutputPath.string(),
+                    WIO_LOG_FATAL("Bytecode sidecar could not replace '{}': {}", filesystem::toUtf8(bytecodeOutputPath),
                                   replaceError);
                     return EXIT_FAILURE;
                 }
-                WIO_LOG_INFO("Generated bytecode output: {}", bytecodeOutputPath.generic_string());
+                WIO_LOG_INFO("Generated bytecode output: {}", filesystem::toGenericUtf8(bytecodeOutputPath));
             }
             return backendPhaseResult;
         }
@@ -3656,7 +3679,7 @@ namespace wio
         }
 
         const std::filesystem::path& actualPath = *resolvedModulePath;
-        std::string absolutePath = actualPath.string();
+        std::string absolutePath = filesystem::toUtf8(actualPath);
 
         if (gAppData.loadedModules.contains(absolutePath))
         {
@@ -3681,14 +3704,14 @@ namespace wio
         readScope.stop();
         if (source.empty())
         {
-            Logger::get().addError("Module file is empty or not found: {}", actualPath.string());
+            Logger::get().addError("Module file is empty or not found: {}", filesystem::toUtf8(actualPath));
             WIO_LOG_PROCESS_ERRORS(CompilationError);
             return makeNodePtr<Program>(std::vector<NodePtr<Statement>>{});
         }
         filesystem::stripBOM(source);
 
         common::profiling::Scope lexerScope("Frontend.Import.Lexer");
-        Lexer lexer(source, actualPath.string());
+        Lexer lexer(source, filesystem::toUtf8(actualPath));
         auto tokens = lexer.lex();
         lexerScope.stop();
         common::profiling::Scope parserScope("Frontend.Import.Parser");

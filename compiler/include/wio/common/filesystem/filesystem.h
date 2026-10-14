@@ -1,6 +1,7 @@
 #pragma once
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace wio::common::filesystem
@@ -8,6 +9,9 @@ namespace wio::common::filesystem
     enum class Encoding : uint8_t { Unknown, UTF8, UTF16_LE, UTF16_BE, UTF32_LE, UTF32_BE };
 
     FILE* openFile(const std::filesystem::path& path, const char* mode);
+    std::filesystem::path fromUtf8(std::string_view value);
+    std::string toUtf8(const std::filesystem::path& value);
+    std::string toGenericUtf8(const std::filesystem::path& value);
     std::filesystem::path getAbsPath(const std::filesystem::path& filepath);
     std::filesystem::path getCanonicalPath(const std::filesystem::path& filepath);
     bool checkExtension(const std::filesystem::path& filepath, const std::string& expected_extension);

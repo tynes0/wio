@@ -1,0 +1,27 @@
+using cpp::header("fixture.h");
+
+[Native, CppName(vm_project_artifact::Add)]
+fn Add(left: i32, right: i32) -> i32;
+
+[Native, CppName(vm_project_artifact::CorrectDirectory)]
+fn CorrectDirectory() -> bool;
+
+[Native, CppName(vm_project_artifact::Print)]
+fn Print(value: string);
+
+[Native, CppName(wio::runtime::AsyncSleep)]
+fn Sleep(milliseconds: u64) -> coroutine<void>;
+
+async fn Entry(args: string[]) -> i32
+{
+    if (args.Count() != 5usize) return 11;
+
+    if (args[1] != "manifest-arg" or args[2] != "two words" or args[3] != "Türkçe 🌍" or args[4] != "--help") return 12;
+
+    if (not CorrectDirectory()) return 13;
+
+    await Sleep(1);
+    let answer = Add(20, 22);
+    Print($"vm-project-artifact:${answer}");
+    return 0;
+}

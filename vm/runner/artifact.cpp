@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <charconv>
 #include <fstream>
 #include <set>
 #include <stdexcept>
@@ -125,6 +126,17 @@ namespace wio::vm::artifact
             return name;
         }
 
+        std::string versionedName(const std::filesystem::path& source, std::span<const std::byte> data)
+        {
+            std::array<char, 16> encoded{};
+            const auto result = std::to_chars(encoded.data(), encoded.data() + encoded.size(), hash(data), 16);
+            const auto stem = source.stem().u8string();
+            const auto extension = source.extension().u8string();
+            return std::string(stem.begin(), stem.end()) + ".wio-" +
+                   std::string(16 - (result.ptr - encoded.data()), '0') + std::string(encoded.data(), result.ptr) +
+                   std::string(extension.begin(), extension.end());
+        }
+
         class PackageLock final
         {
         public:
@@ -229,98 +241,153 @@ namespace wio::vm::artifact
         return true;
     }
 
-    void package(const std::filesystem::path& runner, const std::filesystem::path& module,
-                 std::span<const std::filesystem::path> libraries, const std::filesystem::path& destination)
+    namespace
     {
-        const auto output = std::filesystem::absolute(destination);
-        require(!std::filesystem::exists(output), "VM package output already exists; choose a new output path");
-        const auto outputName = output.filename().u8string();
-        require(key(std::string(outputName.begin(), outputName.end())) != LockName,
-                "VM executable name is reserved for package locking");
-        require(libraries.size() <= 64, "VM package has too many native libraries");
-        Payload existing;
-        require(!read(runner, existing), "a packaged application cannot be used as a runner template");
-        auto prefix = bytes(runner);
-        auto code = bytes(module);
-        verify(code);
-        std::vector<std::byte> data;
-        appendInteger(data, code.size(), 8);
-        appendInteger(data, libraries.size(), 4);
-        std::set<std::string> names;
-        std::vector<std::filesystem::path> copies;
-        for (const auto& library : libraries)
+        void packageImage(const std::filesystem::path& runner, std::span<const std::byte> code,
+                          std::span<const std::filesystem::path> libraries, const std::filesystem::path& destination,
+                          const PackageOptions options)
         {
-            const auto encoded = library.filename().u8string();
-            const std::string name(encoded.begin(), encoded.end());
-            require(safeName(name) && names.insert(key(name)).second, "unsafe or duplicate VM native library name");
-            require(key(name) != LockName, "native library name is reserved for package locking");
-            const auto target = output.parent_path() / library.filename();
-            require(key(name) != key(std::string(outputName.begin(), outputName.end())),
-                    "native library collides with VM executable");
-            const auto libraryBytes = bytes(library);
-            if (std::filesystem::exists(target))
-                require(bytes(target) == libraryBytes, "VM package would overwrite a different native library");
-            copies.push_back(target);
-            appendInteger(data, name.size(), 4);
-            for (unsigned char value : name)
-                data.push_back(std::byte{value});
-        }
-        data.insert(data.end(), code.begin(), code.end());
-        require(data.size() <= Limit, "VM package payload exceeds its size limit");
-        std::vector<std::byte> footer(Magic.begin(), Magic.end());
-        appendInteger(footer, data.size(), 8);
-        appendInteger(footer, hash(data), 8);
-        appendInteger(footer, 1, 4);
-        appendInteger(footer, 0, 4);
-        std::filesystem::create_directories(output.parent_path());
-        // Serialize cooperating packagers in one deployment directory. Without
-        // this, a failed writer could roll back a DLL another writer just used.
-        const PackageLock lock{output.parent_path()};
-        auto temporary = output;
-        temporary += ".wio-package-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-        require(!std::filesystem::exists(temporary), "VM package temporary path already exists");
-        std::vector<std::filesystem::path> created;
-        try
-        {
-            std::ofstream stream{temporary, std::ios::binary};
-            require(bool(stream), "could not create VM package output");
-            for (const auto& block : {std::span<const std::byte>{prefix}, std::span<const std::byte>{data},
-                                      std::span<const std::byte>{footer}})
-                stream.write(reinterpret_cast<const char*>(block.data()), block.size());
-            stream.close();
-            require(bool(stream), "VM package write failed");
-            std::filesystem::permissions(temporary, std::filesystem::status(runner).permissions());
-            for (std::size_t index = 0; index < copies.size(); ++index)
-                if (std::filesystem::exists(copies[index]))
-                    require(bytes(copies[index]) == bytes(libraries[index]),
-                            "VM package native library changed after preflight");
-                else
-                {
-                    std::filesystem::copy_file(libraries[index], copies[index]);
-                    created.push_back(copies[index]);
-                }
-            // Publish the complete executable without an overwrite or a
-            // partially visible destination, including concurrent writers.
+            const auto output = std::filesystem::absolute(destination);
+            if (std::filesystem::exists(output))
+            {
+                require(options.replace, "VM package output already exists; choose a new output path");
+                Payload prior;
+                require(read(output, prior), "refusing to replace a non-VM executable artifact");
+            }
+            const auto outputName = output.filename().u8string();
+            require(key(std::string(outputName.begin(), outputName.end())) != LockName,
+                    "VM executable name is reserved for package locking");
+            require(libraries.size() <= 64, "VM package has too many native libraries");
+            Payload existing;
+            require(!read(runner, existing), "a packaged application cannot be used as a runner template");
+            auto prefix = bytes(runner);
+            verify(code);
+            std::vector<std::byte> data;
+            appendInteger(data, code.size(), 8);
+            appendInteger(data, libraries.size(), 4);
+            std::set<std::string> names;
+            std::vector<std::filesystem::path> copies;
+            std::vector<std::uint64_t> expectedHashes;
+            for (const auto& library : libraries)
+            {
+                const auto encoded = library.filename().u8string();
+                const auto libraryBytes = bytes(library);
+                const std::string name = options.versionLibraries ? versionedName(library, libraryBytes)
+                                                                  : std::string(encoded.begin(), encoded.end());
+                require(safeName(name) && names.insert(key(name)).second, "unsafe or duplicate VM native library name");
+                require(key(name) != LockName, "native library name is reserved for package locking");
+                const auto target = output.parent_path() / std::filesystem::u8path(name);
+                require(key(name) != key(std::string(outputName.begin(), outputName.end())),
+                        "native library collides with VM executable");
+                if (std::filesystem::exists(target))
+                    require(bytes(target) == libraryBytes, "VM package would overwrite a different native library");
+                copies.push_back(target);
+                expectedHashes.push_back(hash(libraryBytes));
+                appendInteger(data, name.size(), 4);
+                for (unsigned char value : name)
+                    data.push_back(std::byte{value});
+            }
+            data.insert(data.end(), code.begin(), code.end());
+            require(data.size() <= Limit, "VM package payload exceeds its size limit");
+            std::vector<std::byte> footer(Magic.begin(), Magic.end());
+            appendInteger(footer, data.size(), 8);
+            appendInteger(footer, hash(data), 8);
+            appendInteger(footer, 1, 4);
+            appendInteger(footer, 0, 4);
+            std::filesystem::create_directories(output.parent_path());
+            // Serialize cooperating packagers in one deployment directory. Without
+            // this, a failed writer could roll back a DLL another writer just used.
+            const PackageLock lock{output.parent_path()};
+            if (std::filesystem::exists(output))
+            {
+                require(options.replace, "VM package output already exists; choose a new output path");
+                Payload prior;
+                require(read(output, prior), "refusing to replace a non-VM executable artifact");
+                // A replacement must not modify a library used by the previous
+                // generation. Changed bytes therefore require a new versioned name.
+                for (const auto& name : prior.libraries)
+                    for (std::size_t index = 0; index < copies.size(); ++index)
+                    {
+                        const auto encoded = copies[index].filename().u8string();
+                        if (key(name) == key(std::string(encoded.begin(), encoded.end())))
+                            require(!std::filesystem::exists(copies[index]) ||
+                                        bytes(copies[index]) == bytes(libraries[index]),
+                                    "replacement would change a library owned by the previous VM generation");
+                    }
+            }
+            auto temporary = output;
+            temporary += ".wio-package-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+            require(!std::filesystem::exists(temporary), "VM package temporary path already exists");
+            std::vector<std::filesystem::path> created;
+            try
+            {
+                std::ofstream stream{temporary, std::ios::binary};
+                require(bool(stream), "could not create VM package output");
+                for (const auto& block : {std::span<const std::byte>{prefix}, std::span<const std::byte>{data},
+                                          std::span<const std::byte>{footer}})
+                    stream.write(reinterpret_cast<const char*>(block.data()), block.size());
+                stream.close();
+                require(bool(stream), "VM package write failed");
+                std::filesystem::permissions(temporary, std::filesystem::status(runner).permissions());
+                for (std::size_t index = 0; index < copies.size(); ++index)
+                    if (std::filesystem::exists(copies[index]))
+                    {
+                        const auto deployed = bytes(copies[index]);
+                        require(deployed == bytes(libraries[index]) && hash(deployed) == expectedHashes[index],
+                                "VM package native library changed after preflight");
+                    }
+                    else
+                    {
+                        std::filesystem::copy_file(libraries[index], copies[index]);
+                        created.push_back(copies[index]);
+                        require(hash(bytes(copies[index])) == expectedHashes[index],
+                                "VM package native library changed during copy");
+                    }
+                // Publish the complete executable without an overwrite or a
+                // partially visible destination, including concurrent writers.
 #if defined(_WIN32)
-            require(MoveFileExW(temporary.c_str(), output.c_str(), MOVEFILE_WRITE_THROUGH) != 0,
-                    "could not publish VM executable without replacing an existing file");
+                const DWORD flags = MOVEFILE_WRITE_THROUGH | (options.replace ? MOVEFILE_REPLACE_EXISTING : 0);
+                require(MoveFileExW(temporary.c_str(), output.c_str(), flags) != 0, "could not publish VM executable");
 #else
-            // Same directory/filesystem by construction. link is exclusive;
-            // removing the temporary name does not remove the published file.
-            std::filesystem::create_hard_link(temporary, output);
+                // Same directory/filesystem by construction. link is exclusive;
+                // removing the temporary name does not remove the published file.
+                if (options.replace)
+                    std::filesystem::rename(temporary, output);
+                else
+                    std::filesystem::create_hard_link(temporary, output);
 #endif
-            // Publication is complete. A temporary-file cleanup failure must
-            // not roll back libraries required by the published executable.
-            std::error_code ignored;
-            std::filesystem::remove(temporary, ignored);
+                // Publication is complete. A temporary-file cleanup failure must
+                // not roll back libraries required by the published executable.
+                std::error_code ignored;
+                std::filesystem::remove(temporary, ignored);
+            }
+            catch (...)
+            {
+                std::error_code ignored;
+                std::filesystem::remove(temporary, ignored);
+                for (const auto& path : created)
+                    std::filesystem::remove(path, ignored);
+                throw;
+            }
         }
-        catch (...)
-        {
-            std::error_code ignored;
-            std::filesystem::remove(temporary, ignored);
-            for (const auto& path : created)
-                std::filesystem::remove(path, ignored);
-            throw;
-        }
+    } // namespace
+
+    void package(const std::filesystem::path& runner, const std::filesystem::path& module,
+                 std::span<const std::filesystem::path> libraries, const std::filesystem::path& destination,
+                 const PackageOptions options)
+    {
+        const auto code = bytes(module);
+        packageImage(runner, code, libraries, destination, options);
+    }
+
+    void deploy(const std::filesystem::path& runner, const std::filesystem::path& application,
+                const std::filesystem::path& output)
+    {
+        Payload source;
+        require(read(application, source), "deployment input is not a VM executable artifact");
+        std::vector<std::filesystem::path> libraries;
+        for (const auto& name : source.libraries)
+            libraries.push_back(std::filesystem::absolute(application).parent_path() / std::filesystem::u8path(name));
+        packageImage(runner, source.bytecode, libraries, output, {});
     }
 } // namespace wio::vm::artifact

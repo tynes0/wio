@@ -65,7 +65,7 @@ fn AddProjectBase(parser: ref Argonaut::Parser, rebuild: bool) -> std::UnitResul
 fn ProjectParser(command: string) -> std::Result<Argonaut::Parser> {
     mut parser = Argonaut::Parser();
     AddProjectBase?(ref parser, command != "describe");
-    if (command == "build" or command == "run") {
+    if (command == "build" or command == "run" or command == "package") {
         AddOption?(ref parser, "BACKEND", ["--backend"], "Select project execution backend: native or vm.");
     }
 
@@ -106,16 +106,7 @@ fn ProjectParser(command: string) -> std::Result<Argonaut::Parser> {
     return std::Ok<Argonaut::Parser>(parser);
 }
 
-fn Contains(args: string[], value: string) -> bool {
-    for argument in args {
-        if (argument == value) {
-            return true;
-        }
-    }
-    return false;
-}
-
-fn ValidateProjectCommand(args: string[]) -> std::UnitResult {
+fn ValidateProjectCommand(args: string[]) -> std::Result<bool> {
     let command = args[2usize];
     mut parser = ProjectParser?(command);
     mut commandArgs: string[] = [$"wio project ${command}"];
@@ -130,12 +121,13 @@ fn ValidateProjectCommand(args: string[]) -> std::UnitResult {
 
     let parsed = parser.Parse(commandArgs);
     if (parsed.IsError()) {
-        return std::ErrUnit(parsed.ErrorValue());
+        return std::Err<bool>(parsed.ErrorValue());
     }
-    if (Contains(commandArgs, "--help") or Contains(commandArgs, "-h")) {
+    if (parser.GetFlag("HELP")) {
         console::Print(parser.Help());
+        return std::Ok<bool>(true);
     }
-    return std::OkUnit();
+    return std::Ok<bool>(false);
 }
 
 fn ExitResult(value: std::Result<i32>) -> i32 {
@@ -257,7 +249,7 @@ fn Entry(args: string[]) -> i32 {
         console::PrintLine!(validation.ErrorValue().message);
         return 2;
     }
-    if (Contains(cliArgs, "--help") or Contains(cliArgs, "-h")) {
+    if (validation.Value()) {
         return 0;
     }
 

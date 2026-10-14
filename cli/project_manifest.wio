@@ -32,6 +32,8 @@ realm SelfHostedProject {
         wioBackendArgs: string[];
         vmBytecodeOutput: string;
         vmBridgeOutput: string;
+        vmExecutableOutput: string;
+        vmRunner: string;
         vmNativeLibraries: string[];
         hostEnabled: bool;
         hostCompiler: string;
@@ -315,6 +317,7 @@ realm SelfHostedProject {
         if (info.wioTarget == "static") { wioSuffix = process::StaticLibrarySuffix(); }
         info.wioOutput = path::Join(info.outputDirectory, wioName + wioSuffix);
         info.nativeCore = path::Join(path::ParentPath(path::AbsoluteRaw(args[0usize])), "wio" + process::ExecutableSuffix());
+        info.vmRunner = path::Join(path::ParentPath(info.nativeCore), "wio-vm" + process::ExecutableSuffix());
         info.toolchainRoot = FindToolchainRoot(args[0usize]);
         if (info.toolchainRoot == "") {
             return Failure<ProjectInfo>(
@@ -377,6 +380,10 @@ realm SelfHostedProject {
             )
         );
         info.vmNativeLibraries = ResolvePaths(info.projectRoot, ManifestArray(manifest, "vm.nativeLibraries"));
+        info.vmExecutableOutput = path::AbsoluteFromRaw(
+            info.projectRoot,
+            ManifestValue(manifest, "vm.executableOutput", path::Join3(info.outputDirectory, "vm", wioName + process::ExecutableSuffix()))
+        );
 
         info.hostEnabled = ManifestBool(manifest, "host.enabled", info.templateName == "hybrid-module");
         if (info.wioTarget == "exe" and info.hostEnabled) {
@@ -464,7 +471,9 @@ realm SelfHostedProject {
         description += ", \"target\": " + serialization::QuoteJson(info.wioTarget);
         description += ", \"output\": " + serialization::QuoteJson(info.wioOutput) + "},\n";
         description += "  \"vm\": {\"bytecode\": " + serialization::QuoteJson(info.vmBytecodeOutput);
-        description += ", \"bridge\": " + serialization::QuoteJson(info.vmBridgeOutput) + "},\n";
+        description += ", \"bridge\": " + serialization::QuoteJson(info.vmBridgeOutput);
+        description += ", \"executable\": " + serialization::QuoteJson(info.vmExecutableOutput);
+        description += ", \"runner\": " + serialization::QuoteJson(info.vmRunner) + "},\n";
         description += "  \"host\": {\"enabled\": " + hostEnabled;
         description += ", \"output\": " + serialization::QuoteJson(info.hostOutput) + "},\n";
         description += "  \"run\": {\"workingDirectory\": ";

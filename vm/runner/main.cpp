@@ -21,16 +21,37 @@ int main(int argc, char* argv[])
                 libraries.push_back(self.parent_path() / std::filesystem::u8path(name));
             return wio::app::runVmModule(decoded.module, self, libraries, {args.begin() + 1, args.end()});
         }
-        if (args.size() > 1 && args[1] == "--package")
+        if (args.size() > 1 && args[1] == "--verify")
+        {
+            if (args.size() != 3)
+                throw std::runtime_error("usage: wio-vm --verify APPLICATION");
+            const auto application = std::filesystem::absolute(std::filesystem::u8path(args[2]));
+            if (!wio::vm::artifact::read(application, payload))
+                throw std::runtime_error("verification input is not a VM executable artifact");
+            for (const auto& library : payload.libraries)
+                if (!std::filesystem::is_regular_file(application.parent_path() / std::filesystem::u8path(library)))
+                    throw std::runtime_error("VM artifact native library is missing: " + library);
+            return 0;
+        }
+        if (args.size() > 1 && (args[1] == "--package" || args[1] == "--deploy"))
         {
             if (args.size() < 5)
                 throw std::runtime_error(
                     "usage: wio-vm --package MODULE --output EXECUTABLE [--native-library LIBRARY ...]");
             std::filesystem::path output;
             std::vector<std::filesystem::path> libraries;
+            wio::vm::artifact::PackageOptions options;
             for (std::size_t index = 3; index < args.size(); ++index)
             {
                 const auto option = args[index];
+                if (option == "--replace" || option == "--version-libraries")
+                {
+                    auto& flag = option == "--replace" ? options.replace : options.versionLibraries;
+                    if (flag)
+                        throw std::runtime_error("repeated VM package option: " + option);
+                    flag = true;
+                    continue;
+                }
                 if (++index >= args.size())
                     throw std::runtime_error("VM package option requires a value");
                 if (option == "--output" && output.empty())
@@ -42,7 +63,14 @@ int main(int argc, char* argv[])
             }
             if (output.empty())
                 throw std::runtime_error("VM package requires --output");
-            wio::vm::artifact::package(self, std::filesystem::u8path(args[2]), libraries, output);
+            if (args[1] == "--deploy")
+            {
+                if (!libraries.empty() || options.replace || options.versionLibraries)
+                    throw std::runtime_error("--deploy accepts only its application and --output");
+                wio::vm::artifact::deploy(self, std::filesystem::u8path(args[2]), output);
+            }
+            else
+                wio::vm::artifact::package(self, std::filesystem::u8path(args[2]), libraries, output, options);
             const auto encoded = output.u8string();
             std::cout << "Generated VM executable: " << std::string(encoded.begin(), encoded.end()) << '\n';
             return 0;
@@ -50,7 +78,10 @@ int main(int argc, char* argv[])
         if (args.size() < 2 || args[1] == "--help" || args[1] == "-h")
         {
             std::cout << "Usage: wio-vm MODULE.wiob [--native-library LIBRARY ...] [-- application args...]\n"
-                         "       wio-vm --package MODULE.wiob --output EXECUTABLE [--native-library LIBRARY ...]\n";
+                         "       wio-vm --package MODULE.wiob --output EXECUTABLE [--native-library LIBRARY ...]\n"
+                         "              [--replace] [--version-libraries]\n"
+                         "       wio-vm --deploy APPLICATION --output EXECUTABLE\n"
+                         "       wio-vm --verify APPLICATION\n";
             return 0;
         }
         args.insert(args.begin() + 1, "--vm-run-bytecode");

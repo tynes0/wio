@@ -2047,3 +2047,43 @@ here as historical evidence rather than active work:
 - [ ] Project-command packaging integration, SDK-backed shared/static Wio module
       artifacts and final backend cost/optimization work remain open. Installing
       a runtime archive is not equivalent to shipping a Wio `.lib` module.
+
+## VM project executable/deployment integration (2026-10-14)
+
+- [x] Project build/run/package select the VM backend through the Wio CLI.
+      The manifest exposes `vm.executableOutput`, and describe reports both the
+      deployed image and adjacent standalone runner. Native and VM executable
+      paths remain separate; source/toolchain/native-output collisions reject.
+- [x] Compilation and packaging have separate incremental inputs. Runner and
+      explicit registry-library changes invalidate packaging without an unrelated
+      producer rebuild. Missing deployed libraries can be repaired from current
+      intermediates; no-build explicitly rejects incomplete deployments.
+- [x] Guarded replacement verifies the existing embedded image and versions native
+      filenames by content. Publication preserves old generation files, rejects
+      unrelated/corrupt outputs and does not publish on a failed compiler build.
+- [x] Artifact deployment reads embedded bytecode and copies only recorded active
+      libraries. Project no-build run/package does not need source, raw bytecode
+      or bridge build intermediates. Existing distributions require explicit
+      clean; validation happens first and cleanup cannot target protected source,
+      include/link, SDK/toolchain or artifact directory ancestors.
+- [x] Project run preserves manifest arguments, explicit argument values, working
+      directory and process exits. Help recognition uses the parsed HELP flag,
+      not an unrestricted raw-token search; `--help` after `--` or as an `--arg`
+      value reaches the application normally.
+- [x] The Unicode project gate exposed and fixed UTF-8 path boundaries in the
+      compiler driver, module/header lookup, output/profile paths, diagnostics
+      and backend invocation. Source paths are explicitly decoded/encoded as
+      UTF-8; Windows backend execution and PATH overrides use wide APIs.
+- [x] Windows synchronous process Run/Capture no longer route UTF-8 commands
+      through an ANSI shell. They preserve standard handles, working-directory
+      isolation, quoted/literal arguments, merged output bytes and exit codes.
+      Launch and invalid-directory errors retain explicit Result categories;
+      shell built-ins/scripts require an explicit shell invocation.
+- [x] Only the three new Windows gates were run on the final revision: 3/3 in
+      15.69 seconds (0.24 process UTF-8/large capture, 0.20 generation/deploy
+      guards, 15.05 project/native/async/Unicode acceptance). Rebuilt the self-hosted
+      CLI and added these gates to the Windows/Linux release workflow. No old
+      full suite or local Linux/macOS qualification is claimed.
+- [ ] VM-backed shared/static Wio module wrappers, complete installed SDK/platform
+      acceptance, generation garbage collection and backend performance budgets
+      remain open. This closes project executable integration, not all packaging.

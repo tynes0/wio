@@ -11,6 +11,23 @@
 
 namespace wio::common::filesystem
 {
+    std::filesystem::path fromUtf8(const std::string_view value)
+    {
+        return std::filesystem::path(std::u8string(value.begin(), value.end()));
+    }
+
+    std::string toUtf8(const std::filesystem::path& value)
+    {
+        const auto encoded = value.u8string();
+        return std::string(encoded.begin(), encoded.end());
+    }
+
+    std::string toGenericUtf8(const std::filesystem::path& value)
+    {
+        const auto encoded = value.generic_u8string();
+        return std::string(encoded.begin(), encoded.end());
+    }
+
     FILE* openFile(const std::filesystem::path& path, const char* mode)
     {
 #ifdef _WIN32

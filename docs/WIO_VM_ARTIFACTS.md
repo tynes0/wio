@@ -1,6 +1,6 @@
 # Wio VM Executable Artifacts
 
-Status: executable slice implemented; project-command integration and VM-backed
+Status: executable and project-command slices implemented; VM-backed
 shared/static **Wio module** artifacts remain open. Locally qualified on Windows;
 Linux/macOS deployment is not claimed by the Windows gates.
 
@@ -84,8 +84,9 @@ packaging does not sandbox it or relax the native ABI qualification boundaries.
 
 ## Publication and corruption guards
 
-- The output must not exist. There is no `--force` yet; select a fresh output
-  path. This prevents overwriting arbitrary files or a deployed application.
+- By default the output must not exist. There is no arbitrary `--force`.
+  `--replace` only replaces an existing decoded/verified VM executable artifact,
+  never an ordinary executable, unknown file or corrupt recognized artifact.
 - Existing adjacent libraries are reused only if byte-identical. Conflicting
   libraries, duplicate basenames and executable/library name collisions reject.
 - Cooperating packagers serialize publication/rollback through a deployment
@@ -117,6 +118,47 @@ FNV-1a detects accidental corruption; it is **not** a cryptographic signature,
 authentication or protection against a malicious producer. A modified bytecode
 program with a recalculated checksum is still untrusted executable input.
 
+## Safe rebuilds and project commands
+
+```powershell
+wio project build --backend vm
+wio project run --backend vm --arg "two words" -- --help
+wio project package --backend vm --output-dir dist
+```
+
+Build/run/package keep manifest resolution in the Wio CLI. The default deployed
+executable is `<outputDirectory>/vm/<wioName>.exe` (no suffix on Unix); override
+it with `vm.executableOutput`. The C++ backend's normal executable is untouched.
+See [project configuration](WIO_PROJECT_SYSTEM.md#49-output-paths) for details.
+
+The CLI packages with `--replace --version-libraries`. The latter inserts a
+content identity before each native library extension, for example
+`bridge.wio-0123456789abcdef.dll`. Changed libraries therefore cannot overwrite
+a previous image's dependencies. Existing versioned files are reused only after
+byte comparison. File changes during copy reject publication. Old generations
+remain on disk to protect running/retained artifacts; they are not automatically
+garbage-collected. The content identity is FNV-1a, not a cryptographic trust claim.
+Missing deployed libraries fail `--no-build` verification. A normal build/run
+can repair them from current producer inputs without altering an existing
+library's bytes; corrupt or non-VM images still reject replacement.
+
+`--replace` publishes the new image atomically under the deployment lock. On
+Windows a running/locked executable can prevent replacement; failure preserves
+the old image. The caller must stop it and retry, not delete it as a workaround.
+Cooperating packagers are serialized; arbitrary external filesystem writers are
+not an authenticated transaction boundary.
+
+`wio-vm --verify APP` checks the embedded module and required library files.
+It does not execute the program or establish native-library ABI/authenticity;
+registry/adapter validation still happens when the VM loads each library.
+
+`wio-vm --deploy APP --output NEW_APP` reads verified embedded bytecode and copies
+only its recorded libraries, using the current runner template. No source or
+external `.wiob` is required. The destination must be fresh; replacement flags
+and arbitrary additional libraries are not accepted by this deployment command.
+Project package uses it so old generation files do not leak into the distribution.
+Native transitive dependency discovery/signing remains outside its scope.
+
 ## Installed embedding surface and remaining work
 
 Installation includes `wio-vm`, the `wio_vm` and `wio_bytecode_core` archives,
@@ -138,12 +180,11 @@ slice does not yet ship an exported CMake package for embedding.
 
 Still required for packaging closure:
 
-1. Project CLI build/run/package integration, including safe repeated builds.
-2. VM-backed shared-library and static-library Wio module wrappers with SDK
+1. VM-backed shared-library and static-library Wio module wrappers with SDK
    exports, lifecycle, async results and module ownership.
-3. Installed SDK host/deployment and clean Linux/macOS qualification gates.
-4. Artifact/runtime/build-cost optimization and release budgets.
+2. Installed SDK host/deployment and clean Linux/macOS qualification gates.
+3. Artifact/runtime/build-cost optimization and release budgets.
 
-Existing `wio project --backend vm` behavior is unchanged by this first slice;
-it still builds `.wiob` plus a paired native producer and uses the existing
-project runner. Existing C++ backend executable/shared/static targets remain.
+Project builds still produce `.wiob` plus a paired native producer as build
+intermediates, then package the executable. Existing C++ backend executable/
+shared/static targets remain unchanged.

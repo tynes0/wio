@@ -175,6 +175,13 @@ explicit caveat:
 - the remaining hardening work is cross-platform behavior and packaged-toolchain
   validation, not a different public API direction.
 
+Windows synchronous `Run` and `Capture` now launch programs through wide
+Windows process APIs with UTF-8 argument conversion, not an ANSI shell command.
+Use an explicit `cmd.exe`/PowerShell invocation when shell built-ins or scripts
+are required. The child working directory does not change the Windows parent
+process directory; Capture merges stdout/stderr and preserves their bytes.
+This does not change the separate owned `Spawn`/async process surface.
+
 Wio 0.12 adds `RunAsync`, `CaptureAsync`, and an owned
 `Process` returned by `Spawn`. The owned form separates stdout/stderr, supports
 sync and async stdin writes, chunk/all pipe reads, independent stdin close,

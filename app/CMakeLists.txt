@@ -121,6 +121,7 @@ if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURC
     add_custom_target(wio_selfhost_cli ALL
         DEPENDS "${WIO_SELFHOST_CLI_OUTPUT}"
     )
+    add_dependencies(wio_selfhost_cli wio_vm_runner)
     set_target_properties(wio_selfhost_cli PROPERTIES FOLDER "app")
 
     install(

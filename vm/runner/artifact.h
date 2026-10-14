@@ -16,6 +16,14 @@ namespace wio::vm::artifact
     // No footer means an ordinary runner. A recognized but malformed footer
     // throws; it must never fall through to command-line tooling.
     bool read(const std::filesystem::path& executable, Payload& payload);
+    struct PackageOptions
+    {
+        bool replace = false;
+        bool versionLibraries = false;
+    };
     void package(const std::filesystem::path& runner, const std::filesystem::path& bytecode,
-                 std::span<const std::filesystem::path> libraries, const std::filesystem::path& output);
+                 std::span<const std::filesystem::path> libraries, const std::filesystem::path& output,
+                 PackageOptions options = {});
+    void deploy(const std::filesystem::path& runner, const std::filesystem::path& application,
+                const std::filesystem::path& output);
 } // namespace wio::vm::artifact

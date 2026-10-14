@@ -86,7 +86,7 @@ jobs:
       - name: Validate standalone VM executable artifacts
         run: >
           ctest --test-dir build --output-on-failure
-          -R "^wio_vm_(artifact_codec|executable_artifact)$"
+          -R "^(wio_vm_(artifact_codec|artifact_generation|executable_artifact|project_artifact)|wio_process_utf8_project)$"
 
   sanitizers:
     runs-on: ubuntu-latest
