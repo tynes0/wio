@@ -55,7 +55,15 @@ namespace wio::vm::detail
         LibraryHandle openLibrary(const std::filesystem::path& path)
         {
 #if defined(_WIN32)
-            return LoadLibraryExW(path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+            DWORD previousMode = 0;
+            const bool changed =
+                SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &previousMode) != 0;
+            const auto handle = LoadLibraryExW(path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+            const auto error = GetLastError();
+            if (changed)
+                (void)SetThreadErrorMode(previousMode, nullptr);
+            SetLastError(error);
+            return handle;
 #else
             return dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
 #endif

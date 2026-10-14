@@ -46,6 +46,13 @@ Owning task parameters now preserve task identity within their original live
 session, including concrete generic relay; cross-session/borrowed/consumed task
 inputs reject before execution. Canonical generic export validation is aligned
 with ordinary exports without expanding the legacy C ABI.
+Installed VM wrappers now accept declared native registry producers and private
+runtime libraries. Shared wrappers deploy a content-addressed bundle beside the
+module; static wrappers deploy beside their final host through
+`wio_deploy_vm_module`. Dependencies resolve from the containing image rather
+than CWD, and registration failure rolls back before session publication or Load.
+This does not discover transitive dependencies or enable raw C++ libraries
+without a qualified bridge. See [declared native deployment](WIO_VM_ARTIFACTS.md#declared-native-dependencies-for-sharedstatic-modules).
 Application/complex exports, foreign task creation and
 legacy Module parity remain outside this qualified surface.
 See [VM module packaging and ownership](WIO_VM_ARTIFACTS.md#vm-backed-sdk-shared-and-static-modules)

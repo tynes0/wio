@@ -35,6 +35,9 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/WioVmRuntimeConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/WioVmRuntimeConfigVersion.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/WioVmModule.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/EmbedWioVmModule.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/StageWioVmNative.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/DeployWioVmNative.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/WioVmNativePaths.cmake"
     DESTINATION lib/cmake/WioVmRuntime COMPONENT WioVmRuntime)
 
 target_compile_options(wio_vm PRIVATE
@@ -443,6 +446,11 @@ if(BUILD_TESTING)
     add_test(NAME wio_vm_task_source_import COMMAND wio_vm_task_source_import_test)
     set_tests_properties(wio_vm_task_source_import PROPERTIES
         TIMEOUT 30 LABELS "vm;sdk;async;task;task-input;ownership;thread;release-gate")
+    add_executable(wio_vm_module_native_paths_test "${CMAKE_SOURCE_DIR}/tests/vm_module_native_paths_test.cpp")
+    target_link_libraries(wio_vm_module_native_paths_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_module_native_paths COMMAND wio_vm_module_native_paths_test)
+    set_tests_properties(wio_vm_module_native_paths PROPERTIES
+        TIMEOUT 30 LABELS "vm;sdk;native;deployment;ownership;release-gate")
 endif()
 
 # Fail configuration if an accidental transitive dependency pulls the compiler
@@ -485,4 +493,7 @@ if(TARGET wio_vm_task_source_shutdown_test)
 endif()
 if(TARGET wio_vm_task_source_import_test)
     wio_assert_runtime_only(wio_vm_task_source_import_test)
+endif()
+if(TARGET wio_vm_module_native_paths_test)
+    wio_assert_runtime_only(wio_vm_module_native_paths_test)
 endif()

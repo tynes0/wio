@@ -12,6 +12,30 @@ Notes:
 
 ## VM SDK shared/static module foundation — 2026-10-14
 
+### Follow-up: declared native dependency bundles
+
+- [x] Installed shared/static CMake wrappers accept qualified registry producers
+      and explicit private runtime libraries, staging SHA-256 content generations
+      without build-machine paths in generated code or distribution manifests.
+- [x] Image-relative runtime resolution is independent of CWD. Shared wrappers
+      deploy beside the module; static wrappers explicitly deploy beside the final
+      host rather than the intermediate archive.
+- [x] Per-session native registration precedes token publication and user Load;
+      failure rolls back the private VM. Native-dependent legacy default getters
+      reject to keep cleanup out of static/DLL teardown.
+- [x] Windows loaders use preferred-form absolute UTF-16 paths and suppress native
+      load error dialogs while preserving error state. Private sibling DLL loading
+      was reproduced and fixed through the new installed-host test.
+- [x] Portable filename, duplicate, traversal, symlink-parent, stage-hash and
+      existing-generation collision guards preserve older library bytes.
+- [x] Three new Windows Debug gates passed 3/3 in 30.64 seconds; the bundle-policy
+      gate also passed after adding the nonexistent-child symlink-parent case.
+      Installed-only relocated shared/static hosts cover private DLLs, independent
+      sessions, rollback, last-session producer shutdown and escaped string owners.
+- [~] Transitive discovery, automatic install/repair, project CLI library targets,
+      old-generation collection and Linux/macOS qualification remain open.
+      This is not full SDK parity, runtime library authentication or a release.
+
 ### Follow-up: same-session owning task inputs
 
 - [x] Synchronous/async and concrete generic exports accept qualified owning

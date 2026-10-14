@@ -1203,8 +1203,15 @@ Rider, and CLion are defined in
     cover cancellation direction, pending/fault/void/Unicode inputs and raw ABI
     rejection before body execution. Foreign task creation, cross-session task
     transfer and complex/nested SDK task payloads remain unqualified.
-    Complex/async-value/application parity, native dependency
-    deployment, project CLI library targets and cross-platform qualification
+    Explicit native registry/private runtime dependencies now use installed
+    CMake helpers, image-relative resolution and SHA-256 bundle generations.
+    Shared modules deploy beside their image; static modules deploy beside the
+    final host. Session open rolls back partial registration before publication
+    or user Load. New focused Windows gates cover relocated Unicode paths,
+    private DLLs, missing/invalid producers, final-session shutdown and immutable
+    bundle hash/collision/traversal/symlink policies. Automatic discovery/install,
+    project CLI library targets and generation collection remain separate work.
+    Complex/async-value/application parity and cross-platform qualification
     remain open. Old native generations are retained deliberately;
    safe garbage collection and final artifact/build/runtime costs remain pending.
     See `docs/WIO_VM_ARTIFACTS.md`; scalar SDK wrappers do not close all static

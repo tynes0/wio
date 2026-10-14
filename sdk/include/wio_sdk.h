@@ -1523,7 +1523,25 @@ namespace wio::sdk
         inline LibraryHandle openLibrary(const std::filesystem::path& path)
         {
 #if defined(_WIN32)
-            return LoadLibraryA(path.string().c_str());
+            std::error_code error;
+            auto absolute = std::filesystem::absolute(path, error);
+            if (error)
+            {
+                SetLastError(ERROR_BAD_PATHNAME);
+                return nullptr;
+            }
+            // The altered-search-path loader needs a native directory spelling
+            // to locate private imports next to the DLL (not a slash-only path).
+            absolute.make_preferred();
+            DWORD previousMode = 0;
+            const bool changed =
+                SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &previousMode) != 0;
+            const auto handle = LoadLibraryExW(absolute.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+            const auto nativeError = GetLastError();
+            if (changed)
+                (void)SetThreadErrorMode(previousMode, nullptr);
+            SetLastError(nativeError);
+            return handle;
 #else
             return dlopen(path.string().c_str(), RTLD_NOW);
 #endif

@@ -1452,3 +1452,23 @@ add_test(NAME wio_vm_sdk_task_inputs_artifacts
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_sdk_task_inputs_artifacts_test.cmake")
 wio_test_labels(wio_vm_sdk_task_inputs_artifacts interop vm sdk async task task-input shared static deployment ownership thread release-gate)
 set_tests_properties(wio_vm_sdk_task_inputs_artifacts PROPERTIES TIMEOUT 360)
+
+add_test(NAME wio_vm_sdk_native_dependencies
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}"
+        "-DWIO_CONFIG=$<CONFIG>"
+        "-DWIO_GENERATOR=${CMAKE_GENERATOR}"
+        "-DWIO_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-sdk-native-dependencies"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_sdk_native_dependencies_test.cmake")
+wio_test_labels(wio_vm_sdk_native_dependencies interop vm sdk native deployment shared static ownership lifecycle release-gate)
+set_tests_properties(wio_vm_sdk_native_dependencies PROPERTIES TIMEOUT 360)
+
+add_test(NAME wio_vm_native_bundle_policy
+    COMMAND ${CMAKE_COMMAND} "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-bundle-policy"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_bundle_policy_test.cmake")
+wio_test_labels(wio_vm_native_bundle_policy vm native deployment integrity release-gate)
+set_tests_properties(wio_vm_native_bundle_policy PROPERTIES TIMEOUT 30)

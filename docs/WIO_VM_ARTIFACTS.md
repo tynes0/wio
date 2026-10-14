@@ -1,7 +1,8 @@
 # Wio VM Executable Artifacts
 
-Status: executable and project-command slices implemented; VM-backed
-shared/static **Wio module** artifacts remain open. Locally qualified on Windows;
+Status: executable/project-command slices and bounded VM-backed shared/static
+**Wio module** adapters are implemented; complete SDK/artifact parity remains open.
+Locally qualified on Windows;
 Linux/macOS deployment is not claimed by the Windows gates.
 
 ## Runtime-only runner
@@ -258,8 +259,9 @@ callback, object/component and container/Any/Box exports reject during
 adapter initialization. Async exports use the bounded task surface below;
 application hosting and complex/nested task payloads remain unqualified. Workers
 are joined during explicit session close, never under a Windows DLL loader
-lock. Generated wrappers do not yet discover/deploy native
-dependencies automatically. A malformed/unsupported embedded module returns
+lock. Generated wrappers deploy explicitly declared native dependencies as
+described below; transitive discovery remains outside their scope.
+A malformed/unsupported embedded module returns
 a null contract getter and is rejected by NativeModule::open; embedding alone
 is not a build-time module acceptance check or a sandbox.
 
@@ -314,7 +316,7 @@ Static wrappers also publish `${GETTER}SessionApi` by default; the optional
 `NativeModule::attachSession(api, owner)` for these or for a scoped
 `vm::ModuleSessionFactory`, passing a factory/code lifetime owner. A static
 process-lifetime token is suitable only for genuinely statically linked code.
-Lifecycle-bearing and async modules reject the legacy default contract getter; pure
+Lifecycle-bearing, async and native-dependent modules reject the legacy default contract getter; pure
 legacy canonical getter/attach remains available with its older shared-instance
 and caller-managed affinity semantics. Do not mix that compatibility instance
 with session-based resource/affinity guarantees.
@@ -493,10 +495,103 @@ ABI rejection, parameter-only reflection, legacy ABI rejection and unsupported
 complex-payload initialization. Both passed on Windows Debug on 2026-10-14:
 2/2 in 23.17 seconds. Older gates and other platforms were not rerun.
 
+## Declared native dependencies for shared/static modules
+
+The installed CMake helper can bundle qualified wire-v2 **registry producers**
+and explicitly listed private runtime libraries. `NATIVE_LIBRARIES` accepts
+shared/module library targets or existing file paths. `RUNTIME_LIBRARIES` uses
+the same input forms but copies files without registering them with the VM.
+Raw third-party C/C++ libraries need a qualified Wio native bridge; listing an
+ordinary DLL as a producer does not invent its call adapters.
+
+```cmake
+find_package(WioVmRuntime CONFIG REQUIRED)
+
+# bridge exports the Wio native registry; helper is its private dependency.
+wio_add_vm_module(plugin SHARED
+    BYTECODE "${CMAKE_CURRENT_SOURCE_DIR}/script.wiob"
+    NATIVE_LIBRARIES bridge
+    RUNTIME_LIBRARIES helper)
+
+wio_add_vm_module(script STATIC
+    BYTECODE "${CMAKE_CURRENT_SOURCE_DIR}/script.wiob"
+    GETTER WioGetScriptContract
+    NATIVE_LIBRARIES bridge
+    RUNTIME_LIBRARIES helper)
+target_link_libraries(host PRIVATE script Wio::wio_sdk)
+wio_deploy_vm_module(script HOST host)
+```
+
+Shared targets deploy beside their own DLL/SO automatically after linking.
+Static targets need `wio_deploy_vm_module(... HOST ...)` on the final executable
+or shared image containing the wrapper, **not** beside the intermediate `.lib/.a`.
+The wrapper resolves producer paths relative to that containing image, never
+relative to the current working directory. Resolve an entire distribution before
+opening it; relocating a live, already initialized factory is not supported.
+
+Each target/configuration stages a SHA-256 content-addressed bundle. The final
+layout is `<target>.vm-native/<digest>/<library-name>`, with a
+`wio-native-manifest.json` recording names, roles and content hashes. Native
+changes produce a new directory; older generations are retained. Staging and
+deployment reject portable-name collisions, traversal, escaping symlink parents,
+changed staged bytes and mismatched existing destination files. They do not
+overwrite conflicting library bytes. The generated wrapper embeds relative
+producer paths, not build-machine absolute paths or the original bytecode file.
+
+Session open registers all producers in its private VM before publishing an
+ownership token. Failed registration destroys the partial instance without
+running user Load/Unload. Successful open still does not run Load: use `start()`
+when the module declares a lifecycle. Producer shutdown waits for the final
+active machine sharing that producer within the module's runtime instance.
+Separately linked runtime copies are not a global cross-image coordinator.
+Native-dependent wrappers reject the legacy default contract getter so teardown
+does not run native cleanup under static/DLL loader destruction.
+
+Manual embedders can pass absolute producer paths to the additive constructor:
+
+```cpp
+auto factory = std::make_shared<wio::vm::ModuleSessionFactory>(
+    std::move(decoded.module), wio::vm::MachineOptions{},
+    std::vector<std::filesystem::path>{absoluteBridgePath});
+auto module = wio::sdk::NativeModule::attachSession(
+    factory->api(), factory, &factory->taskApi());
+```
+
+`moduleNativeLibraries(anchor, relativePaths)` provides the image-relative
+resolution used by generated wrappers. Nonempty lists require an anchor inside
+the final image; paths must name regular files within that image's directory,
+without absolute roots, `.`/`..`, NUL or symlink escape. The original two-argument
+factory constructor remains available for pure modules.
+
+On Windows, SDK and VM loading use absolute, native-form UTF-16 paths with the
+loaded library's directory available for private DLL dependencies. Failed loads
+return through the SDK/VM boundary without an operating-system error dialog.
+On Unix, producers still need their platform loader configuration, for example
+origin-relative RPATH; copying a helper does not modify the producer's link flags.
+
+This is explicit dependency deployment, not import-table discovery, an installer,
+automatic repair of deleted bundles during an otherwise up-to-date build, or
+atomic replacement of a whole distribution. `POST_BUILD` runs when the host
+links; installed/final distributions must retain their matching bundle directories.
+Automatic install rules, project CLI shared/static VM targets and old-generation
+garbage collection remain separate work. Hashes detect content mismatch during
+staging/deployment; the runtime does not reauthenticate a replaced native library.
+Signing and sandboxing are not provided, and native code remains privileged.
+
+Three new Windows Debug gates passed 3/3 in 30.64 seconds:
+`wio_vm_module_native_paths`, `wio_vm_sdk_native_dependencies` and
+`wio_vm_native_bundle_policy`. They cover installed-only shared/static hosts
+relocated to a Unicode path, a separate final static-host directory, changed CWD,
+private DLLs, missing/invalid producers, partial registration rollback, independent
+sessions, exactly-once producer shutdown and escaped NUL-bearing results.
+The bundle policy gate additionally checks nonexistent-child symlink parents and
+CMake list-separator filename rejection. Linux/macOS branches are implemented but not locally
+qualified; older gates and the full corpus were not rerun.
+
 Still required for packaging closure:
 
 1. Extend the shared/static adapters to complex/async value parity and application
-   hosting, native dependency deployment and project CLI library targets.
+   hosting, project CLI library targets and complete install/deployment workflows.
 2. Installed SDK host/deployment and clean Linux/macOS qualification gates.
 3. Artifact/runtime/build-cost optimization and release budgets.
 

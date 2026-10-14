@@ -9,6 +9,7 @@ namespace wio::vm
     {
         bytecode::Module module;
         MachineOptions options;
+        std::vector<std::filesystem::path> nativeLibraries;
         WioSdkModuleSessionApi api{};
         WioSdkModuleTaskApi tasks{};
         std::mutex defaultMutex;
@@ -22,9 +23,17 @@ namespace wio::vm
             return &result->contract() == session->contract ? result : nullptr;
         }
 
-        explicit State(bytecode::Module input, MachineOptions machineOptions)
-            : module(std::move(input)), options(machineOptions)
+        explicit State(bytecode::Module input, MachineOptions machineOptions,
+                       std::vector<std::filesystem::path> dependencies)
+            : module(std::move(input)), options(machineOptions), nativeLibraries(std::move(dependencies))
         {
+            for (auto& path : nativeLibraries)
+            {
+                if (!path.is_absolute() ||
+                    path.native().find(std::filesystem::path::value_type{}) != std::filesystem::path::string_type::npos)
+                    throw std::invalid_argument("VM module native dependencies require absolute paths without NUL");
+                path = path.lexically_normal();
+            }
             // Qualify the complete immutable module before exposing the factory.
             ModuleAdapter checked{module, options};
             api = {WIO_SDK_MODULE_SESSION_VERSION,
@@ -38,6 +47,13 @@ namespace wio::vm
                        {
                            const auto& source = *static_cast<State*>(factory);
                            auto instance = std::make_unique<ModuleAdapter>(source.module, source.options);
+                           for (const auto& path : source.nativeLibraries)
+                           {
+                               std::string error;
+                               if (!instance->loadNativeLibrary(path, &error))
+                                   throw std::runtime_error("VM module native dependency registration failed: " +
+                                                            error);
+                           }
                            result->contract = &instance->contract();
                            result->context = instance.release();
                            return WIO_NATIVE_ABI_OK;
@@ -140,7 +156,13 @@ namespace wio::vm
     };
 
     ModuleSessionFactory::ModuleSessionFactory(bytecode::Module module, MachineOptions options)
-        : state_(std::make_unique<State>(std::move(module), options))
+        : ModuleSessionFactory(std::move(module), options, {})
+    {
+    }
+
+    ModuleSessionFactory::ModuleSessionFactory(bytecode::Module module, MachineOptions options,
+                                               std::vector<std::filesystem::path> nativeLibraries)
+        : state_(std::make_unique<State>(std::move(module), options, std::move(nativeLibraries)))
     {
     }
 
@@ -159,6 +181,8 @@ namespace wio::vm
     const WioSdkModuleContract& ModuleSessionFactory::defaultContract()
     {
         std::scoped_lock lock{state_->defaultMutex};
+        if (!state_->nativeLibraries.empty())
+            throw std::invalid_argument("VM native-dependent modules require explicit SDK sessions");
         const auto& lifecycle = state_->module.contract.lifecycle;
         if (lifecycle.apiVersion != bytecode::InvalidIndex || lifecycle.load != bytecode::InvalidIndex ||
             lifecycle.update != bytecode::InvalidIndex || lifecycle.unload != bytecode::InvalidIndex ||

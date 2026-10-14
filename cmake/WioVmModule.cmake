@@ -1,12 +1,35 @@
 include_guard(GLOBAL)
 
 set(_WIO_VM_EMBED_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/EmbedWioVmModule.cmake")
+set(_WIO_VM_NATIVE_STAGE_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/StageWioVmNative.cmake")
+set(_WIO_VM_NATIVE_PATH_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/WioVmNativePaths.cmake")
+set(_WIO_VM_NATIVE_DEPLOY_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/DeployWioVmNative.cmake")
+
+function(wio_deploy_vm_module target)
+    cmake_parse_arguments(ARG "" "HOST" "" ${ARGN})
+    if(ARG_UNPARSED_ARGUMENTS OR ARG_KEYWORDS_MISSING_VALUES OR NOT TARGET "${target}" OR NOT TARGET "${ARG_HOST}")
+        message(FATAL_ERROR "wio_deploy_vm_module requires a VM target and HOST image target")
+    endif()
+    get_target_property(stage "${target}" WIO_VM_NATIVE_STAGE)
+    get_target_property(manifest "${target}" WIO_VM_NATIVE_MANIFEST)
+    get_target_property(host_kind "${ARG_HOST}" TYPE)
+    if(NOT stage OR NOT manifest OR NOT host_kind MATCHES "^(EXECUTABLE|SHARED_LIBRARY|MODULE_LIBRARY)$")
+        message(FATAL_ERROR "VM native deployment requires declared dependencies and a final executable/shared image")
+    endif()
+    if(NOT target STREQUAL ARG_HOST)
+        add_dependencies("${ARG_HOST}" "${target}")
+    endif()
+    add_custom_command(TARGET "${ARG_HOST}" POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" "-DMANIFEST=${manifest}" "-DSTAGE=${stage}"
+            "-DDESTINATION=$<TARGET_FILE_DIR:${ARG_HOST}>" -P "${_WIO_VM_NATIVE_DEPLOY_SCRIPT}"
+        VERBATIM)
+endfunction()
 
 # Bytecode must already exist or be produced by another target/custom command.
 # Shared modules expose WioGetSdkModuleContract; static modules require a unique
 # getter name, avoiding duplicate symbols when multiple modules share one host.
 function(wio_add_vm_module target)
-    cmake_parse_arguments(ARG "STATIC;SHARED" "BYTECODE;GETTER;SESSION_GETTER;TASK_GETTER" "" ${ARGN})
+    cmake_parse_arguments(ARG "STATIC;SHARED" "BYTECODE;GETTER;SESSION_GETTER;TASK_GETTER" "NATIVE_LIBRARIES;RUNTIME_LIBRARIES" ${ARGN})
     if(ARG_UNPARSED_ARGUMENTS OR ARG_KEYWORDS_MISSING_VALUES OR NOT ARG_BYTECODE OR
        (ARG_STATIC AND ARG_SHARED))
         message(FATAL_ERROR "wio_add_vm_module requires BYTECODE and at most one of STATIC/SHARED")
@@ -52,13 +75,62 @@ function(wio_add_vm_module target)
     endif()
     get_filename_component(bytecode "${ARG_BYTECODE}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
     set(output "${CMAKE_CURRENT_BINARY_DIR}/${target}.vm-module.cpp")
+    set(native_sources)
+    set(runtime_sources)
+    set(native_dependencies)
+    foreach(category IN ITEMS NATIVE_LIBRARIES RUNTIME_LIBRARIES)
+        foreach(input IN LISTS ARG_${category})
+            if(TARGET "${input}")
+                get_target_property(input_kind "${input}" TYPE)
+                if(NOT input_kind MATCHES "^(SHARED_LIBRARY|MODULE_LIBRARY)$")
+                    message(FATAL_ERROR "VM native dependencies require shared/module library targets: ${input}")
+                endif()
+                set(source "$<TARGET_FILE:${input}>")
+                list(APPEND native_dependencies "${input}" "${source}")
+            else()
+                if(input MATCHES "\\$<")
+                    message(FATAL_ERROR "Use a library target or an existing native file, not an arbitrary generator expression")
+                endif()
+                get_filename_component(source "${input}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+                if(NOT EXISTS "${source}" OR IS_DIRECTORY "${source}")
+                    message(FATAL_ERROR "VM native dependency does not exist: ${source}")
+                endif()
+                list(APPEND native_dependencies "${source}")
+            endif()
+            if(category STREQUAL "NATIVE_LIBRARIES")
+                list(APPEND native_sources "${source}")
+            else()
+                list(APPEND runtime_sources "${source}")
+            endif()
+        endforeach()
+    endforeach()
+    if(runtime_sources AND NOT native_sources)
+        message(FATAL_ERROR "RUNTIME_LIBRARIES require at least one native producer")
+    endif()
+    set(native_byproducts)
+    if(native_sources)
+        set(output "${CMAKE_CURRENT_BINARY_DIR}/${target}.$<CONFIG>.vm-module.cpp")
+        set(stage "${CMAKE_CURRENT_BINARY_DIR}/${target}.vm-native-stage/$<CONFIG>")
+        set(manifest "${CMAKE_CURRENT_BINARY_DIR}/${target}.$<CONFIG>.vm-native.json")
+        list(APPEND native_byproducts "${manifest}")
+        list(APPEND native_dependencies "${_WIO_VM_NATIVE_STAGE_SCRIPT}" "${_WIO_VM_NATIVE_PATH_SCRIPT}")
+    endif()
     add_custom_command(OUTPUT "${output}"
         COMMAND "${CMAKE_COMMAND}" "-DINPUT=${bytecode}" "-DOUTPUT=${output}"
             "-DGETTER=${ARG_GETTER}" "-DSESSION_GETTER=${ARG_SESSION_GETTER}" "-DTASK_GETTER=${ARG_TASK_GETTER}" "-DKIND=${kind}"
+            "-DNATIVE_PRODUCERS=${native_sources}" "-DRUNTIME_LIBRARIES=${runtime_sources}"
+            "-DNATIVE_STAGE=${stage}" "-DNATIVE_MANIFEST=${manifest}" "-DNATIVE_PREFIX=${target}.vm-native"
             -P "${_WIO_VM_EMBED_SCRIPT}"
-        DEPENDS "${bytecode}" "${_WIO_VM_EMBED_SCRIPT}"
+        DEPENDS "${bytecode}" "${_WIO_VM_EMBED_SCRIPT}" ${native_dependencies}
+        BYPRODUCTS ${native_byproducts}
         VERBATIM)
     add_library(${target} ${kind} "${output}")
+    if(native_sources)
+        set_target_properties(${target} PROPERTIES WIO_VM_NATIVE_STAGE "${stage}" WIO_VM_NATIVE_MANIFEST "${manifest}")
+        if(NOT ARG_STATIC)
+            wio_deploy_vm_module(${target} HOST ${target})
+        endif()
+    endif()
     target_compile_features(${target} PRIVATE cxx_std_20)
     if(TARGET Wio::wio_vm)
         target_link_libraries(${target} PRIVATE Wio::wio_vm)
