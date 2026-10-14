@@ -10,6 +10,20 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Planning decision: SDK kit boundary — 2026-10-15
+
+- [x] Separate full SDK kit parity from compiler/VM/backend closure. The existing
+      v1 SDK gate owns complex/generic/nested host values, host ref/view/callback
+      APIs, complex async results, application hosting, detailed reflection and
+      reload/capability coverage.
+- [x] Retain common low-level ABI/native bridge, runtime ownership/thread/error
+      safety, artifact production/CLI integration and cost/platform acceptance
+      inside backend closure. Product version alignment remains unchanged.
+- [~] This is a planning reclassification, not an implementation or qualification
+      claim. Outstanding kit work is still required before v1. Historical slice
+      records below retain their original scope; the later boundary governs
+      current milestone/reporting decisions.
+
 ## VM SDK shared/static module foundation — 2026-10-14
 
 ### Follow-up: final-image install and explicit repair — 2026-10-15

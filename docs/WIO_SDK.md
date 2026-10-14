@@ -29,6 +29,13 @@ Official public headers:
 Everything else should be treated as implementation detail unless it is
 explicitly re-exported through those headers.
 
+The SDK is a separately delivered developer kit. Full host-feature parity is
+an existing v1 blocker, not a requirement for closing the compiler/VM/backend
+milestone. Backend closure retains the common low-level ABI and runtime bridge;
+kit adapters and their acceptance matrix are tracked in the
+[SDK evolution plan](WIO_SDK_EVOLUTION_PLAN.md#11-sdk-kit-versus-backend-milestone-2026-10-15).
+This scope separation changes neither the shipped support table nor version alignment.
+
 ### Experimental Lowered-WIR host (Sprints 17.4-17.5)
 
 Compiler-independent VM library modules now expose the same canonical contract

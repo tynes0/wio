@@ -326,6 +326,23 @@ here does not by itself mean that v1 cannot ship.
    cross-toolchain ABI conformance remain.
 
 5. [~] Bring the host SDK to full Wio 1.0 parity and version it with Wio.
+   Scope decision (2026-10-15): the SDK is a separately delivered developer kit
+   with its own product acceptance matrix. Full kit parity is a v1 blocker, not
+   a prerequisite for closing the compiler/VM/backend milestone. Keep the kit
+   version aligned with Wio; this is a scope separation, not a second ABI.
+   Backend closure still owns the shared low-level ABI, native bridge, ownership,
+   exception/thread boundaries, artifact production and their qualified runtime
+   integration. Do not reopen that milestone for an unimplemented SDK convenience
+   API, host-value adapter or reflection accessor.
+
+   Outstanding kit work includes the VM adapter's complex/nested values,
+   generic component/object/interface exports, safe host ref/view and callback
+   surfaces, complex/nested async results and foreign task creation/transfer,
+   application hosting, detailed reflection/accessors and reload/capability
+   coverage. Those remain mandatory under this v1 SDK gate, including kit-specific
+   conformance on both backends; existing scalar/session/task adapters are only
+   the qualified foundation. Track them here rather than as backend packaging work.
+
    Before the Wio 1.0 release, every host-observable stable language/runtime
    feature must have a documented C ABI descriptor and an ergonomic C++ SDK
    representation or an explicit diagnostic explaining why it cannot cross
@@ -1202,7 +1219,8 @@ Rider, and CLion are defined in
     legacy C ABI rejection remains. New focused import and installed-host gates
     cover cancellation direction, pending/fault/void/Unicode inputs and raw ABI
     rejection before body execution. Foreign task creation, cross-session task
-    transfer and complex/nested SDK task payloads remain unqualified.
+    transfer and complex/nested SDK task payloads remain unqualified SDK-kit
+    capabilities, tracked by Native/SDK item 5 as v1 blockers, not backend closure.
     Explicit native registry/private runtime dependencies now use installed
     CMake helpers, image-relative resolution and SHA-256 bundle generations.
     Shared modules deploy beside their image; static modules deploy beside the
@@ -1217,11 +1235,13 @@ Rider, and CLion are defined in
     manifests and real private-library rebuilds with retained old/new images.
     Automatic discovery, project CLI library targets and generation collection
     remain separate work; bundle/framework and broader platform acceptance is open.
-    Complex/async-value/application parity and cross-platform qualification
+    Full SDK complex-value/async/application/reflection parity is outside this
+    backend milestone and remains mandatory under Native/SDK item 5 before v1.
+    Backend artifact/CLI integration and cross-platform runtime qualification
     remain open. Old native generations are retained deliberately;
    safe garbage collection and final artifact/build/runtime costs remain pending.
-    See `docs/WIO_VM_ARTIFACTS.md`; scalar SDK wrappers do not close all static
-    Wio-module lifecycle/ownership surfaces.
+    See `docs/WIO_VM_ARTIFACTS.md`; bounded SDK wrappers are not a claim of full
+    kit parity, nor a reason to merge its separate v1 gate into backend closure.
    Unconstrained
    T-to-Any boxing remains semantically unsupported. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.

@@ -649,12 +649,21 @@ distributions, not concurrent cross-generation native loading in one process.
 Linux/macOS, `DESTDIR`, bundles/frameworks and a fresh full corpus are not locally
 qualified by this Windows gate.
 
-Still required for packaging closure:
+Still required for backend artifact closure:
 
-1. Extend the shared/static adapters to complex/async value parity and application
-   hosting and project CLI library targets.
-2. Installed SDK host/deployment and clean Linux/macOS qualification gates.
+1. Project CLI shared/static VM targets and the remaining declared dependency/
+   generation-management deployment policy.
+2. Artifact/runtime installation and clean Linux/macOS qualification gates.
 3. Artifact/runtime/build-cost optimization and release budgets.
+
+Full SDK complex/nested/generic value parity, host ref/view/callback APIs,
+complex async payloads and foreign task creation, application hosting, detailed
+reflection/accessors and reload/capability wrappers are separate **v1 SDK kit
+blockers**, not backend packaging blockers. The currently bounded shared/static
+SDK adapters remain available and explicitly reject unsupported shapes.
+The shared low-level ABI, native bridge and declared runtime safety rules still
+belong to backend closure. See the
+[SDK scope decision](WIO_SDK_EVOLUTION_PLAN.md#11-sdk-kit-versus-backend-milestone-2026-10-15).
 
 Project builds still produce `.wiob` plus a paired native producer as build
 intermediates, then package the executable. Existing C++ backend executable/

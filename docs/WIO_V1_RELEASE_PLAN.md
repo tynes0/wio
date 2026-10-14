@@ -103,6 +103,25 @@ Historical release scopes below remain historical; they do not override this
 later decision or imply that the current implementation has already migrated.
 Existing backend and v1 gate identities are not renumbered by this addition.
 
+### 2.2 SDK kit scope separation (2026-10-15)
+
+Full SDK parity remains an existing mandatory v1 gate, but is not part of the
+compiler/VM/backend closure milestone. The SDK is a separately delivered
+developer kit, version-aligned with Wio and governed by
+[`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
+
+Backend closure retains shared low-level ABI/native-bridge correctness,
+ownership/exception/thread boundaries, runnable/exported artifacts, CLI build
+integration, supported-platform qualification and generated/runtime cost budgets.
+Kit-specific complex/generic value adapters, ergonomic host ref/view/callback
+APIs, complex async results, application hosting, complete reflection/accessors
+and reload/capability coverage close under the SDK v1 gate instead.
+
+This reclassification does not mark any unsupported SDK shape complete, remove
+a v1 requirement, renumber the existing gates, or authorize a divergent ABI.
+Backend and kit conformance are reported separately. A backend milestone can
+close before full kit parity; Wio v1 cannot ship before the SDK gate closes.
+
 ## 3. Planned Release Train
 
 ### v0.13.0 - Language Coherence
