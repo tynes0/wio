@@ -792,11 +792,20 @@ namespace wio::vm
 
             ~ExecutorScheduler()
             {
+                shutdown();
+            }
+
+            void shutdown()
+            {
                 std::deque<Work> cancelled;
+                std::unique_ptr<ExecutorQueue> worker, blocking, io;
                 {
                     std::scoped_lock lock{mutex_};
                     stopping_ = true;
                     cancelled.swap(mainQueue_);
+                    worker = std::move(worker_);
+                    blocking = std::move(blocking_);
+                    io = std::move(io_);
                 }
                 for (Work& work : cancelled)
                     if (work.cancel)
@@ -829,7 +838,6 @@ namespace wio::vm
                     return true;
                 }
 
-                ExecutorQueue* queue = nullptr;
                 {
                     std::scoped_lock lock{mutex_};
                     if (stopping_)
@@ -855,9 +863,10 @@ namespace wio::vm
                         return false;
                     if (!*target)
                         *target = std::make_unique<ExecutorQueue>(kind, count);
-                    queue = target->get();
+                    // Keep the scheduler lock through queue publication; a
+                    // concurrent shutdown must not free this queue pointer.
+                    return (*target)->schedule(std::move(work));
                 }
-                return queue->schedule(std::move(work));
             }
 
             std::uint64_t drainMain()
@@ -1185,6 +1194,8 @@ namespace wio::vm
         Machine* owner = nullptr;
         std::size_t activeOwnerCalls = 0;
         const bytecode::Module* module = nullptr;
+        std::shared_ptr<const bytecode::Module> moduleOwner;
+        std::atomic_bool asyncStopping{false};
         ExecutionError loadError;
         std::vector<FunctionPlan> functions;
         detail::ObjectLayouts objectLayouts;
@@ -1667,14 +1678,55 @@ namespace wio::vm
         program_->valid = true;
     }
 
+    Machine::Machine(std::shared_ptr<const bytecode::Module> module, MachineOptions options)
+        : Machine(module ? *module : throw std::invalid_argument("Owned VM module cannot be null"), options)
+    {
+        program_->moduleOwner = std::move(module);
+    }
+
     Machine::~Machine()
+    {
+        shutdown();
+    }
+
+    void Machine::quiesceAsync()
+    {
+        if (!program_ || program_->asyncStopping.exchange(true))
+            return;
+        program_->stopDebugControl();
+        bool reattach = false;
+        {
+            std::scoped_lock lock{program_->ownerMutex};
+            reattach = program_->owner == this;
+        }
+        // In-flight native waits see stopped sources and release their owner
+        // leases before cancellation needs the VM execution lock.
+        program_->detachOwner(this);
+        program_->cancelNativeTasks();
+        cancelAndUnwindContinuations();
+        if (program_->executors)
+            program_->executors->shutdown();
+        std::unique_ptr<TimerScheduler> timers;
+        {
+            std::scoped_lock lock{program_->timerMutex};
+            timers = std::move(program_->timers);
+        }
+        timers.reset();
+        cleanupNativeTaskSources(true);
+        if (reattach)
+        {
+            std::scoped_lock lock{program_->ownerMutex};
+            program_->owner = this; // synchronous unload remains executable
+        }
+    }
+
+    void Machine::shutdown()
     {
         if (program_)
         {
             program_->stopDebugControl();
             program_->detachOwner(this);
-            program_->cancelNativeTasks();
-            cancelAndUnwindContinuations();
+            quiesceAsync();
             cleanupGlobals();
             cleanupNativeObjects(true);
             program_->releaseNativeLibraryMachines();
@@ -1697,17 +1749,7 @@ namespace wio::vm
     {
         if (this == &other)
             return *this;
-        if (program_)
-        {
-            program_->stopDebugControl();
-            program_->detachOwner(this);
-            program_->cancelNativeTasks();
-            cancelAndUnwindContinuations();
-            cleanupGlobals();
-            cleanupNativeObjects(true);
-            program_->releaseNativeLibraryMachines();
-        }
-        program_.reset();
+        shutdown();
         program_ = std::move(other.program_);
         options_ = std::move(other.options_);
         if (program_)
@@ -1761,13 +1803,7 @@ namespace wio::vm
                 detail::collectNativeCallbackResultLeases(program_);
             ExecutionError cleanupError;
             auto& errors = primaryError ? *primaryError : cleanupError;
-            auto inputs = program_->nativeTaskInputs.takeRetired(shutdown);
-            for (auto& input : inputs)
-            {
-                if (shutdown)
-                    (void)input.cancelTask();
-                cleanupValue(input, errors);
-            }
+            cleanupNativeTaskSources(shutdown, &errors);
             auto callbacks = program_->nativeCallbacks.takeRetired(shutdown);
             for (auto& callable : callbacks)
                 cleanupValue(callable, errors);
@@ -1784,6 +1820,22 @@ namespace wio::vm
         }
         catch (...)
         {
+        }
+    }
+
+    void Machine::cleanupNativeTaskSources(bool shutdown, ExecutionError* primaryError)
+    {
+        if (!program_)
+            return;
+        std::scoped_lock lock{program_->executionMutex};
+        ExecutionError cleanupError;
+        auto& errors = primaryError ? *primaryError : cleanupError;
+        auto inputs = program_->nativeTaskInputs.takeRetired(shutdown);
+        for (auto& input : inputs)
+        {
+            if (shutdown)
+                (void)cancel(input);
+            cleanupValue(input, errors);
         }
     }
 
@@ -2368,7 +2420,6 @@ namespace wio::vm
                                    std::string& error, const detail::NativePodLayouts&)
     {
         const auto program = program_;
-        std::scoped_lock lock{program->executionMutex};
         if (value.kind() != Value::Kind::AsyncTask || type >= program->module->types.size() ||
             program->module->types[type].kind != 34 || program->module->types[type].arguments.size() != 1)
         {
@@ -2406,12 +2457,13 @@ namespace wio::vm
         {
             if (!ready)
                 return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            if (program->asyncStopping.load())
+                return WIO_NATIVE_ABI_STALE_HANDLE;
             Machine* owner = program->acquireOwner();
             if (!owner)
                 return WIO_NATIVE_ABI_STALE_HANDLE;
             const auto release = [program](Machine*) { program->releaseOwner(); };
             const std::unique_ptr<Machine, decltype(release)> guard{owner, release};
-            std::scoped_lock lock{program->executionMutex};
             const auto state = root->callable.taskState();
             *ready = state == AsyncTaskState::Ready || state == AsyncTaskState::Faulted ||
                      state == AsyncTaskState::Cancelled;
@@ -2419,6 +2471,8 @@ namespace wio::vm
         };
         cell->cancel = [program, root]
         {
+            if (program->asyncStopping.load())
+                return WIO_NATIVE_ABI_STALE_HANDLE;
             Machine* owner = program->acquireOwner();
             if (!owner)
                 return WIO_NATIVE_ABI_STALE_HANDLE;
@@ -2433,12 +2487,20 @@ namespace wio::vm
             if (!result)
                 return WIO_NATIVE_ABI_INVALID_ARGUMENT;
             *result = {};
+            if (program->asyncStopping.load())
+                return WIO_NATIVE_ABI_STALE_HANDLE;
             Machine* owner = program->acquireOwner();
             if (!owner)
                 return WIO_NATIVE_ABI_STALE_HANDLE;
             const auto release = [program](Machine*) { program->releaseOwner(); };
             const std::unique_ptr<Machine, decltype(release)> guard{owner, release};
-            std::scoped_lock lock{program->executionMutex};
+            // Scalar/string/text results are immutable after the task's acquire
+            // state transition. Querying them must not wait behind unrelated
+            // worker execution. Complex codec traversal remains serialized.
+            std::unique_lock<std::recursive_mutex> lock{program->executionMutex, std::defer_lock};
+            std::uint8_t payloadCodec = 0;
+            if (!detail::nativeValueMarshalling(*program->module, payload, payloadCodec) || payloadCodec > 3)
+                lock.lock();
             const auto state = root->callable.taskState();
             if (state == AsyncTaskState::Cancelled)
                 return WIO_NATIVE_ABI_CANCELLED;
@@ -2471,12 +2533,13 @@ namespace wio::vm
         {
             if (!callback)
                 return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            if (program->asyncStopping.load())
+                return WIO_NATIVE_ABI_STALE_HANDLE;
             Machine* owner = program->acquireOwner();
             if (!owner)
                 return WIO_NATIVE_ABI_STALE_HANDLE;
             const auto release = [program](Machine*) { program->releaseOwner(); };
             const std::unique_ptr<Machine, decltype(release)> guard{owner, release};
-            std::scoped_lock lock{program->executionMutex};
             const bool registered = root->callable.registerTaskWaiter(
                 [callback, state](AsyncTaskState terminal, const Value&, const ExecutionError&)
                 {
@@ -2500,6 +2563,8 @@ namespace wio::vm
         {
             if (!drained)
                 return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            if (program->asyncStopping.load())
+                return WIO_NATIVE_ABI_STALE_HANDLE;
             Machine* owner = program->acquireOwner();
             if (!owner)
                 return WIO_NATIVE_ABI_STALE_HANDLE;
@@ -2527,6 +2592,54 @@ namespace wio::vm
         (void)cell.release();
         const auto access = nativeObjectAccess();
         access.pinWire(access.state, output);
+        return true;
+    }
+
+    bool Machine::exportTaskSource(const Value& value, std::uint32_t type, WioNativeAbiValue& output,
+                                   std::string& error)
+    {
+        if (!program_ || program_->asyncStopping.load() || type >= program_->module->types.size() ||
+            program_->module->types[type].kind != 34 || program_->module->types[type].arguments.size() != 1 ||
+            output.kind != WIO_NATIVE_ABI_VOID || output.flags || output.owner.state || output.owner.ops)
+        {
+            error = "Task export requires a live VM, concrete task type and empty output";
+            return false;
+        }
+        const auto payloadType = program_->module->types[type].arguments.front();
+        std::uint8_t payload = 0;
+        if (payloadType >= program_->module->types.size() || program_->module->types[payloadType].kind == 29 ||
+            program_->module->types[payloadType].kind == 30 ||
+            !detail::nativeValueMarshalling(*program_->module, payloadType, payload) || payload > 3)
+        {
+            error = "Task export payload is not a qualified scalar/string/text value";
+            return false;
+        }
+        std::shared_ptr<const detail::NativePodLayouts> layouts;
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            layouts = program_->nativePodLayouts;
+        }
+        return encodeNativeTask(value, type, output, error, *layouts);
+    }
+
+    bool Machine::taskSource(const WioNativeAbiValue& wire, WioNativeTaskSource& output) const noexcept
+    {
+        if (!program_ || program_->asyncStopping.load() || wire.kind != WIO_NATIVE_ABI_RUNTIME_VALUE ||
+            wire.flags != (WIO_NATIVE_ABI_VALUE_OWNED | WIO_NATIVE_ABI_VALUE_TASK_SOURCE) || !wire.owner.state ||
+            !wire.owner.ops || !wire.payload.slice.data || wire.payload.slice.size != sizeof(WioNativeTaskSource) ||
+            reinterpret_cast<std::uintptr_t>(wire.payload.slice.data) % alignof(WioNativeTaskSource))
+            return false;
+        const auto& source = *static_cast<const WioNativeTaskSource*>(wire.payload.slice.data);
+        if (source.abiVersion != WIO_NATIVE_ABI_VERSION || source.reserved || source.taskTypeId != wire.typeId ||
+            !source.state || source.ready != &NativeTaskSourceCell::queryReady ||
+            source.cancel != &NativeTaskSourceCell::cancelTask || source.read != &NativeTaskSourceCell::readTask ||
+            source.onComplete != &NativeTaskSourceCell::subscribeTask ||
+            source.pumpMain != &NativeTaskSourceCell::pumpMain)
+            return false;
+        const auto* cell = static_cast<const NativeTaskSourceCell*>(source.state);
+        if (cell->programIdentity != program_.get() || &cell->source != wire.payload.slice.data)
+            return false;
+        output = source;
         return true;
     }
 
@@ -3140,7 +3253,7 @@ namespace wio::vm
     Value Machine::sleepFor(const std::chrono::nanoseconds duration)
     {
         Value task = Value::externalTask();
-        if (!program_ || !program_->valid)
+        if (!program_ || !program_->valid || program_->asyncStopping.load())
         {
             (void)task.failTask({"WVM1000", "Timer scheduling requires a loaded VM program"});
             return task;
@@ -3151,16 +3264,70 @@ namespace wio::vm
             return task;
         }
 
-        TimerScheduler* scheduler = nullptr;
         {
             std::scoped_lock lock{program_->timerMutex};
+            if (program_->asyncStopping.load())
+            {
+                (void)task.cancelTask();
+                return task;
+            }
             if (!program_->timers)
                 program_->timers = std::make_unique<TimerScheduler>();
-            scheduler = program_->timers.get();
+            const auto now = std::chrono::steady_clock::now();
+            const auto bounded = (std::min)(duration, std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                          std::chrono::steady_clock::time_point::max() - now));
+            // Keep publication under the same lock as shutdown's queue detach.
+            program_->timers->schedule(
+                task, now + bounded, [task] { task.completeTask({}); }, [task] { task.cancelTask(); });
         }
-        scheduler->schedule(
-            task, std::chrono::steady_clock::now() + duration, [task] { task.completeTask({}); },
-            [task] { task.cancelTask(); });
+        return task;
+    }
+
+    Value Machine::runTaskCallable(const Value& callable)
+    {
+        Value task = Value::externalTask();
+        const std::weak_ptr<Program> weak = program_;
+        const bool scheduled =
+            !program_->asyncStopping.load() &&
+            program_->executors->schedule(
+                ExecutorKind::Worker,
+                ExecutorQueue::Work{
+                    .run =
+                        [weak, task, callable]
+                    {
+                        const auto program = weak.lock();
+                        if (!program || program->asyncStopping.load() || !task.beginTask())
+                        {
+                            (void)task.cancelTask();
+                            return;
+                        }
+                        Machine* owner = program->acquireOwner();
+                        if (!owner)
+                        {
+                            (void)task.cancelTask();
+                            return;
+                        }
+                        const auto release = [program](Machine*) { program->releaseOwner(); };
+                        const std::unique_ptr<Machine, decltype(release)> lease{owner, release};
+                        try
+                        {
+                            std::vector<Value> captures;
+                            for (std::size_t index = 0; index < callable.captureCount(); ++index)
+                                captures.push_back(*callable.capture(index));
+                            auto result = owner->execute(callable.callableFunction(), captures, &task, {}, &callable);
+                            if (result.succeeded())
+                                (void)task.completeTask(result.value());
+                            else
+                                (void)task.failTask(result.error());
+                        }
+                        catch (...)
+                        {
+                            (void)task.failTask({"WVM1207", "VM worker callable threw across the runtime boundary"});
+                        }
+                    },
+                    .cancel = [task] { (void)task.cancelTask(); }});
+        if (!scheduled)
+            (void)task.cancelTask();
         return task;
     }
 
@@ -3289,6 +3456,11 @@ namespace wio::vm
     {
         if (!program_ || !program_->executors)
             return false;
+        if (program_->asyncStopping.load())
+        {
+            (void)state->activeTask.cancelTask();
+            return false;
+        }
         if (executor == ExecutorKind::Inherit)
             executor = activeExecutor != ExecutorKind::Inherit
                            ? activeExecutor
@@ -5962,13 +6134,88 @@ namespace wio::vm
                 Program::NativeFunction native;
                 std::shared_ptr<const detail::NativePodLayouts> podLayouts;
                 const std::string stableKey{module.string(declaration.nativeBinding.stableKey)};
+                bool registeredNative = false;
                 {
                     std::scoped_lock lock{program_->nativeMutex};
                     const auto registered = program_->nativeFunctions.find(stableKey);
-                    if (registered == program_->nativeFunctions.end())
-                        return fail("WVM1220", "Native function is not registered: " + stableKey);
-                    native = registered->second;
+                    if (registered != program_->nativeFunctions.end())
+                    {
+                        native = registered->second;
+                        registeredNative = true;
+                    }
                     podLayouts = program_->nativePodLayouts;
+                }
+                if (!registeredNative)
+                {
+                    // Only exact runtime symbols with their canonical signature
+                    // may use VM services. Ordinary functions named Sleep/Spawn
+                    // still require an explicitly registered native producer.
+                    const auto& binding = declaration.nativeBinding;
+                    const auto symbol = module.string(binding.symbol);
+                    const auto resultType = binding.result.type;
+                    const bool taskResult =
+                        resultType < module.types.size() && module.types[resultType].kind == TypeAsyncTask &&
+                        module.types[resultType].arguments.size() == 1 && resultType == declaration.returnType &&
+                        binding.result.passing == 4 && binding.result.marshalling == 8 && !binding.result.nullable;
+                    const Value* operand = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                    const bool valueArgument = binding.parameters.size() == 1 && binding.parameters[0].passing == 0 &&
+                                               !binding.parameters[0].nullable &&
+                                               binding.parameters[0].type < module.types.size();
+                    Value result;
+                    bool serviced = false;
+                    if (taskResult && valueArgument && operand && symbol == "wio::runtime::AsyncSleep" &&
+                        module.types[module.types[resultType].arguments[0]].kind == TypeVoid &&
+                        module.types[binding.parameters[0].type].kind == TypeU64 &&
+                        binding.parameters[0].marshalling == 1 && operand->kind() == Value::Kind::UnsignedInteger)
+                    {
+                        constexpr auto maximum = (std::numeric_limits<std::int64_t>::max)() / 1000000;
+                        const auto milliseconds =
+                            (std::min)(operand->asUnsignedInteger(), static_cast<std::uint64_t>(maximum));
+                        result = sleepFor(std::chrono::nanoseconds{static_cast<std::int64_t>(milliseconds * 1000000)});
+                        serviced = true;
+                    }
+                    else if (taskResult && valueArgument && operand && symbol == "wio::runtime::RunAsync" &&
+                             module.types[binding.parameters[0].type].kind == TypeFunction &&
+                             module.types[binding.parameters[0].type].arguments == module.types[resultType].arguments &&
+                             binding.parameters[0].marshalling == 7 && operand->kind() == Value::Kind::Callable &&
+                             binding.parameters[0].callbackLifetime == 1 && binding.parameters[0].callbackThread == 1 &&
+                             !operand->nativeCallback().ops && !hasBorrowedNativeCapture(*operand) &&
+                             operand->callableFunction() < module.functions.size())
+                    {
+                        const auto& target = module.functions[operand->callableFunction()];
+                        bool qualifiedCaptures = true;
+                        for (std::size_t index = 0; index < operand->captureCount(); ++index)
+                        {
+                            const auto* capture = operand->capture(index);
+                            if (!capture ||
+                                (capture->kind() != Value::Kind::Boolean &&
+                                 capture->kind() != Value::Kind::SignedInteger &&
+                                 capture->kind() != Value::Kind::UnsignedInteger &&
+                                 capture->kind() != Value::Kind::Float64 && capture->kind() != Value::Kind::String &&
+                                 capture->kind() != Value::Kind::Text))
+                                qualifiedCaptures = false;
+                        }
+                        std::uint8_t payloadCodec = 0;
+                        const bool qualifiedPayload =
+                            detail::nativeValueMarshalling(module, module.types[resultType].arguments[0],
+                                                           payloadCodec) &&
+                            payloadCodec <= 3;
+                        if (!target.hasCoroutine && !target.hasNativeBinding &&
+                            target.parameters.size() == operand->captureCount() &&
+                            target.captureParameterCount == operand->captureCount() &&
+                            target.returnType == module.types[resultType].arguments[0] && qualifiedCaptures &&
+                            qualifiedPayload)
+                        {
+                            result = runTaskCallable(*operand);
+                            serviced = true;
+                        }
+                    }
+                    if (!serviced)
+                        return fail("WVM1220", "Native function is not registered: " + stableKey);
+                    if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(result)))
+                        return fail("WVM1224", "VM async service result register is invalid");
+                    ++frame.instruction;
+                    continue;
                 }
 
                 struct NativeToken

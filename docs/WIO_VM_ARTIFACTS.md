@@ -244,7 +244,8 @@ not published by this adapter yet. No legacy raw C++ function addresses or
 
 Calls/registration belong to the session's opening thread (or the constructing
 thread for a direct ModuleAdapter). Foreign calls return WRONG_THREAD;
-reentrant calls reject. VM execution failure returns PANIC, conversion errors
+reentrant mutations reject. Owner-thread completion callbacks may query/read a
+task result. VM execution failure returns PANIC, conversion errors
 return TYPE_MISMATCH, and exceptions are contained at the wire boundary.
 Direct embedders can inspect `ModuleAdapter::lastError()` on the owning thread.
 Raw result slots must be empty; arguments are copied, never consumed. String
@@ -253,11 +254,11 @@ the closed VM instance, through close and cloning. Raw ABI callers must retain p
 the final owner release, even when result storage outlives the adapter.
 
 This is deliberately a bounded module-hosting surface. Ref/view, nullable,
-callback, object/component, container/Any/Box and async exports reject during
-adapter initialization. Application hosting and async helper work anywhere in
-the module still reject; task/result/cancellation codecs and worker shutdown
-qualification must be added before enabling this surface. Workers cannot be
-joined under a Windows DLL loader lock. Generated wrappers do not yet discover/deploy native
+callback, object/component and container/Any/Box exports reject during
+adapter initialization. Async exports use the bounded task surface below;
+application hosting and complex/nested task payloads remain unqualified. Workers
+are joined during explicit session close, never under a Windows DLL loader
+lock. Generated wrappers do not yet discover/deploy native
 dependencies automatically. A malformed/unsupported embedded module returns
 a null contract getter and is rejected by NativeModule::open; embedding alone
 is not a build-time module acceptance check or a sandbox.
@@ -313,7 +314,7 @@ Static wrappers also publish `${GETTER}SessionApi` by default; the optional
 `NativeModule::attachSession(api, owner)` for these or for a scoped
 `vm::ModuleSessionFactory`, passing a factory/code lifetime owner. A static
 process-lifetime token is suitable only for genuinely statically linked code.
-Lifecycle-bearing modules reject the legacy default contract getter; pure
+Lifecycle-bearing and async modules reject the legacy default contract getter; pure
 legacy canonical getter/attach remains available with its older shared-instance
 and caller-managed affinity semantics. Do not mix that compatibility instance
 with session-based resource/affinity guarantees.
@@ -347,9 +348,88 @@ globals, state copying, owner-thread retirement, reentrant view closure and
 escaped snapshots/results. This is synchronous lifecycle/session closure within
 the qualified value surface, not application/async/complex SDK parity.
 
+## Async session tasks
+
+VM sessions publish a separate `WioGetSdkModuleTaskApi` v1 sidecar. Session v1,
+native value ABI v2, task-source wire and bytecode versions do not change.
+`NativeModule::open` validates the optional sidecar against the exact session
+descriptor; a present invalid sidecar never silently falls back. Static modules
+default to `${GETTER}TaskApi`; `TASK_GETTER` selects a unique C identifier.
+In-process/static attachment passes `&factory->taskApi()` as the third argument
+to `NativeModule::attachSession(factory->api(), factory, ...)`.
+
+Concrete async functions and generic specializations may return owning tasks
+with void, scalar, enum/flagset, string or text payloads. Arguments still use the
+qualified ordinary value surface. Ordinary functions returning a qualified
+`coroutine<T>` (for example a timer) use the same task sidecar. Task arguments,
+async ref/view and complex or nested task payloads are not enabled. Invocation returns the task without waiting
+for its completion. A task can be pending, ready, faulted or cancelled; there is
+no temporary/default payload. Read before completion returns NOT_READY; reading
+a fault/cancellation throws through the C++ wrapper (raw APIs return statuses).
+Fault text is preserved in the wrapper's exception.
+
+```cpp
+auto module = wio::sdk::NativeModule::open("jobs.dll");
+module.start(); // required only when the library declares a lifecycle
+std::array args{wio::sdk::NativeValue::integer(41)};
+auto task = module.invoke("Work", args); // no implicit wait
+if (module.waitTaskReady(task, std::chrono::milliseconds{10}))
+{
+    auto result = module.readTask(task);
+    std::cout << result.asInteger();
+}
+else
+{
+    module.cancelTask(task); // timeout itself does not cancel
+}
+module.stop();
+```
+
+`taskReady`, `cancelTask`, `readTask`, `onTaskComplete` and `pumpMain` are scoped
+to the task's original session/generation and opening thread. Cloning/moving a
+task preserves provenance; a different session rejects it, even for the same
+DLL. `pumpMain` drives owner-thread continuations. `waitTaskReady(timeout)` and
+`waitTask()` are explicit blocking convenience operations that pump main work;
+the latter has no timeout. Timeout is a progress-check budget, not preemption of
+a running body/native call. A host can instead poll/pump in its application loop.
+
+Completion subscriptions own their task wire until exactly-once delivery and
+contain C++ callback exceptions. Delivery may be inline or on the completing
+worker/timer thread. Owner-thread callbacks may query/read the settled task;
+worker callbacks must marshal SDK operations back to the owner. Mutating reentry
+(invoke/cancel/stop/pump/subscribe) remains rejected. A callback may release its
+SDK view/task; active calls and subscriptions hold the necessary leases.
+
+Without a registered native producer, **exact** `wio::runtime::AsyncSleep(u64)`
+and `wio::runtime::RunAsync(fn() -> T)` bindings with canonical ABI plans use the
+VM's timer/worker services. A registered producer retains precedence. The worker
+fallback currently qualifies non-async Wio callables with scalar/string/text
+captures, an explicit retained/any-thread callback ABI and the payload surface
+above; other native helpers/captures still
+require their producer. A foreign function merely named Sleep/Spawn, or a
+signature mismatch, does not acquire builtin behavior.
+
+Close marks the session closed, quiesces async activity and cancels pending work
+before synchronous Unload. Worker/timer queues are joined, then VM storage is
+released. Arbitrary blocking native work cannot be forcibly preempted. Raw task
+sources become STALE_HANDLE after close; decoded results still own their storage
+and pin producer code. Escaped task wires retain immutable metadata, not a live
+VM, and their last release may occur off-thread without joining worker threads.
+Raw ABI callers still must pin producer code through their final wire release.
+
+Focused Windows Debug gates `wio_vm_task_source_shutdown` and
+`wio_vm_sdk_async_artifacts` cover 80 worker/main/timer shutdown repetitions and
+installed, relocated shared/static hosts, pending/timeout/cancel/fault/void,
+generic specialization, Unicode/NUL values, provenance/affinity, callback read
+and reentrant task release. A controlled native-worker barrier also proves that
+task publication/query/simple read/subscription do not wait behind unrelated
+serialized VM execution. The two gates passed 2/2 in 36.67 seconds on 2026-10-14.
+This is not full SDK/async parity or a fresh full
+existing-corpus/platform qualification.
+
 Still required for packaging closure:
 
-1. Extend the shared/static adapters to async/complex values and application
+1. Extend the shared/static adapters to complex/async value parity and application
    hosting, native dependency deployment and project CLI library targets.
 2. Installed SDK host/deployment and clean Linux/macOS qualification gates.
 3. Artifact/runtime/build-cost optimization and release budgets.

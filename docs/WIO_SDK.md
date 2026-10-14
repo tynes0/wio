@@ -24,6 +24,7 @@ Official public headers:
 - `sdk/include/wio_native_reflection.h` (experimental reflection sidecar)
 - `sdk/include/wio_native_sdk.h` (experimental C++ owner/host wrappers)
 - `sdk/include/wio_module_session.h` (additive instance/lifecycle sidecar)
+- `sdk/include/wio_module_tasks.h` (additive affine session task sidecar)
 
 Everything else should be treated as implementation detail unless it is
 explicitly re-exported through those headers.
@@ -37,7 +38,11 @@ adapter ownership. Instance-based `NativeModule::open`/`attachSession` now
 support independent VM globals, start/update/unload and scalar/string/text
 save/restore. `stop()` reports affine shutdown failures; `collectSessions()`
 reclaims off-thread final releases on their owner thread. Returned wires pin
-code without retaining the closed VM. Application/async/complex exports and
+code without retaining the closed VM. Session task sidecar v1 now supports
+owning scalar/string/text/enum/void async exports, explicit poll/wait/cancel,
+main pumping and exactly-once completion subscriptions. Task results carry no
+placeholder value while pending; timeout does not implicitly cancel.
+Application/complex exports, async task parameters and
 legacy Module parity remain outside this qualified surface.
 See [VM module packaging and ownership](WIO_VM_ARTIFACTS.md#vm-backed-sdk-shared-and-static-modules)
 for examples, toolchain requirements and rejection boundaries.

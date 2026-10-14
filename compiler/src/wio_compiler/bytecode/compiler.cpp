@@ -384,6 +384,8 @@ namespace wio::bytecode
                 return;
             addStructuralAbiIdentity(addStructuralAbiIdentity, typeId, 0);
         };
+        for (const auto& entry : source.contract.exports)
+            addStructuralAbiIdentity(addStructuralAbiIdentity, entry.returnType, 0);
         for (const wir::lowered::Function& function : source.functions)
         {
             for (const auto& block : function.blocks)

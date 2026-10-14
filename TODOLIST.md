@@ -1189,7 +1189,14 @@ Rider, and CLion are defined in
     scalar/string/text save/restore, failed-start rollback and owner-thread
     retirement outside DLL loader teardown. Two new focused gates cover
     reentrant view closure, exactly-once cleanup and independent shared/static
-    globals. Async/complex-value/application parity, native dependency
+    globals. Async exports now return canonical owning task sources with
+    scalar/string/text/enum/flagset/void payloads and concrete generic identities.
+    Additive task sidecars preserve session ABI, enforce session/thread provenance
+    and support explicit poll/wait/cancel/main pumping and once-only subscriptions.
+    Session close quiesces workers/timers before unload; escaped wires retain code
+    and immutable metadata without retaining a live VM. New focused gates cover
+    installed shared/static async hosts and 80 shutdown race repetitions.
+    Complex/async-value/application parity, native dependency
     deployment, project CLI library targets and cross-platform qualification
     remain open. Old native generations are retained deliberately;
    safe garbage collection and final artifact/build/runtime costs remain pending.

@@ -119,7 +119,12 @@ namespace wio::vm
         // The module is verified and indexed once, then borrowed immutably for
         // the machine's lifetime.
         explicit Machine(const bytecode::Module& module, MachineOptions options = {});
+        // Owning form: escaped task-source wires keep immutable metadata alive
+        // even after the machine is shut down and its owner is detached.
+        explicit Machine(std::shared_ptr<const bytecode::Module> module, MachineOptions options = {});
         ~Machine();
+        void quiesceAsync();
+        void shutdown();
 
         Machine(Machine&&) noexcept;
         Machine& operator=(Machine&&) noexcept;
@@ -128,6 +133,9 @@ namespace wio::vm
 
         [[nodiscard]] ExecutionResult invoke(std::uint32_t function, std::span<const Value> arguments = {});
         [[nodiscard]] ExecutionResult wait(const Value& task);
+        [[nodiscard]] bool exportTaskSource(const Value& task, std::uint32_t type, WioNativeAbiValue& result,
+                                            std::string& error);
+        [[nodiscard]] bool taskSource(const WioNativeAbiValue& value, WioNativeTaskSource& result) const noexcept;
         bool cancel(const Value& task);
 
         // A debug observer may pause execution at the instruction boundary it
@@ -225,6 +233,7 @@ namespace wio::vm
         void cancelAndUnwindContinuations();
         void cleanupGlobals();
         void cleanupNativeObjects(bool shutdown = false, ExecutionError* primaryError = nullptr) noexcept;
+        void cleanupNativeTaskSources(bool shutdown, ExecutionError* primaryError = nullptr);
         [[nodiscard]] WioNativeAbiStatus dispatchNativeObjectMethod(const Value&, std::uint64_t,
                                                                     const WioNativeAbiValue*, std::uint64_t,
                                                                     WioNativeAbiValue*, WioNativeAbiFailure*);
@@ -244,6 +253,7 @@ namespace wio::vm
                       const ExecutionError& error);
         void resumeTask(std::shared_ptr<ExecutionState> state);
         [[nodiscard]] Value startTask(std::uint32_t function, std::span<const Value> arguments);
+        [[nodiscard]] Value runTaskCallable(const Value& callable);
         [[nodiscard]] ExecutionResult driveTask(const Value& task);
         [[nodiscard]] bool registerNativeRegistryImpl(
             const WioNativeAbiRegistry& registry, const WioNativeTaskApi* tasks,

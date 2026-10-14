@@ -1,4 +1,16 @@
 string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef suffix)
+if(NOT WIO_LIBRARY_SOURCE)
+    set(WIO_LIBRARY_SOURCE "${WIO_ROOT}/tests/vm_sdk_session_library.wio")
+endif()
+if(NOT WIO_HOST_SOURCE)
+    set(WIO_HOST_SOURCE "${WIO_ROOT}/tests/vm_sdk_session_artifact_host.cpp")
+endif()
+if(NOT WIO_HOST_PROJECT)
+    set(WIO_HOST_PROJECT "${WIO_ROOT}/tests/projects/vm_sdk_session_host")
+endif()
+if(NOT WIO_HOST_TARGET)
+    set(WIO_HOST_TARGET vm_session_host)
+endif()
 set(root "${WIO_OUTPUT_DIR}/${suffix}")
 file(MAKE_DIRECTORY "${root}")
 execute_process(COMMAND "${CMAKE_COMMAND}" --install "${WIO_BUILD_DIR}" --config "${WIO_CONFIG}"
@@ -15,7 +27,7 @@ foreach(header IN ITEMS "sdk/include/wio_module_session.h" "include/wio/vm/modul
     endif()
 endforeach()
 execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
-    "${WIO_EXECUTABLE}" "${WIO_ROOT}/tests/vm_sdk_session_library.wio" --no-builtin
+    "${WIO_EXECUTABLE}" "${WIO_LIBRARY_SOURCE}" --no-builtin
     --target shared --emit-bytecode --bytecode-output "${root}/session.wiob"
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45 ENCODING UTF-8)
 if(NOT "${result}" STREQUAL "0")
@@ -25,9 +37,9 @@ set(generator_args -G "${WIO_GENERATOR}")
 if(WIO_GENERATOR_PLATFORM)
     list(APPEND generator_args -A "${WIO_GENERATOR_PLATFORM}")
 endif()
-execute_process(COMMAND "${CMAKE_COMMAND}" -S "${WIO_ROOT}/tests/projects/vm_sdk_session_host" -B "${root}/host"
+execute_process(COMMAND "${CMAKE_COMMAND}" -S "${WIO_HOST_PROJECT}" -B "${root}/host"
     ${generator_args} "-DCMAKE_PREFIX_PATH=${prefix}" "-DCMAKE_BUILD_TYPE=${WIO_CONFIG}"
-    "-DWIO_TEST_BYTECODE=${root}/session.wiob" "-DWIO_TEST_HOST_SOURCE=${WIO_ROOT}/tests/vm_sdk_session_artifact_host.cpp"
+    "-DWIO_TEST_BYTECODE=${root}/session.wiob" "-DWIO_TEST_HOST_SOURCE=${WIO_HOST_SOURCE}"
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45 ENCODING UTF-8)
 if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Installed-only session host configure failed: ${output}\n${error}")
@@ -37,7 +49,7 @@ if(WIO_GENERATOR MATCHES "Visual Studio")
     set(build_args -- /m:1 /nodeReuse:false)
 endif()
 execute_process(COMMAND "${CMAKE_COMMAND}" --build "${root}/host" --config "${WIO_CONFIG}"
-    --target vm_session_host ${build_args}
+    --target "${WIO_HOST_TARGET}" ${build_args}
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 180 ENCODING UTF-8)
 if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Installed-only session modules/host build failed: ${output}\n${error}")

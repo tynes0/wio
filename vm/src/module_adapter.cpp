@@ -15,7 +15,7 @@ namespace wio::vm
     {
         constexpr std::uint8_t TypeReference = 29;
         constexpr std::uint8_t TypeNullable = 30;
-        constexpr std::uint8_t AsyncTaskIntrinsicFamily = 14;
+        constexpr std::uint8_t TypeAsyncTask = 34;
 
         std::uint64_t currentOwnerToken() noexcept
         {
@@ -63,7 +63,8 @@ namespace wio::vm
             std::uint8_t result;
         };
 
-        bytecode::Module module;
+        std::shared_ptr<const bytecode::Module> moduleStorage;
+        const bytecode::Module& module;
         Machine machine;
         const std::uint64_t owner = currentOwnerToken();
         std::vector<Call> calls;
@@ -77,23 +78,26 @@ namespace wio::vm
         bool closed = false;
         bool unloadRequired = false;
 
-        template <class F> std::int32_t protect(F action, bool allowClosed = false) noexcept
+        template <class F>
+        std::int32_t protect(F action, bool allowClosed = false, bool allowReadReentry = false) noexcept
         {
             if (owner != currentOwnerToken())
                 return WIO_NATIVE_ABI_WRONG_THREAD;
-            if (invoking)
+            if (invoking && !allowReadReentry)
                 return WIO_NATIVE_ABI_INVALID_ARGUMENT;
             if (closed && !allowClosed)
                 return WIO_NATIVE_ABI_STALE_HANDLE;
+            const bool previous = invoking;
             invoking = true;
             struct Reset
             {
                 bool& active;
+                bool previous;
                 ~Reset()
                 {
-                    active = false;
+                    active = previous;
                 }
-            } reset{invoking};
+            } reset{invoking, previous};
             try
             {
                 error.clear();
@@ -148,7 +152,8 @@ namespace wio::vm
         }
 
         explicit State(bytecode::Module input, MachineOptions options)
-            : module(verifiedModule(std::move(input))), machine(module, options)
+            : moduleStorage(std::make_shared<const bytecode::Module>(verifiedModule(std::move(input)))),
+              module(*moduleStorage), machine(moduleStorage, options)
         {
             const auto& lifecycle = module.contract.lifecycle;
             if (module.moduleKind != WIO_SDK_MODULE_WIO_LIBRARY || module.stableId == 0 ||
@@ -197,20 +202,6 @@ namespace wio::vm
             }
             if (module.contract.exports.size() > (std::numeric_limits<std::uint32_t>::max)())
                 throw std::invalid_argument("VM SDK export table is too large");
-            // A synchronous export can still start asynchronous helper work.
-            // DLL teardown cannot join VM workers under the OS loader lock:
-            // reject this whole-module surface until explicit sessions/shutdown
-            // are implemented, rather than validating only export signatures.
-            for (const auto& function : module.functions)
-            {
-                if (function.hasCoroutine)
-                    throw std::invalid_argument("VM SDK asynchronous module hosting is not qualified yet");
-                for (const auto& block : function.blocks)
-                    for (const auto& instruction : block.instructions)
-                        if (instruction.asyncOperation != 0 || instruction.intrinsicFamily == AsyncTaskIntrinsicFamily)
-                            throw std::invalid_argument("VM SDK asynchronous module hosting is not qualified yet");
-            }
-
             const auto cstring = [&](bytecode::StringId id) -> const char*
             {
                 if (id >= module.strings.size() || module.strings[id].find('\0') != std::string::npos)
@@ -225,19 +216,31 @@ namespace wio::vm
             {
                 const auto slot = static_cast<std::uint32_t>(calls.size());
                 if (entry.kind > WIO_SDK_EXPORT_GENERIC_FUNCTION_SPECIALIZATION ||
-                    entry.role > WIO_SDK_EXPORT_EVENT_HOOK || entry.isAsync ||
-                    entry.function >= module.functions.size() || entry.callTableSlot != slot ||
-                    module.contract.callTableEntries[slot] != entry.stableId ||
+                    entry.role > WIO_SDK_EXPORT_EVENT_HOOK || entry.function >= module.functions.size() ||
+                    entry.callTableSlot != slot || module.contract.callTableEntries[slot] != entry.stableId ||
                     entry.stableId != WioStableSdkId(cstring(entry.stableKey)) ||
                     !identities.insert(entry.stableId).second)
                     throw std::invalid_argument("VM SDK export identity, slot or callable kind is unsupported");
                 const auto& function = module.functions[entry.function];
-                if (function.hasCoroutine || function.captureParameterCount != 0 || !function.captures.empty() ||
-                    !function.genericParameters.empty() || (function.flags & bytecode::FunctionTemplateDeclaration) ||
+                if (function.hasCoroutine != entry.isAsync || function.captureParameterCount != 0 ||
+                    !function.captures.empty() || !function.genericParameters.empty() ||
+                    (function.flags & bytecode::FunctionTemplateDeclaration) ||
                     function.parameters.size() != entry.parameterTypes.size() ||
                     function.returnType != entry.returnType)
-                    throw std::invalid_argument("VM SDK export does not match a concrete synchronous function");
-                Call call{this, &entry, {}, qualifiedMarshalling(module, entry.returnType, true)};
+                    throw std::invalid_argument("VM SDK export does not match a concrete function");
+                const bool task =
+                    entry.returnType < module.types.size() && module.types[entry.returnType].kind == TypeAsyncTask;
+                std::uint8_t result = 0;
+                if (task)
+                {
+                    if (module.types[entry.returnType].arguments.size() != 1)
+                        throw std::invalid_argument("VM SDK task export requires one concrete payload");
+                    (void)qualifiedMarshalling(module, module.types[entry.returnType].arguments[0], true);
+                    result = 8;
+                }
+                else
+                    result = qualifiedMarshalling(module, entry.returnType, true);
+                Call call{this, &entry, {}, result};
                 for (std::size_t index = 0; index < entry.parameterTypes.size(); ++index)
                 {
                     if (function.parameters[index].type != entry.parameterTypes[index])
@@ -320,6 +323,14 @@ namespace wio::vm
                         return WIO_NATIVE_ABI_PANIC;
                     }
                     WioNativeAbiValue encoded{};
+                    if (call.result == 8)
+                    {
+                        if (!state.machine.exportTaskSource(execution.value(), call.entry->returnType, encoded,
+                                                            state.error))
+                            return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                        *result = encoded;
+                        return WIO_NATIVE_ABI_OK;
+                    }
                     if (!detail::encodeOwnedNativeValue(state.module, execution.value(), call.entry->returnType,
                                                         call.result, encoded, state.error))
                         return WIO_NATIVE_ABI_TYPE_MISMATCH;
@@ -393,6 +404,7 @@ namespace wio::vm
                     return WIO_NATIVE_ABI_OK;
                 state_->closed = true;
                 state_->started = false;
+                state_->machine.quiesceAsync();
                 const bool unload = std::exchange(state_->unloadRequired, false);
                 return unload ? state_->statusCall(state_->module.contract.lifecycle.unload) : WIO_NATIVE_ABI_OK;
             },
@@ -476,6 +488,68 @@ namespace wio::vm
                     return WIO_NATIVE_ABI_TYPE_MISMATCH;
                 }
                 return state_->statusCall(function, {&value.value, 1});
+            });
+    }
+
+    std::int32_t ModuleAdapter::taskReady(const WioNativeAbiValue& wire, bool& result) noexcept
+    {
+        return state_->protect(
+            [&]() -> std::int32_t
+            {
+                WioNativeTaskSource source{};
+                return state_->machine.taskSource(wire, source) ? source.ready(source.state, &result)
+                                                                : WIO_NATIVE_ABI_TYPE_MISMATCH;
+            },
+            false, true);
+    }
+
+    std::int32_t ModuleAdapter::cancelTask(const WioNativeAbiValue& wire) noexcept
+    {
+        return state_->protect(
+            [&]() -> std::int32_t
+            {
+                WioNativeTaskSource source{};
+                return state_->machine.taskSource(wire, source) ? source.cancel(source.state)
+                                                                : WIO_NATIVE_ABI_TYPE_MISMATCH;
+            });
+    }
+
+    std::int32_t ModuleAdapter::readTask(const WioNativeAbiValue& wire, WioNativeAbiValue& result,
+                                         WioNativeAbiFailure* failure) noexcept
+    {
+        return state_->protect(
+            [&]() -> std::int32_t
+            {
+                if (!emptyOutput(result))
+                    return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                WioNativeTaskSource source{};
+                return state_->machine.taskSource(wire, source) ? source.read(source.state, &result, failure)
+                                                                : WIO_NATIVE_ABI_TYPE_MISMATCH;
+            },
+            false, true);
+    }
+
+    std::int32_t ModuleAdapter::onTaskComplete(const WioNativeAbiValue& wire, WioNativeTaskCompletionFn callback,
+                                               void* userdata) noexcept
+    {
+        return state_->protect(
+            [&]() -> std::int32_t
+            {
+                if (!callback)
+                    return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                WioNativeTaskSource source{};
+                return state_->machine.taskSource(wire, source) ? source.onComplete(source.state, callback, userdata)
+                                                                : WIO_NATIVE_ABI_TYPE_MISMATCH;
+            });
+    }
+
+    std::int32_t ModuleAdapter::pumpMain(std::uint64_t& drained) noexcept
+    {
+        return state_->protect(
+            [&]() -> std::int32_t
+            {
+                drained = state_->machine.drainMainExecutor();
+                return WIO_NATIVE_ABI_OK;
             });
     }
 } // namespace wio::vm

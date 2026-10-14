@@ -1,5 +1,5 @@
 if(NOT DEFINED INPUT OR NOT DEFINED OUTPUT OR NOT GETTER MATCHES "^[A-Za-z_][A-Za-z0-9_]*$" OR
-   NOT SESSION_GETTER MATCHES "^[A-Za-z_][A-Za-z0-9_]*$")
+   NOT SESSION_GETTER MATCHES "^[A-Za-z_][A-Za-z0-9_]*$" OR NOT TASK_GETTER MATCHES "^[A-Za-z_][A-Za-z0-9_]*$")
     message(FATAL_ERROR "Invalid VM module embedding arguments")
 endif()
 file(SIZE "${INPUT}" byte_count)
@@ -51,6 +51,18 @@ extern \"C\" WIO_VM_EXPORT const WioSdkModuleSessionApi* ${SESSION_GETTER}() noe
     try
     {
         return &module().api();
+    }
+    catch (...)
+    {
+        return nullptr;
+    }
+}
+
+extern \"C\" WIO_VM_EXPORT const WioSdkModuleTaskApi* ${TASK_GETTER}() noexcept
+{
+    try
+    {
+        return &module().taskApi();
     }
     catch (...)
     {

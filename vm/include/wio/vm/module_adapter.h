@@ -35,6 +35,13 @@ namespace wio::vm
         // Idempotent; marks the adapter closed before running unload. The
         // caller must destroy it on the owning thread after this safe point.
         [[nodiscard]] std::int32_t close() noexcept;
+        [[nodiscard]] std::int32_t taskReady(const WioNativeAbiValue& task, bool& result) noexcept;
+        [[nodiscard]] std::int32_t cancelTask(const WioNativeAbiValue& task) noexcept;
+        [[nodiscard]] std::int32_t readTask(const WioNativeAbiValue& task, WioNativeAbiValue& result,
+                                            WioNativeAbiFailure* failure = nullptr) noexcept;
+        [[nodiscard]] std::int32_t onTaskComplete(const WioNativeAbiValue& task, WioNativeTaskCompletionFn callback,
+                                                  void* userdata) noexcept;
+        [[nodiscard]] std::int32_t pumpMain(std::uint64_t& drained) noexcept;
 
     private:
         struct State;

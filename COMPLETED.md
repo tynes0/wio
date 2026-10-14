@@ -12,6 +12,26 @@ Notes:
 
 ## VM SDK shared/static module foundation — 2026-10-14
 
+### Follow-up: owning async session task boundary
+
+- [x] Additive task sidecar v1 reuses the canonical task-source wire without
+      changing session v1, native value v2 or bytecode versions.
+- [x] Concrete async exports/generic identities return pending tasks with
+      scalar/string/text/enum/flagset/void payloads, not placeholder values.
+- [x] Explicit affine poll/read/cancel/main pumping, bounded wait and once-only
+      completion subscriptions preserve provenance and callback/value leases.
+      Timeouts do not cancel; owner callbacks may read settled results.
+- [x] Exact canonical AsyncSleep and bounded RunAsync bindings can use VM
+      services without a producer; ordinary foreign symbols still need one.
+- [x] Async quiescence precedes unload, workers/timers join during session
+      close, and escaped wires retain immutable metadata without a live VM.
+- [x] Two new Windows Debug gates passed 2/2 in 36.67 seconds: relocated
+      shared/static async hosts, negative ABI/provenance/reentry checks, 80
+      shutdown race repetitions and nonblocking queries behind a native barrier.
+- [~] Qualification uses only the two new Windows Debug gates; complex/async
+      payload parity, application hosting, native dependency/project packaging
+      and broader platform/corpus acceptance remain open.
+
 ### Follow-up: independent affine sessions and lifecycle
 
 - [x] Additive session descriptor v1 opens independent VM instances per SDK
