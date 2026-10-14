@@ -1390,3 +1390,17 @@ add_test(NAME wio_vm_project_artifact
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_project_artifact_test.cmake")
 wio_test_labels(wio_vm_project_artifact interop vm artifact project cli native async incremental deployment release-gate)
 set_tests_properties(wio_vm_project_artifact PROPERTIES TIMEOUT 900)
+
+add_test(NAME wio_vm_sdk_module_artifacts
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}"
+        "-DWIO_CONFIG=$<CONFIG>"
+        "-DWIO_GENERATOR=${CMAKE_GENERATOR}"
+        "-DWIO_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-sdk-module-artifacts"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_sdk_module_artifacts_test.cmake")
+wio_test_labels(wio_vm_sdk_module_artifacts interop vm sdk module shared static deployment ownership release-gate)
+set_tests_properties(wio_vm_sdk_module_artifacts PROPERTIES TIMEOUT 360)

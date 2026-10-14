@@ -42,6 +42,7 @@ endfunction()
 function(wio_add_solution_catalogs)
     file(GLOB_RECURSE wio_cmake_module_files CONFIGURE_DEPENDS LIST_DIRECTORIES false
         "${CMAKE_SOURCE_DIR}/cmake/*.cmake"
+        "${CMAKE_SOURCE_DIR}/cmake/*.cmake.in"
     )
     file(GLOB_RECURSE wio_cmake_project_files CONFIGURE_DEPENDS LIST_DIRECTORIES false
         "${CMAKE_SOURCE_DIR}/app/CMakeLists.txt"

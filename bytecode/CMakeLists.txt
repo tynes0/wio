@@ -7,9 +7,12 @@ set(WIO_BYTECODE_CORE_SOURCES
     "${CMAKE_SOURCE_DIR}/compiler/src/wio_compiler/bytecode/disassembler.cpp")
 add_library(wio_bytecode_core STATIC ${WIO_BYTECODE_CORE_SOURCES})
 add_library(wio-bytecode-core ALIAS wio_bytecode_core)
-target_include_directories(wio_bytecode_core PUBLIC "${CMAKE_SOURCE_DIR}/compiler/include")
+target_compile_features(wio_bytecode_core PUBLIC cxx_std_20)
+target_include_directories(wio_bytecode_core PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/compiler/include>"
+    "$<INSTALL_INTERFACE:include>")
 set_target_properties(wio_bytecode_core PROPERTIES FOLDER "runtime" POSITION_INDEPENDENT_CODE ON)
-install(TARGETS wio_bytecode_core ARCHIVE DESTINATION lib COMPONENT WioVmRuntime)
+install(TARGETS wio_bytecode_core EXPORT WioVmRuntimeTargets ARCHIVE DESTINATION lib COMPONENT WioVmRuntime)
 install(FILES
     "${CMAKE_SOURCE_DIR}/compiler/include/wio/bytecode/codec.h"
     "${CMAKE_SOURCE_DIR}/compiler/include/wio/bytecode/module.h"

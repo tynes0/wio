@@ -1,0 +1,60 @@
+[export]
+fn Add(left: i32, right: i32) -> i32
+{
+    return left + right;
+}
+
+[export, instantiate(i32)]
+fn Identity<T>(value: T) -> T
+{
+    return value;
+}
+
+[export]
+fn Echo(value: string) -> string
+{
+    return "VM:" + value;
+}
+
+[export]
+fn Unicode(value: text) -> text
+{
+    return u"⟦" + value + u"⟧";
+}
+
+[export]
+fn Fail() -> i32
+{
+    let values: i32[] = [1];
+    return values[3];
+}
+
+enum Mode
+{
+    Idle = 0,
+    Active = 1
+};
+
+flagset Permission
+{
+    None = 0u32,
+    Read = 1u32,
+    Write = 2u32
+};
+
+[export]
+fn EnumIdentity(value: Mode) -> Mode
+{
+    return value;
+}
+
+[export]
+fn FlagIdentity(value: Permission) -> Permission
+{
+    return value;
+}
+
+[export]
+fn Unit()
+{
+}

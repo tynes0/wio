@@ -29,6 +29,14 @@ explicitly re-exported through those headers.
 
 ### Experimental Lowered-WIR host (Sprints 17.4-17.5)
 
+Compiler-independent VM library modules now expose the same canonical contract
+through `vm::ModuleAdapter` and installed `wio_add_vm_module` shared/static
+targets. `NativeModule::attach(contract, owner)` supports explicit in-process
+adapter ownership. This initial surface is synchronous scalar/string/text and
+enum/flagset exports, not legacy Module/lifecycle/async/complex-value parity.
+See [VM module packaging and ownership](WIO_VM_ARTIFACTS.md#vm-backed-sdk-shared-and-static-modules)
+for examples, toolchain requirements and rejection boundaries.
+
 For libraries compiled with `--cpp-backend wir`, include the additional
 `wio_native_sdk.h` header. This opts into canonical value ABI v2 without changing
 the production `Module` API or descriptor v11:

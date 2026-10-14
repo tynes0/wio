@@ -16,8 +16,12 @@ set(WIO_SDK_HEADERS
 )
 
 add_library(wio_sdk INTERFACE)
-target_include_directories(wio_sdk INTERFACE "${WIO_SDK_INCLUDE_DIR}")
-target_sources(wio_sdk INTERFACE ${WIO_SDK_HEADERS})
+target_compile_features(wio_sdk INTERFACE cxx_std_20)
+target_include_directories(wio_sdk INTERFACE
+    "$<BUILD_INTERFACE:${WIO_SDK_INCLUDE_DIR}>"
+    "$<INSTALL_INTERFACE:sdk/include>")
+target_sources(wio_sdk INTERFACE "$<BUILD_INTERFACE:${WIO_SDK_HEADERS}>")
+install(TARGETS wio_sdk EXPORT WioVmRuntimeTargets COMPONENT WioVmRuntime)
 
 if(BUILD_TESTING)
     add_executable(wio_sdk_version_contract_test
@@ -80,5 +84,5 @@ if(BUILD_TESTING)
 endif()
 
 install(DIRECTORY "${WIO_SDK_INCLUDE_DIR}/"
-    DESTINATION sdk/include
+    DESTINATION sdk/include COMPONENT WioVmRuntime
 )

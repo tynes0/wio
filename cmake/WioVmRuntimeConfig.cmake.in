@@ -1,0 +1,11 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+include("${CMAKE_CURRENT_LIST_DIR}/WioVmRuntimeTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/WioVmModule.cmake")
+
+# Archives are C++ runtime products, not a cross-toolchain wire format.
+set(WioVmRuntime_CXX_COMPILER_ID "@CMAKE_CXX_COMPILER_ID@")
+set(WioVmRuntime_MSVC_STATIC_RUNTIME "@WIO_MSVC_STATIC_RUNTIME@")
+check_required_components(WioVmRuntime)

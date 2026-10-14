@@ -146,6 +146,7 @@ class NativeModule {
         const WioNativeTaskCompletionApi* taskCompletions{};
         const WioNativeAbiRegistry* natives{};
         const WioNativeReflectionApi* reflection{};
+        std::shared_ptr<void> attachedOwner;
         std::shared_ptr<detail::BindingState> binding = std::make_shared<detail::BindingState>();
         bool started = false;
         ~State() {
@@ -160,6 +161,24 @@ class NativeModule {
     std::shared_ptr<State> state_;
 
 public:
+    // The owner pins descriptor/context storage and producer code, including
+    // owning results that survive close(). No module lifecycle is inferred.
+    static NativeModule attach(const WioSdkModuleContract& contract, std::shared_ptr<void> owner)
+    {
+        if (!owner || !WioValidateSdkModuleContract(&contract))
+            throw std::invalid_argument("canonical attachment requires a valid contract and lifetime owner");
+        for (std::uint32_t i = 0; i < contract.exportCount; ++i)
+            if (contract.exports[i].reserved != WIO_SDK_CALL_NATIVE_ABI_V2)
+                throw std::invalid_argument("unsupported canonical attachment value ABI");
+        if (contract.lifecycleFlags != 0 || contract.stateSchemaVersion != 0)
+            throw std::invalid_argument("canonical attachment lifecycle requires a dedicated host adapter");
+        NativeModule module;
+        module.state_ = std::make_shared<State>();
+        module.state_->contract = &contract;
+        module.state_->attachedOwner = std::move(owner);
+        return module;
+    }
+
     static NativeModule open(const std::filesystem::path& path) {
         NativeModule module;
         auto state = std::make_shared<State>();

@@ -10,6 +10,25 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## VM SDK shared/static module foundation — 2026-10-14
+
+- [x] Compiler-independent ModuleAdapter owns decoded bytecode, Machine,
+      stable SDK export descriptors, reflection identities and call contexts.
+- [x] Concrete synchronous functions/generic specializations support owning
+      scalar/string/text/enum/flagset calls using existing native value ABI v2.
+      Unsupported signatures and lifecycle/async hosting reject explicitly.
+- [x] NativeModule::attach requires a lifetime owner; returned SDK values and
+      clones pin the attachment/shared library after the host view closes.
+- [x] Relocatable installed WioVmRuntime CMake targets and wio_add_vm_module
+      produce real compiler-free shared/static modules with embedded bytecode.
+      Static getters have unique names and independent VM instances.
+- [x] Two new Windows Debug gates passed 2/2 in 40.89 seconds, including
+      installed-only relocated hosting, generic/enum/flagset/void exports,
+      Unicode/NUL storage, panic recovery, wrong-thread entry and invalid modules.
+- [~] Lifecycle/async/complex exports, explicit host sessions, native dependency
+      deployment, project CLI library targets and Linux/macOS acceptance remain
+      tracked in Backend item 8. This is not complete SDK parity or a release.
+
 ## v0.15 attribute foundation sprint
 
 - [x] Declaration-leading `[Attribute]` syntax supports stacked and grouped

@@ -1180,11 +1180,17 @@ Rider, and CLion are defined in
    packaging reuse are separate; no-build run/package needs no source or .wiob
    intermediates. Source/native/toolchain output collisions are rejected, and
    packaging verifies before cleaning an existing distribution. VM-backed
-   shared/static Wio modules, SDK host/lifecycle packaging and cross-platform
-   qualification remain open. Old native generations are retained deliberately;
+    shared/static Wio modules now have compiler-independent CMake wrappers,
+    stable SDK call tables and owning scalar/string/text/enum/flagset exports,
+    including concrete generic functions and explicit embedding lifetime owners.
+    Two new focused gates cover installed-prefix relocation, shared/two-static
+    hosts, invalid modules, panic recovery, wrong-thread calls and escaped values.
+    Lifecycle/async/complex-value parity, host sessions, native dependency
+    deployment, project CLI library targets and cross-platform qualification
+    remain open. Old native generations are retained deliberately;
    safe garbage collection and final artifact/build/runtime costs remain pending.
-   See `docs/WIO_VM_ARTIFACTS.md`; the installed VM archive alone does not close
-   the static Wio-module requirement.
+    See `docs/WIO_VM_ARTIFACTS.md`; scalar SDK wrappers do not close all static
+    Wio-module lifecycle/ownership surfaces.
    Unconstrained
    T-to-Any boxing remains semantically unsupported. See
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.

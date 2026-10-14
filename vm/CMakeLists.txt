@@ -13,14 +13,29 @@ add_library(wio_vm STATIC
 )
 
 add_library(wio-vm ALIAS wio_vm)
+target_compile_features(wio_vm PUBLIC cxx_std_20)
 
-target_include_directories(wio_vm PUBLIC include)
+target_include_directories(wio_vm PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:include>")
 find_package(Threads REQUIRED)
 target_link_libraries(wio_vm PUBLIC wio_bytecode_core wio_sdk PRIVATE ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(wio_vm PROPERTIES POSITION_INDEPENDENT_CODE ON)
-install(TARGETS wio_vm ARCHIVE DESTINATION lib COMPONENT WioVmRuntime)
+install(TARGETS wio_vm EXPORT WioVmRuntimeTargets ARCHIVE DESTINATION lib COMPONENT WioVmRuntime)
 install(DIRECTORY include/wio/vm DESTINATION include/wio COMPONENT WioVmRuntime FILES_MATCHING PATTERN "*.h")
-install(FILES "${CMAKE_SOURCE_DIR}/sdk/include/wio_native_abi.h" DESTINATION sdk/include COMPONENT WioVmRuntime)
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file("${CMAKE_SOURCE_DIR}/cmake/WioVmRuntimeConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/WioVmRuntimeConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/WioVmRuntime)
+write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/WioVmRuntimeConfigVersion.cmake"
+    VERSION "${PROJECT_VERSION}" COMPATIBILITY SameMinorVersion)
+install(EXPORT WioVmRuntimeTargets NAMESPACE Wio:: DESTINATION lib/cmake/WioVmRuntime COMPONENT WioVmRuntime)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/WioVmRuntimeConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/WioVmRuntimeConfigVersion.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/WioVmModule.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/EmbedWioVmModule.cmake"
+    DESTINATION lib/cmake/WioVmRuntime COMPONENT WioVmRuntime)
 
 target_compile_options(wio_vm PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
@@ -408,6 +423,11 @@ if(BUILD_TESTING)
     target_link_libraries(wio_vm_artifact_codec_test PRIVATE wio_bytecode_core)
     add_test(NAME wio_vm_artifact_codec COMMAND wio_vm_artifact_codec_test "${CMAKE_BINARY_DIR}/vm-artifact-codec")
     set_tests_properties(wio_vm_artifact_codec PROPERTIES LABELS "vm;artifact;codec;deployment;release-gate")
+    add_executable(wio_vm_sdk_module_adapter_test "${CMAKE_SOURCE_DIR}/tests/vm_sdk_module_adapter_test.cpp")
+    target_link_libraries(wio_vm_sdk_module_adapter_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_sdk_module_adapter COMMAND wio_vm_sdk_module_adapter_test)
+    set_tests_properties(wio_vm_sdk_module_adapter PROPERTIES
+        TIMEOUT 30 LABELS "vm;sdk;module;ownership;thread;release-gate")
 endif()
 
 # Fail configuration if an accidental transitive dependency pulls the compiler
@@ -439,3 +459,6 @@ function(wio_assert_runtime_only target)
     endforeach()
 endfunction()
 wio_assert_runtime_only(wio_vm_runner)
+if(TARGET wio_vm_sdk_module_adapter_test)
+    wio_assert_runtime_only(wio_vm_sdk_module_adapter_test)
+endif()
