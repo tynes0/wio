@@ -1240,13 +1240,17 @@ Rider, and CLion are defined in
     repair without relinking. Bare archives are qualified through an independent
     C++ consumer. Two new Windows Debug gates passed 2/2 in 91.65 seconds,
     including Unicode relocation and executable sidecar compatibility.
-    Automatic discovery/generation-management policy remains separate work;
-    bundle/framework and broader platform acceptance is open.
+    Distribution policy now requires explicit producer/private dependency lists,
+    with no automatic transitive discovery. Executable private dependencies use
+    checked v2 cohorts preserving import filenames; old generations are retained
+    intentionally and fresh packages copy only the selected cohort.
+    Bundle/framework support is excluded by the current policy; broader platform
+    acceptance remains open. See `docs/WIO_NATIVE_DISTRIBUTION_POLICY.md`.
     Full SDK complex-value/async/application/reflection parity is outside this
     backend milestone and remains mandatory under Native/SDK item 5 before v1.
-    Distribution policy and cross-platform artifact/runtime qualification
-    remain open. Old native generations are retained deliberately;
-   safe garbage collection and final artifact/build/runtime costs remain pending.
+    Cross-platform artifact/runtime qualification and the three agreed heavy
+    optimization passes remain open. Live-generation garbage collection is not
+    promised by the frozen retention policy.
     See `docs/WIO_VM_ARTIFACTS.md`; bounded SDK wrappers are not a claim of full
     kit parity, nor a reason to merge its separate v1 gate into backend closure.
    Unconstrained

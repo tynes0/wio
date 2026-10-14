@@ -186,6 +186,11 @@ realm SelfHostedProject {
             inputs.Push(library);
         }
 
+        for library in info.vmRuntimeLibraries
+        {
+            inputs.Push(library);
+        }
+
         if (not forceRebuild and OutputUpToDate(info.vmExecutableOutput, inputs))
         {
             let verified = process::Capture?(info.vmRunner, ["--verify", info.vmExecutableOutput], info.projectRoot);
@@ -205,6 +210,12 @@ realm SelfHostedProject {
         for library in info.vmNativeLibraries
         {
             arguments.Push("--native-library");
+            arguments.Push(library);
+        }
+
+        for library in info.vmRuntimeLibraries
+        {
+            arguments.Push("--runtime-library");
             arguments.Push(library);
         }
 
@@ -597,6 +608,7 @@ realm SelfHostedProject {
             for value in info.wioLinkDirs { protectedFiles.Push(value); }
             for value in info.wioNativeSources { protectedFiles.Push(value); }
             for value in info.vmNativeLibraries { protectedFiles.Push(value); }
+            for value in info.vmRuntimeLibraries { protectedFiles.Push(value); }
             for file in protectedFiles
             {
                 mut ancestor = fs::IsDirectory(file) ? file : path::ParentPath(file);

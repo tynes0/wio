@@ -1509,3 +1509,17 @@ add_test(NAME wio_vm_project_record_policy
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_project_record_policy_test.cmake")
 wio_test_labels(wio_vm_project_record_policy vm project cli artifact integrity release-gate)
 set_tests_properties(wio_vm_project_record_policy PROPERTIES TIMEOUT 30)
+
+add_test(NAME wio_vm_executable_cohort
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}"
+        "-DWIO_CONFIG=$<CONFIG>"
+        "-DWIO_GENERATOR=${CMAKE_GENERATOR}"
+        "-DWIO_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-executable-cohort"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_executable_cohort_test.cmake")
+wio_test_labels(wio_vm_executable_cohort interop vm native project cli artifact integrity deployment release-gate)
+set_tests_properties(wio_vm_executable_cohort PROPERTIES TIMEOUT 600)

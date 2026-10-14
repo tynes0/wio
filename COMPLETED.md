@@ -26,6 +26,33 @@ Notes:
 
 ## VM SDK shared/static module foundation — 2026-10-14
 
+### Follow-up: declared native distribution policy — 2026-10-15
+
+- [x] Freeze explicit registry/private-library roles across executable/shared/
+      static VM artifacts. No import-table discovery or live-generation pruning
+      is promised. Old cohorts remain intentionally retained; fresh deployment
+      copies only the selected generation.
+- [x] Executable packaging now accepts `--runtime-library`; project CLI forwards
+      `vm.runtimeLibraries`, tracks changes and protects their source directories.
+      V2 cohorts preserve original native import filenames and bind dependency
+      role/path/size/hash. V1 producer-only format remains supported.
+- [x] Verify every v2 dependency before embedded execution, `--verify` or deploy.
+      Reject corruption, conflicting files, unsafe names, noncanonical records,
+      reserved output names and escaping/dangling symlinks. Missing files repair
+      from current inputs; failed updates preserve the prior image.
+- [x] Only two new Windows Debug gates ran: `wio_vm_artifact_cohort` and
+      `wio_vm_executable_cohort`, 2/2 in 13.74 seconds. They cover real registry +
+      private DLL calls, Unicode deployment/project paths, ASCII build directory,
+      fresh renamed deployment, source-independent execution, corruption and
+      missing-helper CLI repair, retained generations and v1 compatibility.
+      Symlink escape ran successfully in the local unit gate.
+- [~] The initial integration run exposed MinGW failure for emoji-containing
+      native build-output paths. Tracked explicitly as NI-011 for the next
+      platform closure step; using an ASCII build directory is not a fix for it.
+      The older test corpus, Linux/macOS and Release configuration were not run.
+      Full SDK kit parity remains a separate v1 blocker. See
+      `docs/WIO_NATIVE_DISTRIBUTION_POLICY.md`.
+
 ### Follow-up: project CLI library and host integration — 2026-10-15
 
 - [x] VM project build/run/package accepts shared/static modules, optional native

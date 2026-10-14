@@ -416,6 +416,12 @@ install(TARGETS wio_vm_runner RUNTIME DESTINATION bin COMPONENT WioVmRuntime)
 if(BUILD_TESTING)
     add_library(wio_vm_artifact_extra_registry SHARED "${CMAKE_SOURCE_DIR}/tests/native/vm_artifact_extra_registry.cpp")
     target_link_libraries(wio_vm_artifact_extra_registry PRIVATE wio_sdk)
+    add_executable(wio_vm_artifact_cohort_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_artifact_cohort_test.cpp" runner/artifact.cpp)
+    target_include_directories(wio_vm_artifact_cohort_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/runner")
+    target_link_libraries(wio_vm_artifact_cohort_test PRIVATE wio_bytecode_core)
+    add_test(NAME wio_vm_artifact_cohort COMMAND wio_vm_artifact_cohort_test "${CMAKE_BINARY_DIR}/vm-artifact-cohort")
+    set_tests_properties(wio_vm_artifact_cohort PROPERTIES LABELS "vm;native;artifact;integrity;deployment;release-gate")
     add_executable(wio_vm_artifact_generation_test
         "${CMAKE_SOURCE_DIR}/tests/vm_artifact_generation_test.cpp"
         runner/artifact.cpp)

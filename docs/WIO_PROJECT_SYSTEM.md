@@ -518,6 +518,7 @@ bytecodeOutput = ".wio-build/interop/app.wiob"
 bridgeOutput = ".wio-build/interop/app.vm-native.dll"
 executableOutput = ".wio-build/interop/vm/app.exe"
 nativeLibraries = ["native/lib/extra-registry.dll"]
+runtimeLibraries = ["native/lib/private-helper.dll"]
 ```
 
 These paths are relative to the project root. Additional libraries must export
@@ -526,6 +527,13 @@ inputs. The generated bridge is loaded first. The active VM outputs must be
 distinct and must not collide with the source entry, manifest, compiler/runner
 or native backend outputs. `describe` reports resolved executable/runner,
 module/host paths, runtime prefix and static getter.
+`runtimeLibraries` contains explicitly declared private DLL/SO dependencies, not
+registry producers. Executable targets keep these with all producers in one
+immutable content-addressed cohort, preserving original filenames and checking
+every file before execution. Shared/static targets use their installed CMake
+bundle helpers. No transitive-library discovery is performed; native linkage
+must support sibling/origin-relative dependency lookup. See the
+[distribution policy](WIO_NATIVE_DISTRIBUTION_POLICY.md).
 
 Project run preserves manifest arguments, `--arg`, arguments after `--`, working
 directory overrides and exit codes. Executable projects execute the embedded application rather
@@ -535,7 +543,7 @@ The project CLI still requires its installed toolchain for project discovery;
 the standalone application itself does not need it.
 
 For executable targets, incremental compilation and packaging are separate. Changes to the VM runner or
-explicit `vm.nativeLibraries` invalidate the package without unnecessarily
+explicit `vm.nativeLibraries` or `vm.runtimeLibraries` invalidate the package without unnecessarily
 recompiling an otherwise current producer. Replacement only accepts an existing
 verified VM artifact; arbitrary files are not overwritten. New native bytes use
 new names, so older generations and failed-build rollback keep their libraries.

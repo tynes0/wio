@@ -24,6 +24,7 @@ namespace wio::vm::artifact
         constexpr std::size_t FooterSize = 32;
         constexpr std::uint64_t Limit = 512ull * 1024ull * 1024ull + 65536;
         constexpr std::string_view LockName = ".wio-vm-package.lock";
+        constexpr std::uint32_t CohortMarker = 0x324e4357;
 
         void require(bool condition, const char* message)
         {
@@ -112,17 +113,29 @@ namespace wio::vm::artifact
 
         bool safeName(const std::string& name)
         {
-            return !name.empty() && name.size() <= 1024 && name != "." && name != ".." &&
-                   name.find_first_of("/\\:") == std::string::npos && name.find('\0') == std::string::npos &&
-                   validUtf8(name);
+            if (name.empty() || name.size() > 1024 || name == "." || name == ".." ||
+                name.find_first_of("/\\:<>\"|?*;") != std::string::npos || name.back() == '.' || name.back() == ' ' ||
+                !validUtf8(name))
+                return false;
+            std::string folded = name;
+            for (char& value : folded)
+            {
+                if (static_cast<unsigned char>(value) < 32)
+                    return false;
+                if (value >= 'A' && value <= 'Z')
+                    value += 'a' - 'A';
+            }
+            const auto stem = folded.substr(0, folded.find('.'));
+            return stem != "con" && stem != "prn" && stem != "aux" && stem != "nul" &&
+                   !(stem.size() == 4 && (stem.starts_with("com") || stem.starts_with("lpt")) && stem[3] >= '1' &&
+                     stem[3] <= '9') &&
+                   folded != LockName && folded != "wio-native-manifest.json";
         }
         std::string key(std::string name)
         {
-#if defined(_WIN32)
             for (char& value : name)
                 if (value >= 'A' && value <= 'Z')
                     value += 'a' - 'A';
-#endif
             return name;
         }
 
@@ -135,6 +148,65 @@ namespace wio::vm::artifact
             return std::string(stem.begin(), stem.end()) + ".wio-" +
                    std::string(16 - (result.ptr - encoded.data()), '0') + std::string(encoded.data(), result.ptr) +
                    std::string(extension.begin(), extension.end());
+        }
+
+        std::string hexHash(std::span<const std::byte> data)
+        {
+            std::array<char, 16> encoded{};
+            const auto result = std::to_chars(encoded.data(), encoded.data() + encoded.size(), hash(data), 16);
+            return std::string(16 - (result.ptr - encoded.data()), '0') + std::string(encoded.data(), result.ptr);
+        }
+
+        void appendIdentity(std::vector<std::byte>& data, bool registry, std::uint64_t size, std::uint64_t checksum,
+                            const std::string& name)
+        {
+            appendInteger(data, registry ? 1 : 0, 4);
+            appendInteger(data, size, 8);
+            appendInteger(data, checksum, 8);
+            appendInteger(data, name.size(), 4);
+            for (unsigned char value : name)
+                data.push_back(std::byte{value});
+        }
+
+        bool cohortPath(const std::string& path)
+        {
+            constexpr std::string_view prefix = "wio-native/";
+            if (!path.starts_with(prefix) || path.size() <= prefix.size() + 17 || path[prefix.size() + 16] != '/')
+                return false;
+            for (std::size_t index = prefix.size(); index < prefix.size() + 16; ++index)
+                if (!((path[index] >= '0' && path[index] <= '9') || (path[index] >= 'a' && path[index] <= 'f')))
+                    return false;
+            return safeName(path.substr(prefix.size() + 17));
+        }
+
+        std::filesystem::path inside(const std::filesystem::path& directory, const std::string& relative)
+        {
+            require(safeName(relative) || cohortPath(relative), "unsafe VM native dependency path");
+            const auto root = std::filesystem::canonical(directory);
+            auto candidate = root;
+            for (const auto& part : std::filesystem::u8path(relative))
+            {
+                candidate /= part;
+                require(!std::filesystem::is_symlink(std::filesystem::symlink_status(candidate)) ||
+                            std::filesystem::exists(candidate),
+                        "VM native dependency contains a dangling symlink");
+                const auto resolved = std::filesystem::weakly_canonical(candidate);
+                auto base = root.begin();
+                auto current = resolved.begin();
+                for (; base != root.end() && current != resolved.end(); ++base, ++current)
+                {
+#if defined(_WIN32)
+                    const auto left = base->u8string();
+                    const auto right = current->u8string();
+                    require(key(std::string(left.begin(), left.end())) == key(std::string(right.begin(), right.end())),
+                            "VM native dependency escapes its package");
+#else
+                    require(*base == *current, "VM native dependency escapes its package");
+#endif
+                }
+                require(base == root.end(), "VM native dependency escapes its package");
+            }
+            return candidate;
         }
 
         class PackageLock final
@@ -214,7 +286,7 @@ namespace wio::vm::artifact
         const auto checksum = readInteger(footer, cursor, 8);
         const auto version = readInteger(footer, cursor, 4);
         const auto reserved = readInteger(footer, cursor, 4);
-        require(version == 1 && reserved == 0, "unsupported VM executable artifact version");
+        require((version == 1 || version == 2) && reserved == 0, "unsupported VM executable artifact version");
         require(length >= 12 && length <= Limit && length < std::uint64_t(fileSize) - FooterSize,
                 "invalid VM executable payload bounds");
         std::vector<std::byte> data(static_cast<std::size_t>(length));
@@ -225,28 +297,81 @@ namespace wio::vm::artifact
         const auto moduleLength = readInteger(data, cursor, 8);
         const auto libraryCount = readInteger(data, cursor, 4);
         require(libraryCount <= 64, "VM executable has too many native libraries");
+        if (version == 2)
+            require(readInteger(data, cursor, 4) == CohortMarker, "invalid VM artifact version-2 cohort marker");
         std::set<std::string> names;
+        std::string cohort;
+        std::vector<std::byte> identity;
+        bool sawPrivate = false;
         for (std::uint64_t index = 0; index < libraryCount; ++index)
         {
+            NativeDependency dependency;
+            if (version == 2)
+            {
+                const auto role = readInteger(data, cursor, 4);
+                require(role <= 1, "invalid VM native dependency role");
+                dependency.registry = role == 1;
+                require(!sawPrivate || !dependency.registry, "noncanonical VM native dependency order");
+                sawPrivate = sawPrivate || !dependency.registry;
+                dependency.size = readInteger(data, cursor, 8);
+                dependency.checksum = readInteger(data, cursor, 8);
+                require(dependency.size > 0 && dependency.size <= Limit, "invalid VM native dependency size");
+            }
             const auto size = readInteger(data, cursor, 4);
-            require(size <= 1024 && size <= data.size() - cursor, "invalid VM native library name length");
+            require(size <= 1100 && size <= data.size() - cursor, "invalid VM native library name length");
             std::string name(reinterpret_cast<const char*>(data.data() + cursor), static_cast<std::size_t>(size));
             cursor += size;
-            require(safeName(name) && names.insert(key(name)).second, "unsafe or duplicate VM native library name");
-            payload.libraries.push_back(std::move(name));
+            require((version == 1 ? safeName(name) : cohortPath(name)) && names.insert(key(name)).second,
+                    "unsafe or duplicate VM native library name");
+            if (version == 2)
+            {
+                const auto prefix = name.substr(0, name.rfind('/'));
+                require(cohort.empty() || cohort == prefix, "VM native dependencies span multiple cohorts");
+                cohort = prefix;
+                appendIdentity(identity, dependency.registry, dependency.size, dependency.checksum,
+                               name.substr(name.rfind('/') + 1));
+                dependency.path = name;
+                payload.dependencies.push_back(dependency);
+            }
+            if (version == 1 || dependency.registry)
+                payload.libraries.push_back(std::move(name));
         }
+        if (version == 2)
+            require(sawPrivate && cohort == "wio-native/" + hexHash(identity), "invalid VM native cohort identity");
         require(moduleLength > 0 && moduleLength == data.size() - cursor, "invalid embedded bytecode length");
         payload.bytecode.assign(data.begin() + cursor, data.end());
         verify(payload.bytecode);
         return true;
     }
 
+    void verifyDependencies(const std::filesystem::path& executable, const Payload& payload)
+    {
+        const auto directory = std::filesystem::absolute(executable).parent_path();
+        if (payload.dependencies.empty())
+        {
+            for (const auto& name : payload.libraries)
+                require(std::filesystem::is_regular_file(inside(directory, name)), "VM native library is missing");
+            return;
+        }
+        for (const auto& dependency : payload.dependencies)
+        {
+            const auto path = inside(directory, dependency.path);
+            require(std::filesystem::is_regular_file(path), "VM native dependency is missing");
+            require(std::filesystem::file_size(path) == dependency.size && hash(bytes(path)) == dependency.checksum,
+                    "VM native dependency checksum mismatch");
+        }
+    }
+
     namespace
     {
         void packageImage(const std::filesystem::path& runner, std::span<const std::byte> code,
-                          std::span<const std::filesystem::path> libraries, const std::filesystem::path& destination,
-                          const PackageOptions options)
+                          std::span<const std::filesystem::path> registries,
+                          std::span<const std::filesystem::path> runtimeLibraries,
+                          const std::filesystem::path& destination, const PackageOptions options)
         {
+            std::vector<std::filesystem::path> libraries(registries.begin(), registries.end());
+            libraries.insert(libraries.end(), runtimeLibraries.begin(), runtimeLibraries.end());
+            const bool cohort = !runtimeLibraries.empty();
             const auto output = std::filesystem::absolute(destination);
             if (std::filesystem::exists(output))
             {
@@ -257,6 +382,8 @@ namespace wio::vm::artifact
             const auto outputName = output.filename().u8string();
             require(key(std::string(outputName.begin(), outputName.end())) != LockName,
                     "VM executable name is reserved for package locking");
+            require(!cohort || key(std::string(outputName.begin(), outputName.end())) != "wio-native",
+                    "VM executable name is reserved for its native cohort directory");
             require(libraries.size() <= 64, "VM package has too many native libraries");
             Payload existing;
             require(!read(runner, existing), "a packaged application cannot be used as a runner template");
@@ -265,24 +392,42 @@ namespace wio::vm::artifact
             std::vector<std::byte> data;
             appendInteger(data, code.size(), 8);
             appendInteger(data, libraries.size(), 4);
+            if (cohort)
+                appendInteger(data, CohortMarker, 4);
             std::set<std::string> names;
             std::vector<std::filesystem::path> copies;
             std::vector<std::uint64_t> expectedHashes;
-            for (const auto& library : libraries)
+            std::vector<std::uint64_t> expectedSizes;
+            std::vector<std::string> relativeNames;
+            std::vector<std::byte> identity;
+            for (std::size_t index = 0; index < libraries.size(); ++index)
             {
+                const auto& library = libraries[index];
                 const auto encoded = library.filename().u8string();
                 const auto libraryBytes = bytes(library);
-                const std::string name = options.versionLibraries ? versionedName(library, libraryBytes)
-                                                                  : std::string(encoded.begin(), encoded.end());
+                const std::string name = options.versionLibraries && !cohort
+                                             ? versionedName(library, libraryBytes)
+                                             : std::string(encoded.begin(), encoded.end());
                 require(safeName(name) && names.insert(key(name)).second, "unsafe or duplicate VM native library name");
-                require(key(name) != LockName, "native library name is reserved for package locking");
-                const auto target = output.parent_path() / std::filesystem::u8path(name);
                 require(key(name) != key(std::string(outputName.begin(), outputName.end())),
                         "native library collides with VM executable");
-                if (std::filesystem::exists(target))
-                    require(bytes(target) == libraryBytes, "VM package would overwrite a different native library");
-                copies.push_back(target);
+                relativeNames.push_back(name);
                 expectedHashes.push_back(hash(libraryBytes));
+                expectedSizes.push_back(libraryBytes.size());
+                appendIdentity(identity, index < registries.size(), libraryBytes.size(), expectedHashes.back(), name);
+            }
+            const auto cohortPrefix = "wio-native/" + hexHash(identity) + "/";
+            for (std::size_t index = 0; index < libraries.size(); ++index)
+            {
+                auto& name = relativeNames[index];
+                if (cohort)
+                {
+                    name = cohortPrefix + name;
+                    appendInteger(data, index < registries.size() ? 1 : 0, 4);
+                    appendInteger(data, expectedSizes[index], 8);
+                    appendInteger(data, expectedHashes[index], 8);
+                }
+                copies.push_back(output.parent_path() / std::filesystem::u8path(name));
                 appendInteger(data, name.size(), 4);
                 for (unsigned char value : name)
                     data.push_back(std::byte{value});
@@ -292,12 +437,19 @@ namespace wio::vm::artifact
             std::vector<std::byte> footer(Magic.begin(), Magic.end());
             appendInteger(footer, data.size(), 8);
             appendInteger(footer, hash(data), 8);
-            appendInteger(footer, 1, 4);
+            appendInteger(footer, cohort ? 2 : 1, 4);
             appendInteger(footer, 0, 4);
             std::filesystem::create_directories(output.parent_path());
             // Serialize cooperating packagers in one deployment directory. Without
             // this, a failed writer could roll back a DLL another writer just used.
             const PackageLock lock{output.parent_path()};
+            for (std::size_t index = 0; index < copies.size(); ++index)
+            {
+                copies[index] = inside(output.parent_path(), relativeNames[index]);
+                if (std::filesystem::exists(copies[index]))
+                    require(bytes(copies[index]) == bytes(libraries[index]),
+                            "VM package would overwrite a different native library");
+            }
             if (std::filesystem::exists(output))
             {
                 require(options.replace, "VM package output already exists; choose a new output path");
@@ -308,8 +460,7 @@ namespace wio::vm::artifact
                 for (const auto& name : prior.libraries)
                     for (std::size_t index = 0; index < copies.size(); ++index)
                     {
-                        const auto encoded = copies[index].filename().u8string();
-                        if (key(name) == key(std::string(encoded.begin(), encoded.end())))
+                        if (key(name) == key(relativeNames[index]))
                             require(!std::filesystem::exists(copies[index]) ||
                                         bytes(copies[index]) == bytes(libraries[index]),
                                     "replacement would change a library owned by the previous VM generation");
@@ -338,6 +489,7 @@ namespace wio::vm::artifact
                     }
                     else
                     {
+                        std::filesystem::create_directories(copies[index].parent_path());
                         std::filesystem::copy_file(libraries[index], copies[index]);
                         created.push_back(copies[index]);
                         require(hash(bytes(copies[index])) == expectedHashes[index],
@@ -377,7 +529,16 @@ namespace wio::vm::artifact
                  const PackageOptions options)
     {
         const auto code = bytes(module);
-        packageImage(runner, code, libraries, destination, options);
+        packageImage(runner, code, libraries, {}, destination, options);
+    }
+
+    void package(const std::filesystem::path& runner, const std::filesystem::path& module,
+                 std::span<const std::filesystem::path> libraries,
+                 std::span<const std::filesystem::path> runtimeLibraries, const std::filesystem::path& destination,
+                 const PackageOptions options)
+    {
+        const auto code = bytes(module);
+        packageImage(runner, code, libraries, runtimeLibraries, destination, options);
     }
 
     void deploy(const std::filesystem::path& runner, const std::filesystem::path& application,
@@ -385,9 +546,15 @@ namespace wio::vm::artifact
     {
         Payload source;
         require(read(application, source), "deployment input is not a VM executable artifact");
+        verifyDependencies(application, source);
         std::vector<std::filesystem::path> libraries;
+        std::vector<std::filesystem::path> runtimeLibraries;
         for (const auto& name : source.libraries)
             libraries.push_back(std::filesystem::absolute(application).parent_path() / std::filesystem::u8path(name));
-        packageImage(runner, source.bytecode, libraries, output, {});
+        for (const auto& dependency : source.dependencies)
+            if (!dependency.registry)
+                runtimeLibraries.push_back(std::filesystem::absolute(application).parent_path() /
+                                           std::filesystem::u8path(dependency.path));
+        packageImage(runner, source.bytecode, libraries, runtimeLibraries, output, {});
     }
 } // namespace wio::vm::artifact

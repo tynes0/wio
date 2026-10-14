@@ -86,7 +86,7 @@ endif()
 file(RENAME "${root}/relocated/native köprü 🌍${WIO_SHARED_SUFFIX}" "${root}/relocated/bridge.offline")
 execute_process(COMMAND "${app}" "two words" "Türkçe 🌍" --help
     WORKING_DIRECTORY "${root}/pure" RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 30)
-if("${result}" STREQUAL "0" OR NOT error MATCHES "native VM module does not exist")
+if("${result}" STREQUAL "0" OR NOT error MATCHES "native library is missing")
     message(FATAL_ERROR "Missing adjacent native library was ignored: ${output}\n${error}")
 endif()
 file(RENAME "${root}/relocated/bridge.offline" "${root}/relocated/native köprü 🌍${WIO_SHARED_SUFFIX}")

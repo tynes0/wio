@@ -77,9 +77,21 @@ producer stays a real native library. Library basenames are recorded in UTF-8
 and resolved relative to the executable, **not the current working directory**.
 Spaces and Unicode filenames/arguments are covered by the Windows gate.
 
-Only explicitly listed producer libraries are copied. Their transitive DLL/SO
-dependencies, assets, platform runtimes, signing and installers are not discovered
-or bundled automatically. Deploy them according to the platform loader's rules.
+Explicit private dependencies can also be copied without registering them:
+
+```powershell
+wio-vm --package build/program.wiob --output dist/program.exe `
+    --native-library build/bridge.dll --runtime-library build/helper.dll
+```
+
+This selects a v2 content-addressed cohort under `dist/wio-native/<id>/`, keeping
+the original producer/helper filenames required by the native loader. Every
+dependency is size/hash-checked before execution, verification or deployment.
+Producer-only packages retain the v1 layout described above. Dependencies,
+assets, platform runtimes, signing and installers are not discovered automatically.
+Declare non-system transitive libraries explicitly and follow the platform
+loader's origin-relative linkage rules. See the complete
+[native distribution policy](WIO_NATIVE_DISTRIBUTION_POLICY.md).
 A missing library fails before Wio entry execution. Native code is privileged;
 packaging does not sandbox it or relax the native ABI qualification boundaries.
 
@@ -95,8 +107,9 @@ packaging does not sandbox it or relax the native ABI qualification boundaries.
   of removing a library another package may use. After a crash, inspect the
   directory and remove the empty `.wio-vm-package.lock` only when no packager is
   running. That name is reserved for the lock, not executable/library output.
-- Library metadata permits only bounded, valid UTF-8 basenames without path
-  traversal or separators. There are at most 64 names, each at most 1,024 bytes.
+- Library metadata permits only bounded, portable, valid UTF-8 basenames. V2
+  wraps them in a strictly checked cohort path, never arbitrary traversal.
+  There are at most 64 dependencies, each basename at most 1,024 UTF-8 bytes.
 - The module must decode and pass the bytecode verifier before publication.
   Executable packaging requires a concrete runnable entry with zero parameters
   or one `string[]` parameter; library-only modules are not executable packages.
@@ -142,6 +155,11 @@ garbage-collected. The content identity is FNV-1a, not a cryptographic trust cla
 Missing deployed libraries fail `--no-build` verification. A normal build/run
 can repair them from current producer inputs without altering an existing
 library's bytes; corrupt or non-VM images still reject replacement.
+When `vm.runtimeLibraries` is nonempty, v2 cohorts replace individual filename
+versioning so native import references continue to work. Both producer and
+private-library changes invalidate the package; private files never become
+registry producers. Old cohorts remain deliberately retained, not automatically
+garbage-collected. Fresh deployment copies only the selected cohort.
 
 `--replace` publishes the new image atomically under the deployment lock. On
 Windows a running/locked executable can prevent replacement; failure preserves
@@ -573,8 +591,9 @@ This is explicit dependency deployment, not import-table discovery or atomic
 replacement of a whole distribution. `POST_BUILD` runs when the host links;
 explicit repair targets and CMake install rules are described below. Installed/final
 distributions must retain their matching bundle directories. Project CLI
-shared/static VM targets and old-generation garbage collection remain separate
-work. Hashes detect content mismatch during
+shared/static VM targets are now integrated as described below. Old generations
+are retained deliberately under the distribution policy, without automatic
+garbage collection. Hashes detect content mismatch during
 staging/deployment; the runtime does not reauthenticate a replaced native library.
 Signing and sandboxing are not provided, and native code remains privileged.
 
@@ -702,9 +721,10 @@ working-directory overrides and the host exit code. A library without a host
 can build/package, but `project run` rejects it before building.
 
 `vm.nativeLibraries` lists extra registry producers; `vm.runtimeLibraries` lists
-explicit private libraries copied without registry registration for library
-targets. Standalone executable packaging retains its existing producer-only
-contract; private dependency discovery is not silently enabled there.
+explicit private libraries copied without registry registration for all artifact
+targets. Executables with private libraries select a v2 cohort; existing
+producer-only packages retain v1 compatibility. No target implicitly discovers
+transitive dependencies. See [distribution policy](WIO_NATIVE_DISTRIBUTION_POLICY.md).
 
 Every normal library build reconfigures its data-only JSON plan and lets CMake
 track changes, repair absent bundles and publish a verified artifact record.
@@ -720,7 +740,8 @@ compatible `WioVmRuntime` and deploy that bundle beside the final host image.
 It is not a self-contained archive with the VM runtime merged into it. A static
 host package contains the final runnable host and its bundle instead. No package
 invented for a bare library has an executable entrypoint. Old native generations
-are retained; automated collection and wider platform qualification remain open.
+are retained intentionally; automated collection is not part of the policy.
+Wider platform qualification remains open.
 
 Two new Windows Debug gates passed 2/2 in 91.65 seconds on 2026-10-15:
 `wio_vm_project_library_cli` and `wio_vm_project_record_policy`. They cover shared/
@@ -732,9 +753,22 @@ The full older corpus and Linux/macOS were not rerun in this slice.
 
 Still required for backend artifact closure:
 
-1. The remaining declared dependency/generation-management deployment policy.
-2. Artifact/runtime installation and clean Linux/macOS qualification gates.
-3. Artifact/runtime/build-cost optimization and release budgets.
+1. Platform/behavioral qualification, including the observed Windows MinGW
+   emoji build-output path failure (NI-011), clean Linux/macOS and runtime install.
+2. The agreed three heavy optimization passes and release budgets.
+
+Declared dependency roles, executable private-library cohorts, immutable retention,
+and selected-generation fresh deployment are specified by the implemented
+[distribution policy](WIO_NATIVE_DISTRIBUTION_POLICY.md); automatic dependency
+discovery and live-generation garbage collection are deliberately not promised.
+
+The distribution-policy slice ran only two new Windows Debug gates on 2026-10-15:
+`wio_vm_artifact_cohort` and `wio_vm_executable_cohort`, 2/2 in 13.74 seconds.
+These cover dependency roles/integrity, v1 compatibility, real private DLL calls,
+Unicode deployment and project paths with ASCII build output, relocation,
+source-independent execution, missing-file CLI repair and fresh packaging.
+The initial emoji build-output failure remains open as NI-011; this is not
+Linux/macOS, Release or full older-corpus qualification.
 
 Full SDK complex/nested/generic value parity, host ref/view/callback APIs,
 complex async payloads and foreign task creation, application hosting, detailed

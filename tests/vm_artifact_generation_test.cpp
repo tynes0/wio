@@ -151,7 +151,7 @@ int main(int argc, char* argv[])
                "deployment copied an obsolete generation");
         rejects([&] { artifact::deploy(runner, app, deployed); }, "already exists");
         fs::rename(app.parent_path() / second.libraries.front(), root / "offline");
-        rejects([&] { artifact::deploy(runner, app, root / "missing" / "app"); }, "could not open");
+        rejects([&] { artifact::deploy(runner, app, root / "missing" / "app"); }, "missing");
         expect(!fs::exists(root / "missing" / "app"), "missing library published a partial deployment");
         std::cout << "VM generation replacement and deployment guards passed\n";
         return 0;
