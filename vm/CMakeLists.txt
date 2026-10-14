@@ -438,6 +438,11 @@ if(BUILD_TESTING)
     add_test(NAME wio_vm_task_source_shutdown COMMAND wio_vm_task_source_shutdown_test)
     set_tests_properties(wio_vm_task_source_shutdown PROPERTIES
         TIMEOUT 90 LABELS "vm;sdk;async;task;shutdown;ownership;thread;release-gate")
+    add_executable(wio_vm_task_source_import_test "${CMAKE_SOURCE_DIR}/tests/vm_task_source_import_test.cpp")
+    target_link_libraries(wio_vm_task_source_import_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_task_source_import COMMAND wio_vm_task_source_import_test)
+    set_tests_properties(wio_vm_task_source_import PROPERTIES
+        TIMEOUT 30 LABELS "vm;sdk;async;task;task-input;ownership;thread;release-gate")
 endif()
 
 # Fail configuration if an accidental transitive dependency pulls the compiler
@@ -477,4 +482,7 @@ if(TARGET wio_vm_sdk_session_lifecycle_test)
 endif()
 if(TARGET wio_vm_task_source_shutdown_test)
     wio_assert_runtime_only(wio_vm_task_source_shutdown_test)
+endif()
+if(TARGET wio_vm_task_source_import_test)
+    wio_assert_runtime_only(wio_vm_task_source_import_test)
 endif()

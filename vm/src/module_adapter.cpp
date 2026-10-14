@@ -33,9 +33,17 @@ namespace wio::vm
             return module;
         }
 
-        std::uint8_t qualifiedMarshalling(const bytecode::Module& module, std::uint32_t type, bool result)
+        std::uint8_t qualifiedMarshalling(const bytecode::Module& module, std::uint32_t type, bool result,
+                                          bool allowTask = false)
         {
             std::uint8_t marshalling = 0;
+            if (allowTask && type < module.types.size() && module.types[type].kind == TypeAsyncTask)
+            {
+                if (module.types[type].arguments.size() != 1)
+                    throw std::invalid_argument("VM SDK task requires one concrete payload");
+                (void)qualifiedMarshalling(module, module.types[type].arguments[0], true);
+                return 8;
+            }
             // Do not unwrap ref/view/nullable declarations through scalarType.
             // Only concrete by-value scalars, enum/flagset, string and text are
             // qualified here; broader native codecs require their sidecars.
@@ -245,7 +253,7 @@ namespace wio::vm
                 {
                     if (function.parameters[index].type != entry.parameterTypes[index])
                         throw std::invalid_argument("VM SDK export parameter differs from the function signature");
-                    call.parameters.push_back(qualifiedMarshalling(module, entry.parameterTypes[index], false));
+                    call.parameters.push_back(qualifiedMarshalling(module, entry.parameterTypes[index], false, true));
                 }
                 calls.push_back(std::move(call));
                 exports.push_back({entry.stableId, cstring(entry.stableKey), cstring(entry.logicalName),
@@ -302,6 +310,15 @@ namespace wio::vm
                     values.reserve(count);
                     for (std::uint32_t index = 0; index < count; ++index)
                     {
+                        if (call.parameters[index] == 8)
+                        {
+                            Value task;
+                            if (!state.machine.importTaskSource(wire[index], call.entry->parameterTypes[index], task,
+                                                                state.error))
+                                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                            values.push_back(std::move(task));
+                            continue;
+                        }
                         if (wire[index].flags & ~(WIO_NATIVE_ABI_VALUE_BORROWED | WIO_NATIVE_ABI_VALUE_OWNED))
                         {
                             state.error = "VM SDK by-value arguments cannot carry reference/consumed flags";

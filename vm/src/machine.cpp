@@ -2643,6 +2643,25 @@ namespace wio::vm
         return true;
     }
 
+    bool Machine::importTaskSource(const WioNativeAbiValue& wire, std::uint32_t type, Value& result, std::string& error)
+    {
+        WioNativeTaskSource source{};
+        if (!result.isEmpty() || !taskSource(wire, source))
+        {
+            error = "Task input requires an owning source from this live machine and an empty output";
+            return false;
+        }
+        auto decoded = decodeNativeTask(wire, type);
+        if (!decoded.succeeded() || decoded.value.kind() != Value::Kind::AsyncTask)
+        {
+            error = decoded.succeeded() ? "Task input no longer names a live task" : std::move(decoded.error);
+            return false;
+        }
+        result = std::move(decoded.value);
+        error.clear();
+        return true;
+    }
+
     detail::NativeValueResult Machine::decodeNativeTask(const WioNativeAbiValue& wire, std::uint32_t type)
     {
         if (type >= program_->module->types.size() || program_->module->types[type].kind != 34 ||

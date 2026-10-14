@@ -33,6 +33,16 @@ execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
 if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Session library bytecode emission failed: ${output}\n${error}")
 endif()
+if(WIO_BAD_LIBRARY_SOURCE)
+    set(WIO_TEST_BAD_BYTECODE "${root}/unsupported.wiob")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}"
+        "${WIO_EXECUTABLE}" "${WIO_BAD_LIBRARY_SOURCE}" --no-builtin
+        --target shared --emit-bytecode --bytecode-output "${WIO_TEST_BAD_BYTECODE}"
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45 ENCODING UTF-8)
+    if(NOT "${result}" STREQUAL "0")
+        message(FATAL_ERROR "Unsupported SDK fixture bytecode emission failed: ${output}\n${error}")
+    endif()
+endif()
 set(generator_args -G "${WIO_GENERATOR}")
 if(WIO_GENERATOR_PLATFORM)
     list(APPEND generator_args -A "${WIO_GENERATOR_PLATFORM}")
@@ -40,6 +50,7 @@ endif()
 execute_process(COMMAND "${CMAKE_COMMAND}" -S "${WIO_HOST_PROJECT}" -B "${root}/host"
     ${generator_args} "-DCMAKE_PREFIX_PATH=${prefix}" "-DCMAKE_BUILD_TYPE=${WIO_CONFIG}"
     "-DWIO_TEST_BYTECODE=${root}/session.wiob" "-DWIO_TEST_HOST_SOURCE=${WIO_HOST_SOURCE}"
+    "-DWIO_TEST_BAD_BYTECODE=${WIO_TEST_BAD_BYTECODE}"
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 45 ENCODING UTF-8)
 if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "Installed-only session host configure failed: ${output}\n${error}")

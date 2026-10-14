@@ -1196,6 +1196,13 @@ Rider, and CLion are defined in
     Session close quiesces workers/timers before unload; escaped wires retain code
     and immutable metadata without retaining a live VM. New focused gates cover
     installed shared/static async hosts and 80 shutdown race repetitions.
+    Owning task parameters now preserve the same session/task identity across
+    synchronous relay and suspended async calls, including concrete generics.
+    Canonical generic-export checks are aligned with ordinary exports while
+    legacy C ABI rejection remains. New focused import and installed-host gates
+    cover cancellation direction, pending/fault/void/Unicode inputs and raw ABI
+    rejection before body execution. Foreign task creation, cross-session task
+    transfer and complex/nested SDK task payloads remain unqualified.
     Complex/async-value/application parity, native dependency
     deployment, project CLI library targets and cross-platform qualification
     remain open. Old native generations are retained deliberately;

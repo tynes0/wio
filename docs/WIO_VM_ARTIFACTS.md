@@ -361,8 +361,9 @@ to `NativeModule::attachSession(factory->api(), factory, ...)`.
 Concrete async functions and generic specializations may return owning tasks
 with void, scalar, enum/flagset, string or text payloads. Arguments still use the
 qualified ordinary value surface. Ordinary functions returning a qualified
-`coroutine<T>` (for example a timer) use the same task sidecar. Task arguments,
-async ref/view and complex or nested task payloads are not enabled. Invocation returns the task without waiting
+`coroutine<T>` (for example a timer) use the same task sidecar. Owning task
+arguments use the same-session capability described below. Async ref/view and
+complex or nested task payloads are not enabled. Invocation returns the task without waiting
 for its completion. A task can be pending, ready, faulted or cancelled; there is
 no temporary/default payload. Read before completion returns NOT_READY; reading
 a fault/cancellation throws through the C++ wrapper (raw APIs return statuses).
@@ -426,6 +427,71 @@ task publication/query/simple read/subscription do not wait behind unrelated
 serialized VM execution. The two gates passed 2/2 in 36.67 seconds on 2026-10-14.
 This is not full SDK/async parity or a fresh full
 existing-corpus/platform qualification.
+
+### Owning task parameters and relay
+
+A synchronous or async export may accept `coroutine<T>` by value when T is in
+the qualified void/scalar/enum/flagset/string/text surface. This copies a handle
+to the **same task state**, not its payload, and never implicitly waits or
+consumes the caller's value. Concrete generic exports use the same canonical
+ABI rule as ordinary exports; legacy C ABI restrictions remain unchanged.
+Structural task/payload identities are emitted even for parameter-only types.
+
+```wio
+[export]
+async fn Number(value: i32) -> i32
+{
+    await main;
+    return value;
+}
+
+[export]
+async fn Add(task: coroutine<i32>, value: i32) -> i32
+{
+    return await task + value;
+}
+
+[export, instantiate(i32)]
+fn Relay<T>(task: coroutine<T>) -> coroutine<T>
+{
+    return task;
+}
+```
+
+```cpp
+std::array input{wio::sdk::NativeValue::integer(41)};
+auto source = module.invoke("Number", input);
+std::array arguments{source.clone(), wio::sdk::NativeValue::integer(1)};
+auto chained = module.invoke("Add", arguments);
+source.reset();
+arguments[0].reset(); // the suspended Wio frame owns its task handle
+auto answer = module.waitTask(chained); // 42; explicit wait pumps main
+```
+
+`Relay<T>` returns an owning source for the same underlying task. Cancelling
+that alias cancels the original state. Cancelling a parent awaiting a shared
+input does not implicitly cancel the input; use explicit cancellation or the
+language's structured-scope rules when group cancellation is intended. A source
+fault/cancellation still propagates through Wio's existing await semantics.
+
+Both SDK convenience calls and raw call-table entry enforce provenance. The
+input must be an original owning TASK_SOURCE wire from the same live session,
+with the exact declared task identity. Another session, even of the same DLL,
+does not qualify. Borrowed/ref/view, consumed, copied/forged source descriptors,
+producer-private runtime handles and wrong payload identities reject before the
+function body. All arguments are decoded before execution; a later invalid
+scalar does not execute a partially validated task call. Raw failure leaves an
+empty output slot; no task claim is consumed. Host-provided/foreign-session task
+creation and complex/nested payloads remain separate work, not enabled by this
+capability. Sessions without the task sidecar cannot use task convenience calls.
+
+New focused gates `wio_vm_task_source_import` and
+`wio_vm_sdk_task_inputs_artifacts` cover 100 import/identity/foreign-release
+repetitions plus installed shared/static chaining, generic relay, cancellation
+direction, fault propagation, void and Unicode/NUL payloads, wrong-thread/raw
+ABI rejection, parameter-only reflection, legacy ABI rejection and unsupported
+complex-payload initialization. Both passed on Windows Debug on 2026-10-14:
+2/2 in 23.17 seconds. Older gates and other platforms were not rerun.
 
 Still required for packaging closure:
 

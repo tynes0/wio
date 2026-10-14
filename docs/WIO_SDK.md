@@ -42,7 +42,11 @@ code without retaining the closed VM. Session task sidecar v1 now supports
 owning scalar/string/text/enum/void async exports, explicit poll/wait/cancel,
 main pumping and exactly-once completion subscriptions. Task results carry no
 placeholder value while pending; timeout does not implicitly cancel.
-Application/complex exports, async task parameters and
+Owning task parameters now preserve task identity within their original live
+session, including concrete generic relay; cross-session/borrowed/consumed task
+inputs reject before execution. Canonical generic export validation is aligned
+with ordinary exports without expanding the legacy C ABI.
+Application/complex exports, foreign task creation and
 legacy Module parity remain outside this qualified surface.
 See [VM module packaging and ownership](WIO_VM_ARTIFACTS.md#vm-backed-sdk-shared-and-static-modules)
 for examples, toolchain requirements and rejection boundaries.

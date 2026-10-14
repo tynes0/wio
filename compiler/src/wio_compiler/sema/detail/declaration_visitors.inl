@@ -1676,7 +1676,7 @@
 
                     for (size_t i = 0; i < instantiatedFunctionType->paramTypes.size(); ++i)
                     {
-                        if (!isCAbiSafeExportType(instantiatedFunctionType->paramTypes[i]))
+                        if (!canonicalAbiExports_ && !isCAbiSafeExportType(instantiatedFunctionType->paramTypes[i]))
                         {
                             WIO_LOG_ADD_ERROR(
                                 node.location(),
@@ -1696,7 +1696,7 @@
                             ? resolvedTask.AsFast<AsyncTaskType>()->valueType
                             : Compiler::get().getTypeContext().getUnknown();
                     }
-                    if (!isCAbiSafeExportType(instantiatedExportResult))
+                    if (!canonicalAbiExports_ && !isCAbiSafeExportType(instantiatedExportResult))
                     {
                         WIO_LOG_ADD_ERROR(
                             node.location(),

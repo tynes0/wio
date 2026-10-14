@@ -136,6 +136,11 @@ namespace wio::vm
         [[nodiscard]] bool exportTaskSource(const Value& task, std::uint32_t type, WioNativeAbiValue& result,
                                             std::string& error);
         [[nodiscard]] bool taskSource(const WioNativeAbiValue& value, WioNativeTaskSource& result) const noexcept;
+        // Owning task inputs must originate from this live machine/generation.
+        // The decoded Value shares task identity; it is not a wait or a copy of
+        // the eventual payload. Foreign producer tasks use the native bridge.
+        [[nodiscard]] bool importTaskSource(const WioNativeAbiValue& value, std::uint32_t type, Value& result,
+                                            std::string& error);
         bool cancel(const Value& task);
 
         // A debug observer may pause execution at the instruction boundary it

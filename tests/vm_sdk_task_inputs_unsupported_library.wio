@@ -1,0 +1,5 @@
+[export]
+fn NeedsArray(task: coroutine<i32[]>) -> i32
+{
+    return 1;
+}

@@ -12,6 +12,25 @@ Notes:
 
 ## VM SDK shared/static module foundation — 2026-10-14
 
+### Follow-up: same-session owning task inputs
+
+- [x] Synchronous/async and concrete generic exports accept qualified owning
+      task parameters, sharing task identity without waiting or consuming the
+      host's claim. Suspended frames retain inputs after host value release.
+- [x] SDK and raw call-table paths reject other sessions/generations, forged
+      identities/descriptors and borrowed/consumed task claims before the body.
+- [x] Generic canonical ABI validation now matches ordinary exports; legacy
+      C ABI rejection remains. Parameter-only task/payload identities are emitted.
+- [x] Generic relay, cancellation direction and fault propagation use existing
+      VM await semantics, with exactly-once task state and post-close value/code
+      ownership. Source wires may be released off-thread after shutdown.
+- [x] Two new Windows Debug gates passed 2/2 in 23.17 seconds: 100 import/lifetime
+      repetitions and relocated shared/static hosts, including generic relay,
+      enum/flagset/void/Unicode inputs, negative raw ABI checks, parameter-only
+      reflection and unsupported complex-task module rejection.
+- [~] Foreign task creation/transfer and complex/nested payloads remain open;
+      focused Windows gates are not complete SDK/platform/corpus qualification.
+
 ### Follow-up: owning async session task boundary
 
 - [x] Additive task sidecar v1 reuses the canonical task-source wire without

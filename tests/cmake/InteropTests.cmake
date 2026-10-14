@@ -1434,3 +1434,21 @@ add_test(NAME wio_vm_sdk_async_artifacts
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_sdk_session_artifacts_test.cmake")
 wio_test_labels(wio_vm_sdk_async_artifacts interop vm sdk async task shared static deployment ownership thread release-gate)
 set_tests_properties(wio_vm_sdk_async_artifacts PROPERTIES TIMEOUT 360)
+
+add_test(NAME wio_vm_sdk_task_inputs_artifacts
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}"
+        "-DWIO_CONFIG=$<CONFIG>"
+        "-DWIO_GENERATOR=${CMAKE_GENERATOR}"
+        "-DWIO_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-sdk-task-inputs-artifacts"
+        "-DWIO_LIBRARY_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_sdk_task_inputs_library.wio"
+        "-DWIO_BAD_LIBRARY_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_sdk_task_inputs_unsupported_library.wio"
+        "-DWIO_HOST_SOURCE=${CMAKE_SOURCE_DIR}/tests/vm_sdk_task_inputs_artifact_host.cpp"
+        "-DWIO_HOST_PROJECT=${CMAKE_SOURCE_DIR}/tests/projects/vm_sdk_task_inputs_host"
+        "-DWIO_HOST_TARGET=vm_task_inputs_host"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_sdk_task_inputs_artifacts_test.cmake")
+wio_test_labels(wio_vm_sdk_task_inputs_artifacts interop vm sdk async task task-input shared static deployment ownership thread release-gate)
+set_tests_properties(wio_vm_sdk_task_inputs_artifacts PROPERTIES TIMEOUT 360)

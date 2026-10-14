@@ -859,7 +859,11 @@ namespace wio::sdk
                 throw std::runtime_error("canonical export not found");
             std::vector<WioNativeAbiValue> wire;
             for (const auto& arg : arguments)
+            {
+                if (state->sessionOwner && (arg.value_.flags & WIO_NATIVE_ABI_VALUE_TASK_SOURCE))
+                    (void)taskOwner(state, arg);
                 wire.push_back(arg.value_);
+            }
             NativeValue result;
             result.keepAlive_ = state->sessionOwner ? std::shared_ptr<void>(state->sessionOwner->code) : state;
             const auto& call = state->contract->callTable[entry->callTableSlot];
