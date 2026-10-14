@@ -149,7 +149,7 @@ because it is approved. Close with a versioned contract/docs consistency pass.
 | ID | Priority / state | Current boundary and closure requirement |
 | --- | --- | --- |
 | NI-001 | Closed within qualified native payload boundaries | Owning task inputs, free std task helpers, completion/cancellation, blocking main progress and retained-source shutdown now have focused codec, C++/full-VM/pruned-VM and live-host gates. See [native task-input closure](WIO_VM_NATIVE_BRIDGE.md#owning-native-task-inputs-and-std-helper-parity). Existing unsupported object surfaces and async borrows are not enabled by this closure. |
-| NI-002 | P1 remaining packaging gap | Runtime-only executables and project build/run/package are qualified within their recorded scope. VM-backed shared/static CMake modules now publish stable SDK calls and owning synchronous scalar/string/text/enum/flagset results, including concrete generic functions; installed relocation and multi-static hosts have focused Windows gates. Lifecycle/async/complex exports, explicit host sessions, native dependency deployment, project CLI library targets and broader platform qualification remain open. Installing archives or passing these initial wrappers is not full SDK module parity. See [artifact contract](WIO_VM_ARTIFACTS.md). Existing C++ backend artifact targets are unchanged. |
+| NI-002 | P1 remaining packaging gap | VM shared/static SDK modules now have independent affine sessions, synchronous lifecycle/API-version/save-restore, rollback and deferred owner-thread cleanup, in addition to qualified canonical value calls. Owning results pin code but not a closed VM. Focused Windows gates cover installed relocation and shared/static hosts. Async/complex/application exports, native dependency deployment, project CLI library targets and broader platform qualification remain open. Hosts must collect off-thread final session releases before the owner thread exits; pending retired instances otherwise remain pinned until process termination. See [artifact contract](WIO_VM_ARTIFACTS.md). Existing C++ backend artifact targets are unchanged. |
 | NI-003 | P2 limitation | Async ref/view parameters/results remain forbidden. Native escaping closures may not capture invocation-scoped borrowed Places; copy/retain values instead. No arbitrary suspension-lifetime promise is made. |
 | NI-004 | P2 limitation | Exact qualified callback aliases work, but aggregate/descendant callback overlap is rejected before invocation. Use one aggregate borrow and access its children. Rejection is a safety boundary, not a memory-corruption bug. |
 | NI-005 | P2 limitation | Box support is bounded to the qualified scalar/string/text/container/Any/defaultable handle families. Arbitrary native POD/fixed-array/component defaults, unsupported method payloads and lifecycle-bearing fields are not automatically materialized. Qualified native POD **default factories** are a separate supported facility. |
@@ -203,6 +203,9 @@ Evidence: [release gates](WIO_V1_RELEASE_PLAN.md),
 ## 5. Missing evidence, not automatically failing behavior
 
 - **QA-001 (P1):** No full current native/C++/VM/SDK/std corpus run is claimed.
+  The session/lifecycle slice on 2026-10-14 ran only two new Windows Debug gates:
+  `wio_vm_sdk_session_lifecycle` and `wio_vm_sdk_session_artifacts`, 2/2 in
+  28.28 seconds. Earlier focused gates were not rerun in this pass.
   The VM SDK module adapter on 2026-10-14 ran only two new Windows Debug gates:
   `wio_vm_sdk_module_adapter` and `wio_vm_sdk_module_artifacts`, 2/2 in 40.89
   seconds. The installed-artifact gate builds and executes shared, two static

@@ -12,6 +12,23 @@ Notes:
 
 ## VM SDK shared/static module foundation — 2026-10-14
 
+### Follow-up: independent affine sessions and lifecycle
+
+- [x] Additive session descriptor v1 opens independent VM instances per SDK
+      module open/attachment, including multiple instances of one DLL or static
+      wrapper, without changing existing call/value/bytecode versions.
+- [x] Synchronous start/update/API-version/unload and scalar/string/text/enum
+      state snapshots/restore validate signatures and exact state payload types.
+- [x] Idempotent start/stop, failed-load rollback, exactly-once unload, unload
+      failure destruction and active-call pinning cover reentrant view closure.
+- [x] SDK results/snapshots retain producer code, not closed VM instances.
+      Off-thread last views retire to the owner-thread collectSessions safe point.
+- [x] Two new Windows Debug gates passed 2/2 in 28.28 seconds, including
+      installed relocated shared/static modules, independent globals, snapshots,
+      reentrant closure, failure cleanup and deferred owner-thread retirement.
+- [~] Async/complex/application exports, native dependency/project library
+      packaging and fresh Linux/macOS/full-suite qualification remain open.
+
 - [x] Compiler-independent ModuleAdapter owns decoded bytecode, Machine,
       stable SDK export descriptors, reflection identities and call contexts.
 - [x] Concrete synchronous functions/generic specializations support owning
@@ -25,9 +42,10 @@ Notes:
 - [x] Two new Windows Debug gates passed 2/2 in 40.89 seconds, including
       installed-only relocated hosting, generic/enum/flagset/void exports,
       Unicode/NUL storage, panic recovery, wrong-thread entry and invalid modules.
-- [~] Lifecycle/async/complex exports, explicit host sessions, native dependency
-      deployment, project CLI library targets and Linux/macOS acceptance remain
-      tracked in Backend item 8. This is not complete SDK parity or a release.
+- [~] Async/complex/application exports, native dependency deployment, project
+      CLI library targets and Linux/macOS acceptance remain tracked in Backend
+      item 8. Session/lifecycle closure is recorded in the follow-up above;
+      this is not complete SDK parity or a release.
 
 ## v0.15 attribute foundation sprint
 

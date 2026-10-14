@@ -23,6 +23,7 @@ Official public headers:
 - `sdk/include/wio_native_abi.h` (experimental Lowered-WIR boundary)
 - `sdk/include/wio_native_reflection.h` (experimental reflection sidecar)
 - `sdk/include/wio_native_sdk.h` (experimental C++ owner/host wrappers)
+- `sdk/include/wio_module_session.h` (additive instance/lifecycle sidecar)
 
 Everything else should be treated as implementation detail unless it is
 explicitly re-exported through those headers.
@@ -32,8 +33,12 @@ explicitly re-exported through those headers.
 Compiler-independent VM library modules now expose the same canonical contract
 through `vm::ModuleAdapter` and installed `wio_add_vm_module` shared/static
 targets. `NativeModule::attach(contract, owner)` supports explicit in-process
-adapter ownership. This initial surface is synchronous scalar/string/text and
-enum/flagset exports, not legacy Module/lifecycle/async/complex-value parity.
+adapter ownership. Instance-based `NativeModule::open`/`attachSession` now
+support independent VM globals, start/update/unload and scalar/string/text
+save/restore. `stop()` reports affine shutdown failures; `collectSessions()`
+reclaims off-thread final releases on their owner thread. Returned wires pin
+code without retaining the closed VM. Application/async/complex exports and
+legacy Module parity remain outside this qualified surface.
 See [VM module packaging and ownership](WIO_VM_ARTIFACTS.md#vm-backed-sdk-shared-and-static-modules)
 for examples, toolchain requirements and rejection boundaries.
 

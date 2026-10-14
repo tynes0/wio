@@ -4,6 +4,7 @@ set(WIO_SDK_HEADERS
     "${WIO_SDK_INCLUDE_DIR}/wio_version.h"
     "${WIO_SDK_INCLUDE_DIR}/module_api.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_module_contract.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_module_session.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_features.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_sdk.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_values.h"

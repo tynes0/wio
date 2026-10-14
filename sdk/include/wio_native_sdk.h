@@ -1,8 +1,13 @@
 #pragma once
 #include "wio_native_reflection.h"
 #include "wio_sdk.h"
+#include "wio_module_session.h"
 
 #include <cstring>
+#include <atomic>
+#include <mutex>
+#include <thread>
+#include <new>
 #include <unordered_set>
 
 namespace wio::sdk {
@@ -138,6 +143,121 @@ public:
 };
 
 class NativeModule {
+    struct SessionCode
+    {
+        decltype(detail::openLibrary(std::filesystem::path{})) handle{};
+        std::shared_ptr<void> attachedOwner;
+        ~SessionCode()
+        {
+            if (handle)
+                detail::closeLibrary(handle);
+        }
+    };
+
+    struct SessionOwner
+    {
+        const WioSdkModuleSessionApi* api{};
+        WioSdkModuleSession session{};
+        std::shared_ptr<SessionCode> code;
+        std::uint64_t owner{};
+        SessionOwner* next = nullptr;
+
+        struct Retirements
+        {
+            std::mutex mutex;
+            SessionOwner* head = nullptr;
+            // Deliberately do not destroy pending affine instances during
+            // static/DLL teardown. The owning thread must collect them.
+        };
+
+        static std::uint64_t threadToken() noexcept
+        {
+            static std::atomic_uint64_t next{1};
+            thread_local const auto token = next.fetch_add(1, std::memory_order_relaxed);
+            return token;
+        }
+
+        static Retirements& retirements()
+        {
+            // Allocation-free, process-lifetime queue: static destruction must
+            // not tear down its mutex before late affine owners are retired.
+            alignas(Retirements) static std::byte storage[sizeof(Retirements)]{};
+            static auto* queue = ::new (static_cast<void*>(storage)) Retirements{};
+            return *queue;
+        }
+
+        static void release(SessionOwner* value) noexcept
+        {
+            if (value->owner == threadToken())
+            {
+                (void)value->api->close(&value->session);
+                if (!value->session.context && !value->session.contract)
+                {
+                    delete value;
+                    return;
+                }
+            }
+            auto& queue = retirements();
+            std::scoped_lock lock{queue.mutex};
+            value->next = queue.head;
+            queue.head = value;
+        }
+
+        static std::uint64_t collect() noexcept
+        {
+            auto& queue = retirements();
+            SessionOwner* selected = nullptr;
+            {
+                std::scoped_lock lock{queue.mutex};
+                auto** cursor = &queue.head;
+                while (*cursor)
+                {
+                    auto* value = *cursor;
+                    if (value->owner == threadToken())
+                    {
+                        *cursor = value->next;
+                        value->next = selected;
+                        selected = value;
+                    }
+                    else
+                        cursor = &value->next;
+                }
+            }
+            std::uint64_t count = 0;
+            while (selected)
+            {
+                auto* value = selected;
+                selected = value->next;
+                (void)value->api->close(&value->session);
+                if (!value->session.context && !value->session.contract)
+                {
+                    delete value;
+                    ++count;
+                }
+                else
+                    release(value);
+            }
+            return count;
+        }
+    };
+
+    static std::shared_ptr<SessionOwner> openSession(const WioSdkModuleSessionApi& api,
+                                                     std::shared_ptr<SessionCode> code)
+    {
+        if (!WioValidateSdkModuleSessionApi(&api))
+            throw std::invalid_argument("invalid canonical module session API");
+        auto value = std::shared_ptr<SessionOwner>(
+            new SessionOwner{&api, {}, std::move(code), SessionOwner::threadToken()}, &SessionOwner::release);
+        const auto status = api.open(api.factory, &value->session);
+        if (status != WIO_NATIVE_ABI_OK || !value->session.context ||
+            !WioValidateSdkModuleContract(value->session.contract))
+            throw std::runtime_error("cannot open canonical module session");
+        for (std::uint32_t i = 0; i < value->session.contract->exportCount; ++i)
+            if (value->session.contract->exports[i].reserved != WIO_SDK_CALL_NATIVE_ABI_V2)
+                throw std::runtime_error("unsupported canonical session value ABI");
+        return value;
+    }
+
     struct State {
         decltype(detail::openLibrary(std::filesystem::path{})) handle{};
         const WioSdkModuleContract* contract{};
@@ -147,6 +267,7 @@ class NativeModule {
         const WioNativeAbiRegistry* natives{};
         const WioNativeReflectionApi* reflection{};
         std::shared_ptr<void> attachedOwner;
+        std::shared_ptr<SessionOwner> sessionOwner;
         std::shared_ptr<detail::BindingState> binding = std::make_shared<detail::BindingState>();
         bool started = false;
         ~State() {
@@ -161,6 +282,24 @@ class NativeModule {
     std::shared_ptr<State> state_;
 
 public:
+    static std::uint64_t collectSessions() noexcept
+    {
+        return SessionOwner::collect();
+    }
+
+    static NativeModule attachSession(const WioSdkModuleSessionApi& api, std::shared_ptr<void> owner)
+    {
+        if (!owner)
+            throw std::invalid_argument("canonical session attachment requires a code/factory lifetime owner");
+        auto code = std::make_shared<SessionCode>();
+        code->attachedOwner = std::move(owner);
+        auto instance = openSession(api, std::move(code));
+        NativeModule module;
+        module.state_ = std::make_shared<State>();
+        module.state_->contract = instance->session.contract;
+        module.state_->sessionOwner = std::move(instance);
+        return module;
+    }
     // The owner pins descriptor/context storage and producer code, including
     // owning results that survive close(). No module lifecycle is inferred.
     static NativeModule attach(const WioSdkModuleContract& contract, std::shared_ptr<void> owner)
@@ -185,6 +324,21 @@ public:
         state->handle = detail::openLibrary(std::filesystem::absolute(path));
         if (!state->handle)
             throw std::runtime_error("cannot open canonical Wio module");
+        auto sessionGet = detail::loadSymbol<WioGetSdkModuleSessionApiFn>(state->handle, "WioGetSdkModuleSessionApi");
+        if (sessionGet)
+        {
+            const auto* api = sessionGet();
+            if (!api)
+                throw std::runtime_error("invalid canonical Wio module descriptor");
+            if (!WioValidateSdkModuleSessionApi(api))
+                throw std::runtime_error("invalid canonical module session API");
+            auto code = std::make_shared<SessionCode>();
+            code->handle = std::exchange(state->handle, {});
+            state->sessionOwner = openSession(*api, std::move(code));
+            state->contract = state->sessionOwner->session.contract;
+            module.state_ = std::move(state);
+            return module;
+        }
         auto get = detail::loadSymbol<WioGetSdkModuleContractFn>(state->handle, "WioGetSdkModuleContract");
         if (!get || !WioValidateSdkModuleContract(state->contract = get()))
             throw std::runtime_error("invalid canonical Wio module descriptor");
@@ -258,18 +412,95 @@ public:
         return module;
     }
     void start() {
-        if (!state_)
+        const auto state = state_;
+        if (!state)
             throw std::runtime_error("closed canonical module");
-        if (!state_->started) {
-            if (state_->tasks && state_->tasks->bindMain)
-                state_->tasks->bindMain();
-            if (state_->legacy && state_->legacy->load && state_->legacy->load() != 0)
+        if (state->sessionOwner && state->sessionOwner->owner != SessionOwner::threadToken())
+            throw std::runtime_error("canonical session start requires its owning thread");
+        if (!state->started)
+        {
+            if (state->sessionOwner)
+            {
+                const auto& session = *state->sessionOwner;
+                const auto status = session.api->start(&session.session);
+                if (status != WIO_NATIVE_ABI_OK)
+                    throw std::runtime_error("canonical session start failed with status " + std::to_string(status));
+            }
+            if (state->tasks && state->tasks->bindMain)
+                state->tasks->bindMain();
+            if (state->legacy && state->legacy->load && state->legacy->load() != 0)
                 throw std::runtime_error("module load failed");
-            state_->started = true;
+            state->started = true;
         }
     }
     void close() noexcept {
         state_.reset();
+    }
+    void stop()
+    {
+        const auto state = state_;
+        if (!state || !state->sessionOwner)
+            throw std::runtime_error("canonical session required");
+        auto& instance = *state->sessionOwner;
+        if (instance.owner != SessionOwner::threadToken())
+            throw std::runtime_error("canonical session stop requires its owning thread");
+        const auto status = instance.api->close(&instance.session);
+        if (!instance.session.context)
+        {
+            state->contract = nullptr;
+            state->started = false;
+        }
+        if (status != WIO_NATIVE_ABI_OK)
+            throw std::runtime_error("canonical session stop failed with status " + std::to_string(status));
+    }
+
+    void update(double deltaSeconds) const
+    {
+        const auto state = state_;
+        if (!state || !state->sessionOwner)
+            throw std::runtime_error("canonical session required");
+        const auto& instance = *state->sessionOwner;
+        const auto status = instance.api->update(&instance.session, deltaSeconds);
+        if (status != WIO_NATIVE_ABI_OK)
+            throw std::runtime_error("canonical session update failed with status " + std::to_string(status));
+    }
+
+    std::uint32_t apiVersion() const
+    {
+        const auto state = state_;
+        if (!state || !state->sessionOwner)
+            throw std::runtime_error("canonical session required");
+        const auto& instance = *state->sessionOwner;
+        std::uint32_t result = 0;
+        const auto status = instance.api->apiVersion(&instance.session, &result);
+        if (status != WIO_NATIVE_ABI_OK)
+            throw std::runtime_error("canonical session version failed with status " + std::to_string(status));
+        return result;
+    }
+
+    NativeValue saveState() const
+    {
+        const auto state = state_;
+        if (!state || !state->sessionOwner)
+            throw std::runtime_error("canonical session required");
+        const auto& instance = *state->sessionOwner;
+        NativeValue result;
+        result.keepAlive_ = instance.code;
+        const auto status = instance.api->saveState(&instance.session, &result.value_);
+        if (status != WIO_NATIVE_ABI_OK)
+            throw std::runtime_error("canonical session save failed with status " + std::to_string(status));
+        return result;
+    }
+
+    void restoreState(const NativeValue& value) const
+    {
+        const auto state = state_;
+        if (!state || !state->sessionOwner)
+            throw std::runtime_error("canonical session required");
+        const auto& instance = *state->sessionOwner;
+        const auto status = instance.api->restoreState(&instance.session, &value.value_);
+        if (status != WIO_NATIVE_ABI_OK)
+            throw std::runtime_error("canonical session restore failed with status " + std::to_string(status));
     }
     ApplicationHost application() const {
         if (!state_ || !state_->started || !state_->legacy || !state_->legacy->application)
@@ -409,27 +640,28 @@ public:
         return result;
     }
     NativeValue invoke(std::uint64_t stableId, std::span<const NativeValue> arguments = {}) const {
-        if (!state_)
+        const auto state = state_;
+        if (!state || !state->contract)
             throw std::runtime_error("closed canonical module");
-        const auto* entry = WioFindSdkExport(state_->contract, stableId);
+        const auto* entry = WioFindSdkExport(state->contract, stableId);
         if (!entry)
             throw std::runtime_error("canonical export not found");
         std::vector<WioNativeAbiValue> wire;
         for (const auto& arg : arguments)
             wire.push_back(arg.value_);
         NativeValue result;
-        result.keepAlive_ = state_;
-        const auto& call = state_->contract->callTable[entry->callTableSlot];
+        result.keepAlive_ = state->sessionOwner ? std::shared_ptr<void>(state->sessionOwner->code) : state;
+        const auto& call = state->contract->callTable[entry->callTableSlot];
         auto status = call.invoke(wire.data(), static_cast<std::uint32_t>(wire.size()), &result.value_, call.context);
         for (const auto& arg : arguments)
             if (arg.borrowed_ && (arg.value_.flags & WIO_NATIVE_ABI_VALUE_MUTABLE))
-                arg.borrowed_->pin(state_);
+                arg.borrowed_->pin(state);
         if (status != WIO_NATIVE_ABI_OK)
             throw std::runtime_error("canonical invocation failed with status " + std::to_string(status));
         return result;
     }
     NativeValue invoke(std::string_view name, std::span<const NativeValue> arguments = {}) const {
-        if (!state_)
+        if (!state_ || !state_->contract)
             throw std::runtime_error("closed canonical module");
         for (std::uint32_t i = 0; i < state_->contract->exportCount; ++i) {
             const auto& entry = state_->contract->exports[i];

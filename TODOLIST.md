@@ -1185,7 +1185,11 @@ Rider, and CLion are defined in
     including concrete generic functions and explicit embedding lifetime owners.
     Two new focused gates cover installed-prefix relocation, shared/two-static
     hosts, invalid modules, panic recovery, wrong-thread calls and escaped values.
-    Lifecycle/async/complex-value parity, host sessions, native dependency
+    Independent SDK sessions now support start/update/unload, API version,
+    scalar/string/text save/restore, failed-start rollback and owner-thread
+    retirement outside DLL loader teardown. Two new focused gates cover
+    reentrant view closure, exactly-once cleanup and independent shared/static
+    globals. Async/complex-value/application parity, native dependency
     deployment, project CLI library targets and cross-platform qualification
     remain open. Old native generations are retained deliberately;
    safe garbage collection and final artifact/build/runtime costs remain pending.

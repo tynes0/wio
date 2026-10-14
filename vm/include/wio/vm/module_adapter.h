@@ -27,6 +27,14 @@ namespace wio::vm
         [[nodiscard]] const WioSdkModuleContract& contract() const noexcept;
         [[nodiscard]] std::string_view lastError() const noexcept;
         [[nodiscard]] bool loadNativeLibrary(const std::filesystem::path& path, std::string* error = nullptr);
+        [[nodiscard]] std::int32_t start() noexcept;
+        [[nodiscard]] std::int32_t update(double deltaSeconds) noexcept;
+        [[nodiscard]] std::int32_t apiVersion(std::uint32_t& result) noexcept;
+        [[nodiscard]] std::int32_t saveState(WioNativeAbiValue& result) noexcept;
+        [[nodiscard]] std::int32_t restoreState(const WioNativeAbiValue& value) noexcept;
+        // Idempotent; marks the adapter closed before running unload. The
+        // caller must destroy it on the owning thread after this safe point.
+        [[nodiscard]] std::int32_t close() noexcept;
 
     private:
         struct State;
