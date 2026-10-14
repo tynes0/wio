@@ -569,12 +569,12 @@ return through the SDK/VM boundary without an operating-system error dialog.
 On Unix, producers still need their platform loader configuration, for example
 origin-relative RPATH; copying a helper does not modify the producer's link flags.
 
-This is explicit dependency deployment, not import-table discovery, an installer,
-automatic repair of deleted bundles during an otherwise up-to-date build, or
-atomic replacement of a whole distribution. `POST_BUILD` runs when the host
-links; installed/final distributions must retain their matching bundle directories.
-Automatic install rules, project CLI shared/static VM targets and old-generation
-garbage collection remain separate work. Hashes detect content mismatch during
+This is explicit dependency deployment, not import-table discovery or atomic
+replacement of a whole distribution. `POST_BUILD` runs when the host links;
+explicit repair targets and CMake install rules are described below. Installed/final
+distributions must retain their matching bundle directories. Project CLI
+shared/static VM targets and old-generation garbage collection remain separate
+work. Hashes detect content mismatch during
 staging/deployment; the runtime does not reauthenticate a replaced native library.
 Signing and sandboxing are not provided, and native code remains privileged.
 
@@ -588,10 +588,71 @@ The bundle policy gate additionally checks nonexistent-child symlink parents and
 CMake list-separator filename rejection. Linux/macOS branches are implemented but not locally
 qualified; older gates and the full corpus were not rerun.
 
+## Installing and repairing module distributions
+
+The installed runtime package also provides an opt-in final-image installer:
+
+```cmake
+# Shared: install the module and its exact native generation.
+wio_install_vm_module(plugin DESTINATION bin COMPONENT GameRuntime)
+
+# Static: install the executable/shared HOST containing the wrapper, not .lib/.a.
+wio_install_vm_module(script HOST host DESTINATION bin COMPONENT GameRuntime)
+
+# Explicit repair targets run even when the images are already up to date.
+wio_deploy_vm_module(plugin HOST plugin DEPLOY_TARGET repair_plugin)
+wio_deploy_vm_module(script HOST host DEPLOY_TARGET repair_script)
+```
+
+```powershell
+cmake --build build --config Release --target host
+cmake --build build --config Release --target repair_script
+cmake --install build --config Release --component GameRuntime --prefix dist
+```
+
+`DESTINATION` is a portable directory relative to the install prefix; absolute
+paths, traversal, list separators and reserved/nonportable components reject
+during configuration. `HOST` is required only for a static VM module and must be
+a built, non-bundle executable/shared image. macOS app bundles/frameworks and
+imported images reject rather than installing dependencies in the wrong directory.
+The default component is `WioVmModules`. Runtime images and native data use the
+chosen component; Windows import archives are isolated in its optional
+`<component>Development` component, excluded from a default full installation.
+This does not export a reusable static SDK archive package.
+
+The install prefix is evaluated by `cmake --install --prefix`, not baked into
+the module. Normal CMake `DESTDIR` staging is forwarded on platforms supporting
+it; that prefix is not embedded in runtime metadata. Native bundles are validated
+and copied before installing their containing image. A conflicting bundle fails
+without replacing that image. Files are recorded in the component's ordinary
+CMake install manifest. Reinstall restores missing native files from the validated
+build stage; differing existing bytes remain an error, not an overwrite request.
+The runtime SDK/build stage must still exist while installing or repairing.
+
+An explicit `DEPLOY_TARGET` depends on its host, then checks/copies the current
+generation beside that image. It repairs deleted files/directories without
+relinking an otherwise up-to-date host. Repeated helper calls do not duplicate the
+same module/host `POST_BUILD` hook. Ordinary up-to-date host builds do not poll or
+repair files automatically; build the declared repair target or reinstall.
+Failed/partial filesystem copies are retryable, not an atomic distribution swap.
+No old generation, unrelated file or retained application is removed.
+
+A new Windows Debug gate, `wio_vm_sdk_native_install`, passed 1/1 in 52.14 seconds
+on 2026-10-15. It covers seven invalid API
+configurations, shared/static repair without changing image bytes/timestamps,
+component installation into a Unicode prefix, install-manifest completeness,
+missing-file reinstall, collision rejection before image replacement, and a real
+private-library rebuild. Old and updated images execute in separate relocated
+processes with their own retained native generations after the build-time
+producer directory and bytecode have been taken offline. This qualifies retained
+distributions, not concurrent cross-generation native loading in one process.
+Linux/macOS, `DESTDIR`, bundles/frameworks and a fresh full corpus are not locally
+qualified by this Windows gate.
+
 Still required for packaging closure:
 
 1. Extend the shared/static adapters to complex/async value parity and application
-   hosting, project CLI library targets and complete install/deployment workflows.
+   hosting and project CLI library targets.
 2. Installed SDK host/deployment and clean Linux/macOS qualification gates.
 3. Artifact/runtime/build-cost optimization and release budgets.
 

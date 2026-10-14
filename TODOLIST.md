@@ -1209,8 +1209,14 @@ Rider, and CLion are defined in
     final host. Session open rolls back partial registration before publication
     or user Load. New focused Windows gates cover relocated Unicode paths,
     private DLLs, missing/invalid producers, final-session shutdown and immutable
-    bundle hash/collision/traversal/symlink policies. Automatic discovery/install,
-    project CLI library targets and generation collection remain separate work.
+    bundle hash/collision/traversal/symlink policies. Opt-in component install
+    rules now deploy the containing shared image/final static host with its exact
+    native generation. Explicit repair targets restore missing build-tree bundles
+    without relinking; reinstall restores missing distribution files. A new
+    installed-host gate covers invalid API inputs, immutable conflicts, install
+    manifests and real private-library rebuilds with retained old/new images.
+    Automatic discovery, project CLI library targets and generation collection
+    remain separate work; bundle/framework and broader platform acceptance is open.
     Complex/async-value/application parity and cross-platform qualification
     remain open. Old native generations are retained deliberately;
    safe garbage collection and final artifact/build/runtime costs remain pending.

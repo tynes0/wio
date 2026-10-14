@@ -4,9 +4,20 @@ set(_WIO_VM_EMBED_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/EmbedWioVmModule.cmake")
 set(_WIO_VM_NATIVE_STAGE_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/StageWioVmNative.cmake")
 set(_WIO_VM_NATIVE_PATH_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/WioVmNativePaths.cmake")
 set(_WIO_VM_NATIVE_DEPLOY_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/DeployWioVmNative.cmake")
+set(_WIO_VM_NATIVE_INSTALL_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/InstallWioVmNative.cmake")
+
+# Generate a literal without interpreting dollars, quotes or backslashes in a
+# consumer's build/install paths. Pick a delimiter not present in the value.
+function(_wio_vm_literal output value)
+    set(equals "==")
+    while("${value}" MATCHES "\\]${equals}\\]")
+        string(APPEND equals "=")
+    endwhile()
+    set(${output} "[${equals}[${value}]${equals}]" PARENT_SCOPE)
+endfunction()
 
 function(wio_deploy_vm_module target)
-    cmake_parse_arguments(ARG "" "HOST" "" ${ARGN})
+    cmake_parse_arguments(ARG "" "HOST;DEPLOY_TARGET" "" ${ARGN})
     if(ARG_UNPARSED_ARGUMENTS OR ARG_KEYWORDS_MISSING_VALUES OR NOT TARGET "${target}" OR NOT TARGET "${ARG_HOST}")
         message(FATAL_ERROR "wio_deploy_vm_module requires a VM target and HOST image target")
     endif()
@@ -19,10 +30,91 @@ function(wio_deploy_vm_module target)
     if(NOT target STREQUAL ARG_HOST)
         add_dependencies("${ARG_HOST}" "${target}")
     endif()
-    add_custom_command(TARGET "${ARG_HOST}" POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" "-DMANIFEST=${manifest}" "-DSTAGE=${stage}"
-            "-DDESTINATION=$<TARGET_FILE_DIR:${ARG_HOST}>" -P "${_WIO_VM_NATIVE_DEPLOY_SCRIPT}"
-        VERBATIM)
+    get_target_property(deployed "${ARG_HOST}" WIO_VM_DEPLOYED_MODULES)
+    if(NOT target IN_LIST deployed)
+        add_custom_command(TARGET "${ARG_HOST}" POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" "-DMANIFEST=${manifest}" "-DSTAGE=${stage}"
+                "-DDESTINATION=$<TARGET_FILE_DIR:${ARG_HOST}>" -P "${_WIO_VM_NATIVE_DEPLOY_SCRIPT}"
+            VERBATIM)
+        set_property(TARGET "${ARG_HOST}" APPEND PROPERTY WIO_VM_DEPLOYED_MODULES "${target}")
+    endif()
+    if(ARG_DEPLOY_TARGET)
+        if(TARGET "${ARG_DEPLOY_TARGET}" OR NOT ARG_DEPLOY_TARGET MATCHES "^[A-Za-z0-9_][A-Za-z0-9_.+-]*$")
+            message(FATAL_ERROR "VM DEPLOY_TARGET must be a new portable CMake target name")
+        endif()
+        # Explicit repair runs even if the host is up to date. Its dependency
+        # builds the host first; never make the host depend back on this target.
+        add_custom_target("${ARG_DEPLOY_TARGET}"
+            COMMAND "${CMAKE_COMMAND}" "-DMANIFEST=${manifest}" "-DSTAGE=${stage}"
+                "-DDESTINATION=$<TARGET_FILE_DIR:${ARG_HOST}>" -P "${_WIO_VM_NATIVE_DEPLOY_SCRIPT}"
+            DEPENDS "${ARG_HOST}"
+            VERBATIM)
+    endif()
+endfunction()
+
+# Install the final image and matching native generation together. For a static
+# module the image is HOST, not its intermediate archive. This is a deployment
+# helper, not an install(EXPORT) package for a reusable static runtime archive.
+function(wio_install_vm_module target)
+    cmake_parse_arguments(ARG "" "HOST;DESTINATION;COMPONENT" "" ${ARGN})
+    if(ARG_UNPARSED_ARGUMENTS OR ARG_KEYWORDS_MISSING_VALUES OR NOT TARGET "${target}" OR NOT ARG_DESTINATION)
+        message(FATAL_ERROR "wio_install_vm_module requires a VM target and relative DESTINATION")
+    endif()
+    get_target_property(is_vm "${target}" WIO_VM_MODULE)
+    get_target_property(kind "${target}" TYPE)
+    if(NOT is_vm)
+        message(FATAL_ERROR "wio_install_vm_module requires a wio_add_vm_module target")
+    endif()
+    string(REPLACE "\\" "/" destination "${ARG_DESTINATION}")
+    if(IS_ABSOLUTE "${destination}" OR destination MATCHES "(^|/)\\.\\.?(/|$)" OR
+       destination MATCHES "[;$<>:\"|?*\r\n]")
+        message(FATAL_ERROR "VM install DESTINATION must be a portable relative directory without traversal")
+    endif()
+    string(REPLACE "/" ";" components "${destination}")
+    include("${_WIO_VM_NATIVE_PATH_SCRIPT}")
+    foreach(part IN LISTS components)
+        wio_vm_native_leaf("${part}")
+    endforeach()
+    set(image "${target}")
+    if(kind STREQUAL "STATIC_LIBRARY")
+        if(NOT TARGET "${ARG_HOST}")
+            message(FATAL_ERROR "Static VM installation requires the final HOST image target")
+        endif()
+        set(image "${ARG_HOST}")
+    elseif(ARG_HOST)
+        message(FATAL_ERROR "VM install HOST is only valid for a static module")
+    endif()
+    get_target_property(image_kind "${image}" TYPE)
+    get_target_property(bundle "${image}" MACOSX_BUNDLE)
+    get_target_property(framework "${image}" FRAMEWORK)
+    get_target_property(imported "${image}" IMPORTED)
+    if(NOT image_kind MATCHES "^(EXECUTABLE|SHARED_LIBRARY|MODULE_LIBRARY)$" OR bundle OR framework OR imported)
+        message(FATAL_ERROR "VM installation requires a built, non-bundle executable/shared HOST image")
+    endif()
+    if(NOT ARG_COMPONENT)
+        set(ARG_COMPONENT WioVmModules)
+    endif()
+    get_target_property(stage "${target}" WIO_VM_NATIVE_STAGE)
+    get_target_property(manifest "${target}" WIO_VM_NATIVE_MANIFEST)
+    if(stage AND manifest)
+        _wio_vm_literal(manifest_literal "${manifest}")
+        _wio_vm_literal(stage_literal "${stage}")
+        _wio_vm_literal(destination_literal "${destination}")
+        _wio_vm_literal(script_literal "${_WIO_VM_NATIVE_INSTALL_SCRIPT}")
+        _wio_vm_literal(deploy_literal "${_WIO_VM_NATIVE_DEPLOY_SCRIPT}")
+        # Native validation/copy precedes image installation. A conflicting
+        # bundle fails without overwriting the currently installed image.
+        install(CODE "set(WIO_VM_INSTALL_MANIFEST ${manifest_literal})
+set(WIO_VM_INSTALL_STAGE ${stage_literal})
+set(WIO_VM_INSTALL_DESTINATION ${destination_literal})
+set(WIO_VM_INSTALL_DEPLOY ${deploy_literal})
+include(${script_literal})
+" COMPONENT "${ARG_COMPONENT}")
+    endif()
+    install(TARGETS "${image}"
+        RUNTIME DESTINATION "${destination}" COMPONENT "${ARG_COMPONENT}"
+        LIBRARY DESTINATION "${destination}" COMPONENT "${ARG_COMPONENT}"
+        ARCHIVE DESTINATION "${destination}" COMPONENT "${ARG_COMPONENT}Development" EXCLUDE_FROM_ALL)
 endfunction()
 
 # Bytecode must already exist or be produced by another target/custom command.
@@ -125,6 +217,7 @@ function(wio_add_vm_module target)
         BYPRODUCTS ${native_byproducts}
         VERBATIM)
     add_library(${target} ${kind} "${output}")
+    set_property(TARGET ${target} PROPERTY WIO_VM_MODULE TRUE)
     if(native_sources)
         set_target_properties(${target} PROPERTIES WIO_VM_NATIVE_STAGE "${stage}" WIO_VM_NATIVE_MANIFEST "${manifest}")
         if(NOT ARG_STATIC)

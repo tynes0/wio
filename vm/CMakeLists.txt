@@ -37,6 +37,7 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/WioVmRuntimeConfig.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/EmbedWioVmModule.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/StageWioVmNative.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/DeployWioVmNative.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/InstallWioVmNative.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/WioVmNativePaths.cmake"
     DESTINATION lib/cmake/WioVmRuntime COMPONENT WioVmRuntime)
 

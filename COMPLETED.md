@@ -12,6 +12,27 @@ Notes:
 
 ## VM SDK shared/static module foundation — 2026-10-14
 
+### Follow-up: final-image install and explicit repair — 2026-10-15
+
+- [x] `wio_install_vm_module` installs shared images or a static module's final
+      executable/shared HOST with validated native bundles, relative destinations,
+      named components and CMake install-manifest data entries.
+- [x] Native validation/copy precedes image replacement; reinstall restores missing
+      files but rejects conflicting existing bytes. Runtime and optional development
+      import-archive components are separate.
+- [x] Optional `DEPLOY_TARGET` creates an explicit repair target that restores an
+      absent build-tree generation without changing/relinking an up-to-date image.
+      Repeated module/host registration keeps one post-link deployment hook.
+- [x] New installed-runtime workflow tests invalid arguments, shared/static repair,
+      Unicode prefix relocation, repeat install, missing/conflicting files and a
+      real private-library rebuild. Retained old and updated hosts execute in
+      separate processes after original producer/bytecode inputs go offline.
+      The new Windows Debug gate passed 1/1 in 52.14 seconds; older tests were not run.
+- [~] Qualification is focused Windows Debug only. `DESTDIR`, macOS bundles and
+      framework deployment are not locally qualified; bundles/frameworks reject.
+      Automatic discovery, project CLI library targets, generation collection and
+      complex/application SDK parity remain open. No release is claimed.
+
 ### Follow-up: declared native dependency bundles
 
 - [x] Installed shared/static CMake wrappers accept qualified registry producers

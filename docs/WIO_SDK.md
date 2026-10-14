@@ -53,6 +53,10 @@ module; static wrappers deploy beside their final host through
 than CWD, and registration failure rolls back before session publication or Load.
 This does not discover transitive dependencies or enable raw C++ libraries
 without a qualified bridge. See [declared native deployment](WIO_VM_ARTIFACTS.md#declared-native-dependencies-for-sharedstatic-modules).
+`wio_install_vm_module` now installs the final module/host image and exact native
+generation through CMake components. Explicit `DEPLOY_TARGET` repair and repeat
+installation restore missing files without overwriting conflicting library bytes.
+See [install and repair workflows](WIO_VM_ARTIFACTS.md#installing-and-repairing-module-distributions).
 Application/complex exports, foreign task creation and
 legacy Module parity remain outside this qualified surface.
 See [VM module packaging and ownership](WIO_VM_ARTIFACTS.md#vm-backed-sdk-shared-and-static-modules)
