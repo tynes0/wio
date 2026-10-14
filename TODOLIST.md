@@ -1233,11 +1233,18 @@ Rider, and CLion are defined in
     without relinking; reinstall restores missing distribution files. A new
     installed-host gate covers invalid API inputs, immutable conflicts, install
     manifests and real private-library rebuilds with retained old/new images.
-    Automatic discovery, project CLI library targets and generation collection
-    remain separate work; bundle/framework and broader platform acceptance is open.
+    Project CLI now builds, runs native hosts and packages shared/static VM
+    libraries using the installed runtime's CMake project. An explicit library
+    sidecar kind preserves module identity rather than producing a program.
+    Recorded hashes protect no-build image/dependency selection; missing bundles
+    repair without relinking. Bare archives are qualified through an independent
+    C++ consumer. Two new Windows Debug gates passed 2/2 in 91.65 seconds,
+    including Unicode relocation and executable sidecar compatibility.
+    Automatic discovery/generation-management policy remains separate work;
+    bundle/framework and broader platform acceptance is open.
     Full SDK complex-value/async/application/reflection parity is outside this
     backend milestone and remains mandatory under Native/SDK item 5 before v1.
-    Backend artifact/CLI integration and cross-platform runtime qualification
+    Distribution policy and cross-platform artifact/runtime qualification
     remain open. Old native generations are retained deliberately;
    safe garbage collection and final artifact/build/runtime costs remain pending.
     See `docs/WIO_VM_ARTIFACTS.md`; bounded SDK wrappers are not a claim of full
@@ -1264,11 +1271,21 @@ Rider, and CLion are defined in
 
 ### Final Pre-v1 Optimization And Performance Acceptance
 
-- [ ] Run a dedicated heavy optimization stage after backend closure and the
-  IDE/tooling/v1 correctness gates, before beta/RC. Keep the nine backend
-  closure items and twelve v1 gates intact; this is an additional final stage,
-  not a replacement for their earlier cost work. Fix severe performance defects
-  earlier when discovered rather than postponing them to this stage.
+- [ ] Execute the accepted three heavy passes after functional backend closure:
+  (1) generated C++/runtime, targeting 5-10% overhead versus equivalent optimized
+  C++ where feasible; (2) best practical current non-JIT VM runtime performance;
+  (3) full compilation/preparation throughput from lexer/parser/analyzer through
+  Typed/Lowered WIR, C++/bytecode emission and VM load/verify/index work, including
+  native compilation/linking. Keep original/previous/current measured baselines.
+  See `docs/WIO_BACKEND_OPTIMIZATION_PLAN.md`. The final pre-v1 checkpoint below
+  requalifies these budgets after later kit/std/IDE work; it does not postpone
+  these passes or add a fourth heavy optimization package.
+
+- [ ] Requalify the three heavy passes' budgets after the IDE/tooling/SDK/v1
+  correctness gates, before beta/RC. Keep the existing backend and v1 gate
+  identities intact; this final checkpoint does not defer the three passes or
+  create a fourth heavy optimization package. Fix severe performance defects
+  when discovered rather than postponing them to this checkpoint.
   Profile semantic analysis, Typed/Lowered WIR, C++ emission/build/runtime,
   VM, std/Unicode, native bridges, and SDK hosts. Measure compiler-stage time,
   cold/warm/incremental builds, generated/binary size, startup/runtime, peak

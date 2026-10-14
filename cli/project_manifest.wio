@@ -35,6 +35,15 @@ realm SelfHostedProject {
         vmExecutableOutput: string;
         vmRunner: string;
         vmNativeLibraries: string[];
+        vmRuntimeLibraries: string[];
+        vmModuleOutput: string;
+        vmHostOutput: string;
+        vmGetter: string;
+        vmRuntimePrefix: string;
+        vmCmake: string;
+        vmGenerator: string;
+        vmGeneratorPlatform: string;
+        vmCxxCompiler: string;
         hostEnabled: bool;
         hostCompiler: string;
         hostSourceFiles: string[];
@@ -42,6 +51,7 @@ realm SelfHostedProject {
         hostLinkDirs: string[];
         hostLinkLibraries: string[];
         hostCompilerArgs: string[];
+        hostLinkerArgs: string[];
         hostOutput: string;
         runArgs: string[];
         runWorkingDirectory: string;
@@ -428,7 +438,28 @@ realm SelfHostedProject {
             : ExistingPaths(info.projectRoot, ["native/lib"]);
         info.hostLinkLibraries = ManifestArray(manifest, "host.linkLibraries");
         info.hostCompilerArgs = ManifestArray(manifest, "host.compilerArgs");
+        info.hostLinkerArgs = ManifestArray(manifest, "host.linkerArgs");
         info.hostOutput = path::Join(info.outputDirectory, hostName + process::ExecutableSuffix());
+        let vmStaticSuffix = process::ExecutableSuffix() == ".exe" ? ".lib" : ".a";
+        let vmModuleSuffix = info.wioTarget == "static" ? vmStaticSuffix : process::SharedLibrarySuffix();
+        info.vmModuleOutput = path::AbsoluteFromRaw(info.projectRoot, ManifestValue(
+            manifest, "vm.moduleOutput", path::Join3(info.outputDirectory, "vm", wioName + vmModuleSuffix)));
+        info.vmHostOutput = path::AbsoluteFromRaw(info.projectRoot, ManifestValue(
+            manifest, "vm.hostOutput", path::Join3(info.outputDirectory, "vm", hostName + process::ExecutableSuffix())));
+        info.vmGetter = ManifestValue(manifest, "vm.getter", "WioGetStaticModuleContract");
+        info.vmRuntimePrefix = path::AbsoluteFromRaw(info.projectRoot,
+            ManifestValue(manifest, "vm.runtimePrefix", info.toolchainRoot));
+        info.vmCmake = ManifestValue(manifest, "vm.cmake", "cmake");
+        info.vmGenerator = ManifestValue(manifest, "vm.generator", "");
+        info.vmGeneratorPlatform = ManifestValue(manifest, "vm.generatorPlatform", "");
+        info.vmCxxCompiler = ManifestValue(manifest, "vm.cxxCompiler",
+            manifest.ContainsKey("host.compiler") ? info.hostCompiler : "");
+        if (info.vmCxxCompiler.Contains("/") or info.vmCxxCompiler.Contains("\\"))
+        {
+            info.vmCxxCompiler = path::AbsoluteFromRaw(info.projectRoot, info.vmCxxCompiler);
+        }
+
+        info.vmRuntimeLibraries = ResolvePaths(info.projectRoot, ManifestArray(manifest, "vm.runtimeLibraries"));
         info.runArgs = ManifestArray(manifest, "run.args");
         info.runWorkingDirectory = path::AbsoluteFromRaw(
             info.projectRoot,
@@ -473,7 +504,11 @@ realm SelfHostedProject {
         description += "  \"vm\": {\"bytecode\": " + serialization::QuoteJson(info.vmBytecodeOutput);
         description += ", \"bridge\": " + serialization::QuoteJson(info.vmBridgeOutput);
         description += ", \"executable\": " + serialization::QuoteJson(info.vmExecutableOutput);
-        description += ", \"runner\": " + serialization::QuoteJson(info.vmRunner) + "},\n";
+        description += ", \"runner\": " + serialization::QuoteJson(info.vmRunner);
+        description += ", \"module\": " + serialization::QuoteJson(info.vmModuleOutput);
+        description += ", \"host\": " + serialization::QuoteJson(info.vmHostOutput);
+        description += ", \"runtimePrefix\": " + serialization::QuoteJson(info.vmRuntimePrefix);
+        description += ", \"getter\": " + serialization::QuoteJson(info.vmGetter) + "},\n";
         description += "  \"host\": {\"enabled\": " + hostEnabled;
         description += ", \"output\": " + serialization::QuoteJson(info.hostOutput) + "},\n";
         description += "  \"run\": {\"workingDirectory\": ";

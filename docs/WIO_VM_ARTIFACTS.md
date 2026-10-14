@@ -649,10 +649,90 @@ distributions, not concurrent cross-generation native loading in one process.
 Linux/macOS, `DESTDIR`, bundles/frameworks and a fresh full corpus are not locally
 qualified by this Windows gate.
 
+## Project CLI shared/static modules and hosts
+
+`wio project build/run/package --backend vm` also accepts `wio.target = "shared"`
+or `"static"`. The CLI emits bytecode and its qualified native registry, then
+drives the installed runtime's CMake project; it does not duplicate the VM ABI
+or fall back to compiling Wio function bodies as C++.
+Internally, `--bytecode-sidecar-kind library` preserves the library contract
+instead of the executable sidecar's default `program` contract. Invalid values
+or use without `--bytecode-sidecar` reject before generation.
+
+```ini
+[wio]
+entry = "wio/module.wio"
+target = "shared"
+includeDirs = ["native/include"]
+
+[host]
+enabled = true
+sources = ["host/main.cpp"]
+
+[vm]
+runtimePrefix = "C:/WioVmRuntime"
+generator = "Visual Studio 17 2022"
+moduleOutput = "deployment/script.dll"
+hostOutput = "deployment/host.exe"
+```
+
+The runtime prefix must contain `lib/cmake/WioVmRuntime`. An installed toolchain
+can use its own prefix by default; a source checkout should install the
+`WioVmRuntime` component and set this field explicitly. `vm.cmake` defaults to
+`cmake`. `vm.generator`, `vm.generatorPlatform` and `vm.cxxCompiler` select the
+CMake toolchain; absent an explicit VM compiler, a configured `host.compiler`
+is honored. Compiler/architecture/CRT/configuration must match the installed VM
+archives. A MinGW C++ native registry DLL can still use the common wire ABI with
+an MSVC-built VM wrapper; a MinGW **static host** cannot link MSVC VM archives.
+
+`vm.moduleOutput` and `vm.hostOutput` default to separate outputs below
+`<outputDirectory>/vm`; native-backend outputs are untouched. The default static
+suffix is `.lib` on Windows and `.a` elsewhere. `vm.getter` defaults to
+`WioGetStaticModuleContract`; static hosts use its `SessionApi`/`TaskApi` getter
+names. Shared hosts use `sdk::NativeModule::open`, not the older `sdk::Module`.
+Supported SDK value shapes are still those documented above, not full kit parity.
+
+The host's sources/include directories/link directories/libraries come from the
+manifest. For CMake-built VM hosts, `host.compilerArgs` are compile options and
+`host.linkerArgs` are link options; both must fit the chosen toolchain. Static
+hosts link the VM module/runtime directly. Shared hosts receive its path before
+application arguments when `run.passLibraryPath` is true (the shared default).
+The CLI preserves manifest arguments, repeated `--arg`, separator arguments,
+working-directory overrides and the host exit code. A library without a host
+can build/package, but `project run` rejects it before building.
+
+`vm.nativeLibraries` lists extra registry producers; `vm.runtimeLibraries` lists
+explicit private libraries copied without registry registration for library
+targets. Standalone executable packaging retains its existing producer-only
+contract; private dependency discovery is not silently enabled there.
+
+Every normal library build reconfigures its data-only JSON plan and lets CMake
+track changes, repair absent bundles and publish a verified artifact record.
+`--no-build` verifies module/host hashes plus the recorded native files before
+run or package, without calling the Wio compiler. Source and `.wiob` intermediates
+are not needed then; the CMake build/install metadata, staged bundles and runtime
+package still are. Hashes detect mismatch, not authentication of untrusted code.
+
+Packaging installs host executables under `bin`, shared modules under `lib`, and
+native bundles beside their containing image. A bare static package contains
+its link archive and matching bundle under `lib`; its consumer must link a
+compatible `WioVmRuntime` and deploy that bundle beside the final host image.
+It is not a self-contained archive with the VM runtime merged into it. A static
+host package contains the final runnable host and its bundle instead. No package
+invented for a bare library has an executable entrypoint. Old native generations
+are retained; automated collection and wider platform qualification remain open.
+
+Two new Windows Debug gates passed 2/2 in 91.65 seconds on 2026-10-15:
+`wio_vm_project_library_cli` and `wio_vm_project_record_policy`. They cover shared/
+static hosts and bare modules, independent consumption of the packaged static
+archive, relocated packages, Unicode paths and NUL results, no-build without
+source/bytecode inputs, missing-file repair, image/native mismatch rejection,
+failed record publication, path escape and the existing program-sidecar default.
+The full older corpus and Linux/macOS were not rerun in this slice.
+
 Still required for backend artifact closure:
 
-1. Project CLI shared/static VM targets and the remaining declared dependency/
-   generation-management deployment policy.
+1. The remaining declared dependency/generation-management deployment policy.
 2. Artifact/runtime installation and clean Linux/macOS qualification gates.
 3. Artifact/runtime/build-cost optimization and release budgets.
 

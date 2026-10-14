@@ -149,7 +149,7 @@ because it is approved. Close with a versioned contract/docs consistency pass.
 | ID | Priority / state | Current boundary and closure requirement |
 | --- | --- | --- |
 | NI-001 | Closed within qualified native payload boundaries | Owning task inputs, free std task helpers, completion/cancellation, blocking main progress and retained-source shutdown now have focused codec, C++/full-VM/pruned-VM and live-host gates. See [native task-input closure](WIO_VM_NATIVE_BRIDGE.md#owning-native-task-inputs-and-std-helper-parity). Existing unsupported object surfaces and async borrows are not enabled by this closure. |
-| NI-002 | P1 backend artifact/packaging gap | Shared/static VM artifact production, explicit native dependency bundles, final-image component install and explicit repair targets are implemented. Focused Windows gates cover relocated images, private DLLs, immutable bundles, install manifests and retained generations after a real private-library rebuild. Project CLI shared/static VM targets, declared dependency discovery/generation-management policy and broader platform artifact/runtime qualification remain open. Full SDK value/async/application/reflection parity belongs to the separate v1 kit gate NI-006, not backend packaging closure. See [artifact contract](WIO_VM_ARTIFACTS.md). Existing C++ backend artifact targets are unchanged. |
+| NI-002 | P1 backend distribution/platform gap | Shared/static VM artifact production, explicit native dependency bundles, final-image component install and explicit repair targets are implemented. Project CLI build/run/package now covers shared/static modules, optional native hosts and bare archives, including independent packaged-archive consumption. Explicit library sidecar identity and recorded image/native hashes preserve no-build selection; missing bundles repair without relinking. Focused Windows gates cover relocation, Unicode/private DLLs, immutable bundles, manifests and retained generations. Declared dependency discovery/generation-management policy and broader platform artifact/runtime qualification remain open. Full SDK value/async/application/reflection parity belongs to the separate v1 kit gate NI-006, not backend packaging closure. See [artifact contract](WIO_VM_ARTIFACTS.md). Existing C++ backend artifact targets are unchanged. |
 | NI-003 | P2 limitation | Async ref/view parameters/results remain forbidden. Native escaping closures may not capture invocation-scoped borrowed Places; copy/retain values instead. No arbitrary suspension-lifetime promise is made. |
 | NI-004 | P2 limitation | Exact qualified callback aliases work, but aggregate/descendant callback overlap is rejected before invocation. Use one aggregate borrow and access its children. Rejection is a safety boundary, not a memory-corruption bug. |
 | NI-005 | P2 limitation | Box support is bounded to the qualified scalar/string/text/container/Any/defaultable handle families. Arbitrary native POD/fixed-array/component defaults, unsupported method payloads and lifecycle-bearing fields are not automatically materialized. Qualified native POD **default factories** are a separate supported facility. |
@@ -203,6 +203,12 @@ Evidence: [release gates](WIO_V1_RELEASE_PLAN.md),
 ## 5. Missing evidence, not automatically failing behavior
 
 - **QA-001 (P1):** No full current native/C++/VM/SDK/std corpus run is claimed.
+  The project library CLI slice ran only two new Windows Debug gates:
+  `wio_vm_project_library_cli` and `wio_vm_project_record_policy`, 2/2 in 91.65
+  seconds on 2026-10-15. Coverage includes shared/static hosts, bare libraries,
+  independent static-archive consumption, relocated packages, no-build without
+  source/bytecode, missing-file repair, hash/path rejection and executable-sidecar
+  compatibility. This is not fresh full-corpus or Linux/macOS qualification.
   The final-image install/repair slice adds only the new Windows Debug gate
   `wio_vm_sdk_native_install`: invalid API configurations, image-preserving repair,
   component manifests, Unicode relocation, collision rejection and old/new native

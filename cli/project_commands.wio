@@ -1,4 +1,5 @@
 use project_manifest;
+use project_vm;
 use std::console as console;
 use std::fs as fs;
 use std::path as path;
@@ -132,18 +133,22 @@ realm SelfHostedProject {
 
     fn ValidateVmProject(info: ProjectInfo) -> std::UnitResult
     {
-        if (info.hostEnabled or info.wioTarget != "exe")
+        if (info.wioTarget != "exe" and not fs::IsFile(path::Join(VmRuntimePackage(info), "WioVmRuntimeConfig.cmake")))
         {
-            return Failure<std::ResultUnit>("The VM project backend requires wio.target = 'exe' and host.enabled = false.");
+            return Failure<std::ResultUnit>("VM library builds require an installed WioVmRuntime. Set vm.runtimePrefix to its prefix; its C++ toolchain and configuration must match the wrapper/host.");
         }
 
-        if (not fs::IsFile(info.vmRunner))
+        if (info.wioTarget == "exe" and not fs::IsFile(info.vmRunner))
         {
             return Failure<std::ResultUnit>($"The standalone VM runner is missing: ${info.vmRunner}. Install or build wio-vm beside wio.");
         }
 
-        let outputs: string[] = [info.vmBytecodeOutput, info.vmBridgeOutput, info.vmExecutableOutput];
-        let protectedInputs: string[] = [info.wioEntry, info.manifestFile, info.nativeCore, info.vmRunner, info.wioOutput];
+        mut outputs: string[] = [info.vmBytecodeOutput, info.vmBridgeOutput];
+        outputs.Push(info.wioTarget == "exe" ? info.vmExecutableOutput : info.vmModuleOutput);
+        if (info.hostEnabled) { outputs.Push(info.vmHostOutput); }
+
+        let protectedInputs: string[] = [info.wioEntry, info.manifestFile, info.nativeCore, info.vmRunner,
+            info.wioOutput, info.hostOutput];
         mut index = 0usize;
         while (index < outputs.Count())
         {
@@ -248,6 +253,11 @@ realm SelfHostedProject {
             compileArgs.Push("--native-bridge-only");
             compileArgs.Push("--bytecode-sidecar");
             compileArgs.Push(info.vmBytecodeOutput);
+            if (info.wioTarget != "exe")
+            {
+                compileArgs.Push("--bytecode-sidecar-kind");
+                compileArgs.Push("library");
+            }
         }
         if (emitMode != "") {
             compileArgs.Push("--intermediate-dir");
@@ -276,7 +286,10 @@ realm SelfHostedProject {
             console::PrintLine!("Project Wio compile: up to date, skipping compiler invocation.");
         }
         if (emitMode != "") { return std::Ok<i32>(0); }
-        if (backend == "vm") { return PackageVmExecutable(info, forceRebuild); }
+        if (backend == "vm")
+        {
+            return info.wioTarget == "exe" ? PackageVmExecutable(info, forceRebuild) : BuildVmLibrary(info, forceRebuild);
+        }
         if (not info.hostEnabled) { return std::Ok<i32>(0); }
 
         mut hostArgs: string[] = ["-std=c++20", "-I", info.sdkIncludeDirectory];
@@ -312,6 +325,7 @@ realm SelfHostedProject {
         }
         if (process::ExecutableSuffix() == ".exe") { hostArgs.Push("-static"); }
         for argument in info.hostCompilerArgs { hostArgs.Push(argument); }
+        for argument in info.hostLinkerArgs { hostArgs.Push(argument); }
         hostArgs.Push("-o");
         hostArgs.Push(info.hostOutput);
         mut hostInputs: string[] = [info.manifestFile, info.wioOutput, info.sdkIncludeDirectory];
@@ -379,6 +393,10 @@ realm SelfHostedProject {
         }
         if (backend == "vm") {
             ValidateVmProject?(info);
+            if (info.wioTarget != "exe" and not info.hostEnabled)
+            {
+                return Failure<i32>("A VM library is not executable. Enable host.enabled or use project build/package.");
+            }
         }
         let noBuild = HasFlag(args, "--no-build");
         if (noBuild and (HasFlag(args, "--rebuild") or HasFlag(args, "--configure"))) {
@@ -400,9 +418,15 @@ realm SelfHostedProject {
         mut executable = "";
         mut runArgs: string[] = [];
         if (backend == "vm") {
-            executable = info.vmExecutableOutput;
-            let verified = RunProcess?(info.vmRunner, ["--verify", executable], info.projectRoot);
+            executable = info.wioTarget == "exe" ? info.vmExecutableOutput : info.vmHostOutput;
+            let verified = info.wioTarget == "exe"
+                ? RunProcess?(info.vmRunner, ["--verify", executable], info.projectRoot)
+                : VerifyVmLibrary?(info);
             if (verified != 0) { return std::Ok<i32>(verified); }
+            if (info.hostEnabled and info.passLibraryPath and info.wioTarget == "shared")
+            {
+                runArgs.Push(info.vmModuleOutput);
+            }
         }
         else if (info.hostEnabled) {
             executable = info.hostOutput;
@@ -552,13 +576,22 @@ realm SelfHostedProject {
         }
         if (backend == "vm")
         {
-            let verified = RunProcess?(info.vmRunner, ["--verify", info.vmExecutableOutput], info.projectRoot);
+            let verified = info.wioTarget == "exe"
+                ? RunProcess?(info.vmRunner, ["--verify", info.vmExecutableOutput], info.projectRoot)
+                : VerifyVmLibrary?(info);
             if (verified != 0) return std::Ok<i32>(verified);
 
             mut protectedFiles: string[] = [
                 info.manifestFile, info.wioEntry, info.nativeCore, info.vmRunner,
                 info.vmExecutableOutput, info.vmBytecodeOutput, info.vmBridgeOutput, info.sdkIncludeDirectory
             ];
+            protectedFiles.Push(info.vmModuleOutput);
+            protectedFiles.Push(info.vmHostOutput);
+            protectedFiles.Push(VmProjectDirectory(info));
+            protectedFiles.Push(info.vmRuntimePrefix);
+            protectedFiles.Push(VmRuntimePackage(info));
+            for value in info.packageAssets { protectedFiles.Push(value); }
+            for value in info.packageFiles { protectedFiles.Push(value); }
             for value in info.wioSourceRoots { protectedFiles.Push(value); }
             for value in info.wioIncludeDirs { protectedFiles.Push(value); }
             for value in info.wioLinkDirs { protectedFiles.Push(value); }
@@ -601,11 +634,30 @@ realm SelfHostedProject {
         mut packageArguments: string[] = [];
         mut artifacts: string[] = [];
         if (backend == "vm") {
-            entrypoint = path::Join("bin", path::FileName(info.vmExecutableOutput));
-            let deployed = RunProcess?(
-                info.vmRunner, ["--deploy", info.vmExecutableOutput, "--output", path::Join(packageRoot, entrypoint)], info.projectRoot);
-            if (deployed != 0) { return std::Ok<i32>(deployed); }
-            artifacts.Push(entrypoint);
+            if (info.wioTarget == "exe")
+            {
+                entrypoint = path::Join("bin", path::FileName(info.vmExecutableOutput));
+                let deployed = RunProcess?(
+                    info.vmRunner, ["--deploy", info.vmExecutableOutput, "--output", path::Join(packageRoot, entrypoint)], info.projectRoot);
+                if (deployed != 0) return std::Ok<i32>(deployed);
+
+                artifacts.Push(entrypoint);
+            }
+            else
+            {
+                let installed = InstallVmLibrary?(info, packageRoot);
+                if (installed != 0) return std::Ok<i32>(installed);
+
+                let library = path::Join("lib", path::FileName(info.vmModuleOutput));
+                if (info.hostEnabled)
+                {
+                    entrypoint = path::Join("bin", path::FileName(info.vmHostOutput));
+                    artifacts.Push(entrypoint);
+                    if (info.wioTarget == "shared" and info.passLibraryPath) { packageArguments.Push(library); }
+                }
+
+                if (info.wioTarget == "shared" or not info.hostEnabled) { artifacts.Push(library); }
+            }
         }
         else if (info.hostEnabled) {
             entrypoint = path::Join("bin", path::FileName(info.hostOutput));
@@ -658,7 +710,13 @@ realm SelfHostedProject {
             else {
                 mut launcher = "#!/usr/bin/env sh\n";
                 launcher += "package_root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n";
-                launcher += "exec \"$package_root/" + entrypoint + "\" \"$@\"\n";
+                launcher += "exec \"$package_root/" + entrypoint + "\"";
+                for argument in packageArguments
+                {
+                    launcher += " \"$package_root/" + argument + "\"";
+                }
+
+                launcher += " \"$@\"\n";
                 let launcherPath = path::Join(packageRoot, "run.sh");
                 if (not fs::TryWriteText(launcherPath, launcher) or not fs::TryMakeExecutable(launcherPath)) {
                     return Failure<i32>("Could not write the package launcher.");

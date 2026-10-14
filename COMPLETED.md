@@ -26,6 +26,32 @@ Notes:
 
 ## VM SDK shared/static module foundation — 2026-10-14
 
+### Follow-up: project CLI library and host integration — 2026-10-15
+
+- [x] VM project build/run/package accepts shared/static modules, optional native
+      hosts and bare libraries through a data-only CMake plan and installed runtime.
+      Native-backend outputs stay separate; compiler/configuration compatibility
+      remains explicit rather than silently linking incompatible VM archives.
+- [x] Add `--bytecode-sidecar-kind program|library`, preserving the executable
+      default while retaining a true library identity for VM wrappers. Invalid
+      values and use without a sidecar reject before generation.
+- [x] Record/verify module, host and native dependency hashes for no-build run/
+      package. Missing bundles repair without relinking an up-to-date image;
+      failed record publication preserves the prior metadata.
+- [x] Shared packages retain module-relative bundles; static-host packages retain
+      final-image bundles; bare archive packages remain explicit SDK link inputs.
+      POSIX launchers now forward package-relative shared-library arguments too.
+- [x] Two new Windows Debug gates passed 2/2 in 91.65 seconds: shared/static hosts,
+      bare libraries, relocated distributions, independent static-archive consumer,
+      Unicode paths, NUL-bearing result ownership, no-build without source/bytecode,
+      missing/corrupt inputs, path/hash policy and executable sidecar compatibility.
+- [x] Record the three subsequent optimization passes: generated C++/runtime
+      (measured 5-10% overhead target where feasible), non-JIT VM runtime, then the
+      entire compilation/preparation pipeline. This records intent, not speed gains.
+- [~] Functional closure steps 2 (distribution policy) and 3 (broader platform
+      qualification) remain open. No old/full corpus or Linux/macOS pass is claimed;
+      SDK kit parity stays a separate v1 blocker. No release is claimed.
+
 ### Follow-up: final-image install and explicit repair — 2026-10-15
 
 - [x] `wio_install_vm_module` installs shared images or a static module's final

@@ -38,8 +38,11 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/WioVmRuntimeConfig.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/StageWioVmNative.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/DeployWioVmNative.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/InstallWioVmNative.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/ManageWioVmProject.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/WioVmNativePaths.cmake"
     DESTINATION lib/cmake/WioVmRuntime COMPONENT WioVmRuntime)
+install(FILES "${CMAKE_SOURCE_DIR}/cmake/vm-project/CMakeLists.txt"
+    DESTINATION lib/cmake/WioVmRuntime/project COMPONENT WioVmRuntime)
 
 target_compile_options(wio_vm PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>

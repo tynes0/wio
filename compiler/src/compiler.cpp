@@ -592,6 +592,13 @@ namespace wio
             const bool hasIrOutput = !gAppData.argParser.GetValuesOf<std::string>("IR-OUTPUT").empty();
             const bool hasBytecodeOutput = !gAppData.argParser.GetValuesOf<std::string>("BYTECODE-OUTPUT").empty();
             const bool hasBytecodeSidecar = !gAppData.argParser.GetValuesOf<std::string>("BYTECODE-SIDECAR").empty();
+            const auto sidecarKinds = gAppData.argParser.GetValuesOf<std::string>("BYTECODE-SIDECAR-KIND");
+            if (!sidecarKinds.empty() &&
+                (!hasBytecodeSidecar || (sidecarKinds.front() != "program" && sidecarKinds.front() != "library")))
+            {
+                WIO_LOG_FATAL("--bytecode-sidecar-kind requires --bytecode-sidecar and a program or library value.");
+                return false;
+            }
             const auto bridgeOnlyFlags = gAppData.argParser.GetValuesOf<bool>("NATIVE-BRIDGE-ONLY");
             if (!bridgeOnlyFlags.empty() && bridgeOnlyFlags.front() && !hasBytecodeSidecar)
             {
@@ -2865,6 +2872,9 @@ namespace wio
                      .AddAlias("--bytecode-sidecar")
                      .SetDescription(
                          "Emits a verified .wiob module beside a native thunk library from the same Lowered WIR."))
+            .Add(Argonaut::Argument("BYTECODE-SIDECAR-KIND")
+                     .AddAlias("--bytecode-sidecar-kind")
+                     .SetDescription("Selects the paired bytecode contract: program (default) or library."))
             .Add(Argonaut::Argument("NATIVE-BRIDGE-ONLY")
                      .AddAlias("--native-bridge-only")
                      .Flag()
@@ -3317,7 +3327,10 @@ namespace wio
                 buildOptions.logicalModuleName = filesystem::toGenericUtf8(outputPath.stem());
                 const bool emitsBytecodeSidecar =
                     !gAppData.argParser.GetValuesOf<std::string>("BYTECODE-SIDECAR").empty();
-                buildOptions.moduleKind = gAppData.buildTarget == BuildTarget::Executable || emitsBytecodeSidecar
+                const auto sidecarKinds = gAppData.argParser.GetValuesOf<std::string>("BYTECODE-SIDECAR-KIND");
+                const bool programSidecar =
+                    emitsBytecodeSidecar && (sidecarKinds.empty() || sidecarKinds.front() == "program");
+                buildOptions.moduleKind = gAppData.buildTarget == BuildTarget::Executable || programSidecar
                                               ? wir::ModuleKind::Program
                                               : wir::ModuleKind::WioLibrary;
                 common::profiling::Scope typedBuildScope("WIR.Typed.Build");

@@ -320,11 +320,15 @@ continuously smoke-tested from an installed toolchain.
 
 ### Final Pre-Beta Stage - Heavy Optimization And Performance Acceptance
 
-Delivery order is: backend closure, final IDE/tooling and v1 correctness gates,
-then this integrated optimization stage, then beta/RC/stable. This is an
-additional final stage, not a renumbering or replacement of the nine backend
-closure items or the twelve v1 acceptance gates. Earlier performance work and
-severe regressions must still be addressed when discovered.
+The 2026-10-15 decision runs three heavy passes immediately after functional
+backend closure: generated C++/runtime (targeting 5-10% overhead versus equivalent
+optimized C++ where feasible), current non-JIT VM runtime, then the entire
+compilation/preparation pipeline. See
+[`WIO_BACKEND_OPTIMIZATION_PLAN.md`](./WIO_BACKEND_OPTIMIZATION_PLAN.md).
+After subsequent IDE/tooling, SDK kit and v1 correctness work, this final stage
+requalifies their performance budgets before beta/RC/stable. It does not postpone
+those passes or create a fourth heavy optimization package. Existing backend
+and v1 gate identities are unchanged; severe regressions are fixed when found.
 
 Required scope:
 

@@ -119,6 +119,13 @@ state: they prefer delegating to `wio ...` instead of owning the workflow.
 
 ## 1. The Two Ways To Use It
 
+VM library/host projects use the same manifest with `wio.target = "shared"` or
+`"static"` and `--backend vm`. Set `vm.runtimePrefix` to a compatible installed
+`WioVmRuntime`; `vm.moduleOutput`, `vm.hostOutput`, `vm.getter` and CMake toolchain
+settings control the outputs. Bare libraries build/package but cannot run without
+a host. See the [VM library CLI contract](WIO_VM_ARTIFACTS.md#project-cli-sharedstatic-modules-and-hosts)
+for toolchain, static-consumer, no-build and deployment rules.
+
 Wio now supports two practical workflows.
 
 ### 1.1 The Easy Path
@@ -493,13 +500,15 @@ Default output names:
 
 For `wio project build/run/package --backend vm`, the build intermediates are
 `<baseName>.wiob` and `<baseName>.vm-native.dll` (`.so`/`.dylib` on POSIX).
-The runnable artifact is `vm/<baseName>.exe` (no suffix on Unix), under the
+For executable targets the runnable artifact is `vm/<baseName>.exe` (no suffix on Unix), under the
 output directory. Its bytecode is embedded and its native registry libraries
 are copied beside it with content-versioned names. Native and VM executable
 outputs stay separate. `wio-vm` must be installed beside `wio`.
-The default backend is still `native`. VM project execution currently requires
-`wio.target = "exe"` and `host.enabled = false`; native include/source/link
-settings still build the wire registry bridge.
+The default backend is still `native`. VM executable projects use `wio.target =
+"exe"` and `host.enabled = false`; shared/static targets may instead build a
+native host or remain bare libraries. Native include/source/link settings still
+build the wire registry bridge. Library/host outputs are independently configured
+by `vm.moduleOutput`/`vm.hostOutput` and require an installed `vm.runtimePrefix`.
 
 Optional VM configuration:
 
@@ -513,18 +522,19 @@ nativeLibraries = ["native/lib/extra-registry.dll"]
 
 These paths are relative to the project root. Additional libraries must export
 `WioGetNativeAbiRegistry`; they are not replacements for ordinary C/C++ linker
-inputs. The generated bridge is loaded first. The three VM outputs must be
+inputs. The generated bridge is loaded first. The active VM outputs must be
 distinct and must not collide with the source entry, manifest, compiler/runner
-or native executable output. `describe` reports the resolved VM executable/runner.
+or native backend outputs. `describe` reports resolved executable/runner,
+module/host paths, runtime prefix and static getter.
 
 Project run preserves manifest arguments, `--arg`, arguments after `--`, working
-directory overrides and exit codes, but executes the embedded application rather
+directory overrides and exit codes. Executable projects execute the embedded application rather
 than the compiler's raw bytecode command. `--no-build` needs the deployed image
 and its versioned libraries, not the original source/bytecode/bridge intermediates.
 The project CLI still requires its installed toolchain for project discovery;
 the standalone application itself does not need it.
 
-Incremental compilation and packaging are separate. Changes to the VM runner or
+For executable targets, incremental compilation and packaging are separate. Changes to the VM runner or
 explicit `vm.nativeLibraries` invalidate the package without unnecessarily
 recompiling an otherwise current producer. Replacement only accepts an existing
 verified VM artifact; arbitrary files are not overwritten. New native bytes use
@@ -532,7 +542,7 @@ new names, so older generations and failed-build rollback keep their libraries.
 Old generation libraries are deliberately retained; safe garbage collection is
 not part of this slice.
 
-`wio project package --backend vm` deploys only the selected generation into
+Executable `wio project package --backend vm` deploys only the selected generation into
 `bin/`, alongside its active libraries, and records `backend: "vm"` in package
 metadata. `--no-build` packages the existing image without source/intermediates;
 `--clean` remains required to replace an existing project package directory.
@@ -540,6 +550,13 @@ Verification precedes cleanup, and source/toolchain/artifact directory ancestors
 are rejected as VM package destinations. Assets/files retain the normal manifest
 rules. Packaged launchers forward caller arguments; they do not implicitly
 prepend manifest `run.args` as `project run` does.
+
+For VM libraries, CMake drives build/repair and component install. No-build
+run/package verifies recorded module/host/native hashes and needs the CMake
+build metadata, staged bundles and runtime package, but not Wio source or `.wiob`
+inputs. Shared modules install under `lib`, hosts under `bin`; bare static
+archives include their bundle as a link/deployment input rather than inventing an
+entrypoint. See the detailed VM library contract linked above.
 
 See [VM artifacts](WIO_VM_ARTIFACTS.md) and
 [VM discovery and lifetime](./WIO_VM_NATIVE_BRIDGE.md) for current scope and

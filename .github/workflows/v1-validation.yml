@@ -86,7 +86,7 @@ jobs:
       - name: Validate standalone VM executable artifacts
         run: >
           ctest --test-dir build --output-on-failure
-          -R "^(wio_vm_(artifact_codec|artifact_generation|executable_artifact|project_artifact|sdk_module_adapter|sdk_module_artifacts|sdk_session_lifecycle|sdk_session_artifacts|task_source_shutdown|task_source_import|sdk_async_artifacts|sdk_task_inputs_artifacts|module_native_paths|sdk_native_dependencies|native_bundle_policy|sdk_native_install)|wio_process_utf8_project)$"
+          -R "^(wio_vm_(artifact_codec|artifact_generation|executable_artifact|project_artifact|sdk_module_adapter|sdk_module_artifacts|sdk_session_lifecycle|sdk_session_artifacts|task_source_shutdown|task_source_import|sdk_async_artifacts|sdk_task_inputs_artifacts|module_native_paths|sdk_native_dependencies|native_bundle_policy|sdk_native_install|project_library_cli|project_record_policy)|wio_process_utf8_project)$"
 
   sanitizers:
     runs-on: ubuntu-latest

@@ -1485,3 +1485,27 @@ add_test(NAME wio_vm_sdk_native_install
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_sdk_native_install_test.cmake")
 wio_test_labels(wio_vm_sdk_native_install interop vm sdk native deployment install repair shared static ownership release-gate)
 set_tests_properties(wio_vm_sdk_native_install PROPERTIES TIMEOUT 480)
+
+add_test(NAME wio_vm_project_library_cli
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}"
+        "-DWIO_CONFIG=$<CONFIG>"
+        "-DWIO_GENERATOR=${CMAKE_GENERATOR}"
+        "-DWIO_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DWIO_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DWIO_MINGW=${MINGW}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-project-library-cli"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_project_library_cli_test.cmake")
+wio_test_labels(wio_vm_project_library_cli interop vm project cli shared static host artifact deployment release-gate)
+set_tests_properties(wio_vm_project_library_cli PROPERTIES TIMEOUT 1200)
+
+add_test(NAME wio_vm_project_record_policy
+    COMMAND ${CMAKE_COMMAND} "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-project-record-policy"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_project_record_policy_test.cmake")
+wio_test_labels(wio_vm_project_record_policy vm project cli artifact integrity release-gate)
+set_tests_properties(wio_vm_project_record_policy PROPERTIES TIMEOUT 30)

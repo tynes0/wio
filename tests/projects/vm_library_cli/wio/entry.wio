@@ -1,0 +1,9 @@
+using cpp::header("fixture.h");
+
+[native, CppName(cli_vm_test::Add)]
+fn NativeAdd(left: i32, right: i32) -> i32;
+
+fn Entry() -> i32
+{
+    return NativeAdd(40, 2) == 42 ? 0 : 1;
+}
