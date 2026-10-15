@@ -1,0 +1,32 @@
+fn Echo(value: i64) -> i64
+{
+    return value;
+}
+
+fn Entry() -> i32
+{
+    mut minimum = -9223372036854775807i64;
+    minimum -= 1i64;
+    let maximum = 18446744073709551615u64;
+    if ($"${minimum}/${maximum}" != "-9223372036854775808/18446744073709551615") return 1;
+    let small = -32768i16;
+    let large = 65535u16;
+    if ($"${small}/${large}/${0}/${-1}" != "-32768/65535/0/-1") return 2;
+    if ($"${-128i8}/${255u8}/${2147483647}/${4294967295u32}" != "-128/255/2147483647/4294967295") return 3;
+    if ($"${true}/${false}/${1.5f64}" != "true/false/1.5") return 4;
+    if (u$"数=${Echo(-42i64)}🙂" != u"数=-42🙂") return 5;
+    if ($"a\0${123}b" != "a\0123b") return 6;
+    if ($"outer ${$"inner ${Echo(1234567i64)}"}" != "outer inner 1234567") return 7;
+    if ($"${123}\0after${456}\0" != "123\0after456\0") return 9;
+    let wide = "0123456789abcdef0123456789abcdef";
+    if ($"prefix${wide}/${wide}suffix" != "prefix" + wide + "/" + wide + "suffix") return 10;
+    mut index = -1000;
+    while (index < 1000)
+    {
+        let rendered = $"${index}:${index + 1000}";
+        if (rendered == "") return 8;
+        index += 1;
+    }
+
+    return 0;
+}

@@ -1317,6 +1317,13 @@ Rider, and CLion are defined in
   timeouts with exact durations. This is an explicit final comparison gate,
   not an additional optimization pass.
 
+- [~] Every optimization update also reports fresh Wio native and Release VM
+  measurements on that same Mandelbrot case, with fixed, explicitly dated
+  C++/C#/Python reference rows. Keep compute versus full-output metrics separate,
+  raw samples/checksums and timeouts visible, and rebaseline references when
+  workload/toolchain policy changes; do not silently defer all comparison until
+  the three passes end. See `tests/performance/mandelbrot_compute/progress.ps1`.
+
 - [ ] Requalify the three heavy passes' budgets after the IDE/tooling/SDK/v1
   correctness gates, before beta/RC. Keep the existing backend and v1 gate
   identities intact; this final checkpoint does not defer the three passes or

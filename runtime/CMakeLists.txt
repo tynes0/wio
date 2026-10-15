@@ -4,6 +4,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/float_parse.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/wir_task_abi.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/wir_inline_place.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/integer_format.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/constant_value.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/entry_args.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"

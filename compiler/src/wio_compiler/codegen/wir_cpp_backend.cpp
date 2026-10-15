@@ -1227,7 +1227,7 @@ namespace wio::codegen
                        "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
                        "#include <any.h>\n#include <entry_args.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include "
                        "<std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n"
-                       "#include <wir_inline_place.h>\n";
+                       "#include <wir_inline_place.h>\n#include <integer_format.h>\n";
                 output_ << "#include <wir_abi.h>\n#include <wir_task_abi.h>\n#include <wir_native.h>\n#include "
                            "<module_api.h>\n#include "
                            "<wio_values.h>\n#include "
@@ -1475,6 +1475,8 @@ inline std::string stringify(const wio::runtime::Text& value) { return value.Utf
 template<class T> std::string stringify(const T& value) {
     if constexpr (std::is_enum_v<T>) {
         return stringify(static_cast<std::underlying_type_t<T>>(value));
+    } else if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, char>) {
+        return wio::runtime::StringifyInteger(value);
     } else if constexpr (requires(std::ostringstream& stream) { stream << value; }) {
         std::ostringstream stream;
         stream << value;
@@ -2833,14 +2835,23 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     break;
                 case lowered::Opcode::Interpolate:
                 {
-                    std::string expression =
-                        cppString(instruction.stringSegments.empty() ? "" : instruction.stringSegments.front());
+                    const std::string_view prefix =
+                        instruction.stringSegments.empty() ? std::string_view{} : instruction.stringSegments.front();
+                    std::string expression = "([&]() { std::string _formatted(" + cppString(prefix) + ", " +
+                                             std::to_string(prefix.size()) + "); ";
                     for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                     {
-                        expression += " + wio::wir_backend::stringify(" + operand(instruction.operands[index]) + ")";
+                        expression +=
+                            "_formatted += wio::wir_backend::stringify(" + operand(instruction.operands[index]) + "); ";
                         if (index + 1 < instruction.stringSegments.size())
-                            expression += " + " + cppString(instruction.stringSegments[index + 1]);
+                        {
+                            const auto& segment = instruction.stringSegments[index + 1];
+                            if (!segment.empty())
+                                expression += "_formatted.append(" + cppString(segment) + ", " +
+                                              std::to_string(segment.size()) + "); ";
+                        }
                     }
+                    expression += "return _formatted; }())";
                     const Type* resultType = module_.types.tryGet(instruction.resultType);
                     assignResult(instruction, resultType && resultType->kind == TypeKind::Text
                                                   ? "wio::runtime::Text::FromUtf8(" + expression + ")"

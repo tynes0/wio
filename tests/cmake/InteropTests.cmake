@@ -1585,3 +1585,12 @@ add_test(NAME wio_wir_cpp_managed_storage
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/wir_cpp_managed_storage_test.cmake")
 wio_test_labels(wio_wir_cpp_managed_storage native vm codegen optimization storage ownership)
 set_tests_properties(wio_wir_cpp_managed_storage PROPERTIES TIMEOUT 900)
+
+add_test(NAME wio_wir_integer_interpolation
+    COMMAND ${CMAKE_COMMAND} "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_BACKEND_CXX=${WIO_BACKEND_CXX_COMPILER}" "-DWIO_RUNTIME=${WIO_BACKEND_RUNTIME_LIBRARY}"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}" "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/wir-integer-interpolation"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/wir_integer_interpolation_test.cmake")
+wio_test_labels(wio_wir_integer_interpolation native vm formatting optimization unicode)
+set_tests_properties(wio_wir_integer_interpolation PROPERTIES TIMEOUT 900)

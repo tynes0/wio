@@ -32,6 +32,10 @@ add_library(wio_compiler STATIC
 add_library(wio-compiler ALIAS wio_compiler)
 
 if(BUILD_TESTING)
+    add_executable(wio_integer_format_test "${CMAKE_SOURCE_DIR}/tests/integer_format_test.cpp")
+    target_include_directories(wio_integer_format_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
+    add_test(NAME wio_integer_format COMMAND wio_integer_format_test)
+    set_tests_properties(wio_integer_format PROPERTIES LABELS "runtime;native;formatting;optimization;locale")
     add_executable(wio_wir_cpp_managed_storage_test "${CMAKE_SOURCE_DIR}/tests/wir_cpp_managed_storage_test.cpp")
     target_link_libraries(wio_wir_cpp_managed_storage_test PRIVATE wio_compiler)
     target_include_directories(wio_wir_cpp_managed_storage_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")

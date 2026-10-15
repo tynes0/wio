@@ -42,5 +42,38 @@ iteration count: it includes coordinate setup, escape tests, and checksums; it
 is not the latency of an individual arithmetic instruction or a pure loop-only
 measurement. Numerical results must match before speed comparisons are accepted.
 
+## Per-update Wio measurements
+
+`progress.ps1` rebuilds/measures only Wio native and a Release non-JIT VM host,
+leaving the dated C++/C#/Python baselines fixed for progress reports. Build
+`wio_mandelbrot_vm_benchmark` in Release first. This diagnostic-only host uses a
+finite 10-billion-instruction budget for the full-size workload, rather than
+changing the production runner's 10-million default. Decoding, verification,
+native ownership and other machine checks remain enabled. The host is excluded
+from the default build/install and is not a new production CLI.
+
+```powershell
+cmake --build build --config Release --target wio_mandelbrot_vm_benchmark
+pwsh -File tests/performance/mandelbrot_compute/progress.ps1 `
+    -OutputDirectory F:/Projects/wio/build/mandelbrot-progress-new-run `
+    -FullSourceDirectory F:/Projects/wio/build/mandelbrot-ddfa2b2 `
+    -Repetitions 5 -VmRepetitions 1 -TimeoutSeconds 180
+```
+
+The compute fixture is versioned here. Optional full-output input uses a frozen
+`main.wio` plus `mandelbrot.wio` snapshot; a saved `main.wio.cpp` also enables
+paired previous/current native full-output samples. The frozen full source is
+currently retained in the ignored local audit directory, not a standalone
+clean-checkout fixture bundle. Do not point this option at a changing playground
+and claim it is the same experiment. All copied source/generated/bytecode/bridge/
+binary hashes are preserved. Ordinary Windows GCC/runtime linkage matches the
+earlier native experiments; the VM itself is an optimized MSVC Release build.
+
+Native has an excluded warm-up; VM repetitions are explicit separate-process
+samples with no hidden warm-up. One VM sample is an observation, not a robust
+median. Kernel time excludes VM setup; full-output wall time includes it. A
+timeout is retained without a checksum/success claim or fabricated exact runtime.
+No .NET/Python installations/runs or old correctness corpus are required here.
+
 See [`../../../docs/WIO_MANDELBROT_PERFORMANCE_AUDIT.md`](../../../docs/WIO_MANDELBROT_PERFORMANCE_AUDIT.md)
 for the measured baseline, limits, and optimization priorities.

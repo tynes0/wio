@@ -2211,7 +2211,7 @@ Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:119](../compiler
 - invalid Lowered WIR: {dynamic context}: {dynamic context}
 - {dynamic context}invalid Lowered WIR: {dynamic context}: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:239](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L239), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:3770](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L3770).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:239](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L239), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:3781](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L3781).
 
 ### WCPP1100
 
@@ -2359,7 +2359,7 @@ Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:572](../comp
 
 - {dynamic context}native-only bridge requires no main and native task sidecars
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:3762](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L3762).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:3773](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L3773).
 
 ## WBC
 

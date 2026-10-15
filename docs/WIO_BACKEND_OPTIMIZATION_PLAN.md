@@ -91,8 +91,20 @@ and variability, and retain semantic/ownership/differential correctness gates.
 
 ## Reporting and final acceptance
 
-Accepted final comparison requirement (2026-10-15): after all three passes,
-rerun the same Mandelbrot workload in C++, Wio native, Wio VM, C# and Python.
+Updated reporting requirement (2026-10-15): every optimization update must end
+with fresh Wio native and Wio VM measurements for the same Mandelbrot case,
+alongside fixed C++/C#/Python reference rows. Label those reference revisions,
+sample dates/configurations and workload/metric explicitly; they are not fresh
+paired measurements or a claim that host timing can never vary. Rebaseline the
+references if algorithm, input, checksum, toolchain or measurement policy changes.
+Use Release VM execution, retain raw samples, and report a timeout as a lower
+bound rather than inventing a completed duration. The diagnostic VM host has an
+explicit finite larger instruction budget; production safety defaults do not
+change. Fresh Wio-only measurements follow each implementation slice, not only
+the end of a numbered pass. Pure explanations do not create new timing evidence.
+
+After all three passes, rerun the same Mandelbrot workload in all five rows:
+C++, Wio native, Wio VM, C# and Python (the two Wio backends remain separate).
 Report compute-only, formatting/buffer construction and complete PPM output
 separately. Match image dimensions, iteration limit, numeric policy and output
 checksums; record compiler/runtime versions, configurations, cold/warm startup,
