@@ -63,6 +63,10 @@ jobs:
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
           -R "^wio_native_ownership_attribution$"
+      - name: Attribute Wio live/peak memory (diagnostic, no speed gate)
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_native_memory_attribution$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -73,3 +77,4 @@ jobs:
             build/measurement-contract-*/evidence/results.json
             build/native-cost-python-contract-*/**/results.json
             build/native-ownership-attribution/**/results.json
+            build/native-memory-attribution/**/results.json

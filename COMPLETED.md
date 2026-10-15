@@ -10,6 +10,23 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N01 live/peak memory attribution — 2026-10-15
+
+- [x] Wio retained object/string/byte-array workloads and native controls called
+      from Wio; Python orchestration and independent checksums. Diagnostic-only
+      ordinary/aligned allocation/free live/peak window accounting; process
+      memory checkpoints for Windows/Linux/macOS. No production changes or PS1.
+- [x] Known-size/control alignment, zero-byte, nothrow/checked-overflow failure,
+      pre-window frees and weak-delayed physical release. Only the new CTest ran:
+      1/1, 8.75 seconds, five checks and 18/18 real Wio executions. All final
+      window-owned live bytes/blocks zero; immutable inputs/artifacts unchanged.
+- [x] Fresh unchanged-binary Mandelbrot 32/32 correct: native compute 24.0372 ms,
+      VM 20.6477775 s. Overall timing rejected for noise/drift, with all samples
+      retained. No speedup/regression claim. Previous Ref-attribution CI green.
+- [ ] Still N01, not N02. Payload-copy bytes, direct malloc/custom allocator
+      attribution, broader subsystem coverage and precise timing remain open.
+      See `docs/WIO_MEMORY_ATTRIBUTION.md` and its raw evidence.
+
 ## N01 Ref ownership attribution — 2026-10-15
 
 - [x] Wio owning-argument/view/return workloads; native weak-lifetime and explicit

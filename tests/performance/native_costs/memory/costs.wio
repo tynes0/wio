@@ -1,0 +1,109 @@
+using cpp::header("probe.h");
+
+[native, cpp::name(memory_costs::Begin)]
+fn Begin();
+
+[native, cpp::name(memory_costs::Checkpoint)]
+fn Checkpoint();
+
+[native, cpp::name(memory_costs::Report)]
+fn Report(checksum: u64) -> i32;
+
+[native, cpp::name(memory_costs::ParseCount)]
+fn ParseCount(value: view string) -> i32;
+
+[native, cpp::name(memory_costs::Hash)]
+fn Hash(value: view string) -> u64;
+
+[native, cpp::name(memory_costs::Control)]
+fn Control(count: i32) -> u64;
+
+[native, cpp::name(memory_costs::AlignedControl)]
+fn AlignedControl(count: i32) -> u64;
+
+[native, cpp::name(memory_costs::WeakControl)]
+fn WeakControl(count: i32) -> u64;
+
+object Counter
+{
+    private value: u64;
+
+    public fn OnConstruct(value: u64)
+    {
+        self.value = value;
+    }
+
+    public fn Read() -> u64
+    {
+        return self.value;
+    }
+
+}
+
+fn Run(kind: view string, count: i32) -> u64
+{
+    if (kind == "control") return Control(count);
+    if (kind == "aligned") return AlignedControl(count);
+    if (kind == "weak") return WeakControl(count);
+
+    mut sum = 0u64;
+    if (kind == "object")
+    {
+        mut values: Counter[] = [];
+        for (index in 0..<count)
+        {
+            values.Push(Counter(index fit u64));
+        }
+
+        Checkpoint();
+        for (value in values)
+        {
+            sum = sum * 33u64 + value.Read();
+        }
+
+        return sum;
+    }
+
+    if (kind == "string")
+    {
+        mut values: string[] = [];
+        for (index in 0..<count)
+        {
+            values.Push($"entry:${index}:0123456789abcdef0123456789abcdef");
+        }
+
+        Checkpoint();
+        for (value in values)
+        {
+            sum = sum * 33u64 + Hash(ref value);
+        }
+
+        return sum;
+    }
+
+    mut values: byte[] = [];
+    for (index in 0..<count)
+    {
+        values.Push((index % 256) fit byte);
+    }
+
+    Checkpoint();
+    for (value in values)
+    {
+        sum = sum * 33u64 + (value fit u64);
+    }
+
+    return sum;
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() != 3usize) return 2;
+    let kind = args[1usize];
+    if (kind != "object" and kind != "string" and kind != "bytes" and
+        kind != "control" and kind != "aligned" and kind != "weak") return 3;
+    let count = ParseCount(ref args[2usize]);
+    Begin();
+    let checksum = Run(ref kind, count);
+    return Report(checksum);
+}

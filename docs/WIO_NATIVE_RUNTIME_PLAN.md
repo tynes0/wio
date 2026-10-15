@@ -63,7 +63,7 @@ the N01 instrumentation slice. Existing dirty std/playground files are preserved
 | Scheduling, cancellation, threading, maps/sets/Unicode expansion | Pending | Existing correctness tests are not performance baselines; add focused workloads before changing those paths |
 | Cold startup, reflection, real file/network I/O | Pending | Whole-process wall time alone does not isolate these costs |
 | Ref copy/move and retain/release events | `native_costs/ownership` | Calibrated GCC/gcov diagnostic, no runtime modifications; ordinary O2 output parity. General payload-copy bytes and production-optimized RC attribution remain pending |
-| Peak/live memory and aligned/malloc traffic | Pending | Not measured by the ordinary-new probe; require an appropriate profiler or separate diagnostic build |
+| Live/peak memory and aligned traffic | `native_costs/memory` | Separate diagnostic ordinary/aligned new/delete window accounting and OS resident-memory checkpoints; not copied bytes or production RSS; malloc/custom allocator traffic remains open |
 
 N01 has a working first cost-map slice, **not complete coverage of all native
 runtime subsystems**. Missing metrics are not zeros. Later slices must extend
@@ -126,6 +126,13 @@ and native weak/control calibration, with Python build/collection. See
 [ownership attribution](WIO_OWNERSHIP_ATTRIBUTION.md). It counts header-only Ref
 paths in a non-inlined coverage compilation, not exact shipping-binary events,
 copy bytes or operation latency. N01 remains open; no N02 transition here.
+
+The subsequent [memory attribution slice](WIO_MEMORY_ATTRIBUTION.md) adds live
+and peak requested-byte/block counters, calibrated aligned/failure/free handling,
+Wio array/string/object cleanup, native weak lifetime, and platform-specific
+resident-memory checkpoints. Its replacement allocator is diagnostic-only;
+neither its timings nor its RSS represent the uninstrumented production binary.
+Payload-copy bytes, broader coverage and timing qualification remain open.
 
 New behavior tests should preferably be Wio; Python is preferred for portable
 build/process/measurement orchestration. Avoid new substantial PS1 test logic.

@@ -1644,6 +1644,15 @@ if(Python3_Interpreter_FOUND)
     wio_test_labels(wio_native_cost_python_contract performance diagnostic measurement language wio)
     set_tests_properties(wio_native_cost_python_contract PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
 
+    add_test(NAME wio_native_memory_attribution
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tests/performance/native_costs/memory/test_memory.py"
+            --output "${CMAKE_BINARY_DIR}/native-memory-attribution"
+            --cxx "${WIO_BACKEND_CXX_COMPILER}" --wio "$<TARGET_FILE:wio_app>"
+            --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}")
+    wio_test_labels(wio_native_memory_attribution native performance diagnostic allocation ownership memory wio)
+    set_tests_properties(wio_native_memory_attribution PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE)
+
     # This attribution profiler needs GCC/gcov, not Clang's different coverage
     # format. Keep it separate from portable timing/allocation controllers.
     execute_process(COMMAND "${WIO_BACKEND_CXX_COMPILER}" --version

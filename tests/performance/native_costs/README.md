@@ -135,3 +135,8 @@ For opt-in RC and Ref copy/move attribution without runtime source changes, see
 [the Wio/Python ownership profiler](ownership/README.md). Its calibrated gcov
 diagnostic build is separate from ordinary O2 output checks and from timing
 acceptance; handle-transfer counts are not copied payload bytes.
+
+For live/peak requested bytes, aligned allocation/free accounting and process
+resident-memory checkpoints, use the separate
+[Wio/Python memory diagnostic](memory/README.md). Its replacement allocator is
+never linked into these ordinary allocation/timing probes or production code.
