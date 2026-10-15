@@ -40,10 +40,10 @@ range/drift rejection, balanced scheduling, artifact mutation, actual child
 affinity inheritance/restoration and the real failed-process evidence path.
 No old correctness corpus or production build was run locally.
 
-The implementation is committed/pushed as `4718f82`. In the three-platform
-[CI run](https://github.com/tynes0/wio/actions/runs/38759859521), Ubuntu Release
-and macOS Release passed; Windows Debug was still running when this report was
-prepared. No unobserved Windows pass is claimed.
+The implementation is committed/pushed as `4718f82`. The three-platform
+[CI run](https://github.com/tynes0/wio/actions/runs/38759859521) is fully green:
+Windows Debug, Ubuntu Release and macOS Release all pass the new measurement
+contract (3/3 executions). These are functional harness tests, not speed gates.
 
 During the manual diagnostic session the observed aggregate CPU busy fraction
 was around 65-70%. A separate brief read-only process sample (a one-second wait

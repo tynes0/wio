@@ -21,6 +21,8 @@ Notes:
 - [x] Only the new `wio_measurement_contract` was run locally: 1/1 in 6.02 seconds,
       38 assertions including real child inheritance and failed-process evidence.
       A separate real VM timeout check terminates its child and retains failure.
+      The new contract also passes on Windows Debug, Ubuntu Release and macOS
+      Release (3/3 CI executions, run 38759859521); no CI speed gate is claimed.
 - [x] Retained all 93 manual diagnostic rows, including the expected timeout.
       The final native experiment passes all 40 output checks and immutable hash
       checks but fails noise limits. Active competing application CPU usage was
