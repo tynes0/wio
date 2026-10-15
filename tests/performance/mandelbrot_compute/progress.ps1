@@ -149,7 +149,9 @@ $taskSummary = foreach ($taskCase in $taskCases) {
 }
 $taskSources = foreach ($taskSource in @('tests/performance/mandelbrot_compute/compute.wio',
     'tests/performance/mandelbrot_compute/benchmark_clock.h', 'tests/performance/mandelbrot_compute/vm_host.cpp',
-    'runtime/include/integer_format.h', 'compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp')) {
+    'runtime/include/integer_format.h', 'compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp',
+    'compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp',
+    'compiler/include/wio/codegen/wir_cpp_storage_plan.h')) {
     [pscustomobject]@{ Path=$taskSource; Hash=(Get-FileHash (Join-Path $taskRoot $taskSource)).Hash }
 }
 [pscustomobject]@{

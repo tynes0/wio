@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory)][string]$OutputDirectory,
     [Parameter(Mandatory)][string]$BaselineDirectory,
     [string]$PreviousDirectory = '',
+    [string]$FixturePath = '',
     [string]$CppCompiler = 'g++',
     [int]$Repetitions = 15
 )
@@ -16,11 +17,12 @@ New-Item -ItemType Directory -Path $OutputDirectory | Out-Null
 $taskCompiler = (Get-Command $CppCompiler).Source
 $taskWio = Join-Path $taskRoot 'build/app/Debug/wio.exe'
 $taskRuntime = Join-Path $taskRoot 'build/runtime/backend/libwio_runtime.a'
+$taskFixture = if ($FixturePath) { [IO.Path]::GetFullPath($FixturePath) } else { Join-Path $PSScriptRoot 'append.wio' }
 function Build([string]$program, [string[]]$arguments) {
     & $program @arguments
     if ($LASTEXITCODE -ne 0) { throw "Build failed: $program ($LASTEXITCODE)" }
 }
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'append.wio') -Destination $OutputDirectory
+Copy-Item -LiteralPath $taskFixture -Destination (Join-Path $OutputDirectory 'append.wio')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'append.cpp') -Destination $OutputDirectory
 Copy-Item -LiteralPath (Join-Path ([IO.Path]::GetFullPath($BaselineDirectory)) 'append.wio.cpp') `
     -Destination (Join-Path $OutputDirectory 'baseline.wio.cpp')
@@ -97,6 +99,7 @@ $taskArtifacts = foreach ($taskCase in $taskCases) {
     Revision=(& git -C $taskRoot rev-parse HEAD).Trim()
     Compiler=(& $taskCompiler --version | Select-Object -First 1); Flags=$taskFlags; Repetitions=$Repetitions
     CompilerHash=(Get-FileHash -LiteralPath $taskWio).Hash; RuntimeHash=(Get-FileHash -LiteralPath $taskRuntime).Hash
+    FixturePath=$taskFixture; FixtureHash=(Get-FileHash -LiteralPath $taskFixture).Hash
     Sources=@($taskSources); Artifacts=@($taskArtifacts); Samples=$taskSamples.ToArray(); Summary=@($taskSummary)
 } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'results.json') -Encoding utf8
 $taskSummary | Format-List

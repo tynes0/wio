@@ -14,7 +14,7 @@ namespace wio::runtime
     // locale. The usual classic-locale decimal path needs no stream/facet work.
     template <class T>
         requires(std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, char>)
-    std::string StringifyInteger(const T value)
+    void AppendInteger(std::string& target, const T value)
     {
         if (std::locale() != std::locale::classic())
         {
@@ -23,7 +23,8 @@ namespace wio::runtime
                 stream << +value;
             else
                 stream << value;
-            return stream.str();
+            target.append(stream.str());
+            return;
         }
 
         // digits10 excludes the possible leading decimal digit and sign.
@@ -31,6 +32,15 @@ namespace wio::runtime
         const auto converted = std::to_chars(buffer, buffer + sizeof(buffer), value);
         if (converted.ec != std::errc{})
             throw std::logic_error("Wio integer formatting buffer is insufficient");
-        return std::string(buffer, converted.ptr);
+        target.append(buffer, converted.ptr);
+    }
+
+    template <class T>
+        requires(std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, char>)
+    std::string StringifyInteger(const T value)
+    {
+        std::string result;
+        AppendInteger(result, value);
+        return result;
     }
 } // namespace wio::runtime

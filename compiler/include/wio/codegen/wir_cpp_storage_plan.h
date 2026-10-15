@@ -14,7 +14,7 @@ namespace wio::codegen
         std::unordered_set<std::uint32_t> scalarPlaces;
         std::unordered_set<std::uint32_t> stringPlaces;
         std::unordered_set<std::uint32_t> plainValues;
-        std::unordered_map<std::uint32_t, wir::ValueId> borrowedAppendCopies;
+        std::unordered_map<std::uint32_t, wir::ValueId> borrowedStringCopies;
         bool directControlFlow = false;
 
         [[nodiscard]] static WirCppStoragePlan build(const wir::lowered::Module& module,

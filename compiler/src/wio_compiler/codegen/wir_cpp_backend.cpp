@@ -1525,6 +1525,23 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
     }
     return result + "}";
 }
+template<class T> void append_formatted(std::string& target, const T& value) {
+    if constexpr (std::is_same_v<T, std::string>) {
+        target.append(value);
+    } else if constexpr (std::is_same_v<T, wio::runtime::Text>) {
+        target.append(value.Utf8());
+    } else if constexpr (std::is_same_v<T, bool>) {
+        target.append(value ? "true" : "false");
+    } else if constexpr (std::is_same_v<T, char>) {
+        target.push_back(value);
+    } else if constexpr (std::is_enum_v<T>) {
+        append_formatted(target, static_cast<std::underlying_type_t<T>>(value));
+    } else if constexpr (std::is_integral_v<T> && !std::is_same_v<T, std::int8_t> && !std::is_same_v<T, std::uint8_t>) {
+        wio::runtime::AppendInteger(target, value);
+    } else {
+        target.append(stringify(value));
+    }
+}
 }
 
 )CPP";
@@ -2092,14 +2109,14 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 }
 
                 collectLinearPlaceAliases(function);
-                for (const auto& [copy, source] : storagePlan_.borrowedAppendCopies)
+                for (const auto& [copy, source] : storagePlan_.borrowedStringCopies)
                 {
                     valueAliases_.emplace(copy, source);
                     valueTypes_.erase(copy);
                 }
                 for (const auto& block : function.blocks)
                     for (const auto& instruction : block.instructions)
-                        if (instruction.result && storagePlan_.borrowedAppendCopies.contains(instruction.result.value()))
+                        if (instruction.result && storagePlan_.borrowedStringCopies.contains(instruction.result.value()))
                             suppressedInstructions_.insert(&instruction);
 
                 if (currentFunctionIsLinear_)
@@ -2841,8 +2858,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                              std::to_string(prefix.size()) + "); ";
                     for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                     {
-                        expression +=
-                            "_formatted += wio::wir_backend::stringify(" + operand(instruction.operands[index]) + "); ";
+                        expression += "wio::wir_backend::append_formatted(_formatted, " +
+                                      operand(instruction.operands[index]) + "); ";
                         if (index + 1 < instruction.stringSegments.size())
                         {
                             const auto& segment = instruction.stringSegments[index + 1];

@@ -1,5 +1,7 @@
 #include "wio/codegen/wir_cpp_storage_plan.h"
 
+#include <algorithm>
+
 namespace wio::codegen
 {
     namespace
@@ -59,6 +61,45 @@ namespace wio::codegen
             if (instruction.opcode == wir::lowered::Opcode::MoveValue && operand == 0)
                 return instruction.resultOwnership == wir::typed::ValueOwnership::Owned;
             return scalarCellUse(instruction, operand);
+        }
+
+        bool observesString(const wir::lowered::Instruction& instruction, const wir::ValueId value)
+        {
+            if (std::find(instruction.operands.begin(), instruction.operands.end(), value) ==
+                instruction.operands.end())
+                return false;
+            using Opcode = wir::lowered::Opcode;
+            if (instruction.opcode == Opcode::Binary)
+            {
+                using Operator = wir::typed::BinaryOperator;
+                switch (instruction.binaryOperator)
+                {
+                case Operator::Add:
+                case Operator::Equal:
+                case Operator::NotEqual:
+                case Operator::Less:
+                case Operator::LessEqual:
+                case Operator::Greater:
+                case Operator::GreaterEqual:
+                    return true;
+                default:
+                    return false;
+                }
+            }
+            if (instruction.opcode != Opcode::IntrinsicCall ||
+                instruction.intrinsicFamily != wir::IntrinsicFamily::String)
+                return false;
+            if (instruction.selector == "Append")
+                return instruction.operands.size() == 2 && instruction.operands[1] == value;
+            // These helpers observe strings or return independent values; none
+            // mutate a borrowed source, retain it or call arbitrary Wio code.
+            const auto selector = instruction.selector;
+            return selector == "Contains" || selector == "StartsWith" || selector == "EndsWith" ||
+                   selector == "IndexOf" || selector == "LastIndexOf" || selector == "Split" || selector == "Slice" ||
+                   selector == "SliceFrom" || selector == "Take" || selector == "Skip" || selector == "Left" ||
+                   selector == "Right" || selector == "Trim" || selector == "TrimStart" || selector == "TrimEnd" ||
+                   selector == "Repeat" || selector == "Lines" || selector == "PadLeft" || selector == "PadRight" ||
+                   selector == "Count" || selector == "Empty";
         }
     } // namespace
 
@@ -137,15 +178,14 @@ namespace wio::codegen
         plan.plainValues.insert(plan.scalarPlaces.begin(), plan.scalarPlaces.end());
         plan.plainValues.insert(plan.stringPlaces.begin(), plan.stringPlaces.end());
 
-        // Remove only an adjacent, single-use borrowed string snapshot passed
-        // to StringAppend's const suffix. std::string append supports self-
-        // aliasing; no intervening mutation or observable value use is crossed.
-        // Other calls/selectors/cleanup/multiple uses retain the owned snapshot.
-        if (function.blocks.size() == 1)
+        // An adjacent, sole-use snapshot can borrow for a known observer, or
+        // Append's self-alias-safe suffix. Count uses across the whole CFG but
+        // never move a borrow across a block edge or intervening instruction.
+        // Unknown calls, other mutators and explicit cleanup keep the copy.
+        std::unordered_map<std::uint32_t, std::size_t> uses;
+        for (const auto& block : function.blocks)
         {
-            std::unordered_map<std::uint32_t, std::size_t> uses;
-            const auto& instructions = function.blocks.front().instructions;
-            for (const auto& instruction : instructions)
+            for (const auto& instruction : block.instructions)
             {
                 for (const auto operand : instruction.operands)
                     ++uses[operand.value()];
@@ -155,6 +195,10 @@ namespace wio::codegen
                     for (const auto argument : target.arguments)
                         ++uses[argument.value()];
             }
+        }
+        for (const auto& block : function.blocks)
+        {
+            const auto& instructions = block.instructions;
             for (std::size_t index = 1; index + 1 < instructions.size(); ++index)
             {
                 const auto& load = instructions[index - 1];
@@ -166,10 +210,8 @@ namespace wio::codegen
                     copy.opcode == wir::lowered::Opcode::CopyValue && copy.result &&
                     copy.resultOwnership == wir::typed::ValueOwnership::Owned && copy.resultType == load.resultType &&
                     copy.operands.size() == 1 && copy.operands.front() == load.result &&
-                    uses[copy.result.value()] == 1 && call.opcode == wir::lowered::Opcode::IntrinsicCall &&
-                    call.intrinsicFamily == wir::IntrinsicFamily::String && call.selector == "Append" &&
-                    call.operands.size() == 2 && call.operands[1] == copy.result)
-                    plan.borrowedAppendCopies.emplace(copy.result.value(), load.result);
+                    uses[copy.result.value()] == 1 && observesString(call, copy.result))
+                    plan.borrowedStringCopies.emplace(copy.result.value(), load.result);
             }
         }
         return plan;

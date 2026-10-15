@@ -176,7 +176,7 @@ namespace
         using Plan = wio::codegen::WirCppStoragePlan;
         auto plan = Plan::build(module, function);
         expect(plan.stringPlaces.contains(1) && plan.plainValues.contains(1), "closed string cell was not promoted");
-        expect(plan.borrowedAppendCopies.contains(3), "adjacent append-only snapshot was not elided");
+        expect(plan.borrowedStringCopies.contains(3), "adjacent append-only snapshot was not elided");
         auto movedCell = function;
         auto& move = movedCell.blocks.front().instructions[2];
         move.opcode = l::Opcode::MoveValue;
@@ -202,7 +202,7 @@ namespace
         async.isAsync = true;
         expect(Plan::build(module, async).stringPlaces.empty(), "async string frame changed");
         const auto rejectCopy = [&](l::Function changed)
-        { expect(Plan::build(module, changed).borrowedAppendCopies.empty(), "observable string copy was removed"); };
+        { expect(Plan::build(module, changed).borrowedStringCopies.empty(), "observable string copy was removed"); };
         auto changed = function;
         changed.blocks.front().instructions[4].selector = "Insert";
         rejectCopy(changed);

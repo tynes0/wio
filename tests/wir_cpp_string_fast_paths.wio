@@ -1,0 +1,82 @@
+using cpp::header("string_fast_probe.h");
+
+[native, CppName(scalar_codegen_probe::Begin)]
+fn Begin();
+
+[native, CppName(string_fast_probe::End)]
+fn End() -> u64;
+
+[native, CppName(string_fast_probe::IsLargest)]
+fn IsLargest(value: string) -> bool;
+
+fn Largest(value: u64) -> string
+{
+    return $"${value}";
+}
+
+fn Search(value: string, other: string) -> bool
+{
+    mut index = 0;
+    while (index < 1000)
+    {
+        if (value != other) return false;
+        if (!value.Contains(other)) return false;
+        if (!value.StartsWith(other) or !value.EndsWith(other)) return false;
+        index += 1;
+    }
+
+    return true;
+}
+
+fn Change(value: ref string) -> string
+{
+    value = "changed during argument evaluation";
+    return "tail";
+}
+
+fn Entry(args: string[]) -> i32
+{
+    let nativeChecks = args.Count() == 1usize;
+    let first = "0123456789abcdef0123456789abcdef";
+    let second = "abcdefghijklmnopabcdefghijklmnop";
+    if ($"prefix${first}/${second}suffix" != "prefix" + first + "/" + second + "suffix") return 1;
+    if (u$"🌍${u"日本語"}/${1234567890123456789i64}" != u"🌍日本語/1234567890123456789") return 2;
+    if ($"${true}/${false}/${-128i8}/${255u8}/${1.5f64}" != "true/false/-128/255/1.5") return 3;
+    if ($"\0${first}\0${42}\0" != "\0" + first + "\0" + "42\0") return 4;
+    mut alias = first;
+    let preserved = alias;
+    let snapshot = $"${preserved}/${Change(ref alias)}";
+    if (snapshot != first + "/tail" or alias != "changed during argument evaluation") return 5;
+    if (nativeChecks) Begin();
+    mut index = 0;
+    while (index < 1000)
+    {
+        if (!IsLargest(Largest(18446744073709551615u64))) return 6;
+        index += 1;
+    }
+
+    // Output storage plus the current native value-argument conversion remain.
+    if (nativeChecks and End() > 2100u64) return 7;
+    if (nativeChecks) Begin();
+    let found = Search(first, first);
+    if (nativeChecks and End() > 16u64) return 8;
+    if (!found or Search(first, second)) return 9;
+    mut same = first;
+    same.Append(same);
+    if (same != first + first) return 10;
+    let before = same;
+    same.Insert(0usize, same);
+    if (same != before + before or before != first + first) return 11;
+    if (!(first < second and second > first and first <= first and second >= second)) return 14;
+    let pieces = (first + "|" + first).Split("|");
+    same.Clear();
+    if (pieces.Count() != 2usize or pieces[0] != first or pieces[1] != first) return 15;
+    if (nativeChecks)
+    {
+        if ($"${'A'}${'\0'}${'B'}" != "A\0B") return 12;
+        let values = [1, 2, 3];
+        if ($"${values}" != "[1, 2, 3]") return 13;
+    }
+
+    return 0;
+}
