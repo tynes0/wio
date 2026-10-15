@@ -24,10 +24,17 @@ int main()
     native_costs::counting.store(false);
     ::operator delete(first);
     ::operator delete[](second);
-    if (native_costs::allocations.load() != 2 || native_costs::requestedBytes.load() != 168)
+#ifdef WIO_COST_NO_COUNTERS
+    constexpr std::uint64_t expectedCalls = 0;
+    constexpr std::uint64_t expectedBytes = 0;
+#else
+    constexpr std::uint64_t expectedCalls = 2;
+    constexpr std::uint64_t expectedBytes = 168;
+#endif
+    if (native_costs::allocations.load() != expectedCalls || native_costs::requestedBytes.load() != expectedBytes)
         return 4;
     native_costs::Record(99);
-    if (native_costs::requestedBytes.load() != 168)
+    if (native_costs::requestedBytes.load() != expectedBytes)
         return 5;
     native_costs::Begin();
     return native_costs::Report(42);

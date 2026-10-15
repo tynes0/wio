@@ -5,6 +5,12 @@ backend runtime and MinGW GCC. It changes no production implementation. Sources
 are copied to a fresh ignored build directory before C++ emission; user playground
 files and outputs are never used. Do not benchmark while another build/test runs.
 
+The default `-Suite core` remains the original nine cases. `-Suite extended`
+selects six additional workloads; see [their boundaries](extended/README.md).
+`-DisableAllocationCounters` compiles out replacement allocation operators for
+counter-free timing. The JSON marks allocation metrics unmeasured, not zero;
+the default instrumentation mode and original core workload sources are unchanged.
+
 ```powershell
 pwsh -NoProfile -File tests/performance/native_costs/run.ps1 `
     -OutputDirectory F:/Projects/wio/build/native-cost-map-new-run `

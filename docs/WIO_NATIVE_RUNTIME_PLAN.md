@@ -58,8 +58,9 @@ the N01 instrumentation slice. Existing dirty std/playground files are preserved
 | ByteWriter and dynamic array | Same new fixture | Growth/write/snapshot/read-sum composite costs, not isolated I/O |
 | Component return and object alias/method | Same new fixture | Composite construction/transport/dispatch/destruction costs; no RC-event counter |
 | Native calls and Result success | Same new fixture | Call/unwrap loop costs; tagged-value C++ Result is a lower bound, not matching Wio object ABI |
-| Unicode, maps/sets, errors, weak refs, closures | Pending | Add focused fixtures before claiming those costs qualified |
-| Async, scheduling, cancellation, threading | Pending | Existing correctness tests are not performance baselines |
+| Unicode, dictionary, Result errors, weak refs, closures | `native_costs/extended` | Text slice/concat/UTF-8, integer Dict insert/lookup/miss, recoverable error payload, runtime weak helper and scalar capture; not full Unicode/set/exception/escaped-closure coverage |
+| Async ready task | Same extended suite | Same AsyncTask runtime in both variants, immediate completion and BlockOn; not suspended/worker/timer/cancellation-race costs |
+| Scheduling, cancellation, threading, maps/sets/Unicode expansion | Pending | Existing correctness tests are not performance baselines; add focused workloads before changing those paths |
 | Cold startup, reflection, real file/network I/O | Pending | Whole-process wall time alone does not isolate these costs |
 | Copy/move bytes and retain/release events | Pending | Need opt-in attribution; allocation bytes are not copied bytes |
 | Peak/live memory and aligned/malloc traffic | Pending | Not measured by the ordinary-new probe; require an appropriate profiler or separate diagnostic build |
@@ -77,6 +78,9 @@ not a declaration that N01's pending instrumentation categories are finished.
 See [the manual runner](../tests/performance/native_costs/README.md). Timing and
 allocation instrumentation share a build; atomic counters add overhead, so these
 are diagnostic timings, not an uninstrumented production-speed leaderboard.
+The optional `-DisableAllocationCounters` mode provides separate counter-free
+timings with standard allocation operators. It marks allocation metrics null,
+not zero; instrumented and counter-free sample sets must not be conflated.
 Requested bytes are cumulative successful ordinary new/new[] request sizes,
 not RSS, resident/peak/live memory, allocated capacity or copy traffic.
 

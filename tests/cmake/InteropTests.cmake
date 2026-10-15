@@ -1613,3 +1613,12 @@ add_test(NAME wio_native_cost_contract
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/native_cost_contract_test.cmake")
 wio_test_labels(wio_native_cost_contract native performance diagnostic allocation)
 set_tests_properties(wio_native_cost_contract PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+
+add_test(NAME wio_native_cost_extended_contract
+    COMMAND ${CMAKE_COMMAND} "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_BACKEND_CXX=${WIO_BACKEND_CXX_COMPILER}" "-DWIO_RUNTIME=${WIO_BACKEND_RUNTIME_LIBRARY}"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}" "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/native-cost-extended-contract" -DWIO_SUITE=extended
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/native_cost_contract_test.cmake")
+wio_test_labels(wio_native_cost_extended_contract native performance diagnostic allocation async unicode ownership)
+set_tests_properties(wio_native_cost_extended_contract PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)

@@ -3,7 +3,9 @@ param(
     [int]$Repetitions = 15,
     [int]$Count = 2000,
     [int]$TimeoutSeconds = 120,
-    [string]$CppCompiler = 'g++'
+    [string]$CppCompiler = 'g++',
+    [ValidateSet('core', 'extended')][string]$Suite = 'core',
+    [switch]$DisableAllocationCounters
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,10 +19,19 @@ $taskCpp = (Get-Command $CppCompiler).Source
 $taskWio = Join-Path $taskRoot 'build/app/Debug/wio.exe'
 $taskRuntime = Join-Path $taskRoot 'build/runtime/backend/libwio_runtime.a'
 $taskFlags = @('-std=c++20', '-O2', '-ffp-contract=off', '-static', '-Wa,-mbig-obj')
+if ($DisableAllocationCounters) { $taskFlags += '-DWIO_COST_NO_COUNTERS' }
 $taskKinds = @('concat', 'builder', 'format', 'bytes', 'array', 'component', 'object', 'native_call', 'result')
+$taskFixtureRoot = $PSScriptRoot
+$taskFixtureFiles = @('costs.wio', 'reference.cpp')
+if ($Suite -eq 'extended') {
+    $taskFixtureRoot = Join-Path $PSScriptRoot 'extended'
+    $taskFixtureFiles += 'workloads.h'
+    $taskKinds = @('unicode', 'dictionary', 'result_error', 'weak', 'closure', 'async_ready')
+}
 New-Item -ItemType Directory -Path $OutputDirectory | Out-Null
-foreach ($taskFile in @('costs.wio', 'reference.cpp', 'probe.h')) {
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $taskFile) -Destination $OutputDirectory
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'probe.h') -Destination $OutputDirectory
+foreach ($taskFile in $taskFixtureFiles) {
+    Copy-Item -LiteralPath (Join-Path $taskFixtureRoot $taskFile) -Destination $OutputDirectory
 }
 function Build([string]$program, [string[]]$arguments) {
     & $program @arguments
@@ -35,19 +46,23 @@ foreach ($taskVariant in @('cpp', 'wio')) {
     $taskSource = if ($taskVariant -eq 'cpp') { 'reference.cpp' } else { 'costs.wio.cpp' }
     $taskArguments = $taskFlags + @((Join-Path $OutputDirectory $taskSource), "-I$OutputDirectory",
         "-I$taskRoot/runtime/include", "-I$taskRoot/sdk/include")
-    if ($taskVariant -eq 'wio') { $taskArguments += @($taskRuntime, '-lws2_32', '-lshell32') }
+    if ($taskVariant -eq 'wio' -or $Suite -eq 'extended') {
+        $taskArguments += @($taskRuntime, '-lws2_32', '-lshell32')
+    }
     Build $taskCpp ($taskArguments + @('-o', (Join-Path $OutputDirectory "$taskVariant.exe")))
 }
 
 $taskSamples = [Collections.Generic.List[object]]::new()
 $taskExpected = @{}
 function SaveEvidence {
-    $taskFiles = @('costs.wio', 'reference.cpp', 'probe.h', 'costs.wio.cpp', 'cpp.exe', 'wio.exe')
+    $taskFiles = $taskFixtureFiles + @('probe.h', 'costs.wio.cpp', 'cpp.exe', 'wio.exe')
     $taskArtifacts = foreach ($taskFile in $taskFiles) {
         $taskItem = Get-Item -LiteralPath (Join-Path $OutputDirectory $taskFile)
         [pscustomobject]@{Path=$taskFile; Bytes=$taskItem.Length; Hash=(Get-FileHash $taskItem.FullName).Hash}
     }
     $taskSourcePaths = @('runtime/include/ref.h', 'runtime/include/integer_format.h',
+        'runtime/include/text.h', 'runtime/include/std_unicode.h', 'runtime/include/std_async.h',
+        'runtime/include/wir_async.h',
         'compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp',
         'compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp')
     $taskSourcePaths += @(Get-ChildItem -LiteralPath (Join-Path $taskRoot 'std') -File -Filter '*.wio' |
@@ -62,8 +77,11 @@ function SaveEvidence {
         Worktree=(@(& git -C $taskRoot status --short) -join "`n")
         Compiler=(& $taskCpp --version | Select-Object -First 1); Flags=$taskFlags
         CompilerHash=(Get-FileHash $taskWio).Hash; RuntimeHash=(Get-FileHash $taskRuntime).Hash
+        RunnerHash=(Get-FileHash $PSCommandPath).Hash; Suite=$Suite
+        CountersEnabled=(!$DisableAllocationCounters)
         Count=$Count; Repetitions=$Repetitions; TimeoutSeconds=$TimeoutSeconds
-        Scope='instrumented ordinary new/new[] calls and requested bytes; not malloc/aligned/live bytes/RSS'
+        Scope=if ($DisableAllocationCounters) { 'counter-free timing; standard allocation operators; allocation metrics unmeasured' }
+            else { 'instrumented ordinary new/new[] calls and requested bytes; not malloc/aligned/live bytes/RSS' }
         ChecksumOracle='C++ excluded warm-up; all Wio/C++ samples compared; not an independent algorithm oracle'
         Artifacts=@($taskArtifacts); Sources=@($taskSources); Samples=$taskSamples.ToArray()
     } | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'results.json') -Encoding utf8
@@ -110,8 +128,8 @@ foreach ($taskKind in $taskKinds) {
                     [double]::Parse($taskMatch.Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture)
                 } else { $null }
                 Checksum=if ($taskMatch.Success) { $taskMatch.Groups[2].Value } else { $null }
-                Allocations=if ($taskMatch.Success) { [long]$taskMatch.Groups[3].Value } else { $null }
-                RequestedBytes=if ($taskMatch.Success) { [long]$taskMatch.Groups[4].Value } else { $null }
+                Allocations=if ($taskMatch.Success -and !$DisableAllocationCounters) { [long]$taskMatch.Groups[3].Value } else { $null }
+                RequestedBytes=if ($taskMatch.Success -and !$DisableAllocationCounters) { [long]$taskMatch.Groups[4].Value } else { $null }
                 Error=$taskError.Result; Output=$taskOutput.Result
             }
             $taskSamples.Add($taskRow)
@@ -135,8 +153,8 @@ $taskSummary = foreach ($taskKind in $taskKinds) {
         }
         [pscustomobject]@{Case=$taskKind; Variant=$taskVariant; MedianMs=1000*$taskMedian
             MinMs=1000*$taskTimes[0]; MaxMs=1000*$taskTimes[-1]
-            Allocations=($taskRows.Allocations | Sort-Object -Unique) -join ','
-            RequestedBytes=($taskRows.RequestedBytes | Sort-Object -Unique) -join ','}
+            Allocations=if ($DisableAllocationCounters) { 'not-measured' } else { ($taskRows.Allocations | Sort-Object -Unique) -join ',' }
+            RequestedBytes=if ($DisableAllocationCounters) { 'not-measured' } else { ($taskRows.RequestedBytes | Sort-Object -Unique) -join ',' }}
     }
 }
 $taskSummary | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'summary.json') -Encoding utf8

@@ -22,17 +22,25 @@ namespace native_costs
     {
         allocations.store(0, std::memory_order_relaxed);
         requestedBytes.store(0, std::memory_order_relaxed);
+#ifdef WIO_COST_NO_COUNTERS
+        counting.store(false, std::memory_order_relaxed);
+#else
         counting.store(true, std::memory_order_relaxed);
+#endif
         started = std::chrono::steady_clock::now();
     }
 
     inline void Record(const std::size_t size)
     {
+#ifdef WIO_COST_NO_COUNTERS
+        (void)size;
+#else
         if (counting.load(std::memory_order_relaxed))
         {
             allocations.fetch_add(1, std::memory_order_relaxed);
             requestedBytes.fetch_add(size, std::memory_order_relaxed);
         }
+#endif
     }
 
     inline std::uint64_t Hash(const std::string& value)
@@ -83,6 +91,7 @@ namespace native_costs
 
 // Diagnostic executable only. Covers ordinary throwing new/new[], not malloc,
 // aligned allocation, live bytes, frees or process RSS. Never link into production.
+#ifndef WIO_COST_NO_COUNTERS
 void* operator new(const std::size_t size)
 {
     if (void* value = std::malloc(size ? size : 1))
@@ -118,3 +127,4 @@ void operator delete[](void* value, std::size_t) noexcept
 {
     ::operator delete(value);
 }
+#endif
