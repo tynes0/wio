@@ -10,6 +10,26 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Playground backend and profile selection — 2026-10-15
+
+- [x] `670fd04`: launcher accepts native/VM and Debug/Release flags, forwards
+      application arguments without a shell and prints host/application profiles.
+      Rider Program arguments and Visual Studio Command Arguments are documented
+      in `playground/README.md`; `--dry-run` previews commands without execution.
+- [x] Native profiles pass real optimization/debug flags. VM profiles build and
+      select the corresponding runtime configuration, rejecting incompatible
+      single-config CMake selections. Backend/profile output directories are
+      isolated; compiler-argument signatures invalidate stale artifacts and are
+      invalidated before compilation so failures cannot preserve success stamps.
+- [x] Only the three new local tests were run: 3/3 passed in 28.30 seconds,
+      including actual native and VM Debug/Release execution, literal arguments,
+      incremental reuse, flag changes and recovery after failed compilation.
+      Tests use scratch projects and do not overwrite user playground sources or
+      output. Production VM instruction limits remain unchanged.
+- [~] Three-platform qualification was dispatched in GitHub Actions run
+      `38721548440`; local results do not imply Linux/macOS qualification. This
+      tooling change has no new runtime-performance measurements.
+
 ## Native optimization pass 1: general string fast paths — 2026-10-15
 
 - [x] `d6cdbd3`: interpolation appends integer/string/text/bool/char directly,

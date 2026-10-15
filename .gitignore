@@ -83,5 +83,6 @@ Thumbs.db
 # Wio generated artifacts
 # =========================
 *.wio.cpp
+/playground/.wio-build/
 
 .wio-qualification/
