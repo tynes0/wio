@@ -1,0 +1,164 @@
+[
+  {
+    "Case": "concat",
+    "Variant": "cpp",
+    "MedianMs": 0.1041,
+    "MinMs": 0.09809999999999999,
+    "MaxMs": 0.1069,
+    "Allocations": "13",
+    "RequestedBytes": "131085"
+  },
+  {
+    "Case": "concat",
+    "Variant": "wio",
+    "MedianMs": 1.3158,
+    "MinMs": 1.2745,
+    "MaxMs": 21.1634,
+    "Allocations": "2003",
+    "RequestedBytes": "64034122"
+  },
+  {
+    "Case": "builder",
+    "Variant": "cpp",
+    "MedianMs": 0.1264,
+    "MinMs": 0.1207,
+    "MaxMs": 0.2567,
+    "Allocations": "14",
+    "RequestedBytes": "195086"
+  },
+  {
+    "Case": "builder",
+    "Variant": "wio",
+    "MedianMs": 0.3395,
+    "MinMs": 0.3286,
+    "MaxMs": 0.43360000000000004,
+    "Allocations": "2017",
+    "RequestedBytes": "261230"
+  },
+  {
+    "Case": "format",
+    "Variant": "cpp",
+    "MedianMs": 0.048900000000000006,
+    "MinMs": 0.0462,
+    "MaxMs": 0.0501,
+    "Allocations": "12",
+    "RequestedBytes": "39624"
+  },
+  {
+    "Case": "format",
+    "Variant": "wio",
+    "MedianMs": 0.24620000000000003,
+    "MinMs": 0.2363,
+    "MaxMs": 0.2585,
+    "Allocations": "15",
+    "RequestedBytes": "39768"
+  },
+  {
+    "Case": "bytes",
+    "Variant": "cpp",
+    "MedianMs": 0.018199999999999997,
+    "MinMs": 0.018000000000000002,
+    "MaxMs": 0.018600000000000002,
+    "Allocations": "16",
+    "RequestedBytes": "24416"
+  },
+  {
+    "Case": "bytes",
+    "Variant": "wio",
+    "MedianMs": 0.299,
+    "MinMs": 0.2902,
+    "MaxMs": 0.3256,
+    "Allocations": "19",
+    "RequestedBytes": "24544"
+  },
+  {
+    "Case": "array",
+    "Variant": "cpp",
+    "MedianMs": 0.014,
+    "MinMs": 0.0134,
+    "MaxMs": 0.0162,
+    "Allocations": "13",
+    "RequestedBytes": "32793"
+  },
+  {
+    "Case": "array",
+    "Variant": "wio",
+    "MedianMs": 0.0352,
+    "MinMs": 0.0329,
+    "MaxMs": 0.060000000000000005,
+    "Allocations": "14",
+    "RequestedBytes": "32841"
+  },
+  {
+    "Case": "component",
+    "Variant": "cpp",
+    "MedianMs": 0.005699999999999999,
+    "MinMs": 0.0055,
+    "MaxMs": 0.0058000000000000005,
+    "Allocations": "1",
+    "RequestedBytes": "33"
+  },
+  {
+    "Case": "component",
+    "Variant": "wio",
+    "MedianMs": 0.37560000000000004,
+    "MinMs": 0.3624,
+    "MaxMs": 0.4764,
+    "Allocations": "4001",
+    "RequestedBytes": "160033"
+  },
+  {
+    "Case": "object",
+    "Variant": "cpp",
+    "MedianMs": 0.112,
+    "MinMs": 0.1079,
+    "MaxMs": 0.1183,
+    "Allocations": "2001",
+    "RequestedBytes": "48033"
+  },
+  {
+    "Case": "object",
+    "Variant": "wio",
+    "MedianMs": 0.5157,
+    "MinMs": 0.5073,
+    "MaxMs": 0.6393,
+    "Allocations": "6001",
+    "RequestedBytes": "192033"
+  },
+  {
+    "Case": "native_call",
+    "Variant": "cpp",
+    "MedianMs": 0.0084,
+    "MinMs": 0.008199999999999999,
+    "MaxMs": 0.009099999999999999,
+    "Allocations": "1",
+    "RequestedBytes": "33"
+  },
+  {
+    "Case": "native_call",
+    "Variant": "wio",
+    "MedianMs": 0.0868,
+    "MinMs": 0.0809,
+    "MaxMs": 0.09179999999999999,
+    "Allocations": "1",
+    "RequestedBytes": "33"
+  },
+  {
+    "Case": "result",
+    "Variant": "cpp",
+    "MedianMs": 0.0092,
+    "MinMs": 0.009099999999999999,
+    "MaxMs": 0.0405,
+    "Allocations": "1",
+    "RequestedBytes": "33"
+  },
+  {
+    "Case": "result",
+    "Variant": "wio",
+    "MedianMs": 0.7272,
+    "MinMs": 0.7039000000000001,
+    "MaxMs": 0.7603,
+    "Allocations": "2001",
+    "RequestedBytes": "176033"
+  }
+]

@@ -10,6 +10,24 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N01 native cost-map foundation — 2026-10-15
+
+- [x] `ae12526`: fixed native substeps N01-N14 and recorded std API/module
+      deletion/consolidation policy (candidate: sort into algorithms), with
+      dependency/import/API migration before removal. No production changes.
+- [x] Added nine native/reference workloads, isolated scratch emission and
+      repeatable alternating-order runner with checksums, source/binary hashes,
+      dirty-state evidence and explicit failure/timeout handling. Ordinary
+      new/new[] call/requested-byte metrics are not copied bytes, RC events or
+      peak memory. See `docs/WIO_NATIVE_COST_MAP.md` for baseline and caveats.
+- [x] Final local new contract test: 1/1 passed in 32.41 seconds, covering O0/O2,
+      nine workload fingerprints and counter/input validation. Manual baseline:
+      288/288 checksum-qualified executions (15 measured pairs per case plus
+      excluded warm-ups). Only this new test ran; the old corpus was not rerun.
+- [ ] N01 remains in progress: async, weak refs, map/set/Unicode/error and startup
+      baselines, copy/move/RC attribution and peak/live-memory measurement remain
+      explicit gaps. N02 optimization is not implemented in this slice.
+
 ## Playground backend and profile selection — 2026-10-15
 
 - [x] `670fd04`: launcher accepts native/VM and Debug/Release flags, forwards

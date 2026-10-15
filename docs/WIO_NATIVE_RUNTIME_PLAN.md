@@ -68,6 +68,10 @@ N01 has a working first cost-map slice, **not complete coverage of all native
 runtime subsystems**. Missing metrics are not zeros. Later slices must extend
 coverage before changing the relevant subsystem. N02 has not started here.
 
+The initial nine-case, 15-pair allocation baseline and its limitations are in
+[the measured cost map](WIO_NATIVE_COST_MAP.md). This is starting evidence,
+not a declaration that N01's pending instrumentation categories are finished.
+
 ## Instrumentation and reproducibility
 
 See [the manual runner](../tests/performance/native_costs/README.md). Timing and
