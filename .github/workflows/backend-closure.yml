@@ -47,17 +47,17 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
       - name: Build compiler, CLI and runtime artifacts
-        run: cmake --build build --target wio_selfhost_cli wio_vm_runner wio_backend_workspace_test wio_float_parse_portability_test wio_wir_cpp_storage_plan_test wio_vm_string_capacity_test --parallel 2
-      - name: Qualify current std builder optimization slice
+        run: cmake --build build --target wio_selfhost_cli wio_vm_runner wio_backend_workspace_test wio_float_parse_portability_test wio_wir_cpp_storage_plan_test wio_vm_string_capacity_test wio_wir_cpp_managed_storage_test --parallel 2
+      - name: Qualify current managed string optimization slice
         if: github.event_name == 'push' && github.ref == 'refs/heads/feature/backend-closure'
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure -j 1
-          -R "^(wio_std_builders_(consistency|style)|wio_vm_string_capacity)$"
+          -R "^wio_wir_cpp_managed_(plan|storage)$"
       - name: Preserve functional and scalar release gates
         if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure -j 1
-          -R "^(wio_backend_workspace|wio_backend_unicode_outputs|wio_vm_platform_qualification|wio_float_parse_portability|wio_wir_cpp_(storage_plan|scalar_storage)|wio_std_builders_(consistency|style)|wio_vm_string_capacity)$"
+          -R "^(wio_backend_workspace|wio_backend_unicode_outputs|wio_vm_platform_qualification|wio_float_parse_portability|wio_wir_cpp_(storage_plan|scalar_storage)|wio_std_builders_(consistency|style)|wio_vm_string_capacity|wio_wir_cpp_managed_(plan|storage))$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4

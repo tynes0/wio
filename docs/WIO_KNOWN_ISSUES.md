@@ -161,6 +161,29 @@ implemented behavior, accepted pending migration and deferred capabilities.
 Use the later consolidation decision for intent; it is not implemented merely
 because it is approved. Close with a versioned contract/docs consistency pass.
 
+### KI-006 — Escaping local ref capture reaches an expired cell (P1 diagnostic/contract gap)
+
+2026-10-15 Windows Debug host / native generated `-O0` reproducer:
+[escaped_string_borrow.wio](../tests/known_issues/escaped_string_borrow.wio).
+Analysis accepts a returned lambda holding a ref to a function-local string;
+invoking it after the function returns fails with `read from uninitialized Wio
+place` (unhandled runtime exception, process exit 1). There is no dedicated
+early lifetime diagnostic in this case.
+
+The generated reproducer contains no `InlinePlace<std::string>` instantiation:
+the borrow forces the preserved full Place path. Function cleanup clears that
+cell, and the retained closure's subsequent read is rejected. This is not
+evidence of memory corruption or a new inline-storage regression, nor a promise
+that capturing a ref extends its owner's lifetime. The lambda capture contract
+retains ordinary borrow restrictions.
+
+Use an owning value capture, or consume the borrowed lambda before its owner
+scope ends. The new managed-storage gate qualifies those two valid cases
+separately. Freeze/qualify the escaping-local-borrow rejection boundary and add
+an actionable early diagnostic (or explicitly document a checked-runtime-only
+boundary); do not silently extend local lifetimes to hide the failure. No fix
+or cross-platform reproduction is claimed by this scoped optimization.
+
 ## 2. Native, VM, ownership and SDK limitations
 
 | ID | Priority / state | Current boundary and closure requirement |

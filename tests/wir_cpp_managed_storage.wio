@@ -1,0 +1,108 @@
+use std::builders as builders;
+
+using cpp::header("managed_codegen_probe.h");
+
+[native, CppName(scalar_codegen_probe::Begin)]
+fn Begin();
+
+[native, CppName(scalar_codegen_probe::End)]
+fn End() -> u64;
+
+[native, CppName(managed_codegen_probe::Mutate)]
+fn Mutate(value: ref string);
+
+fn Echo(value: string) -> string
+{
+    return value;
+}
+
+fn NativeBorrow() -> string
+{
+    mut value = "native";
+    let alias = ref value;
+    Mutate(ref value);
+    return deref alias;
+}
+
+fn ScopedBorrow() -> string
+{
+    mut value = "borrow";
+    let alias = ref value;
+    let reader: fn() -> string = () => deref alias;
+    value.Append("!");
+    return reader();
+}
+
+fn Snapshot() -> fn() -> string
+{
+    mut value = "before";
+    let reader: fn() -> string = () => value;
+    value = "after";
+    return reader;
+}
+
+fn Early(limit: i32) -> string
+{
+    mut output = "";
+    for (index in 0..<limit)
+    {
+        let piece = "x";
+        if (index == 1) continue;
+        output.Append(piece);
+        if (index == 3) break;
+    }
+
+    return output;
+}
+
+fn Propagate(fail: bool) -> std::Result<string>
+{
+    let snapshot = "owned result snapshot longer than the short string buffer";
+    if (fail)
+    {
+        return std::Err<string>(std::MakeResultError(std::ResultDomain::custom, 7, "expected"));
+    }
+
+    return std::Ok(snapshot);
+}
+
+fn Outer(fail: bool) -> std::Result<string>
+{
+    let local = "cleanup before propagated return";
+    let value = Propagate?(fail);
+    return std::Ok(local + value);
+}
+
+fn Entry() -> i32
+{
+    Begin();
+    mut index = 0;
+    while (index < 1000)
+    {
+        if (Echo("abc") != "abc") return 1;
+        index += 1;
+    }
+
+    if (End() != 0u64) return 2;
+    if (NativeBorrow() != "native!") return 3;
+    if (ScopedBorrow() != "borrow!" or Snapshot()() != "before") return 4;
+    if (Early(100) != "xxx") return 5;
+    if (Outer(true).ErrorValue().code != 7 or Outer(false).IsError()) return 6;
+    let builder = builders::StringBuilder();
+    builder.Append("snapshot longer than SSO storage");
+    let original = builder.ToString();
+    builder.Append(original);
+    if (builder.ToString() != original + original) return 7;
+    builder.Clear();
+    builder.AppendLine("line");
+    if (builder.ToString() != "line\n") return 8;
+    mut same = "self append longer than SSO";
+    same.Append(same);
+    if (same != "self append longer than SSOself append longer than SSO") return 9;
+    if (Outer(false).Value() != "cleanup before propagated returnowned result snapshot longer than the short string buffer")
+    {
+        return 10;
+    }
+
+    return 0;
+}

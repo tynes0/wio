@@ -51,6 +51,15 @@ namespace wio::codegen
                 return false;
             }
         }
+
+        bool stringCellUse(const wir::lowered::Instruction& instruction, std::size_t operand)
+        {
+            if (instruction.opcode == wir::lowered::Opcode::Load && operand == 0)
+                return true;
+            if (instruction.opcode == wir::lowered::Opcode::MoveValue && operand == 0)
+                return instruction.resultOwnership == wir::typed::ValueOwnership::Owned;
+            return scalarCellUse(instruction, operand);
+        }
     } // namespace
 
     WirCppStoragePlan WirCppStoragePlan::build(const wir::lowered::Module& module,
@@ -85,6 +94,13 @@ namespace wio::codegen
                     (instruction.escapeClass == wir::lowered::EscapeClass::Local ||
                      instruction.escapeClass == wir::lowered::EscapeClass::Store))
                     plan.scalarPlaces.insert(instruction.result.value());
+                if (instruction.opcode == wir::lowered::Opcode::LocalPlace && instruction.result && type &&
+                    type->kind == wir::TypeKind::Reference && type->arguments.size() == 1 &&
+                    module.types.get(type->arguments.front()).kind == wir::TypeKind::String &&
+                    instruction.storageClass == wir::lowered::StorageClass::Stack &&
+                    (instruction.escapeClass == wir::lowered::EscapeClass::Local ||
+                     instruction.escapeClass == wir::lowered::EscapeClass::Store))
+                    plan.stringPlaces.insert(instruction.result.value());
             }
         }
         // Store classification also includes writes *into* the cell in current
@@ -96,20 +112,66 @@ namespace wio::codegen
             for (const auto& instruction : block.instructions)
             {
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
                     if (!scalarCellUse(instruction, index))
                         plan.scalarPlaces.erase(instruction.operands[index].value());
+                    if (!stringCellUse(instruction, index))
+                        plan.stringPlaces.erase(instruction.operands[index].value());
+                }
                 if (instruction.borrowOrigin && !(instruction.opcode == wir::lowered::Opcode::Load &&
                                                   instruction.resultOwnership == wir::typed::ValueOwnership::Trivial))
                     plan.scalarPlaces.erase(instruction.borrowOrigin.value());
+                if (instruction.borrowOrigin && instruction.opcode != wir::lowered::Opcode::Load)
+                    plan.stringPlaces.erase(instruction.borrowOrigin.value());
                 for (const auto& target : instruction.targets)
                     for (const auto value : target.arguments)
+                    {
                         plan.scalarPlaces.erase(value.value());
+                        plan.stringPlaces.erase(value.value());
+                    }
                 if (instruction.opcode == wir::lowered::Opcode::Release ||
                     instruction.opcode == wir::lowered::Opcode::DropValue)
                     for (const auto value : instruction.operands)
                         plan.plainValues.erase(value.value());
             }
         plan.plainValues.insert(plan.scalarPlaces.begin(), plan.scalarPlaces.end());
+        plan.plainValues.insert(plan.stringPlaces.begin(), plan.stringPlaces.end());
+
+        // Remove only an adjacent, single-use borrowed string snapshot passed
+        // to StringAppend's const suffix. std::string append supports self-
+        // aliasing; no intervening mutation or observable value use is crossed.
+        // Other calls/selectors/cleanup/multiple uses retain the owned snapshot.
+        if (function.blocks.size() == 1)
+        {
+            std::unordered_map<std::uint32_t, std::size_t> uses;
+            const auto& instructions = function.blocks.front().instructions;
+            for (const auto& instruction : instructions)
+            {
+                for (const auto operand : instruction.operands)
+                    ++uses[operand.value()];
+                if (instruction.borrowOrigin)
+                    ++uses[instruction.borrowOrigin.value()];
+                for (const auto& target : instruction.targets)
+                    for (const auto argument : target.arguments)
+                        ++uses[argument.value()];
+            }
+            for (std::size_t index = 1; index + 1 < instructions.size(); ++index)
+            {
+                const auto& load = instructions[index - 1];
+                const auto& copy = instructions[index];
+                const auto& call = instructions[index + 1];
+                if (load.opcode == wir::lowered::Opcode::Load && load.result &&
+                    load.resultOwnership == wir::typed::ValueOwnership::Borrowed &&
+                    module.types.get(load.resultType).kind == wir::TypeKind::String &&
+                    copy.opcode == wir::lowered::Opcode::CopyValue && copy.result &&
+                    copy.resultOwnership == wir::typed::ValueOwnership::Owned && copy.resultType == load.resultType &&
+                    copy.operands.size() == 1 && copy.operands.front() == load.result &&
+                    uses[copy.result.value()] == 1 && call.opcode == wir::lowered::Opcode::IntrinsicCall &&
+                    call.intrinsicFamily == wir::IntrinsicFamily::String && call.selector == "Append" &&
+                    call.operands.size() == 2 && call.operands[1] == copy.result)
+                    plan.borrowedAppendCopies.emplace(copy.result.value(), load.result);
+            }
+        }
         return plan;
     }
 } // namespace wio::codegen

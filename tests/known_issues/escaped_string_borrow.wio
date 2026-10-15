@@ -1,0 +1,15 @@
+// Known issue: the returned closure retains the reference cell, but function
+// cleanup clears its stored value. This uses the full Place path, not the new
+// closed-string inline storage. Do not treat this as a passing ownership case.
+fn Reader() -> fn() -> string
+{
+    mut value = "borrow";
+    let reference = ref value;
+    return () => deref reference;
+}
+
+fn Entry() -> i32
+{
+    let read = Reader();
+    return read() == "borrow" ? 0 : 1;
+}

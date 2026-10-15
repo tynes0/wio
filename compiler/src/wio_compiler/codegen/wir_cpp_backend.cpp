@@ -1226,7 +1226,8 @@ namespace wio::codegen
                        "#include <stdexcept>\n#include <string>\n#include <tuple>\n#include <type_traits>\n"
                        "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
                        "#include <any.h>\n#include <entry_args.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include "
-                       "<std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n";
+                       "<std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n"
+                       "#include <wir_inline_place.h>\n";
                 output_ << "#include <wir_abi.h>\n#include <wir_task_abi.h>\n#include <wir_native.h>\n#include "
                            "<module_api.h>\n#include "
                            "<wio_values.h>\n#include "
@@ -2089,6 +2090,15 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 }
 
                 collectLinearPlaceAliases(function);
+                for (const auto& [copy, source] : storagePlan_.borrowedAppendCopies)
+                {
+                    valueAliases_.emplace(copy, source);
+                    valueTypes_.erase(copy);
+                }
+                for (const auto& block : function.blocks)
+                    for (const auto& instruction : block.instructions)
+                        if (instruction.result && storagePlan_.borrowedAppendCopies.contains(instruction.result.value()))
+                            suppressedInstructions_.insert(&instruction);
 
                 if (currentFunctionIsLinear_)
                 {
@@ -2202,6 +2212,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
             {
                 if (storagePlan_.scalarPlaces.contains(id))
                     return "wio::wir_backend::ScalarPlace<" + placeValueType(type) + ">";
+                if (storagePlan_.stringPlaces.contains(id))
+                    return "wio::wir_backend::InlinePlace<" + placeValueType(type) + ">";
                 if (objectBorrowedLoads_.contains(id))
                     return "wio::wir_backend::ObjectBorrow<" + objectName(type) + ">";
                 if (borrowedLoads_.contains(id))

@@ -2,6 +2,7 @@ param(
     [string]$RepositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..')),
     [Parameter(Mandatory)][string]$OutputDirectory,
     [Parameter(Mandatory)][string]$BaselineDirectory,
+    [string]$PreviousDirectory = '',
     [string]$CppCompiler = 'g++',
     [int]$Repetitions = 15
 )
@@ -33,7 +34,14 @@ try {
 }
 $taskFlags = @('-std=c++20', '-O2', '-ffp-contract=off', '-static')
 $taskCases = @(
-    @{Name='baseline'; Source='baseline.wio.cpp'},
+    @{Name='baseline'; Source='baseline.wio.cpp'}
+)
+if ($PreviousDirectory) {
+    Copy-Item -LiteralPath (Join-Path ([IO.Path]::GetFullPath($PreviousDirectory)) 'append.wio.cpp') `
+        -Destination (Join-Path $OutputDirectory 'previous.wio.cpp')
+    $taskCases += @{Name='previous'; Source='previous.wio.cpp'}
+}
+$taskCases += @(
     @{Name='current'; Source='append.wio.cpp'},
     @{Name='cpp'; Source='append.cpp'}
 )
@@ -72,6 +80,8 @@ $taskSummary = foreach ($taskCase in $taskCases) {
     [pscustomobject]@{Name=$taskCase.Name; Median=$taskMedian; Min=$taskValues[0]; Max=$taskValues[-1]}
 }
 $taskSources = foreach ($taskSource in @('std/builders.wio', 'std/binary.wio', 'runtime/include/std_builders.h',
+    'runtime/include/wir_inline_place.h', 'compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp',
+    'compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp',
     'vm/src/string_intrinsics.cpp', 'vm/src/value.cpp', 'tests/native/builder_benchmark.h',
     'tests/performance/std_builders/append.wio', 'tests/performance/std_builders/append.cpp')) {
     [pscustomobject]@{Path=$taskSource; Hash=(Get-FileHash -LiteralPath (Join-Path $taskRoot $taskSource)).Hash}

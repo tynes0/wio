@@ -3,6 +3,7 @@
 #include "wio/wir/lowered_ir.h"
 
 #include <unordered_set>
+#include <unordered_map>
 
 namespace wio::codegen
 {
@@ -11,7 +12,9 @@ namespace wio::codegen
     struct WirCppStoragePlan final
     {
         std::unordered_set<std::uint32_t> scalarPlaces;
+        std::unordered_set<std::uint32_t> stringPlaces;
         std::unordered_set<std::uint32_t> plainValues;
+        std::unordered_map<std::uint32_t, wir::ValueId> borrowedAppendCopies;
         bool directControlFlow = false;
 
         [[nodiscard]] static WirCppStoragePlan build(const wir::lowered::Module& module,
