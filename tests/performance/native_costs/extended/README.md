@@ -3,13 +3,11 @@
 This is a separate suite; the original nine core workload sources are unchanged.
 Run serially, with a fresh output directory:
 
-```powershell
-pwsh -NoProfile -File tests/performance/native_costs/run.ps1 `
-    -Suite extended -OutputDirectory F:/Projects/wio/build/native-cost-extended-new-run `
-    -Repetitions 15 -Count 2000
+```sh
+python tests/performance/native_costs/run.py --suite extended --output build/native-cost-extended-new --repetitions 15 --count 2000
 ```
 
-Repeat with another fresh directory and `-DisableAllocationCounters` to measure
+Repeat with another fresh directory and `--disable-allocation-counters` to measure
 the same kernels without allocation-counter overhead. This compiles out the
 replacement new/delete operators and uses the standard allocator. Raw numeric
 output retains zero placeholders, but JSON allocation metrics are **null**, the

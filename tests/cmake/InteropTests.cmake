@@ -1632,10 +1632,15 @@ if(WIO_MEASUREMENT_PWSH)
             "${CMAKE_SOURCE_DIR}/tests/performance/measurement_test.ps1")
     wio_test_labels(wio_measurement_contract performance diagnostic measurement)
     set_tests_properties(wio_measurement_contract PROPERTIES TIMEOUT 60 RUN_SERIAL TRUE)
-    add_test(NAME wio_native_cost_measurement_contract
-        COMMAND "${WIO_MEASUREMENT_PWSH}" -NoProfile -File
-            "${CMAKE_SOURCE_DIR}/tests/performance/native_costs/measurement_test.ps1"
-            -CppCompiler "${WIO_BACKEND_CXX_COMPILER}")
-    wio_test_labels(wio_native_cost_measurement_contract performance diagnostic measurement)
-    set_tests_properties(wio_native_cost_measurement_contract PROPERTIES TIMEOUT 180 RUN_SERIAL TRUE)
+endif()
+
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME wio_native_cost_python_contract
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tests/performance/native_costs/test_measurement.py"
+            --cxx "${WIO_BACKEND_CXX_COMPILER}" --wio "$<TARGET_FILE:wio_app>"
+            --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}")
+    wio_test_labels(wio_native_cost_python_contract performance diagnostic measurement language wio)
+    set_tests_properties(wio_native_cost_python_contract PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
 endif()

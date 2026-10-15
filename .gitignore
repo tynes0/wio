@@ -86,3 +86,6 @@ Thumbs.db
 /playground/.wio-build/
 
 .wio-qualification/
+
+# Python diagnostic/test bytecode caches
+__pycache__/

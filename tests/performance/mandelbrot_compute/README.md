@@ -44,6 +44,21 @@ measurement. Numerical results must match before speed comparisons are accepted.
 
 ## Per-update Wio measurements
 
+Preferred frozen-artifact tracking now uses the common Python controller:
+
+```sh
+python tests/performance/mandelbrot_compute/progress.py --artifacts build/mandelbrot-progress-n01-extended-2026-10-15 --output build/mandelbrot-python-new --cpu 2 --repetitions 5 --vm-repetitions 3
+```
+
+It rebuilds nothing and uses the same numeric/PPM fingerprints. Child wall time
+excludes Python-worker startup and is not identical to legacy external-wall
+accounting; internal kernel time is unchanged. Windows/Linux support affinity;
+macOS needs explicit unpinned observation and cannot claim timing qualification.
+The VM host/bridge binaries must match the host ABI; runner portability does not
+make Windows executables portable. `--vm-host` overrides the diagnostic host path.
+Older PS build/qualification entry points below remain legacy compatibility;
+new orchestration tests use Python and actual Wio workloads.
+
 `progress.ps1` rebuilds/measures only Wio native and a Release non-JIT VM host,
 leaving the dated C++/C#/Python baselines fixed for progress reports. Build
 `wio_mandelbrot_vm_benchmark` in Release first. This diagnostic-only host uses a
