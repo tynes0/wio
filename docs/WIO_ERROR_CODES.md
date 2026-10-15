@@ -3695,7 +3695,7 @@ Definitions: [vm/src/string_intrinsics.cpp:309](../vm/src/string_intrinsics.cpp#
 
 - String replacement requires old and new string values
 
-Definitions: [vm/src/string_intrinsics.cpp:344](../vm/src/string_intrinsics.cpp#L344), [vm/src/string_intrinsics.cpp:511](../vm/src/string_intrinsics.cpp#L511).
+Definitions: [vm/src/string_intrinsics.cpp:344](../vm/src/string_intrinsics.cpp#L344), [vm/src/string_intrinsics.cpp:540](../vm/src/string_intrinsics.cpp#L540).
 
 ### WVM1125
 
@@ -3742,25 +3742,25 @@ Definitions: [vm/src/string_intrinsics.cpp:467](../vm/src/string_intrinsics.cpp#
 
 - String Append requires a string suffix
 
-Definitions: [vm/src/string_intrinsics.cpp:475](../vm/src/string_intrinsics.cpp#L475).
+Definitions: [vm/src/string_intrinsics.cpp:481](../vm/src/string_intrinsics.cpp#L481), [vm/src/string_intrinsics.cpp:504](../vm/src/string_intrinsics.cpp#L504).
 
 ### WVM1132
 
 - String Push requires a byte-sized char
 
-Definitions: [vm/src/string_intrinsics.cpp:482](../vm/src/string_intrinsics.cpp#L482).
+Definitions: [vm/src/string_intrinsics.cpp:489](../vm/src/string_intrinsics.cpp#L489), [vm/src/string_intrinsics.cpp:511](../vm/src/string_intrinsics.cpp#L511).
 
 ### WVM1133
 
 - String Insert requires an index and fragment
 
-Definitions: [vm/src/string_intrinsics.cpp:490](../vm/src/string_intrinsics.cpp#L490).
+Definitions: [vm/src/string_intrinsics.cpp:519](../vm/src/string_intrinsics.cpp#L519).
 
 ### WVM1134
 
 - String Erase requires index and count operands
 
-Definitions: [vm/src/string_intrinsics.cpp:498](../vm/src/string_intrinsics.cpp#L498).
+Definitions: [vm/src/string_intrinsics.cpp:527](../vm/src/string_intrinsics.cpp#L527).
 
 ### WVM1135
 
@@ -4829,10 +4829,11 @@ This section inventories MakeResultError calls in committed std sources. The std
 
 | Source | Domain | Code expression | Message / definition template |
 | --- | --- | --- | --- |
-| [std/binary.wio:41](../std/binary.wio#L41) | `std::ResultDomain::custom` | `1` | Binary frame header is truncated. |
-| [std/binary.wio:45](../std/binary.wio#L45) | `std::ResultDomain::custom` | `2` | Binary frame magic is invalid. |
-| [std/binary.wio:50](../std/binary.wio#L50) | `std::ResultDomain::custom` | `3` | Binary frame payload length is invalid. |
-| [std/binary.wio:55](../std/binary.wio#L55) | `std::ResultDomain::custom` | `4` | Binary frame contains malformed trailing data. |
+| [std/binary.wio:52](../std/binary.wio#L52) | `std::ResultDomain::custom` | `1` | Binary frame header is truncated. |
+| [std/binary.wio:58](../std/binary.wio#L58) | `std::ResultDomain::custom` | `2` | Binary frame magic is invalid. |
+| [std/binary.wio:65](../std/binary.wio#L65) | `std::ResultDomain::custom` | `3` | Binary frame payload length is invalid. |
+| [std/binary.wio:72](../std/binary.wio#L72) | `std::ResultDomain::custom` | `4` | Binary frame contains malformed trailing data. |
+| [std/builders.wio:29](../std/builders.wio#L29) | `std::ResultDomain::io` | `code.Value()` | Forwarded/dynamic message: message |
 | [std/compression.wio:25](../std/compression.wio#L25) | `std::ResultDomain::custom` | `1` | Malformed RLE payload. |
 | [std/compression.wio:33](../std/compression.wio#L33) | `std::ResultDomain::custom` | `2` | RLE output limit exceeded. |
 | [std/config.wio:32](../std/config.wio#L32) | `std::ResultDomain::custom` | `1` | Invalid INI assignment at line ${lineNumber}. |

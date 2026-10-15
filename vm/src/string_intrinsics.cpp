@@ -467,6 +467,35 @@ namespace wio::vm::detail
             return failure("WVM1130", "String boolean conversion failed");
         }
 
+        // Strings are owned inline by Value: ordinary copies already own a
+        // separate string. Mutate the actual place in place for append/clear,
+        // preserving capacity instead of copying the growing prefix each time.
+        // Keep the old transactional path for distinct receiver/target values.
+        if (mutableReceiver == &receiver && mutableReceiver->mutableString())
+        {
+            auto& target = *mutableReceiver->mutableString();
+            if (selector == "Append")
+            {
+                std::string_view suffix;
+                if (!stringValue(argument(arguments, 0), suffix))
+                    return failure("WVM1131", "String Append requires a string suffix");
+                target.append(suffix);
+                return success();
+            }
+            if (selector == "Push")
+            {
+                char character = 0;
+                if (!charValue(argument(arguments, 0), character))
+                    return failure("WVM1132", "String Push requires a byte-sized char");
+                target.push_back(character);
+                return success();
+            }
+            if (selector == "Clear")
+            {
+                target.clear();
+                return success();
+            }
+        }
         std::string mutated{value};
         if (selector == "Append")
         {

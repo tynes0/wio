@@ -71,22 +71,23 @@ realm std
 
             public fn Clear()
             {
-                self.value = "";
+                self.value.Clear();
             }
 
             public fn Append(value: string)
             {
-                self.value += value;
+                self.value.Append(value);
             }
 
             public fn AppendChar(value: char)
             {
-                unicode::AppendByteCharacter(ref self.value, value);
+                self.value.Push(value);
             }
 
             public fn AppendLine(value: string)
             {
-                self.value += value + "\n";
+                self.value.Append(value);
+                self.value.Push('\n');
             }
 
             public fn AppendCodePoint(value: u32) -> std::UnitResult

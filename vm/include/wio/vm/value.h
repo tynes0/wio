@@ -150,6 +150,7 @@ namespace wio::vm
             return scalar_.floating;
         }
         [[nodiscard]] std::string_view asString() const noexcept;
+        [[nodiscard]] std::string* mutableString() noexcept;
         [[nodiscard]] std::u32string_view asText() const noexcept;
         [[nodiscard]] std::size_t elementCount() const noexcept;
         [[nodiscard]] std::size_t elementCapacity() const noexcept;

@@ -13,6 +13,13 @@ add_library(wio_vm STATIC
 )
 
 add_library(wio-vm ALIAS wio_vm)
+
+if(BUILD_TESTING)
+    add_executable(wio_vm_string_capacity_test "${CMAKE_SOURCE_DIR}/tests/vm_string_capacity_test.cpp")
+    target_link_libraries(wio_vm_string_capacity_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_string_capacity COMMAND wio_vm_string_capacity_test)
+    set_tests_properties(wio_vm_string_capacity PROPERTIES LABELS "std;vm;string;optimization;ownership")
+endif()
 target_compile_features(wio_vm PUBLIC cxx_std_20)
 
 target_include_directories(wio_vm PUBLIC

@@ -936,6 +936,11 @@ namespace wio::vm
         return kind_ == Kind::String ? std::string_view{text_.string} : std::string_view{};
     }
 
+    std::string* Value::mutableString() noexcept
+    {
+        return kind_ == Kind::String ? &text_.string : nullptr;
+    }
+
     std::u32string_view Value::asText() const noexcept
     {
         return kind_ == Kind::Text ? std::u32string_view{text_.text} : std::u32string_view{};

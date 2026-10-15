@@ -1,0 +1,82 @@
+use std::builders as builders;
+use std::binary as binary;
+
+fn ReadPair(reader: builders::ByteReader) -> std::Result<u16>
+{
+    let low = reader.ReadU8?();
+    let high = reader.ReadU8?();
+    return std::Ok((low fit u16) | ((high fit u16) << 8u16));
+}
+
+fn Entry() -> i32
+{
+    let builder = builders::StringBuilder(1024usize);
+    builder.Append("hello");
+    let snapshot = builder.ToString();
+    builder.Append(snapshot);
+    builder.AppendLine("!");
+    builder.AppendChar('X');
+    if (snapshot != "hello" or builder.ToString() != "hellohello!\nX") return 1;
+    builder.Clear();
+    builder.Reserve(2048usize);
+    if (not builder.Empty() or builder.Length() != 0usize) return 2;
+    builder.AppendCodePoint!(0x1f642u32);
+    let unicode = builder.ToString();
+    if (unicode != "🙂" or builder.AppendCodePoint(0x110000u32).IsOk()) return 3;
+    if (builder.ToString() != unicode) return 4;
+    builder.Append("\0tail");
+    if (builder.Length() != 9usize) return 5;
+
+    let writer = builders::ByteWriter(256usize);
+    writer.WriteU16LE(0x1234u16);
+    writer.WriteU16BE(0x5678u16);
+    writer.WriteU32LE(0x89abcdefu32);
+    writer.WriteU32BE(0x12345678u32);
+    writer.WriteU64LE(0xffffffffffffffffu64);
+    writer.WriteVarUInt(0xffffffffffffffffu64);
+    writer.WriteString("ğ🙂\0X");
+    writer.WriteString("");
+    let reader = builders::ByteReader(writer.ToArray());
+    let saved = writer.ToArray();
+    writer.Clear();
+    writer.WriteU8(99u8);
+    if (saved[0usize] != 0x34u8 or reader.ReadU16LE!() != 0x1234u16) return 6;
+    if (reader.ReadU16BE!() != 0x5678u16 or reader.ReadU32LE!() != 0x89abcdefu32) return 7;
+    if (reader.ReadU32BE!() != 0x12345678u32) return 8;
+    if (reader.ReadU64LE!() != 0xffffffffffffffffu64) return 9;
+    if (reader.ReadVarUInt!() != 0xffffffffffffffffu64) return 10;
+    if (reader.ReadString!() != "ğ🙂\0X" or reader.ReadString!() != "") return 11;
+    if (reader.ReadBytes!(0usize).Count() != 0usize or reader.Remaining() != 0usize) return 12;
+    let eof = reader.ReadU8();
+    if (eof.IsOk() or eof.ErrorValue().domain != std::ResultDomain::io) return 13;
+    if (eof.ErrorValue().code != builders::ReadErrorCode::unexpectedEnd.Value()) return 14;
+    if (reader.ReadU16LE().IsOk() or reader.ReadU32LE().IsOk() or reader.ReadU64LE().IsOk()) return 15;
+    if (reader.ReadU16BE().IsOk() or reader.ReadU32BE().IsOk() or reader.ReadBytes(1usize).IsOk()) return 16;
+    reader.Reset();
+    if (ReadPair!(reader) != 0x1234u16 or reader.Position() != 2usize) return 17;
+
+    let partial = builders::ByteReader([0x80u8]);
+    if (partial.ReadVarUInt().IsOk() or partial.Position() != 0usize) return 18;
+    let overflow = builders::ByteReader([255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 2u8]);
+    let invalid = overflow.ReadVarUInt();
+    if (invalid.IsOk() or invalid.ErrorValue().code != builders::ReadErrorCode::invalidVarUInt.Value()) return 19;
+    if (overflow.Position() != 0usize) return 20;
+    let shortText = builders::ByteReader([4u8, 65u8]);
+    if (shortText.ReadString().IsOk() or shortText.Position() != 0usize) return 21;
+    let badText = builders::ByteReader([2u8, 0xc0u8, 0x80u8]);
+    let bad = badText.ReadString();
+    if (bad.IsOk() or bad.ErrorValue().code != builders::ReadErrorCode::invalidUtf8.Value()) return 22;
+    if (badText.Position() != 0usize) return 23;
+    let pair = builders::ByteReader([1u8]);
+    let missing = ReadPair(pair);
+    if (missing.IsOk() or missing.ErrorValue().code != builders::ReadErrorCode::unexpectedEnd.Value()) return 24;
+
+    let frame = binary::DecodeFrame!(binary::EncodeFrame([1u8, 2u8, 3u8], 7u16, 3u16));
+    if (frame.version != 7u16 or frame.flags != 3u16 or frame.payload.Count() != 3usize) return 25;
+    if (binary::DecodeFrame([1u8, 2u8]).IsOk()) return 26;
+    writer.Clear();
+    writer.WriteBytes([1u8, 2u8]);
+    writer.WriteBytes(writer.ToArray());
+    if (writer.Length() != 4usize or writer.ToArray()[3usize] != 2u8) return 27;
+    return 0;
+}

@@ -1561,3 +1561,17 @@ add_test(NAME wio_wir_cpp_scalar_storage
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/wir_cpp_scalar_storage_test.cmake")
 wio_test_labels(wio_wir_cpp_scalar_storage native codegen optimization storage ownership)
 set_tests_properties(wio_wir_cpp_scalar_storage PROPERTIES TIMEOUT 600)
+
+add_test(NAME wio_std_builders_consistency
+    COMMAND ${CMAKE_COMMAND} "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_BACKEND_CXX=${WIO_BACKEND_CXX_COMPILER}" "-DWIO_RUNTIME=${WIO_BACKEND_RUNTIME_LIBRARY}"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}" "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/std-builders-consistency"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/std_builders_consistency_test.cmake")
+wio_test_labels(wio_std_builders_consistency std native vm builders result optimization)
+set_tests_properties(wio_std_builders_consistency PROPERTIES TIMEOUT 900)
+
+add_test(NAME wio_std_builders_style COMMAND ${CMAKE_COMMAND} "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+    -P "${CMAKE_SOURCE_DIR}/tests/cmake/std_builders_style_test.cmake")
+wio_test_labels(wio_std_builders_style std builders style result)
