@@ -1,9 +1,10 @@
 # Native Distribution Policy
 
 Status: declared-dependency policy implemented for VM executable/shared/static
-artifacts. Focused local qualification is Windows-only; Linux/macOS artifact and
-loader qualification remains the next backend gate. Full SDK kit parity is a
-separate pre-v1 requirement.
+artifacts. The focused functional closure matrix passed Windows Debug, Linux
+Release and macOS Release; see [qualification evidence](WIO_BACKEND_CLOSURE_QUALIFICATION.md).
+This is not full older-corpus or every-architecture acceptance. Full SDK kit
+parity remains a separate pre-v1 requirement.
 
 ## Explicit roles, not automatic discovery
 

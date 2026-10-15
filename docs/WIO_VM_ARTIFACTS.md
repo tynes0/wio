@@ -1,9 +1,11 @@
 # Wio VM Executable Artifacts
 
 Status: executable/project-command slices and bounded VM-backed shared/static
-**Wio module** adapters are implemented; complete SDK/artifact parity remains open.
-Locally qualified on Windows;
-Linux/macOS deployment is not claimed by the Windows gates.
+**Wio module** adapters are implemented. Functional artifact/platform closure
+is qualified on Windows Debug, Linux Release and macOS Release; see
+[the matrix](WIO_BACKEND_CLOSURE_QUALIFICATION.md). Complete SDK kit parity and
+the three heavy optimization passes remain open. Historical Windows-only slice
+results below remain historical, not whole-corpus qualification claims.
 
 ## Runtime-only runner
 
@@ -751,11 +753,12 @@ source/bytecode inputs, missing-file repair, image/native mismatch rejection,
 failed record publication, path escape and the existing program-sidecar default.
 The full older corpus and Linux/macOS were not rerun in this slice.
 
-Still required for backend artifact closure:
-
-1. Platform/behavioral qualification, including the observed Windows MinGW
-   emoji build-output path failure (NI-011), clean Linux/macOS and runtime install.
-2. The agreed three heavy optimization passes and release budgets.
+Functional artifact closure is complete within the focused platform matrix:
+NI-011 is fixed, and four new gates passed on clean Windows Debug, Linux Release
+and macOS Release builds (12/12). See
+[qualification evidence](WIO_BACKEND_CLOSURE_QUALIFICATION.md). The agreed three
+heavy optimization passes and release budgets remain; broad architecture/config
+portability hardening remains on the roadmap.
 
 Declared dependency roles, executable private-library cohorts, immutable retention,
 and selected-generation fresh deployment are specified by the implemented
@@ -767,8 +770,9 @@ The distribution-policy slice ran only two new Windows Debug gates on 2026-10-15
 These cover dependency roles/integrity, v1 compatibility, real private DLL calls,
 Unicode deployment and project paths with ASCII build output, relocation,
 source-independent execution, missing-file CLI repair and fresh packaging.
-The initial emoji build-output failure remains open as NI-011; this is not
-Linux/macOS, Release or full older-corpus qualification.
+The initial emoji build-output failure was subsequently fixed and qualified by
+the final matrix above. This earlier two-test result alone was not Linux/macOS,
+Release or full older-corpus qualification.
 
 Full SDK complex/nested/generic value parity, host ref/view/callback APIs,
 complex async payloads and foreign task creation, application hosting, detailed

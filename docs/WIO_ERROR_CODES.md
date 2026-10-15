@@ -3646,74 +3646,74 @@ Definitions: [vm/src/machine.cpp:4737](../vm/src/machine.cpp#L4737).
 
 - String intrinsic receiver is not a string
 
-Definitions: [vm/src/string_intrinsics.cpp:241](../vm/src/string_intrinsics.cpp#L241).
+Definitions: [vm/src/string_intrinsics.cpp:242](../vm/src/string_intrinsics.cpp#L242).
 
 ### WVM1117
 
 - String Contains requires a string or byte-sized char
 
-Definitions: [vm/src/string_intrinsics.cpp:255](../vm/src/string_intrinsics.cpp#L255).
+Definitions: [vm/src/string_intrinsics.cpp:256](../vm/src/string_intrinsics.cpp#L256).
 
 ### WVM1118
 
 - String prefix/suffix query requires a string
 
-Definitions: [vm/src/string_intrinsics.cpp:261](../vm/src/string_intrinsics.cpp#L261).
+Definitions: [vm/src/string_intrinsics.cpp:262](../vm/src/string_intrinsics.cpp#L262).
 
 ### WVM1119
 
 - String index query requires a string or byte-sized char
 
-Definitions: [vm/src/string_intrinsics.cpp:277](../vm/src/string_intrinsics.cpp#L277).
+Definitions: [vm/src/string_intrinsics.cpp:278](../vm/src/string_intrinsics.cpp#L278).
 
 ### WVM1120
 
 - String endpoint intrinsic requires a non-empty string
 
-Definitions: [vm/src/string_intrinsics.cpp:284](../vm/src/string_intrinsics.cpp#L284).
+Definitions: [vm/src/string_intrinsics.cpp:285](../vm/src/string_intrinsics.cpp#L285).
 
 ### WVM1121
 
 - String indexing requires a non-negative index
 
-Definitions: [vm/src/string_intrinsics.cpp:293](../vm/src/string_intrinsics.cpp#L293).
+Definitions: [vm/src/string_intrinsics.cpp:294](../vm/src/string_intrinsics.cpp#L294).
 
 ### WVM1122
 
 - String index is outside the byte bounds
 
-Definitions: [vm/src/string_intrinsics.cpp:299](../vm/src/string_intrinsics.cpp#L299).
+Definitions: [vm/src/string_intrinsics.cpp:300](../vm/src/string_intrinsics.cpp#L300).
 
 ### WVM1123
 
 - String slicing requires a non-negative index or count
 - String Slice requires a non-negative count
 
-Definitions: [vm/src/string_intrinsics.cpp:308](../vm/src/string_intrinsics.cpp#L308), [vm/src/string_intrinsics.cpp:321](../vm/src/string_intrinsics.cpp#L321).
+Definitions: [vm/src/string_intrinsics.cpp:309](../vm/src/string_intrinsics.cpp#L309), [vm/src/string_intrinsics.cpp:322](../vm/src/string_intrinsics.cpp#L322).
 
 ### WVM1124
 
 - String replacement requires old and new string values
 
-Definitions: [vm/src/string_intrinsics.cpp:343](../vm/src/string_intrinsics.cpp#L343), [vm/src/string_intrinsics.cpp:510](../vm/src/string_intrinsics.cpp#L510).
+Definitions: [vm/src/string_intrinsics.cpp:344](../vm/src/string_intrinsics.cpp#L344), [vm/src/string_intrinsics.cpp:511](../vm/src/string_intrinsics.cpp#L511).
 
 ### WVM1125
 
 - String Repeat count exceeds runtime limits
 
-Definitions: [vm/src/string_intrinsics.cpp:352](../vm/src/string_intrinsics.cpp#L352).
+Definitions: [vm/src/string_intrinsics.cpp:353](../vm/src/string_intrinsics.cpp#L353).
 
 ### WVM1126
 
 - String Split requires a separator
 
-Definitions: [vm/src/string_intrinsics.cpp:366](../vm/src/string_intrinsics.cpp#L366).
+Definitions: [vm/src/string_intrinsics.cpp:367](../vm/src/string_intrinsics.cpp#L367).
 
 ### WVM1127
 
 - String padding requires a width and optional byte-sized char
 
-Definitions: [vm/src/string_intrinsics.cpp:411](../vm/src/string_intrinsics.cpp#L411).
+Definitions: [vm/src/string_intrinsics.cpp:412](../vm/src/string_intrinsics.cpp#L412).
 
 ### WVM1128
 
@@ -3723,50 +3723,50 @@ Definitions: [vm/src/string_intrinsics.cpp:411](../vm/src/string_intrinsics.cpp#
 - String signed conversion is out of range
 - String integer conversion base is invalid
 
-Definitions: [vm/src/string_intrinsics.cpp:195](../vm/src/string_intrinsics.cpp#L195), [vm/src/string_intrinsics.cpp:200](../vm/src/string_intrinsics.cpp#L200), [vm/src/string_intrinsics.cpp:211](../vm/src/string_intrinsics.cpp#L211), [vm/src/string_intrinsics.cpp:219](../vm/src/string_intrinsics.cpp#L219), [vm/src/string_intrinsics.cpp:429](../vm/src/string_intrinsics.cpp#L429).
+Definitions: [vm/src/string_intrinsics.cpp:196](../vm/src/string_intrinsics.cpp#L196), [vm/src/string_intrinsics.cpp:201](../vm/src/string_intrinsics.cpp#L201), [vm/src/string_intrinsics.cpp:212](../vm/src/string_intrinsics.cpp#L212), [vm/src/string_intrinsics.cpp:220](../vm/src/string_intrinsics.cpp#L220), [vm/src/string_intrinsics.cpp:430](../vm/src/string_intrinsics.cpp#L430).
 
 ### WVM1129
 
 - String f32 conversion failed
 - String floating-point conversion failed
 
-Definitions: [vm/src/string_intrinsics.cpp:446](../vm/src/string_intrinsics.cpp#L446), [vm/src/string_intrinsics.cpp:454](../vm/src/string_intrinsics.cpp#L454).
+Definitions: [vm/src/string_intrinsics.cpp:447](../vm/src/string_intrinsics.cpp#L447), [vm/src/string_intrinsics.cpp:455](../vm/src/string_intrinsics.cpp#L455).
 
 ### WVM1130
 
 - String boolean conversion failed
 
-Definitions: [vm/src/string_intrinsics.cpp:466](../vm/src/string_intrinsics.cpp#L466).
+Definitions: [vm/src/string_intrinsics.cpp:467](../vm/src/string_intrinsics.cpp#L467).
 
 ### WVM1131
 
 - String Append requires a string suffix
 
-Definitions: [vm/src/string_intrinsics.cpp:474](../vm/src/string_intrinsics.cpp#L474).
+Definitions: [vm/src/string_intrinsics.cpp:475](../vm/src/string_intrinsics.cpp#L475).
 
 ### WVM1132
 
 - String Push requires a byte-sized char
 
-Definitions: [vm/src/string_intrinsics.cpp:481](../vm/src/string_intrinsics.cpp#L481).
+Definitions: [vm/src/string_intrinsics.cpp:482](../vm/src/string_intrinsics.cpp#L482).
 
 ### WVM1133
 
 - String Insert requires an index and fragment
 
-Definitions: [vm/src/string_intrinsics.cpp:489](../vm/src/string_intrinsics.cpp#L489).
+Definitions: [vm/src/string_intrinsics.cpp:490](../vm/src/string_intrinsics.cpp#L490).
 
 ### WVM1134
 
 - String Erase requires index and count operands
 
-Definitions: [vm/src/string_intrinsics.cpp:497](../vm/src/string_intrinsics.cpp#L497).
+Definitions: [vm/src/string_intrinsics.cpp:498](../vm/src/string_intrinsics.cpp#L498).
 
 ### WVM1135
 
 - String mutation requires a mutable receiver
 
-Definitions: [vm/src/string_intrinsics.cpp:230](../vm/src/string_intrinsics.cpp#L230).
+Definitions: [vm/src/string_intrinsics.cpp:231](../vm/src/string_intrinsics.cpp#L231).
 
 ### WVM1136
 

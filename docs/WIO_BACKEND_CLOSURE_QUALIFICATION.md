@@ -1,6 +1,7 @@
 # Functional Backend Closure Qualification
 
-This is the final functional pass before the three heavy optimization passes.
+Status: functional pass completed on 2026-10-15 for the matrix below. This is the
+final functional pass before the three heavy optimization passes.
 Full SDK kit parity remains a separate v1 blocker. Performance budgets are not
 claimed by these correctness gates; framework/bundle packaging, automatic
 dependency discovery and live-generation pruning are outside the frozen native
@@ -56,11 +57,29 @@ Windows Debug local qualification: the four new gates passed 4/4 in 78.31
 seconds. The strengthened native/VM floating-conversion Unicode gate passed
 again in 10.00 seconds. Diagnostic reference validation passed (693 IDs).
 
-Remote matrix qualification is in progress. The first runs exposed and led to
+Remote matrix qualification for commit `b4c552f`:
+
+| Platform / configuration | New gates | Test time | Evidence |
+| --- | --- | --- | --- |
+| Windows / Debug | 4/4 passed | 65.88 s | [CI job](https://github.com/tynes0/wio/actions/runs/38667946311/job/116204357504) |
+| Linux / Release | 4/4 passed | 22.19 s | [CI job](https://github.com/tynes0/wio/actions/runs/38667946311/job/116204357239) |
+| macOS / Release | 4/4 passed | 28.60 s | [CI job](https://github.com/tynes0/wio/actions/runs/38667946311/job/116204357430) |
+
+The [complete CI run](https://github.com/tynes0/wio/actions/runs/38667946311)
+is successful: 12/12 new test executions across three clean platform builds.
+These are test durations, not cold compiler build benchmarks. The first runs exposed and led to
 fixes for GCC dependent-template syntax, missing system-libc++ floating
 `from_chars`, Darwin `fwrite_unlocked`, and Darwin `timeval.tv_usec` width.
 The runtime/VM now share a bounded, C-locale fallback where floating
 `from_chars` is unavailable; supported native implementations keep their direct
-allocation-free path. CI results will be recorded here after the fixed matrix
-completes. Older corpus results remain their historical qualification, not a
-new full-corpus claim from this pass.
+allocation-free path. NI-011 and the bounded artifact/platform gap NI-002 are
+closed by this matrix. Older corpus results remain their historical
+qualification, not a new full-corpus claim from this pass. Other CPU/OS/config
+combinations, sanitizer/fuzzer depth and complete SDK kit parity are not inferred
+from these gates. Broad portability hardening remains a separate roadmap item.
+
+Functional closure tasks are now complete: project CLI integration, declared
+native distribution policy, and this platform/behavioral pass. Next is heavy
+optimization pass 1 (generated C++ + runtime), then pass 2 (non-JIT VM runtime),
+then pass 3 (compiler/preparation/build throughput). This qualification does not
+claim any performance improvement or release-budget acceptance.

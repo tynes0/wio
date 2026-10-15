@@ -26,6 +26,33 @@ Notes:
 
 ## VM SDK shared/static module foundation — 2026-10-14
 
+### Follow-up: final functional platform closure — 2026-10-15
+
+- [x] Complete the three agreed pre-optimization tasks: project CLI integration,
+      declared native distribution policy and focused platform/behavioral
+      qualification. SDK kit parity remains a separate v1 blocker; broad
+      architecture/configuration portability remains its own roadmap work.
+- [x] Fix NI-011 using isolated ASCII external-tool output paths without
+      changing cwd/relative arguments, then native filesystem copy and atomic
+      publication. Static archives now publish safely too. Known temporary files
+      clean up; unknown user tool side outputs are preserved.
+- [x] Fix actual CI portability blockers: GCC dependent-template syntax,
+      missing libc++ floating from_chars via a shared bounded C-locale fallback,
+      Darwin stdio API availability/timeval width, and Mach-O library identity/
+      private-library lookup. Native floating implementations keep the direct
+      path; this is correctness/portability work, not a heavy optimization pass.
+- [x] Four new gates passed locally on Windows Debug (4/4, 78.31 seconds) and
+      on three clean CI builds of b4c552f (12/12 executions): Windows Debug
+      65.88 seconds, Linux Release 22.19 seconds, macOS Release 28.60 seconds.
+      Covers runtime-only relocated SDK prefixes, Unix DESTDIR, native lifecycle/
+      rollback and private DLL/SO/dylib, Unicode native outputs, failed rebuild
+      preservation, native/VM float parsing, shared/static CLI and source/SDK-
+      independent packaged execution. No old full corpus was rerun.
+- [x] Pin successful CI evidence in `docs/WIO_BACKEND_CLOSURE_QUALIFICATION.md`.
+      Diagnostic reference validation remains 693 IDs. Functional backend item 8
+      is closed within its qualified boundaries. Next: generated C++/runtime
+      heavy optimization, then VM runtime, then compiler/preparation/build time.
+
 ### Follow-up: declared native distribution policy — 2026-10-15
 
 - [x] Freeze explicit registry/private-library roles across executable/shared/

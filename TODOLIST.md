@@ -586,7 +586,15 @@ Rider, and CLion are defined in
    sanitizer builds on Ubuntu. Add macOS, x64/arm64 coverage, static/shared/PIC
    qualification, endian/alignment audits, and alternative-backend evidence.
 
-8. [~] Complete the backend-neutral WIR and independent fast backend.
+8. [x] Complete the backend-neutral WIR and independent backend functional path.
+   Functional closure recorded 2026-10-15 within the supported/qualified shape
+   boundaries below. Project CLI, declared native distribution policy and final
+   platform/artifact qualification are complete: four new gates passed on clean
+   Windows Debug, Linux Release and macOS Release builds (12/12 executions).
+   NI-011 Unicode native output paths are fixed. This does not requalify the full
+   older corpus or every CPU/configuration. Heavy optimization is item 9/the
+   three accepted passes; full SDK kit parity remains Native/SDK item 5 before v1.
+   See `docs/WIO_BACKEND_CLOSURE_QUALIFICATION.md` for pinned CI evidence.
    Typed WIR, canonical Lowered WIR, stable IDs/source spans, control flow,
    values, places/borrows, arrays, matching, component/object construction,
    lexical cleanup, receiver-aware methods, deterministic object/interface
@@ -609,7 +617,7 @@ Rider, and CLion are defined in
    symbols, generic specialization keys, adapter strategy, `native-call` /
    `native-invoke`, deterministic thunk planning, and the C-shaped SDK handle
    contract survive verified Typed-to-Lowered WIR. Concrete C++ thunk bodies
-   are complete; the VM native bridge remains backend work.
+   and the qualified VM native bridge are complete within the boundaries below.
    Module/import/export identity, concrete generic export signatures,
    detailed field/method/attribute reflection descriptors,
    application/system schedule and resource-access metadata,
@@ -1248,9 +1256,10 @@ Rider, and CLion are defined in
     acceptance remains open. See `docs/WIO_NATIVE_DISTRIBUTION_POLICY.md`.
     Full SDK complex-value/async/application/reflection parity is outside this
     backend milestone and remains mandatory under Native/SDK item 5 before v1.
-    Cross-platform artifact/runtime qualification and the three agreed heavy
-    optimization passes remain open. Live-generation garbage collection is not
-    promised by the frozen retention policy.
+    The final focused artifact/runtime platform matrix passed Windows Debug,
+    Linux Release and macOS Release. The three agreed heavy optimization passes
+    remain open; live-generation garbage collection is not promised by the
+    frozen retention policy.
     See `docs/WIO_VM_ARTIFACTS.md`; bounded SDK wrappers are not a claim of full
     kit parity, nor a reason to merge its separate v1 gate into backend closure.
    Unconstrained

@@ -4,6 +4,12 @@ Accepted order: 2026-10-15. First finish the three functional closure tasks:
 VM project CLI library/host integration, native distribution policy, and platform/
 behavioral qualification. SDK kit parity remains a separate v1 blocker.
 
+Status 2026-10-15: all three functional tasks are complete within the qualified
+artifact matrix. The final four new gates passed on clean Windows Debug, Linux
+Release and macOS Release builds (12/12 executions). See
+[qualification evidence](WIO_BACKEND_CLOSURE_QUALIFICATION.md). The next work is
+pass 1 below; none of the optimization targets is claimed achieved by this gate.
+
 The subsequent heavy optimization work is split into exactly three passes.
 These are ordered work packages, not renumbered historical backend sprints.
 
