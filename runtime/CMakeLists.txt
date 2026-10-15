@@ -172,6 +172,7 @@ add_custom_command(
     DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_convert.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_convert.h"
+        "${WIO_RUNTIME_INCLUDE_DIR}/float_parse.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
     VERBATIM
 )

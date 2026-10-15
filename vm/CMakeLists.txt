@@ -17,7 +17,8 @@ target_compile_features(wio_vm PUBLIC cxx_std_20)
 
 target_include_directories(wio_vm PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    "$<INSTALL_INTERFACE:include>")
+    "$<INSTALL_INTERFACE:include>"
+    PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
 find_package(Threads REQUIRED)
 target_link_libraries(wio_vm PUBLIC wio_bytecode_core wio_sdk PRIVATE ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(wio_vm PROPERTIES POSITION_INDEPENDENT_CODE ON)

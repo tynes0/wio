@@ -144,7 +144,7 @@ namespace wio::runtime::std_net
             FD_SET(value, &exceptional);
             timeval timeout{
                 static_cast<long>(std::min<std::uint64_t>(timeoutMilliseconds / 1'000, 2'147'483'647)),
-                static_cast<long>((timeoutMilliseconds % 1'000) * 1'000)};
+                static_cast<decltype(timeval{}.tv_usec)>((timeoutMilliseconds % 1'000) * 1'000)};
             timeval* timeoutPointer = timeoutMilliseconds == 0 ? nullptr : &timeout;
 #if defined(_WIN32)
             const int ready = select(0, nullptr, &writable, &exceptional, timeoutPointer);
