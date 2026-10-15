@@ -15,6 +15,9 @@ replacement new/delete operators and uses the standard allocator. Raw numeric
 output retains zero placeholders, but JSON allocation metrics are **null**, the
 summary says `not-measured`, and metadata records `CountersEnabled=false`.
 Never interpret those placeholders as evidence of zero allocation.
+Instrumentation can also affect compiler optimization/allocation elision, not
+just add a fixed counter cost. Do not subtract two separate sessions to claim an
+exact per-allocation overhead. Keep sample ranges and environment differences.
 
 The runner copies these files and the common `probe.h` into scratch before
 emission. Both variants link the same backend runtime. Flags, warm-up, alternate

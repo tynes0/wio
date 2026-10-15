@@ -73,6 +73,10 @@ The initial nine-case, 15-pair allocation baseline and its limitations are in
 [the measured cost map](WIO_NATIVE_COST_MAP.md). This is starting evidence,
 not a declaration that N01's pending instrumentation categories are finished.
 
+The next slice adds six workloads and a separate counter-free timing mode:
+[extended cost-map evidence](WIO_NATIVE_COST_EXTENDED_MAP.md). Core source cases
+are unchanged; the measured inventory now has 15 cases without renumbering N01-N14.
+
 ## Instrumentation and reproducibility
 
 See [the manual runner](../tests/performance/native_costs/README.md). Timing and
@@ -93,3 +97,9 @@ An N01 baseline does not prove an optimization or a regression against another
 session. Numeric-only reference loops may be optimized more aggressively than
 generated Wio; the result is an end-to-end composite cost, not the latency of an
 individual component operation, Ref increment or instruction.
+
+The extended session also shows substantial timing drift with unchanged compiler,
+runtime and VM-host hashes, including a slower prior-generated-C++ control.
+Keep all samples and qualify the environment before numeric performance-budget
+acceptance. Stable documented conditions and paired controls are an N01
+measurement requirement; do not silently alter the user's system power policy.

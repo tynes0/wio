@@ -10,6 +10,28 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N01 extended coverage and counter-free timing — 2026-10-15
+
+- [x] `5f40405`: six new Unicode, Dict, Result-error, native weak-reference,
+      scalar-capture and ready-coroutine diagnostics; original nine core
+      workload sources unchanged. Source/ABI/cancellation boundaries and
+      remaining coverage gaps are explicit in `docs/WIO_NATIVE_COST_EXTENDED_MAP.md`.
+- [x] Separate counter-free mode compiles out diagnostic replacement allocation
+      operators, uses standard allocation, and marks unmeasured metrics null.
+      It is not a production allocator/runtime change or a speedup claim.
+- [x] Final local new test: 1/1 in 140.03 seconds, O0/O2 plus counter-free O2,
+      independent fingerprints at counts 1/17, counter/input guards. New gate
+      passed on all three clean CI platforms (3/3 executions, run 38754331032).
+      No old corpus rerun. Final manual samples: 384/384 independently qualified
+      outputs across the two modes, with all ranges/outliers retained.
+- [x] Fresh native/Release-VM Mandelbrot: 24/24 checks passed. This session has
+      substantial timing drift despite identical compiler/runtime/VM-host hashes;
+      the prior C++ control is also slower. Preserve all results and report no
+      attributed speedup/regression. Measurement calibration remains part of N01.
+- [ ] N01 copy/move/RC-event attribution, peak/live memory and suspended/worker/
+      cancellation, broader containers, startup/reflection and I/O baselines
+      remain open; N02 has not started. Missing metrics are not zero.
+
 ## N01 native cost-map foundation — 2026-10-15
 
 - [x] `ae12526`: fixed native substeps N01-N14 and recorded std API/module

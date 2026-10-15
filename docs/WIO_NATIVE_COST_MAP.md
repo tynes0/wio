@@ -88,6 +88,8 @@ qualification was dispatched in [CI](https://github.com/tynes0/wio/actions/runs/
 At this report's checkpoint Linux Release and macOS Release passed the new
 contract gate; Windows Debug was still building. This is not a completed
 three-platform success claim or remote performance measurement.
+Later confirmation: that run completed successfully on all three platforms
+(3/3 new contract-gate executions). The checkpoint above is retained as history.
 
 Run instructions and instrumentation boundaries:
 [native_costs README](../tests/performance/native_costs/README.md).
