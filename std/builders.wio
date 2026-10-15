@@ -11,10 +11,10 @@ realm std
         fn ReserveStringNative(value: ref string, capacity: usize);
 
         [native, cpp::name(wio::runtime::std_builders::AppendBytes)]
-        fn AppendBytesNative(value: ref u8[], source: string);
+        fn AppendBytesNative(value: ref u8[], source: view string);
 
         [native, cpp::name(wio::runtime::std_builders::ReadBytes)]
-        fn ReadBytesNative(value: u8[], start: usize, count: usize) -> string;
+        fn ReadBytesNative(value: view u8[], start: usize, count: usize) -> string;
 
         [Type(i32)]
         enum ReadErrorCode
@@ -186,7 +186,7 @@ realm std
             public fn WriteString(value: string)
             {
                 self.WriteVarUInt(value.Count() fit u64);
-                AppendBytesNative(ref self.bytes, value);
+                AppendBytesNative(ref self.bytes, ref value);
             }
 
             public fn WriteBytes(value: u8[])
@@ -346,7 +346,7 @@ realm std
                 }
 
                 let count = length.Value() fit usize;
-                let value = ReadBytesNative(self.bytes, self.position, count);
+                let value = ReadBytesNative(ref self.bytes, self.position, count);
                 if (not unicode::IsValidUtf8(value))
                 {
                     self.position = original;
