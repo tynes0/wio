@@ -1643,4 +1643,20 @@ if(Python3_Interpreter_FOUND)
             --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}")
     wio_test_labels(wio_native_cost_python_contract performance diagnostic measurement language wio)
     set_tests_properties(wio_native_cost_python_contract PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+
+    # This attribution profiler needs GCC/gcov, not Clang's different coverage
+    # format. Keep it separate from portable timing/allocation controllers.
+    execute_process(COMMAND "${WIO_BACKEND_CXX_COMPILER}" --version
+        OUTPUT_VARIABLE WIO_COST_CXX_VERSION ERROR_QUIET)
+    find_program(WIO_COST_GCOV NAMES gcov)
+    if(WIO_COST_GCOV AND WIO_COST_CXX_VERSION MATCHES "(g\\+\\+|GCC|Free Software Foundation)")
+        add_test(NAME wio_native_ownership_attribution
+            COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/tests/performance/native_costs/ownership/test_ownership.py"
+                --output "${CMAKE_BINARY_DIR}/native-ownership-attribution"
+                --cxx "${WIO_BACKEND_CXX_COMPILER}" --gcov "${WIO_COST_GCOV}"
+                --wio "$<TARGET_FILE:wio_app>" --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}")
+        wio_test_labels(wio_native_ownership_attribution native performance diagnostic ownership wio)
+        set_tests_properties(wio_native_ownership_attribution PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE)
+    endif()
 endif()

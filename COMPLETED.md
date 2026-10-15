@@ -10,6 +10,22 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N01 Ref ownership attribution — 2026-10-15
+
+- [x] Wio owning-argument/view/return workloads; native weak-lifetime and explicit
+      copy/move control called from Wio; Python-only orchestration. GCC/gcov
+      diagnostic attribution, no production runtime/compiler changes or new PS1.
+- [x] Calibrated retain/release/weak/destruction and Ref handle-transfer counts at
+      1, 17, 2000; ordinary O2 checksum parity. Only the new CTest ran locally:
+      1/1, 17.64 seconds; five checks and 30 actual Wio workload executions.
+- [x] Fresh unchanged-binary Mandelbrot: 32/32 correct outputs. Native compute
+      23.9045 ms, VM compute 20.5566244 s; full-VM range/drift fail timing gates,
+      so overall timing is rejected without trimming/retries. No speedup claim.
+- [ ] Still N01, not N02: general copied-payload bytes, live/peak memory, broader
+      subsystem coverage and precise baselines remain open. Ref counts are from
+      non-inlined diagnostics, not exact shipping-binary event attribution.
+      See `docs/WIO_OWNERSHIP_ATTRIBUTION.md` and its raw evidence.
+
 ## N01 Wio + Python measurement path — 2026-10-15
 
 - [x] `33f2c1b`: prefer Wio behavior/workload fixtures with Python orchestration.

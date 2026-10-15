@@ -130,3 +130,8 @@ this slice does not claim to replace every repository script. New behavior tests
 should prefer Wio, with Python for orchestration.
 
 Full plan and remaining coverage: [N01-N14](../../../docs/WIO_NATIVE_RUNTIME_PLAN.md).
+
+For opt-in RC and Ref copy/move attribution without runtime source changes, see
+[the Wio/Python ownership profiler](ownership/README.md). Its calibrated gcov
+diagnostic build is separate from ordinary O2 output checks and from timing
+acceptance; handle-transfer counts are not copied payload bytes.

@@ -56,13 +56,13 @@ the N01 instrumentation slice. Existing dirty std/playground files are preserved
 | Append and builder snapshot | `std_builders/append.wio` | Native paired code, allocations, fixed fingerprint |
 | Ordinary `+=`, builder and integer output | New `native_costs/costs.wio` | Instrumented kernel duration, ordinary new/new[] calls and requested bytes |
 | ByteWriter and dynamic array | Same new fixture | Growth/write/snapshot/read-sum composite costs, not isolated I/O |
-| Component return and object alias/method | Same new fixture | Composite construction/transport/dispatch/destruction costs; no RC-event counter |
+| Component return and object alias/method | Same new fixture; `native_costs/ownership` attribution | Composite costs; separate GCC/gcov diagnostic counts for object argument/view/return and Ref transfers, not production-binary RC timing |
 | Native calls and Result success | Same new fixture | Call/unwrap loop costs; tagged-value C++ Result is a lower bound, not matching Wio object ABI |
 | Unicode, dictionary, Result errors, weak refs, closures | `native_costs/extended` | Text slice/concat/UTF-8, integer Dict insert/lookup/miss, recoverable error payload, runtime weak helper and scalar capture; not full Unicode/set/exception/escaped-closure coverage |
 | Async ready task | Same extended suite | Same AsyncTask runtime in both variants, immediate completion and BlockOn; not suspended/worker/timer/cancellation-race costs |
 | Scheduling, cancellation, threading, maps/sets/Unicode expansion | Pending | Existing correctness tests are not performance baselines; add focused workloads before changing those paths |
 | Cold startup, reflection, real file/network I/O | Pending | Whole-process wall time alone does not isolate these costs |
-| Copy/move bytes and retain/release events | Pending | Need opt-in attribution; allocation bytes are not copied bytes |
+| Ref copy/move and retain/release events | `native_costs/ownership` | Calibrated GCC/gcov diagnostic, no runtime modifications; ordinary O2 output parity. General payload-copy bytes and production-optimized RC attribution remain pending |
 | Peak/live memory and aligned/malloc traffic | Pending | Not measured by the ordinary-new probe; require an appropriate profiler or separate diagnostic build |
 
 N01 has a working first cost-map slice, **not complete coverage of all native
@@ -120,6 +120,12 @@ Every update names its current N01-N14 item. Closing one item and starting anoth
 in the same turn must state both the closure and transition explicitly. A narrow
 subsystem slice is not a whole-item closure. This controller pass starts/ends at
 N01; N02 has not started. Remaining attribution/coverage gaps above remain open.
+
+The next ownership-attribution slice adds Wio object argument/view/return cases
+and native weak/control calibration, with Python build/collection. See
+[ownership attribution](WIO_OWNERSHIP_ATTRIBUTION.md). It counts header-only Ref
+paths in a non-inlined coverage compilation, not exact shipping-binary events,
+copy bytes or operation latency. N01 remains open; no N02 transition here.
 
 New behavior tests should preferably be Wio; Python is preferred for portable
 build/process/measurement orchestration. Avoid new substantial PS1 test logic.
