@@ -1,0 +1,867 @@
+{
+  "Schema": 3,
+  "Harness": "python",
+  "Stage": "N01",
+  "Rebuilt": false,
+  "ArtifactsBefore": [
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\build.json",
+      "Bytes": 4974,
+      "Hash": "D3401A1FD493A916E0645E8681F3C4166ACDAF11EFBCAD625E58CA4C1DBB9578"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\benchmark_clock.h",
+      "Bytes": 987,
+      "Hash": "CBCEBFC64EE2D3BE46A76415A3AC549F0FE13C30614E9DC5DEF622EDE6AF6F77"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\bridge.dll",
+      "Bytes": 926693,
+      "Hash": "F03F7F65575494A88ECD04D274350DCF345576867C184137824F63FDAAE037F8"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\main.wio",
+      "Bytes": 1613,
+      "Hash": "B526C768105B20624B2B14EEFBEA05DE30BB7096C1275894865EDEE01BD71C9E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\main.wio.cpp",
+      "Bytes": 109667,
+      "Hash": "A589EF40F29647984CE3119629AC23C24B2D6D4CD21DC5F0EEBBD0FDC1E1D3D2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\main.wiob",
+      "Bytes": 30866,
+      "Hash": "81FCD6B05FD93DF6CB418213178C88663FFA55884ABC85154F96F8FF90F5143B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\native.exe",
+      "Bytes": 3790765,
+      "Hash": "37CD8FEA190951B2C27F57DD6951D9DD6629085179076F5E952AA740831A6F30"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\bridge.dll",
+      "Bytes": 6366765,
+      "Hash": "290837EB608BFCC69206DCB714DB76F0541A90B0F17F0271DA2667867A7B3466"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\main.wio",
+      "Bytes": 117,
+      "Hash": "BF0EF3870ACB568551D00704958880BB1A803F1C5433FA980C4457B2AFD73D9E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\main.wio.cpp",
+      "Bytes": 2659497,
+      "Hash": "F58248A3927536554986EE6991FF4F31E279DB0813BCCD163AE15121F557AC7B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\main.wiob",
+      "Bytes": 2104032,
+      "Hash": "D9EC851742B3CF722978562EEBF19DD0CF4BA273C8EE1485F07056B447CE3A80"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\mandelbrot.wio",
+      "Bytes": 2568,
+      "Hash": "4E701B4C781B1EC77BF749F9472BE6711AE8D254F3AAB86028F8EE6B60CE8AF9"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\native.exe",
+      "Bytes": 9050655,
+      "Hash": "E5D9AFD45D5B494CEDBD4C48F88DF061292167468D22259AA8A7CBA297AD22A7"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\previous.exe",
+      "Bytes": 9050655,
+      "Hash": "1CB587A7155F283A5E3D9AAFA95C978EC64275F382BE176067866F6571522BD3"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\vm\\Release\\wio_mandelbrot_vm_benchmark.exe",
+      "Bytes": 1152512,
+      "Hash": "715F44B50E6FFA84E8018566D6D776A9637861568A3AA5A4D482C8C4AB41618D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\mandelbrot_compute\\progress.py",
+      "Bytes": 7383,
+      "Hash": "8561B961A42771CE38AC55F792A5CAC7179AC04AAB62B230750B12494E9AFDF2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\measurement.py",
+      "Bytes": 15195,
+      "Hash": "367D71149726CEC1BC2049ADDB80F08A65FC09B2448D02A3FA75510C72DC9499"
+    }
+  ],
+  "Samples": [
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.1773648001253605,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.1761905405013434,
+      "SystemBusyFraction": 0.21232876712328763,
+      "Output": "seconds=0.023676700 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 34020,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native",
+      "Round": 0,
+      "Warmup": true,
+      "KernelSeconds": 0.0236767
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.0365529996342957,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.8549229970904991,
+      "SystemBusyFraction": 0.19444444444444442,
+      "Output": "seconds=0.024563400 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 75224,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native-control",
+      "Round": 0,
+      "Warmup": true,
+      "KernelSeconds": 0.0245634
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 20.314467299729586,
+      "CpuSeconds": 19.21875,
+      "CpuToWall": 0.9460622184395565,
+      "SystemBusyFraction": 0.21550149052793532,
+      "Output": "seconds=20.288840300 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 83152,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-vm",
+      "Round": 0,
+      "Warmup": true,
+      "KernelSeconds": 20.2888403
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.40232469979673624,
+      "CpuSeconds": 0.078125,
+      "CpuToWall": 0.19418395151843912,
+      "SystemBusyFraction": 0.2142857142857143,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 43112,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-native",
+      "Round": 0,
+      "Warmup": true,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.4144407003186643,
+      "CpuSeconds": 0.09375,
+      "CpuToWall": 0.22620847790266602,
+      "SystemBusyFraction": 0.17449664429530198,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 56728,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-previous",
+      "Round": 0,
+      "Warmup": true,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 23.24741469975561,
+      "CpuSeconds": 20.265625,
+      "CpuToWall": 0.8717367183290727,
+      "SystemBusyFraction": 0.3022874442855942,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 28840,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-vm",
+      "Round": 0,
+      "Warmup": true,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 21.691104999743402,
+      "CpuSeconds": 20.6875,
+      "CpuToWall": 0.9537319560365747,
+      "SystemBusyFraction": 0.2009631830047709,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 68728,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-vm",
+      "Round": 1,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.1252769003622234,
+      "CpuSeconds": 0.125,
+      "CpuToWall": 0.9977896933798429,
+      "SystemBusyFraction": 0.2536231884057971,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 67172,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-previous",
+      "Round": 1,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.12790179997682571,
+      "CpuSeconds": 0.125,
+      "CpuToWall": 0.9773122819432448,
+      "SystemBusyFraction": 0.31007751937984496,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 81916,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-native",
+      "Round": 1,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 22.27082550013438,
+      "CpuSeconds": 18.578125,
+      "CpuToWall": 0.8341911259592916,
+      "SystemBusyFraction": 0.3017966695880806,
+      "Output": "seconds=22.249446800 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 79492,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-vm",
+      "Round": 1,
+      "Warmup": false,
+      "KernelSeconds": 22.2494468
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.03984030010178685,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.7843816417085279,
+      "SystemBusyFraction": 0.475,
+      "Output": "seconds=0.024908100 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 71740,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native-control",
+      "Round": 1,
+      "Warmup": false,
+      "KernelSeconds": 0.0249081
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.03725499985739589,
+      "CpuSeconds": 0.015625,
+      "CpuToWall": 0.4194067926401593,
+      "SystemBusyFraction": 0.25806451612903225,
+      "Output": "seconds=0.024394100 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 76796,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native",
+      "Round": 1,
+      "Warmup": false,
+      "KernelSeconds": 0.0243941
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.03745840024203062,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.8342587990433074,
+      "SystemBusyFraction": 0.19444444444444442,
+      "Output": "seconds=0.024647900 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 10552,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native-control",
+      "Round": 2,
+      "Warmup": false,
+      "KernelSeconds": 0.0246479
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 24.136851000133902,
+      "CpuSeconds": 20.125,
+      "CpuToWall": 0.8337873072128735,
+      "SystemBusyFraction": 0.3091386979377274,
+      "Output": "seconds=24.116553300 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 30628,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-vm",
+      "Round": 2,
+      "Warmup": false,
+      "KernelSeconds": 24.1165533
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.16908829985186458,
+      "CpuSeconds": 0.125,
+      "CpuToWall": 0.7392587193171284,
+      "SystemBusyFraction": 0.5363128491620112,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 31320,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-native",
+      "Round": 2,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.13993580034002662,
+      "CpuSeconds": 0.125,
+      "CpuToWall": 0.8932667673051894,
+      "SystemBusyFraction": 0.295774647887324,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 78012,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-previous",
+      "Round": 2,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 23.66901640035212,
+      "CpuSeconds": 21.65625,
+      "CpuToWall": 0.9149619753391114,
+      "SystemBusyFraction": 0.2615346555065353,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 79976,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-vm",
+      "Round": 2,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.04717219993472099,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.6624664536155861,
+      "SystemBusyFraction": 0.5909090909090908,
+      "Output": "seconds=0.024360100 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 18308,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native",
+      "Round": 2,
+      "Warmup": false,
+      "KernelSeconds": 0.0243601
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.043378000147640705,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.7204112659329147,
+      "SystemBusyFraction": 0.4565217391304348,
+      "Output": "seconds=0.024287900 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 75448,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native",
+      "Round": 3,
+      "Warmup": false,
+      "KernelSeconds": 0.0242879
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 22.165268399752676,
+      "CpuSeconds": 20.5625,
+      "CpuToWall": 0.9276900973700566,
+      "SystemBusyFraction": 0.2572725669957687,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 3664,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-vm",
+      "Round": 3,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.1586897000670433,
+      "CpuSeconds": 0.109375,
+      "CpuToWall": 0.68923817962849,
+      "SystemBusyFraction": 0.4671052631578947,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 23444,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-previous",
+      "Round": 3,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.1364322998560965,
+      "CpuSeconds": 0.109375,
+      "CpuToWall": 0.8016796617469947,
+      "SystemBusyFraction": 0.23809523809523814,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 28840,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-native",
+      "Round": 3,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 23.13837270019576,
+      "CpuSeconds": 20.84375,
+      "CpuToWall": 0.9008304201022596,
+      "SystemBusyFraction": 0.2986266638495668,
+      "Output": "seconds=23.114729100 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 67704,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-vm",
+      "Round": 3,
+      "Warmup": false,
+      "KernelSeconds": 23.1147291
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.04068590002134442,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.7680793587853726,
+      "SystemBusyFraction": 0.23529411764705888,
+      "Output": "seconds=0.024183900 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 44212,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native-control",
+      "Round": 3,
+      "Warmup": false,
+      "KernelSeconds": 0.0241839
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.12809740006923676,
+      "CpuSeconds": 0.125,
+      "CpuToWall": 0.9758199614702359,
+      "SystemBusyFraction": 0.26865671641791045,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 37564,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-native",
+      "Round": 4,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.13119400013238192,
+      "CpuSeconds": 0.125,
+      "CpuToWall": 0.9527874740755535,
+      "SystemBusyFraction": 0.3067484662576687,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 23088,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-previous",
+      "Round": 4,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.03825080022215843,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.8169763722197133,
+      "SystemBusyFraction": 0.12765957446808507,
+      "Output": "seconds=0.025050400 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 2256,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native",
+      "Round": 4,
+      "Warmup": false,
+      "KernelSeconds": 0.0250504
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.038034699857234955,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.8216181570328767,
+      "SystemBusyFraction": 0.19999999999999996,
+      "Output": "seconds=0.024506800 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 24404,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native-control",
+      "Round": 4,
+      "Warmup": false,
+      "KernelSeconds": 0.0245068
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.03739640023559332,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.8356419281836847,
+      "SystemBusyFraction": 0.3548387096774194,
+      "Output": "seconds=0.025119500 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 9080,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native-control",
+      "Round": 5,
+      "Warmup": false,
+      "KernelSeconds": 0.0251195
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.037639399990439415,
+      "CpuSeconds": 0.046875,
+      "CpuToWall": 1.245370542886084,
+      "SystemBusyFraction": 0.3555555555555555,
+      "Output": "seconds=0.024474100 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Pid": 81632,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "compute-native",
+      "Round": 5,
+      "Warmup": false,
+      "KernelSeconds": 0.0244741
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.1308439001441002,
+      "CpuSeconds": 0.125,
+      "CpuToWall": 0.9553368545445051,
+      "SystemBusyFraction": 0.28971962616822433,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 27332,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-previous",
+      "Round": 5,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.12785009993240237,
+      "CpuSeconds": 0.125,
+      "CpuToWall": 0.9777074876444423,
+      "SystemBusyFraction": 0.2644628099173554,
+      "Output": "Mandelbrot (800x800) hesaplan\u0131yor... Motoru \u0131s\u0131t!\r\r\nHesaplama bitti, disk \u00fczerine yaz\u0131l\u0131yor...\r\r\nHarika! 'mandelbrot.ppm' dosyas\u0131 ba\u015far\u0131yla olu\u015fturuldu. Resmi a\u00e7\u0131p bakabilirsin.",
+      "Error": "",
+      "Pid": 756,
+      "WallScope": "child launch through output drain; excludes Python worker startup",
+      "Name": "full-native",
+      "Round": 5,
+      "Warmup": false,
+      "KernelSeconds": null,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    }
+  ],
+  "Summary": [
+    {
+      "Name": "compute-native",
+      "Metric": "KernelSeconds",
+      "Stability": {
+        "Accepted": true,
+        "Reasons": [],
+        "Samples": 5,
+        "Expected": 5,
+        "Median": 0.0243941,
+        "Min": 0.0242879,
+        "Max": 0.0250504,
+        "RelativeRange": 0.03125755818005171,
+        "RelativeDrift": 0.015788653813832067,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    },
+    {
+      "Name": "compute-native-control",
+      "Metric": "KernelSeconds",
+      "Stability": {
+        "Accepted": true,
+        "Reasons": [],
+        "Samples": 5,
+        "Expected": 5,
+        "Median": 0.0246479,
+        "Min": 0.0241839,
+        "Max": 0.0251195,
+        "RelativeRange": 0.03795860904985813,
+        "RelativeDrift": 0.0014260849808704873,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    },
+    {
+      "Name": "compute-vm",
+      "Metric": "KernelSeconds",
+      "Stability": {
+        "Accepted": true,
+        "Reasons": [],
+        "Samples": 3,
+        "Expected": 3,
+        "Median": 23.1147291,
+        "Min": 22.2494468,
+        "Max": 24.1165533,
+        "RelativeRange": 0.08077561679059428,
+        "RelativeDrift": 0.037434239279057806,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    },
+    {
+      "Name": "full-native",
+      "Metric": "WallSeconds",
+      "Stability": {
+        "Accepted": false,
+        "Reasons": [
+          "range",
+          "drift"
+        ],
+        "Samples": 5,
+        "Expected": 5,
+        "Median": 0.12809740006923676,
+        "Min": 0.12785009993240237,
+        "Max": 0.16908829985186458,
+        "RelativeRange": 0.32192846925209195,
+        "RelativeDrift": 0.1602007527274855,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    },
+    {
+      "Name": "full-previous",
+      "Metric": "WallSeconds",
+      "Stability": {
+        "Accepted": false,
+        "Reasons": [
+          "range"
+        ],
+        "Samples": 5,
+        "Expected": 5,
+        "Median": 0.13119400013238192,
+        "Min": 0.1252769003622234,
+        "Max": 0.1586897000670433,
+        "RelativeRange": 0.25468237626038215,
+        "RelativeDrift": 0.012099640313445553,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    },
+    {
+      "Name": "full-vm",
+      "Metric": "WallSeconds",
+      "Stability": {
+        "Accepted": true,
+        "Reasons": [],
+        "Samples": 3,
+        "Expected": 3,
+        "Median": 22.165268399752676,
+        "Min": 21.691104999743402,
+        "Max": 23.66901640035212,
+        "RelativeRange": 0.08923471464170442,
+        "RelativeDrift": 0.02139217948809342,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    }
+  ],
+  "Failure": null,
+  "Affinity": {
+    "Supported": true,
+    "LogicalProcessor": 2,
+    "Policy": "controller pinned before child launch; inherited; restored on exit"
+  },
+  "ArtifactsUnchanged": true,
+  "EnvironmentBefore": {
+    "OS": "Windows-11-10.0.26100-SP0",
+    "Processor": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "LogicalProcessors": 16,
+    "PowerState": "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (Y\u00fcksek performans)",
+    "PowerQueryError": null,
+    "Caveat": "Endpoint policy snapshots only; no effective-frequency, temperature, SMT-isolation or per-core-load claim"
+  },
+  "EnvironmentAfter": {
+    "OS": "Windows-11-10.0.26100-SP0",
+    "Processor": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "LogicalProcessors": 16,
+    "PowerState": "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (Y\u00fcksek performans)",
+    "PowerQueryError": null,
+    "Caveat": "Endpoint policy snapshots only; no effective-frequency, temperature, SMT-isolation or per-core-load claim"
+  },
+  "OutputsCorrect": true,
+  "TimingQualified": false,
+  "Accepted": false,
+  "PowerStateUnchanged": true,
+  "Policy": "Warm-up per lane; rotate/reverse; no trimming/retries; internal kernel unchanged; child wall excludes worker startup",
+  "SameBinaryControl": {
+    "RelativeMedianDifference": 0.010350311977488761,
+    "Accepted": true
+  },
+  "ArtifactsAfter": [
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\build.json",
+      "Bytes": 4974,
+      "Hash": "D3401A1FD493A916E0645E8681F3C4166ACDAF11EFBCAD625E58CA4C1DBB9578"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\benchmark_clock.h",
+      "Bytes": 987,
+      "Hash": "CBCEBFC64EE2D3BE46A76415A3AC549F0FE13C30614E9DC5DEF622EDE6AF6F77"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\bridge.dll",
+      "Bytes": 926693,
+      "Hash": "F03F7F65575494A88ECD04D274350DCF345576867C184137824F63FDAAE037F8"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\main.wio",
+      "Bytes": 1613,
+      "Hash": "B526C768105B20624B2B14EEFBEA05DE30BB7096C1275894865EDEE01BD71C9E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\main.wio.cpp",
+      "Bytes": 109667,
+      "Hash": "A589EF40F29647984CE3119629AC23C24B2D6D4CD21DC5F0EEBBD0FDC1E1D3D2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\main.wiob",
+      "Bytes": 30866,
+      "Hash": "81FCD6B05FD93DF6CB418213178C88663FFA55884ABC85154F96F8FF90F5143B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\native.exe",
+      "Bytes": 3790765,
+      "Hash": "37CD8FEA190951B2C27F57DD6951D9DD6629085179076F5E952AA740831A6F30"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\bridge.dll",
+      "Bytes": 6366765,
+      "Hash": "290837EB608BFCC69206DCB714DB76F0541A90B0F17F0271DA2667867A7B3466"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\main.wio",
+      "Bytes": 117,
+      "Hash": "BF0EF3870ACB568551D00704958880BB1A803F1C5433FA980C4457B2AFD73D9E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\main.wio.cpp",
+      "Bytes": 2659497,
+      "Hash": "F58248A3927536554986EE6991FF4F31E279DB0813BCCD163AE15121F557AC7B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\main.wiob",
+      "Bytes": 2104032,
+      "Hash": "D9EC851742B3CF722978562EEBF19DD0CF4BA273C8EE1485F07056B447CE3A80"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\mandelbrot.wio",
+      "Bytes": 2568,
+      "Hash": "4E701B4C781B1EC77BF749F9472BE6711AE8D254F3AAB86028F8EE6B60CE8AF9"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\native.exe",
+      "Bytes": 9050655,
+      "Hash": "E5D9AFD45D5B494CEDBD4C48F88DF061292167468D22259AA8A7CBA297AD22A7"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\previous.exe",
+      "Bytes": 9050655,
+      "Hash": "1CB587A7155F283A5E3D9AAFA95C978EC64275F382BE176067866F6571522BD3"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\vm\\Release\\wio_mandelbrot_vm_benchmark.exe",
+      "Bytes": 1152512,
+      "Hash": "715F44B50E6FFA84E8018566D6D776A9637861568A3AA5A4D482C8C4AB41618D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\mandelbrot_compute\\progress.py",
+      "Bytes": 7383,
+      "Hash": "8561B961A42771CE38AC55F792A5CAC7179AC04AAB62B230750B12494E9AFDF2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\measurement.py",
+      "Bytes": 15195,
+      "Hash": "367D71149726CEC1BC2049ADDB80F08A65FC09B2448D02A3FA75510C72DC9499"
+    }
+  ]
+}

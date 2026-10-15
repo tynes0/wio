@@ -1,0 +1,56 @@
+using cpp::header("probe.h");
+
+[native, cpp::name(append_probe::Begin)]
+fn Begin();
+
+[native, cpp::name(append_probe::Live)]
+fn Live();
+
+[native, cpp::name(append_probe::End)]
+fn End(checksum: u64) -> i32;
+
+[native, cpp::name(append_probe::ParseCount)]
+fn ParseCount(value: view string) -> i32;
+
+[native, cpp::name(append_probe::Hash)]
+fn Hash(value: view string) -> u64;
+
+[native, cpp::name(append_probe::HashText)]
+fn HashText(value: view text) -> u64;
+
+fn Run(mode: i32, count: i32, source: view string, unicode: view text) -> u64
+{
+    if (mode == 0)
+    {
+        mut output = "";
+        for (index in 0..<count)
+        {
+            output += source;
+        }
+
+        Live();
+        return Hash(ref output);
+    }
+
+    mut output = u"";
+    for (index in 0..<count)
+    {
+        output += unicode;
+    }
+
+    Live();
+    return HashText(ref output);
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() != 3usize) return 2;
+    let mode = ParseCount(ref args[1usize]) - 1;
+    let count = ParseCount(ref args[2usize]);
+    if (mode > 1) return 3;
+    let source = "copy\0payload:0123456789abcdef0123456789abcdef";
+    let unicode = u"A🌍é日本語:payload:0123456789abcdef";
+    Begin();
+    let checksum = Run(mode, count, ref source, ref unicode);
+    return End(checksum);
+}

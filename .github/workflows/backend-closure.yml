@@ -47,7 +47,7 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
       - name: Build compiler, CLI and runtime artifacts
-        run: cmake --build build --target wio_playground wio_vm_runner wio_backend_workspace_test wio_float_parse_portability_test wio_wir_cpp_storage_plan_test wio_vm_string_capacity_test wio_wir_cpp_managed_storage_test wio_integer_format_test wio_wir_cpp_string_fast_paths_test --parallel 2
+        run: cmake --build build --target wio_playground wio_vm_runner wio_backend_workspace_test wio_float_parse_portability_test wio_wir_cpp_storage_plan_test wio_vm_string_capacity_test wio_wir_cpp_managed_storage_test wio_integer_format_test wio_wir_cpp_string_fast_paths_test wio_wir_cpp_append_reuse_plan_test --parallel 2
       - name: Preserve functional and scalar release gates
         if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
         run: >-
@@ -64,10 +64,14 @@ jobs:
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
           -R "^wio_native_memory_attribution$"
       - name: Attribute Wio observed bulk-copy traffic (GCC/linker diagnostic)
-        if: runner.os != 'macOS'
+        if: runner.os != 'macOS' && (github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure')
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
           -R "^wio_native_copy_attribution$"
+      - name: Qualify new N02 append optimization (native O0/O2 and VM)
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_n02_append_(reuse|plan)$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -80,3 +84,4 @@ jobs:
             build/native-ownership-attribution/**/results.json
             build/native-memory-attribution/**/results.json
             build/native-copy-attribution/**/results.json
+            build/n02-append-semantics/**/results.json

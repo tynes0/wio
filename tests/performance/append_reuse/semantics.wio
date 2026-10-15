@@ -1,0 +1,67 @@
+component Record
+{
+    public value: string;
+}
+
+fn Rewrite(value: ref string) -> string
+{
+    value = "changed";
+    return "tail";
+}
+
+fn BorrowedAppend(value: ref string)
+{
+    value += "borrowed";
+}
+
+fn Entry() -> i32
+{
+    for (size in 0..<65)
+    {
+        mut value = "";
+        for (index in 0..<size)
+        {
+            value += "x";
+        }
+
+        let snapshot = value;
+        let expected = snapshot + snapshot;
+        value += value;
+        if (value != expected or snapshot.Count() != (size fit usize)) return 1;
+        value += "";
+        if (value != expected) return 2;
+    }
+
+    mut nul = "A\0B";
+    let nulSnapshot = nul;
+    nul += nul;
+    if (nul != "A\0BA\0B" or nulSnapshot != "A\0B") return 3;
+    mut textValue = u"🌍é日本語";
+    let textSnapshot = textValue;
+    textValue += textValue;
+    if (textValue != textSnapshot + textSnapshot) return 4;
+    textValue += u"";
+    if (textSnapshot != u"🌍é日本語") return 5;
+
+    mut changed = "original";
+    changed += Rewrite(ref changed);
+    if (changed != "changedtail") return 6;
+    changed = "original";
+    let explicitSnapshot = changed;
+    changed = explicitSnapshot + Rewrite(ref changed);
+    if (changed != "originaltail") return 7;
+
+    mut expression = "left";
+    expression += "right";
+    let captured = expression;
+    expression += "later";
+    if (captured != "leftright" or expression != "leftrightlater") return 8;
+    BorrowedAppend(ref expression);
+    if (expression != "leftrightlaterborrowed") return 9;
+
+    mut record = Record();
+    record.value = "field";
+    record.value += record.value;
+    if (record.value != "fieldfield") return 10;
+    return 0;
+}

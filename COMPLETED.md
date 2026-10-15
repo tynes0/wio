@@ -10,6 +10,23 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N02 local string/text append reuse — 2026-10-16
+
+- [x] Actual C++ backend/storage-plan optimization: fuse a proven adjacent
+      mutable-local load/add/store-or-replace into in-place append. RHS snapshots,
+      evaluation order and cleanup remain; fields/globals/proxies/async excluded.
+- [x] New Wio semantics run at native O0/O2 and VM, plus narrow selection/rejection
+      proof tests. Only these new tests ran locally; cross-platform CI configured.
+- [x] Frozen before/after 2000-repeat diagnostics: string allocations 2002 -> 14,
+      peak requested bytes 180059 -> 138344; text 4001 -> 14, 419808 -> 129125.
+      Final tracked live bytes/blocks zero. String retained bytes increase ~2.4%
+      due to reusable capacity: explicit speed/memory tradeoff, not hidden.
+- [x] Counter-free paired timings collected with raw samples and A/A control;
+      overall timing rejected for baseline/control range noise. No qualified
+      speedup factor. Pilot and rejected no-fusion candidate retained locally.
+- [ ] N02 remains open: broader concat/last-use patterns and field-safe reuse.
+      N01 residual profiling remains open. See `docs/WIO_LOCAL_APPEND_REUSE.md`.
+
 ## N01 observed bulk-copy attribution — 2026-10-15
 
 - [x] Wio string/text/component owning/view/return, concat and scalar-component

@@ -68,7 +68,8 @@ the N01 instrumentation slice. Existing dirty std/playground files are preserved
 
 N01 has a working first cost-map slice, **not complete coverage of all native
 runtime subsystems**. Missing metrics are not zeros. Later slices must extend
-coverage before changing the relevant subsystem. N02 has not started here.
+coverage before changing the relevant subsystem. N02's first local-append slice
+started on 2026-10-16; the residual N01 inventory stays open.
 
 The initial nine-case, 15-pair allocation baseline and its limitations are in
 [the measured cost map](WIO_NATIVE_COST_MAP.md). This is starting evidence,
@@ -119,8 +120,9 @@ measurement requirement; do not silently alter the user's system power policy.
 
 Every update names its current N01-N14 item. Closing one item and starting another
 in the same turn must state both the closure and transition explicitly. A narrow
-subsystem slice is not a whole-item closure. This controller pass starts/ends at
-N01; N02 has not started. Remaining attribution/coverage gaps above remain open.
+subsystem slice is not a whole-item closure. The earlier controller passes were
+N01-only; the current production change is N02. Remaining N01 attribution and
+coverage gaps above remain open.
 
 The next ownership-attribution slice adds Wio object argument/view/return cases
 and native weak/control calibration, with Python build/collection. See
@@ -144,3 +146,16 @@ without claiming to count inline/scalar copies or changing production code.
 New behavior tests should preferably be Wio; Python is preferred for portable
 build/process/measurement orchestration. Avoid new substantial PS1 test logic.
 Legacy PS wrappers may remain for compatibility, not as the primary new test path.
+
+## N02: first production slice, 2026-10-16
+
+[Local string/text append reuse](WIO_LOCAL_APPEND_REUSE.md) replaces a proven
+adjacent local load/add/replace sequence with in-place append. It preserves RHS
+snapshots and excludes fields, globals, proxies, intervening effects and async
+frames. This is not closure of N02 or a rewrite of the VM.
+
+Each subsequent slice follows **measure -> optimize -> measure**. Report plain
+runtime separately from diagnostic allocation/live/peak memory, including retained
+capacity tradeoffs, and compare original/previous/current when evidence permits.
+Keep failed/noisy samples; do not claim a speedup from an unqualified session.
+Balance memory and speed rather than optimizing only the displayed timing.

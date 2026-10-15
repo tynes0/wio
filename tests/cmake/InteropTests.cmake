@@ -1636,6 +1636,12 @@ endif()
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
+    add_test(NAME wio_n02_append_reuse
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/append_reuse/verify.py"
+            --wio "$<TARGET_FILE:wio_app>" --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}"
+            --cxx "${WIO_BACKEND_CXX_COMPILER}" --output "${CMAKE_BINARY_DIR}/n02-append-semantics")
+    wio_test_labels(wio_n02_append_reuse native vm string optimization ownership)
+    set_tests_properties(wio_n02_append_reuse PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
     add_test(NAME wio_native_cost_python_contract
         COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_SOURCE_DIR}/tests/performance/native_costs/test_measurement.py"

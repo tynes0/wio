@@ -2119,6 +2119,17 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                         if (instruction.result && storagePlan_.borrowedStringCopies.contains(instruction.result.value()))
                             suppressedInstructions_.insert(&instruction);
 
+                for (const auto& [sum, suffix] : storagePlan_.localAppendSuffixes)
+                {
+                    (void)suffix;
+                    valueTypes_.erase(sum);
+                    ownedValues_.erase(sum);
+                }
+                for (const auto& block : function.blocks)
+                    for (const auto& instruction : block.instructions)
+                        if (instruction.result && storagePlan_.localAppendSuffixes.contains(instruction.result.value()))
+                            suppressedInstructions_.insert(&instruction);
+
                 if (currentFunctionIsLinear_)
                 {
                     for (const auto& [id, type] : valueTypes_)
@@ -3029,6 +3040,19 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     break;
                 case lowered::Opcode::PlaceInit:
                 case lowered::Opcode::Store:
+                case lowered::Opcode::Replace:
+                    if (instruction.opcode != lowered::Opcode::PlaceInit &&
+                        storagePlan_.localAppendSuffixes.contains(instruction.operands[1].value()))
+                    {
+                        // The plan proves an initialized mutable LocalPlace,
+                        // never a view/proxy. String/Text += has no effect on
+                        // allocation failure; the old post-add store was a
+                        // nonthrowing move into this same initialized cell.
+                        output_ << "                " << operand(instruction.operands[0]) << ".read() += "
+                                << operand(storagePlan_.localAppendSuffixes.at(instruction.operands[1].value()))
+                                << "; // Wio local append reuse\n";
+                        break;
+                    }
                     output_ << "                " << operand(instruction.operands[0]) << ".write("
                             << movedOperand(instruction.operands[1]) << ");\n";
                     break;
@@ -3168,10 +3192,6 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                                  module_.types.get(valueType(instruction.operands[0])).kind == TypeKind::Reference
                                      ? operand(instruction.operands[0]) + ".take()"
                                      : movedOperand(instruction.operands[0]));
-                    break;
-                case lowered::Opcode::Replace:
-                    output_ << "                " << operand(instruction.operands[0]) << ".write("
-                            << movedOperand(instruction.operands[1]) << ");\n";
                     break;
                 case lowered::Opcode::Release:
                 case lowered::Opcode::DropValue:

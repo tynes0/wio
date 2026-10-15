@@ -214,6 +214,45 @@ namespace wio::codegen
                     plan.borrowedStringCopies.emplace(copy.result.value(), load.result);
             }
         }
+
+        // Fuse only adjacent load/add/store for a mutable local cell. No call,
+        // projection, proxy, borrow conversion or CFG edge can intervene. Keep
+        // the already evaluated RHS snapshot: self append and side effects
+        // during RHS evaluation must retain their existing value semantics.
+        std::unordered_map<std::uint32_t, wir::TypeId> appendLocals;
+        for (const auto& block : function.blocks)
+            for (const auto& instruction : block.instructions)
+            {
+                const auto* type = module.types.tryGet(instruction.resultType);
+                if (instruction.opcode == wir::lowered::Opcode::LocalPlace && instruction.result && type &&
+                    type->kind == wir::TypeKind::Reference && type->isMutable && type->arguments.size() == 1)
+                    appendLocals.emplace(instruction.result.value(), type->arguments.front());
+            }
+        for (const auto& block : function.blocks)
+        {
+            const auto& instructions = block.instructions;
+            for (std::size_t index = 1; index + 1 < instructions.size(); ++index)
+            {
+                const auto& load = instructions[index - 1];
+                const auto& add = instructions[index];
+                const auto& store = instructions[index + 1];
+                const auto* type = module.types.tryGet(add.resultType);
+                if (!type || (type->kind != wir::TypeKind::String && type->kind != wir::TypeKind::Text) ||
+                    add.opcode != wir::lowered::Opcode::Binary || !add.result ||
+                    add.binaryOperator != wir::typed::BinaryOperator::Add || add.operands.size() != 2 ||
+                    uses[add.result.value()] != 1 ||
+                    (store.opcode != wir::lowered::Opcode::Store && store.opcode != wir::lowered::Opcode::Replace) ||
+                    store.operands.size() != 2 || store.operands[1] != add.result ||
+                    load.opcode != wir::lowered::Opcode::Load || !load.result || load.operands.size() != 1 ||
+                    load.resultOwnership != wir::typed::ValueOwnership::Borrowed || load.resultType != add.resultType ||
+                    load.result != add.operands[0] || uses[load.result.value()] != 1 ||
+                    load.operands[0] != store.operands[0])
+                    continue;
+                const auto local = appendLocals.find(store.operands[0].value());
+                if (local != appendLocals.end() && local->second == add.resultType)
+                    plan.localAppendSuffixes.emplace(add.result.value(), add.operands[1]);
+            }
+        }
         return plan;
     }
 } // namespace wio::codegen
