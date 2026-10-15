@@ -2,7 +2,11 @@ cmake_minimum_required(VERSION 3.20)
 string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef suffix)
 set(root "${WIO_OUTPUT_DIR}/${suffix}/Build Türkçe 🚀")
 file(MAKE_DIRECTORY "${root}/cwd Türkçe 🚀")
-file(WRITE "${root}/program.wio" "fn Entry() -> i32\n{\n    return 37;\n}\n")
+file(WRITE "${root}/program.wio" "fn Entry() -> i32
+{
+    return \" 1.25 \".ToF64() == 1.25f64 and \"+2.5\".ToF32() == 2.5f32 ? 37 : 1;
+}
+")
 file(WRITE "${root}/library.wio" "[export]\nfn Answer() -> i32\n{\n    return 37;\n}\n")
 file(WRITE "${root}/broken.cpp" "#error deliberate qualification failure\n")
 function(run expected)
