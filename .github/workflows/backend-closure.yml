@@ -48,19 +48,21 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
       - name: Build compiler, CLI and runtime artifacts
         run: cmake --build build --target wio_playground wio_vm_runner wio_backend_workspace_test wio_float_parse_portability_test wio_wir_cpp_storage_plan_test wio_vm_string_capacity_test wio_wir_cpp_managed_storage_test wio_integer_format_test wio_wir_cpp_string_fast_paths_test --parallel 2
-      - name: Qualify native cost-map instrumentation and workload contracts
+      - name: Qualify measurement controller (no wall-time performance threshold)
         if: github.event_name == 'push' && github.ref == 'refs/heads/feature/backend-closure'
         run: >-
-          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure -j 1
-          -R "^wio_native_cost_extended_contract$"
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_measurement_contract$"
       - name: Preserve functional and scalar release gates
         if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure -j 1
-          -R "^(wio_backend_workspace|wio_backend_unicode_outputs|wio_vm_platform_qualification|wio_float_parse_portability|wio_wir_cpp_(storage_plan|scalar_storage)|wio_std_builders_(consistency|style)|wio_vm_string_capacity|wio_wir_cpp_managed_(plan|storage)|wio_integer_format|wio_wir_integer_interpolation|wio_wir_cpp_string_fast_(plan|paths)|wio_playground_launcher_(options|profiles|signature)|wio_native_cost_(contract|extended_contract))$"
+          -R "^(wio_backend_workspace|wio_backend_unicode_outputs|wio_vm_platform_qualification|wio_float_parse_portability|wio_wir_cpp_(storage_plan|scalar_storage)|wio_std_builders_(consistency|style)|wio_vm_string_capacity|wio_wir_cpp_managed_(plan|storage)|wio_integer_format|wio_wir_integer_interpolation|wio_wir_cpp_string_fast_(plan|paths)|wio_playground_launcher_(options|profiles|signature)|wio_native_cost_(contract|extended_contract)|wio_measurement_contract)$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-closure-${{ matrix.os }}-${{ matrix.config }}
-          path: build/Testing/Temporary/
+          path: |
+            build/Testing/Temporary/
+            build/measurement-contract-*/evidence/results.json

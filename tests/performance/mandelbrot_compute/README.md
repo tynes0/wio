@@ -57,7 +57,7 @@ cmake --build build --config Release --target wio_mandelbrot_vm_benchmark
 pwsh -File tests/performance/mandelbrot_compute/progress.ps1 `
     -OutputDirectory F:/Projects/wio/build/mandelbrot-progress-new-run `
     -FullSourceDirectory F:/Projects/wio/build/mandelbrot-ddfa2b2 `
-    -Repetitions 5 -VmRepetitions 1 -TimeoutSeconds 180
+    -Repetitions 9 -VmRepetitions 3 -TimeoutSeconds 180 -LogicalProcessor 2
 ```
 
 The compute fixture is versioned here. Optional full-output input uses a frozen
@@ -69,11 +69,62 @@ and claim it is the same experiment. All copied source/generated/bytecode/bridge
 binary hashes are preserved. Ordinary Windows GCC/runtime linkage matches the
 earlier native experiments; the VM itself is an optimized MSVC Release build.
 
-Native has an excluded warm-up; VM repetitions are explicit separate-process
-samples with no hidden warm-up. One VM sample is an observation, not a robust
-median. Kernel time excludes VM setup; full-output wall time includes it. A
-timeout is retained without a checksum/success claim or fabricated exact runtime.
+Both native and VM now have one explicit excluded warm-up per case. Each measured
+sample is a separate process; three measured samples per backend are the minimum,
+not a precision guarantee. Kernel time excludes VM setup; full-output wall time
+includes it. Build provenance is saved in `build.json`; raw timing evidence is in
+`qualification/results.json`. Failure/timeout samples are saved before rejection.
 No .NET/Python installations/runs or old correctness corpus are required here.
+
+## Controlled same-binary remeasurement
+
+To isolate environmental variability from recompilation, use existing frozen
+artifacts directly. **Nothing is rebuilt**, including native bridges or the VM:
+
+```powershell
+pwsh -NoProfile -File tests/performance/mandelbrot_compute/qualify.ps1 `
+    -ArtifactDirectory F:/Projects/wio/build/mandelbrot-progress-n01-extended-2026-10-15 `
+    -OutputDirectory F:/Projects/wio/build/mandelbrot-controlled-new-run `
+    -LogicalProcessor 2 -Repetitions 9 -VmRepetitions 3
+```
+
+This controller is Windows x64/PowerShell 7 only. Run it in a dedicated `pwsh`
+process. It pins its own process **before** launching children, so affinity is
+inherited at process creation instead of racing an already-running short kernel.
+The original controller affinity is restored in `finally`, including failures.
+Only its own process tree is affected: no power-plan, priority, other-process,
+security or machine configuration changes. Multiple processor groups are rejected
+explicitly. `-LogicalProcessor -1` selects the first allowed logical processor;
+this is a reproducible fallback, **not** an assertion that it is a performance core,
+idle, physically isolated or fastest. Choose an explicit allowed index and keep it
+constant across comparisons. Do not search CPUs/rerun until attractive results.
+
+Case order rotates and reverses by round. `compute-native-control` executes the
+**identical executable** as `compute-native` in a second A/A lane. All input/binary
+hashes are captured before and after; every checksum is checked. Output files
+must be fresh, not inherited from a previous sample. A `-NativeOnly` diagnostic
+is available, but cannot qualify VM behavior.
+
+Acceptance requires every sample/checksum, unchanged artifacts and endpoint power
+scheme, >=3 samples per case, relative range `(max-min)/median <= 15%`, first/last
+half-median drift <=10%, and A/A median difference <=10%. Thresholds are explicit
+options recorded in evidence. **These are coarse noise gates, not 5% accuracy or
+statistical confidence guarantees.** No outlier removal or automatic reruns are
+performed. Failed qualification returns a nonzero exit and retains raw results;
+rejection is not a compiler regression. A passed run alone does not establish
+cross-session equivalence or causal attribution of an optimization.
+
+Telemetry records each child CPU time, CPU/wall ratio and aggregate system busy
+fraction during the process, plus endpoint power/OS/processor data. CPU-time ticks
+are coarse for short cases; aggregate load is not the chosen core's utilization.
+Unavailable CIM data is null with its error recorded, not guessed. Snapshot clock
+information is not effective workload frequency; temperature, throttling and
+physical-core/SMT isolation are not measured. Endpoint power checks do not prove
+the scheme stayed constant throughout. Pinning alone cannot remove contention,
+frequency changes or OS activity. Historical cross-language rows remain dated
+context, not current controlled speed ratios.
+
+Windows inheritance contract: [SetProcessAffinityMask](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setprocessaffinitymask).
 
 See [`../../../docs/WIO_MANDELBROT_PERFORMANCE_AUDIT.md`](../../../docs/WIO_MANDELBROT_PERFORMANCE_AUDIT.md)
 for the measured baseline, limits, and optimization priorities.

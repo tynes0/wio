@@ -1622,3 +1622,14 @@ add_test(NAME wio_native_cost_extended_contract
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/native_cost_contract_test.cmake")
 wio_test_labels(wio_native_cost_extended_contract native performance diagnostic allocation async unicode ownership)
 set_tests_properties(wio_native_cost_extended_contract PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+
+# PowerShell is optional for compiler users; this is a diagnostic harness test,
+# not a platform runtime dependency or a performance-threshold CI gate.
+find_program(WIO_MEASUREMENT_PWSH NAMES pwsh)
+if(WIO_MEASUREMENT_PWSH)
+    add_test(NAME wio_measurement_contract
+        COMMAND "${WIO_MEASUREMENT_PWSH}" -NoProfile -File
+            "${CMAKE_SOURCE_DIR}/tests/performance/measurement_test.ps1")
+    wio_test_labels(wio_measurement_contract performance diagnostic measurement)
+    set_tests_properties(wio_measurement_contract PROPERTIES TIMEOUT 60 RUN_SERIAL TRUE)
+endif()
