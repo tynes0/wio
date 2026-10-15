@@ -97,7 +97,7 @@ switches append/line/clear to in-place capacity-preserving operations, adds a
 reserve hint and removes the VM string intrinsic's prefix copy. Native/VM
 snapshot, self-append and failure cases have new focused gates. The paired append
 benchmark is substantially faster, but managed parameter/temporary allocations
-and the C++ performance gap remain. Direct numeric formatting and ordinary
+and the C++ performance gap remain. Direct numeric-to-builder append and ordinary
 string `+=` remain open; this is not full performance-budget closure.
 
 The next [closed string-storage slice](WIO_MANAGED_STRING_OPTIMIZATION.md)
@@ -119,6 +119,13 @@ VM 20.5356141 s, all with the same image hash. Native decimal formatting improve
 without claiming direct builder numeric append, arbitrary argument-copy elision
 or the overall performance budget is complete. The VM row is one observation,
 not an already optimized runtime or a statistically qualified median.
+
+The [general string fast-path slice](WIO_NATIVE_STRING_FAST_PATHS.md) removes
+the extra owned stringify temporary and extends local observing-copy proofs.
+Its long-string workload is 19.30% less measured time with 60,020 to 30,020
+allocation calls; Mandelbrot is effectively unchanged in a balanced recheck.
+These are different cases. Owning argument traffic, numeric-to-builder fusion
+and broader native/VM budgets remain open; do not extrapolate one case's gain.
 
 Close with amortized-linear append/reserve/clear/numeric formatting, explicit
 finalization costs, self/aliased append correctness and native/VM measurements.

@@ -1283,6 +1283,12 @@ Rider, and CLion are defined in
    slice, 90,020 to 30,020 allocation calls, still 5.84x the paired C++ reference.
    See `docs/WIO_MANAGED_STRING_OPTIMIZATION.md`; managed/formatting costs and
    the separate KI-006 borrow diagnostic boundary remain open.
+   Subsequent direct integer/interpolation and general observing-string-copy
+   slices are recorded in `docs/WIO_INTEGER_INTERPOLATION_OPTIMIZATION.md` and
+   `docs/WIO_NATIVE_STRING_FAST_PATHS.md`. The latter improves the separate long-
+   string workload by 19.30% and halves its allocation calls, but establishes no
+   meaningful new Mandelbrot gain. Both adverse/favorable native rechecks, fresh
+   Release VM samples and the fixed dated language references are retained.
    Treat the native C++ path as a product backend with enforced size, compile
    time, memory, runtime, and binary-size budgets. A trivial program must not
    emit unused async/reflection/native infrastructure or thousands of lines of

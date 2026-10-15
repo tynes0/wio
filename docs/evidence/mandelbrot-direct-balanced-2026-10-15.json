@@ -1,0 +1,139 @@
+{
+  "Revision": "d6cdbd324ffa606c90cea4ffbb217fdf2fe142a3",
+  "ParentEvidencePath": "build/mandelbrot-progress-direct-append/results.json",
+  "ParentEvidenceHash": "7E07964CCACCBEE400056F7FB8454CF0E325692C25258E981C709A85E4248A1B",
+  "Repetitions": 15,
+  "Policy": "Separate native-only recheck; excluded round 0; pair order alternates every round; no simultaneous VM/build workload; same previously compiled binaries",
+  "Bytes": 5156528,
+  "ValidatedHashForAll32Executions": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+  "Rounds": [
+    {
+      "Round": 0,
+      "Warmup": true,
+      "First": "previous",
+      "CurrentSeconds": 0.1306884,
+      "PreviousSeconds": 0.1387606
+    },
+    {
+      "Round": 1,
+      "Warmup": false,
+      "First": "current",
+      "CurrentSeconds": 0.1303336,
+      "PreviousSeconds": 0.1328004
+    },
+    {
+      "Round": 2,
+      "Warmup": false,
+      "First": "previous",
+      "CurrentSeconds": 0.1314312,
+      "PreviousSeconds": 0.1320815
+    },
+    {
+      "Round": 3,
+      "Warmup": false,
+      "First": "current",
+      "CurrentSeconds": 0.1328446,
+      "PreviousSeconds": 0.1307343
+    },
+    {
+      "Round": 4,
+      "Warmup": false,
+      "First": "previous",
+      "CurrentSeconds": 0.1299102,
+      "PreviousSeconds": 0.1314288
+    },
+    {
+      "Round": 5,
+      "Warmup": false,
+      "First": "current",
+      "CurrentSeconds": 0.1317694,
+      "PreviousSeconds": 0.1335332
+    },
+    {
+      "Round": 6,
+      "Warmup": false,
+      "First": "previous",
+      "CurrentSeconds": 0.1325485,
+      "PreviousSeconds": 0.1351326
+    },
+    {
+      "Round": 7,
+      "Warmup": false,
+      "First": "current",
+      "CurrentSeconds": 0.1329552,
+      "PreviousSeconds": 0.13145
+    },
+    {
+      "Round": 8,
+      "Warmup": false,
+      "First": "previous",
+      "CurrentSeconds": 0.1291256,
+      "PreviousSeconds": 0.132043
+    },
+    {
+      "Round": 9,
+      "Warmup": false,
+      "First": "current",
+      "CurrentSeconds": 0.132168,
+      "PreviousSeconds": 0.1306316
+    },
+    {
+      "Round": 10,
+      "Warmup": false,
+      "First": "previous",
+      "CurrentSeconds": 0.133687,
+      "PreviousSeconds": 0.1326381
+    },
+    {
+      "Round": 11,
+      "Warmup": false,
+      "First": "current",
+      "CurrentSeconds": 0.1329745,
+      "PreviousSeconds": 0.1312139
+    },
+    {
+      "Round": 12,
+      "Warmup": false,
+      "First": "previous",
+      "CurrentSeconds": 0.1303612,
+      "PreviousSeconds": 0.1330412
+    },
+    {
+      "Round": 13,
+      "Warmup": false,
+      "First": "current",
+      "CurrentSeconds": 0.1302839,
+      "PreviousSeconds": 0.1303456
+    },
+    {
+      "Round": 14,
+      "Warmup": false,
+      "First": "previous",
+      "CurrentSeconds": 0.1309066,
+      "PreviousSeconds": 0.1312463
+    },
+    {
+      "Round": 15,
+      "Warmup": false,
+      "First": "current",
+      "CurrentSeconds": 0.1321653,
+      "PreviousSeconds": 0.1322528
+    }
+  ],
+  "Summary": [
+    {
+      "Name": "current",
+      "Median": 0.1317694,
+      "Min": 0.1291256,
+      "Max": 0.133687,
+      "BinaryHash": "33FAD1D38DFB58C02399E29E8B7B4DEF0E417FFAD147A20B1BCF23AD0F60B1F4"
+    },
+    {
+      "Name": "previous",
+      "Median": 0.132043,
+      "Min": 0.1303456,
+      "Max": 0.1351326,
+      "BinaryHash": "DD333F30BEA096FF752E302B221DB8847A3830E15661CC65C3F387A3B98CA461"
+    }
+  ]
+}

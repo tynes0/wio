@@ -10,6 +10,41 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Native optimization pass 1: general string fast paths — 2026-10-15
+
+- [x] `d6cdbd3`: interpolation appends integer/string/text/bool/char directly,
+      without the extra stringify-owned string. Preserve locale/byte/enum and
+      float/container fallback behavior; retain public value-argument semantics.
+- [x] Generalize sole-use adjacent borrowed string snapshots to known observers
+      and string binary operations inside multi-block functions. Count uses over
+      the whole CFG; preserve copies for unknown/mutating/intervening/capture/
+      cleanup/phi/async cases. No std-name or Mandelbrot recognizer was added.
+- [x] Only two new tests run locally: plan/locale/ownership proof and actual
+      native O0/O2 plus VM+bridge semantics, 2/2 in 11.30 s. Windows O0/O2 search
+      loop: two total allocations for initial value args across 1,000 iterations;
+      maximal-u64 render/native-check path retains 2,000 for 1,000 operations.
+      VM checks semantics, not the DLL allocation counter's view of the host heap.
+- [x] Clean real-CLI CI passes two new gates on Windows Debug (19.18 s), Linux
+      Release (12.59 s), macOS Release (11.29 s), 6/6 executions. Older corpus was
+      not rerun; diagnostic reference validation remains 693 IDs/3 dynamic-only/
+      49 std Result construction sites.
+- [x] Fresh 15-round paired long-string interpolation: previous 4.016 ms/current
+      3.241 ms, 19.30% less measured time; allocation calls 60,020 to 30,020 with
+      identical 960,000-byte fingerprint. Still 5.63x the C++ direct-append lower
+      bound, not final native budget closure.
+- [x] Preserve fresh Mandelbrot results and both native experiments: initial
+      five-round current 135.035 ms versus previous 132.854 ms (adverse 1.64%);
+      subsequent native-only, alternating-order 15-round recheck current
+      131.769 ms versus previous 132.043 ms (0.21% favorable, overlapping ranges).
+      No meaningful image-render gain or certain regression is claimed. Native
+      compute median 23.850 ms; three Release VM samples give 19.077921 s kernel
+      and 20.570923 s full output. All checksums match; fixed dated language
+      reference rows are retained, not presented as fresh measurements.
+- [~] Remaining owning argument/effect/alias work, direct numeric-to-builder
+      output, ordinary += and broader aggregate/std costs remain pass 1 work.
+      VM and compiler-throughput heavy work remain passes 2/3. See
+      `docs/WIO_NATIVE_STRING_FAST_PATHS.md` and its three new evidence files.
+
 ## Native optimization pass 1: integer interpolation slice — 2026-10-15
 
 - [x] `9554b63`: use bounded to_chars integer formatting in the classic locale,

@@ -52,6 +52,17 @@ establishing an explicit pass-2 baseline. New per-update measurements and fixed
 dated language references are in
 [the interpolation report](WIO_INTEGER_INTERPOLATION_OPTIMIZATION.md).
 
+`d6cdbd3` generalizes direct value-to-interpolation append and local observing
+string-copy proofs across multi-block functions. The separate long-string
+workload improves by 19.30% with allocation calls 60,020 to 30,020. Mandelbrot
+does not establish a meaningful gain in this slice: both the initial adverse
+1.64% delta and the subsequent balanced 15-pair 0.21% favorable delta are retained.
+Native current/previous full medians in the latter are 131.769/132.043 ms;
+three Release VM observations give 20.570923 s full output. See
+[general string fast-path evidence](WIO_NATIVE_STRING_FAST_PATHS.md), including
+fresh per-update native/VM and fixed dated C++/C#/Python rows. Remaining call,
+aggregate, output and broader budgets are open; no VM optimization gain is claimed.
+
 Reduce native runtime overhead toward 5-10% relative to equivalent hand-written
 optimized C++ (roughly 1.05-1.10x execution time), where language semantics and the
 workload permit it. This is an acceptance target to measure, not a claim that all

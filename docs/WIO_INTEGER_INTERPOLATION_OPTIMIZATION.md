@@ -3,6 +3,11 @@
 Date: 2026-10-15. Implementation: `9554b63`. This is a bounded continuation of
 native/runtime optimization pass 1, not the VM heavy pass or final budget closure.
 
+Follow-up: [general direct formatting and observing string copies](WIO_NATIVE_STRING_FAST_PATHS.md)
+records `d6cdbd3`, long-string allocation/time improvement and fresh Mandelbrot
+native/VM measurements. Both its initial adverse native delta and subsequent
+balanced recheck are retained; this earlier report's figures remain historical.
+
 ## Implementation and correctness
 
 - Generated native integer stringify uses installed `integer_format.h`: bounded
