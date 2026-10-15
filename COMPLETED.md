@@ -10,6 +10,25 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N01 observed bulk-copy attribution — 2026-10-15
+
+- [x] Wio string/text/component owning/view/return, concat and scalar-component
+      fixtures; native overlap/zero-length calibration called from Wio. Python
+      orchestration, independent fingerprints and source-immutability checks.
+      No production compiler/runtime/std edits and no new PowerShell logic.
+- [x] GCC/GNU-linker memcpy/memmove diagnostic plus ordinary O2 output parity.
+      Only the new CTest ran: 1/1, 52.32 seconds, five checks, 78/78 actual Wio
+      executions. Count-2000 concat observes 90135003 / 168086004 bulk-copy request
+      bytes for string/text; these are not all payload copies or production counts.
+- [x] Fresh unchanged-artifact Mandelbrot 32/32 correct. Native compute 51.7406 ms,
+      VM 42.6891409 s; A/A and other noise gates reject the session. No compiler
+      speedup/regression claim. Prior memory-attribution CI green on all three OSes.
+- [x] Current feature-branch CI runs only the new copy test on GCC-supported
+      runners; main/release/PR functional and previous diagnostic gates remain.
+- [ ] Still N01, not N02: exact optimized/all-inline payload-copy profiling,
+      direct malloc/custom allocators, broader coverage and precise timing remain
+      open. See `docs/WIO_COPY_ATTRIBUTION.md` and raw evidence.
+
 ## N01 live/peak memory attribution — 2026-10-15
 
 - [x] Wio retained object/string/byte-array workloads and native controls called

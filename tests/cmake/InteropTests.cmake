@@ -1657,6 +1657,16 @@ if(Python3_Interpreter_FOUND)
     # format. Keep it separate from portable timing/allocation controllers.
     execute_process(COMMAND "${WIO_BACKEND_CXX_COMPILER}" --version
         OUTPUT_VARIABLE WIO_COST_CXX_VERSION ERROR_QUIET)
+    if(WIO_COST_CXX_VERSION MATCHES "(g\\+\\+|GCC|Free Software Foundation)")
+        add_test(NAME wio_native_copy_attribution
+            COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/tests/performance/native_costs/copies/test_copies.py"
+                --output "${CMAKE_BINARY_DIR}/native-copy-attribution"
+                --cxx "${WIO_BACKEND_CXX_COMPILER}" --wio "$<TARGET_FILE:wio_app>"
+                --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}")
+        wio_test_labels(wio_native_copy_attribution native performance diagnostic copies wio)
+        set_tests_properties(wio_native_copy_attribution PROPERTIES TIMEOUT 600 RUN_SERIAL TRUE)
+    endif()
     find_program(WIO_COST_GCOV NAMES gcov)
     if(WIO_COST_GCOV AND WIO_COST_CXX_VERSION MATCHES "(g\\+\\+|GCC|Free Software Foundation)")
         add_test(NAME wio_native_ownership_attribution

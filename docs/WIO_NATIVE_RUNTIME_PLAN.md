@@ -62,7 +62,8 @@ the N01 instrumentation slice. Existing dirty std/playground files are preserved
 | Async ready task | Same extended suite | Same AsyncTask runtime in both variants, immediate completion and BlockOn; not suspended/worker/timer/cancellation-race costs |
 | Scheduling, cancellation, threading, maps/sets/Unicode expansion | Pending | Existing correctness tests are not performance baselines; add focused workloads before changing those paths |
 | Cold startup, reflection, real file/network I/O | Pending | Whole-process wall time alone does not isolate these costs |
-| Ref copy/move and retain/release events | `native_costs/ownership` | Calibrated GCC/gcov diagnostic, no runtime modifications; ordinary O2 output parity. General payload-copy bytes and production-optimized RC attribution remain pending |
+| Ref copy/move and retain/release events | `native_costs/ownership` | Calibrated GCC/gcov diagnostic, no runtime modifications; ordinary O2 output parity. Production-optimized RC attribution remains pending |
+| String/text/component bulk-copy requests | `native_costs/copies` | Calibrated memcpy/memmove linker wrapping, owning/view/return and concat cases, normal O2 output parity; not all payload/scalar/inline copies or shipping-O2 counts |
 | Live/peak memory and aligned traffic | `native_costs/memory` | Separate diagnostic ordinary/aligned new/delete window accounting and OS resident-memory checkpoints; not copied bytes or production RSS; malloc/custom allocator traffic remains open |
 
 N01 has a working first cost-map slice, **not complete coverage of all native
@@ -133,6 +134,12 @@ Wio array/string/object cleanup, native weak lifetime, and platform-specific
 resident-memory checkpoints. Its replacement allocator is diagnostic-only;
 neither its timings nor its RSS represent the uninstrumented production binary.
 Payload-copy bytes, broader coverage and timing qualification remain open.
+
+The [bulk-copy attribution slice](WIO_COPY_ATTRIBUTION.md) adds calibrated
+observed memcpy/memmove byte lengths for string/text/component transport and
+repeated concat. These are separate from allocation counts, Ref handle events,
+and process memory. They expose growing-prefix costs for N02 investigation,
+without claiming to count inline/scalar copies or changing production code.
 
 New behavior tests should preferably be Wio; Python is preferred for portable
 build/process/measurement orchestration. Avoid new substantial PS1 test logic.

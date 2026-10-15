@@ -140,3 +140,8 @@ For live/peak requested bytes, aligned allocation/free accounting and process
 resident-memory checkpoints, use the separate
 [Wio/Python memory diagnostic](memory/README.md). Its replacement allocator is
 never linked into these ordinary allocation/timing probes or production code.
+
+For observed memcpy/memmove request byte lengths in string/text/component
+transport and concat, see [the copy diagnostic](copies/README.md). It has its
+own calibrated GCC/linker build and ordinary O2 output-parity checks; it is not
+a complete payload-copy profiler or a throughput measurement.
