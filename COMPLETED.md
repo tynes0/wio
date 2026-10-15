@@ -10,6 +10,27 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N01 measurement acceptance correction — 2026-10-15
+
+- [x] `4718f82`: exact-binary Mandelbrot remeasurement, pre-launch inherited
+      affinity/restoration, VM/native warm-ups, rotating/reversing order and
+      same-executable A/A controls. The build runner delegates to this controller.
+- [x] Preserve partial/failed/timeout evidence; check binary/controller/provenance
+      hashes and endpoint power scheme; reject incomplete/unstable experiments.
+      Coarse noise limits are not statistical confidence or 5% accuracy claims.
+- [x] Only the new `wio_measurement_contract` was run locally: 1/1 in 6.02 seconds,
+      38 assertions including real child inheritance and failed-process evidence.
+      A separate real VM timeout check terminates its child and retains failure.
+- [x] Retained all 93 manual diagnostic rows, including the expected timeout.
+      The final native experiment passes all 40 output checks and immutable hash
+      checks but fails noise limits. Active competing application CPU usage was
+      observed; no process/power/priority configuration was modified. No production
+      optimization or performance regression attribution is claimed.
+- [ ] A quiet stable baseline, native-cost runner controller migration and the
+      other N01 attribution/coverage gaps remain open. VM development observations
+      are quarantined, not final-controller performance acceptance. See
+      `docs/WIO_MEASUREMENT_QUALIFICATION.md` for ranges, references and raw evidence.
+
 ## N01 extended coverage and counter-free timing — 2026-10-15
 
 - [x] `5f40405`: six new Unicode, Dict, Result-error, native weak-reference,

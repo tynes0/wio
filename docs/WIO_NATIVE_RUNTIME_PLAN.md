@@ -98,6 +98,13 @@ session. Numeric-only reference loops may be optimized more aggressively than
 generated Wio; the result is an end-to-end composite cost, not the latency of an
 individual component operation, Ref increment or instruction.
 
+The Mandelbrot controller now rejects unstable runs and supports exact-binary
+remeasurement, pre-launch affinity, VM warm-ups, A/A controls and endpoint hash/
+power checks. See [measurement correction and evidence](WIO_MEASUREMENT_QUALIFICATION.md).
+This repairs acceptance, not the busy machine: a qualified quiet baseline is
+still pending. The native-cost runner's timing controller migration is separate;
+do not retroactively qualify its existing diagnostic timing results.
+
 The extended session also shows substantial timing drift with unchanged compiler,
 runtime and VM-host hashes, including a slower prior-generated-C++ control.
 Keep all samples and qualify the environment before numeric performance-budget
