@@ -3,6 +3,11 @@
 Date: 2026-10-15. This is the first scoped std consolidation slice inside
 optimization pass 1, not completion of all std or the backend performance budget.
 
+Follow-up: [native string storage and append-copy optimization](WIO_MANAGED_STRING_OPTIMIZATION.md)
+records `79568bd` and a fresh original/previous/current/C++ comparison. The
+measurements below remain evidence for this earlier std slice, not current-head
+timings or a claim that its remaining managed allocation costs were left unchanged.
+
 ## Delivery and boundary
 
 - `7246971`: readability-only migration of `std/builders.wio` and its binary

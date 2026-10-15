@@ -35,6 +35,14 @@ the first scoped Result/style migration and native/VM append-capacity fix. See
 managed/string argument overhead are still open. The scoped 120-column guard
 does not freeze a language-wide formatter policy.
 
+The next scoped slice, `79568bd`, promotes proven nonescaping synchronous string
+cells and elides single-use adjacent append snapshots without changing the ABI.
+Paired append time falls from 5.095 to 3.221 ms (36.78% less), and allocation
+calls from 90,020 to 30,020; it is still 5.84x C++, not budget closure. See
+[managed string evidence](WIO_MANAGED_STRING_OPTIMIZATION.md). Escaping captures,
+async frames, general aggregates and remaining owned argument costs are not
+silently promoted; KI-006 separately tracks an expired-borrow diagnostic gap.
+
 Reduce native runtime overhead toward 5-10% relative to equivalent hand-written
 optimized C++ (roughly 1.05-1.10x execution time), where language semantics and the
 workload permit it. This is an acceptance target to measure, not a claim that all
@@ -82,6 +90,17 @@ Pin source/toolchain/runtime versions and configurations, report sample counts
 and variability, and retain semantic/ownership/differential correctness gates.
 
 ## Reporting and final acceptance
+
+Accepted final comparison requirement (2026-10-15): after all three passes,
+rerun the same Mandelbrot workload in C++, Wio native, Wio VM, C# and Python.
+Report compute-only, formatting/buffer construction and complete PPM output
+separately. Match image dimensions, iteration limit, numeric policy and output
+checksums; record compiler/runtime versions, configurations, cold/warm startup,
+sample counts/ranges and compare original/previous/final measurements without
+turning historical timeouts into exact speedups. Use normal optimized C# and
+plain Python baselines; disclose any native/vectorized-library variant separately.
+Wio native and VM remain separate rows, with no implicit JIT claim. This final
+measurement is part of the existing acceptance checkpoint, not a fourth pass.
 
 For each pass, report the original baseline, previous revision and current
 revision, workload/checksum, measured change, remaining hotspots and acceptance

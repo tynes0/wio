@@ -10,6 +10,33 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Native optimization pass 1: closed string storage/copy slice — 2026-10-15
+
+- [x] `79568bd`: prove closed synchronous string cells and select inline
+      initialized storage without a heap cell/optional/function wrapper. Keep
+      escaping/captured/borrowed cells and async frames on the established path;
+      preserve clear/reinit/move-out and checked empty reads.
+- [x] Elide only single-use adjacent borrowed string snapshots feeding Append,
+      with no WIR identity, ABI or owned-value snapshot contract change.
+- [x] Two new local tests pass 2/2 in 29.92 s: storage proof and resource/throwing
+      cleanup; actual native O0/O2 and VM+bridge semantics. Native short-string
+      echo has zero allocation calls across 1,000 loop iterations in both modes.
+      This counter does not establish zero VM allocations.
+- [x] Clean CLI/platform CI passes both new tests on Windows Debug (43.10 s),
+      Linux Release (29.52 s) and macOS Release (24.26 s): 6/6 executions.
+- [x] Fresh paired append evidence, 15 measured rounds per variant: original
+      543.757 ms, previous 5.095 ms, current 3.221 ms, C++ 0.552 ms. Current is
+      36.78% less time than previous and 168.81x faster than original in this
+      session; new/new[] calls fall from previous 90,020 to 30,020 (C++ 17).
+- [~] Still 5.84x C++ on this append case; remaining owning argument/copy/format
+      work is open. General aggregate/async promotion and complete pass budgets
+      are not closed. KI-006 records an escaping-local-borrow diagnostic gap,
+      not a fix or a new inline-storage lifetime extension. User changes remain
+      untouched. See `docs/WIO_MANAGED_STRING_OPTIMIZATION.md` and raw evidence.
+- [x] Record the requested post-three-pass C++/Wio native/Wio VM/C#/Python
+      Mandelbrot comparison as a final acceptance gate, with separate compute,
+      format/buffer and full PPM measurements; do not call it a fourth pass.
+
 ## Coordinated std consolidation: builder/binary slice — 2026-10-15
 
 - [x] Integrate std readability/API/performance work module by module into native

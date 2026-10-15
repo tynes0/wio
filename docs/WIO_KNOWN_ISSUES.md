@@ -100,6 +100,12 @@ benchmark is substantially faster, but managed parameter/temporary allocations
 and the C++ performance gap remain. Direct numeric formatting and ordinary
 string `+=` remain open; this is not full performance-budget closure.
 
+The next [closed string-storage slice](WIO_MANAGED_STRING_OPTIMIZATION.md)
+removes two further allocations per measured append: previous 90,020 to 30,020
+calls, paired median 5.095 to 3.221 ms. The remaining gap is still 5.84x C++ in
+that fresh append session; neither the full-output timings below nor the final
+native performance budget are requalified by that smaller benchmark.
+
 The historical full-output Wio runs at the audited revision timed out after
 300 seconds, even with `-O2`; those are lower bounds, not exact execution times.
 Those are historical timings, not current runtime claims. ByteWriter/ByteBuffer and binary

@@ -1278,6 +1278,11 @@ Rider, and CLion are defined in
    1.027x the C++ median; this does not close string/format/managed/container/
    async/application or compile-time budgets. See
    `docs/WIO_NATIVE_SCALAR_OPTIMIZATION.md` for raw evidence and scope.
+   Follow-up `79568bd` promotes closed synchronous string cells and removes
+   proven adjacent append snapshots: 5.095 to 3.221 ms versus the previous std
+   slice, 90,020 to 30,020 allocation calls, still 5.84x the paired C++ reference.
+   See `docs/WIO_MANAGED_STRING_OPTIMIZATION.md`; managed/formatting costs and
+   the separate KI-006 borrow diagnostic boundary remain open.
    Treat the native C++ path as a product backend with enforced size, compile
    time, memory, runtime, and binary-size budgets. A trivial program must not
    emit unused async/reflection/native infrastructure or thousands of lines of
@@ -1304,6 +1309,13 @@ Rider, and CLion are defined in
   See `docs/WIO_BACKEND_OPTIMIZATION_PLAN.md`. The final pre-v1 checkpoint below
   requalifies these budgets after later kit/std/IDE work; it does not postpone
   these passes or add a fourth heavy optimization package.
+
+- [ ] After the three passes, rerun the same Mandelbrot case across C++, Wio
+  native, Wio VM, C# and Python, with separate compute/format-buffer/full-PPM
+  measurements and matching hashes. Preserve original/previous/final evidence,
+  versions/configurations and timing variability; do not equate historical
+  timeouts with exact durations. This is an explicit final comparison gate,
+  not an additional optimization pass.
 
 - [ ] Requalify the three heavy passes' budgets after the IDE/tooling/SDK/v1
   correctness gates, before beta/RC. Keep the existing backend and v1 gate
