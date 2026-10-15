@@ -17,21 +17,6 @@ realm SelfHostedProject {
         return false;
     }
 
-    fn OptionValues(args: string[], name: string) -> string[] {
-        mut values: string[] = [];
-        mut index = 3usize;
-        while (index < args.Count()) {
-            if (args[index] == "--") { break; }
-            if (args[index] == name and index + 1usize < args.Count()) {
-                values.Push(args[index + 1usize]);
-                index += 2usize;
-                continue;
-            }
-            index += 1usize;
-        }
-        return values;
-    }
-
     fn ArgumentsAfterSeparator(args: string[]) -> string[] {
         mut values: string[] = [];
         mut afterSeparator = false;
@@ -289,9 +274,26 @@ realm SelfHostedProject {
             outputCurrent = OutputUpToDate(info.vmBytecodeOutput, compilerInputs) and
                 OutputUpToDate(info.vmBridgeOutput, compilerInputs);
         }
+        mut signature = serialization::QuoteJson(info.config) + "\n";
+        for argument in compileArgs
+        {
+            signature += serialization::QuoteJson(argument) + "\n";
+        }
+
+        let signatureFile = compileOutput + ".build-args";
+        outputCurrent = outputCurrent and fs::IsFile(signatureFile) and fs::ReadTextRaw(signatureFile) == signature;
         if (emitMode != "" or cppBackend != "" or noBuiltin or forceRebuild or not outputCurrent) {
+            if (emitMode == "" and not fs::TryWriteTextEnsured(signatureFile, ""))
+            {
+                return Failure<i32>($"Could not invalidate project compiler arguments: ${signatureFile}");
+            }
+
             let compileResult = RunProcess?(info.nativeCore, compileArgs, info.projectRoot);
             if (compileResult != 0) { return std::Ok<i32>(compileResult); }
+            if (emitMode == "" and not fs::TryWriteTextEnsured(signatureFile, signature))
+            {
+                return Failure<i32>($"Could not record project compiler arguments: ${signatureFile}");
+            }
         }
         else {
             console::PrintLine!("Project Wio compile: up to date, skipping compiler invocation.");

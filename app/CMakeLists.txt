@@ -152,10 +152,24 @@ if(EXISTS "${WIO_PLAYGROUND_MANIFEST}")
         ${WIO_PLAYGROUND_SOURCES}
     )
     add_dependencies(wio_playground wio_app wio_runtime_backend)
+    if(TARGET wio_selfhost_cli)
+        add_dependencies(wio_playground wio_selfhost_cli)
+    endif()
+    target_link_libraries(wio_playground PRIVATE wio_runtime_host)
+    file(TO_CMAKE_PATH "${CMAKE_BINARY_DIR}" WIO_PLAYGROUND_BUILD_ROOT)
+    if(CMAKE_CONFIGURATION_TYPES)
+        set(WIO_PLAYGROUND_MULTI_CONFIG 1)
+    else()
+        set(WIO_PLAYGROUND_MULTI_CONFIG 0)
+    endif()
     target_compile_definitions(wio_playground PRIVATE
         WIO_PLAYGROUND_COMPILER_PATH="$<TARGET_FILE:wio_app>"
         WIO_PLAYGROUND_MANIFEST_PATH="${WIO_PLAYGROUND_MANIFEST_PATH}"
         WIO_PLAYGROUND_SOURCE_ROOT="${WIO_PLAYGROUND_SOURCE_ROOT}"
+        WIO_PLAYGROUND_BUILD_CONFIG="$<CONFIG>"
+        WIO_PLAYGROUND_BUILD_ROOT="${WIO_PLAYGROUND_BUILD_ROOT}"
+        WIO_PLAYGROUND_CMAKE_PATH="${CMAKE_COMMAND}"
+        WIO_PLAYGROUND_MULTI_CONFIG=${WIO_PLAYGROUND_MULTI_CONFIG}
     )
     source_group(TREE "${WIO_PLAYGROUND_DIR}" PREFIX "Project" FILES ${WIO_PLAYGROUND_SOURCES})
     source_group("Launcher" FILES "${CMAKE_SOURCE_DIR}/tools/wio_playground_launcher.cpp")

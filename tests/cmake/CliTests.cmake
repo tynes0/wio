@@ -1,5 +1,23 @@
 # Cli test registrations. Included in the app directory scope.
 
+add_test(NAME wio_playground_launcher_options
+    COMMAND ${CMAKE_COMMAND} "-DWIO_LAUNCHER=$<TARGET_FILE:wio_playground>"
+        "-DWIO_CONFIG=$<CONFIG>" "-DWIO_MULTI_CONFIG=${WIO_PLAYGROUND_MULTI_CONFIG}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/playground_launcher_options_test.cmake")
+wio_test_labels(wio_playground_launcher_options cli playground)
+foreach(mode IN ITEMS profiles signature)
+    add_test(NAME wio_playground_launcher_${mode}
+        COMMAND ${CMAKE_COMMAND} "-DWIO_LAUNCHER=$<TARGET_FILE:wio_playground>"
+            "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>" "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DWIO_CONFIG=$<CONFIG>" "-DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DWIO_MULTI_CONFIG=${WIO_PLAYGROUND_MULTI_CONFIG}"
+            "-DWIO_EXE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}" "-DWIO_TEST_MODE=${mode}"
+            "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/playground-launcher-${mode}"
+            -P "${CMAKE_SOURCE_DIR}/tests/cmake/playground_launcher_project_test.cmake")
+    wio_test_labels(wio_playground_launcher_${mode} cli playground native vm)
+    set_tests_properties(wio_playground_launcher_${mode} PROPERTIES TIMEOUT 720 RUN_SERIAL TRUE)
+endforeach()
+
 add_test(
     NAME wio_cmake_test_catalog
     COMMAND ${CMAKE_COMMAND}

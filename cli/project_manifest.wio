@@ -254,15 +254,43 @@ realm SelfHostedProject {
     }
 
     fn OptionValue(args: string[], option: string, fallback: string) -> string {
-        mut index = 3usize;
-        while (index + 1usize < args.Count()) {
-            if (args[index] == "--") { break; }
-            if (args[index] == option) {
-                return args[index + 1usize];
-            }
-            index += 1usize;
-        }
+        let values = OptionValues(args, option);
+        if (values.Count() != 0usize) return values[0usize];
         return fallback;
+    }
+
+    fn ProjectOptionHasValue(value: string) -> bool
+    {
+        return value == "--project" or value == "--config" or value == "--build-dir" or value == "--cwd" or
+            value == "--working-directory" or value == "--arg" or value == "--filter" or
+            value == "--output-dir" or value == "--backend" or value == "--cpp-backend" or
+            value == "--ir-output" or value == "--bytecode-output" or
+            value == "--backend-arg" or value == "--vm-runner";
+    }
+
+    fn OptionValues(args: string[], name: string) -> string[]
+    {
+        mut values: string[] = [];
+        mut index = 3usize;
+        while (index < args.Count())
+        {
+            if (args[index] == "--") break;
+            if (args[index] == name and index + 1usize < args.Count())
+            {
+                values.Push(args[index + 1usize]);
+                index += 2usize;
+                continue;
+            }
+
+            if (args[index].StartsWith(name + "="))
+            {
+                values.Push(args[index].Skip(name.Count() + 1usize));
+            }
+
+            index += ProjectOptionHasValue(args[index]) ? 2usize : 1usize;
+        }
+
+        return values;
     }
 
     fn ProjectValue(args: string[]) -> string {
@@ -276,10 +304,7 @@ realm SelfHostedProject {
             if (value == "--") {
                 break;
             }
-            if (value == "--config" or value == "--build-dir" or value == "--cwd" or
-                value == "--working-directory" or value == "--arg" or value == "--filter" or
-                value == "--output-dir" or value == "--backend" or value == "--cpp-backend" or
-                value == "--ir-output" or value == "--bytecode-output") {
+            if (ProjectOptionHasValue(value)) {
                 index += 2usize;
                 continue;
             }
@@ -328,6 +353,11 @@ realm SelfHostedProject {
         info.wioOutput = path::Join(info.outputDirectory, wioName + wioSuffix);
         info.nativeCore = path::Join(path::ParentPath(path::AbsoluteRaw(args[0usize])), "wio" + process::ExecutableSuffix());
         info.vmRunner = path::Join(path::ParentPath(info.nativeCore), "wio-vm" + process::ExecutableSuffix());
+        let runnerOverride = OptionValue(args, "--vm-runner", "");
+        if (runnerOverride != "")
+        {
+            info.vmRunner = path::AbsoluteFromRaw(info.projectRoot, runnerOverride);
+        }
         info.toolchainRoot = FindToolchainRoot(args[0usize]);
         if (info.toolchainRoot == "") {
             return Failure<ProjectInfo>(
@@ -377,6 +407,10 @@ realm SelfHostedProject {
         }
         info.wioLinkLibraries = ManifestArray(manifest, "wio.linkLibraries");
         info.wioBackendArgs = ManifestArray(manifest, "wio.backendArgs");
+        for argument in OptionValues(args, "--backend-arg")
+        {
+            info.wioBackendArgs.Push(argument);
+        }
         info.vmBytecodeOutput = path::AbsoluteFromRaw(
             info.projectRoot,
             ManifestValue(manifest, "vm.bytecodeOutput", path::Join(info.outputDirectory, wioName + ".wiob"))

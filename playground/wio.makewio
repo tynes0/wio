@@ -24,7 +24,8 @@ buildDir = ".wio-build"
 config = "Debug"
 
 [outputs]
-directory = ".wio-build/interop"
+# Follow --build-dir, so launcher backend/profile outputs stay isolated.
+directory = ""
 baseName = "wio_playground"
 wioName = "wio_playground"
 hostName = "wio_playground.host"
