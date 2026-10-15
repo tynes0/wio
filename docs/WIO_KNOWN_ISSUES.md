@@ -112,7 +112,13 @@ Those are historical timings, not current runtime claims. ByteWriter/ByteBuffer 
 file output exist, but switching formats is not a fix for builder growth.
 The fresh native full P3 follow-up now completes in 247.528 ms median wall time
 with the exact image hash, versus C++ 55.233 ms. Remaining managed/temp/formatting
-cost and the 4.48x wall-time gap are still tracked; see the linked std report.
+cost and the 4.48x wall-time gap belong to that earlier revision/session; see the
+linked std report. The [subsequent interpolation report](WIO_INTEGER_INTERPOLATION_OPTIMIZATION.md)
+records fresh native 128.437 ms, paired saved-full-snapshot 250.618 ms and Release
+VM 20.5356141 s, all with the same image hash. Native decimal formatting improves
+without claiming direct builder numeric append, arbitrary argument-copy elision
+or the overall performance budget is complete. The VM row is one observation,
+not an already optimized runtime or a statistically qualified median.
 
 Close with amortized-linear append/reserve/clear/numeric formatting, explicit
 finalization costs, self/aliased append correctness and native/VM measurements.

@@ -4,6 +4,10 @@ Date: 2026-10-15. Implementation: `79568bd`. This is another bounded slice of
 optimization pass 1, following the [builder/std work](WIO_STD_BUILDERS_CONSOLIDATION.md),
 not completion of native, VM or compiler-throughput optimization.
 
+Later follow-up: [integer interpolation and per-update measurement](WIO_INTEGER_INTERPOLATION_OPTIMIZATION.md)
+records a fresh full-output native/Release-VM comparison. The append samples
+below remain evidence for this earlier storage slice, not new current timings.
+
 ## What changed
 
 Proven nonescaping synchronous string cells now use `InlinePlace<std::string>`

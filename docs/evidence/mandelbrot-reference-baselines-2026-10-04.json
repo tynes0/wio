@@ -1,0 +1,184 @@
+{
+  "Date": "2026-10-04",
+  "Source": "docs/WIO_MANDELBROT_PERFORMANCE_AUDIT.md",
+  "Environment": "Windows 11 build 26100; Intel Core i7-13620H",
+  "Versions": {
+    "CSharp": ".NET 9 SDK 9.0.311 / runtime 9.0.13, Release",
+    "Python": "CPython 3.12.14, no native/vectorized libraries",
+    "Cpp": "MinGW GCC 15.2.0, C++20 -O2 -ffp-contract=off"
+  },
+  "ComputeFingerprint": "11613930/3721766287256/94440",
+  "ComputeSamples": [
+    {
+      "Name": "cpp-o2",
+      "Repetition": 1,
+      "KernelSeconds": 0.0295256,
+      "WallSeconds": 0.097721,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "csharp-release",
+      "Repetition": 1,
+      "KernelSeconds": 0.0342737,
+      "WallSeconds": 0.1671954,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "python",
+      "Repetition": 1,
+      "KernelSeconds": 1.3480412,
+      "WallSeconds": 1.489248,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "cpp-o2",
+      "Repetition": 2,
+      "KernelSeconds": 0.028375,
+      "WallSeconds": 0.0545629,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "csharp-release",
+      "Repetition": 2,
+      "KernelSeconds": 0.0295856,
+      "WallSeconds": 0.1118498,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "python",
+      "Repetition": 2,
+      "KernelSeconds": 1.3023832,
+      "WallSeconds": 1.3480246,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "cpp-o2",
+      "Repetition": 3,
+      "KernelSeconds": 0.029464,
+      "WallSeconds": 0.0572744,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "csharp-release",
+      "Repetition": 3,
+      "KernelSeconds": 0.0289085,
+      "WallSeconds": 0.1134376,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "python",
+      "Repetition": 3,
+      "KernelSeconds": 1.4409177,
+      "WallSeconds": 1.4898163,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "cpp-o2",
+      "Repetition": 4,
+      "KernelSeconds": 0.0280724,
+      "WallSeconds": 0.057524,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "csharp-release",
+      "Repetition": 4,
+      "KernelSeconds": 0.0291457,
+      "WallSeconds": 0.1113945,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "python",
+      "Repetition": 4,
+      "KernelSeconds": 1.2983682,
+      "WallSeconds": 1.3461896,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "cpp-o2",
+      "Repetition": 5,
+      "KernelSeconds": 0.0284052,
+      "WallSeconds": 0.0791952,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "csharp-release",
+      "Repetition": 5,
+      "KernelSeconds": 0.0318193,
+      "WallSeconds": 0.1220564,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    },
+    {
+      "Name": "python",
+      "Repetition": 5,
+      "KernelSeconds": 1.3839654,
+      "WallSeconds": 1.4304436,
+      "Iterations": 11613930,
+      "Weighted": 3721766287256,
+      "Interior": 94440
+    }
+  ],
+  "ComputeSummary": [
+    {
+      "Name": "cpp-o2",
+      "KernelMedian": 0.0284052,
+      "KernelMin": 0.0280724,
+      "KernelMax": 0.0295256,
+      "WallMedian": 0.057524,
+      "NanosecondsPerStep": 2.445787084991902
+    },
+    {
+      "Name": "csharp-release",
+      "KernelMedian": 0.0295856,
+      "KernelMin": 0.0289085,
+      "KernelMax": 0.0342737,
+      "WallMedian": 0.1134376,
+      "NanosecondsPerStep": 2.547423654180798
+    },
+    {
+      "Name": "python",
+      "KernelMedian": 1.3480412,
+      "KernelMin": 1.2983682,
+      "KernelMax": 1.4409177,
+      "WallMedian": 1.4304436,
+      "NanosecondsPerStep": 116.07106293907403
+    }
+  ],
+  "FullPpm": {
+    "SHA256": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+    "MedianSeconds": {
+      "CSharp": 0.14913,
+      "Python": 1.61371,
+      "Cpp": 0.07602
+    },
+    "Bytes": 5156528,
+    "Metric": "external wall seconds; three samples per reference; no raw full-program samples preserved here"
+  }
+}

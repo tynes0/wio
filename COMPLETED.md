@@ -10,6 +10,38 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Native optimization pass 1: integer interpolation slice — 2026-10-15
+
+- [x] `9554b63`: use bounded to_chars integer formatting in the classic locale,
+      preserve custom global grouping through the prior stream path, and leave
+      bool/char/float/object/container formatting contracts unchanged.
+- [x] Accumulate interpolation parts in one owning string with explicit literal
+      byte lengths, fixing the existing NUL prefix/suffix truncation. New native
+      O0/O2 and VM tests cover extrema, Unicode, nesting and long pieces; the
+      standalone formatter compares boundaries/random values and custom locales
+      against stream output. Local new tests: 2/2 in 5.31 s; older corpus not run.
+- [x] Clean platform CLI CI at `9554b63`: two new tests pass on Windows Debug
+      (8.18 s), Linux Release (3.33 s), macOS Release (4.16 s), 6/6 executions.
+      Diagnostic reference validation remains 693 IDs/three dynamic-only/49 std
+      Result construction sites. Remote performance is not inferred from CI.
+- [x] Add the manual per-update native/Release-VM Mandelbrot runner and an
+      excluded-from-default-build diagnostic VM host with an explicit finite
+      10-billion instruction budget. Production runner defaults are unchanged.
+- [x] Fresh compute: native 23.300 ms (five measured rounds), Release VM
+      19.0023835 s (one observation). Same three-field numeric fingerprint.
+- [x] Fresh full PPM: native 128.437 ms versus recompiled previous full snapshot
+      `ddfa2b2` at 250.618 ms, 1.951x faster; Release VM 20.5356141 s. Every full
+      image has the same 5,156,528-byte hash. The paired native gain includes both
+      string storage and interpolation work since that saved snapshot, not solely
+      this commit; there is no immediate-previous-commit full-render comparison.
+- [x] Preserve dated C++/C#/Python reference rows and raw compute samples for
+      every update's report. Keep compute kernel and full-output wall metrics
+      separate and single VM observations explicit. See
+      `docs/WIO_INTEGER_INTERPOLATION_OPTIMIZATION.md` and raw evidence.
+- [~] Owning argument/alias proofs, direct numeric append/buffers and the rest
+      of native/std pass 1 remain open. The large measured VM overhead is a real
+      pass-2 baseline, not a Debug artifact, fixed result or new regression claim.
+
 ## Native optimization pass 1: closed string storage/copy slice — 2026-10-15
 
 - [x] `79568bd`: prove closed synchronous string cells and select inline

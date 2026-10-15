@@ -43,6 +43,15 @@ calls from 90,020 to 30,020; it is still 5.84x C++, not budget closure. See
 async frames, general aggregates and remaining owned argument costs are not
 silently promoted; KI-006 separately tracks an expired-borrow diagnostic gap.
 
+`9554b63` adds classic-locale bounded integer formatting and one-buffer,
+length-aware interpolation (including embedded NUL preservation). The fresh
+full-render median is 128.437 ms versus 250.618 ms for the recompiled last saved
+full snapshot, `ddfa2b2`; that combined gain spans both the storage and formatting
+slices. Release VM completes the same image in a 20.5356141 s observation,
+establishing an explicit pass-2 baseline. New per-update measurements and fixed
+dated language references are in
+[the interpolation report](WIO_INTEGER_INTERPOLATION_OPTIMIZATION.md).
+
 Reduce native runtime overhead toward 5-10% relative to equivalent hand-written
 optimized C++ (roughly 1.05-1.10x execution time), where language semantics and the
 workload permit it. This is an acceptance target to measure, not a claim that all
