@@ -10,6 +10,36 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Coordinated std consolidation: builder/binary slice — 2026-10-15
+
+- [x] Integrate std readability/API/performance work module by module into native
+      optimization pass 1, keeping VM heavy optimization and compiler throughput
+      as passes 2/3 and full SDK kit parity as a separate v1 gate.
+- [x] Apply the accepted source rules to builders/binary in a readability-only
+      commit. Follow with Result-first ByteReader read APIs, explicit IO read
+      codes 1101/1102/1103, cursor rollback, no Try compatibility API, and the
+      binary consumer migration. Explicit user Option remains supported.
+- [x] Preserve string append/line/clear capacity; add reserve hints, bulk byte/
+      string conversion and read-only native input borrows. VM append/push/clear
+      mutates the actual inline owned string without copying its growing prefix.
+- [x] Only three new local gates run: native/VM Result/snapshot/UTF-8/NUL/endian/
+      varint/bulk/binary behavior, scoped style guard, VM capacity/alias/failure
+      behavior. Final local Windows Debug run: 3/3 in 24.02 seconds.
+- [x] Clean final CI at `ddfa2b2` builds the actual CLI and passes all three new
+      tests on Windows Debug (46.32 s), Linux Release (15.68 s) and macOS Release
+      (13.54 s): 9/9 executions, with logs linked in the module report.
+- [x] Preserve 15-round paired append evidence: old 389.139 ms, current 4.897 ms,
+      C++ 0.584 ms. 79.47x faster but still 8.39x C++; ordinary allocation calls
+      fall from 120,004 to 90,020 (C++ 17), exposing remaining managed-arg costs.
+- [x] Requalify native full PPM completion: 247.528 ms median wall time versus
+      C++ 55.233 ms, seven interleaved measured rounds and identical 5,156,528-byte
+      image hash. This is 4.48x C++, not final budget acceptance or an exact gain
+      inferred from the historical 300-second timeout.
+- [~] Managed argument/temp storage, direct numeric formatting, string +=,
+      ByteBuffer/BytePool and the remaining std/intrinsic surface remain open.
+      User-owned std/buffer and playground changes were not modified/committed.
+      See `docs/WIO_STD_BUILDERS_CONSOLIDATION.md` and its committed raw evidence.
+
 ## Native optimization pass 1: scalar storage/CFG slice — 2026-10-15
 
 - [x] Add a conservative function-local storage plan: closed primitive cells use

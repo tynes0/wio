@@ -11,6 +11,13 @@ evidence](WIO_NATIVE_SCALAR_OPTIMIZATION.md). The original results below remain
 historical evidence; growing-prefix formatting and the full PPM timeout have
 not been requalified or fixed by that compute-only slice.
 
+Later follow-up on the same date: the [coordinated std builder slice](WIO_STD_BUILDERS_CONSOLIDATION.md)
+removes growing-prefix append copies. A fresh native full PPM run at `ddfa2b2`
+now completes in 247.528 ms median external wall time (C++ 55.233 ms, seven
+measured interleaved rounds), producing the same 5,156,528-byte SHA-256 image.
+It remains 4.48x C++ on that metric; the old timeout is not an exact before time.
+This later result does not retroactively change the historical data below.
+
 ## Workload And Method
 
 - Intel Core i7-13620H, Windows 11 (build 26100).

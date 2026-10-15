@@ -19,7 +19,21 @@ budgets remain open. See [scalar evidence](WIO_NATIVE_SCALAR_OPTIMIZATION.md).
 The subsequent heavy optimization work is split into exactly three passes.
 These are ordered work packages, not renumbered historical backend sprints.
 
-## 1. Generated C++ and runtime
+## 1. Generated C++, runtime and coordinated std consolidation
+
+Accepted extension on 2026-10-15: do the std source rules, Result-first API
+standardization and implementation optimization module by module within this
+pass, rather than optimizing APIs that will immediately be replaced later.
+Capture behavior/performance first; keep readability, API and hot-path changes
+in reviewable commits and qualify native/VM semantics together. This does not
+move full SDK kit parity or language-wide legacy-attribute removal into pass 1.
+
+Start with builders/string/text, byte/buffer output and containers, then expand
+through the remaining std inventory. `builders` and its `binary` consumer have
+the first scoped Result/style migration and native/VM append-capacity fix. See
+[the module report](WIO_STD_BUILDERS_CONSOLIDATION.md). Remaining std modules and
+managed/string argument overhead are still open. The scoped 120-column guard
+does not freeze a language-wide formatter policy.
 
 Reduce native runtime overhead toward 5-10% relative to equivalent hand-written
 optimized C++ (roughly 1.05-1.10x execution time), where language semantics and the

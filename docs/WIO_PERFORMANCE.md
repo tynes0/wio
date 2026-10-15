@@ -179,7 +179,7 @@ arguments. Inspection of the native compiler command construction found no
 default `-O2`/`-O3`; configuration-to-backend flag forwarding must be qualified
 rather than assuming the manifest selects optimized generated code.
 
-`StringBuilder.AppendLine` currently uses `self.value += value + "\n"`. The
+Historical baseline: `StringBuilder.AppendLine` used `self.value += value + "\n"`. The
 builder is an object wrapping a string, without a dedicated buffer/capacity API.
 Typed WIR currently represents compound assignment as load, binary addition,
 and replace/store; the C++ backend emits string addition as `+`, rather than a
@@ -188,6 +188,12 @@ full-prefix copies, temporary allocations, capacity growth, and final-output
 copies. The local Mandelbrot audit confirms full-prefix addition in generated
 `AppendLine` code, making accumulated copying quadratic for this workload;
 the exact contribution relative to other runtime overhead still needs profiling.
+
+2026-10-15 follow-up: the [std builder consolidation slice](WIO_STD_BUILDERS_CONSOLIDATION.md)
+replaces that path with in-place append/line/clear and adds reserve hints, with
+native/VM correctness checks and paired append measurements. The growing-prefix
+defect is addressed, but managed argument/temp allocation and direct numeric
+formatting still prevent the final C++ budget from being claimed.
 
 Require an amortized-linear builder with reusable capacity, reserve/clear
 behavior, direct append/append-line, and numeric formatting into its buffer.

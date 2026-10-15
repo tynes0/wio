@@ -4,6 +4,11 @@ Date: 2026-10-15. Implementation: `722e836`. This is the first measured slice
 of optimization pass 1 (generated C++ and runtime), not completion of the pass.
 VM runtime and compiler-throughput optimization remain passes 2 and 3.
 
+Later std follow-up: [builder consolidation](WIO_STD_BUILDERS_CONSOLIDATION.md)
+addresses growing-prefix append and requalifies native full PPM completion.
+The scalar-only measurements below retain their original scope and do not
+claim the later std gain or complete language-wide performance acceptance.
+
 ## What changed
 
 `WirCppStoragePlan` makes conservative function-local emission decisions over

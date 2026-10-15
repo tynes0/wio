@@ -274,7 +274,7 @@ here does not by itself mean that v1 cannot ship.
     geometry/color, localization, and CLI parsing exist. Add decimal, archive,
     TOML, database primitives, and real-project qualification.
 
-11. [ ] Complete the Result-first std standardization, cleanup and performance
+11. [~] Complete the Result-first std standardization, cleanup and performance
     pass before v1. Standard checked retrieval/fallible operations return
     `Result<T>` with standardized missing-value/key/index, invalid-value and
     other error contracts; ordinary calls, `!()` and `?()` share one model.
@@ -300,6 +300,11 @@ here does not by itself mean that v1 cannot ship.
     restrictions; source migration and syntax-aware formatter checks must agree.
     This is an accepted v1 blocker; final integrated optimization still follows.
     Scope and acceptance: `docs/WIO_V1_SURFACE_CONSOLIDATION_PLAN.md`, sections 1/3.
+    On 2026-10-15 this work was integrated module by module into the first heavy
+    generated-C++/runtime optimization pass. Builders and the binary consumer
+    have the first Result/style migration and native/VM append-capacity slice;
+    the rest of std, builtin checked retrieval and broad migration/tooling remain
+    open. See `docs/WIO_STD_BUILDERS_CONSOLIDATION.md`.
 
 ## P1 - Native Interop, SDK, and Ecosystem
 

@@ -1,0 +1,177 @@
+{
+  "Implementation": "ddfa2b2150c988ad3526eb071d854a9f74cbd90d",
+  "Repetitions": 7,
+  "Flags": [
+    "-std=c++20",
+    "-O2",
+    "-ffp-contract=off",
+    "-static"
+  ],
+  "CompilerHash": "615907229F775762552BAF76B2426DEB3A07CCD55FEDB09CB2E9800C495CF461",
+  "RuntimeHash": "59FF4005117CB2C7CFF701629B98D7A599D4550B18FF40B3AA402923F8863941",
+  "GeneratedHash": "7AE18CFACC1B8977F0B9F346DEA741750DB71F46FD005CC55B3383A474D8AFBF",
+  "WioBinaryHash": "41CFDE496108ACAB4B2E9FC2CFF94EF469B1644635F9E44064D9FC2C9DE5536B",
+  "CppBinaryHash": "8DED42835DF73BE2D1C514547008B60E59F3308339371EC3AA0A92E10E5A5733",
+  "WioSourceHash": "4E701B4C781B1EC77BF749F9472BE6711AE8D254F3AAB86028F8EE6B60CE8AF9",
+  "CppSourceHash": "2AB095CDA0D1C47B6EA13F50C6AD9CB8B343827B4956F59233753597E345D737",
+  "Samples": [
+    {
+      "Name": "wio",
+      "Round": 0,
+      "Warmup": true,
+      "WallSeconds": 0.4747963,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin."
+    },
+    {
+      "Name": "cpp",
+      "Round": 0,
+      "Warmup": true,
+      "WallSeconds": 0.1189788,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "compute=0.0234428 format=0.01257 write=0.0016939 total=0.0377067 iterations=11613930"
+    },
+    {
+      "Name": "wio",
+      "Round": 1,
+      "Warmup": false,
+      "WallSeconds": 0.2512418,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin."
+    },
+    {
+      "Name": "cpp",
+      "Round": 1,
+      "Warmup": false,
+      "WallSeconds": 0.0535453,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "compute=0.0242103 format=0.0110119 write=0.0016228 total=0.036845 iterations=11613930"
+    },
+    {
+      "Name": "wio",
+      "Round": 2,
+      "Warmup": false,
+      "WallSeconds": 0.2462194,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin."
+    },
+    {
+      "Name": "cpp",
+      "Round": 2,
+      "Warmup": false,
+      "WallSeconds": 0.0567242,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "compute=0.0243959 format=0.0124934 write=0.0015205 total=0.0384098 iterations=11613930"
+    },
+    {
+      "Name": "wio",
+      "Round": 3,
+      "Warmup": false,
+      "WallSeconds": 0.2470706,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin."
+    },
+    {
+      "Name": "cpp",
+      "Round": 3,
+      "Warmup": false,
+      "WallSeconds": 0.0557786,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "compute=0.0237434 format=0.0109231 write=0.0042411 total=0.0389076 iterations=11613930"
+    },
+    {
+      "Name": "wio",
+      "Round": 4,
+      "Warmup": false,
+      "WallSeconds": 0.2486783,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin."
+    },
+    {
+      "Name": "cpp",
+      "Round": 4,
+      "Warmup": false,
+      "WallSeconds": 0.0536819,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "compute=0.0240614 format=0.0110249 write=0.0017778 total=0.0368641 iterations=11613930"
+    },
+    {
+      "Name": "wio",
+      "Round": 5,
+      "Warmup": false,
+      "WallSeconds": 0.2496573,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin."
+    },
+    {
+      "Name": "cpp",
+      "Round": 5,
+      "Warmup": false,
+      "WallSeconds": 0.0552328,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "compute=0.0245802 format=0.0111074 write=0.001739 total=0.0374266 iterations=11613930"
+    },
+    {
+      "Name": "wio",
+      "Round": 6,
+      "Warmup": false,
+      "WallSeconds": 0.2453413,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin."
+    },
+    {
+      "Name": "cpp",
+      "Round": 6,
+      "Warmup": false,
+      "WallSeconds": 0.0553973,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "compute=0.0240054 format=0.0125384 write=0.0016456 total=0.0381894 iterations=11613930"
+    },
+    {
+      "Name": "wio",
+      "Round": 7,
+      "Warmup": false,
+      "WallSeconds": 0.2475282,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin."
+    },
+    {
+      "Name": "cpp",
+      "Round": 7,
+      "Warmup": false,
+      "WallSeconds": 0.0534252,
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733",
+      "Output": "compute=0.0239962 format=0.0111927 write=0.0017617 total=0.0369506 iterations=11613930"
+    }
+  ],
+  "Summary": [
+    {
+      "Name": "wio",
+      "Median": 0.2475282,
+      "Min": 0.2453413,
+      "Max": 0.2512418
+    },
+    {
+      "Name": "cpp",
+      "Median": 0.0552328,
+      "Min": 0.0534252,
+      "Max": 0.0567242
+    }
+  ]
+}

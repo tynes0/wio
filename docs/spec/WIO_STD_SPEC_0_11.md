@@ -2,6 +2,12 @@
 
 Status: normative library contract
 
+Version note: this is the historical 0.11 contract. The 2026-10-15
+[builder migration](../WIO_STD_BUILDERS_CONSOLIDATION.md) supersedes its Option
+failure model specifically for current ByteReader methods: checked reads now
+return Result and preserve cursor position on failure. Other modules remain
+under the ongoing Result-first consolidation inventory.
+
 ## 1. Failure and absence
 
 Recoverable failure uses `Result<T>`, value-less success uses `UnitResult`,

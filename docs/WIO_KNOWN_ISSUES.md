@@ -10,6 +10,10 @@ that undiscovered bugs do not exist. No compiler suite, benchmark, or installed
 toolchain matrix was run for this documentation/branch-maintenance task.
 The external editor/site repositories were not audited in this pass.
 
+Incremental qualification updates on 2026-10-15 are recorded under KI-002 and
+KI-003 below. Other entries retain their original snapshot scope; this update
+does not claim a new full-repository or external-tooling audit.
+
 The inventory was checked against the active backlog, completion records,
 native/VM/backend/SDK contracts, source rejection paths, performance audit, and
 GitHub issue/PR/release metadata. There were no open GitHub issues or PRs in
@@ -81,17 +85,28 @@ The new [inferred-call fixture](../tests/wir_inferred_array_calls.wio) and
 
 ### KI-002 — Growing StringBuilder appends repeatedly copy the prefix (P1)
 
-`StringBuilder.AppendLine` in [std/builders.wio](../std/builders.wio) uses
+At the original snapshot, `StringBuilder.AppendLine` in [std/builders.wio](../std/builders.wio) used
 `self.value += value + "\n"`. The
 [Mandelbrot audit](WIO_MANDELBROT_PERFORMANCE_AUDIT.md) confirmed generated
 full-prefix string addition/replacement rather than capacity-preserving append.
 Accumulated copying is quadratic for the measured fixed-size-line workload.
-The builder currently has no independently optimized backing buffer contract.
+That snapshot had no independently optimized backing buffer contract.
+
+2026-10-15 partial closure: the [builder/std slice](WIO_STD_BUILDERS_CONSOLIDATION.md)
+switches append/line/clear to in-place capacity-preserving operations, adds a
+reserve hint and removes the VM string intrinsic's prefix copy. Native/VM
+snapshot, self-append and failure cases have new focused gates. The paired append
+benchmark is substantially faster, but managed parameter/temporary allocations
+and the C++ performance gap remain. Direct numeric formatting and ordinary
+string `+=` remain open; this is not full performance-budget closure.
 
 The historical full-output Wio runs at the audited revision timed out after
 300 seconds, even with `-O2`; those are lower bounds, not exact execution times.
-No fresh timing at this snapshot is claimed. ByteWriter/ByteBuffer and binary
+Those are historical timings, not current runtime claims. ByteWriter/ByteBuffer and binary
 file output exist, but switching formats is not a fix for builder growth.
+The fresh native full P3 follow-up now completes in 247.528 ms median wall time
+with the exact image hash, versus C++ 55.233 ms. Remaining managed/temp/formatting
+cost and the 4.48x wall-time gap are still tracked; see the linked std report.
 
 Close with amortized-linear append/reserve/clear/numeric formatting, explicit
 finalization costs, self/aliased append correctness and native/VM measurements.
@@ -104,10 +119,12 @@ allocated a heap-backed Place for inner-loop `xtemp`; optimized assembly still
 contained allocation calls. This is a workload-specific historical result,
 not a current universal speed ratio.
 
-The current [C++ backend](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp)
-still contains general `make_shared<optional<T>>` Place storage, optional
-temporaries and CFG dispatch machinery. Scalar stack/SSA promotion, proven
-initialized loads and direct control-flow emission remain open. Source
+2026-10-15 bounded scalar closure: [the scalar slice](WIO_NATIVE_SCALAR_OPTIMIZATION.md)
+qualifies closed primitive stack/SSA promotion, initialization checks and direct
+synchronous CFG emission. Its paired compute kernel is 33.44x faster than the
+original with 1.027x C++ median time; the allocation probe and three-platform
+correctness gates pass. General managed/escaping Place storage, optional owned
+temporaries, coroutine frames and broader performance budgets remain open. Source
 `Option<T>`/nullable semantics must not be confused with compiler-internal
 initialization state, or removed to optimize it.
 

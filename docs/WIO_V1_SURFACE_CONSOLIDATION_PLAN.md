@@ -1,10 +1,17 @@
 # Wio v1 Surface Consolidation Plan
 
-Status: **accepted pre-v1 release blockers; implementation pending**.
+Status: **accepted pre-v1 release blockers; scoped implementation in progress**.
 Decision recorded on **2026-10-07**. This document changes the intended v1
 contract, not the behavior of the current compiler or released std.
 The std source-style and explicit-visibility requirements below were added on
 **2026-10-13**; they are accepted cleanup requirements, not a completed migration.
+
+On 2026-10-15 std consolidation was integrated module by module into native
+optimization pass 1. The first `builders`/`binary` slice implements the accepted
+source rules and Result-first ByteReader APIs, with native/VM correctness gates.
+See [scope, migration and measurements](WIO_STD_BUILDERS_CONSOLIDATION.md).
+Other std/intrinsic APIs and language-wide bracket-only retirement remain open;
+this is not a completed v1 or SDK migration.
 
 These requirements refine the existing language-coherence, std-correctness,
 migration, tooling, SDK-parity and performance gates. They do not renumber the
