@@ -1,4 +1,3 @@
-use std::option as option;
 use std::result as result;
 use std::unicode as unicode;
 
@@ -6,6 +5,35 @@ realm std
 {
     realm builders
     {
+        using cpp::header("std_builders.h");
+
+        [native, cpp::name(wio::runtime::std_builders::ReserveString)]
+        fn ReserveStringNative(value: ref string, capacity: usize);
+
+        [native, cpp::name(wio::runtime::std_builders::AppendBytes)]
+        fn AppendBytesNative(value: ref u8[], source: string);
+
+        [native, cpp::name(wio::runtime::std_builders::ReadBytes)]
+        fn ReadBytesNative(value: u8[], start: usize, count: usize) -> string;
+
+        [Type(i32)]
+        enum ReadErrorCode
+        {
+            unexpectedEnd = 1101,
+            invalidVarUInt = 1102,
+            invalidUtf8 = 1103
+        };
+
+        fn ReadFailure(code: ReadErrorCode, message: string) -> std::ResultError
+        {
+            return std::MakeResultError(std::ResultDomain::io, code.Value(), message);
+        }
+
+        fn EndOfInput<T>() -> std::Result<T>
+        {
+            return std::Err<T>(ReadFailure(ReadErrorCode::unexpectedEnd, "ByteReader reached the end of the input."));
+        }
+
         object StringBuilder
         {
             private value: string;
@@ -18,6 +46,17 @@ realm std
             public fn OnConstruct(initial: string)
             {
                 self.value = initial;
+            }
+
+            public fn OnConstruct(capacity: usize)
+            {
+                self.value = "";
+                ReserveStringNative(ref self.value, capacity);
+            }
+
+            public fn Reserve(capacity: usize)
+            {
+                ReserveStringNative(ref self.value, capacity);
             }
 
             public fn Length() -> usize
@@ -146,22 +185,12 @@ realm std
             public fn WriteString(value: string)
             {
                 self.WriteVarUInt(value.Count() fit u64);
-                mut index = 0usize;
-                while (index < value.Count())
-                {
-                    self.bytes.Push(unicode::ByteAt(value, index));
-                    index += 1usize;
-                }
-
+                AppendBytesNative(ref self.bytes, value);
             }
 
             public fn WriteBytes(value: u8[])
             {
-                for (item in value)
-                {
-                    self.bytes.Push(item);
-                }
-
+                self.bytes.Extend(value);
             }
 
             public fn ToArray() -> u8[]
@@ -193,26 +222,26 @@ realm std
                 return self.bytes.Count() - self.position;
             }
 
-            public fn ReadU8() -> std::Option<u8>
+            public fn ReadU8() -> std::Result<u8>
             {
-                if (self.position >= self.bytes.Count()) return std::None<u8>();
+                if (self.position >= self.bytes.Count()) return EndOfInput<u8>();
                 let value = self.bytes[self.position];
                 self.position += 1usize;
-                return std::Some(value);
+                return std::Ok(value);
             }
 
-            public fn ReadU16LE() -> std::Option<u16>
+            public fn ReadU16LE() -> std::Result<u16>
             {
-                if (self.Remaining() < 2usize) return std::None<u16>();
+                if (self.Remaining() < 2usize) return EndOfInput<u16>();
                 let first = self.bytes[self.position] fit u16;
                 let second = self.bytes[self.position + 1usize] fit u16;
                 self.position += 2usize;
-                return std::Some<u16>((first | (second << 8u16)) fit u16);
+                return std::Ok<u16>((first | (second << 8u16)) fit u16);
             }
 
-            public fn ReadU32LE() -> std::Option<u32>
+            public fn ReadU32LE() -> std::Result<u32>
             {
-                if (self.Remaining() < 4usize) return std::None<u32>();
+                if (self.Remaining() < 4usize) return EndOfInput<u32>();
                 mut value = 0u32;
                 mut index = 0usize;
                 while (index < 4usize)
@@ -222,12 +251,12 @@ realm std
                 }
 
                 self.position += 4usize;
-                return std::Some(value);
+                return std::Ok(value);
             }
 
-            public fn ReadU64LE() -> std::Option<u64>
+            public fn ReadU64LE() -> std::Result<u64>
             {
-                if (self.Remaining() < 8usize) return std::None<u64>();
+                if (self.Remaining() < 8usize) return EndOfInput<u64>();
                 mut value = 0u64;
                 mut index = 0usize;
                 while (index < 8usize)
@@ -237,21 +266,21 @@ realm std
                 }
 
                 self.position += 8usize;
-                return std::Some(value);
+                return std::Ok(value);
             }
 
-            public fn ReadU16BE() -> std::Option<u16>
+            public fn ReadU16BE() -> std::Result<u16>
             {
-                if (self.Remaining() < 2usize) return std::None<u16>();
+                if (self.Remaining() < 2usize) return EndOfInput<u16>();
                 let value = ((self.bytes[self.position] fit u16) << 8u16) |
-                (self.bytes[self.position + 1usize] fit u16);
+                    (self.bytes[self.position + 1usize] fit u16);
                 self.position += 2usize;
-                return std::Some(value);
+                return std::Ok(value);
             }
 
-            public fn ReadU32BE() -> std::Option<u32>
+            public fn ReadU32BE() -> std::Result<u32>
             {
-                if (self.Remaining() < 4usize) return std::None<u32>();
+                if (self.Remaining() < 4usize) return EndOfInput<u32>();
                 mut value = 0u32;
                 mut index = 0usize;
                 while (index < 4usize)
@@ -261,10 +290,10 @@ realm std
                 }
 
                 self.position += 4usize;
-                return std::Some(value);
+                return std::Ok(value);
             }
 
-            public fn ReadVarUInt() -> std::Option<u64>
+            public fn ReadVarUInt() -> std::Result<u64>
             {
                 mut value = 0u64;
                 mut shift = 0u64;
@@ -272,63 +301,59 @@ realm std
                 while (cursor < self.bytes.Count() and shift <= 63u64)
                 {
                     let byte = self.bytes[cursor];
-                    if (shift == 63u64 and (byte & 0xfeu8) != 0u8) return std::None<u64>();
+                    if (shift == 63u64 and (byte & 0xfeu8) != 0u8)
+                    {
+                        return std::Err<u64>(ReadFailure(ReadErrorCode::invalidVarUInt, "VarUInt exceeds 64 bits."));
+                    }
+
                     value |= ((byte & 0x7fu8) fit u64) << shift;
                     cursor += 1usize;
                     if ((byte & 0x80u8) == 0u8)
                     {
                         self.position = cursor;
-                        return std::Some(value);
+                        return std::Ok(value);
                     }
 
                     shift += 7u64;
                 }
 
-                return std::None<u64>();
+                return EndOfInput<u64>();
             }
 
-            public fn ReadBytes(count: usize) -> std::Option<u8[]>
+            public fn ReadBytes(count: usize) -> std::Result<u8[]>
             {
-                if (count > self.Remaining()) return std::None<u8[]>();
-                mut value: u8[] = [];
-                value.Reserve(count);
-                mut index = 0usize;
-                while (index < count)
-                {
-                    value.Push(self.bytes[self.position + index]);
-                    index += 1usize;
-                }
-
+                if (count > self.Remaining()) return EndOfInput<u8[]>();
+                let value = self.bytes.Slice(self.position, count);
                 self.position += count;
-                return std::Some(value);
+                return std::Ok(value);
             }
 
-            public fn ReadString() -> std::Option<string>
+            public fn ReadString() -> std::Result<string>
             {
                 let original = self.position;
                 let length = self.ReadVarUInt();
-                if (length.IsNone() or length.Value() > (self.Remaining() fit u64))
+                if (length.IsError())
+                {
+                    return std::Err<string>(length.ErrorValue());
+                }
+
+                if (length.Value() > (self.Remaining() fit u64))
                 {
                     self.position = original;
-                    return std::None<string>();
+                    return std::Err<string>(ReadFailure(
+                        ReadErrorCode::unexpectedEnd, "String length exceeds the remaining input."));
                 }
 
-                mut value = "";
-                mut index = 0usize;
-                while (index < length.Value() fit usize)
-                {
-                    unicode::AppendByte(ref value, self.bytes[self.position + index]);
-                    index += 1usize;
-                }
-
-                self.position += index;
+                let count = length.Value() fit usize;
+                let value = ReadBytesNative(self.bytes, self.position, count);
                 if (not unicode::IsValidUtf8(value))
                 {
                     self.position = original;
-                    return std::None<string>();
+                    return std::Err<string>(ReadFailure(ReadErrorCode::invalidUtf8, "String contains invalid UTF-8."));
                 }
 
-                return std::Some(value);
+                self.position += count;
+                return std::Ok(value);
             }
 
             public fn Reset()

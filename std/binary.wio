@@ -47,30 +47,30 @@ realm std
             let version = reader.ReadU16LE();
             let flags = reader.ReadU16LE();
             let length = reader.ReadU64LE();
-            if (magic.IsNone() or version.IsNone() or flags.IsNone() or length.IsNone())
+            if (magic.IsError() or version.IsError() or flags.IsError() or length.IsError())
             {
                 return std::Err<Frame>(std::MakeResultError(
-                std::ResultDomain::custom, 1, "Binary frame header is truncated."));
+                    std::ResultDomain::custom, 1, "Binary frame header is truncated."));
             }
 
             if (magic.Value() != Magic)
             {
                 return std::Err<Frame>(std::MakeResultError(
-                std::ResultDomain::custom, 2, "Binary frame magic is invalid."));
+                    std::ResultDomain::custom, 2, "Binary frame magic is invalid."));
             }
 
             if (length.Value() > (maximumPayload fit u64) or
-            length.Value() > (reader.Remaining() fit u64))
+                length.Value() > (reader.Remaining() fit u64))
             {
                 return std::Err<Frame>(std::MakeResultError(
-                std::ResultDomain::custom, 3, "Binary frame payload length is invalid."));
+                    std::ResultDomain::custom, 3, "Binary frame payload length is invalid."));
             }
 
             let payload = reader.ReadBytes((length.Value() fit usize));
-            if (payload.IsNone() or reader.Remaining() != 0usize)
+            if (payload.IsError() or reader.Remaining() != 0usize)
             {
                 return std::Err<Frame>(std::MakeResultError(
-                std::ResultDomain::custom, 4, "Binary frame contains malformed trailing data."));
+                    std::ResultDomain::custom, 4, "Binary frame contains malformed trailing data."));
             }
 
             return std::Ok(Frame(version.Value(), flags.Value(), payload.Value()));

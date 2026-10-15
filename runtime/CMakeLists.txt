@@ -12,6 +12,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/ref.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/io_errors.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_assert.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_builders.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_async.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_async_fs.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_async_net.h"
