@@ -10,6 +10,12 @@ Release and macOS Release builds (12/12 executions). See
 [qualification evidence](WIO_BACKEND_CLOSURE_QUALIFICATION.md). The next work is
 pass 1 below; none of the optimization targets is claimed achieved by this gate.
 
+Pass 1 has started: `722e836` promotes proven closed scalar cells, uses plain
+primitive SSA and direct synchronous CFG edges. The paired Mandelbrot compute
+measurement is 33.44x faster than original Wio, with 1.027x C++ median execution
+time for that kernel only. String/format/container/managed/async and whole-app
+budgets remain open. See [scalar evidence](WIO_NATIVE_SCALAR_OPTIMIZATION.md).
+
 The subsequent heavy optimization work is split into exactly three passes.
 These are ordered work packages, not renumbered historical backend sprints.
 

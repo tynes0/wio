@@ -1267,6 +1267,12 @@ Rider, and CLion are defined in
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.
 
 9. [ ] Close generated-native cost and build scalability before v1.
+   First measured slice (`722e836`): proven closed scalar cells use inline
+   storage, primitive SSA loses optional wrappers and synchronous CFG uses
+   direct edges. Mandelbrot compute-only is 33.44x faster than original Wio,
+   1.027x the C++ median; this does not close string/format/managed/container/
+   async/application or compile-time budgets. See
+   `docs/WIO_NATIVE_SCALAR_OPTIMIZATION.md` for raw evidence and scope.
    Treat the native C++ path as a product backend with enforced size, compile
    time, memory, runtime, and binary-size budgets. A trivial program must not
    emit unused async/reflection/native infrastructure or thousands of lines of

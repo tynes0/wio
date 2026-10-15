@@ -4,6 +4,13 @@ Date: 2026-10-04. This is a local diagnostic measurement, not a general language
 benchmark or a completed optimization milestone. No playground source or user
 output was modified.
 
+Follow-up 2026-10-15: the scalar storage/CFG slice reduces the separate
+compute-only kernel from 774.603 ms to 23.163 ms (C++ 22.553 ms) in a fresh
+15-round paired measurement. See [the scoped optimization report and raw
+evidence](WIO_NATIVE_SCALAR_OPTIMIZATION.md). The original results below remain
+historical evidence; growing-prefix formatting and the full PPM timeout have
+not been requalified or fixed by that compute-only slice.
+
 ## Workload And Method
 
 - Intel Core i7-13620H, Windows 11 (build 26100).

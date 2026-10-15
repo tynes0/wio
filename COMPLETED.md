@@ -10,6 +10,31 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Native optimization pass 1: scalar storage/CFG slice — 2026-10-15
+
+- [x] Add a conservative function-local storage plan: closed primitive cells use
+      inline initialized storage without optional/function/shared allocation;
+      escaping/borrowed/captured/managed/coroutine state keeps the prior model.
+- [x] Emit plain trivial scalar SSA slots and direct synchronous CFG edges;
+      preserve checks/cleanup and simultaneous block-parameter transfer.
+- [x] Two new local gates pass 2/2 in 9.48 seconds, including O0/O2 zero-loop-
+      allocation probes, initialized/clear reads, native ref/capture fallback,
+      early loop exits and verified self-loop phi swaps.
+- [x] Preserve 15-round paired native benchmark evidence: original 774.603 ms,
+      intermediate 699.159 ms, current 23.163 ms, C++ 22.553 ms. Current is
+      33.44x faster than original, 1.027x C++ for compute only. Every checksum
+      matches; source/flags/runtime hashes and raw samples are committed.
+- [x] Independently instrument generated-entry allocation calls: original
+      15,454,738 ordinary new/new[] calls versus 2 currently, with all three
+      checksums preserved. Instrumented timing is not mixed into the medians.
+- [x] Clean CI at `722e836` builds the real Wio CLI and passes both new tests
+      on Windows Debug (12.26 s), Linux Release (8.79 s) and macOS Release
+      (8.46 s): 6/6 executions. See `docs/WIO_NATIVE_SCALAR_OPTIMIZATION.md`.
+- [~] Full generated/runtime pass remains open: string/buffer formatting,
+      aggregate/managed/container/async/application costs and support pruning.
+      VM runtime and compiler throughput remain later passes. No full old test
+      corpus, universal 5% budget, PPM timeout fix or release is claimed.
+
 ## Planning decision: SDK kit boundary — 2026-10-15
 
 - [x] Separate full SDK kit parity from compiler/VM/backend closure. The existing
