@@ -31,6 +31,15 @@ add_library(wio_compiler STATIC
 
 add_library(wio-compiler ALIAS wio_compiler)
 
+if(BUILD_TESTING)
+    add_executable(wio_backend_workspace_test
+        "${CMAKE_SOURCE_DIR}/tests/backend_workspace_test.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/wio_compiler/common/filesystem/backend_workspace.cpp")
+    target_include_directories(wio_backend_workspace_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    add_test(NAME wio_backend_workspace COMMAND wio_backend_workspace_test "${CMAKE_BINARY_DIR}/backend-workspace")
+    set_tests_properties(wio_backend_workspace PROPERTIES LABELS "native;platform;unicode;publication;backend-closure")
+endif()
+
 target_include_directories(wio_compiler PUBLIC include)
 
 add_dependencies(wio_compiler wio_runtime_backend)

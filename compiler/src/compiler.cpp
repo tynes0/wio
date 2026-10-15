@@ -43,6 +43,7 @@
 #include "wio/bytecode/verifier.h"
 #include "wio/common/exception.h"
 #include "wio/common/filesystem/filesystem.h"
+#include "wio/common/filesystem/backend_workspace.h"
 #include "wio/common/logger.h"
 #include "wio/common/profiling.h"
 #include "wio/lexer/lexer.h"
@@ -3440,6 +3441,8 @@ namespace wio
 
                 const std::filesystem::path backendCompilerPath = getBackendCompilerPath();
                 const std::string backendCompiler = filesystem::toUtf8(backendCompilerPath);
+                filesystem::BackendWorkspace backendWorkspace;
+                const auto nativeArtifact = backendWorkspace.file("artifact");
                 int exitCode = EXIT_SUCCESS;
 
                 if (gAppData.buildTarget == BuildTarget::StaticLibrary)
@@ -3457,18 +3460,9 @@ namespace wio
                     std::vector<std::filesystem::path> objectFiles;
                     objectFiles.reserve(1 + backendSourceFiles.size());
 
-                    auto buildObjectPath = [&](const std::filesystem::path& inputPath, size_t index)
-                    {
-                        std::string stem = filesystem::toUtf8(inputPath.stem());
-                        std::filesystem::path objectPath =
-                            outputPath.parent_path() /
-                            (filesystem::toUtf8(outputPath.stem()) + "." + stem + "." + std::to_string(index) + ".o");
-                        return objectPath.make_preferred();
-                    };
-
                     auto compileObject = [&](const std::filesystem::path& inputPath, size_t index) -> CommandResult
                     {
-                        std::filesystem::path objectPath = buildObjectPath(inputPath, index);
+                        std::filesystem::path objectPath = backendWorkspace.file("object", index);
                         objectFiles.push_back(objectPath);
 
                         std::stringstream compileCmd;
@@ -3509,7 +3503,7 @@ namespace wio
 
                     std::stringstream archiveCmd;
                     archiveCmd << quoteCommand(getBackendArchiver());
-                    archiveCmd << " rcs " << quotePath(outputPath);
+                    archiveCmd << " rcs " << quotePath(nativeArtifact);
                     for (const auto& objectFile : objectFiles)
                         archiveCmd << " " << quotePath(objectFile);
 
@@ -3526,7 +3520,6 @@ namespace wio
                 }
                 else
                 {
-                    const std::filesystem::path stagingOutputPath = makeBackendStagingPath(outputPath);
                     std::stringstream cmd;
                     cmd << quoteCommand(backendCompiler);
                     cmd << " -std=c++20 ";
@@ -3545,6 +3538,12 @@ namespace wio
                         cmd << "-fPIC ";
 #endif
                         cmd << "-shared ";
+#if defined(__APPLE__)
+                        // The temporary workspace name must not become the
+                        // Mach-O library identity seen by native consumers.
+                        cmd << "-Xlinker -install_name -Xlinker "
+                            << quoteCommand("@rpath/" + filesystem::toUtf8(outputPath.filename())) << " ";
+#endif
                     }
 
 #if defined(_WIN32)
@@ -3565,7 +3564,7 @@ namespace wio
 #else
                     cmd << " -pthread";
 #endif
-                    cmd << " -o " << quotePath(stagingOutputPath);
+                    cmd << " -o " << quotePath(nativeArtifact);
 
                     const CommandResult backendResult =
                         runCommandCaptureOutput(cmd.str(), {backendCompilerPath.parent_path()});
@@ -3573,22 +3572,33 @@ namespace wio
 
                     if (exitCode != 0)
                     {
-                        std::error_code cleanupError;
-                        std::filesystem::remove(stagingOutputPath, cleanupError);
                         reportBackendCommandFailure("Backend compilation failed", exitCode, backendResult.output,
                                                     backendResult.command);
                         return EXIT_FAILURE;
                     }
+                }
 
-                    std::string replaceError;
-                    if (!replaceBackendOutputWithRetry(stagingOutputPath, outputPath, replaceError))
-                    {
-                        std::error_code cleanupError;
-                        std::filesystem::remove(stagingOutputPath, cleanupError);
-                        WIO_LOG_FATAL("Generated backend output could not replace '{}': {}",
-                                      filesystem::toUtf8(outputPath), replaceError);
-                        return EXIT_FAILURE;
-                    }
+                // Copy through native filesystem APIs, then publish from the
+                // destination filesystem atomically. This also keeps a failed
+                // static archive rebuild from corrupting the previous archive.
+                filesystem::BackendWorkspace publicationWorkspace(outputPath.parent_path());
+                const auto stagingOutputPath = publicationWorkspace.file("artifact");
+                std::error_code copyError;
+                std::filesystem::copy_file(nativeArtifact, stagingOutputPath, copyError);
+                if (copyError)
+                {
+                    WIO_LOG_FATAL("Generated backend output could not be staged for '{}': {}",
+                                  filesystem::toUtf8(outputPath), copyError.message());
+                    return EXIT_FAILURE;
+                }
+                std::string replaceError;
+                if (!replaceBackendOutputWithRetry(stagingOutputPath, outputPath, replaceError))
+                {
+                    std::error_code cleanupError;
+                    std::filesystem::remove(stagingOutputPath, cleanupError);
+                    WIO_LOG_FATAL("Generated backend output could not replace '{}': {}", filesystem::toUtf8(outputPath),
+                                  replaceError);
+                    return EXIT_FAILURE;
                 }
 
                 WIO_LOG_INFO("Generated backend output: {}", pathToDisplayString(outputPath));

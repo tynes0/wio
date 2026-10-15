@@ -1523,3 +1523,31 @@ add_test(NAME wio_vm_executable_cohort
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_executable_cohort_test.cmake")
 wio_test_labels(wio_vm_executable_cohort interop vm native project cli artifact integrity deployment release-gate)
 set_tests_properties(wio_vm_executable_cohort PROPERTIES TIMEOUT 600)
+
+add_test(NAME wio_backend_unicode_outputs
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_VM_RUNNER=$<TARGET_FILE:wio_vm_runner>"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_SHARED_SUFFIX=${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/backend-unicode-outputs"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/backend_unicode_outputs_test.cmake")
+wio_test_labels(wio_backend_unicode_outputs native platform artifact unicode publication release-gate backend-closure)
+set_tests_properties(wio_backend_unicode_outputs PROPERTIES TIMEOUT 600)
+
+add_test(NAME wio_vm_platform_qualification
+    COMMAND ${CMAKE_COMMAND}
+        "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}"
+        "-DWIO_CONFIG=$<CONFIG>"
+        "-DWIO_GENERATOR=${CMAKE_GENERATOR}"
+        "-DWIO_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}"
+        "-DWIO_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DWIO_MINGW=${MINGW}"
+        "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-platform-qualification"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_platform_qualification_test.cmake")
+wio_test_labels(wio_vm_platform_qualification vm native platform cli install deployment ownership release-gate backend-closure)
+set_tests_properties(wio_vm_platform_qualification PROPERTIES TIMEOUT 1200)

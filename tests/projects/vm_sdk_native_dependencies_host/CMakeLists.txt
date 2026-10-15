@@ -14,6 +14,11 @@ foreach(target IN ITEMS deploy_calc deploy_native deploy_invalid)
     set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/original-producers"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/original-producers" BUILD_RPATH_USE_ORIGIN TRUE)
 endforeach()
+if(APPLE)
+    # BUILD_RPATH_USE_ORIGIN is ELF-specific. Preserve sibling dependency lookup
+    # after copying Mach-O producers into an immutable native cohort as well.
+    set_target_properties(deploy_calc deploy_native deploy_invalid PROPERTIES BUILD_RPATH "@loader_path")
+endif()
 wio_add_vm_module(native_shared BYTECODE "${WIO_TEST_BYTECODE}"
     NATIVE_LIBRARIES deploy_native RUNTIME_LIBRARIES deploy_calc)
 wio_add_vm_module(native_static STATIC BYTECODE "${WIO_TEST_BYTECODE}" GETTER WioStaticNativeContract
