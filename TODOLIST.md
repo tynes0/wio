@@ -1272,6 +1272,11 @@ Rider, and CLion are defined in
    `docs/WIO_VM_NATIVE_BRIDGE.md` for the qualified surface and negative cases.
 
 9. [ ] Close generated-native cost and build scalability before v1.
+   Fixed pass-1 substeps N01-N14 and coverage are tracked in
+   `docs/WIO_NATIVE_RUNTIME_PLAN.md`. N01 starts the native cost map, not runtime
+   transformations. Std consolidation includes deleting unnecessary/duplicate
+   APIs and merging suitable modules (candidate: sort into algorithms), with
+   explicit dependency/import/API migration and native/VM qualification.
    First measured slice (`722e836`): proven closed scalar cells use inline
    storage, primitive SSA loses optional wrappers and synchronous CFG uses
    direct edges. Mandelbrot compute-only is 33.44x faster than original Wio,

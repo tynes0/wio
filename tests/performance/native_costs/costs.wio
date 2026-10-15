@@ -1,0 +1,164 @@
+use std::builders as builders;
+use std::result;
+
+using cpp::header("probe.h");
+
+[native, cpp::name(native_costs::Begin)]
+fn Begin();
+
+[native, cpp::name(native_costs::Report)]
+fn Report(checksum: u64) -> i32;
+
+[native, cpp::name(native_costs::Hash)]
+fn Hash(value: view string) -> u64;
+
+[native, cpp::name(native_costs::ParseCount)]
+fn ParseCount(value: string) -> i32;
+
+[native, cpp::name(native_costs::Step)]
+fn NativeStep(value: u64) -> u64;
+
+component Pair
+{
+    public first: u64;
+
+    public second: u64;
+}
+
+fn MakePair(value: u64) -> Pair
+{
+    mut pair = Pair();
+    pair.first = value;
+    pair.second = value + 1u64;
+    return pair;
+}
+
+object Counter
+{
+    private value: u64;
+
+    public fn OnConstruct(value: u64)
+    {
+        self.value = value;
+    }
+
+    public fn Read() -> u64
+    {
+        return self.value;
+    }
+
+}
+
+fn Success(value: u64) -> std::Result<u64>
+{
+    return std::Ok(value);
+}
+
+fn Run(kind: string, count: i32) -> u64
+{
+    let fragment = "0123456789abcdef0123456789abcdef";
+    if (kind == "concat")
+    {
+        mut output = "";
+        for (index in 0..<count)
+        {
+            output += fragment;
+        }
+
+        return Hash(ref output);
+    }
+
+    if (kind == "builder" or kind == "format")
+    {
+        let output = builders::StringBuilder();
+        for (index in 0..<count)
+        {
+            if (kind == "builder")
+            {
+                output.Append(fragment);
+            }
+            else
+            {
+                output.Append($"${index}/");
+            }
+
+        }
+
+        let snapshot = output.ToString();
+        return Hash(ref snapshot);
+    }
+
+    if (kind == "bytes")
+    {
+        let output = builders::ByteWriter();
+        for (index in 0..<count)
+        {
+            output.WriteU32LE(index fit u32);
+        }
+
+        let snapshot = output.ToArray();
+        mut sum = 14695981039346656037u64;
+        for (value in snapshot)
+        {
+            sum = (sum ^ (value fit u64)) * 1099511628211u64;
+        }
+
+        return sum;
+    }
+
+    if (kind == "array")
+    {
+        mut values: u64[] = [];
+        for (index in 0..<count)
+        {
+            values.Push(index fit u64);
+        }
+
+        mut sum = 0u64;
+        for (value in values)
+        {
+            sum = sum * 33u64 + value;
+        }
+
+        return sum;
+    }
+
+    mut sum = 0u64;
+    for (index in 0..<count)
+    {
+        if (kind == "component")
+        {
+            let value = MakePair(index fit u64);
+            sum = sum * 33u64 + value.first + value.second;
+        }
+        else if (kind == "object")
+        {
+            let value = Counter(index fit u64);
+            let alias = value;
+            sum = sum * 33u64 + alias.Read();
+        }
+        else if (kind == "native_call")
+        {
+            sum = NativeStep(sum);
+        }
+        else if (kind == "result")
+        {
+            sum = sum * 33u64 + Success!(index fit u64);
+        }
+
+    }
+
+    return sum;
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() != 3usize) return 2;
+    let kind = args[1usize];
+    if (kind != "concat" and kind != "builder" and kind != "format" and kind != "bytes" and
+        kind != "array" and kind != "component" and kind != "object" and kind != "native_call" and kind != "result") return 3;
+    let count = ParseCount(args[2usize]);
+    Begin();
+    let checksum = Run(kind, count);
+    return Report(checksum);
+}

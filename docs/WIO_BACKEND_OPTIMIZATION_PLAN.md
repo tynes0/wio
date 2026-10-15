@@ -21,6 +21,14 @@ These are ordered work packages, not renumbered historical backend sprints.
 
 ## 1. Generated C++, runtime and coordinated std consolidation
 
+The fixed native substep list is **N01-N14** in
+[the native runtime plan](WIO_NATIVE_RUNTIME_PLAN.md). N01 begins with an
+allocation/requested-byte and checksum-qualified cost map; missing subsystem
+metrics remain explicit. These IDs do not change the three main passes.
+Std consolidation also removes unnecessary/duplicate surfaces and evaluates
+merging focused modules (for example `sort` into `algorithms`), with import/API
+migration and native/VM behavior qualified before removal.
+
 Accepted extension on 2026-10-15: do the std source rules, Result-first API
 standardization and implementation optimization module by module within this
 pass, rather than optimizing APIs that will immediately be replaced later.
