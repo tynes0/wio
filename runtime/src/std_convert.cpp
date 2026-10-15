@@ -1,6 +1,7 @@
 #include "std_convert.h"
 
 #include "exception.h"
+#include "float_parse.h"
 
 #include <algorithm>
 #include <charconv>
@@ -231,12 +232,7 @@ namespace wio::runtime::std_convert
             }
 
             T parsed = 0;
-            const auto [end, conversionError] = std::from_chars(
-                text.data(),
-                text.data() + text.size(),
-                parsed,
-                std::chars_format::general
-            );
+            const auto [end, conversionError] = detail::parseFloatChars(text, parsed);
 
             if (conversionError == std::errc::invalid_argument)
             {

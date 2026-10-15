@@ -789,7 +789,7 @@
                     const auto resolved = unwrapAliasType(parameter);
                     if (!resolved || resolved->kind() != TypeKind::Reference)
                         return false;
-                    const auto reference = resolved.AsFast<ReferenceType>();
+                    const auto reference = resolved.template AsFast<ReferenceType>();
                     return (!resultReference->isMutable || reference->isMutable) &&
                            sameNativeBorrowCellType(reference->referredType, resultReference->referredType);
                 });

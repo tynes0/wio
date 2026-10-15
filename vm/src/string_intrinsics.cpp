@@ -1,4 +1,5 @@
 #include "string_intrinsics.h"
+#include "float_parse.h"
 
 #include <algorithm>
 #include <charconv>
@@ -440,7 +441,7 @@ namespace wio::vm::detail
             {
                 float parsed = 0.0f;
                 const auto [end, error] =
-                    std::from_chars(source.data(), source.data() + source.size(), parsed, std::chars_format::general);
+                    runtime::detail::parseFloatChars(source, parsed);
                 if (source.empty() || error != std::errc{} || end != source.data() + source.size() ||
                     !std::isfinite(parsed))
                     return failure("WVM1129", "String f32 conversion failed");
@@ -448,7 +449,7 @@ namespace wio::vm::detail
             }
             double parsed = 0.0;
             const auto [end, error] =
-                std::from_chars(source.data(), source.data() + source.size(), parsed, std::chars_format::general);
+                runtime::detail::parseFloatChars(source, parsed);
             if (source.empty() || error != std::errc{} || end != source.data() + source.size() ||
                 !std::isfinite(parsed))
                 return failure("WVM1129", "String floating-point conversion failed");

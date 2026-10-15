@@ -32,6 +32,10 @@ add_library(wio_compiler STATIC
 add_library(wio-compiler ALIAS wio_compiler)
 
 if(BUILD_TESTING)
+    add_executable(wio_float_parse_portability_test "${CMAKE_SOURCE_DIR}/tests/float_parse_portability_test.cpp")
+    target_include_directories(wio_float_parse_portability_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
+    add_test(NAME wio_float_parse_portability COMMAND wio_float_parse_portability_test)
+    set_tests_properties(wio_float_parse_portability PROPERTIES LABELS "runtime;platform;conversion;backend-closure")
     add_executable(wio_backend_workspace_test
         "${CMAKE_SOURCE_DIR}/tests/backend_workspace_test.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/wio_compiler/common/filesystem/backend_workspace.cpp")

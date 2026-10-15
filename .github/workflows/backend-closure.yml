@@ -44,11 +44,11 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
       - name: Build compiler, CLI and runtime artifacts
-        run: cmake --build build --target wio_selfhost_cli wio_vm_runner wio_backend_workspace_test --parallel 2
+        run: cmake --build build --target wio_selfhost_cli wio_vm_runner wio_backend_workspace_test wio_float_parse_portability_test --parallel 2
       - name: Qualify new functional closure cases
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure -j 1
-          -R "^(wio_backend_workspace|wio_backend_unicode_outputs|wio_vm_platform_qualification)$"
+          -R "^(wio_backend_workspace|wio_backend_unicode_outputs|wio_vm_platform_qualification|wio_float_parse_portability)$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
