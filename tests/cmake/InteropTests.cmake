@@ -1632,4 +1632,10 @@ if(WIO_MEASUREMENT_PWSH)
             "${CMAKE_SOURCE_DIR}/tests/performance/measurement_test.ps1")
     wio_test_labels(wio_measurement_contract performance diagnostic measurement)
     set_tests_properties(wio_measurement_contract PROPERTIES TIMEOUT 60 RUN_SERIAL TRUE)
+    add_test(NAME wio_native_cost_measurement_contract
+        COMMAND "${WIO_MEASUREMENT_PWSH}" -NoProfile -File
+            "${CMAKE_SOURCE_DIR}/tests/performance/native_costs/measurement_test.ps1"
+            -CppCompiler "${WIO_BACKEND_CXX_COMPILER}")
+    wio_test_labels(wio_native_cost_measurement_contract performance diagnostic measurement)
+    set_tests_properties(wio_native_cost_measurement_contract PROPERTIES TIMEOUT 180 RUN_SERIAL TRUE)
 endif()
