@@ -1,4 +1,5 @@
 #include "wio/codegen/wir_cpp_backend.h"
+#include "wio/codegen/wir_cpp_storage_plan.h"
 #include "wio/codegen/wir_intrinsics.h"
 #include "wio/codegen/wir_module_emitter.h"
 #include "wio/codegen/wir_native_bridge_plan.h"
@@ -335,6 +336,7 @@ namespace wio::codegen
             std::unordered_map<std::uint32_t, ValueId> valueAliases_;
             std::unordered_set<const lowered::Instruction*> suppressedInstructions_;
             std::unordered_set<std::uint32_t> directValues_;
+            WirCppStoragePlan storagePlan_;
             std::unordered_set<std::uint32_t> structuralAliases_;
             std::set<TypeId> nativeProxyTypes_;
             std::set<TypeId> nativeProxyHierarchyTypes_;
@@ -1280,6 +1282,43 @@ template<class To, class From> To numeric_fit(const From value) {
         return static_cast<To>(value);
     }
 }
+template<class T> class ScalarPlace
+{
+    static_assert(std::is_arithmetic_v<T>);
+
+public:
+    static ScalarPlace local()
+    {
+        return {};
+    }
+
+    T& read()
+    {
+        if (!initialized_)
+            throw std::runtime_error("read from uninitialized Wio place");
+        return value_;
+    }
+
+    const T& read() const
+    {
+        return const_cast<ScalarPlace*>(this)->read();
+    }
+
+    void write(T value)
+    {
+        value_ = value;
+        initialized_ = true;
+    }
+
+    void clear()
+    {
+        initialized_ = false;
+    }
+
+private:
+    T value_{};
+    bool initialized_ = false;
+};
 template<class T> class Place {
 public:
     static Place local() {
@@ -2015,6 +2054,7 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 directValues_.clear();
                 directValues_.reserve(valueCapacity);
                 currentFunctionIsLinear_ = isLinearFunction(function);
+                storagePlan_ = WirCppStoragePlan::build(module_, function);
                 for (const lowered::Parameter& parameter : function.parameters)
                 {
                     valueTypes_[parameter.id.value()] = parameter.type;
@@ -2160,6 +2200,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
 
             std::string valueStorageType(const std::uint32_t id, const TypeId type) const
             {
+                if (storagePlan_.scalarPlaces.contains(id))
+                    return "wio::wir_backend::ScalarPlace<" + placeValueType(type) + ">";
                 if (objectBorrowedLoads_.contains(id))
                     return "wio::wir_backend::ObjectBorrow<" + objectName(type) + ">";
                 if (borrowedLoads_.contains(id))
@@ -2170,7 +2212,7 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
             std::string operand(ValueId id) const
             {
                 id = resolveValueAlias(id);
-                if (directValues_.contains(id.value()))
+                if (directValues_.contains(id.value()) || storagePlan_.plainValues.contains(id.value()))
                     return borrowedLoads_.contains(id.value()) ? "(" + valueName(id) + ".get())" : valueName(id);
                 return borrowedLoads_.contains(id.value()) ? "(" + valueName(id) + "->get())"
                                                            : "(*" + valueName(id) + ")";
@@ -2515,13 +2557,25 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 for (const lowered::BasicBlock& block : currentFunction_->blocks)
                     if (block.id == target.block)
                         destination = &block;
+                // Phi assignment is simultaneous, including self-loop swaps.
+                output_ << "                {\n";
                 for (std::size_t index = 0; destination && index < target.arguments.size(); ++index)
-                    output_ << "                " << valueName(destination->parameters[index].id) << " = "
+                    output_ << "                "
+                            << valueStorageType(destination->parameters[index].id.value(),
+                                                destination->parameters[index].type)
+                            << " _edge" << index << " = "
                             << (destination->parameters[index].ownership == typed::ValueOwnership::Owned
                                     ? movedOperand(target.arguments[index])
                                     : operand(target.arguments[index]))
                             << ";\n";
-                output_ << "                _block = " << target.block.value() << "; continue;\n";
+                for (std::size_t index = 0; destination && index < target.arguments.size(); ++index)
+                    output_ << "                " << valueName(destination->parameters[index].id)
+                            << " = std::move(_edge" << index << ");\n";
+                if (storagePlan_.directControlFlow)
+                    output_ << "                goto _b" << target.block.value() << ";\n";
+                else
+                    output_ << "                _block = " << target.block.value() << "; continue;\n";
+                output_ << "                }\n";
             }
 
             void emitInstruction(const lowered::Instruction& instruction)
@@ -2930,7 +2984,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     break;
                 }
                 case lowered::Opcode::LocalPlace:
-                    assignResult(instruction, cppType(instruction.resultType) + "::local()");
+                    assignResult(instruction,
+                                 valueStorageType(instruction.result.value(), instruction.resultType) + "::local()");
                     break;
                 case lowered::Opcode::PlaceInit:
                 case lowered::Opcode::Store:
@@ -3269,7 +3324,10 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 {
                     if (directValues_.contains(id))
                         continue;
-                    output_ << "    std::optional<" << valueStorageType(id, type) << "> _v" << id << ";\n";
+                    if (storagePlan_.plainValues.contains(id))
+                        output_ << "    " << valueStorageType(id, type) << " _v" << id << "{};\n";
+                    else
+                        output_ << "    std::optional<" << valueStorageType(id, type) << "> _v" << id << ";\n";
                 }
                 for (std::size_t index = 0; index < function.parameters.size(); ++index)
                 {
@@ -3288,20 +3346,29 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     return;
                 }
 
-                output_ << "    std::uint32_t _block = " << function.blocks.front().id.value()
-                        << ";\n"
-                           "    for (;;) {\n        switch (_block) {\n";
+                if (storagePlan_.directControlFlow)
+                    output_ << "    goto _b" << function.blocks.front().id.value() << ";\n";
+                else
+                    output_ << "    std::uint32_t _block = " << function.blocks.front().id.value()
+                            << ";\n"
+                               "    for (;;) {\n        switch (_block) {\n";
                 for (const lowered::BasicBlock& block : function.blocks)
                 {
                     currentBlock_ = &block;
-                    output_ << "        case " << block.id.value() << ": {\n";
+                    if (storagePlan_.directControlFlow)
+                        output_ << "    _b" << block.id.value() << ": {\n";
+                    else
+                        output_ << "        case " << block.id.value() << ": {\n";
                     for (const lowered::Instruction& instruction : block.instructions)
                         emitInstruction(instruction);
                     output_ << "                throw std::logic_error(\"Wio block has no terminator\");\n"
                                "        }\n";
                 }
-                output_ << "        default: throw std::logic_error(\"invalid Wio block id\");\n"
-                           "        }\n    }\n}\n\n";
+                if (storagePlan_.directControlFlow)
+                    output_ << "}\n\n";
+                else
+                    output_ << "        default: throw std::logic_error(\"invalid Wio block id\");\n"
+                               "        }\n    }\n}\n\n";
             }
 
             void emitAsyncBehavioralFunction(const lowered::Function& function,

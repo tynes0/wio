@@ -2211,155 +2211,155 @@ Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:119](../compiler
 - invalid Lowered WIR: {dynamic context}: {dynamic context}
 - {dynamic context}invalid Lowered WIR: {dynamic context}: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:238](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L238), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:3691](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L3691).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:239](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L239), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:3758](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L3758).
 
 ### WCPP1100
 
 - unresolved type reached the C++ backend: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:450](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L450).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:452](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L452).
 
 ### WCPP1101
 
 - const-value type has no canonical value
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:457](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L457).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:459](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L459).
 
 ### WCPP1102
 
 - type {dynamic context} requires one argument
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:465](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L465).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:467](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L467).
 
 ### WCPP1103
 
 - dictionary type requires key and value arguments
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:469](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L469).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:471](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L471).
 
 ### WCPP1104
 
 - function type requires a return type
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:473](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L473).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:475](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L475).
 
 ### WCPP1105
 
 - native POD type requires a C++ type binding
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:520](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L520).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:522](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L522).
 
 ### WCPP1106
 
 - object/interface requires canonical hierarchy lowering
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:479](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L479).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:481](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L481).
 
 ### WCPP1107
 
 - enum/flagset requires canonical underlying-type and case layout metadata
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:525](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L525).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:527](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L527).
 
 ### WCPP1108
 
 - global value requires a concrete specialized type
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:535](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L535).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:537](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L537).
 
 ### WCPP1201
 
 - opcode is not implemented by the WIR C++ backend: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:667](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L667).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:669](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L669).
 
 ### WCPP1202
 
 - native invocation requires an adapter thunk not implemented by this backend
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:780](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L780).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:782](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L782).
 
 ### WCPP1203
 
 - constructor identity does not match its canonical argument signature
 - constructor '{dynamic context}' requires a callable constructor adapter; only canonical field-wise construction is enabled (operands={dynamic context}, fields={dynamic context})
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:804](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L804), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:826](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L826).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:806](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L806), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:828](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L828).
 
 ### WCPP1205
 
 - intrinsic family is not implemented by this C++ backend slice: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:737](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L737).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:739](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L739).
 
 ### WCPP1206
 
 - enum/flagset intrinsic is not recognized: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:745](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L745).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:747](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L747).
 
 ### WCPP1207
 
 - enum/flagset constant does not exist in canonical layout: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:752](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L752).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:754](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L754).
 
 ### WCPP1208
 
 - payload variants currently require canonical Option/Result layout
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:768](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L768).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:770](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L770).
 
 ### WCPP1209
 
 - generic call requires a concrete specialized function body
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:726](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L726).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:728](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L728).
 
 ### WCPP1210
 
 - iterator source or operand count is not supported
 - iterator projection is not supported: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:688](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L688), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:716](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L716).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:690](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L690), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:718](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L718).
 
 ### WCPP1211
 
 - cannot construct an object with abstract method contracts
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:792](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L792).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:794](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L794).
 
 ### WCPP1212
 
 - object lifecycle requires a concrete receiver-only body
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:506](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L506), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:515](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L515).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:508](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L508), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:517](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L517).
 
 ### WCPP1213
 
 - wire ABI requires owned results and forbids ref/view parameters on asynchronous calls
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:609](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L609).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:611](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L611).
 
 ### WCPP1214
 
 - application requires canonical exit-state fields
 - worker application stages require a thread-transfer lowering contract
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:546](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L546), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:549](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L549).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:548](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L548), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:551](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L551).
 
 ### WCPP1215
 
 - behavioral attribute requires a concrete processor object and pinned hook function
 - around processors are not valid on asynchronous functions
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:570](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L570), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:577](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L577).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:572](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L572), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:579](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L579).
 
 ### WCPP1220
 
 - {dynamic context}native-only bridge requires no main and native task sidecars
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:3683](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L3683).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:3750](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L3750).
 
 ## WBC
 

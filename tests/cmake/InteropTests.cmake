@@ -1551,3 +1551,13 @@ add_test(NAME wio_vm_platform_qualification
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_platform_qualification_test.cmake")
 wio_test_labels(wio_vm_platform_qualification vm native platform cli install deployment ownership release-gate backend-closure)
 set_tests_properties(wio_vm_platform_qualification PROPERTIES TIMEOUT 1200)
+
+add_test(NAME wio_wir_cpp_scalar_storage
+    COMMAND ${CMAKE_COMMAND} "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_PLAN_TEST=$<TARGET_FILE:wio_wir_cpp_storage_plan_test>"
+        "-DWIO_BACKEND_CXX=${WIO_BACKEND_CXX_COMPILER}" "-DWIO_RUNTIME=${WIO_BACKEND_RUNTIME_LIBRARY}"
+        "-DWIO_ROOT=${CMAKE_SOURCE_DIR}" "-DWIO_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/wir-cpp-scalar-storage"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/wir_cpp_scalar_storage_test.cmake")
+wio_test_labels(wio_wir_cpp_scalar_storage native codegen optimization storage ownership)
+set_tests_properties(wio_wir_cpp_scalar_storage PROPERTIES TIMEOUT 600)
