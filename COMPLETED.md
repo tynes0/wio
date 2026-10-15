@@ -10,6 +10,30 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N01 Wio + Python measurement path — 2026-10-15
+
+- [x] `33f2c1b`: prefer Wio behavior/workload fixtures with Python orchestration.
+      Both original Wio suites are unchanged. Native-cost PS entries are now thin
+      compatibility forwarding only; removed the just-added synthetic C++/PS test
+      (recoverable in Git). Old unrelated scripts were not bulk-converted.
+- [x] Python affinity/worker isolation, partial timeout output, descendant cleanup,
+      immutable build/runner/input hashes, explicit counter mode and independent
+      extended fingerprints, separate output/timing acceptance. Windows/Linux
+      support hard affinity; macOS explicitly collects unpinned correctness and
+      never fabricates a timing-qualified result.
+- [x] Only the new Python CTest was run: 1/1, 55.66 seconds, 26 checks with no
+      skips, including both real Wio builds and 128/128 checked executions at count
+      17. No old corpus. Final count-2000 runs: 720/720 outputs correct; allocation
+      evidence matches previous instrumented baselines. All three microcase timing
+      sessions are rejected without trimming/retry-until-pass.
+- [x] Frozen-artifact Python Mandelbrot: 32/32 output checks; unchanged hashes and
+      endpoint power state; all coarse timing gates pass. Native compute median
+      23.6669 ms, Release VM 20.5034887 s. This is not a compiler/runtime optimization
+      or 5% accuracy claim; child-wall boundary differs from old external timing.
+- [ ] Opening/closing stage remains N01. Copy/move/RC attribution, live/peak memory,
+      broader subsystem coverage and precise microcase baselines remain open;
+      N02 has not started. See `docs/WIO_NATIVE_COST_CONTROLLER.md` for evidence.
+
 ## N01 measurement acceptance correction — 2026-10-15
 
 - [x] `4718f82`: exact-binary Mandelbrot remeasurement, pre-launch inherited

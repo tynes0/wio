@@ -61,9 +61,10 @@ close N01, or claim a current C++ performance ratio. Repeat a predeclared paired
 experiment once normal quiet conditions are available, not until numbers look
 attractive. Historical results remain intact.
 
-The separate native-cost microbenchmark runner has not yet been migrated to this
-Windows controller. Its earlier diagnostic timings remain explicitly unqualified
-for precise performance claims; its allocation/fingerprint evidence is separate.
+The follow-up [native-cost controller pass](WIO_NATIVE_COST_CONTROLLER.md) migrates
+the microbenchmark runner to the shared control helpers. Earlier diagnostic
+timings remain explicitly unqualified for precise performance claims; their
+allocation/fingerprint evidence is separate. This is still N01, not N02.
 
 ## Raw runs
 

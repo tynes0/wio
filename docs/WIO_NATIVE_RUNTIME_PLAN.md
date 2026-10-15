@@ -101,12 +101,26 @@ individual component operation, Ref increment or instruction.
 The Mandelbrot controller now rejects unstable runs and supports exact-binary
 remeasurement, pre-launch affinity, VM warm-ups, A/A controls and endpoint hash/
 power checks. See [measurement correction and evidence](WIO_MEASUREMENT_QUALIFICATION.md).
-This repairs acceptance, not the busy machine: a qualified quiet baseline is
-still pending. The native-cost runner's timing controller migration is separate;
-do not retroactively qualify its existing diagnostic timing results.
+This repairs acceptance, not the busy machine. The Python Mandelbrot follow-up
+meets coarse gates; tighter accuracy and noisy microcase baselines remain pending.
+The native-cost runner now uses Python affinity, process-capture,
+hash and stability helpers, with independent timing/output acceptance and frozen
+binary reuse. See [the native-cost controller pass](WIO_NATIVE_COST_CONTROLLER.md).
+Do not retroactively qualify its older diagnostic timing results.
 
 The extended session also shows substantial timing drift with unchanged compiler,
 runtime and VM-host hashes, including a slower prior-generated-C++ control.
 Keep all samples and qualify the environment before numeric performance-budget
 acceptance. Stable documented conditions and paired controls are an N01
 measurement requirement; do not silently alter the user's system power policy.
+
+## Progress reporting
+
+Every update names its current N01-N14 item. Closing one item and starting another
+in the same turn must state both the closure and transition explicitly. A narrow
+subsystem slice is not a whole-item closure. This controller pass starts/ends at
+N01; N02 has not started. Remaining attribution/coverage gaps above remain open.
+
+New behavior tests should preferably be Wio; Python is preferred for portable
+build/process/measurement orchestration. Avoid new substantial PS1 test logic.
+Legacy PS wrappers may remain for compatibility, not as the primary new test path.
