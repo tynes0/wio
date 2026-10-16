@@ -10,6 +10,39 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N02 Wio-owned benchmark library and controller — 2026-10-16
+
+- [x] `std::benchmark`: checksum-verified warmup/repetition runs, calibration,
+      opaque scalar inputs/observable consumption, min/max/mean/median,
+      p90/p95/p99, sample standard deviation/error, MAD and range/drift checks.
+      Wio report/protocol/JSON surfaces; no new language syntax.
+- [x] Wio-written `wio-bench`: strict manifests, literal argv/no shell, serial
+      builds/version capture, source/runtime/toolchain/binary SHA256 endpoints,
+      rotating/reversing comparison rounds, native A/A controls and distinct
+      final native/VM rounds. Raw/checkpoint JSON and Markdown, compare/report
+      commands, explicit process-local suite environment and no result overwrite.
+- [x] Native OS boundary: timeout/output limits, ordinary descendant cleanup,
+      child CPU and peak RSS, self-process memory flags. Separate opt-in native
+      allocation windows cover ordinary/aligned/zero/nothrow/overflow/frees with
+      request/live/peak/failure accounting. Not malloc/custom/managed/VM-heap
+      attribution or production timing. Scoped Wio example: 9 requests, 4587
+      requested/freed bytes, 3652 peak live bytes, zero final live bytes/blocks.
+- [x] CMake build/install/distribution integration; static Windows tool linkage.
+      Wio project, portable Python bootstrap, four-language real example plus
+      optional Python. Required future before/after + final-Wio workflow recorded.
+- [x] Tests caught and corrected disappearing pure-compute timing and JSON
+      floating zero -> null/precision loss. Locale-independent round-trip number
+      serialization, plus new Wio/native/VM and independent Python/C++ checks.
+- [x] Final new-only CTest 1/1 passed in 690.91 seconds, including intentional
+      stale-root override, failed outputs, descendant cleanup and immutable
+      before/after artifacts. No old corpus run. Three-OS CI configured.
+- [x] Real 20,000-step comparison: 48/48 outputs correct, endpoint hashes,
+      affinity and power observation unchanged. Overall time qualification rejects
+      Python's 24.6% range; no samples removed, no general speedup claim.
+- [ ] N02's remaining string/concat optimization is still open; this tooling is
+      not closure of native/VM/compiler optimization or broader N01 coverage.
+      See `docs/WIO_BENCHMARKS.md` and `tools/wio-bench/README.md`.
+
 ## N02 local string/text append reuse — 2026-10-16
 
 - [x] Actual C++ backend/storage-plan optimization: fuse a proven adjacent

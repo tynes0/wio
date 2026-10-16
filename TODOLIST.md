@@ -1274,7 +1274,11 @@ Rider, and CLion are defined in
 9. [ ] Close generated-native cost and build scalability before v1.
    Fixed pass-1 substeps N01-N14 and coverage are tracked in
    `docs/WIO_NATIVE_RUNTIME_PLAN.md`. N01 starts the native cost map, not runtime
-   transformations. Std consolidation includes deleting unnecessary/duplicate
+   transformations. N02 now has a scoped local string/text append optimization;
+   its remaining work and N01 residual profiling stay open. `std::benchmark` and
+   the Wio-written `wio-bench` supply the required Wio/native/VM + C++ + C#
+   before/after and final-Wio comparison workflow; see `docs/WIO_BENCHMARKS.md`.
+   Std consolidation includes deleting unnecessary/duplicate
    APIs and merging suitable modules (candidate: sort into algorithms), with
    explicit dependency/import/API migration and native/VM qualification.
    First measured slice (`722e836`): proven closed scalar cells use inline

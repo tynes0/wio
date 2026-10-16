@@ -1636,6 +1636,19 @@ endif()
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
+    set(WIO_BENCHMARK_TEST_RUNNER "" CACHE FILEPATH "Explicit prebuilt wio-bench for its contract test (empty bootstraps from Wio)")
+    set(WIO_BENCHMARK_TEST_RUNNER_ARGS)
+    if(WIO_BENCHMARK_TEST_RUNNER)
+        list(APPEND WIO_BENCHMARK_TEST_RUNNER_ARGS --runner "${WIO_BENCHMARK_TEST_RUNNER}")
+    endif()
+    add_test(NAME wio_benchmark_contract
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/benchmark/verify.py"
+            --wio "$<TARGET_FILE:wio_app>" --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}"
+            --cxx "${WIO_BACKEND_CXX_COMPILER}" --vm-host "$<TARGET_FILE:wio_vm_runner>"
+            --vm-config "$<CONFIG>" --output "${CMAKE_BINARY_DIR}/wio-benchmark-contract"
+            ${WIO_BENCHMARK_TEST_RUNNER_ARGS})
+    wio_test_labels(wio_benchmark_contract native vm benchmark performance diagnostic memory wio)
+    set_tests_properties(wio_benchmark_contract PROPERTIES TIMEOUT 1800 RUN_SERIAL TRUE)
     add_test(NAME wio_n02_append_reuse
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/append_reuse/verify.py"
             --wio "$<TARGET_FILE:wio_app>" --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}"

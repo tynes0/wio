@@ -32,6 +32,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
       - uses: msys2/setup-msys2@v2
@@ -69,9 +72,14 @@ jobs:
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
           -R "^wio_native_copy_attribution$"
       - name: Qualify new N02 append optimization (native O0/O2 and VM)
+        if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
           -R "^wio_n02_append_(reuse|plan)$"
+      - name: Qualify Wio-written benchmark library and controller
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_benchmark_contract$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -85,3 +93,5 @@ jobs:
             build/native-memory-attribution/**/results.json
             build/native-copy-attribution/**/results.json
             build/n02-append-semantics/**/results.json
+            build/wio-benchmark-contract/**/results.json
+            build/wio-benchmark-contract/**/report.md

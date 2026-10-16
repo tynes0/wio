@@ -102,6 +102,9 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/docs/"
 
 if (WIO_BUILD_APP)
     set(WIO_DIST_DEPENDENCIES wio_app wio_runtime_backend wio_vm_runner)
+    if(TARGET wio_bench)
+        list(APPEND WIO_DIST_DEPENDENCIES wio_bench)
+    endif()
     if (TARGET wio_selfhost_cli)
         list(APPEND WIO_DIST_DEPENDENCIES wio_selfhost_cli)
     endif()

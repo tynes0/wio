@@ -1,0 +1,37 @@
+use std::benchmark as bench;
+use std::console as console;
+use std::hash as hash;
+use std::json as json;
+
+fn Work() -> u64
+{
+    mut value = "";
+    for (index in 0..<128)
+    {
+        value += "payload";
+    }
+
+    let snapshot = value;
+    return hash::Fnv1a64(snapshot);
+}
+
+fn Entry() -> i32
+{
+    if (not bench::AllocationAvailable())
+    {
+        console::PrintLine("Compile this single generated C++ file with -DWIO_BENCHMARK_ALLOCATIONS.");
+        return 2;
+    }
+
+    let before = bench::Memory();
+    if (bench::BeginAllocations().IsError()) return 1;
+    let checksum = Work();
+    let counters = bench::EndAllocations();
+    let after = bench::Memory();
+    bench::Consume(checksum);
+    if (checksum != 12315153952189776677u64 or counters.liveBlocks != 0u64) return 3;
+    console::PrintLine(json::WritePretty(bench::AllocationJson(counters)));
+    console::PrintLine(json::WritePretty(bench::MemoryJson(before)));
+    console::PrintLine(json::WritePretty(bench::MemoryJson(after)));
+    return 0;
+}

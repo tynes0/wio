@@ -1,0 +1,3 @@
+.wio-build/
+examples/**/bin/
+examples/**/obj/

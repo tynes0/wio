@@ -1,6 +1,9 @@
 set(WIO_RUNTIME_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(WIO_RUNTIME_HEADERS
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_benchmark.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/benchmark_memory.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/wio_benchmark_allocations.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/float_parse.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/wir_task_abi.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/wir_inline_place.h"

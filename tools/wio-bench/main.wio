@@ -1,0 +1,757 @@
+use std::benchmark as bench;
+use std::console as console;
+use std::fs as fs;
+use std::json as json;
+use std::path as path;
+use std::result;
+use std::environment as processEnvironment;
+
+fn Field(value: json::Value, name: string) -> json::Value
+{
+    return value.objectValue.GetOr(name, json::NullValue());
+}
+
+fn Text(value: json::Value, name: string, fallback: string) -> string
+{
+    return Field(value, name).StringOr(fallback);
+}
+
+fn Integer(value: json::Value, name: string, fallback: i64) -> i64
+{
+    let number = Field(value, name).I64();
+    if (number.IsOk()) return number.Value();
+    return fallback;
+}
+
+fn Number(value: json::Value, name: string, fallback: f64) -> f64
+{
+    let item = Field(value, name);
+    if (item.IsInteger())
+    {
+        let number = item.I64();
+        if (number.IsOk()) return number.Value() fit f64;
+    }
+
+    return item.NumberOr(fallback);
+}
+
+fn Strings(value: json::Value) -> string[]
+{
+    mut result: string[] = [];
+    for (item in value.arrayValue)
+    {
+        result.Push(item.stringValue);
+    }
+
+    return result;
+}
+
+fn Error(message: string) -> std::UnitResult
+{
+    return bench::Failure<std::ResultUnit>(message);
+}
+
+fn ValidateCommand(command: json::Value) -> std::UnitResult
+{
+    if (not command.IsObject() or Text(command, "program", "") == "") return Error("Command requires program.");
+    if (not path::IsAbsolute(Text(command, "program", ""))) return Error("program must be an absolute executable path.");
+    if (not Field(command, "args").IsArray()) return Error("Command requires args array.");
+    if (not Field(command, "cwd").IsString()) return Error("Command requires cwd string.");
+    for (arg in Field(command, "args").arrayValue)
+    {
+        if (not arg.IsString()) return Error("Command arguments must be strings.");
+    }
+
+    if (command.Contains("timeoutMs") and (Field(command, "timeoutMs").I64().IsError()
+        or Integer(command, "timeoutMs", 0) < 1 or Integer(command, "timeoutMs", 0) > 86400000))
+    {
+        return Error("Command timeoutMs must be 1..86400000.");
+    }
+
+    return std::OkUnit();
+}
+
+fn Validate(manifest: json::Value) -> std::UnitResult
+{
+    if (not manifest.IsObject() or Integer(manifest, "schemaVersion", 0) != 1) return Error("Expected schemaVersion 1.");
+    if (Text(manifest, "name", "") == "") return Error("Suite name is required.");
+    if (manifest.Contains("environment"))
+    {
+        let entries = Field(manifest, "environment");
+        if (not entries.IsObject()) return Error("environment must be an object of string values.");
+        for (key in entries.objectValue.Keys())
+        {
+            if (key == "" or key.Contains("=") or key.Contains("\0") or not Field(entries, key).IsString()
+                or Field(entries, key).stringValue.Contains("\0")) return Error("Invalid environment entry.");
+        }
+    }
+    for (key in ["repetitions", "finalRepetitions", "warmups", "cpu", "timeoutMs", "outputLimit"])
+    {
+        if (manifest.Contains(key) and Field(manifest, key).I64().IsError())
+        {
+            return Error("Expected an integer for " + key);
+        }
+    }
+
+    for (key in ["maximumRange", "maximumDrift", "maximumControlDifference"])
+    {
+        if (manifest.Contains(key))
+        {
+            let value = Field(manifest, key);
+            if (not value.IsInteger() and not value.IsNumber()) return Error("Expected a numeric stability limit.");
+            if (bench::AnalyzeWithLimits([1.0, 1.0, 1.0], Number(manifest, key, 0.0), 0.10).IsError())
+            {
+                return Error("Stability limits must be finite and positive.");
+            }
+        }
+    }
+
+    if (manifest.Contains("builds") and not Field(manifest, "builds").IsArray()) return Error("builds must be an array.");
+    if (manifest.Contains("versions") and not Field(manifest, "versions").IsArray()) return Error("versions must be an array.");
+    if (Integer(manifest, "repetitions", 0) < 3 or Integer(manifest, "repetitions", 0) > 10000)
+    {
+        return Error("repetitions must be 3..10000.");
+    }
+
+    if (Integer(manifest, "finalRepetitions", 3) < 3 or Integer(manifest, "finalRepetitions", 3) > 10000)
+    {
+        return Error("finalRepetitions must be 3..10000.");
+    }
+
+    if (Integer(manifest, "warmups", 1) < 1 or Integer(manifest, "warmups", 1) > 100)
+    {
+        return Error("warmups must be 1..100.");
+    }
+
+    if (Integer(manifest, "cpu", -1) < -1 or Integer(manifest, "cpu", -1) > 4095) return Error("Invalid CPU index.");
+    if (Integer(manifest, "timeoutMs", 30000) < 1 or Integer(manifest, "timeoutMs", 30000) > 86400000)
+    {
+        return Error("timeoutMs must be 1..86400000.");
+    }
+
+    if (Integer(manifest, "outputLimit", 1048576) < 1 or Integer(manifest, "outputLimit", 1048576) > 16777216)
+    {
+        return Error("outputLimit must be 1..16777216.");
+    }
+
+    let cases = Field(manifest, "cases");
+    if (not cases.IsArray() or cases.Count() == 0usize or cases.Count() > 128usize) return Error("Require 1..128 cases.");
+    if (not Field(manifest, "artifacts").IsArray() or Field(manifest, "artifacts").Count() == 0usize)
+    {
+        return Error("List source, runtime, toolchain and workload artifacts to freeze.");
+    }
+
+    for (artifact in Field(manifest, "artifacts").arrayValue)
+    {
+        if (not artifact.IsString() or artifact.stringValue == "") return Error("Invalid artifact path.");
+    }
+
+    mut names: Dict<string, bool> = {};
+    for (item in cases.arrayValue)
+    {
+        let checked = ValidateCommand(item);
+        if (checked.IsError()) return checked;
+        let name = Text(item, "name", "");
+        let implementation = Text(item, "implementation", "");
+        if (name == "" or names.ContainsKey(name)) return Error("Case names must be nonempty and unique.");
+        names.Set(name, true);
+        if (implementation == "")
+        {
+            return Error("implementation must be a nonempty tag; core Wio/C++/C# cases remain required.");
+        }
+
+        if (Text(item, "workload", "") == "" or Text(item, "expectedChecksum", "") == "")
+        {
+            return Error("Every case requires workload and independent expectedChecksum.");
+        }
+
+        if (Integer(item, "operations", 0) < 1) return Error("Every case requires positive operations.");
+        let metric = Text(item, "metric", "kernel");
+        if (metric != "kernel" and metric != "wall") return Error("metric must be kernel or wall.");
+        mut native = false;
+        mut vm = false;
+        mut cpp = false;
+        mut csharp = false;
+        for (other in cases.arrayValue)
+        {
+            if (Text(other, "workload", "") == Text(item, "workload", ""))
+            {
+                if (Text(other, "expectedChecksum", "") != Text(item, "expectedChecksum", "")
+                    or Integer(other, "operations", 0) != Integer(item, "operations", 0)
+                    or Text(other, "metric", "kernel") != metric)
+                {
+                    return Error("Same workload must have identical checksum, operations and metric.");
+                }
+
+                let kind = Text(other, "implementation", "");
+                if (kind == "wio-native") native = true;
+                if (kind == "wio-vm") vm = true;
+                if (kind == "cpp") cpp = true;
+                if (kind == "csharp") csharp = true;
+            }
+        }
+
+        if (not native or not vm or not cpp or not csharp)
+        {
+            return Error("Each workload requires Wio native, Wio VM, C++ and C# cases.");
+        }
+    }
+
+    for (build in Field(manifest, "builds").arrayValue)
+    {
+        let checked = ValidateCommand(build);
+        if (checked.IsError()) return checked;
+    }
+
+    for (command in Field(manifest, "versions").arrayValue)
+    {
+        let checked = ValidateCommand(command);
+        if (checked.IsError()) return checked;
+    }
+
+    return std::OkUnit();
+}
+
+fn Capture(command: json::Value, manifest: json::Value, root: string) -> json::Value
+{
+    let cwd = path::AbsoluteFromRaw(root, Text(command, "cwd", "."));
+    let result = bench::Execute(Text(command, "program", ""), Strings(Field(command, "args")), cwd,
+        Integer(command, "timeoutMs", Integer(manifest, "timeoutMs", 30000)),
+        Integer(manifest, "outputLimit", 1048576) fit usize, Integer(manifest, "cpu", -1) fit i32);
+    if (result.IsOk()) return result.Value();
+    mut failed: Dict<string, json::Value> = {};
+    failed.Set("status", json::StringValue("capture-error"));
+    failed.Set("error", json::StringValue(result.ErrorValue().message));
+    return json::ObjectValue(failed);
+}
+
+fn Snapshot(manifest: json::Value, root: string) -> std::Result<json::Value>
+{
+    mut hashes: json::Value[] = [];
+    let toolHash = json::Parse(bench::SelfFingerprintNative());
+    if (toolHash.IsError() or not Field(toolHash.Value(), "ok").BoolOr(false))
+    {
+        return bench::Failure<json::Value>("Cannot fingerprint wio-bench itself.");
+    }
+
+    hashes.Push(toolHash.Value());
+    for (artifact in Field(manifest, "artifacts").arrayValue)
+    {
+        let fingerprint = bench::Fingerprint(path::AbsoluteFromRaw(root, artifact.stringValue));
+        if (fingerprint.IsError()) return fingerprint;
+        hashes.Push(fingerprint.Value());
+    }
+
+    for (section in ["cases", "builds", "versions"])
+    {
+        for (command in Field(manifest, section).arrayValue)
+        {
+            let fingerprint = bench::Fingerprint(Text(command, "program", ""));
+            if (fingerprint.IsError()) return fingerprint;
+            hashes.Push(fingerprint.Value());
+        }
+    }
+
+    return std::Ok(json::ArrayValue(hashes));
+}
+
+fn Save(output: string, report: json::Value) -> bool
+{
+    let temporary = path::Join(output, "results.pending.json");
+    let written = fs::WriteText(temporary, json::WritePretty(report));
+    if (written.IsError())
+    {
+        console::PrintLine("Cannot write checkpoint: " + written.ErrorValue().message);
+        return false;
+    }
+
+    let replaced = fs::ReplaceFileAtomic(temporary, path::Join(output, "results.json"));
+    if (replaced.IsError())
+    {
+        console::PrintLine("Cannot publish checkpoint: " + replaced.ErrorValue().message);
+        return false;
+    }
+
+    return true;
+}
+
+fn Sample(item: json::Value, manifest: json::Value, root: string, phase: string,
+    round: usize, warmup: bool, control: bool) -> json::Value
+{
+    let process = Capture(item, manifest, root);
+    mut fields: Dict<string, json::Value> = {};
+    fields.Set("case", json::StringValue(Text(item, "name", "")));
+    fields.Set("workload", Field(item, "workload"));
+    fields.Set("implementation", Field(item, "implementation"));
+    fields.Set("phase", json::StringValue(phase));
+    fields.Set("round", json::IntegerValue(round fit u64));
+    fields.Set("warmup", json::BoolValue(warmup));
+    fields.Set("control", json::BoolValue(control));
+    fields.Set("process", process);
+    let result = json::ObjectValue(fields);
+    mut correct = Text(process, "status", "") == "passed";
+    if (correct)
+    {
+        let protocol = json::Parse(Text(process, "stdout", ""));
+        correct = protocol.IsOk();
+        if (correct)
+        {
+            let payload = protocol.Value();
+            result.objectValue.Set("payload", payload);
+            correct = payload.IsObject() and Integer(payload, "schemaVersion", 0) == 1
+                and Text(payload, "checksum", "") == Text(item, "expectedChecksum", "")
+                and Integer(payload, "operations", 0) == Integer(item, "operations", 0)
+                and Integer(payload, "elapsedNanoseconds", 0) > 0;
+            if (correct)
+            {
+                let elapsed = Text(item, "metric", "kernel") == "kernel"
+                    ? Integer(payload, "elapsedNanoseconds", 0) : Integer(process, "wallNanoseconds", 0);
+                result.objectValue.Set("nanoseconds", json::IntegerValue(elapsed));
+            }
+        }
+    }
+
+    result.objectValue.Set("correct", json::BoolValue(correct));
+    console::PrintLine(phase + " / " + Text(item, "name", "") + (control ? " [A/A]" : "")
+        + (warmup ? " warmup" : " sample") + (correct ? " ok" : " FAILED"));
+    return result;
+}
+
+fn SamplesFor(report: json::Value, name: string, phase: string, control: bool) -> f64[]
+{
+    mut values: f64[] = [];
+    for (sample in Field(report, "samples").arrayValue)
+    {
+        if (Text(sample, "case", "") == name and Text(sample, "phase", "") == phase
+            and Field(sample, "control").BoolOr(false) == control
+            and not Field(sample, "warmup").BoolOr(true) and Field(sample, "correct").BoolOr(false))
+        {
+            values.Push(Integer(sample, "nanoseconds", 0) fit f64);
+        }
+    }
+
+    return values;
+}
+
+fn ProcessMetric(report: json::Value, name: string, phase: string, key: string) -> json::Value
+{
+    mut values: f64[] = [];
+    for (sample in Field(report, "samples").arrayValue)
+    {
+        if (Text(sample, "case", "") == name and Text(sample, "phase", "") == phase
+            and not Field(sample, "control").BoolOr(false) and not Field(sample, "warmup").BoolOr(true)
+            and Field(sample, "correct").BoolOr(false))
+        {
+            let parsed = Field(Field(sample, "process"), key).I64();
+            if (parsed.IsOk() and parsed.Value() >= 0)
+            {
+                values.Push(parsed.Value() fit f64);
+            }
+        }
+    }
+
+    if (values.Count() == 0usize) return json::NullValue();
+    let sorted = bench::Sorted(values);
+    mut fields: Dict<string, json::Value> = {};
+    fields.Set("count", json::IntegerValue(values.Count() fit u64));
+    fields.Set("median", json::NumberValue(bench::QuantileSorted(sorted, 0.5)));
+    fields.Set("minimum", json::NumberValue(sorted[0usize]));
+    fields.Set("maximum", json::NumberValue(sorted[sorted.Count() - 1usize]));
+    return json::ObjectValue(fields);
+}
+
+fn Summarize(report: json::Value, manifest: json::Value) -> bool
+{
+    mut summaries: json::Value[] = [];
+    mut qualified = true;
+    let cases = Field(manifest, "cases");
+    for (phase in ["comparison", "final"])
+    {
+        for (item in cases.arrayValue)
+        {
+            let implementation = Text(item, "implementation", "");
+            if (phase == "final" and implementation != "wio-native" and implementation != "wio-vm") continue;
+            let name = Text(item, "name", "");
+            let values = SamplesFor(report, name, phase, false);
+            let expected = phase == "final" ? Integer(manifest, "finalRepetitions", 3) : Integer(manifest, "repetitions", 3);
+            let summary = bench::AnalyzeWithLimits(values, Number(manifest, "maximumRange", 0.15),
+                Number(manifest, "maximumDrift", 0.10));
+            mut fields: Dict<string, json::Value> = {};
+            fields.Set("case", json::StringValue(name));
+            fields.Set("workload", Field(item, "workload"));
+            fields.Set("implementation", Field(item, "implementation"));
+            fields.Set("phase", json::StringValue(phase));
+            fields.Set("metric", json::StringValue(Text(item, "metric", "kernel")));
+            fields.Set("processCpuNanoseconds", ProcessMetric(report, name, phase, "cpuNanoseconds"));
+            fields.Set("processPeakResidentBytes", ProcessMetric(report, name, phase, "peakResidentBytes"));
+            mut accepted = summary.IsOk() and values.Count() == (expected fit usize);
+            if (summary.IsOk())
+            {
+                fields.Set("statistics", bench::SummaryJson(summary.Value()));
+                fields.Set("nanosecondsPerOperation", json::NumberValue(summary.Value().median / (Integer(item, "operations", 1) fit f64)));
+                accepted = accepted and summary.Value().stable;
+            }
+
+            // Every native lane has an exact-command A/A lane, separately timed.
+            if (implementation == "wio-native")
+            {
+                let controls = SamplesFor(report, name, phase, true);
+                let controlSummary = bench::AnalyzeWithLimits(controls, Number(manifest, "maximumRange", 0.15),
+                    Number(manifest, "maximumDrift", 0.10));
+                accepted = accepted and controlSummary.IsOk() and controls.Count() == values.Count();
+                if (controlSummary.IsOk() and summary.IsOk())
+                {
+                    let left = summary.Value().median;
+                    let right = controlSummary.Value().median;
+                    let difference = left > right ? left - right : right - left;
+                    let relative = difference / ((left + right) / 2.0);
+                    fields.Set("control", bench::SummaryJson(controlSummary.Value()));
+                    fields.Set("controlRelativeDifference", json::NumberValue(relative));
+                    accepted = accepted and controlSummary.Value().stable
+                        and relative <= Number(manifest, "maximumControlDifference", 0.10);
+                }
+            }
+
+            fields.Set("statisticsQualified", json::BoolValue(accepted));
+            summaries.Push(json::ObjectValue(fields));
+            qualified = qualified and accepted;
+        }
+    }
+
+    report.objectValue.Set("summary", json::ArrayValue(summaries));
+    return qualified;
+}
+
+fn Markdown(report: json::Value) -> string
+{
+    mut text = "# " + Text(report, "name", "wio-bench") + "\n\n";
+    text += "All raw samples, warmups and failures are retained in results.json. No trimming or retries.\n\n";
+    text += "| Phase | Case | Metric | Median ns | CPU ms | Peak RSS KiB | Qualified |\n| --- | --- | --- | ---: | ---: | ---: | --- |\n";
+    for (row in Field(report, "summary").arrayValue)
+    {
+        text += "| " + Text(row, "phase", "") + " | " + Text(row, "case", "")
+            + " | " + Text(row, "metric", "") + " | " + std::ToString<f64>(Number(Field(row, "statistics"), "median", 0.0))
+            + " | " + (Field(row, "processCpuNanoseconds").IsNull() ? "n/a"
+                : std::ToString<f64>(Number(Field(row, "processCpuNanoseconds"), "median", 0.0) / 1000000.0))
+            + " | " + (Field(row, "processPeakResidentBytes").IsNull() ? "n/a"
+                : std::ToString<f64>(Number(Field(row, "processPeakResidentBytes"), "median", 0.0) / 1024.0))
+            + " | " + (Field(row, "timingQualified").BoolOr(false) ? "yes" : "no") + " |\n";
+    }
+
+    text += "\nKernel time excludes process startup; wall time includes startup and polling.\n";
+    text += "Child CPU/peak RSS cover the root process; allocation diagnostics are separate and optional.\n";
+    text += "Approximate mean 95% intervals are descriptive normal intervals, not a universal accuracy guarantee.\n";
+    text += "\nOutputs correct: " + (Field(report, "outputsCorrect").BoolOr(false) ? "yes" : "no")
+        + "; overall timing qualified: " + (Field(report, "timingQualified").BoolOr(false) ? "yes" : "no") + ".\n";
+    return text;
+}
+
+fn Run(manifest: json::Value, root: string, output: string, skipBuild: bool) -> i32
+{
+    if (fs::Exists(output))
+    {
+        console::PrintLine("Output already exists; choose a fresh directory. Nothing overwritten.");
+        return 1;
+    }
+
+    if (fs::CreateDirectories(output).IsError()) return 1;
+    mut fields: Dict<string, json::Value> = {};
+    fields.Set("schemaVersion", json::IntegerValue(1));
+    fields.Set("toolVersion", json::StringValue("wio-bench/1"));
+    fields.Set("name", Field(manifest, "name"));
+    fields.Set("manifest", manifest);
+    fields.Set("complete", json::BoolValue(false));
+    fields.Set("outputsCorrect", json::BoolValue(false));
+    fields.Set("timingQualified", json::BoolValue(false));
+    fields.Set("samples", json::ArrayValue([]));
+    let report = json::ObjectValue(fields);
+    let environment = bench::Environment();
+    if (environment.IsError()) return 1;
+    report.objectValue.Set("environmentBefore", environment.Value());
+    if (not Save(output, report)) return 1;
+    // This is a serial command-line process. Set only its own environment; no
+    // SetUser, registry changes, shell profiles or global machine mutation.
+    let entries = Field(manifest, "environment");
+    for (key in entries.objectValue.Keys())
+    {
+        if (not processEnvironment::Set(key, Field(entries, key).stringValue))
+        {
+            report.objectValue.Set("failure", json::StringValue("Cannot set process environment key: " + key));
+            Save(output, report);
+            return 1;
+        }
+    }
+
+    mut versions: json::Value[] = [];
+    for (command in Field(manifest, "versions").arrayValue)
+    {
+        let version = Capture(command, manifest, root);
+        versions.Push(version);
+        report.objectValue.Set("versions", json::ArrayValue(versions));
+        if (not Save(output, report)) return 1;
+        if (Text(version, "status", "") != "passed") return 1;
+    }
+
+    mut builds: json::Value[] = [];
+    if (not skipBuild)
+    {
+        for (command in Field(manifest, "builds").arrayValue)
+        {
+            let built = Capture(command, manifest, root);
+            builds.Push(built);
+            report.objectValue.Set("builds", json::ArrayValue(builds));
+            if (not Save(output, report)) return 1;
+            if (Text(built, "status", "") != "passed")
+            {
+                console::PrintLine("Build failed; checkpoint retained.");
+                return 1;
+            }
+        }
+    }
+
+    let before = Snapshot(manifest, root);
+    if (before.IsError())
+    {
+        report.objectValue.Set("failure", json::StringValue(before.ErrorValue().message));
+        Save(output, report);
+        return 1;
+    }
+
+    report.objectValue.Set("artifactsBefore", before.Value());
+    mut samples: json::Value[] = [];
+    mut correct = true;
+    let warmups = Integer(manifest, "warmups", 1) fit usize;
+    for (phase in ["comparison", "final"])
+    {
+        mut lanes: json::Value[] = [];
+        mut controls: bool[] = [];
+        for (item in Field(manifest, "cases").arrayValue)
+        {
+            let implementation = Text(item, "implementation", "");
+            if (phase == "comparison" or implementation == "wio-native" or implementation == "wio-vm")
+            {
+                lanes.Push(item);
+                controls.Push(false);
+                if (implementation == "wio-native")
+                {
+                    lanes.Push(item);
+                    controls.Push(true);
+                }
+            }
+        }
+
+        let repeats = (phase == "final" ? Integer(manifest, "finalRepetitions", 3)
+            : Integer(manifest, "repetitions", 3)) fit usize;
+        for (round in 0usize..<warmups + repeats)
+        {
+            for (position in 0usize..<lanes.Count())
+            {
+                let ordered = round % 2usize == 0usize ? position : lanes.Count() - 1usize - position;
+                let index = (ordered + (round / 2usize)) % lanes.Count();
+                let sample = Sample(lanes[index], manifest, root, phase, round, round < warmups, controls[index]);
+                correct = correct and Field(sample, "correct").BoolOr(false);
+                samples.Push(sample);
+                report.objectValue.Set("samples", json::ArrayValue(samples));
+                if (not Save(output, report)) return 1;
+            }
+        }
+    }
+
+    let after = Snapshot(manifest, root);
+    let finalEnvironment = bench::Environment();
+    mut unchanged = false;
+    mut powerUnchanged = false;
+    if (after.IsOk())
+    {
+        report.objectValue.Set("artifactsAfter", after.Value());
+        unchanged = json::Write(before.Value()) == json::Write(after.Value());
+    }
+
+    if (finalEnvironment.IsOk())
+    {
+        report.objectValue.Set("environmentAfter", finalEnvironment.Value());
+        let originalPower = Field(environment.Value(), "powerProfile");
+        powerUnchanged = not originalPower.IsNull()
+            and json::Write(originalPower) == json::Write(Field(finalEnvironment.Value(), "powerProfile"));
+    }
+
+    let stable = Summarize(report, manifest);
+    mut affinityQualified = Integer(manifest, "cpu", -1) >= 0;
+    for (sample in samples)
+    {
+        affinityQualified = affinityQualified and Field(Field(sample, "process"), "affinityApplied").BoolOr(false);
+    }
+
+    let timingQualified = correct and unchanged and stable and powerUnchanged and affinityQualified;
+    for (row in Field(report, "summary").arrayValue)
+    {
+        row.objectValue.Set("timingQualified", json::BoolValue(timingQualified and Field(row, "statisticsQualified").BoolOr(false)));
+    }
+
+    report.objectValue.Set("complete", json::BoolValue(true));
+    report.objectValue.Set("artifactsUnchanged", json::BoolValue(unchanged));
+    report.objectValue.Set("powerProfileUnchanged", json::BoolValue(powerUnchanged));
+    report.objectValue.Set("affinityQualified", json::BoolValue(affinityQualified));
+    report.objectValue.Set("outputsCorrect", json::BoolValue(correct and unchanged));
+    report.objectValue.Set("timingQualified", json::BoolValue(timingQualified));
+    if (not Save(output, report)) return 1;
+    if (fs::WriteText(path::Join(output, "report.md"), Markdown(report)).IsError()) return 1;
+    console::PrintLine("Saved " + path::Join(output, "results.json"));
+    if (not correct or not unchanged) return 1;
+    return timingQualified ? 0 : 2;
+}
+
+fn Compare(before: json::Value, after: json::Value) -> i32
+{
+    if (not Field(before, "complete").BoolOr(false) or not Field(after, "complete").BoolOr(false)) return 1;
+    if (not Field(before, "outputsCorrect").BoolOr(false) or not Field(after, "outputsCorrect").BoolOr(false)) return 1;
+    let oldCases = Field(Field(before, "manifest"), "cases");
+    let newCases = Field(Field(after, "manifest"), "cases");
+    if (oldCases.Count() == 0usize or oldCases.Count() != newCases.Count()) return 1;
+    for (current in newCases.arrayValue)
+    {
+        mut matched = false;
+        for (original in oldCases.arrayValue)
+        {
+            if (Text(current, "name", "") == Text(original, "name", ""))
+            {
+                matched = true;
+                for (key in ["workload", "expectedChecksum", "implementation"])
+                {
+                    if (Text(current, key, "") != Text(original, key, "")) return 1;
+                }
+
+                if (Integer(current, "operations", 0) != Integer(original, "operations", 0)) return 1;
+            }
+        }
+
+        if (not matched) return 1;
+    }
+
+    mut qualified = Field(before, "timingQualified").BoolOr(false) and Field(after, "timingQualified").BoolOr(false);
+    console::PrintLine("| Phase | Case | Before ns | After ns | Before/after |\n| --- | --- | ---: | ---: | ---: |");
+    for (current in Field(after, "summary").arrayValue)
+    {
+        mut found = false;
+        for (original in Field(before, "summary").arrayValue)
+        {
+            if (Text(current, "case", "") == Text(original, "case", "")
+                and Text(current, "phase", "") == Text(original, "phase", ""))
+            {
+                found = true;
+                if (Text(current, "workload", "") != Text(original, "workload", "")
+                    or Text(current, "metric", "") != Text(original, "metric", "")) return 1;
+                let left = Number(Field(original, "statistics"), "median", 0.0);
+                let right = Number(Field(current, "statistics"), "median", 0.0);
+                if (left <= 0.0 or right <= 0.0) return 1;
+                console::PrintLine("| " + Text(current, "phase", "") + " | " + Text(current, "case", "")
+                    + " | " + std::ToString<f64>(left) + " | " + std::ToString<f64>(right)
+                    + " | " + std::ToString<f64>(left / right) + " |");
+            }
+        }
+
+        if (not found) return 1;
+    }
+
+    // Timing ratios never become acceptance evidence solely by printing them.
+    console::PrintLine(qualified ? "Both sessions qualified; review sources/flags/environment before attribution."
+        : "UNQUALIFIED comparison: descriptive ratios only, not a speedup claim.");
+    return qualified ? 0 : 2;
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() < 2usize or args[1usize] == "--help" or args[1usize] == "help")
+    {
+        console::PrintLine("wio-bench run MANIFEST --output NEW_DIRECTORY [--skip-build]\n"
+            + "wio-bench validate MANIFEST\nwio-bench report RESULTS_JSON\nwio-bench --version\n"
+            + "wio-bench compare BEFORE_JSON AFTER_JSON\n"
+            + "Exit: 0 qualified, 1 invalid/failure, 2 correct but timing unqualified.");
+        return 0;
+    }
+
+    if (args[1usize] == "--version")
+    {
+        console::PrintLine("wio-bench/1");
+        return 0;
+    }
+
+    if (args.Count() < 3usize) return 1;
+    let file = path::AbsoluteRaw(args[2usize]);
+    let source = fs::ReadText(file);
+    if (source.IsError())
+    {
+        console::PrintLine(source.ErrorValue().message);
+        return 1;
+    }
+
+    let parsed = json::Parse(source.Value());
+    if (parsed.IsError())
+    {
+        console::PrintLine(parsed.ErrorValue().message);
+        return 1;
+    }
+
+    if (args[1usize] == "report")
+    {
+        if (args.Count() != 3usize) return 1;
+        console::PrintLine(Markdown(parsed.Value()));
+        return 0;
+    }
+
+    if (args[1usize] == "compare")
+    {
+        if (args.Count() != 4usize) return 1;
+        let afterSource = fs::ReadText(args[3usize]);
+        if (afterSource.IsError()) return 1;
+        let after = json::Parse(afterSource.Value());
+        if (after.IsError()) return 1;
+        return Compare(parsed.Value(), after.Value());
+    }
+
+    if (args[1usize] != "run" and args[1usize] != "validate") return 1;
+    let checked = Validate(parsed.Value());
+    if (checked.IsError())
+    {
+        console::PrintLine(checked.ErrorValue().message);
+        return 1;
+    }
+
+    if (args[1usize] == "validate")
+    {
+        if (args.Count() != 3usize) return 1;
+        console::PrintLine("Manifest valid.");
+        return 0;
+    }
+
+    mut output = "";
+    mut skipBuild = false;
+    mut index = 3usize;
+    while (index < args.Count())
+    {
+        if (args[index] == "--skip-build")
+        {
+            skipBuild = true;
+        }
+        else if (args[index] == "--output" and index + 1usize < args.Count())
+        {
+            index += 1usize;
+            output = path::AbsoluteRaw(args[index]);
+        }
+        else
+        {
+            console::PrintLine("Unknown or incomplete option: " + args[index]);
+            return 1;
+        }
+
+        index += 1usize;
+    }
+
+    if (output == "")
+    {
+        console::PrintLine("--output NEW_DIRECTORY is required.");
+        return 1;
+    }
+
+    return Run(parsed.Value(), path::ParentPath(file), output, skipBuild);
+}

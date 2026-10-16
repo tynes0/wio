@@ -159,3 +159,21 @@ runtime separately from diagnostic allocation/live/peak memory, including retain
 capacity tradeoffs, and compare original/previous/current when evidence permits.
 Keep failed/noisy samples; do not claim a speedup from an unqualified session.
 Balance memory and speed rather than optimizing only the displayed timing.
+
+## Wio-owned comparison policy, 2026-10-16
+
+The user requires related **Wio + C++ + C#** workloads before a change that can
+affect measurements. Wio has both native and VM variants. Capture a before state,
+apply the scoped change, rebuild and capture after. At the end of each session,
+run Wio native and VM once more as a separate repeated final phase, not a
+replacement for comparison samples. Include independent checksums/operation
+counts, exact build/runtime/source provenance, warmups, raw failures, A/A and
+range/drift qualification. Report memory separately from time and retain noise.
+
+`std::benchmark` and the Wio-written `wio-bench` now implement this workflow; see
+[the library/controller manual](../tools/wio-bench/README.md). Python remains a
+bootstrap and independent validation oracle, not the main sample controller.
+Allocation diagnostics require a separate opt-in executable and are not ordinary
+timing samples. Existing historical tables stay dated; do not retroactively
+reinterpret their measurement scopes. This tooling does not close N02 or start
+the VM/compiler optimization passes.

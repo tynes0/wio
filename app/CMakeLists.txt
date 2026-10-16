@@ -132,6 +132,8 @@ if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURC
     )
 endif()
 
+include("${CMAKE_SOURCE_DIR}/cmake/WioBenchmarkTool.cmake")
+
 set(WIO_PLAYGROUND_DIR "${CMAKE_SOURCE_DIR}/playground")
 
 set(WIO_PLAYGROUND_MANIFEST "${WIO_PLAYGROUND_DIR}/wio.makewio")
