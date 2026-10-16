@@ -3,6 +3,10 @@
 2026-10-16; first production slice, not N02 completion. N01's remaining profiling
 coverage is still open. No std/playground user edits are part of this change.
 
+Subsequently superseded by the [N02 concat closure](WIO_CONCAT_OPTIMIZATION.md).
+The proof boundary, measurements and remaining-work statements below describe
+this first slice only; they are retained as dated evidence, not current status.
+
 ## Change and proof boundary
 
 The C++ storage plan recognizes an adjacent borrowed `Load`, string/text `Add`,

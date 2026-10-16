@@ -10,6 +10,28 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N02 string/text/concat closure — 2026-10-16
+
+- [x] Ordinary self-assignment and safe direct-cell append reuse; transactional
+      multi-append with original-length self aliases, NUL and failure rollback.
+      Identical direct field/global cells qualify, not arbitrary proxy/ref cells.
+- [x] Pure concat trees reserve one payload buffer, including parenthesized RHS
+      trees. Independently owned sole-use temporaries use rvalue concat outside
+      pure trees. Matching builtin types, CFG/borrow observations, effects and
+      async boundaries remain conservative; generated variadic groups are bounded.
+- [x] Text lvalue/rvalue concat overloads avoid prefix-copy/reallocation, preserve
+      validated UTF-8 and explicitly guard moved self alias on MSVC/libstdc++.
+- [x] Three new tests only, final 3/3 in 19.01s: actual Wio native O0/O2 + VM,
+      proof rejection/selection and runtime allocation-failure/alias coverage.
+- [x] Wio-owned before/intermediate/final comparisons: 504/504 correct outputs.
+      Native allocations growing string/text 2005/4013 -> 16/24; six-part chains
+      12009/22038 -> 4005/4029. All diagnostic windows end with zero live blocks.
+- [x] N02 production scope closed. Next is N03 formatting/builders, not yet
+      started. All three timing sessions remain globally unqualified; no speedup
+      factor, VM optimization or full native/VM parity claim. N01/N14 evidence
+      gaps and pre-existing KI-007 remain open. See
+      `docs/WIO_CONCAT_OPTIMIZATION.md` for raw data, memory scope and tradeoffs.
+
 ## N02 Wio-owned benchmark library and controller — 2026-10-16
 
 - [x] `std::benchmark`: checksum-verified warmup/repetition runs, calibration,
@@ -39,8 +61,9 @@ Notes:
 - [x] Real 20,000-step comparison: 48/48 outputs correct, endpoint hashes,
       affinity and power observation unchanged. Overall time qualification rejects
       Python's 24.6% range; no samples removed, no general speedup claim.
-- [ ] N02's remaining string/concat optimization is still open; this tooling is
-      not closure of native/VM/compiler optimization or broader N01 coverage.
+- [x] The remaining N02 string/concat work was subsequently completed by the
+      closure above; this tooling alone was not that closure. Broader native/VM/
+      compiler optimization and N01 coverage remain open.
       See `docs/WIO_BENCHMARKS.md` and `tools/wio-bench/README.md`.
 
 ## N02 local string/text append reuse — 2026-10-16
@@ -57,8 +80,9 @@ Notes:
 - [x] Counter-free paired timings collected with raw samples and A/A control;
       overall timing rejected for baseline/control range noise. No qualified
       speedup factor. Pilot and rejected no-fusion candidate retained locally.
-- [ ] N02 remains open: broader concat/last-use patterns and field-safe reuse.
-      N01 residual profiling remains open. See `docs/WIO_LOCAL_APPEND_REUSE.md`.
+- [x] Broader concat/last-use patterns and direct-field-safe reuse subsequently
+      completed by the closure above. N01 residual profiling stays open.
+      See `docs/WIO_LOCAL_APPEND_REUSE.md` for the historical first slice.
 
 ## N01 observed bulk-copy attribution — 2026-10-15
 

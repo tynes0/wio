@@ -2119,15 +2119,18 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                         if (instruction.result && storagePlan_.borrowedStringCopies.contains(instruction.result.value()))
                             suppressedInstructions_.insert(&instruction);
 
-                for (const auto& [sum, suffix] : storagePlan_.localAppendSuffixes)
+                for (const auto sum : storagePlan_.elidedConcatValues)
                 {
-                    (void)suffix;
                     valueTypes_.erase(sum);
                     ownedValues_.erase(sum);
                 }
                 for (const auto& block : function.blocks)
                     for (const auto& instruction : block.instructions)
-                        if (instruction.result && storagePlan_.localAppendSuffixes.contains(instruction.result.value()))
+                        if ((instruction.result && storagePlan_.elidedConcatValues.contains(instruction.result.value())) ||
+                            ((instruction.opcode == lowered::Opcode::DropValue ||
+                              instruction.opcode == lowered::Opcode::Release) &&
+                             instruction.operands.size() == 1 &&
+                             storagePlan_.elidedConcatValues.contains(instruction.operands[0].value())))
                             suppressedInstructions_.insert(&instruction);
 
                 if (currentFunctionIsLinear_)
@@ -2645,7 +2648,33 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                                          operand(instruction.operands[0]));
                     break;
                 case lowered::Opcode::Binary:
-                    if (!instruction.operands.empty() &&
+                    if (storagePlan_.flattenedConcatOperands.contains(instruction.result.value()))
+                    {
+                        std::string expression = "wio::runtime::Concat(";
+                        const auto& parts = storagePlan_.flattenedConcatOperands.at(instruction.result.value());
+                        for (std::size_t index = 0; index < parts.size(); ++index)
+                        {
+                            if (index)
+                                expression += ", ";
+                            expression += operand(parts[index]);
+                        }
+
+                        assignResult(instruction, expression + ")");
+                    }
+                    else if (instruction.binaryOperator == typed::BinaryOperator::Add &&
+                             instruction.operands.size() == 2 &&
+                             (module_.types.get(instruction.resultType).kind == TypeKind::String ||
+                              module_.types.get(instruction.resultType).kind == TypeKind::Text))
+                    {
+                        const auto concatOperand = [&](const ValueId value)
+                        {
+                            return storagePlan_.consumedConcatOperands.contains(value.value()) ? movedOperand(value)
+                                                                                              : operand(value);
+                        };
+                        assignResult(instruction, "(" + concatOperand(instruction.operands[0]) + " + " +
+                                                      concatOperand(instruction.operands[1]) + ")");
+                    }
+                    else if (!instruction.operands.empty() &&
                         module_.types.get(valueType(instruction.operands.front())).kind == TypeKind::Nullable &&
                         module_.types.get(module_.types.get(valueType(instruction.operands.front())).arguments.front())
                                 .kind != TypeKind::Opaque &&
@@ -3044,13 +3073,22 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     if (instruction.opcode != lowered::Opcode::PlaceInit &&
                         storagePlan_.localAppendSuffixes.contains(instruction.operands[1].value()))
                     {
-                        // The plan proves an initialized mutable LocalPlace,
+                        // The plan proves an initialized mutable direct cell,
                         // never a view/proxy. String/Text += has no effect on
                         // allocation failure; the old post-add store was a
                         // nonthrowing move into this same initialized cell.
-                        output_ << "                " << operand(instruction.operands[0]) << ".read() += "
-                                << operand(storagePlan_.localAppendSuffixes.at(instruction.operands[1].value()))
-                                << "; // Wio local append reuse\n";
+                        const auto& suffixes = storagePlan_.localAppendSuffixes.at(instruction.operands[1].value());
+                        if (suffixes.size() == 1)
+                            output_ << "                " << operand(instruction.operands[0]) << ".read() += "
+                                    << operand(suffixes.front()) << "; // Wio local append reuse\n";
+                        else
+                        {
+                            output_ << "                wio::runtime::AppendConcat("
+                                    << operand(instruction.operands[0]) << ".read()";
+                            for (const auto suffix : suffixes)
+                                output_ << ", " << operand(suffix);
+                            output_ << "); // Wio transactional concat reuse\n";
+                        }
                         break;
                     }
                     output_ << "                " << operand(instruction.operands[0]) << ".write("

@@ -1,0 +1,15 @@
+// Preserve the pre-N02 native borrowed-LHS behavior. This is deliberately
+// native-only: the VM already snapshots this particular expression differently.
+fn Change(value: ref string) -> string
+{
+    value = "changed";
+    return "tail";
+}
+
+fn Entry() -> i32
+{
+    mut value = "original";
+    value = value + Change(ref value);
+    if (value != "changedtail") return 1;
+    return 0;
+}

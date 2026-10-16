@@ -203,6 +203,26 @@ an actionable early diagnostic (or explicitly document a checked-runtime-only
 boundary); do not silently extend local lifetimes to hide the failure. No fix
 or cross-platform reproduction is claimed by this scoped optimization.
 
+### KI-007 — Borrowed string LHS across a mutating RHS differs by backend (P1)
+
+Confirmed by the new N02 tests on 2026-10-16. For
+`value = value + Change(ref value)`, starting with `"original"`, where Change
+assigns `"changed"` and returns `"tail"`, current native O0/O2 yields
+`"changedtail"`; the VM yields `"originaltail"`. Native keeps a borrowed LHS
+until the addition, whereas VM materializes a snapshot. This was already noted
+in the first local-append investigation; it is not introduced by concat reuse.
+
+Use `let snapshot = value; value = snapshot + Change(ref value);` to request the
+same owning-snapshot behavior on both. The optimizer must not cross the call or
+silently settle the language contract. Freeze evaluation/materialization rules
+and align native/VM in a dedicated correctness fix before v1. This is an open
+backend parity defect, not an intentionally supported difference.
+
+The [native compatibility fixture](../tests/performance/concat_reuse/barrier.wio)
+locks the unchanged fallback. Shared [N02 semantics](../tests/performance/concat_reuse/semantics.wio)
+use an explicit snapshot. The first failing cross-backend test was retained in
+the local `build/n02-concat-semantics/` evidence, not hidden as a parity success.
+
 ## 2. Native, VM, ownership and SDK limitations
 
 | ID | Priority / state | Current boundary and closure requirement |

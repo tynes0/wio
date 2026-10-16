@@ -1,0 +1,94 @@
+use std::benchmark as bench;
+use std::console as console;
+use std::convert as convert;
+use std::json as json;
+
+using cpp::header("probe.h");
+
+[native, cpp::name(concat_probe::Hash)]
+fn Hash(value: view string) -> u64;
+
+[native, cpp::name(concat_probe::HashText)]
+fn HashText(value: view text) -> u64;
+
+fn Work(mode: i64, count: i64) -> u64
+{
+    let a = "copy\0payload:0123456789abcdef0123456789abcdef";
+    let b = "second:0123456789abcdef0123456789abcdef";
+    let c = "third:0123456789abcdef0123456789abcdef";
+    if (mode == 0)
+    {
+        mut output = "";
+        for (index in 0i64..<count)
+        {
+            output = output + a;
+        }
+
+        return Hash(ref output);
+    }
+
+    if (mode == 1)
+    {
+        let source = u"A🌍é日本語:payload:0123456789abcdef";
+        mut output = u"";
+        for (index in 0i64..<count)
+        {
+            output = output + source;
+        }
+
+        return HashText(ref output);
+    }
+
+    mut checksum = 0u64;
+    if (mode == 2)
+    {
+        for (index in 0i64..<count)
+        {
+            let value = a + b + c + a + b + c;
+            checksum = checksum ^ Hash(ref value);
+        }
+
+        return checksum;
+    }
+
+    let ta = u"A🌍é日本語:payload:0123456789abcdef";
+    let tb = u"B🌙é日本語:payload:0123456789abcdef";
+    let tc = u"C⭐é日本語:payload:0123456789abcdef";
+    for (index in 0i64..<count)
+    {
+        let value = ta + tb + tc + ta + tb + tc;
+        checksum = checksum ^ HashText(ref value);
+    }
+
+    return checksum;
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() < 3usize or args.Count() > 4usize) return 1;
+    let modeResult = convert::ParseI64(args[1usize]);
+    let countResult = convert::ParseI64(args[2usize]);
+    if (modeResult.IsError() or countResult.IsError()) return 1;
+    let mode = modeResult.Value();
+    let count = countResult.Value();
+    if (mode < 0 or mode > 3 or count < 1 or count > 100000) return 1;
+    bench::Consume(Work(mode, bench::Input(count)));
+    bench::Consume(Work(mode, bench::Input(count)));
+    if (args.Count() == 4usize)
+    {
+        if (bench::BeginAllocations().IsError()) return 2;
+        let checksum = Work(mode, bench::Input(count));
+        let counters = bench::EndAllocations();
+        console::PrintLine(bench::Protocol(1i64, count fit u64, checksum));
+        console::PrintLine(json::Write(bench::AllocationJson(counters)));
+        if (counters.liveBlocks != 0u64 or counters.liveBytes != 0u64) return 3;
+        return 0;
+    }
+
+    let start = bench::Now();
+    let checksum = Work(mode, bench::Input(count));
+    bench::Consume(checksum);
+    let elapsed = bench::Now() - start;
+    console::PrintLine(bench::Protocol(elapsed, count fit u64, checksum));
+    return 0;
+}

@@ -10,7 +10,7 @@ then pass 3 (compiler and build throughput). SDK remains a separate v1 blocker.
 | ID | Scope | Completion evidence |
 | --- | --- | --- |
 | N01 | Measurement and cost map | Qualified workloads, raw samples/checksums, clear coverage gaps; distinguish timing, allocation, copies, RC and memory metrics |
-| N02 | String/text/concat | Reuse last-use owned buffers, avoid repeated growing-prefix copies, preserve alias/snapshot/NUL/evaluation semantics |
+| N02 | String/text/concat (implemented 2026-10-16) | Last-use buffers, transactional append and pure-tree flattening; bounded correctness gate complete; noisy timing acceptance remains N14 |
 | N03 | Formatting/builders | Direct numeric append, float/locale costs, capacity reuse; preserve formatting and snapshot contracts |
 | N04 | Byte/buffer/I/O | Avoid encoding/string/byte round trips, batch writes, reuse buffers; same-format comparisons stay separate from format changes |
 | N05 | Value/place/component representation | Proven stack storage, direct fields, fewer temporaries and unnecessary optional/shared/type-erased cells; exact lifetimes and cleanup |
@@ -177,3 +177,23 @@ Allocation diagnostics require a separate opt-in executable and are not ordinary
 timing samples. Existing historical tables stay dated; do not retroactively
 reinterpret their measurement scopes. This tooling does not close N02 or start
 the VM/compiler optimization passes.
+
+## N02 closure, 2026-10-16
+
+[The concat closure pass](WIO_CONCAT_OPTIMIZATION.md) completes the production
+N02 scope: ordinary self-assignment, transactional multi-append, pure concat-tree
+flattening, last-use owned-buffer transport and Text rvalue overloads. Identical
+direct field/global cells qualify; unknown ref/proxy/coroutine paths intentionally
+retain their checked fallback. No unproven alias/borrow lifetime is weakened.
+
+Only three new tests ran locally: 3/3 passed, native O0/O2 and VM plus ownership/
+type/effect/CFG and allocation-failure checks. Before/intermediate/final Wio-owned
+four-implementation sessions have 504/504 correct outputs and zero final tracked
+live bytes/blocks. Growing string/text allocations are 2005/4013 -> 16/24; chain
+allocations are 12009/22038 -> 4005/4029. All raw timing sessions remain globally
+unqualified; keep that N01/N14 acceptance gap visible, not a speedup promise.
+
+The pre-existing mutating-RHS borrowed-LHS native/VM discrepancy is now explicitly
+tracked as KI-007; N02 does not silently choose new language semantics to hide it.
+N01 residual coverage and the v1 parity fix remain open. Next production work is
+**N03 formatting/builders**; no N03 transition was implemented in this patch.

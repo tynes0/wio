@@ -1,0 +1,103 @@
+component Record
+{
+    public value: string;
+    public unicode: text;
+}
+
+fn Piece(order: ref i32, expected: i32, value: string) -> string
+{
+    if (order != expected) return "bad-order";
+    order += 1;
+    return value;
+}
+
+fn Change(value: ref string) -> string
+{
+    value = "changed";
+    return "tail";
+}
+
+fn RefChain(value: ref string, suffix: view string)
+{
+    value = value + suffix + suffix;
+}
+
+fn OwnedChain(a: string, b: string, c: string) -> string
+{
+    return a + (b + c) + a + b;
+}
+
+fn Entry() -> i32
+{
+    let suffix = "🌍\0payload:0123456789abcdef";
+    let second = "second:0123456789abcdef";
+    let third = "third:0123456789abcdef";
+    mut value = "";
+    mut expected = "";
+    for (count in 0..<80)
+    {
+        let snapshot = value;
+        value = value + suffix;
+        expected += suffix;
+        if (value != expected or snapshot + suffix != expected) return 1;
+    }
+
+    let saved = value;
+    value = value + second + third + suffix;
+    if (saved + second + third + suffix != value) return 2;
+    value = "a\0b";
+    value = value + value + value;
+    if (value != "a\0ba\0ba\0b") return 3;
+    value = value + "" + value + "";
+    if (value != "a\0ba\0ba\0ba\0ba\0ba\0b") return 4;
+
+    let ua = u"🌍é日本語\0";
+    let ub = u"abc⭐";
+    if (ua.ByteCount() != 17usize) return 16;
+    mut unicode = u"";
+    mut unicodeExpected = u"";
+    for (count in 0..<80)
+    {
+        let snapshot = unicode;
+        unicode = unicode + ua;
+        unicodeExpected += ua;
+        if (unicode != unicodeExpected or snapshot + ua != unicodeExpected) return 5;
+    }
+
+    unicode = ua;
+    unicode = unicode + unicode + ub + unicode;
+    if (unicode != ua + ua + ub + ua) return 6;
+    let unicodeSaved = unicode;
+    unicode = unicode + u"";
+    if (unicode != unicodeSaved) return 7;
+
+    if (OwnedChain(suffix, second, third) != suffix + second + third + suffix + second) return 8;
+    mut order = 0;
+    let ordered = Piece(ref order, 0, suffix) + Piece(ref order, 1, second) + Piece(ref order, 2, third);
+    if (order != 3 or ordered != suffix + second + third) return 9;
+    mut changed = "original";
+    let snapshot = changed;
+    changed = snapshot + Change(ref changed);
+    if (changed != "originaltail") return 10;
+
+    RefChain(ref value, ref suffix);
+    let previous = value;
+    RefChain(ref value, ref value);
+    if (value != previous + previous + previous) return 12;
+    mut record = Record();
+    record.value = suffix;
+    record.value = record.value + second + record.value;
+    if (record.value != suffix + second + suffix) return 13;
+    record.unicode = ua;
+    record.unicode = record.unicode + ub + record.unicode;
+    if (record.unicode != ua + ub + ua) return 14;
+    record.value += second;
+    record.unicode += ub;
+    if (record.value != suffix + second + suffix + second or record.unicode != ua + ub + ua + ub) return 17;
+
+    let fixed = suffix + second;
+    let first = fixed + third;
+    let later = fixed + suffix;
+    if (first != suffix + second + third or later != suffix + second + suffix) return 15;
+    return 0;
+}

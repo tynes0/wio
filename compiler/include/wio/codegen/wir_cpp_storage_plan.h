@@ -4,6 +4,7 @@
 
 #include <unordered_set>
 #include <unordered_map>
+#include <vector>
 
 namespace wio::codegen
 {
@@ -15,9 +16,16 @@ namespace wio::codegen
         std::unordered_set<std::uint32_t> stringPlaces;
         std::unordered_set<std::uint32_t> plainValues;
         std::unordered_map<std::uint32_t, wir::ValueId> borrowedStringCopies;
-        // Sole-use Add immediately followed by a store to its freshly loaded,
-        // mutable local string/text cell. RHS snapshots remain owned.
-        std::unordered_map<std::uint32_t, wir::ValueId> localAppendSuffixes;
+        // Sole-use concat tree followed by a store into its freshly loaded,
+        // mutable direct string/text cell. Only stable local loads may intervene.
+        // Field/global cells need identical place IDs; proxies never qualify.
+        std::unordered_map<std::uint32_t, std::vector<wir::ValueId>> localAppendSuffixes;
+        std::unordered_set<std::uint32_t> elidedConcatValues;
+        // Pure borrowed-leaf concat trees: one checked reserve and no temporary
+        // prefix buffers. Calls/effects and owned reusable leaves keep rvalues.
+        std::unordered_map<std::uint32_t, std::vector<wir::ValueId>> flattenedConcatOperands;
+        // Independently owned, sole semantic use at this concat; cleanup stays.
+        std::unordered_set<std::uint32_t> consumedConcatOperands;
         bool directControlFlow = false;
 
         [[nodiscard]] static WirCppStoragePlan build(const wir::lowered::Module& module,

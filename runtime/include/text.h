@@ -1,6 +1,7 @@
 #pragma once
 
 #include "std_unicode.h"
+#include "string_concat.h"
 
 #include <compare>
 #include <cstddef>
@@ -106,10 +107,48 @@ namespace wio::runtime
             return *this;
         }
 
-        [[nodiscard]] friend Text operator+(Text left, const Text& right)
+        [[nodiscard]] friend Text operator+(const Text& left, const Text& right)
         {
-            left += right;
-            return left;
+            return Text(left.value_ + right.value_, ValidatedTag{});
+        }
+
+        [[nodiscard]] friend Text operator+(Text&& left, const Text& right)
+        {
+            if (&left == &right)
+            {
+                left.value_ += left.value_;
+                return Text(std::move(left.value_), ValidatedTag{});
+            }
+
+            return Text(std::move(left.value_) + right.value_, ValidatedTag{});
+        }
+
+        [[nodiscard]] friend Text operator+(const Text& left, Text&& right)
+        {
+            if (&left == &right)
+            {
+                right.value_ += right.value_;
+                return Text(std::move(right.value_), ValidatedTag{});
+            }
+
+            return Text(left.value_ + std::move(right.value_), ValidatedTag{});
+        }
+
+        [[nodiscard]] friend Text operator+(Text&& left, Text&& right)
+        {
+            if (&left == &right)
+            {
+                left.value_ += left.value_;
+                return Text(std::move(left.value_), ValidatedTag{});
+            }
+
+            return Text(std::move(left.value_) + std::move(right.value_), ValidatedTag{});
+        }
+
+        template <class... Parts>
+        void appendConcat(const Parts&... parts)
+        {
+            detail::AppendStringParts(value_, std::array<const std::string*, sizeof...(Parts)>{&parts.value_...});
         }
 
         [[nodiscard]] friend bool operator==(const Text&, const Text&) = default;
@@ -129,6 +168,20 @@ namespace wio::runtime
 
         std::string value_;
     };
+
+    template <class... Parts>
+    void AppendConcat(Text& destination, const Parts&... parts)
+    {
+        destination.appendConcat(parts...);
+    }
+
+    template <class... Parts>
+    [[nodiscard]] Text Concat(const Text& first, const Parts&... parts)
+    {
+        Text result;
+        AppendConcat(result, first, parts...);
+        return result;
+    }
 
     [[nodiscard]] inline Text TextFromUtf8(const std::string_view value)
     {

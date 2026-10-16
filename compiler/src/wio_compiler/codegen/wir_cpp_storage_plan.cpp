@@ -215,42 +215,266 @@ namespace wio::codegen
             }
         }
 
-        // Fuse only adjacent load/add/store for a mutable local cell. No call,
-        // projection, proxy, borrow conversion or CFG edge can intervene. Keep
-        // the already evaluated RHS snapshot: self append and side effects
-        // during RHS evaluation must retain their existing value semantics.
+        // Cleanup is not an observation of a string's contents. It remains in
+        // the output after a consumed operand is moved from. Borrow metadata and
+        // CFG arguments ARE observations and must prevent last-use inference.
+        std::unordered_map<std::uint32_t, std::size_t> semanticUses;
+        std::unordered_map<std::uint32_t, wir::TypeId> concatTypes;
+        for (const auto& parameter : function.parameters)
+            concatTypes.emplace(parameter.id.value(), parameter.type);
+        for (const auto& block : function.blocks)
+        {
+            for (const auto& parameter : block.parameters)
+                concatTypes.emplace(parameter.id.value(), parameter.type);
+            for (const auto& instruction : block.instructions)
+            {
+                if (instruction.result)
+                    concatTypes.emplace(instruction.result.value(), instruction.resultType);
+                if (instruction.opcode != wir::lowered::Opcode::DropValue &&
+                    instruction.opcode != wir::lowered::Opcode::Release)
+                    for (const auto operand : instruction.operands)
+                        ++semanticUses[operand.value()];
+                if (instruction.borrowOrigin)
+                    ++semanticUses[instruction.borrowOrigin.value()];
+                for (const auto& target : instruction.targets)
+                    for (const auto argument : target.arguments)
+                        ++semanticUses[argument.value()];
+            }
+        }
+
+        // A local load can safely separate concat nodes: it cannot call a
+        // native proxy getter. Calls, fields, reference parameters, projections,
+        // stores and all unknown effects remain hard barriers.
+        std::unordered_map<std::uint32_t, wir::TypeId> stableLocals;
         std::unordered_map<std::uint32_t, wir::TypeId> appendLocals;
         for (const auto& block : function.blocks)
             for (const auto& instruction : block.instructions)
             {
                 const auto* type = module.types.tryGet(instruction.resultType);
-                if (instruction.opcode == wir::lowered::Opcode::LocalPlace && instruction.result && type &&
-                    type->kind == wir::TypeKind::Reference && type->isMutable && type->arguments.size() == 1)
-                    appendLocals.emplace(instruction.result.value(), type->arguments.front());
+                const bool localCell = instruction.opcode == wir::lowered::Opcode::LocalPlace;
+                const bool directCell =
+                    localCell ||
+                    (instruction.opcode == wir::lowered::Opcode::FieldPlace && instruction.operands.size() == 1) ||
+                    (instruction.opcode == wir::lowered::Opcode::GlobalPlace && instruction.global);
+                if (directCell && instruction.result && type && type->kind == wir::TypeKind::Reference &&
+                    type->arguments.size() == 1)
+                {
+                    if (localCell)
+                        stableLocals.emplace(instruction.result.value(), type->arguments.front());
+                    if (type->isMutable)
+                        appendLocals.emplace(instruction.result.value(), type->arguments.front());
+                }
             }
         for (const auto& block : function.blocks)
         {
             const auto& instructions = block.instructions;
-            for (std::size_t index = 1; index + 1 < instructions.size(); ++index)
+            std::unordered_map<std::uint32_t, std::size_t> definitions;
+            for (std::size_t index = 0; index < instructions.size(); ++index)
+                if (instructions[index].result)
+                    definitions.emplace(instructions[index].result.value(), index);
+
+            const auto concat = [&](const wir::lowered::Instruction& instruction, const wir::TypeId type)
             {
-                const auto& load = instructions[index - 1];
-                const auto& add = instructions[index];
-                const auto& store = instructions[index + 1];
+                return instruction.opcode == wir::lowered::Opcode::Binary && instruction.result &&
+                       instruction.resultType == type &&
+                       instruction.binaryOperator == wir::typed::BinaryOperator::Add &&
+                       instruction.operands.size() == 2 && concatTypes.contains(instruction.operands[0].value()) &&
+                       concatTypes.contains(instruction.operands[1].value()) &&
+                       concatTypes.at(instruction.operands[0].value()) == type &&
+                       concatTypes.at(instruction.operands[1].value()) == type &&
+                       instruction.resultOwnership == wir::typed::ValueOwnership::Owned;
+            };
+            for (std::size_t index = 1; index < instructions.size(); ++index)
+            {
+                const auto& store = instructions[index];
+                if ((store.opcode != wir::lowered::Opcode::Store && store.opcode != wir::lowered::Opcode::Replace) ||
+                    store.operands.size() != 2)
+                    continue;
+                const auto root = definitions.find(store.operands[1].value());
+                if (root == definitions.end() || root->second >= index)
+                    continue;
+                const auto& add = instructions[root->second];
                 const auto* type = module.types.tryGet(add.resultType);
                 if (!type || (type->kind != wir::TypeKind::String && type->kind != wir::TypeKind::Text) ||
-                    add.opcode != wir::lowered::Opcode::Binary || !add.result ||
-                    add.binaryOperator != wir::typed::BinaryOperator::Add || add.operands.size() != 2 ||
-                    uses[add.result.value()] != 1 ||
-                    (store.opcode != wir::lowered::Opcode::Store && store.opcode != wir::lowered::Opcode::Replace) ||
-                    store.operands.size() != 2 || store.operands[1] != add.result ||
-                    load.opcode != wir::lowered::Opcode::Load || !load.result || load.operands.size() != 1 ||
-                    load.resultOwnership != wir::typed::ValueOwnership::Borrowed || load.resultType != add.resultType ||
-                    load.result != add.operands[0] || uses[load.result.value()] != 1 ||
-                    load.operands[0] != store.operands[0])
+                    !concat(add, add.resultType) || semanticUses[add.result.value()] != 1)
                     continue;
                 const auto local = appendLocals.find(store.operands[0].value());
-                if (local != appendLocals.end() && local->second == add.resultType)
-                    plan.localAppendSuffixes.emplace(add.result.value(), add.operands[1]);
+                if (local == appendLocals.end() || local->second != add.resultType)
+                    continue;
+
+                std::vector<wir::ValueId> suffixes;
+                std::unordered_set<std::uint32_t> sums;
+                const auto* node = &add;
+                while (concat(*node, add.resultType) && semanticUses[node->result.value()] == 1)
+                {
+                    // Bound generated variadic templates and proof work. Longer
+                    // expressions retain the linear rvalue-buffer fallback.
+                    if (sums.size() >= 64)
+                    {
+                        node = nullptr;
+                        break;
+                    }
+
+                    sums.insert(node->result.value());
+                    suffixes.push_back(node->operands[1]);
+                    const auto previous = definitions.find(node->operands[0].value());
+                    if (previous == definitions.end() || previous->second >= definitions.at(node->result.value()))
+                    {
+                        node = nullptr;
+                        break;
+                    }
+
+                    node = &instructions[previous->second];
+                }
+
+                if (!node || node->opcode != wir::lowered::Opcode::Load || !node->result ||
+                    node->resultType != add.resultType || node->operands.size() != 1 ||
+                    node->resultOwnership != wir::typed::ValueOwnership::Borrowed ||
+                    semanticUses[node->result.value()] != 1 || node->operands[0] != store.operands[0])
+                    continue;
+
+                bool safe = true;
+                for (auto cursor = definitions.at(node->result.value()); cursor < index; ++cursor)
+                {
+                    const auto& step = instructions[cursor];
+                    if (step.result && sums.contains(step.result.value()))
+                        continue;
+                    if ((step.opcode == wir::lowered::Opcode::DropValue ||
+                         step.opcode == wir::lowered::Opcode::Release) &&
+                        step.operands.size() == 1 && sums.contains(step.operands[0].value()))
+                        continue;
+                    if (&step == node)
+                        continue;
+                    if (step.opcode == wir::lowered::Opcode::Load && step.operands.size() == 1 &&
+                        step.resultType == add.resultType && stableLocals.contains(step.operands[0].value()) &&
+                        stableLocals.at(step.operands[0].value()) == step.resultType)
+                        continue;
+                    if (step.opcode == wir::lowered::Opcode::Constant && step.resultType == add.resultType)
+                        continue;
+
+                    safe = false;
+                    break;
+                }
+
+                if (safe)
+                {
+                    std::reverse(suffixes.begin(), suffixes.end());
+                    plan.localAppendSuffixes.emplace(add.result.value(), std::move(suffixes));
+                    plan.elidedConcatValues.insert(sums.begin(), sums.end());
+                }
+            }
+
+            // Flatten complete pure trees, including parenthesized RHS trees.
+            // Visit roots in reverse so a larger tree claims its interiors first.
+            // Retain every leaf evaluation at its original position. Unknown
+            // effects between nodes forbid flattening (allocation failure must
+            // not move across user-visible work).
+            for (std::size_t reverse = instructions.size(); reverse > 0; --reverse)
+            {
+                const auto index = reverse - 1;
+                const auto& add = instructions[index];
+                const auto* type = module.types.tryGet(add.resultType);
+                if (!type || (type->kind != wir::TypeKind::String && type->kind != wir::TypeKind::Text) ||
+                    !concat(add, add.resultType) || plan.elidedConcatValues.contains(add.result.value()))
+                    continue;
+
+                std::vector<wir::ValueId> leaves;
+                std::unordered_set<std::uint32_t> sums;
+                bool safe = true;
+                std::size_t begin = index;
+                const auto visit = [&](const auto& self, const wir::ValueId id, const std::size_t before) -> void
+                {
+                    if (!safe)
+                        return;
+                    const auto found = definitions.find(id.value());
+                    if (found == definitions.end() || found->second >= before)
+                    {
+                        safe = false;
+                        return;
+                    }
+
+                    const auto& node = instructions[found->second];
+                    if (concat(node, add.resultType) && semanticUses[id.value()] == 1 &&
+                        !plan.elidedConcatValues.contains(id.value()))
+                    {
+                        if (sums.size() >= 64)
+                        {
+                            safe = false;
+                            return;
+                        }
+
+                        sums.insert(id.value());
+                        self(self, node.operands[0], found->second);
+                        self(self, node.operands[1], found->second);
+                        return;
+                    }
+
+                    if (node.resultType != add.resultType ||
+                        !((node.opcode == wir::lowered::Opcode::Load && node.operands.size() == 1 &&
+                           node.resultOwnership == wir::typed::ValueOwnership::Borrowed &&
+                           stableLocals.contains(node.operands[0].value()) &&
+                           stableLocals.at(node.operands[0].value()) == add.resultType) ||
+                          (node.opcode == wir::lowered::Opcode::Constant && semanticUses[id.value()] == 1)))
+                    {
+                        safe = false;
+                        return;
+                    }
+
+                    begin = std::min(begin, found->second);
+                    leaves.push_back(id);
+                };
+                sums.insert(add.result.value());
+                visit(visit, add.operands[0], index);
+                visit(visit, add.operands[1], index);
+                if (!safe || sums.size() < 2)
+                    continue;
+                std::unordered_set<std::uint32_t> leafIds;
+                for (const auto leaf : leaves)
+                    leafIds.insert(leaf.value());
+                for (auto cursor = begin; cursor < index && safe; ++cursor)
+                {
+                    const auto& step = instructions[cursor];
+                    if (step.result && (sums.contains(step.result.value()) || leafIds.contains(step.result.value())))
+                        continue;
+                    if ((step.opcode == wir::lowered::Opcode::DropValue ||
+                         step.opcode == wir::lowered::Opcode::Release) &&
+                        step.operands.size() == 1 && sums.contains(step.operands[0].value()))
+                        continue;
+
+                    safe = false;
+                }
+
+                if (safe)
+                {
+                    sums.erase(add.result.value());
+                    plan.flattenedConcatOperands.emplace(add.result.value(), std::move(leaves));
+                    plan.elidedConcatValues.insert(sums.begin(), sums.end());
+                }
+            }
+
+            // Give the STL/Text rvalue overloads an independently owned last-use
+            // buffer. Never consume a load alias optimized into a borrow, a
+            // parameter, phi value, cross-block definition or coroutine value.
+            for (std::size_t index = 0; index < instructions.size(); ++index)
+            {
+                const auto& add = instructions[index];
+                const auto* type = module.types.tryGet(add.resultType);
+                if (!type || (type->kind != wir::TypeKind::String && type->kind != wir::TypeKind::Text) ||
+                    !concat(add, add.resultType) || plan.elidedConcatValues.contains(add.result.value()) ||
+                    plan.flattenedConcatOperands.contains(add.result.value()))
+                    continue;
+                for (const auto operand : add.operands)
+                {
+                    const auto found = definitions.find(operand.value());
+                    if (found == definitions.end() || found->second >= index || semanticUses[operand.value()] != 1 ||
+                        plan.borrowedStringCopies.contains(operand.value()) ||
+                        plan.elidedConcatValues.contains(operand.value()))
+                        continue;
+                    const auto& definition = instructions[found->second];
+                    if (definition.resultType == add.resultType &&
+                        definition.resultOwnership == wir::typed::ValueOwnership::Owned)
+                        plan.consumedConcatOperands.insert(operand.value());
+                }
             }
         }
         return plan;
