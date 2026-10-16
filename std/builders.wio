@@ -79,6 +79,12 @@ realm std
                 self.value.Append(value);
             }
 
+            [apply(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, byte, f32, f64, bool)]
+            public fn Append<T>(value: T)
+            {
+                self.value.Append($"${value}");
+            }
+
             public fn AppendChar(value: char)
             {
                 self.value.Push(value);
@@ -87,6 +93,13 @@ realm std
             public fn AppendLine(value: string)
             {
                 self.value.Append(value);
+                self.value.Push('\n');
+            }
+
+            [apply(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, byte, f32, f64, bool)]
+            public fn AppendLine<T>(value: T)
+            {
+                self.Append(value);
                 self.value.Push('\n');
             }
 

@@ -21,5 +21,5 @@ namespace wio::vm::detail
     [[nodiscard]] StringIntrinsicResult executeStringIntrinsic(std::string_view selector, const Value& receiver,
                                                                Value* mutableReceiver,
                                                                std::span<const Value* const> arguments,
-                                                               std::uint8_t resultType);
+                                                               std::uint8_t resultType, std::uint8_t argumentType = 0);
 } // namespace wio::vm::detail

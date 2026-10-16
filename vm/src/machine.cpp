@@ -4454,7 +4454,10 @@ namespace wio::vm
                                                         ? module.types[instruction.resultType].kind
                                                         : TypeVoid;
                     detail::StringIntrinsicResult intrinsicResult = detail::executeStringIntrinsic(
-                        selector, *receiver, mutableReceiver, intrinsicArguments, resultType);
+                        selector, *receiver, mutableReceiver, intrinsicArguments, resultType,
+                        instruction.signatureTypes.size() > 1 && instruction.signatureTypes[1] < module.types.size()
+                            ? module.types[instruction.signatureTypes[1]].kind
+                            : TypeVoid);
                     if (!intrinsicResult.recognized)
                         return fail("WVM1061", "String intrinsic is not implemented: " + std::string{selector});
                     if (!intrinsicResult.succeeded)

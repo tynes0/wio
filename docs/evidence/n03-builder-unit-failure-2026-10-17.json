@@ -1,0 +1,29 @@
+{
+  "passed": false,
+  "processes": [
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "F:\\Projects\\wio\\tests\\numeric_builder_test.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-o",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\e632fbb463b54330a69a7362781f7afc\\numeric-unit.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\e632fbb463b54330a69a7362781f7afc\\numeric-unit.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 3221226505,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

@@ -17,6 +17,7 @@ namespace wio::wir
         std::size_t heapAllocations = 0;
         std::size_t coroutineFrameAllocations = 0;
         std::size_t boundsChecksEliminated = 0;
+        std::size_t numericAppendsFused = 0;
 
         auto operator<=>(const OptimizationStatistics&) const = default;
     };

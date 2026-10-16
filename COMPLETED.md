@@ -10,6 +10,30 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 direct primitive builder append — 2026-10-17
+
+- [x] Constrained numeric/bool StringBuilder Append and AppendLine overloads,
+      preserving exact integer types, owning snapshots and capacity reuse.
+- [x] Dedicated backend-neutral NumericAppendOptimizer fuses only adjacent,
+      empty-affix, sole-use primitive formatting/append and matching string
+      cleanup. Async/frames, shared values, effects, borrows and user hooks stay
+      conservative. C++ and VM append directly without native string marshalling.
+- [x] Corrected libc++ const vector<bool> proxy handling after the preceding CI
+      run passed Windows/Ubuntu but failed macOS compilation. New CI acceptance
+      is independent; local success is not a macOS qualification claim.
+- [x] Three new tests passed locally in 64.15s: selection/rejection proof matrix,
+      allocation/locale/rounding helper checks and actual Lowered WIR plus Wio
+      native O0/O2 + VM, including all allowed primitive types and rejection.
+      No old functional corpus run. Earlier development failures remain recorded.
+- [x] Same-source four-implementation before/after and final native/VM sessions:
+      252/252 correct outputs. Large-integer allocations 40007 -> 20005, requested
+      bytes 1631632 -> 1011570, unchanged peak 311 bytes and zero final live memory.
+      Short scalar cases have unchanged allocation counts. Both timing sessions
+      remain unqualified; separate final growing-row native timing is higher.
+- [ ] N03 still open for richer formatting, legacy Format and KI-008 user-hook
+      invocation. Native N14 budgets and N01 qualification are separate, not
+      silently satisfied by this slice. See `docs/WIO_NUMERIC_BUILDER_OPTIMIZATION.md`.
+
 ## N03 float and builtin-container formatting slice — 2026-10-17
 
 - [x] Finite classic-locale/nearest float display uses a stack buffer and
@@ -28,7 +52,8 @@ Notes:
       retained. Vector allocations 50007 -> 30005 and requested bytes 2460358 ->
       1480260; peak live bytes 278 -> 285, final live blocks/bytes zero. Scalar/
       builder allocation counts are unchanged. Both timing sessions unqualified.
-- [ ] N03 is not closed: direct numeric builder append, richer formatting,
+- [ ] N03 is not closed: the subsequent direct primitive append slice is above;
+      richer formatting,
       legacy stream formatting and VM user ToString invocation remain open.
       KI-008 records the hook gap; N01/N14 timing qualification and KI-007 remain
       separate. See `docs/WIO_FORMATTING_OPTIMIZATION.md` for scoped evidence.

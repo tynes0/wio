@@ -93,7 +93,12 @@ namespace wio::runtime
                 if (!first)
                     target.append(", ");
                 first = false;
-                AppendBasicFormatted(target, item);
+                // libc++ keeps a proxy even for const vector<bool> iteration.
+                // Format its declared bool value, never the proxy host type.
+                if constexpr (std::is_same_v<typename Raw::value_type, bool>)
+                    AppendBasicFormatted(target, static_cast<bool>(item));
+                else
+                    AppendBasicFormatted(target, item);
             }
 
             target.push_back(']');

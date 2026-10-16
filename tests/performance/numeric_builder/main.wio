@@ -1,0 +1,82 @@
+use std::benchmark as bench;
+use std::builders as builders;
+use std::console as console;
+use std::convert as convert;
+use std::json as json;
+
+using cpp::header("probe.h");
+
+[native, cpp::name(format_probe::Hash)]
+fn Hash(value: view string) -> u64;
+
+fn Work(mode: i64, count: i64) -> u64
+{
+    let reserved = (count fit usize) * 16usize;
+    let capacity = mode == 2 ? reserved : 64usize;
+    let builder = builders::StringBuilder(capacity);
+    mut checksum = 0u64;
+    for (index in 0i64..<count)
+    {
+        if (mode == 0)
+        {
+            builder.Append("id=");
+            builder.Append(index fit u64);
+            builder.Append(",value=");
+            builder.Append(((index % 64i64) fit f64) * 0.125f64 - 4.0f64);
+            builder.Append(",ok=");
+            builder.Append(index % 2i64 == 0i64);
+            builder.AppendChar('\n');
+        }
+        else if (mode == 1)
+        {
+            builder.Clear();
+            builder.Append(-9223372036854775807i64 + index);
+            builder.AppendChar(':');
+            builder.Append(18446744073709551615u64 - (index fit u64));
+            builder.AppendChar(':');
+            builder.Append((index % 127i64) fit i8);
+            let snapshot = builder.ToString();
+            checksum += Hash(ref snapshot);
+        }
+        else
+        {
+            builder.Append(((index % 64i64) fit f32) * 0.125f32 - 4.0f32);
+            builder.AppendChar(',');
+        }
+
+    }
+
+    if (mode == 1) return checksum;
+    let snapshot = builder.ToString();
+    return Hash(ref snapshot);
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() < 3usize or args.Count() > 4usize) return 1;
+    let modeResult = convert::ParseI64(args[1usize]);
+    let countResult = convert::ParseI64(args[2usize]);
+    if (modeResult.IsError() or countResult.IsError()) return 1;
+    let mode = modeResult.Value();
+    let count = countResult.Value();
+    if (mode < 0 or mode > 2 or count < 1 or count > 100000) return 1;
+    bench::Consume(Work(mode, bench::Input(count)));
+    bench::Consume(Work(mode, bench::Input(count)));
+    if (args.Count() == 4usize)
+    {
+        if (bench::BeginAllocations().IsError()) return 2;
+        let checksum = Work(mode, bench::Input(count));
+        let counters = bench::EndAllocations();
+        console::PrintLine(bench::Protocol(1i64, count fit u64, checksum));
+        console::PrintLine(json::Write(bench::AllocationJson(counters)));
+        if (counters.liveBlocks != 0u64 or counters.liveBytes != 0u64) return 3;
+        return 0;
+    }
+
+    let start = bench::Now();
+    let checksum = Work(mode, bench::Input(count));
+    bench::Consume(checksum);
+    let elapsed = bench::Now() - start;
+    console::PrintLine(bench::Protocol(elapsed, count fit u64, checksum));
+    return 0;
+}

@@ -1281,8 +1281,10 @@ Rider, and CLion are defined in
    N03 formatting/builders is in progress: finite float stack formatting and
    direct builtin-container interpolation are implemented, with VM display
    conformance fixes and frozen related four-implementation measurements.
-   Direct numeric builder append, richer formatting and VM user ToString
-   invocation (KI-008) remain open; see `docs/WIO_FORMATTING_OPTIMIZATION.md`.
+   Direct primitive builder Append/AppendLine now use canonical formatting fusion
+   and typed C++/VM append; see `docs/WIO_NUMERIC_BUILDER_OPTIMIZATION.md`.
+   Richer formatting, legacy Format and VM user ToString invocation (KI-008)
+   remain open; see `docs/WIO_FORMATTING_OPTIMIZATION.md`.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

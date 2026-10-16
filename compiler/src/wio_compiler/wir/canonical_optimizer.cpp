@@ -1,4 +1,5 @@
 #include "wio/wir/canonical_optimizer.h"
+#include "wio/wir/numeric_append_optimizer.h"
 #include "wio/common/profiling.h"
 
 #include <algorithm>
@@ -1214,6 +1215,9 @@ namespace wio::wir
         common::profiling::Scope deadValuesScope("WIR.Optimize.EliminateDeadValues");
         statistics.instructionsRemoved = eliminateDeadValues(module);
         deadValuesScope.stop();
+        common::profiling::Scope appendScope("WIR.Optimize.NumericAppend");
+        statistics.numericAppendsFused = NumericAppendOptimizer::optimize(module);
+        appendScope.stop();
         common::profiling::Scope storageScope("WIR.Optimize.ClassifyStorage");
         classifyStorage(module, statistics);
         storageScope.stop();

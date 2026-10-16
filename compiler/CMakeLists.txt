@@ -32,6 +32,16 @@ add_library(wio_compiler STATIC
 add_library(wio-compiler ALIAS wio_compiler)
 
 if(BUILD_TESTING)
+    add_executable(wio_numeric_append_optimizer_test "${CMAKE_SOURCE_DIR}/tests/numeric_append_optimizer_test.cpp")
+    target_link_libraries(wio_numeric_append_optimizer_test PRIVATE wio_compiler)
+    add_test(NAME wio_n03_numeric_builder_plan COMMAND wio_numeric_append_optimizer_test)
+    set_tests_properties(wio_n03_numeric_builder_plan PROPERTIES LABELS "wir;native;vm;formatting;optimization;ownership" TIMEOUT 60)
+
+    add_executable(wio_numeric_builder_test "${CMAKE_SOURCE_DIR}/tests/numeric_builder_test.cpp")
+    target_include_directories(wio_numeric_builder_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
+    add_test(NAME wio_n03_numeric_builder_unit COMMAND wio_numeric_builder_test)
+    set_tests_properties(wio_n03_numeric_builder_unit PROPERTIES LABELS "native;formatting;float;memory;optimization" TIMEOUT 60)
+
     add_executable(wio_floating_value_format_test "${CMAKE_SOURCE_DIR}/tests/floating_value_format_test.cpp")
     target_include_directories(wio_floating_value_format_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
     add_test(NAME wio_n03_value_format COMMAND wio_floating_value_format_test)

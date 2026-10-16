@@ -50,7 +50,7 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
       - name: Build compiler, CLI and runtime artifacts
-        run: cmake --build build --target wio_playground wio_vm_runner wio_backend_workspace_test wio_float_parse_portability_test wio_wir_cpp_storage_plan_test wio_vm_string_capacity_test wio_wir_cpp_managed_storage_test wio_integer_format_test wio_wir_cpp_string_fast_paths_test wio_wir_cpp_append_reuse_plan_test wio_wir_cpp_concat_plan_test wio_concat_runtime_test wio_floating_value_format_test wio_vm_value_format_test --parallel 2
+        run: cmake --build build --target wio_playground wio_vm_runner wio_backend_workspace_test wio_float_parse_portability_test wio_wir_cpp_storage_plan_test wio_vm_string_capacity_test wio_wir_cpp_managed_storage_test wio_integer_format_test wio_wir_cpp_string_fast_paths_test wio_wir_cpp_append_reuse_plan_test wio_wir_cpp_concat_plan_test wio_concat_runtime_test wio_floating_value_format_test wio_vm_value_format_test wio_numeric_builder_test wio_numeric_append_optimizer_test --parallel 2
       - name: Preserve functional and scalar release gates
         if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
         run: >-
@@ -90,6 +90,10 @@ jobs:
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
           -R "^wio_n03_(value_format|format_semantics|vm_format)$"
+      - name: Qualify N03 direct numeric builder append
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_n03_numeric_builder_(plan|unit|semantics)$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -105,5 +109,6 @@ jobs:
             build/n02-append-semantics/**/results.json
             build/n02-concat-semantics/**/results.json
             build/n03-format-semantics/**/results.json
+            build/n03-numeric-builder-semantics/**/results.json
             build/wio-benchmark-contract/**/results.json
             build/wio-benchmark-contract/**/report.md

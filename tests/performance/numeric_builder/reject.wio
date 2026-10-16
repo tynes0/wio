@@ -1,0 +1,8 @@
+use std::builders as builders;
+
+fn Entry() -> i32
+{
+    let builder = builders::StringBuilder();
+    builder.Append<string>("explicit numeric specialization must reject strings");
+    return 0;
+}

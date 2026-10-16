@@ -192,8 +192,9 @@ The final separate host/VM unit recheck passed 2/2 in 0.69 seconds.
 
 ## Remaining N03 work
 
-Direct numeric append into existing builder storage (without an interpolated
-argument string), richer formatting/precision surfaces, the legacy native
+Direct numeric append into existing builder storage was subsequently implemented
+by [the second N03 slice](WIO_NUMERIC_BUILDER_OPTIMIZATION.md). Richer
+formatting/precision surfaces, the legacy native
 `runtime::Format` stream surface and user-hook callable lowering/VM invocation
 remain open. Keep ToString snapshots, call order, locale/rounding policy and
 failure behavior explicit. N04 byte/buffer/I/O and the fixed later passes have

@@ -122,7 +122,7 @@ Every update names its current N01-N14 item. Closing one item and starting anoth
 in the same turn must state both the closure and transition explicitly. A narrow
 subsystem slice is not a whole-item closure. The earlier controller passes were
 N01-only; N02 is closed within its recorded bounds and the current production
-change is the first N03 slice. Remaining N01 attribution and coverage gaps above
+change is N03 formatting/builders. Remaining N01 attribution and coverage gaps above
 remain open.
 
 The next ownership-attribution slice adds Wio object argument/view/return cases
@@ -215,3 +215,21 @@ processes remain in evidence; no speedup is computed from unsupported execution.
 N03 stays open for direct numeric builder append, richer formatting, the legacy
 stream API and shared user-hook callable lowering. N04 has not started. N01/N14
 measurement qualification and KI-007 remain separate open work.
+
+## N03: direct primitive builder append, 2026-10-17
+
+[The numeric builder slice](WIO_NUMERIC_BUILDER_OPTIMIZATION.md) adds constrained
+primitive/bool Append and AppendLine overloads and fuses sole-use adjacent empty-
+affix primitive formatting/append in canonical Lowered WIR. C++ and VM append
+directly to their string storage, without per-number native ABI marshalling.
+Exact integer types, locale/rounding, snapshots and checked receiver behavior are
+retained. Frames, nonprimitive hooks, intervening effects and shared formatting
+remain conservative; only matching unobservable string cleanup is removed.
+
+The same-source before/after suite uses direct-to_chars C++ and stack-span C#
+references, separate memory diagnostics and a final repeated native/VM phase.
+The before state explicitly includes the new API's interpolation implementation;
+it is not an unmodified release. The previous macOS const vector<bool> proxy
+compile failure is corrected here, not erased from its CI record. N03 stays open
+for richer formatting, legacy Format and KI-008 user-hook lowering. N04 has not
+started; timing budgets and the fixed remaining passes are not renumbered.

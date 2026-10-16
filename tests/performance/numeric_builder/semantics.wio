@@ -1,0 +1,58 @@
+use std::builders as builders;
+
+fn Entry() -> i32
+{
+    let builder = builders::StringBuilder(4096usize);
+    builder.Append(-128i8);
+    builder.AppendChar('|');
+    builder.Append(-32768i16);
+    builder.AppendChar('|');
+    builder.Append(-2147483647i32 - 1i32);
+    builder.AppendChar('|');
+    builder.Append(-9223372036854775807i64 - 1i64);
+    builder.AppendChar('|');
+    builder.Append(-7isize);
+    builder.AppendChar('|');
+    builder.Append(255u8);
+    builder.AppendChar('|');
+    builder.Append(65535u16);
+    builder.AppendChar('|');
+    builder.Append(4294967295u32);
+    builder.AppendChar('|');
+    builder.Append(18446744073709551615u64);
+    builder.AppendChar('|');
+    builder.Append(17usize);
+    builder.AppendChar('|');
+    let lastByte: byte = 255;
+    builder.Append(lastByte);
+    builder.AppendChar('|');
+    builder.Append(true);
+    builder.AppendChar('|');
+    builder.Append(false);
+    let expected = "-128|-32768|-2147483648|-9223372036854775808|-7|255|65535|4294967295|"
+        + "18446744073709551615|17|255|true|false";
+    if (builder.ToString() != expected) return 1;
+    let snapshot = builder.ToString();
+    builder.Clear();
+    builder.Append(-0.0f32);
+    builder.AppendChar('|');
+    builder.Append(-0.0f64);
+    builder.AppendChar('|');
+    builder.Append(1.23456789f64);
+    builder.AppendChar('|');
+    builder.Append(12500000.0f64);
+    if (builder.ToString() != "-0|-0|1.23457|1.25e+07") return 2;
+    if (snapshot != expected) return 3;
+    builder.Reserve(8192usize);
+    builder.Clear();
+    builder.Append("a\0b");
+    builder.AppendLine(42);
+    builder.AppendLine(false);
+    if (builder.ToString() != "a\0b42\nfalse\n") return 4;
+    if (builder.Length() != 12usize) return 5;
+    builder.Clear();
+    builder.Append(snapshot);
+    builder.Append(9007199254740993u64);
+    if (builder.ToString() != expected + "9007199254740993") return 6;
+    return 0;
+}

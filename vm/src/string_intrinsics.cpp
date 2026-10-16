@@ -1,5 +1,6 @@
 #include "string_intrinsics.h"
 #include "float_parse.h"
+#include <value_format.h>
 
 #include <algorithm>
 #include <charconv>
@@ -14,6 +15,7 @@ namespace wio::vm::detail
 {
     namespace
     {
+        constexpr std::uint8_t TypeBool = 2;
         constexpr std::uint8_t TypeI8 = 3;
         constexpr std::uint8_t TypeI16 = 4;
         constexpr std::uint8_t TypeI32 = 5;
@@ -24,6 +26,10 @@ namespace wio::vm::detail
         constexpr std::uint8_t TypeU32 = 10;
         constexpr std::uint8_t TypeU64 = 11;
         constexpr std::uint8_t TypeUSize = 12;
+        constexpr std::uint8_t TypeF32 = 13;
+        constexpr std::uint8_t TypeF64 = 14;
+        constexpr std::uint8_t TypeByte = 15;
+        constexpr std::uint8_t TypeString = 17;
         StringIntrinsicResult success(Value value = {})
         {
             return {.recognized = true, .succeeded = true, .value = std::move(value)};
@@ -73,6 +79,52 @@ namespace wio::vm::detail
                 return false;
             output = value->asString();
             return true;
+        }
+
+        bool appendSuffix(std::string& target, const Value* suffix, const std::uint8_t type)
+        {
+            if (!suffix)
+                return false;
+            switch (suffix->kind())
+            {
+            case Value::Kind::String:
+                if (type != 0 && type != TypeString)
+                    return false;
+                target.append(suffix->asString());
+                return true;
+            case Value::Kind::Boolean:
+                if (type != TypeBool)
+                    return false;
+                runtime::AppendBasicFormatted(target, suffix->asBoolean());
+                return true;
+            case Value::Kind::SignedInteger:
+                if (type < TypeI8 || type > TypeISize)
+                    return false;
+                if (type == TypeI8)
+                    target.append(std::to_string(suffix->asSignedInteger()));
+                else
+                    runtime::AppendInteger(target, suffix->asSignedInteger());
+                return true;
+            case Value::Kind::UnsignedInteger:
+                if ((type < TypeU8 || type > TypeUSize) && type != TypeByte)
+                    return false;
+                // Numeric byte/i8/u8 display historically ignores native locale.
+                if (type == TypeU8 || type == TypeByte)
+                    target.append(std::to_string(suffix->asUnsignedInteger()));
+                else
+                    runtime::AppendInteger(target, suffix->asUnsignedInteger());
+                return true;
+            case Value::Kind::Float64:
+                if (type != TypeF32 && type != TypeF64)
+                    return false;
+                if (type == TypeF32)
+                    runtime::AppendFloating(target, static_cast<float>(suffix->asFloat64()));
+                else
+                    runtime::AppendFloating(target, suffix->asFloat64());
+                return true;
+            default:
+                return false;
+            }
         }
 
         bool isSpace(const char value) noexcept
@@ -236,7 +288,7 @@ namespace wio::vm::detail
 
     StringIntrinsicResult executeStringIntrinsic(const std::string_view selector, const Value& receiver,
                                                  Value* mutableReceiver, const std::span<const Value* const> arguments,
-                                                 const std::uint8_t resultType)
+                                                 const std::uint8_t resultType, const std::uint8_t argumentType)
     {
         if (receiver.kind() != Value::Kind::String)
             return failure("WVM1116", "String intrinsic receiver is not a string");
@@ -440,16 +492,14 @@ namespace wio::vm::detail
             if (selector == "ToF32")
             {
                 float parsed = 0.0f;
-                const auto [end, error] =
-                    runtime::detail::parseFloatChars(source, parsed);
+                const auto [end, error] = runtime::detail::parseFloatChars(source, parsed);
                 if (source.empty() || error != std::errc{} || end != source.data() + source.size() ||
                     !std::isfinite(parsed))
                     return failure("WVM1129", "String f32 conversion failed");
                 return success(Value::floating(parsed));
             }
             double parsed = 0.0;
-            const auto [end, error] =
-                runtime::detail::parseFloatChars(source, parsed);
+            const auto [end, error] = runtime::detail::parseFloatChars(source, parsed);
             if (source.empty() || error != std::errc{} || end != source.data() + source.size() ||
                 !std::isfinite(parsed))
                 return failure("WVM1129", "String floating-point conversion failed");
@@ -476,10 +526,8 @@ namespace wio::vm::detail
             auto& target = *mutableReceiver->mutableString();
             if (selector == "Append")
             {
-                std::string_view suffix;
-                if (!stringValue(argument(arguments, 0), suffix))
-                    return failure("WVM1131", "String Append requires a string suffix");
-                target.append(suffix);
+                if (!appendSuffix(target, argument(arguments, 0), argumentType))
+                    return failure("WVM1131", "String Append requires a string, numeric or bool suffix");
                 return success();
             }
             if (selector == "Push")
@@ -499,10 +547,8 @@ namespace wio::vm::detail
         std::string mutated{value};
         if (selector == "Append")
         {
-            std::string_view suffix;
-            if (!stringValue(argument(arguments, 0), suffix))
-                return failure("WVM1131", "String Append requires a string suffix");
-            mutated.append(suffix);
+            if (!appendSuffix(mutated, argument(arguments, 0), argumentType))
+                return failure("WVM1131", "String Append requires a string, numeric or bool suffix");
         }
         else if (selector == "Push")
         {
