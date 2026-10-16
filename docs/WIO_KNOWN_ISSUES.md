@@ -223,6 +223,30 @@ locks the unchanged fallback. Shared [N02 semantics](../tests/performance/concat
 use an explicit snapshot. The first failing cross-backend test was retained in
 the local `build/n02-concat-semantics/` evidence, not hidden as a parity success.
 
+### KI-008 — Display formatting parity (partly fixed, user hooks still open)
+
+The N03 baseline on 2026-10-17 exposed WVM1062 for builtin f64 array
+interpolation. VM scalar floating interpolation also used shortest output where
+native uses defaultfloat precision 6; VM chars lacked their declared type hint.
+Native C++ negative-zero constants could be emitted as integer `-0`, losing the
+sign when converted to double. The N03 formatting slice corrects those builtin
+paths with typed, bounded array/dictionary formatting and shared scalar helpers.
+
+**Still open:** interpolation of objects with user-defined ToString is not
+materialized as a shared WIR call or scheduled by the VM; it still returns
+WVM1062 in the VM. Generic ToString
+and object-container formatting inherit that missing hook surface. Native
+stateful ToString/object-array behavior is covered separately; the VM case is an
+explicit negative test, not a parity success. Track this under remaining N03
+correctness work before claiming complete formatting conformance or v1 parity.
+Resolve this through shared callable lowering (and continuation support where
+needed), not arbitrary callbacks inside the low-level builtin formatter.
+
+See [the new fixtures](../tests/performance/formatting/README.md). The failed
+baseline and initial failing user-hook test remain visible in the saved evidence.
+Nonfinite spellings retain each host's standard-stream behavior; do not assume a
+universal cross-CRT spelling for every signaling/payload NaN.
+
 ## 2. Native, VM, ownership and SDK limitations
 
 | ID | Priority / state | Current boundary and closure requirement |

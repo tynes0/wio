@@ -121,8 +121,9 @@ measurement requirement; do not silently alter the user's system power policy.
 Every update names its current N01-N14 item. Closing one item and starting another
 in the same turn must state both the closure and transition explicitly. A narrow
 subsystem slice is not a whole-item closure. The earlier controller passes were
-N01-only; the current production change is N02. Remaining N01 attribution and
-coverage gaps above remain open.
+N01-only; N02 is closed within its recorded bounds and the current production
+change is the first N03 slice. Remaining N01 attribution and coverage gaps above
+remain open.
 
 The next ownership-attribution slice adds Wio object argument/view/return cases
 and native weak/control calibration, with Python build/collection. See
@@ -197,3 +198,20 @@ The pre-existing mutating-RHS borrowed-LHS native/VM discrepancy is now explicit
 tracked as KI-007; N02 does not silently choose new language semantics to hide it.
 N01 residual coverage and the v1 parity fix remain open. Next production work is
 **N03 formatting/builders**; no N03 transition was implemented in this patch.
+
+## N03: float and builtin-container formatting, 2026-10-17
+
+[The first formatting slice](WIO_FORMATTING_OPTIMIZATION.md) replaces normal
+finite float streams with stack-buffer `to_chars(general, 6)` and appends builtin
+containers directly into the interpolation buffer. Locale, rounding, nonfinite
+and user-hook fallback contracts remain explicit. Negative-zero literal transport
+and VM builtin array/dictionary/char/float display parity were also corrected;
+user-defined ToString in VM remains open as KI-008, not a passing feature claim.
+
+Frozen Wio native/VM + C++ + C# workloads cover scalar floats, mixed builder rows
+and float vectors, with independent output checks, separate allocation diagnostics
+and a distinct final native/VM measurement phase. Failed baseline VM-vector
+processes remain in evidence; no speedup is computed from unsupported execution.
+N03 stays open for direct numeric builder append, richer formatting, the legacy
+stream API and shared user-hook callable lowering. N04 has not started. N01/N14
+measurement qualification and KI-007 remain separate open work.

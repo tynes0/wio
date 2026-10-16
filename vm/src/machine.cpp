@@ -20,6 +20,7 @@
 #include "place_storage_internal.h"
 #include "string_intrinsics.h"
 #include "text_intrinsics.h"
+#include "value_format_internal.h"
 
 #include <algorithm>
 #include <atomic>
@@ -560,32 +561,6 @@ namespace wio::vm
                     static_cast<std::uint64_t>((std::numeric_limits<std::size_t>::max)()))
                 return static_cast<std::size_t>(value.asSignedInteger());
             return std::nullopt;
-        }
-
-        [[nodiscard]] std::optional<std::string> formatUtf8(const Value& value)
-        {
-            if (value.kind() == Value::Kind::String)
-                return std::string{value.asString()};
-            if (value.kind() == Value::Kind::Text)
-                return encodeUtf8(value.asText());
-            if (value.kind() == Value::Kind::Null)
-                return "null";
-            if (value.kind() == Value::Kind::Boolean)
-                return value.asBoolean() ? "true" : "false";
-
-            char buffer[128]{};
-            std::to_chars_result converted{};
-            if (value.kind() == Value::Kind::SignedInteger)
-                converted = std::to_chars(std::begin(buffer), std::end(buffer), value.asSignedInteger());
-            else if (value.kind() == Value::Kind::UnsignedInteger)
-                converted = std::to_chars(std::begin(buffer), std::end(buffer), value.asUnsignedInteger());
-            else if (value.kind() == Value::Kind::Float64)
-                converted = std::to_chars(std::begin(buffer), std::end(buffer), value.asFloat64());
-            else
-                return std::nullopt;
-            if (converted.ec != std::errc{})
-                return std::nullopt;
-            return std::string{buffer, converted.ptr};
         }
 
         class TimerScheduler final
@@ -4259,7 +4234,8 @@ namespace wio::vm
             }
             if (instruction.opcode == bytecode::Opcode::Interpolate)
             {
-                if (instruction.stringSegments.size() != instruction.operands.size() + 1)
+                if (instruction.stringSegments.size() != instruction.operands.size() + 1 ||
+                    instruction.signatureTypes.size() != instruction.operands.size())
                     return fail("WVM1055", "Interpolation segment shape is invalid");
                 std::string utf8;
                 for (std::size_t index = 0; index < instruction.stringSegments.size(); ++index)
@@ -4270,10 +4246,8 @@ namespace wio::vm
                         const Value* operand = read(instruction.operands[index]);
                         if (!operand)
                             return fail("WVM1056", "Interpolation reads an unavailable value");
-                        const std::optional<std::string> formatted = formatUtf8(*operand);
-                        if (!formatted)
+                        if (!detail::ValueFormatter::append(module, instruction.signatureTypes[index], *operand, utf8))
                             return fail("WVM1062", "Interpolation value has no VM string representation");
-                        utf8.append(*formatted);
                     }
                 }
                 Value result;

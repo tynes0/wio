@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <cctype>
 #include <concepts>
 #include <iomanip>
@@ -1227,7 +1228,7 @@ namespace wio::codegen
                        "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
                        "#include <any.h>\n#include <entry_args.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include "
                        "<std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n"
-                       "#include <wir_inline_place.h>\n#include <integer_format.h>\n";
+                       "#include <wir_inline_place.h>\n#include <integer_format.h>\n#include <value_format.h>\n";
                 output_ << "#include <wir_abi.h>\n#include <wir_task_abi.h>\n#include <wir_native.h>\n#include "
                            "<module_api.h>\n#include "
                            "<wio_values.h>\n#include "
@@ -1477,6 +1478,8 @@ template<class T> std::string stringify(const T& value) {
         return stringify(static_cast<std::underlying_type_t<T>>(value));
     } else if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, char>) {
         return wio::runtime::StringifyInteger(value);
+    } else if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+        return wio::runtime::StringifyFloating(value);
     } else if constexpr (requires(std::ostringstream& stream) { stream << value; }) {
         std::ostringstream stream;
         stream << value;
@@ -1526,18 +1529,16 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
     return result + "}";
 }
 template<class T> void append_formatted(std::string& target, const T& value) {
-    if constexpr (std::is_same_v<T, std::string>) {
-        target.append(value);
-    } else if constexpr (std::is_same_v<T, wio::runtime::Text>) {
-        target.append(value.Utf8());
-    } else if constexpr (std::is_same_v<T, bool>) {
-        target.append(value ? "true" : "false");
-    } else if constexpr (std::is_same_v<T, char>) {
-        target.push_back(value);
-    } else if constexpr (std::is_enum_v<T>) {
-        append_formatted(target, static_cast<std::underlying_type_t<T>>(value));
-    } else if constexpr (std::is_integral_v<T> && !std::is_same_v<T, std::int8_t> && !std::is_same_v<T, std::uint8_t>) {
-        wio::runtime::AppendInteger(target, value);
+    if constexpr (wio::runtime::IsBasicFormattable<T>) {
+        if constexpr (wio::runtime::IsBasicFormatContainer<T>) {
+            // Native numeric facets can be stateful. Keep the established
+            // container evaluation order/facet callbacks outside classic locale.
+            if (std::locale() != std::locale::classic()) {
+                target.append(stringify(value));
+                return;
+            }
+        }
+        wio::runtime::AppendBasicFormatted(target, value);
     } else {
         target.append(stringify(value));
     }
@@ -2302,6 +2303,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     return std::to_string(*value) + "ULL";
                 if (const auto* value = std::get_if<double>(&instruction.literal))
                 {
+                    if (*value == 0.0 && std::signbit(*value))
+                        return "-0.0";
                     std::ostringstream text;
                     text << std::setprecision(17) << *value;
                     return text.str();

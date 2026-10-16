@@ -27,11 +27,18 @@ def expected(mode, count):
     return str(result if mode < 2 or count % 2 else 0)
 
 
-def prepare(args):
+def prepare(args, fixture=None):
+    # Other optimization fixtures share the serial build/manifest pipeline, not
+    # the workloads or checksum oracle. The original N02 command stays identical.
+    fixture = fixture or dict(files=("main.wio", "probe.h", "main.cpp", "Program.cs", "Concat.csproj"),
+                              project="Concat.csproj", assembly="Concat", stage="n02", title="N02 concat",
+                              cases=("assignment-string", "assignment-text", "chain-string", "chain-text"),
+                              expected=expected,
+                              contracts="UTF8 hash/NUL; C# UTF16 strings + UTF8 hash allocation; no reserve; two warmups")
     folder = args.output.resolve()
     if not args.reuse_build:
         folder.mkdir(parents=True, exist_ok=False)
-        for name in ("main.wio", "probe.h", "main.cpp", "Program.cs", "Concat.csproj"):
+        for name in fixture["files"]:
             shutil.copyfile(args.sources.resolve() / name, folder / name)
     cxx = Path(shutil.which(args.cxx) or args.cxx).resolve()
     dotnet = Path(shutil.which("dotnet")).resolve()
@@ -67,20 +74,20 @@ def prepare(args):
     for target, extra in ((native, []), (diagnostic, ["-DWIO_BENCHMARK_ALLOCATIONS"])):
         run([cxx, *flags, *extra, generated, f"-I{folder}", f"-I{ROOT / 'runtime/include'}",
              f"-I{ROOT / 'sdk/include'}", runtime, *links, "-o", target])
-    run([cxx, *flags, folder / "main.cpp", "-o", cpp])
-    run([dotnet, "build", folder / "Concat.csproj", "-c", "Release", "-o", folder / "csharp", "--nologo"])
+    run([cxx, *flags, f"-I{folder}", folder / "main.cpp", "-o", cpp])
+    run([dotnet, "build", folder / fixture["project"], "-c", "Release", "-o", folder / "csharp", "--nologo"])
     run([wio, folder / "main.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder,
          "--output", bridge, "--bytecode-sidecar", bytecode])
     cases = []
     memory = []
-    for mode, name in enumerate(("assignment-string", "assignment-text", "chain-string", "chain-text")):
-        common = dict(workload="n02-" + name + "-v1", metric="kernel", operations=args.count,
-                      expectedChecksum=expected(mode, args.count), cwd=str(folder))
+    for mode, name in enumerate(fixture["cases"]):
+        common = dict(workload=fixture["stage"] + "-" + name + "-v1", metric="kernel", operations=args.count,
+                      expectedChecksum=fixture["expected"](mode, args.count), cwd=str(folder))
         for implementation, program, argv in (
             ("wio-native", native, [mode, args.count]),
             ("wio-vm", vm, [bytecode, "--native-library", bridge, "--", mode, args.count]),
             ("cpp", cpp, [mode, args.count]),
-            ("csharp", dotnet, [folder / "csharp/Concat.dll", mode, args.count])):
+            ("csharp", dotnet, [folder / ("csharp/" + fixture["assembly"] + ".dll"), mode, args.count])):
             cases.append(dict(name=name + "-" + implementation, implementation=implementation,
                               program=str(program), args=[str(x) for x in argv], **common))
         record = subprocess.run([str(diagnostic), str(mode), str(args.count), "memory"], cwd=folder,
@@ -94,8 +101,8 @@ def prepare(args):
         if len(lines) != 2 or json.loads(lines[0])["checksum"] != common["expectedChecksum"]:
             raise RuntimeError("Allocation checksum mismatch")
     artifacts = [p for p in folder.iterdir() if p.is_file() and p.suffix != ".json"]
-    artifacts += [wio, runtime, vm, cxx, dotnet, args.runner.resolve(), folder / "csharp/Concat.dll",
-                  folder / "csharp/Concat.runtimeconfig.json", ROOT / "std/benchmark.wio",
+    artifacts += [wio, runtime, vm, cxx, dotnet, args.runner.resolve(), folder / ("csharp/" + fixture["assembly"] + ".dll"),
+                  folder / ("csharp/" + fixture["assembly"] + ".runtimeconfig.json"), ROOT / "std/benchmark.wio",
                   ROOT / "runtime/include/std_benchmark.h", ROOT / "runtime/include/text.h",
                   ROOT / "runtime/include/wio_benchmark_allocations.h", ROOT / "runtime/include/benchmark_memory.h",
                   ROOT / "std/json.wio", ROOT / "std/serialization.wio", ROOT / "runtime/include/std_serialization.h"]
@@ -104,12 +111,15 @@ def prepare(args):
                   ROOT / "compiler/include/wio/codegen/wir_cpp_storage_plan.h"]
     if (ROOT / "runtime/include/string_concat.h").is_file():
         artifacts.append(ROOT / "runtime/include/string_concat.h")
-    manifest = dict(schemaVersion=1, name="N02 concat " + args.label, warmups=1,
+    for extra in fixture.get("artifacts", ()):
+        if (ROOT / extra).is_file():
+            artifacts.append(ROOT / extra)
+    manifest = dict(schemaVersion=1, name=fixture["title"] + " " + args.label, warmups=1,
                     repetitions=args.repetitions, finalRepetitions=3, timeoutMs=60000, outputLimit=1048576, cpu=args.cpu,
                     environment=dict(WIO_ROOT=str(ROOT), DOTNET_NOLOGO="1"),
                     maximumRange=.15, maximumDrift=.10, maximumControlDifference=.10,
                     metadata=dict(label=args.label, nativeFlags=flags, vm="Release host; unchanged bytecode semantics",
-                                  contracts="UTF8 hash/NUL; C# UTF16 strings + UTF8 hash allocation; no reserve; two warmups",
+                                  contracts=fixture["contracts"],
                                   revision=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()),
                     versions=[dict(program=str(program), args=argv, cwd=str(folder))
                               for program, argv in ((wio, ["--version"]), (cxx, ["--version"]), (dotnet, ["--info"]))],
@@ -118,11 +128,11 @@ def prepare(args):
     print(folder / "manifest.json")
 
 
-if __name__ == "__main__":
+def arguments(default_sources=HERE):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--label", required=True)
-    p.add_argument("--sources", type=Path, default=HERE, help="Frozen workload source directory for an exact-input rebuild")
+    p.add_argument("--sources", type=Path, default=default_sources, help="Frozen workload source directory for an exact-input rebuild")
     p.add_argument("--reuse-build", action="store_true", help="Explicitly finish an existing frozen build; no compilation")
     p.add_argument("--wio", type=Path, default=ROOT / "build/app/Debug/wio.exe")
     p.add_argument("--runtime", type=Path, default=ROOT / "build/runtime/backend/libwio_runtime.a")
@@ -132,7 +142,11 @@ if __name__ == "__main__":
     p.add_argument("--count", type=int, default=2001)
     p.add_argument("--repetitions", type=int, default=5)
     p.add_argument("--cpu", type=int, default=2)
-    arguments = p.parse_args()
-    if not 1 <= arguments.count <= 100000 or arguments.repetitions < 3:
+    parsed = p.parse_args()
+    if not 1 <= parsed.count <= 100000 or parsed.repetitions < 3:
         p.error("Invalid count/repetitions")
-    prepare(arguments)
+    return parsed
+
+
+if __name__ == "__main__":
+    prepare(arguments())

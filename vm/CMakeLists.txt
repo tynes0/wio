@@ -15,6 +15,11 @@ add_library(wio_vm STATIC
 add_library(wio-vm ALIAS wio_vm)
 
 if(BUILD_TESTING)
+    add_executable(wio_vm_value_format_test "${CMAKE_SOURCE_DIR}/tests/vm_value_format_test.cpp")
+    target_include_directories(wio_vm_value_format_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+    target_link_libraries(wio_vm_value_format_test PRIVATE wio_vm)
+    add_test(NAME wio_n03_vm_format COMMAND wio_vm_value_format_test)
+    set_tests_properties(wio_n03_vm_format PROPERTIES TIMEOUT 30 LABELS "vm;formatting;float;unicode;parity")
     add_executable(wio_mandelbrot_vm_benchmark EXCLUDE_FROM_ALL
         "${CMAKE_SOURCE_DIR}/tests/performance/mandelbrot_compute/vm_host.cpp")
     target_link_libraries(wio_mandelbrot_vm_benchmark PRIVATE wio_vm)

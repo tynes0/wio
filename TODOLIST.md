@@ -1278,7 +1278,12 @@ Rider, and CLion are defined in
    transactional append, pure-tree flattening and last-use owned buffers; see
    `docs/WIO_CONCAT_OPTIMIZATION.md`. N01 residual profiling and N14 qualified
    timing acceptance stay open; all three N02 timing sessions remain noisy.
-   Next is N03 formatting/builders. The pre-existing mutating-RHS/borrowed-LHS
+   N03 formatting/builders is in progress: finite float stack formatting and
+   direct builtin-container interpolation are implemented, with VM display
+   conformance fixes and frozen related four-implementation measurements.
+   Direct numeric builder append, richer formatting and VM user ToString
+   invocation (KI-008) remain open; see `docs/WIO_FORMATTING_OPTIMIZATION.md`.
+   The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and
    the Wio-written `wio-bench` supply the required Wio/native/VM + C++ + C#

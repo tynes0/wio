@@ -1649,6 +1649,12 @@ if(Python3_Interpreter_FOUND)
             ${WIO_BENCHMARK_TEST_RUNNER_ARGS})
     wio_test_labels(wio_benchmark_contract native vm benchmark performance diagnostic memory wio)
     set_tests_properties(wio_benchmark_contract PROPERTIES TIMEOUT 1800 RUN_SERIAL TRUE)
+    add_test(NAME wio_n03_format_semantics
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/formatting/verify.py"
+            --wio "$<TARGET_FILE:wio_app>" --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}"
+            --cxx "${WIO_BACKEND_CXX_COMPILER}" --output "${CMAKE_BINARY_DIR}/n03-format-semantics")
+    wio_test_labels(wio_n03_format_semantics native vm formatting float optimization ownership)
+    set_tests_properties(wio_n03_format_semantics PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
     add_test(NAME wio_n02_concat_semantics
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/concat_reuse/verify.py"
             --wio "$<TARGET_FILE:wio_app>" --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}"

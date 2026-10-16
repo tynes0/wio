@@ -159,8 +159,10 @@ borrowed-LHS mutation discrepancy; the shared test now requests an explicit
 snapshot and the discrepancy stays open in the known-issues register. The first
 memory-preparation parser rejected blank lines around otherwise correct JSON;
 preparation was fixed without rerunning builds or discarding its rejected log.
-All development failures remain under `build/n02-concat-*`. Three-OS CI is wired
-for the new tests; local Windows results are not Linux/macOS evidence.
+All development failures remain under `build/n02-concat-*`. Subsequent
+[N02 CI run 38965482262](https://github.com/tynes0/wio/actions/runs/38965482262)
+passed the new gates on Windows Debug, Ubuntu Release and macOS Release.
+This focused matrix is not a claim that the old entire corpus was rerun.
 
 The Wio-written benchmark controller itself was rebuilt with the final compiler
 and O2/static native settings. Its strict validation of the final manifest and

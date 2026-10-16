@@ -1,0 +1,20 @@
+[
+  {
+    "mode": "float-scalar",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"17158333491225556920\",\"elapsedNanoseconds\":1,\"operations\":10001,\"schemaVersion\":1}\n\n{\"allocations\":10001,\"available\":true,\"failures\":0,\"freedBytes\":560056,\"frees\":10001,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":2,\"peakBytes\":112,\"requestedBytes\":560056,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  },
+  {
+    "mode": "mixed-builder",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"12383699017449248766\",\"elapsedNanoseconds\":1,\"operations\":10001,\"schemaVersion\":1}\n\n{\"allocations\":18690,\"available\":true,\"failures\":0,\"freedBytes\":2221563,\"frees\":18690,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":5,\"peakBytes\":858364,\"requestedBytes\":2221563,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  },
+  {
+    "mode": "float-vector",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"2783617495510484312\",\"elapsedNanoseconds\":1,\"operations\":10001,\"schemaVersion\":1}\n\n{\"allocations\":50007,\"available\":true,\"failures\":0,\"freedBytes\":2460358,\"frees\":50007,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":5,\"peakBytes\":278,\"requestedBytes\":2460358,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  }
+]

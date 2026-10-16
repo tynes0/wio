@@ -10,6 +10,29 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 float and builtin-container formatting slice — 2026-10-17
+
+- [x] Finite classic-locale/nearest float display uses a stack buffer and
+      `to_chars(general, 6)`, retaining explicit stream fallbacks for locale,
+      rounding, nonfinite values and unavailable conversion overloads.
+- [x] Builtin scalar/string/text/enum containers append directly into generated
+      interpolation storage. User/native hooks and non-classic container locale
+      behavior retain their existing fallback; public builder APIs are unchanged.
+- [x] Corrected native negative-zero constant emission and bounded typed VM
+      float/char/array/dictionary display. No bytecode schema or native ABI change.
+- [x] Three new tests passed locally; the latest Wio gate passed in 127.77s,
+      including actual generated-code-compiler float oracle, native O0/O2,
+      shared builtin VM cases and explicit user-hook rejection. No old corpus run.
+- [x] Wio-owned frozen before/after comparison and separate final native/VM phase:
+      after 126/126 correct; baseline 116/126 with unsupported VM-vector failures
+      retained. Vector allocations 50007 -> 30005 and requested bytes 2460358 ->
+      1480260; peak live bytes 278 -> 285, final live blocks/bytes zero. Scalar/
+      builder allocation counts are unchanged. Both timing sessions unqualified.
+- [ ] N03 is not closed: direct numeric builder append, richer formatting,
+      legacy stream formatting and VM user ToString invocation remain open.
+      KI-008 records the hook gap; N01/N14 timing qualification and KI-007 remain
+      separate. See `docs/WIO_FORMATTING_OPTIMIZATION.md` for scoped evidence.
+
 ## N02 string/text/concat closure — 2026-10-16
 
 - [x] Ordinary self-assignment and safe direct-cell append reuse; transactional
@@ -23,11 +46,13 @@ Notes:
       validated UTF-8 and explicitly guard moved self alias on MSVC/libstdc++.
 - [x] Three new tests only, final 3/3 in 19.01s: actual Wio native O0/O2 + VM,
       proof rejection/selection and runtime allocation-failure/alias coverage.
+      Subsequent CI run 38965482262 passed Windows Debug, Ubuntu Release and
+      macOS Release; no full old-corpus rerun is inferred from that focused gate.
 - [x] Wio-owned before/intermediate/final comparisons: 504/504 correct outputs.
       Native allocations growing string/text 2005/4013 -> 16/24; six-part chains
       12009/22038 -> 4005/4029. All diagnostic windows end with zero live blocks.
-- [x] N02 production scope closed. Next is N03 formatting/builders, not yet
-      started. All three timing sessions remain globally unqualified; no speedup
+- [x] N02 production scope closed; the subsequent N03 slice is recorded above.
+      All three N02 timing sessions remain globally unqualified; no speedup
       factor, VM optimization or full native/VM parity claim. N01/N14 evidence
       gaps and pre-existing KI-007 remain open. See
       `docs/WIO_CONCAT_OPTIMIZATION.md` for raw data, memory scope and tradeoffs.

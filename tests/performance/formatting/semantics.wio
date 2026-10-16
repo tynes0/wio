@@ -1,0 +1,40 @@
+use std::builders as builders;
+use std::convert;
+
+fn Entry() -> i32
+{
+    let scalar = 1.23456789f64;
+    if ($"${scalar}" != "1.23457") return 1;
+    let negativeZero = -0.0f64;
+    if ($"${negativeZero}" != "-0") return 2;
+    let large = 12500000.0f64;
+    if ($"${large}" != "1.25e+07") return 3;
+    let small = 0.0000125f32;
+    if ($"${small}" != "1.25e-05") return 4;
+    let numbers: f64[] = [-4.0f64, -0.125f64, 0.0f64, 0.125f64, 1.5f64, 7.875f64, 32.0f64, 12500000.0f64];
+    if ($"${numbers}" != "[-4, -0.125, 0, 0.125, 1.5, 7.875, 32, 1.25e+07]") return 5;
+    let bytes: i8[] = [-128i8, 0i8, 127i8];
+    if ($"${bytes}" != "[-128, 0, 127]") return 6;
+    let flags: bool[] = [true, false, true];
+    if ($"${flags}" != "[true, false, true]") return 7;
+    let strings: string[] = ["a\0b", "🌍é日本語"];
+    if ($"${strings}" != "[a\0b, 🌍é日本語]") return 8;
+    let nested: f64[][] = [[1.5f64, -0.0f64], [12500000.0f64, 0.125f64]];
+    if ($"${nested}" != "[[1.5, -0], [1.25e+07, 0.125]]") return 9;
+    let builder = builders::StringBuilder(2048usize);
+    builder.Append($"prefix\0${numbers}:${scalar}");
+    let saved = builder.ToString();
+    builder.Clear();
+    builder.Append($"after:${flags}:${large}");
+    if (saved != "prefix\0[-4, -0.125, 0, 0.125, 1.5, 7.875, 32, 1.25e+07]:1.23457") return 10;
+    if (builder.ToString() != "after:[true, false, true]:1.25e+07") return 11;
+    if (std::ToString(numbers) != $"${numbers}") return 12;
+    let dictionary: Dict<string, f64[]> = { "samples": [1.5f64, -0.125f64] };
+    if ($"${dictionary}" != "{samples: [1.5, -0.125]}") return 14;
+    let letter = 'A';
+    let nul = '\0';
+    if ($"${letter}:${nul}" != "A:\0") return 15;
+    let chars: char[] = ['A', '\0'];
+    if ($"${chars}" != "[A, \0]") return 16;
+    return 0;
+}
