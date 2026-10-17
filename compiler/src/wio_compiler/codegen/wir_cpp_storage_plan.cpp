@@ -304,6 +304,11 @@ namespace wio::codegen
         }
     } // namespace
 
+    bool WirCppStoragePlan::isPlainScalar(const wir::TypeTable& types, const wir::TypeId type)
+    {
+        return primitive(types, type);
+    }
+
     bool WirCppStoragePlan::supportsCallScopedStringAbi(const wir::lowered::Module& module,
                                                         const wir::lowered::Function& function)
     {

@@ -1,0 +1,9 @@
+{
+  "intermediate": "build/n03-receiver-after-2026-10-17/frozen.cpp",
+  "final": "build/n03-receiver-cold-after-2026-10-17/frozen.cpp",
+  "intermediateSha256": "6f4e994fb33da2bd8a79ac2c25ab8ffc86c0a33bf8ba2414dcdd9df17dbac4c1",
+  "finalSha256": "b791c803c5848f2dd6cce21d412f54618fb5e6b3d80465f843e3048968d6b15e",
+  "normalization": "Replace n03-receiver-cold-after-2026-10-17 with n03-receiver-after-2026-10-17 in the final source path",
+  "equalAfterSourcePathNormalization": true,
+  "scope": "The tightened receiver prelude proof does not change this workload's generated C++ body. The integer cold-split header and rebuilt compiler image are distinct declared artifacts in the final session. This is not binary equivalence."
+}

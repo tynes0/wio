@@ -50,6 +50,13 @@ string interpolation and Unicode Text after checked pre-reserve. The new
 emission optimizations; they add no WIR/VM instructions. See
 [the field/reservation report](../../../docs/WIO_SCALAR_FIELD_OPTIMIZATION.md).
 
+`wio_n03_receiver_plan` proves implementation-only one-pointer self entries.
+The expanded fields fixture covers readonly calls, format-before-self fallback,
+override dispatch, super calls and generated C++ function-pointer/null/expired-
+borrow checks at O0/O2. `wio_n03_integer_hot_path` covers live locale toggling,
+integer boundaries and NUL-prefixed append for the separately measured stream
+hot/cold split. See [the receiver report](../../../docs/WIO_RECEIVER_OPTIMIZATION.md).
+
 Object-containing containers, async frames, native/generic hook declarations,
 ambiguous/private hooks and unsupported mixed surfaces are not enabled by this
 bounded pass. The user-container WVM1062 fixture stays an explicit negative gate.

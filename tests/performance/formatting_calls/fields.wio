@@ -60,6 +60,42 @@ object Counter
     {
         return $"counter:${self.value}";
     }
+
+    public fn FormatThenRead() -> string
+    {
+        let before = $"counter:${self.value}";
+        self.value += 1i64;
+        return $"${before}:${self.value}";
+    }
+}
+
+object Base
+{
+    private value: i32;
+
+    public fn Value() -> i32
+    {
+        return self.value;
+    }
+}
+
+[from(Base)]
+object Derived
+{
+    public fn Value() -> i32
+    {
+        return 17;
+    }
+
+    public fn BaseValue() -> i32
+    {
+        return super.Value();
+    }
+}
+
+fn ReadCounter(value: view Counter) -> i64
+{
+    return value.Value();
 }
 
 fn Entry() -> i32
@@ -84,5 +120,11 @@ fn Entry() -> i32
     if ($"prefix:${left}|${right}|${left}:suffix" != "prefix:a\0b|0123456789012345678901234567890123456789|a\0b:suffix") return 7;
     if (left != "a\0b" or right.Count() != 40usize) return 8;
     if (u$"🌎${left}${right}" != u"🌎a\0b0123456789012345678901234567890123456789") return 9;
+    if (ReadCounter(ref counter) != 1011i64) return 10;
+    if (counter.FormatThenRead() != "counter:1011:1012") return 11;
+    let derived = Derived();
+    let base = ref derived fit Base;
+    if (base.Value() != 17) return 12;
+    if (derived.BaseValue() != 0) return 13;
     return 0;
 }

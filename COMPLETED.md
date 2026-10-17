@@ -10,6 +10,23 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 bounded receivers and integer hot/cold paths — 2026-10-17
+
+- [x] Emit implementation-only one-pointer self entries for proven small
+  synchronous scalar-field methods; retain ordinary ABI, dispatch, ownership,
+  null and callback-borrow checks. Unsafe/reentrant/complex cases retain Place.
+- [x] Outline integer stream fallback without caching or weakening live locale
+  semantics. Add deterministic boundary/prefix/NUL/locale-toggle checks.
+- [x] Final 3/3 relevant gates pass (91.76s), including native O0/O2 + VM and C++
+  callback/null/expiry probes. GCC strict header execution and receiver syntax
+  checks pass. Retain and fix the initial receiver-prelude ordering failure.
+- [x] Before/intermediate/final retain 252/252 correct outputs. Native comparison
+  medians: 1.0847/2.7687 -> 0.9826/2.7876 -> 0.8473/2.6165 ms. Allocation traffic
+  is unchanged; final executable is 6186 bytes smaller, generated source grows.
+- [ ] N03 remains open. Final-repeat single native rises to 1.1231 ms; all
+  sessions are globally timing-unqualified. The C++ gap and performance budget
+  are not closed. See [the full report](docs/WIO_RECEIVER_OPTIMIZATION.md).
+
 ## N03 bounded scalar fields and rendered-string reservation — 2026-10-17
 
 - [x] Emit direct pointers for proven closed primitive Wio field intervals;

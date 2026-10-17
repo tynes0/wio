@@ -286,3 +286,24 @@ allocations fall from 15004 to 10003; single-case final observations rise betwee
 the two slices and remain visible. N03/C++ budgets and KI-008/KI-009 stay open;
 N04 has not begun. Next cost attribution is receiver/merge transport and integer
 locale/fallback formatting, without weakening contracts.
+
+## N03: bounded private receiver transport, 2026-10-17
+
+[The receiver slice](WIO_RECEIVER_OPTIMIZATION.md) removes general self Place
+transport from small proven synchronous scalar-field object methods. The
+ordinary ABI entry remains, override selection is unchanged, and null/expired
+callback borrow checks remain explicit. Native/proxy/behavioral/async/generic
+and escaping/reentrant receiver uses keep the established entry. This is shared
+representation/call proof work with N05/N08, not their closure or renumbering.
+
+A second separately measured slice outlines integer stream formatting while
+retaining the per-call live locale guard. Final 3/3 focused gates pass; 252/252
+session outputs are correct. Native comparison observations fall to
+0.8473/2.6165 ms, but final-repeat single native rises to 1.1231 ms. Heap traffic
+is unchanged, generated source grows, and the executable is 6186 bytes smaller.
+All timing remains globally unqualified; no universal speedup/budget closure.
+
+N03 remains open for richer formatting, legacy Format and KI-008 hooks. KI-007,
+KI-009 and N01/N14 timing acceptance remain open; N04 has not started. The
+preceding scalar-field commit's CI passed Windows Debug, Ubuntu Release and
+macOS Release; the present commit requires its own platform qualification.

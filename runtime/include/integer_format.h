@@ -10,6 +10,29 @@
 
 namespace wio::runtime
 {
+    namespace detail
+    {
+        // Do not inline stream construction/EH state into the usual decimal
+        // append. The locale guard stays live on every call: native code may
+        // change the global locale without going through a Wio setter.
+        template <class T>
+#if defined(_MSC_VER)
+        __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+        __attribute__((noinline, cold))
+#endif
+        void
+        AppendIntegerStream(std::string& target, const T value)
+        {
+            std::ostringstream stream;
+            if constexpr (std::is_same_v<T, signed char> || std::is_same_v<T, unsigned char>)
+                stream << +value;
+            else
+                stream << value;
+            target.append(stream.str());
+        }
+    } // namespace detail
+
     // Preserve stream formatting when native code installs a custom global
     // locale. The usual classic-locale decimal path needs no stream/facet work.
     template <class T>
@@ -18,12 +41,7 @@ namespace wio::runtime
     {
         if (std::locale() != std::locale::classic())
         {
-            std::ostringstream stream;
-            if constexpr (std::is_same_v<T, signed char> || std::is_same_v<T, unsigned char>)
-                stream << +value;
-            else
-                stream << value;
-            target.append(stream.str());
+            detail::AppendIntegerStream(target, value);
             return;
         }
 

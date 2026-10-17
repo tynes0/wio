@@ -1,5 +1,8 @@
 # N03: bounded scalar field projections
 
+Subsequent work: [bounded private receiver entries](WIO_RECEIVER_OPTIMIZATION.md).
+Historical measurements below remain unchanged.
+
 2026-10-17. Follow-up to the native string borrow transport pass (`318b610`).
 N03 remains in progress; this is not closure of the native performance budget,
 N05, the heavy VM pass or compile-time optimization.

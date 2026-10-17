@@ -32,6 +32,16 @@ add_library(wio_compiler STATIC
 add_library(wio-compiler ALIAS wio_compiler)
 
 if(BUILD_TESTING)
+    add_executable(wio_integer_hot_path_test "${CMAKE_SOURCE_DIR}/tests/integer_hot_path_test.cpp")
+    target_include_directories(wio_integer_hot_path_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
+    add_test(NAME wio_n03_integer_hot_path COMMAND wio_integer_hot_path_test)
+    set_tests_properties(wio_n03_integer_hot_path PROPERTIES LABELS "native;formatting;locale;memory" TIMEOUT 60)
+
+    add_executable(wio_receiver_plan_test "${CMAKE_SOURCE_DIR}/tests/receiver_plan_test.cpp")
+    target_link_libraries(wio_receiver_plan_test PRIVATE wio_compiler)
+    add_test(NAME wio_n03_receiver_plan COMMAND wio_receiver_plan_test)
+    set_tests_properties(wio_n03_receiver_plan PROPERTIES LABELS "native;formatting;ownership;memory" TIMEOUT 60)
+
     add_executable(wio_formatted_size_test "${CMAKE_SOURCE_DIR}/tests/formatted_size_test.cpp")
     target_include_directories(wio_formatted_size_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
     add_test(NAME wio_n03_formatted_size COMMAND wio_formatted_size_test)

@@ -31,6 +31,8 @@ namespace wio::codegen
         std::unordered_set<std::uint32_t> consumedConcatOperands;
         bool directControlFlow = false;
 
+        [[nodiscard]] static bool isPlainScalar(const wir::TypeTable& types, wir::TypeId type);
+
         // A synchronous native leaf with only scalar values and call-scoped
         // UTF-8 borrows. It cannot return or carry a retained reference/callback.
         [[nodiscard]] static bool supportsCallScopedStringAbi(const wir::lowered::Module& module,

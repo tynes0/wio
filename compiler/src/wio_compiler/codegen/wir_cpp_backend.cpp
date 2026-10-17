@@ -1,4 +1,5 @@
 #include "wio/codegen/wir_cpp_backend.h"
+#include "wio/codegen/wir_cpp_receiver_plan.h"
 #include "wio/codegen/wir_cpp_storage_plan.h"
 #include "wio/codegen/wir_intrinsics.h"
 #include "wio/codegen/wir_module_emitter.h"
@@ -275,6 +276,18 @@ namespace wio::codegen
                     emitStructuralAliases();
                 }
                 cppTypeCacheEnabled_ = true;
+                {
+                    common::profiling::Scope scope("Backend.Cpp.PlanReceivers");
+                    for (const auto& function : module_.functions)
+                    {
+                        if (functionIsOpen(function) || !behavioralPipeline(function.id).empty() ||
+                            nativeProxyHierarchyTypes_.contains(function.ownerType))
+                            continue;
+                        auto plan = WirCppReceiverPlan::build(module_, function);
+                        if (plan.eligible())
+                            receiverPlans_.emplace(function.id.value(), std::move(plan));
+                    }
+                }
                 output_ << WirNativeObjectEmitter::emitCodecs(module_, nativeProxyTypes_,
                                                               [this](TypeId id) { return cppType(id); });
                 output_ << WirModuleEmitter::emitCallableCodecs(
@@ -338,6 +351,8 @@ namespace wio::codegen
             std::unordered_set<const lowered::Instruction*> suppressedInstructions_;
             std::unordered_set<std::uint32_t> directValues_;
             WirCppStoragePlan storagePlan_;
+            std::unordered_map<std::uint32_t, WirCppReceiverPlan> receiverPlans_;
+            const WirCppReceiverPlan* currentReceiverPlan_ = nullptr;
             std::unordered_set<std::uint32_t> structuralAliases_;
             std::set<TypeId> nativeProxyTypes_;
             std::set<TypeId> nativeProxyHierarchyTypes_;
@@ -1449,8 +1464,14 @@ template<class T> struct ObjectBorrow {
     T* pointer;
     T* Get() const { return pointer; }
     T* operator->() const { return pointer; }
+    ObjectBorrow asView() const { return *this; }
     operator wio::runtime::Ref<T>() const { return wio::runtime::Ref<T>(pointer); }
 };
+template<class T> ObjectBorrow<T> checkedObjectReceiver(T* value) {
+    if (activeCallbackBorrow && !activeCallbackBorrow->active.load(std::memory_order_acquire))
+        throw std::runtime_error("expired native callback borrow");
+    return {value};
+}
 template<class T> T* object_ptr(const ObjectBorrow<T>& value) { return value.Get(); }
 template<class T> T& value_base(ObjectBorrow<T>& value) { if (!value.Get()) throw std::runtime_error("null Wio object access"); return *value.Get(); }
 template<class T> auto object_ptr(const std::optional<T>& value) { return value ? object_ptr(*value) : nullptr; }
@@ -1657,8 +1678,7 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                             continue;
                         const auto& function = *functions_.at(entry.implementation.value());
                         output_ << dispatchSignature(entry, objectName(id) + "::") << " { return "
-                                << functionName(function.id) << "(" << cppType(function.parameters.front().type)
-                                << "::raw(static_cast<" << objectName(function.ownerType) << "*>(this))";
+                                << receiverEntryName(function) << "(" << receiverThisArgument(function);
                         for (std::size_t i = 1; i < function.parameters.size(); ++i)
                             output_ << ", std::move(_a" << (i - 1) << ")";
                         output_ << "); }\n";
@@ -1689,8 +1709,7 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                             output_ << "return ";
                         if (callableResult)
                             output_ << "wio::wir_backend::bindOwningNativeResult(";
-                        output_ << functionName(function->id) << '(' << cppType(function->parameters.front().type)
-                                << "::raw(static_cast<" << objectName(function->ownerType) << "*>(this))";
+                        output_ << receiverEntryName(*function) << '(' << receiverThisArgument(*function);
                         for (std::size_t index = 1; index < function->parameters.size(); ++index)
                             output_ << ", std::move(_a" << (index - 1) << ')';
                         output_ << (callableResult ? ")); }\n" : "); }\n");
@@ -1994,9 +2013,22 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                 output_ << '\n';
             }
 
+            std::string receiverEntryName(const lowered::Function& function) const
+            {
+                return functionName(function.id) + (receiverPlans_.contains(function.id.value()) ? "_receiver" : "");
+            }
+
+            std::string receiverThisArgument(const lowered::Function& function) const
+            {
+                const std::string pointer = "static_cast<" + objectName(function.ownerType) + "*>(this)";
+                return receiverPlans_.contains(function.id.value())
+                           ? "wio::wir_backend::checkedObjectReceiver(" + pointer + ")"
+                           : cppType(function.parameters.front().type) + "::raw(" + pointer + ")";
+            }
+
             std::string functionSignature(const lowered::Function& function, const bool declaration,
                                           const std::string_view emittedName = {},
-                                          const bool directStringBorrow = false) const
+                                          const bool directStringBorrow = false, const bool directReceiver = false) const
             {
                 std::string signature;
                 signature.reserve(48 + function.parameters.size() * 32);
@@ -2012,7 +2044,9 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                         signature += ", ";
                     const auto parameter = function.parameters[index].type;
                     const auto& type = module_.types.get(parameter);
-                    signature += directStringBorrow && type.kind == TypeKind::Reference
+                    signature += directReceiver && index == 0
+                                     ? "wio::wir_backend::ObjectBorrow<" + objectName(function.ownerType) + ">"
+                                 : directStringBorrow && type.kind == TypeKind::Reference
                                      ? (type.isMutable ? "std::string&" : "const std::string&")
                                      : cppType(parameter);
                     signature += " _p";
@@ -2045,6 +2079,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     if (!functionIsOpen(function))
                     {
                         output_ << functionSignature(function, true) << '\n';
+                        if (receiverPlans_.contains(function.id.value()))
+                            output_ << functionSignature(function, true, receiverEntryName(function), false, true) << '\n';
                         if (WirCppStoragePlan::supportsCallScopedStringAbi(module_, function))
                             output_ << functionSignature(function, true, functionName(function.id) + "_borrow", true)
                                     << '\n';
@@ -2253,6 +2289,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
 
             std::string valueStorageType(const std::uint32_t id, const TypeId type) const
             {
+                if (currentReceiverPlan_ && currentReceiverPlan_->receiverValues.contains(id))
+                    return "wio::wir_backend::ObjectBorrow<" + objectName(currentFunction_->ownerType) + ">";
                 if (storagePlan_.scalarFieldPlaces.contains(id))
                     return placeValueType(type) + "*";
                 if (storagePlan_.scalarPlaces.contains(id))
@@ -2439,8 +2477,13 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                 std::string receiver;
                 if (owner.nominalKind == NominalKind::Object || owner.nominalKind == NominalKind::Interface)
                 {
-                    receiver = cppType(instruction.signatureTypes.front()) + "::raw(wio::wir_backend::object_ptr(" +
-                               operand(instruction.operands.front()) + "))";
+                    if (receiverPlans_.contains(instruction.callee.value()))
+                        receiver = "wio::wir_backend::checkedObjectReceiver(static_cast<" +
+                                   objectName(functions_.at(instruction.callee.value())->ownerType) +
+                                   "*>(wio::wir_backend::object_ptr(" + operand(instruction.operands.front()) + ")))";
+                    else
+                        receiver = cppType(instruction.signatureTypes.front()) + "::raw(wio::wir_backend::object_ptr(" +
+                                   operand(instruction.operands.front()) + "))";
                 }
                 else
                 {
@@ -2771,7 +2814,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     break;
                 case lowered::Opcode::MethodCall:
                     assignResult(instruction,
-                                 functionName(instruction.callee) + "(" + directMethodArguments(instruction) + ")");
+                                 receiverEntryName(*functions_.at(instruction.callee.value())) + "(" +
+                                     directMethodArguments(instruction) + ")");
                     break;
                 case lowered::Opcode::NativeInvoke:
                 {
@@ -3475,11 +3519,13 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                 }
             }
 
-            void emitRawFunction(const lowered::Function& function, const std::string_view emittedName)
+            void emitRawFunction(const lowered::Function& function, const std::string_view emittedName,
+                                 const bool directReceiver = false)
             {
                 currentFunction_ = &function;
+                currentReceiverPlan_ = directReceiver ? &receiverPlans_.at(function.id.value()) : nullptr;
                 collectValueTypes(function);
-                output_ << functionSignature(function, false, emittedName) << " {\n";
+                output_ << functionSignature(function, false, emittedName, false, directReceiver) << " {\n";
                 if (function.coroutine && function.coroutine->retainedReceiver)
                 {
                     output_ << "    auto _selfGuard = " << cppType(function.ownerType) << "(_p0.Get());\n";
@@ -3506,7 +3552,9 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                 {
                     output_ << "    ";
                     if (directValues_.contains(function.parameters[index].id.value()))
-                        output_ << cppType(function.parameters[index].type) << ' ';
+                        output_ << (directReceiver ? valueStorageType(function.parameters[index].id.value(),
+                                                                       function.parameters[index].type)
+                                                   : cppType(function.parameters[index].type)) << ' ';
                     output_ << valueName(function.parameters[index].id) << " = std::move(_p" << index << ");\n";
                 }
 
@@ -3848,7 +3896,17 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                         }
                         continue;
                     }
-                    if (behavioralPipeline(function.id).empty())
+                    if (receiverPlans_.contains(function.id.value()))
+                    {
+                        emitRawFunction(function, receiverEntryName(function), true);
+                        currentReceiverPlan_ = nullptr;
+                        // Keep the general Place entry for callbacks, exports and other ABI consumers.
+                        // Its owner/lifetime token remains live throughout the private entry call.
+                        output_ << functionSignature(function, false) << " { return " << receiverEntryName(function)
+                                << "(wio::wir_backend::ObjectBorrow<" << objectName(function.ownerType)
+                                << ">{_p0.Get()}); }\n\n";
+                    }
+                    else if (behavioralPipeline(function.id).empty())
                         emitRawFunction(function, functionName(function.id));
                     else
                         emitBehavioralFunction(function);

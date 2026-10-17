@@ -1,0 +1,11 @@
+{
+  "commands": [
+    "g++ -std=c++20 -O2 -Wall -Wextra -Werror -pedantic tests/integer_hot_path_test.cpp -Iruntime/include -o build/n03-integer-hot-path-strict.exe",
+    "build/n03-integer-hot-path-strict.exe",
+    "g++ -std=c++20 -Werror=return-type -fsyntax-only -Icompiler/include compiler/src/wio_compiler/codegen/wir_cpp_receiver_plan.cpp tests/receiver_plan_test.cpp"
+  ],
+  "exitCodes": [0, 0, 0],
+  "stdout": "",
+  "stderr": "",
+  "scope": "GCC 15.2 Windows x64 header execution plus new receiver source syntax. Not full cross-platform qualification or a performance measurement."
+}

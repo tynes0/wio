@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -96,12 +97,53 @@ def verify(args):
     run([wio, folder / "fields.wio", "--emit-cpp"])
     field_source = (folder / "fields.wio.cpp").read_text(encoding="utf-8")
     for required in ("std::int64_t* _v", "bool* _v", "double* _v", "std::addressof(",
+                     "_receiver(wio::wir_backend::ObjectBorrow<", ">{_p0.Get()}); }",
                      "CheckedFormattedSize(_formatted.max_size()", "_formatted.reserve(_required)"):
         if required not in field_source:
             raise RuntimeError("Missing proven direct scalar field representation: " + required)
+    # Exercise the unchanged entry via a C++ function pointer, not only through
+    # the new private dispatch entry. Every proven body must still reject null
+    # before touching a field. This runs before the Wio Entry in both O0/O2.
+    receivers = sorted(set(re.findall(
+        r"\b(_wio_f\d+)_receiver\(wio::wir_backend::ObjectBorrow<(\w+)> _p0\)", field_source)))
+    if not receivers:
+        raise RuntimeError("No proven receiver entries emitted")
+    probes = []
+    for index, (name, owner) in enumerate(receivers):
+        probes.append(f"""
+namespace {{ const bool receiver_probe_{index} = []() {{
+    bool rejected = false;
+    auto callback = &{name};
+    try {{ (void)callback(wio::wir_backend::Place<wio::runtime::Ref<{owner}>>::raw(nullptr)); }}
+    catch (const std::runtime_error& error) {{
+        rejected = std::string_view(error.what()) == "null Wio object access";
+    }}
+    if (!rejected) std::abort();
+    auto token = std::make_shared<wio::wir_backend::CallbackBorrowLifetime>();
+    auto previous = std::exchange(wio::wir_backend::activeCallbackBorrow, token);
+    auto expired = wio::wir_backend::Place<wio::runtime::Ref<{owner}>>::raw(nullptr);
+    token->active.store(false);
+    rejected = false;
+    try {{ (void)callback(std::move(expired)); }}
+    catch (const std::runtime_error& error) {{
+        rejected = std::string_view(error.what()) == "expired native callback borrow";
+    }}
+    if (!rejected) std::abort();
+    rejected = false;
+    try {{ (void)wio::wir_backend::checkedObjectReceiver(static_cast<{owner}*>(nullptr)); }}
+    catch (const std::runtime_error& error) {{
+        rejected = std::string_view(error.what()) == "expired native callback borrow";
+    }}
+    if (!rejected) std::abort();
+    wio::wir_backend::activeCallbackBorrow = std::move(previous);
+    return true;
+}}(); }}
+""")
+    callback_source = folder / "fields_callback.cpp"
+    callback_source.write_text('#include "fields.wio.cpp"\n' + "".join(probes), encoding="utf-8")
     for optimization in ("-O0", "-O2"):
         program = folder / ("fields.exe" if os.name == "nt" else "fields")
-        run([args.cxx, "-std=c++20", optimization, folder / "fields.wio.cpp",
+        run([args.cxx, "-std=c++20", optimization, callback_source,
              f"-I{ROOT / 'runtime/include'}", f"-I{ROOT / 'sdk/include'}", args.runtime.resolve(),
              *links, "-o", program])
         run([program])

@@ -1297,6 +1297,13 @@ Rider, and CLion are defined in
    byte capacity without expanding WIR/VM instructions. See
    `docs/WIO_SCALAR_FIELD_OPTIMIZATION.md` for before/intermediate/final speed,
    heap/RSS/code-size evidence and the still-open timing acceptance/C++ gap.
+   Bounded synchronous scalar-field object methods now have private one-pointer
+   receiver entries while preserving ordinary ABI, dynamic dispatch, null and
+   callback-borrow validation. See `docs/WIO_RECEIVER_OPTIMIZATION.md`; complex
+   methods and self access after potentially reentrant formatting retain Place.
+   Integer formatting now outlines the cold stream path while checking the live
+   locale every call. The report preserves mixed/noisy timing, unchanged heap
+   traffic and the still-open performance target; this does not close N03.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and
