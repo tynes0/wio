@@ -328,3 +328,28 @@ smaller. Global timing remains unqualified and the C++ budget stays open.
 N03, KI-007/KI-008/KI-009 and N01/N14 performance qualification remain open;
 N04 has not started. The preceding receiver/cold-integer commit's three-platform
 CI passed independently of this change.
+
+## N03: direct construction into proven-empty cells, 2026-10-17
+
+[The initialization slice](WIO_STRING_INIT_OPTIMIZATION.md) removes the fresh
+source slot and subsequent moves for a sole initializer into a closed local
+string cell. A bounded may-initialized CFG proof joins all predecessors and
+backedges and checks emptiness before the producer, not after the later reset.
+Owned string-only cleanup stays in place; other effects/resources, aliases,
+extra/metadata uses, Text and async frames retain the existing path. An exact
+string factory uses prvalue construction and remains empty on exceptions.
+
+Four relevant gates pass, including native O0/O2 + VM loops, snapshots, native
+returns/initializer failures and runtime factory-state tests. Both sessions
+retain 168/168 correct outputs. Native comparison observations fall
+0.7707/2.1480 -> 0.6586/2.1031 ms; separate final 0.7730/2.1295 ->
+0.6762/2.0893. Work loses two optional-string slots, actual O2 stack reservation
+falls 696 -> 584 bytes, and the executable is 512 bytes smaller. Heap traffic
+is unchanged and process RSS slightly rises. Timing remains globally
+unqualified; no accepted percentage speedup or C++ budget closure is claimed.
+
+N03 remains open for primitive-part materialization, locale/richer/legacy
+formatting and KI-008 hooks. KI-007/KI-009 and N01/N14 qualification remain;
+N04 has not started. This shares N05 proof work without renumbering/closing it.
+The previous string-transfer commit's Windows/Ubuntu/macOS CI passed; this
+change requires its own platform qualification.

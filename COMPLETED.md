@@ -10,6 +10,24 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 direct construction into proven-empty string cells — 2026-10-17
+
+- [x] Construct fresh, sole-use owned string results directly in closed local
+  cells. Preserve original RHS/exception/hook order and destination cleanup.
+  A bounded may-initialized CFG proof checks the producer, joins loop backedges
+  and rejects any possibly-live incoming path; excluded cases retain staging.
+- [x] New proof/emitter/runtime gates and the expanded Wio native O0/O2 + VM
+  suite pass 4/4 in 88.89s. Cover snapshot/borrow, NUL/long/Text fallback,
+  continue/early return, native return/initializer errors and factory failure
+  state/retry. Shared fresh-producer classification and strict GCC syntax pass.
+- [x] Before/after retain 168/168 correct outputs. Native comparison medians
+  0.7707/2.1480 -> 0.6586/2.1031 ms; separate final 0.7730/2.1295 ->
+  0.6762/2.0893. Work optional-string slots fall 7 -> 5, O2 stack reservation
+  696 -> 584 bytes, executable size -512 bytes. Heap is unchanged and RSS
+  slightly rises. Global timing remains unqualified; no percentage/budget
+  closure claim. N03, KI-007/KI-008/KI-009 and N01/N14 acceptance remain open.
+  Evidence: `docs/WIO_STRING_INIT_OPTIMIZATION.md`.
+
 ## N03 sole-use string edge forwarding — 2026-10-17
 
 - [x] Forward fresh owned string producers into one immediately following block

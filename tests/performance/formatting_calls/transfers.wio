@@ -43,13 +43,46 @@ fn Format(flag: bool, label: Label) -> string
     return flag ? $"<${label}>" : $"[${label}]";
 }
 
+fn InitializeLoop(limit: i32) -> string
+{
+    let seed = "long:0123456789012345678901234567890123456789";
+    for (index in 0..<limit)
+    {
+        mut value = Echo(ref seed);
+        let snapshot = value;
+        value.Append("tail");
+        if (index % 2 == 0) continue;
+        if (snapshot != "long:0123456789012345678901234567890123456789") return "bad";
+        if (index == limit - 1) return value;
+    }
+
+    return "empty";
+}
+
+fn InitializeFailure() -> string
+{
+    let seed = "failure";
+    let value = Fail(ref seed);
+    return value;
+}
+
 fn Entry(args: string[]) -> i32
 {
     if (args.Count() > 1usize)
     {
+        if (args[1] == "init-fail")
+        {
+            InitializeFailure();
+            return 98;
+        }
+
         ChooseFailure(true);
         return 99;
     }
+
+    if (InitializeLoop(0) != "empty") return 7;
+    if (InitializeLoop(1) != "empty") return 8;
+    if (InitializeLoop(128) != "long:0123456789012345678901234567890123456789tail") return 9;
 
     let label = Label();
     for (index in 0..<128)

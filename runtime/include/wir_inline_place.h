@@ -1,7 +1,9 @@
 #pragma once
 
 #include <memory>
+#include <new>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -76,6 +78,20 @@ namespace wio::wir_backend
                 std::construct_at(&storage_.value, std::move(value));
                 initialized_ = true;
             }
+        }
+
+        // Compiler-internal: the closed-cell CFG proof guarantees empty storage
+        // at the producer, and the factory cannot observe/reenter this cell.
+        // Placement new preserves prvalue elision; construct_at(factory()) would
+        // forward through another T and reintroduce a string move.
+        template <class Factory>
+            requires(std::is_same_v<T, std::string> && std::is_same_v<std::invoke_result_t<Factory &&>, T>)
+        void initializeFrom(Factory&& factory)
+        {
+            if (initialized_)
+                throw std::logic_error("initialization of live Wio inline place");
+            ::new (static_cast<void*>(std::addressof(storage_.value))) T(std::forward<Factory>(factory)());
+            initialized_ = true;
         }
 
         void clear() noexcept

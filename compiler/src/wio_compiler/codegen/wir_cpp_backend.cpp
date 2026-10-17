@@ -2,6 +2,7 @@
 #include "wio/codegen/wir_cpp_receiver_plan.h"
 #include "wio/codegen/wir_cpp_storage_plan.h"
 #include "wio/codegen/wir_cpp_string_transfer_plan.h"
+#include "wio/codegen/wir_cpp_string_init_plan.h"
 #include "wio/codegen/wir_intrinsics.h"
 #include "wio/codegen/wir_module_emitter.h"
 #include "wio/codegen/wir_native_bridge_plan.h"
@@ -353,6 +354,7 @@ namespace wio::codegen
             std::unordered_set<std::uint32_t> directValues_;
             WirCppStoragePlan storagePlan_;
             WirCppStringTransferPlan stringTransferPlan_;
+            WirCppStringInitPlan stringInitPlan_;
             std::unordered_map<std::uint32_t, WirCppReceiverPlan> receiverPlans_;
             const WirCppReceiverPlan* currentReceiverPlan_ = nullptr;
             std::unordered_set<std::uint32_t> structuralAliases_;
@@ -2202,6 +2204,18 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                             !instruction.operands.empty())
                             directValues_.erase(resolveValueAlias(instruction.operands.front()).value());
                 }
+
+                stringInitPlan_ = WirCppStringInitPlan::build(module_, function, storagePlan_);
+                for (const auto& [source, cell] : stringInitPlan_.producerCells)
+                {
+                    valueTypes_.erase(source);
+                    ownedValues_.erase(source);
+                    // The original LocalPlace declaration is suppressed, even
+                    // in linear functions. Predeclare an empty closed cell.
+                    directValues_.erase(cell.value());
+                }
+                suppressedInstructions_.insert(stringInitPlan_.suppressedInstructions.begin(),
+                                                stringInitPlan_.suppressedInstructions.end());
             }
 
             void collectLinearPlaceAliases(const lowered::Function& function)
@@ -2679,6 +2693,13 @@ template<class T> void append_formatted(std::string& target, const T& value) {
             {
                 if (instruction.result)
                 {
+                    if (const auto cell = stringInitPlan_.producerCells.find(instruction.result.value());
+                        cell != stringInitPlan_.producerCells.end())
+                    {
+                        output_ << "                " << operand(cell->second)
+                                << ".initializeFrom([&]() -> std::string { return " << expression << "; });\n";
+                        return;
+                    }
                     const auto forwarded = stringTransferPlan_.edgeDestinations.find(instruction.result.value());
                     const ValueId destination = forwarded == stringTransferPlan_.edgeDestinations.end()
                                                     ? instruction.result

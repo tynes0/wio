@@ -155,6 +155,8 @@ namespace {{ const bool receiver_probe_{index} = []() {{
     shutil.copyfile(HERE / "transfers.wio", folder / "transfers.wio")
     shutil.copyfile(HERE / "transfer_probe.h", folder / "transfer_probe.h")
     run([wio, folder / "transfers.wio", "--emit-cpp", "--include-dir", folder])
+    if '.initializeFrom([&]() -> std::string { return ' not in (folder / "transfers.wio.cpp").read_text(encoding="utf-8"):
+        raise RuntimeError("No proven direct string initialization in the Wio loop fixture")
     for optimization in ("-O0", "-O2"):
         program = folder / ("transfers.exe" if os.name == "nt" else "transfers")
         run([args.cxx, "-std=c++20", optimization, folder / "transfers.wio.cpp",
@@ -164,6 +166,9 @@ namespace {{ const bool receiver_probe_{index} = []() {{
         failed = run([program, "fail"], expected=1)
         if "transfer-probe failure" not in failed.stdout + failed.stderr:
             raise RuntimeError("Forwarded native string result changed exception propagation")
+        failed = run([program, "init-fail"], expected=1)
+        if "transfer-probe failure" not in failed.stdout + failed.stderr:
+            raise RuntimeError("Direct native string initialization changed exception propagation")
     transfer_bridge = folder / ("transfers.dll" if os.name == "nt" else "transfers.dylib" if sys.platform == "darwin" else "transfers.so")
     transfer_bytecode = folder / "transfers.wiob"
     run([wio, folder / "transfers.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder,
@@ -173,6 +178,10 @@ namespace {{ const bool receiver_probe_{index} = []() {{
                   "--", "fail"], expected=1)
     if "transfer-probe failure" not in failed.stdout + failed.stderr:
         raise RuntimeError("VM native string result changed exception propagation")
+    failed = run([wio, "--vm-run-bytecode", transfer_bytecode, "--native-library", transfer_bridge,
+                  "--", "init-fail"], expected=1)
+    if "transfer-probe failure" not in failed.stdout + failed.stderr:
+        raise RuntimeError("VM direct string initialization changed exception propagation")
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
     print("N03 scalar ToString: ordered/null-safe dispatch, view/interface/generic calls, native O0/O2 + VM")
 

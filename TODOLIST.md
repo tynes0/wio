@@ -1308,6 +1308,13 @@ Rider, and CLion are defined in
    write the destination slot directly, avoiding source/edge staging. Multiple
    uses/cleanup/metadata, effects, parallel edges, Text and async retain the old
    path. See `docs/WIO_STRING_TRANSFER_OPTIMIZATION.md`; this is not N03 closure.
+   Fresh owned string results now construct directly into proven-empty closed
+   local cells. A bounded may-initialized CFG proof includes loop backedges and
+   rejects any possibly-live predecessor; generic writes and public ABI remain.
+   See `docs/WIO_STRING_INIT_OPTIMIZATION.md`: 4/4 focused gates pass, Work stack
+   reservation falls 696 -> 584 bytes, heap is unchanged, and 168/168 session
+   outputs are correct. Native medians fall but global timing remains noisy;
+   N03/C++ acceptance is still open and N04 has not started.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

@@ -4,29 +4,31 @@
 
 namespace wio::codegen
 {
-    namespace
+    bool WirCppStringTransferPlan::isFreshStringProducer(const wir::lowered::Module& module,
+                                                         const wir::lowered::Instruction& instruction)
     {
-        bool freshStringProducer(const wir::lowered::Instruction& instruction)
+        const auto* type = module.types.tryGet(instruction.resultType);
+        if (!instruction.result || instruction.resultOwnership != wir::typed::ValueOwnership::Owned ||
+            instruction.borrowOrigin || !instruction.targets.empty() || !type || type->kind != wir::TypeKind::String)
+            return false;
+        using Opcode = wir::lowered::Opcode;
+        // Loads/copies/references/native resource values are not fresh
+        // prvalues. Do not coalesce them through this proof.
+        switch (instruction.opcode)
         {
-            using Opcode = wir::lowered::Opcode;
-            // Loads/copies/references/native resource values are not fresh
-            // prvalues. Do not coalesce them through this proof.
-            switch (instruction.opcode)
-            {
-            case Opcode::Constant:
-            case Opcode::Interpolate:
-            case Opcode::Call:
-            case Opcode::MethodCall:
-            case Opcode::ExtensionCall:
-            case Opcode::VirtualCall:
-            case Opcode::InterfaceCall:
-            case Opcode::NativeInvoke:
-                return true;
-            default:
-                return false;
-            }
+        case Opcode::Constant:
+        case Opcode::Interpolate:
+        case Opcode::Call:
+        case Opcode::MethodCall:
+        case Opcode::ExtensionCall:
+        case Opcode::VirtualCall:
+        case Opcode::InterfaceCall:
+        case Opcode::NativeInvoke:
+            return true;
+        default:
+            return false;
         }
-    } // namespace
+    }
 
     WirCppStringTransferPlan WirCppStringTransferPlan::build(const wir::lowered::Module& module,
                                                              const wir::lowered::Function& function)
@@ -50,11 +52,8 @@ namespace wio::codegen
                 continue;
             const auto& producer = code[code.size() - 2];
             const auto& edge = code.back();
-            const auto* type = module.types.tryGet(producer.resultType);
             if (edge.opcode != Opcode::Jump || edge.targets.size() != 1 || edge.targets[0].arguments.size() != 1 ||
-                !producer.result || edge.targets[0].arguments[0] != producer.result || !freshStringProducer(producer) ||
-                producer.resultOwnership != typed::ValueOwnership::Owned || producer.borrowOrigin ||
-                !producer.targets.empty() || !type || type->kind != TypeKind::String)
+                edge.targets[0].arguments[0] != producer.result || !isFreshStringProducer(module, producer))
                 continue;
             candidates.push_back({producer.result, producer.resultType, edge.targets[0].block});
         }

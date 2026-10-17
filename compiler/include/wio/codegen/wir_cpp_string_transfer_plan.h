@@ -13,6 +13,9 @@ namespace wio::codegen
     {
         std::unordered_map<std::uint32_t, wir::ValueId> edgeDestinations;
 
+        [[nodiscard]] static bool isFreshStringProducer(const wir::lowered::Module& module,
+                                                        const wir::lowered::Instruction& instruction);
+
         [[nodiscard]] static WirCppStringTransferPlan build(const wir::lowered::Module& module,
                                                             const wir::lowered::Function& function);
     };

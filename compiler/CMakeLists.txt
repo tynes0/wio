@@ -32,6 +32,16 @@ add_library(wio_compiler STATIC
 add_library(wio-compiler ALIAS wio_compiler)
 
 if(BUILD_TESTING)
+    add_executable(wio_string_init_plan_test "${CMAKE_SOURCE_DIR}/tests/string_init_plan_test.cpp")
+    target_link_libraries(wio_string_init_plan_test PRIVATE wio_compiler)
+    add_test(NAME wio_n03_string_init_plan COMMAND wio_string_init_plan_test)
+    set_tests_properties(wio_n03_string_init_plan PROPERTIES LABELS "native;formatting;ownership;memory" TIMEOUT 60)
+
+    add_executable(wio_inline_string_init_test "${CMAKE_SOURCE_DIR}/tests/inline_string_init_test.cpp")
+    target_include_directories(wio_inline_string_init_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
+    add_test(NAME wio_n03_inline_string_init COMMAND wio_inline_string_init_test)
+    set_tests_properties(wio_n03_inline_string_init PROPERTIES LABELS "native;formatting;ownership;memory" TIMEOUT 60)
+
     add_executable(wio_string_transfer_plan_test "${CMAKE_SOURCE_DIR}/tests/string_transfer_plan_test.cpp")
     target_link_libraries(wio_string_transfer_plan_test PRIVATE wio_compiler)
     add_test(NAME wio_n03_string_transfer_plan COMMAND wio_string_transfer_plan_test)
