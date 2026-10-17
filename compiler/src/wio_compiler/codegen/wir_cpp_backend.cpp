@@ -1,6 +1,7 @@
 #include "wio/codegen/wir_cpp_backend.h"
 #include "wio/codegen/wir_cpp_receiver_plan.h"
 #include "wio/codegen/wir_cpp_storage_plan.h"
+#include "wio/codegen/wir_cpp_string_transfer_plan.h"
 #include "wio/codegen/wir_intrinsics.h"
 #include "wio/codegen/wir_module_emitter.h"
 #include "wio/codegen/wir_native_bridge_plan.h"
@@ -351,6 +352,7 @@ namespace wio::codegen
             std::unordered_set<const lowered::Instruction*> suppressedInstructions_;
             std::unordered_set<std::uint32_t> directValues_;
             WirCppStoragePlan storagePlan_;
+            WirCppStringTransferPlan stringTransferPlan_;
             std::unordered_map<std::uint32_t, WirCppReceiverPlan> receiverPlans_;
             const WirCppReceiverPlan* currentReceiverPlan_ = nullptr;
             std::unordered_set<std::uint32_t> structuralAliases_;
@@ -2179,6 +2181,14 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                              storagePlan_.elidedConcatValues.contains(instruction.operands[0].value())))
                             suppressedInstructions_.insert(&instruction);
 
+                stringTransferPlan_ = WirCppStringTransferPlan::build(module_, function);
+                for (const auto& [source, destination] : stringTransferPlan_.edgeDestinations)
+                {
+                    valueAliases_.emplace(source, destination);
+                    valueTypes_.erase(source);
+                    ownedValues_.erase(source);
+                }
+
                 if (currentFunctionIsLinear_)
                 {
                     for (const auto& [id, type] : valueTypes_)
@@ -2669,10 +2679,14 @@ template<class T> void append_formatted(std::string& target, const T& value) {
             {
                 if (instruction.result)
                 {
+                    const auto forwarded = stringTransferPlan_.edgeDestinations.find(instruction.result.value());
+                    const ValueId destination = forwarded == stringTransferPlan_.edgeDestinations.end()
+                                                    ? instruction.result
+                                                    : forwarded->second;
                     output_ << "                ";
-                    if (directValues_.contains(instruction.result.value()))
-                        output_ << valueStorageType(instruction.result.value(), instruction.resultType) << ' ';
-                    output_ << valueName(instruction.result) << " = " << expression << ";\n";
+                    if (directValues_.contains(destination.value()))
+                        output_ << valueStorageType(destination.value(), instruction.resultType) << ' ';
+                    output_ << valueName(destination) << " = " << expression << ";\n";
                 }
                 else
                     output_ << "                " << expression << ";\n";
@@ -2686,7 +2700,13 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                         destination = &block;
                 // Phi assignment is simultaneous, including self-loop swaps.
                 output_ << "                {\n";
-                for (std::size_t index = 0; destination && index < target.arguments.size(); ++index)
+                const auto forwarded = target.arguments.size() == 1
+                                           ? stringTransferPlan_.edgeDestinations.find(target.arguments[0].value())
+                                           : stringTransferPlan_.edgeDestinations.end();
+                const bool alreadyStored = destination && destination->parameters.size() == 1 &&
+                                           forwarded != stringTransferPlan_.edgeDestinations.end() &&
+                                           forwarded->second == destination->parameters[0].id;
+                for (std::size_t index = 0; !alreadyStored && destination && index < target.arguments.size(); ++index)
                     output_ << "                "
                             << valueStorageType(destination->parameters[index].id.value(),
                                                 destination->parameters[index].type)
@@ -2695,7 +2715,7 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                                     ? movedOperand(target.arguments[index])
                                     : operand(target.arguments[index]))
                             << ";\n";
-                for (std::size_t index = 0; destination && index < target.arguments.size(); ++index)
+                for (std::size_t index = 0; !alreadyStored && destination && index < target.arguments.size(); ++index)
                     output_ << "                " << valueName(destination->parameters[index].id)
                             << " = std::move(_edge" << index << ");\n";
                 if (storagePlan_.directControlFlow)

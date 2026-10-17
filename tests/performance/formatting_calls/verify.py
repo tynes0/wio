@@ -152,6 +152,27 @@ namespace {{ const bool receiver_probe_{index} = []() {{
     run([wio, folder / "fields.wio", "--target", "shared", "--native-bridge-only", "--output", field_bridge,
          "--bytecode-sidecar", field_bytecode])
     run([wio, "--vm-run-bytecode", field_bytecode, "--native-library", field_bridge])
+    shutil.copyfile(HERE / "transfers.wio", folder / "transfers.wio")
+    shutil.copyfile(HERE / "transfer_probe.h", folder / "transfer_probe.h")
+    run([wio, folder / "transfers.wio", "--emit-cpp", "--include-dir", folder])
+    for optimization in ("-O0", "-O2"):
+        program = folder / ("transfers.exe" if os.name == "nt" else "transfers")
+        run([args.cxx, "-std=c++20", optimization, folder / "transfers.wio.cpp",
+             f"-I{folder}", f"-I{ROOT / 'runtime/include'}", f"-I{ROOT / 'sdk/include'}", args.runtime.resolve(),
+             *links, "-o", program])
+        run([program])
+        failed = run([program, "fail"], expected=1)
+        if "transfer-probe failure" not in failed.stdout + failed.stderr:
+            raise RuntimeError("Forwarded native string result changed exception propagation")
+    transfer_bridge = folder / ("transfers.dll" if os.name == "nt" else "transfers.dylib" if sys.platform == "darwin" else "transfers.so")
+    transfer_bytecode = folder / "transfers.wiob"
+    run([wio, folder / "transfers.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder,
+         "--output", transfer_bridge, "--bytecode-sidecar", transfer_bytecode])
+    run([wio, "--vm-run-bytecode", transfer_bytecode, "--native-library", transfer_bridge])
+    failed = run([wio, "--vm-run-bytecode", transfer_bytecode, "--native-library", transfer_bridge,
+                  "--", "fail"], expected=1)
+    if "transfer-probe failure" not in failed.stdout + failed.stderr:
+        raise RuntimeError("VM native string result changed exception propagation")
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
     print("N03 scalar ToString: ordered/null-safe dispatch, view/interface/generic calls, native O0/O2 + VM")
 

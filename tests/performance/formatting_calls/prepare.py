@@ -31,6 +31,8 @@ if __name__ == "__main__":
                    "compiler/include/wio/codegen/wir_cpp_storage_plan.h",
                    "compiler/src/wio_compiler/codegen/wir_cpp_receiver_plan.cpp",
                    "compiler/include/wio/codegen/wir_cpp_receiver_plan.h",
+                   "compiler/src/wio_compiler/codegen/wir_cpp_string_transfer_plan.cpp",
+                   "compiler/include/wio/codegen/wir_cpp_string_transfer_plan.h",
                    "compiler/src/wio_compiler/wir/lowering_pipeline.cpp",
                    "runtime/include/value_format.h", "runtime/include/integer_format.h",
                    "runtime/include/formatted_size.h",

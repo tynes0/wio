@@ -1,5 +1,8 @@
 # N03: bounded private receiver entries
 
+Subsequent work: [single-value string edge forwarding](WIO_STRING_TRANSFER_OPTIMIZATION.md).
+Historical observations below remain unchanged.
+
 2026-10-17. Follow-up to `8ade2e8`. N03 remains in progress; N04 has not
 started. This is not closure of the C++ performance budget or the VM pass.
 

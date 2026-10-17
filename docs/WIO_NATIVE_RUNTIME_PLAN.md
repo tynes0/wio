@@ -307,3 +307,24 @@ N03 remains open for richer formatting, legacy Format and KI-008 hooks. KI-007,
 KI-009 and N01/N14 timing acceptance remain open; N04 has not started. The
 preceding scalar-field commit's CI passed Windows Debug, Ubuntu Release and
 macOS Release; the present commit requires its own platform qualification.
+
+## N03: single-value string edge forwarding, 2026-10-17
+
+[The transfer slice](WIO_STRING_TRANSFER_OPTIMIZATION.md) removes the source
+string slot and parallel-edge temporary when a fresh owned string producer is
+immediately followed by its only single-value transfer. The destination slot
+and cleanup remain. Extra uses, references/metadata/cleanup, intervening effects,
+parallel assignments, non-string values and async/coroutine frames retain their
+established path. This is C++ storage emission only, not new WIR/VM instructions
+or ABI. Shared N05 proof work does not close or renumber that pass.
+
+The new/expanded gates pass 2/2 with O0/O2 + VM native return/error, snapshot,
+NUL/Text and ordered-hook coverage. Both sessions retain 168/168 correct outputs.
+Native comparison medians are 0.9110/2.4496 -> 0.7787/2.1290 ms; separate final
+0.8710/2.3850 -> 0.8260/2.1240. Work's measured GCC O2 prologue reservation falls
+1032 -> 696 bytes; heap traffic is unchanged and the executable is 3072 bytes
+smaller. Global timing remains unqualified and the C++ budget stays open.
+
+N03, KI-007/KI-008/KI-009 and N01/N14 performance qualification remain open;
+N04 has not started. The preceding receiver/cold-integer commit's three-platform
+CI passed independently of this change.

@@ -50,6 +50,14 @@ string interpolation and Unicode Text after checked pre-reserve. The new
 emission optimizations; they add no WIR/VM instructions. See
 [the field/reservation report](../../../docs/WIO_SCALAR_FIELD_OPTIMIZATION.md).
 
+`wio_n03_string_transfer_plan` proves adjacent sole-use owned string forwarding
+to one block parameter, with source and edge storage absent in emitted code.
+The `transfers.wio` gate adds repeated short/long/NUL values, mutation snapshots,
+native string-returning branches, ordered hooks, Text fallback and native error
+propagation at O0/O2 + VM. Multi-argument phi edges, additional use/metadata/
+cleanup and async frames retain the established transport. See
+[the transfer report](../../../docs/WIO_STRING_TRANSFER_OPTIMIZATION.md).
+
 `wio_n03_receiver_plan` proves implementation-only one-pointer self entries.
 The expanded fields fixture covers readonly calls, format-before-self fallback,
 override dispatch, super calls and generated C++ function-pointer/null/expired-

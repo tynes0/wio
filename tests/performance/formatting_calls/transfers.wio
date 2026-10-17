@@ -1,0 +1,72 @@
+using cpp::header("transfer_probe.h");
+
+[native, cpp::name(transfer_probe::Echo)]
+fn Echo(value: view string) -> string;
+
+[native, cpp::name(transfer_probe::Fail)]
+fn Fail(value: view string) -> string;
+
+fn Choose(flag: bool) -> string
+{
+    return flag ? "a\0b" : "long:0123456789012345678901234567890123456789";
+}
+
+fn ChooseNative(flag: bool, value: string) -> string
+{
+    return flag ? Echo(ref value) : "fallback";
+}
+
+fn ChooseText(flag: bool) -> text
+{
+    return flag ? u"🌍" : u"日本";
+}
+
+fn ChooseFailure(flag: bool) -> string
+{
+    let value = "failure";
+    return flag ? Fail(ref value) : "safe";
+}
+
+object Label
+{
+    private count: i32;
+
+    public fn ToString() -> string
+    {
+        self.count += 1;
+        return $"item:${self.count}";
+    }
+}
+
+fn Format(flag: bool, label: Label) -> string
+{
+    return flag ? $"<${label}>" : $"[${label}]";
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() > 1usize)
+    {
+        ChooseFailure(true);
+        return 99;
+    }
+
+    let label = Label();
+    for (index in 0..<128)
+    {
+        let flag = index % 2 == 0;
+        mut value = Choose(flag);
+        let snapshot = value;
+        let original = flag ? "a\0b" : "long:0123456789012345678901234567890123456789";
+        value.Append("tail");
+        if (snapshot != original) return 1;
+        if (value != original + "tail") return 2;
+        if (ChooseNative(flag, snapshot) != (flag ? original : "fallback")) return 3;
+        let expected = flag ? $"<item:${index + 1}>" : $"[item:${index + 1}]";
+        if (Format(flag, label) != expected) return 4;
+        if (ChooseText(flag) != (flag ? u"🌍" : u"日本")) return 5;
+        if (ChooseFailure(false) != "safe") return 6;
+    }
+
+    return 0;
+}

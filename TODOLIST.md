@@ -1304,6 +1304,10 @@ Rider, and CLion are defined in
    Integer formatting now outlines the cold stream path while checking the live
    locale every call. The report preserves mixed/noisy timing, unchanged heap
    traffic and the still-open performance target; this does not close N03.
+   Fresh owned string producers with an immediate sole single-value edge now
+   write the destination slot directly, avoiding source/edge staging. Multiple
+   uses/cleanup/metadata, effects, parallel edges, Text and async retain the old
+   path. See `docs/WIO_STRING_TRANSFER_OPTIMIZATION.md`; this is not N03 closure.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

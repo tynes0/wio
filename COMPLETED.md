@@ -10,6 +10,23 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 sole-use string edge forwarding — 2026-10-17
+
+- [x] Forward fresh owned string producers into one immediately following block
+  parameter slot. Remove source/edge staging; preserve destination ownership,
+  cleanup, RHS completion/exception order and ordinary ABI. Unsafe cases retain
+  simultaneous transfers, including parallel edges and async frames.
+- [x] New proof/emitter and expanded Wio native O0/O2 + VM gates pass 2/2 (86.41s),
+  with NUL/long strings, snapshots, hooks, native returns/errors and Text fallback.
+  GCC syntax checking passes; initial fixture API typo is retained as an excerpt.
+- [x] Before/after sessions retain 168/168 correct outputs. Native comparison
+  medians: 0.9110/2.4496 -> 0.7787/2.1290 ms; separate final: 0.8710/2.3850 ->
+  0.8260/2.1240. Work's actual O2 stack reservation falls 1032 -> 696 bytes;
+  executable size falls 3072 bytes. Heap allocations remain unchanged.
+- [ ] N03 and C++ performance budget remain open. Global timing qualification
+  is false; no accepted percentage speedup or VM gain is claimed. See
+  [the report](docs/WIO_STRING_TRANSFER_OPTIMIZATION.md).
+
 ## N03 bounded receivers and integer hot/cold paths — 2026-10-17
 
 - [x] Emit implementation-only one-pointer self entries for proven small
