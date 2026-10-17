@@ -216,7 +216,9 @@ Raw evidence: [before](evidence/n03-builder-before-2026-10-17.json),
 ## Remaining work
 
 N03 remains open for richer formatting/precision, legacy runtime::Format and
-shared user ToString callable lowering/VM invocation (KI-008). The native/VM
+remaining user-container/async/native/open-generic hook lowering (KI-008).
+[Synchronous scalar hooks](WIO_FORMATTING_CALL_LOWERING.md) now use shared WIR
+calls; that bounded correctness slice does not close the whole issue. The native/VM
 mutating borrowed-LHS issue KI-007 is unchanged. Native object/call/representation
 overheads are not excused or declared solved by this formatting slice; they remain
 in the fixed later N05/N07/N08 passes. N01 residual attribution/qualification and

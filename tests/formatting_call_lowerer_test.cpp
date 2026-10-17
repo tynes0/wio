@@ -120,6 +120,13 @@ int main()
         rejects(
             [](auto& value)
             {
+                const auto parameter = value.types.intern({.kind = TypeKind::GenericParameter, .name = "T"});
+                value.types.getMutable(value.functions[1].ownerType).arguments = {parameter};
+            },
+            "open generic owner was selected through a nongeneric method symbol");
+        rejects(
+            [](auto& value)
+            {
                 const auto owner = value.functions[1].ownerType;
                 value.types.getMutable(owner).methods[0].visibility = FieldVisibility::Private;
             },

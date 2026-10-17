@@ -51,10 +51,14 @@ Negative zero in a native lowered constant could be printed as C++ integer
 `-0`, losing the double sign. It is now emitted as `-0.0`. Runtime signed-zero
 formatting and literal signed-zero transport have separate coverage.
 
-**Remaining gap KI-008:** VM user-defined object ToString is not yet materialized
-as a shared callable operation/continuation. Native stateful object/array hooks
-have positive compatibility coverage; the VM fixture deliberately checks its
-current WVM1062 rejection. That negative test is not feature parity. The shared
+**Original gap KI-008:** in this first slice, VM user-defined object ToString
+was not materialized as a shared callable operation/continuation. Synchronous
+scalar object/interface hooks were subsequently implemented by
+[shared formatting-call lowering](WIO_FORMATTING_CALL_LOWERING.md); object-
+container/async/native/open-generic hook surfaces still remain open.
+The original native stateful object/array hooks
+have positive compatibility coverage; the object-array VM fixture deliberately
+checks the remaining WVM1062 rejection. That negative test is not feature parity. The shared
 Wio tests exercise only the now-qualified builtin container leaves. Nonfinite
 spellings retain the host stream, including platform-specific NaN variants;
 universal cross-CRT signaling/payload-NaN spelling is not claimed.
@@ -199,7 +203,7 @@ The final separate host/VM unit recheck passed 2/2 in 0.69 seconds.
 Direct numeric append into existing builder storage was subsequently implemented
 by [the second N03 slice](WIO_NUMERIC_BUILDER_OPTIMIZATION.md). Richer
 formatting/precision surfaces, the legacy native
-`runtime::Format` stream surface and user-hook callable lowering/VM invocation
+`runtime::Format` stream surface and remaining user-container/async hook lowering
 remain open. Keep ToString snapshots, call order, locale/rounding policy and
 failure behavior explicit. N04 byte/buffer/I/O and the fixed later passes have
 not started in this slice. No general 1.05–1.10x budget acceptance is claimed.

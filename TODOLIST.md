@@ -1283,8 +1283,10 @@ Rider, and CLion are defined in
    conformance fixes and frozen related four-implementation measurements.
    Direct primitive builder Append/AppendLine now use canonical formatting fusion
    and typed C++/VM append; see `docs/WIO_NUMERIC_BUILDER_OPTIMIZATION.md`.
-   Richer formatting, legacy Format and VM user ToString invocation (KI-008)
-   remain open; see `docs/WIO_FORMATTING_OPTIMIZATION.md`.
+   Scalar synchronous user ToString now lowers to shared WIR virtual/interface
+   calls, including concrete generic callers, views and temporaries; see
+   `docs/WIO_FORMATTING_CALL_LOWERING.md`. Object-container/async/native/open-
+   generic hooks (KI-008), richer formatting and legacy Format remain open.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

@@ -27,6 +27,20 @@ namespace wio::wir
             MethodLayout method;
         };
 
+        bool hasOpenType(const TypeTable& types, const TypeId id, const unsigned depth = 0)
+        {
+            if (!id)
+                return false;
+            const Type* type = types.tryGet(id);
+            if (!type || depth > 128)
+                return true;
+            if (type->kind == TypeKind::GenericParameter || type->kind == TypeKind::ConstGenericParameter ||
+                type->kind == TypeKind::GenericParameterPack)
+                return true;
+            return std::ranges::any_of(type->arguments,
+                                       [&](const TypeId argument) { return hasOpenType(types, argument, depth + 1); });
+        }
+
         Formatter formatter(const Module& module, const FunctionIndex& functions, TypeId id, const unsigned depth = 0)
         {
             const Type* type = module.types.tryGet(id);
@@ -51,6 +65,8 @@ namespace wio::wir
                 return {.surface = Surface::Builtin};
             if (type->nominalKind != NominalKind::Object && type->nominalKind != NominalKind::Interface)
                 return {};
+            if (hasOpenType(module.types, id))
+                return {};
 
             std::optional<MethodLayout> selected;
             for (const MethodLayout& method : type->methods)
@@ -61,7 +77,7 @@ namespace wio::wir
                 const auto found = functions.find(method.function.value());
                 const Function* callee = found == functions.end() ? nullptr : found->second;
                 if (!callee || callee->isAsync || callee->nativeBinding || !callee->genericParameters.empty() ||
-                    !callee->isMethod)
+                    !callee->isMethod || hasOpenType(module.types, callee->ownerType))
                     continue;
                 if (selected)
                     return {}; // Never guess an overload or inherited declaration.
@@ -89,7 +105,8 @@ namespace wio::wir
 
         std::size_t lowerFunction(Module& module, const FunctionIndex& functions, Function& function)
         {
-            if (function.isAsync || function.coroutine || !function.genericParameters.empty())
+            if (function.isAsync || function.coroutine || !function.genericParameters.empty() ||
+                hasOpenType(module.types, function.ownerType))
                 return 0;
             if (std::ranges::none_of(function.blocks,
                                      [&](const BasicBlock& block)

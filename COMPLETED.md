@@ -18,6 +18,10 @@ Notes:
   NUL and implicit interface public visibility; native O0/O2 + VM gate passed.
 - [x] Two new tests passed locally (63.76 seconds); preceding portability CI is
   green on all three platforms. See [the report](docs/WIO_FORMATTING_CALL_LOWERING.md).
+- [x] Final open-generic-owner guard recheck passed 2/2 (98.96 seconds); the
+  measured closed-type generated C++ remains byte-identical. Benchmark observes
+  higher native times, unchanged allocations and newly working VM cases; no
+  performance budget or zero-regression claim is accepted.
 - [ ] Object-container hooks, async frames and native/open-generic hook declarations
   remain KI-008/N03 work. This correctness slice does not establish a speed budget.
 
