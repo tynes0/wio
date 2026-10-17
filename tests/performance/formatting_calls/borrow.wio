@@ -1,0 +1,50 @@
+using cpp::header("borrow_probe.h");
+
+[native, cpp::name(borrow_probe::Read)]
+fn Read(value: view string) -> usize;
+
+[native, cpp::name(borrow_probe::ReadOffset)]
+fn ReadOffset(value: view string, offset: usize) -> usize;
+
+[native, cpp::name(borrow_probe::Grow)]
+fn Grow(value: ref string) -> usize;
+
+[native, cpp::name(borrow_probe::Fail)]
+fn Fail(value: view string) -> usize;
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() > 1usize)
+    {
+        if (args[1] == "indirect")
+        {
+            let indirectValue = "a\0b";
+            let reader: fn(view string) -> usize = Read;
+            if (reader(ref indirectValue) != 3usize) return 7;
+            return 0;
+        }
+
+        let failure = "fail";
+        Fail(ref failure);
+        return 9;
+    }
+
+    let shortValue = "a\0b";
+    if (Read(ref shortValue) != 3usize) return 1;
+    mut value = "a\0b";
+    let snapshot = value;
+    let count = Grow(ref value);
+    if (value != "a\0b-expanded:012345678901234567890123456789\0") return 2;
+    if (count != value.Count()) return 3;
+    if (snapshot != "a\0b") return 4;
+    if (ReadOffset(ref snapshot, 2usize) != 5usize) return 8;
+    value.Append("tail");
+    if (value != "a\0b-expanded:012345678901234567890123456789\0tail") return 5;
+    for (index in 0..<1000)
+    {
+        let text = $"loop:${index}";
+        if (Read(ref text) != text.Count()) return 6;
+    }
+
+    return 0;
+}

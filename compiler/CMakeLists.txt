@@ -32,6 +32,10 @@ add_library(wio_compiler STATIC
 add_library(wio-compiler ALIAS wio_compiler)
 
 if(BUILD_TESTING)
+    add_executable(wio_native_string_borrow_plan_test "${CMAKE_SOURCE_DIR}/tests/native_string_borrow_plan_test.cpp")
+    target_link_libraries(wio_native_string_borrow_plan_test PRIVATE wio_compiler)
+    add_test(NAME wio_n03_native_string_borrow_plan COMMAND wio_native_string_borrow_plan_test)
+    set_tests_properties(wio_n03_native_string_borrow_plan PROPERTIES LABELS "native;formatting;memory;ownership;interop" TIMEOUT 60)
     add_executable(wio_formatting_call_lowerer_test "${CMAKE_SOURCE_DIR}/tests/formatting_call_lowerer_test.cpp")
     target_link_libraries(wio_formatting_call_lowerer_test PRIVATE wio_compiler)
     add_test(NAME wio_n03_formatting_call_plan COMMAND wio_formatting_call_lowerer_test)

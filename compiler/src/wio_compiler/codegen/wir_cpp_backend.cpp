@@ -1994,7 +1994,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
             }
 
             std::string functionSignature(const lowered::Function& function, const bool declaration,
-                                          const std::string_view emittedName = {}) const
+                                          const std::string_view emittedName = {},
+                                          const bool directStringBorrow = false) const
             {
                 std::string signature;
                 signature.reserve(48 + function.parameters.size() * 32);
@@ -2008,7 +2009,11 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                 {
                     if (index)
                         signature += ", ";
-                    signature += cppType(function.parameters[index].type);
+                    const auto parameter = function.parameters[index].type;
+                    const auto& type = module_.types.get(parameter);
+                    signature += directStringBorrow && type.kind == TypeKind::Reference
+                                     ? (type.isMutable ? "std::string&" : "const std::string&")
+                                     : cppType(parameter);
                     signature += " _p";
                     signature += std::to_string(index);
                 }
@@ -2039,6 +2044,9 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     if (!functionIsOpen(function))
                     {
                         output_ << functionSignature(function, true) << '\n';
+                        if (WirCppStoragePlan::supportsCallScopedStringAbi(module_, function))
+                            output_ << functionSignature(function, true, functionName(function.id) + "_borrow", true)
+                                    << '\n';
                         if (!function.isExternal && !behavioralPipeline(function.id).empty())
                             output_ << functionSignature(function, true, coreFunctionName(function.id)) << '\n';
                     }
@@ -2378,7 +2386,32 @@ template<class T> void append_formatted(std::string& target, const T& value) {
 
             std::string nativeCall(const lowered::Function& callee, const lowered::Instruction& instruction) const
             {
-                return functionName(callee.id) + "(" + callArguments(instruction) + ")";
+                bool directBorrow = WirCppStoragePlan::supportsCallScopedStringAbi(module_, callee);
+                for (std::size_t index = 0; directBorrow && index < instruction.operands.size(); ++index)
+                    if (module_.types.get(callee.parameters[index].type).kind == TypeKind::Reference &&
+                        !storagePlan_.stringPlaces.contains(instruction.operands[index].value()))
+                        directBorrow = false;
+                std::string arguments;
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index)
+                        arguments += ", ";
+                    const ValueId value = instruction.operands[index];
+                    if (storagePlan_.stringPlaces.contains(value.value()))
+                    {
+                        // The storage proof permits only call-scoped UTF-8
+                        // borrows with scalar/void results and no callbacks.
+                        const TypeId parameter = callee.parameters[index].type;
+                        const bool mutableBorrow = module_.types.get(parameter).isMutable;
+                        arguments += directBorrow
+                                         ? operand(value) + ".read()"
+                                         : cppType(parameter) + (mutableBorrow ? "::borrow(" : "::borrowView(") +
+                                               operand(value) + ".read())";
+                    }
+                    else
+                        arguments += operand(value);
+                }
+                return functionName(callee.id) + (directBorrow ? "_borrow(" : "(") + arguments + ")";
             }
 
             std::string callArguments(const lowered::Instruction& instruction, const std::size_t begin = 0,
@@ -3581,6 +3614,19 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     emitSyncBehavioralFunction(function, processors);
             }
 
+            void emitNativeExceptionCatch(const NativeBinding& binding)
+            {
+                if (binding.exceptionBoundary == NativeExceptionBoundary::None)
+                    return;
+                output_ << " } catch (const wio::wir_backend::abi::Error&) { throw; } "
+                           "catch (const wio::runtime::RuntimeException&) { throw; } catch (const "
+                           "std::exception& _error) { throw wio::runtime::RuntimeException("
+                        << cppString("Native call '" + binding.symbol + "' failed: ")
+                        << " + std::string(_error.what())); } catch (...) { throw "
+                           "wio::runtime::RuntimeException("
+                        << cppString("Native call '" + binding.symbol + "' failed with an unknown exception") << "); }";
+            }
+
             void emitFunctions()
             {
                 for (const lowered::Function& function : module_.functions)
@@ -3595,7 +3641,13 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                             if (nativeSource.begin.line > 1)
                                 --nativeSource.begin.line;
                             emitSource(nativeSource);
-                            output_ << functionSignature(function, false) << " {\n  ";
+                            const bool directStringBorrow =
+                                WirCppStoragePlan::supportsCallScopedStringAbi(module_, function);
+                            output_ << functionSignature(function, false,
+                                                         directStringBorrow ? functionName(function.id) + "_borrow"
+                                                                            : std::string{},
+                                                         directStringBorrow)
+                                    << " {\n  ";
                             if (!runtimeAsyncBinding(function) &&
                                 std::ranges::any_of(function.parameters, [&](const auto& p)
                                                     { return module_.types.get(p.type).kind == TypeKind::Function; }))
@@ -3624,7 +3676,7 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                                 std::string argument =
                                     (passing == NativePassingMode::Borrow || passing == NativePassingMode::BorrowMut)
                                         ? std::string(passing == NativePassingMode::Borrow ? "std::as_const(" : "") +
-                                              "_p" + std::to_string(index) + ".read()" +
+                                              "_p" + std::to_string(index) + (directStringBorrow ? "" : ".read()") +
                                               (passing == NativePassingMode::Borrow ? ")" : "")
                                     : passing == NativePassingMode::Consume
                                         ? "std::move(_p" + std::to_string(index) + ")"
@@ -3731,19 +3783,29 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                             if (function.nativeBinding->exceptionBoundary != NativeExceptionBoundary::None)
                                 output_ << "try { ";
                             output_ << "return " << call << ';';
-                            if (function.nativeBinding->exceptionBoundary != NativeExceptionBoundary::None)
-                            {
-                                output_ << " } catch (const wio::wir_backend::abi::Error&) { throw; } "
-                                           "catch (const wio::runtime::RuntimeException&) { throw; } catch (const "
-                                           "std::exception& _error) { throw wio::runtime::RuntimeException("
-                                        << cppString("Native call '" + function.nativeBinding->symbol + "' failed: ")
-                                        << " + std::string(_error.what())); } catch (...) { throw "
-                                           "wio::runtime::RuntimeException("
-                                        << cppString("Native call '" + function.nativeBinding->symbol +
-                                                     "' failed with an unknown exception")
-                                        << "); }";
-                            }
+                            emitNativeExceptionCatch(*function.nativeBinding);
                             output_ << "\n}\n\n";
+                            if (directStringBorrow)
+                            {
+                                // Keep the ordinary Place ABI for function values,
+                                // exports and unproven callers. Only the private
+                                // leaf entry avoids constructing a general Place.
+                                output_ << functionSignature(function, false) << " { ";
+                                if (function.nativeBinding->exceptionBoundary != NativeExceptionBoundary::None)
+                                    output_ << "try { ";
+                                output_ << "return " << functionName(function.id) << "_borrow(";
+                                for (std::size_t index = 0; index < function.parameters.size(); ++index)
+                                {
+                                    if (index)
+                                        output_ << ", ";
+                                    output_ << "_p" << index;
+                                    if (module_.types.get(function.parameters[index].type).kind == TypeKind::Reference)
+                                        output_ << ".read()";
+                                }
+                                output_ << ");";
+                                emitNativeExceptionCatch(*function.nativeBinding);
+                                output_ << " }\n\n";
+                            }
                         }
                         continue;
                     }

@@ -56,11 +56,86 @@ namespace wio::codegen
 
         bool stringCellUse(const wir::lowered::Instruction& instruction, std::size_t operand)
         {
+            if (operand == 0 && instruction.opcode == wir::lowered::Opcode::IntrinsicCall &&
+                instruction.intrinsicFamily == wir::IntrinsicFamily::String && instruction.selector == "Append" &&
+                instruction.operands.size() == 2 && !instruction.result)
+                return true;
             if (instruction.opcode == wir::lowered::Opcode::Load && operand == 0)
                 return true;
             if (instruction.opcode == wir::lowered::Opcode::MoveValue && operand == 0)
                 return instruction.resultOwnership == wir::typed::ValueOwnership::Owned;
             return scalarCellUse(instruction, operand);
+        }
+
+        bool callScopedStringUse(const wir::lowered::Module& module, const wir::lowered::Instruction& instruction,
+                                 const std::size_t operand)
+        {
+            using namespace wir;
+            if (instruction.opcode != lowered::Opcode::NativeInvoke || !instruction.callee)
+                return false;
+            const auto offset = instruction.callee.value();
+            const lowered::Function* callee =
+                offset < module.functions.size() && module.functions[offset].id == instruction.callee
+                    ? &module.functions[offset]
+                    : nullptr;
+            if (!callee)
+            {
+                const auto found = std::ranges::find(module.functions, instruction.callee, &lowered::Function::id);
+                if (found != module.functions.end())
+                    callee = &*found;
+            }
+            if (!callee || !WirCppStoragePlan::supportsCallScopedStringAbi(module, *callee))
+                return false;
+            const NativeBinding& binding = *callee->nativeBinding;
+            if (binding.parameters.size() != instruction.operands.size() ||
+                instruction.signatureTypes.size() != instruction.operands.size() ||
+                callee->parameters.size() != instruction.operands.size() || operand >= binding.parameters.size())
+                return false;
+            for (std::size_t index = 0; index < binding.parameters.size(); ++index)
+                if (binding.parameters[index].type != instruction.signatureTypes[index])
+                    return false;
+            return binding.parameters[operand].marshalling == NativeMarshallingKind::Utf8String;
+        }
+
+        bool callScopedStringAbi(const wir::lowered::Module& module, const wir::lowered::Function& callee)
+        {
+            using namespace wir;
+            if (!callee.isExternal || !callee.nativeBinding || callee.isAsync || callee.isMethod || callee.isExtension)
+                return false;
+            const auto& binding = *callee.nativeBinding;
+            const Type* result = module.types.tryGet(callee.returnType);
+            if (binding.receiver != NativeReceiverKind::None || !result ||
+                (binding.result.passing != NativePassingMode::Value &&
+                 binding.result.passing != NativePassingMode::ReturnOwned) ||
+                (result->kind != TypeKind::Void && !primitive(module.types, callee.returnType)) ||
+                (binding.result.marshalling != NativeMarshallingKind::Void &&
+                 binding.result.marshalling != NativeMarshallingKind::Scalar) ||
+                binding.result.callbackLifetime != NativeCallbackLifetime::Call ||
+                binding.result.callbackThread != NativeCallbackThread::Caller ||
+                binding.parameters.size() != callee.parameters.size())
+                return false;
+            bool hasString = false;
+            for (std::size_t index = 0; index < binding.parameters.size(); ++index)
+            {
+                const auto& parameter = binding.parameters[index];
+                const Type* type = module.types.tryGet(parameter.type);
+                if (!type || parameter.nullable || parameter.type != callee.parameters[index].type ||
+                    parameter.callbackLifetime != NativeCallbackLifetime::Call ||
+                    parameter.callbackThread != NativeCallbackThread::Caller)
+                    return false;
+                if (parameter.marshalling == NativeMarshallingKind::Scalar &&
+                    parameter.passing == NativePassingMode::Value && primitive(module.types, parameter.type))
+                    continue;
+                if (parameter.marshalling != NativeMarshallingKind::Utf8String ||
+                    (parameter.passing != NativePassingMode::Borrow &&
+                     parameter.passing != NativePassingMode::BorrowMut) ||
+                    type->kind != TypeKind::Reference || type->arguments.size() != 1 ||
+                    type->isMutable != (parameter.passing == NativePassingMode::BorrowMut) ||
+                    module.types.get(type->arguments.front()).kind != TypeKind::String)
+                    return false;
+                hasString = true;
+            }
+            return hasString;
         }
 
         bool observesString(const wir::lowered::Instruction& instruction, const wir::ValueId value)
@@ -102,6 +177,12 @@ namespace wio::codegen
                    selector == "Count" || selector == "Empty";
         }
     } // namespace
+
+    bool WirCppStoragePlan::supportsCallScopedStringAbi(const wir::lowered::Module& module,
+                                                        const wir::lowered::Function& function)
+    {
+        return callScopedStringAbi(module, function);
+    }
 
     WirCppStoragePlan WirCppStoragePlan::build(const wir::lowered::Module& module,
                                                const wir::lowered::Function& function)
@@ -156,7 +237,8 @@ namespace wio::codegen
                 {
                     if (!scalarCellUse(instruction, index))
                         plan.scalarPlaces.erase(instruction.operands[index].value());
-                    if (!stringCellUse(instruction, index))
+                    if (plan.stringPlaces.contains(instruction.operands[index].value()) &&
+                        !stringCellUse(instruction, index) && !callScopedStringUse(module, instruction, index))
                         plan.stringPlaces.erase(instruction.operands[index].value());
                 }
                 if (instruction.borrowOrigin && !(instruction.opcode == wir::lowered::Opcode::Load &&

@@ -10,6 +10,23 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 call-scoped native string transport — 2026-10-17
+
+- [x] Prove bounded synchronous native UTF-8 borrows, promote closed string
+  cells to existing inline storage, and avoid general Place transport through
+  private C++ reference adapters. Ordinary ABI/function identities remain intact.
+- [x] Three new relevant tests passed (65.44 seconds), covering native O0/O2,
+  direct VM calls, mutable growth, snapshots, NUL and exception translation.
+- [x] Reject the shared-WIR streaming experiment after measurement exposed more
+  VM work; preserve its timings and initial ownership-verifier failure.
+- [x] Capture frozen before/final Wio-owned comparison and final native/VM phase:
+  84/84 correct outputs per session; allocations 10003/25005 -> 2/15004,
+  zero final live bytes/blocks. Lower native medians are observed, not a qualified
+  speed budget; full timing qualification remains false.
+- [ ] Native indirect function values work, but VM reports WVM1003 (KI-009).
+  N03, full formatting parity and runtime timing budgets remain open. See
+  [the transport report](docs/WIO_NATIVE_STRING_BORROW_OPTIMIZATION.md).
+
 ## N03 shared scalar user ToString — 2026-10-17
 
 - [x] Materialize synchronous scalar object/interface hook calls in shared WIR,

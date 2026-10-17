@@ -1287,6 +1287,11 @@ Rider, and CLion are defined in
    calls, including concrete generic callers, views and temporaries; see
    `docs/WIO_FORMATTING_CALL_LOWERING.md`. Object-container/async/native/open-
    generic hooks (KI-008), richer formatting and legacy Format remain open.
+   Bounded call-scoped native string borrows now use proven stack cells and
+   private C++ reference adapters; ordinary ABI and exception boundaries remain.
+   The shared-WIR streaming experiment was rejected for added VM cost. See
+   `docs/WIO_NATIVE_STRING_BORROW_OPTIMIZATION.md`. Indirect native function
+   values still fail in VM (KI-009); this is not N03 or VM parity closure.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

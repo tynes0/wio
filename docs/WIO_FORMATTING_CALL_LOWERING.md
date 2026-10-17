@@ -178,3 +178,12 @@ matching `frozen.cpp`. This proves that the measured native workload code did
 not change under the guard, not that every unmeasured generic/VM program has a
 performance qualification. Native/bridge/bytecode benchmark artifacts and all
 old/new samples remain frozen. No favorable timing rerun was substituted.
+
+## Native transport follow-up
+
+The higher native observations above are the starting point for
+[the native string borrow transport pass](WIO_NATIVE_STRING_BORROW_OPTIMIZATION.md).
+It removes bounded shared cells/general Place argument transport without changing
+this shared call-lowering implementation. A measured streaming-WIR experiment
+was rejected for added VM cost; it is not silently described as a production win.
+The follow-up retains the before, rejected and final evidence separately.

@@ -253,6 +253,24 @@ baseline and initial failing user-hook test remain visible in the saved evidence
 Nonfinite spellings retain each host's standard-stream behavior; do not assume a
 universal cross-CRT spelling for every signaling/payload NaN.
 
+### KI-009 — VM indirect native function values bypass native dispatch (P1)
+
+Found during the N03 native string transport tests on 2026-10-17 (working tree
+based on `7633af4`, Windows x64). A native `fn Read(view string) -> usize` works
+when called directly, but assigning it to `fn(view string) -> usize` and invoking
+that value reaches WVM1003, even with the native bridge loaded. Native O0/O2
+execute both forms correctly. `tests/performance/formatting_calls/borrow.wio`
+isolates the indirect form behind the `indirect` process argument.
+
+The unchanged VM frame-entry path rejects external functions before native
+dispatch, whereas `NativeInvoke` resolves the registered binding. This pass does
+not alter either VM path or claim indirect-call parity. The focused gate retains
+the failed discovery and explicitly asserts this remaining boundary; direct VM
+borrows, mutation and translated exceptions must still succeed. Workaround: call
+the native declaration directly. Closure requires shared native dispatch for
+indirect calls with argument/return marshalling, lifetime, callback and exception
+tests, not removal of the external-function safety check.
+
 ## 2. Native, VM, ownership and SDK limitations
 
 | ID | Priority / state | Current boundary and closure requirement |

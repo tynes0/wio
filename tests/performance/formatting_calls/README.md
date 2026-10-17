@@ -34,6 +34,14 @@ New-only gates are `wio_n03_formatting_call_plan` and
 before formatting, exactly-once/left-to-right hooks, NUL, temporary receivers,
 generic interpolation/std::ToString, view receivers and interface dispatch.
 The IR proof checks null-safe CFG, cleanup, idempotence and conservative rejection.
+The new `wio_n03_native_string_borrow_plan` proof and `borrow.wio` extend this
+with bounded native string borrow transport: stack cells/private reference
+adapters, mutable growth, NUL, independent snapshots, scalar arguments and
+exception translation. Native function values retain the ordinary ABI and pass
+O0/O2; VM indirect native invocation still reports WVM1003 (KI-009), an explicit
+negative boundary separate from passing direct VM calls. Unicode hook output is
+also checked. See [the transport report](../../../docs/WIO_NATIVE_STRING_BORROW_OPTIMIZATION.md).
+
 Object-containing containers, async frames, native/generic hook declarations,
 ambiguous/private hooks and unsupported mixed surfaces are not enabled by this
 bounded pass. The user-container WVM1062 fixture stays an explicit negative gate.

@@ -74,5 +74,6 @@ fn Entry() -> i32
     if (Read(ref a) != "a:5") return 9;
     let printable = ref a fit IPrintable;
     if ($"${printable}" != "a:6") return 10;
+    if (u$"🌍${a}日本" != u"🌍a:7日本") return 11;
     return 0;
 }

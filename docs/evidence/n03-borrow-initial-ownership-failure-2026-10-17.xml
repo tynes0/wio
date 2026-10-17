@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-MSBuild"
+	tests="2"
+	failures="2"
+	disabled="0"
+	skipped="0"
+	hostname="DESKTOP-0G3MR0G"
+	time="3"
+	timestamp="2026-10-17T07:49:22"
+	>
+	<testcase name="wio_n03_formatting_call_plan" classname="wio_n03_formatting_call_plan" time="1.15857" status="fail">
+		<failure message="Failed"/>
+		<properties>
+			<property name="cmake_labels" value="formatting;native;ownership;vm;wir"/>
+		</properties>
+		<system-out>WIR1470: Cleanup-bearing place is moved or dropped more than once.
+lowered formatting failed verification
+</system-out>
+	</testcase>
+	<testcase name="wio_n03_formatting_call_semantics" classname="wio_n03_formatting_call_semantics" time="1.33938" status="fail">
+		<failure message="Failed"/>
+		<properties>
+			<property name="cmake_labels" value="callable;formatting;native;ownership;vm"/>
+		</properties>
+		<system-out>Traceback (most recent call last):
+  File "F:\Projects\wio\tests\performance\formatting_calls\verify.py", line 73, in &lt;module&gt;
+    verify(parser.parse_args())
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "F:\Projects\wio\tests\performance\formatting_calls\verify.py", line 34, in verify
+    run([wio, folder / "main.wio", "--emit-lowered-wir", "--ir-output", lowered])
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\Projects\wio\tests\performance\formatting_calls\verify.py", line 29, in run
+    raise RuntimeError(str(row))
+RuntimeError: {'command': ['F:\\Projects\\wio\\build\\app\\Debug\\wio.exe', 'F:\\Projects\\wio\\build\\n03-formatting-call-semantics\\5977b6ec66634d088470046a9af03376\\main.wio', '--emit-lowered-wir', '--ir-output', 'F:\\Projects\\wio\\build\\n03-formatting-call-semantics\\5977b6ec66634d088470046a9af03376\\calls.lwir'], 'expectedExitCode': 0, 'exitCode': 1, 'stdout': 'Error [F:\\Projects\\wio\\build\\n03-formatting-call-semantics\\5977b6ec66634d088470046a9af03376\\main.wio:59:13]: Lowered WIR WIR1470 (verify-specialized-wir): Cleanup-bearing place is moved or dropped more than once.\nError [F:\\Projects\\wio\\build\\n03-formatting-call-semantics\\5977b6ec66634d088470046a9af03376\\main.wio:67:10]: Lowered WIR WIR1470 (verify-specialized-wir): Cleanup-bearing place is moved or dropped more than once.\nError [F:\\Projects\\wio\\build\\n03-formatting-call-semantics\\5977b6ec66634d088470046a9af03376\\main.wio:69:10]: Lowered WIR WIR1470 (verify-specialized-wir): Cleanup-bearing place is moved or dropped more than once.\nError [F:\\Projects\\wio\\build\\n03-formatting-call-semantics\\5977b6ec66634d088470046a9af03376\\main.wio:72:10]: Lowered WIR WIR1470 (verify-specialized-wir): Cleanup-bearing place is moved or dropped more than once.\nError [F:\\Projects\\wio\\build\\n03-formatting-call-semantics\\5977b6ec66634d088470046a9af03376\\main.wio:76:10]: Lowered WIR WIR1470 (verify-specialized-wir): Cleanup-bearing place is moved or dropped more than once.\nError [F:\\Projects\\wio\\build\\n03-formatting-call-semantics\\5977b6ec66634d088470046a9af03376\\main.wio:54:13]: Lowered WIR WIR1470 (verify-specialized-wir): Cleanup-bearing place is moved or dropped more than once.\nError [F:\\Projects\\wio\\std\\convert.wio:5:17]: Lowered WIR WIR1470 (verify-specialized-wir): Cleanup-bearing place is moved or dropped more than once.\n', 'stderr': ''}
+</system-out>
+	</testcase>
+</testsuite>

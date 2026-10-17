@@ -26,6 +26,9 @@ if __name__ == "__main__":
         cases=("single-hook", "ordered-hooks"), expected=expected,
         contracts="Stateful scalar object ToString; G6/decimal; left-to-right hooks after operand evaluation; UTF8 FNV",
         artifacts=("compiler/src/wio_compiler/wir/formatting_call_lowerer.cpp",
+                   "compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+                   "compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
+                   "compiler/include/wio/codegen/wir_cpp_storage_plan.h",
                    "compiler/src/wio_compiler/wir/lowering_pipeline.cpp",
                    "runtime/include/value_format.h", "runtime/include/integer_format.h",
                    "tests/performance/formatting_calls/prepare.py", "tests/performance/concat_reuse/prepare.py")))

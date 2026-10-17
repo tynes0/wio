@@ -28,6 +28,11 @@ namespace wio::codegen
         std::unordered_set<std::uint32_t> consumedConcatOperands;
         bool directControlFlow = false;
 
+        // A synchronous native leaf with only scalar values and call-scoped
+        // UTF-8 borrows. It cannot return or carry a retained reference/callback.
+        [[nodiscard]] static bool supportsCallScopedStringAbi(const wir::lowered::Module& module,
+                                                              const wir::lowered::Function& function);
+
         [[nodiscard]] static WirCppStoragePlan build(const wir::lowered::Module& module,
                                                      const wir::lowered::Function& function);
     };

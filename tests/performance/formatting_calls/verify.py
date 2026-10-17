@@ -60,6 +60,38 @@ def verify(args):
     rejected = run([wio, "--vm-run-bytecode", container_bytecode, "--native-library", container_bridge], expected=1)
     if "WVM1062" not in rejected.stderr:
         raise RuntimeError("Expected explicit remaining user-container formatting boundary")
+    shutil.copyfile(HERE / "borrow.wio", folder / "borrow.wio")
+    shutil.copyfile(HERE / "borrow_probe.h", folder / "borrow_probe.h")
+    run([wio, folder / "borrow.wio", "--emit-cpp", "--include-dir", folder])
+    borrow_source = (folder / "borrow.wio.cpp").read_text(encoding="utf-8")
+    for required in ('InlinePlace<std::string>::local()', '_borrow(const std::string&',
+                     '_borrow(std::string&'):
+        if required not in borrow_source:
+            raise RuntimeError("Missing proven stack-native borrow adapter: " + required)
+    for optimization in ("-O0", "-O2"):
+        program = folder / ("borrow.exe" if os.name == "nt" else "borrow")
+        run([args.cxx, "-std=c++20", optimization, folder / "borrow.wio.cpp",
+             f"-I{folder}", f"-I{ROOT / 'runtime/include'}", f"-I{ROOT / 'sdk/include'}", args.runtime.resolve(),
+             *links, "-o", program])
+        run([program])
+        run([program, "indirect"])
+        failed = run([program, "fail"], expected=1)
+        if "borrow-probe failure" not in failed.stdout + failed.stderr:
+            raise RuntimeError("Native borrow exception boundary changed")
+    borrow_bridge = folder / ("borrow.dll" if os.name == "nt" else "borrow.dylib" if sys.platform == "darwin" else "borrow.so")
+    borrow_bytecode = folder / "borrow.wiob"
+    run([wio, folder / "borrow.wio", "--target", "shared", "--native-bridge-only", "--output", borrow_bridge,
+         "--include-dir", folder, "--bytecode-sidecar", borrow_bytecode])
+    run([wio, "--vm-run-bytecode", borrow_bytecode, "--native-library", borrow_bridge])
+    # Native function values still reach the VM's external-function rejection;
+    # direct native borrows above must succeed independently of that old gap.
+    indirect = run([wio, "--vm-run-bytecode", borrow_bytecode, "--native-library", borrow_bridge,
+                    "--", "indirect"], expected=1)
+    if "WVM1003" not in indirect.stderr:
+        raise RuntimeError("Expected explicit VM indirect native-function boundary")
+    failed = run([wio, "--vm-run-bytecode", borrow_bytecode, "--native-library", borrow_bridge, "--", "fail"], expected=1)
+    if "borrow-probe failure" not in failed.stdout + failed.stderr:
+        raise RuntimeError("VM native borrow exception boundary changed")
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
     print("N03 scalar ToString: ordered/null-safe dispatch, view/interface/generic calls, native O0/O2 + VM")
 

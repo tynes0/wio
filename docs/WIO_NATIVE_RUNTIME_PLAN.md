@@ -253,3 +253,18 @@ O0/O2 + VM coverage. Implicit interface public visibility is also retained in WI
 Object-container traversal, async frames and native/open-generic hook declarations
 remain KI-008 work; N03 and N14 are not closed. The preceding libc++ correction's
 CI passed Windows Debug, Ubuntu Release and macOS Release.
+
+## N03: call-scoped native string transport, 2026-10-17
+
+[The transport pass](WIO_NATIVE_STRING_BORROW_OPTIMIZATION.md) removes shared
+heap cells and general Place construction from proven synchronous native string
+borrow leaves. Ordinary ABI/function identities and native exception boundaries
+remain. This shares proof work with the planned storage passes, not closure or
+renumbering of N05. The original shared hook lowering is unchanged: a streaming
+experiment was rejected after measurement exposed added VM cost.
+
+Three new relevant gates pass locally, including native O0/O2, direct VM calls,
+mutable growth, snapshots and exceptions. Indirect native function values exposed
+the unchanged WVM1003 frame-entry boundary (KI-009); do not infer full native/VM
+callable parity. N03 still includes richer formatting, legacy Format and remaining
+KI-008 hooks. N04 has not started, and N01/N14 timing acceptance remains separate.
