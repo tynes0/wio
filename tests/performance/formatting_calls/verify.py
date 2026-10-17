@@ -92,6 +92,24 @@ def verify(args):
     failed = run([wio, "--vm-run-bytecode", borrow_bytecode, "--native-library", borrow_bridge, "--", "fail"], expected=1)
     if "borrow-probe failure" not in failed.stdout + failed.stderr:
         raise RuntimeError("VM native borrow exception boundary changed")
+    shutil.copyfile(HERE / "fields.wio", folder / "fields.wio")
+    run([wio, folder / "fields.wio", "--emit-cpp"])
+    field_source = (folder / "fields.wio.cpp").read_text(encoding="utf-8")
+    for required in ("std::int64_t* _v", "bool* _v", "double* _v", "std::addressof(",
+                     "CheckedFormattedSize(_formatted.max_size()", "_formatted.reserve(_required)"):
+        if required not in field_source:
+            raise RuntimeError("Missing proven direct scalar field representation: " + required)
+    for optimization in ("-O0", "-O2"):
+        program = folder / ("fields.exe" if os.name == "nt" else "fields")
+        run([args.cxx, "-std=c++20", optimization, folder / "fields.wio.cpp",
+             f"-I{ROOT / 'runtime/include'}", f"-I{ROOT / 'sdk/include'}", args.runtime.resolve(),
+             *links, "-o", program])
+        run([program])
+    field_bridge = folder / ("fields.dll" if os.name == "nt" else "fields.dylib" if sys.platform == "darwin" else "fields.so")
+    field_bytecode = folder / "fields.wiob"
+    run([wio, folder / "fields.wio", "--target", "shared", "--native-bridge-only", "--output", field_bridge,
+         "--bytecode-sidecar", field_bytecode])
+    run([wio, "--vm-run-bytecode", field_bytecode, "--native-library", field_bridge])
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
     print("N03 scalar ToString: ordered/null-safe dispatch, view/interface/generic calls, native O0/O2 + VM")
 

@@ -268,3 +268,21 @@ mutable growth, snapshots and exceptions. Indirect native function values expose
 the unchanged WVM1003 frame-entry boundary (KI-009); do not infer full native/VM
 callable parity. N03 still includes richer formatting, legacy Format and remaining
 KI-008 hooks. N04 has not started, and N01/N14 timing acceptance remains separate.
+
+## N03: bounded fields and pre-sized rendered interpolation, 2026-10-17
+
+[Two measured slices](WIO_SCALAR_FIELD_OPTIMIZATION.md) replace closed primitive
+Wio field transport with a direct pointer inside proven call-free block windows,
+then preflight and reserve final interpolation containing already-rendered string
+parts. Root checks, ABI and WIR/VM shape remain unchanged; unknown/proxy/escaping/
+native/async cases retain the established representation. This is shared proof
+work with N05, not a renumbering or closure of that pass.
+
+Three focused gates pass, with O0/O2 + VM object/component-extension, mutable
+field-ref, numeric fields, repeated/NUL/Text strings and size-overflow checks.
+Before/field-only/final sessions retain 252/252 correct outputs, but timing is
+globally unqualified. Native medians fall versus the fresh baseline and long-case
+allocations fall from 15004 to 10003; single-case final observations rise between
+the two slices and remain visible. N03/C++ budgets and KI-008/KI-009 stay open;
+N04 has not begun. Next cost attribution is receiver/merge transport and integer
+locale/fallback formatting, without weakening contracts.

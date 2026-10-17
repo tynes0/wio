@@ -1,0 +1,19 @@
+GCC 15.2, Windows x64, 2026-10-17
+
+Before warning annotation:
+g++ -std=c++20 -O2 -Wall -Wextra -Werror tests/formatted_size_test.cpp -Iruntime/include -o build/n03-formatted-size-strict.exe
+Exit: 1
+runtime/include/formatted_size.h:16:20: error: variable 'add' set but not used [-Werror=unused-but-set-variable]
+Instantiation: CheckedFormattedSize with Sizes = {}.
+
+Correction: [[maybe_unused]] on the add lambda only.
+
+After warning annotation: same strict build command, exit 0; executable exit 0.
+
+Independent assembly comparison:
+g++ -std=c++20 -O2 -S tests/formatted_size_test.cpp -Ibuild/n03-size-before-annotation -o build/n03-size-before-annotation.s
+g++ -std=c++20 -O2 -S tests/formatted_size_test.cpp -Iruntime/include -o build/n03-size-after-annotation.s
+Both commands exit 0. Both assembly SHA256 values:
+8c49b866eef2906ed849153dea2bb0c42fda031fef787b7622fc0b5ab0fa7bcc
+
+The recorded benchmark binaries were not rebuilt/replaced after this annotation.

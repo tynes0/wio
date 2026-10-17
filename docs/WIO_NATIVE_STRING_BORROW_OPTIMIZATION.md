@@ -156,3 +156,7 @@ VM cost model. Keep KI-008, KI-009 and N01/N14 qualification open; N04 has not b
   The additional indirect VM discovery is retained separately:
   [failed CTest](evidence/n03-borrow-indirect-discovery-2026-10-17.xml),
   [failed process](evidence/n03-borrow-indirect-discovery-2026-10-17.json).
+
+Subsequent work: [bounded scalar fields and pre-sized rendered interpolation](WIO_SCALAR_FIELD_OPTIMIZATION.md)
+records two further production optimizations with distinct before/intermediate/
+final observations. The historical measurements above are not replaced.

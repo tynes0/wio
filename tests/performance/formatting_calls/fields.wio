@@ -1,0 +1,88 @@
+component Cell
+{
+    public value: i64;
+}
+
+extension CellOps for Cell
+{
+    public ref fn Step()
+    {
+        self.value += 1i64;
+    }
+
+    public view fn Read() -> i64
+    {
+        return self.value;
+    }
+}
+
+fn ThroughBorrow(value: ref i64)
+{
+    value += 10i64;
+}
+
+object Counter
+{
+    private value: i64;
+
+    private enabled: bool;
+
+    private fraction: f64;
+
+    public fn Step()
+    {
+        self.value += 1i64;
+        self.enabled = !self.enabled;
+        self.fraction += 0.5f64;
+    }
+
+    public fn Borrowed()
+    {
+        ThroughBorrow(ref self.value);
+    }
+
+    public fn Value() -> i64
+    {
+        return self.value;
+    }
+
+    public fn Enabled() -> bool
+    {
+        return self.enabled;
+    }
+
+    public fn Fraction() -> f64
+    {
+        return self.fraction;
+    }
+
+    public fn ToString() -> string
+    {
+        return $"counter:${self.value}";
+    }
+}
+
+fn Entry() -> i32
+{
+    let counter = Counter();
+    mut cell = Cell();
+    for (index in 0..<1001)
+    {
+        counter.Step();
+        cell.Step();
+    }
+
+    if (counter.Value() != 1001i64) return 1;
+    if (!counter.Enabled()) return 2;
+    if (counter.Fraction() != 500.5f64) return 3;
+    if (cell.Read() != 1001i64) return 4;
+    counter.Borrowed();
+    if (counter.Value() != 1011i64) return 5;
+    if ($"${counter}" != "counter:1011") return 6;
+    let left = "a\0b";
+    let right = "0123456789012345678901234567890123456789";
+    if ($"prefix:${left}|${right}|${left}:suffix" != "prefix:a\0b|0123456789012345678901234567890123456789|a\0b:suffix") return 7;
+    if (left != "a\0b" or right.Count() != 40usize) return 8;
+    if (u$"🌎${left}${right}" != u"🌎a\0b0123456789012345678901234567890123456789") return 9;
+    return 0;
+}

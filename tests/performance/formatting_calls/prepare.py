@@ -31,4 +31,5 @@ if __name__ == "__main__":
                    "compiler/include/wio/codegen/wir_cpp_storage_plan.h",
                    "compiler/src/wio_compiler/wir/lowering_pipeline.cpp",
                    "runtime/include/value_format.h", "runtime/include/integer_format.h",
+                   "runtime/include/formatted_size.h",
                    "tests/performance/formatting_calls/prepare.py", "tests/performance/concat_reuse/prepare.py")))

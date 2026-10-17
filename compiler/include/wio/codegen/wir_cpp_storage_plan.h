@@ -13,6 +13,9 @@ namespace wio::codegen
     struct WirCppStoragePlan final
     {
         std::unordered_set<std::uint32_t> scalarPlaces;
+        // Primitive Wio fields used only inside a bounded, call-free block
+        // interval. The receiver is checked when forming the address.
+        std::unordered_set<std::uint32_t> scalarFieldPlaces;
         std::unordered_set<std::uint32_t> stringPlaces;
         std::unordered_set<std::uint32_t> plainValues;
         std::unordered_map<std::uint32_t, wir::ValueId> borrowedStringCopies;

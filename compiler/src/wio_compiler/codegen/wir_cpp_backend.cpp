@@ -1228,7 +1228,8 @@ namespace wio::codegen
                        "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
                        "#include <any.h>\n#include <entry_args.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include "
                        "<std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n"
-                       "#include <wir_inline_place.h>\n#include <integer_format.h>\n#include <value_format.h>\n";
+                       "#include <wir_inline_place.h>\n#include <integer_format.h>\n#include <value_format.h>\n"
+                       "#include <formatted_size.h>\n";
                 output_ << "#include <wir_abi.h>\n#include <wir_task_abi.h>\n#include <wir_native.h>\n#include "
                            "<module_api.h>\n#include "
                            "<wio_values.h>\n#include "
@@ -2252,6 +2253,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
 
             std::string valueStorageType(const std::uint32_t id, const TypeId type) const
             {
+                if (storagePlan_.scalarFieldPlaces.contains(id))
+                    return placeValueType(type) + "*";
                 if (storagePlan_.scalarPlaces.contains(id))
                     return "wio::wir_backend::ScalarPlace<" + placeValueType(type) + ">";
                 if (storagePlan_.stringPlaces.contains(id))
@@ -2930,8 +2933,30 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                 {
                     const std::string_view prefix =
                         instruction.stringSegments.empty() ? std::string_view{} : instruction.stringSegments.front();
-                    std::string expression = "([&]() { std::string _formatted(" + cppString(prefix) + ", " +
-                                             std::to_string(prefix.size()) + "); ";
+                    const bool renderedStrings =
+                        instruction.operands.size() > 1 &&
+                        std::ranges::all_of(instruction.operands, [&](const ValueId value)
+                                            { return module_.types.get(valueType(value)).kind == TypeKind::String; });
+                    std::string expression = renderedStrings ? "([&]() { std::string _formatted; "
+                                                             : "([&]() { std::string _formatted(" + cppString(prefix) +
+                                                                   ", " + std::to_string(prefix.size()) + "); ";
+                    if (renderedStrings)
+                    {
+                        // All user hooks have already run as ordinary WIR calls.
+                        // Strings have no formatting side effects; preflight only
+                        // their byte lengths, never arbitrary ToString/containers.
+                        expression +=
+                            "const auto _required = wio::runtime::detail::CheckedFormattedSize(_formatted.max_size()";
+                        for (const auto& segment : instruction.stringSegments)
+                            if (!segment.empty())
+                                expression += ", std::size_t{" + std::to_string(segment.size()) + "}";
+                        for (const ValueId value : instruction.operands)
+                            expression += ", " + operand(value) + ".size()";
+                        expression += "); if (_required > _formatted.capacity()) _formatted.reserve(_required); ";
+                        if (!prefix.empty())
+                            expression +=
+                                "_formatted.append(" + cppString(prefix) + ", " + std::to_string(prefix.size()) + "); ";
+                    }
                     for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                     {
                         expression += "wio::wir_backend::append_formatted(_formatted, " +
@@ -3106,6 +3131,12 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                 case lowered::Opcode::PlaceInit:
                 case lowered::Opcode::Store:
                 case lowered::Opcode::Replace:
+                    if (storagePlan_.scalarFieldPlaces.contains(instruction.operands[0].value()))
+                    {
+                        output_ << "                *" << operand(instruction.operands[0]) << " = "
+                                << operand(instruction.operands[1]) << ";\n";
+                        break;
+                    }
                     if (instruction.opcode != lowered::Opcode::PlaceInit &&
                         storagePlan_.localAppendSuffixes.contains(instruction.operands[1].value()))
                     {
@@ -3115,8 +3146,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                         // nonthrowing move into this same initialized cell.
                         const auto& suffixes = storagePlan_.localAppendSuffixes.at(instruction.operands[1].value());
                         if (suffixes.size() == 1)
-                            output_ << "                " << operand(instruction.operands[0]) << ".read() += "
-                                    << operand(suffixes.front()) << "; // Wio local append reuse\n";
+                            output_ << "                " << operand(instruction.operands[0])
+                                    << ".read() += " << operand(suffixes.front()) << "; // Wio local append reuse\n";
                         else
                         {
                             output_ << "                wio::runtime::AppendConcat("
@@ -3131,6 +3162,11 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                             << movedOperand(instruction.operands[1]) << ");\n";
                     break;
                 case lowered::Opcode::Load:
+                    if (storagePlan_.scalarFieldPlaces.contains(instruction.operands[0].value()))
+                    {
+                        assignResult(instruction, "(*" + operand(instruction.operands[0]) + ")");
+                        break;
+                    }
                     assignResult(instruction, objectBorrowedLoads_.contains(instruction.result.value())
                                                   ? "wio::wir_backend::ObjectBorrow<" +
                                                         objectName(instruction.resultType) + ">{" +
@@ -3160,10 +3196,13 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     const std::string field = layout.nominalRepresentation == NominalRepresentation::NativePod
                                                   ? instruction.selector
                                                   : "_f" + std::to_string(instruction.projectionIndex);
-                    assignResult(instruction,
-                                 "wio::wir_backend::Place<" + placeValueType(instruction.resultType) + ">::borrow(" +
-                                     (object ? "static_cast<" + objectName(owner) + "&>(" + base + ")" : base) + "." +
-                                     field + ")");
+                    const auto access =
+                        (object ? "static_cast<" + objectName(owner) + "&>(" + base + ")" : base) + "." + field;
+                    assignResult(instruction, storagePlan_.scalarFieldPlaces.contains(instruction.result.value())
+                                                  ? "std::addressof(" + access + ")"
+                                                  : "wio::wir_backend::Place<" +
+                                                        placeValueType(instruction.resultType) + ">::borrow(" + access +
+                                                        ")");
                     break;
                 }
                 case lowered::Opcode::ArrayPlace:

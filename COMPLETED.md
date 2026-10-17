@@ -10,6 +10,23 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 bounded scalar fields and rendered-string reservation — 2026-10-17
+
+- [x] Emit direct pointers for proven closed primitive Wio field intervals;
+  preserve receiver checks and keep escaping/proxy/native/async paths general.
+- [x] Preflight two-or-more already-rendered string parts and literal bytes with
+  checked arithmetic, then reserve once before assembly. WIR/VM shape is unchanged.
+- [x] New proof/overflow units and expanded Wio O0/O2 + VM gate pass 3/3 (78.79s).
+  Strict GCC warning-only correction has identical unit O2 assembly; 2/2 C++
+  recheck passes. Initial fixture/strict-warning failures remain in evidence.
+- [x] Before/field-only/final sessions retain 252/252 correct outputs. Native
+  comparison medians: 1.5623/4.0313 -> 1.0518/2.9288 -> 1.0735/2.7163 ms.
+  Ordered-case allocations: 15004 -> 10003; requested bytes: 615156 -> 315097;
+  zero final live blocks/bytes. No globally qualified speedup is accepted.
+- [ ] N03 and the C++ performance gap remain open. Single-case final native
+  observations rise between the two slices; no universal no-regression claim.
+  See [the full report](docs/WIO_SCALAR_FIELD_OPTIMIZATION.md).
+
 ## N03 call-scoped native string transport — 2026-10-17
 
 - [x] Prove bounded synchronous native UTF-8 borrows, promote closed string

@@ -54,6 +54,132 @@ namespace wio::codegen
             }
         }
 
+        std::unordered_set<std::uint32_t> scalarFields(const wir::lowered::Module& module,
+                                                       const wir::lowered::Function& function)
+        {
+            using namespace wir;
+            using Opcode = lowered::Opcode;
+            struct Interval
+            {
+                std::size_t block, begin, end;
+                TypeId valueType;
+            };
+            std::unordered_map<std::uint32_t, Interval> candidates;
+            for (std::size_t blockIndex = 0; blockIndex < function.blocks.size(); ++blockIndex)
+            {
+                const auto& block = function.blocks[blockIndex];
+                for (std::size_t index = 0; index < block.instructions.size(); ++index)
+                {
+                    const auto& instruction = block.instructions[index];
+                    if (instruction.opcode != Opcode::FieldPlace || !instruction.result ||
+                        instruction.operands.size() != 1)
+                        continue;
+                    const auto* reference = module.types.tryGet(instruction.resultType);
+                    const auto* owner = module.types.tryGet(instruction.targetType);
+                    if (!reference || reference->kind != TypeKind::Reference || reference->arguments.size() != 1 ||
+                        !primitive(module.types, reference->arguments.front()) || !owner || owner->nativeBinding ||
+                        owner->nominalRepresentation != NominalRepresentation::Wio ||
+                        (owner->nominalKind != NominalKind::Object && owner->nominalKind != NominalKind::Component) ||
+                        instruction.projectionIndex >= owner->fields.size() ||
+                        owner->fields[instruction.projectionIndex].type != reference->arguments.front())
+                        continue;
+                    candidates.emplace(instruction.result.value(),
+                                       Interval{blockIndex, index, index, reference->arguments.front()});
+                }
+            }
+            if (candidates.empty())
+                return {};
+            std::unordered_map<std::uint32_t, TypeId> types;
+            for (const auto& parameter : function.parameters)
+                types.emplace(parameter.id.value(), parameter.type);
+            for (const auto& block : function.blocks)
+            {
+                for (const auto& parameter : block.parameters)
+                    types.emplace(parameter.id.value(), parameter.type);
+                for (const auto& instruction : block.instructions)
+                    if (instruction.result)
+                        types.emplace(instruction.result.value(), instruction.resultType);
+            }
+            const auto scalarValue = [&](const ValueId value)
+            {
+                const auto found = types.find(value.value());
+                return found != types.end() && primitive(module.types, found->second);
+            };
+            for (std::size_t blockIndex = 0; blockIndex < function.blocks.size(); ++blockIndex)
+            {
+                const auto& instructions = function.blocks[blockIndex].instructions;
+                for (std::size_t index = 0; index < instructions.size(); ++index)
+                {
+                    const auto& instruction = instructions[index];
+                    for (std::size_t operand = 0; operand < instruction.operands.size(); ++operand)
+                    {
+                        const auto found = candidates.find(instruction.operands[operand].value());
+                        if (found == candidates.end())
+                            continue;
+                        const bool load = instruction.opcode == Opcode::Load &&
+                                          instruction.resultOwnership == typed::ValueOwnership::Trivial &&
+                                          instruction.resultType == found->second.valueType;
+                        const bool store =
+                            (instruction.opcode == Opcode::Store || instruction.opcode == Opcode::Replace) &&
+                            instruction.operands.size() == 2 && scalarValue(instruction.operands[1]);
+                        if (operand != 0 || blockIndex != found->second.block || index <= found->second.begin ||
+                            (!load && !store))
+                            candidates.erase(found);
+                        else
+                            found->second.end = index;
+                    }
+                    if (instruction.borrowOrigin &&
+                        (instruction.opcode != Opcode::Load || instruction.operands.size() != 1 ||
+                         instruction.operands[0] != instruction.borrowOrigin ||
+                         instruction.resultOwnership != typed::ValueOwnership::Trivial))
+                        candidates.erase(instruction.borrowOrigin.value());
+                    for (const auto& target : instruction.targets)
+                        for (const auto argument : target.arguments)
+                            candidates.erase(argument.value());
+                }
+            }
+            std::unordered_set<std::uint32_t> result;
+            for (const auto& [id, interval] : candidates)
+            {
+                // Bound both proof work and the lifetime window. A missed
+                // opportunity falls back to Place; it never weakens a borrow.
+                if (interval.end == interval.begin || interval.end - interval.begin > 32)
+                    continue;
+                bool safe = true;
+                const auto& instructions = function.blocks[interval.block].instructions;
+                for (std::size_t index = interval.begin + 1; safe && index <= interval.end; ++index)
+                {
+                    const auto& instruction = instructions[index];
+                    switch (instruction.opcode)
+                    {
+                    case Opcode::Constant:
+                        safe = primitive(module.types, instruction.resultType);
+                        break;
+                    case Opcode::Unary:
+                    case Opcode::Binary:
+                        safe = primitive(module.types, instruction.resultType) &&
+                               std::ranges::all_of(instruction.operands, scalarValue);
+                        break;
+                    case Opcode::Load:
+                    case Opcode::Store:
+                    case Opcode::Replace:
+                        safe = !instruction.operands.empty() && instruction.operands[0].value() == id;
+                        break;
+                    default:
+                        safe = false;
+                        break;
+                    }
+                    if (instruction.borrowOrigin && instruction.borrowOrigin.value() != id)
+                        safe = false;
+                    if (!instruction.targets.empty())
+                        safe = false;
+                }
+                if (safe)
+                    result.insert(id);
+            }
+            return result;
+        }
+
         bool stringCellUse(const wir::lowered::Instruction& instruction, std::size_t operand)
         {
             if (operand == 0 && instruction.opcode == wir::lowered::Opcode::IntrinsicCall &&
@@ -192,6 +318,7 @@ namespace wio::codegen
         if (function.isAsync || function.coroutine)
             return plan;
         plan.directControlFlow = true;
+        plan.scalarFieldPlaces = scalarFields(module, function);
         const auto collect = [&](const wir::lowered::Parameter& parameter)
         {
             if (parameter.ownership == wir::typed::ValueOwnership::Trivial && primitive(module.types, parameter.type))
@@ -258,6 +385,7 @@ namespace wio::codegen
                         plan.plainValues.erase(value.value());
             }
         plan.plainValues.insert(plan.scalarPlaces.begin(), plan.scalarPlaces.end());
+        plan.plainValues.insert(plan.scalarFieldPlaces.begin(), plan.scalarFieldPlaces.end());
         plan.plainValues.insert(plan.stringPlaces.begin(), plan.stringPlaces.end());
 
         // An adjacent, sole-use snapshot can borrow for a known observer, or

@@ -1292,6 +1292,11 @@ Rider, and CLion are defined in
    The shared-WIR streaming experiment was rejected for added VM cost. See
    `docs/WIO_NATIVE_STRING_BORROW_OPTIMIZATION.md`. Indirect native function
    values still fail in VM (KI-009); this is not N03 or VM parity closure.
+   Proven bounded scalar field projections now avoid general Place transport,
+   and final interpolation of already-rendered string parts pre-reserves checked
+   byte capacity without expanding WIR/VM instructions. See
+   `docs/WIO_SCALAR_FIELD_OPTIMIZATION.md` for before/intermediate/final speed,
+   heap/RSS/code-size evidence and the still-open timing acceptance/C++ gap.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

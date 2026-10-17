@@ -42,6 +42,14 @@ O0/O2; VM indirect native invocation still reports WVM1003 (KI-009), an explicit
 negative boundary separate from passing direct VM calls. Unicode hook output is
 also checked. See [the transport report](../../../docs/WIO_NATIVE_STRING_BORROW_OPTIMIZATION.md).
 
+`wio_n03_scalar_field_plan` proves bounded direct primitive field intervals, and
+`fields.wio` checks object/component-extension mutation, bool/f64 fields and the
+ordinary transport for a field ref passed to another function. It also checks long/repeated/NUL
+string interpolation and Unicode Text after checked pre-reserve. The new
+`wio_n03_formatted_size` unit covers maximum/overflow arithmetic. These are C++
+emission optimizations; they add no WIR/VM instructions. See
+[the field/reservation report](../../../docs/WIO_SCALAR_FIELD_OPTIMIZATION.md).
+
 Object-containing containers, async frames, native/generic hook declarations,
 ambiguous/private hooks and unsupported mixed surfaces are not enabled by this
 bounded pass. The user-container WVM1062 fixture stays an explicit negative gate.
