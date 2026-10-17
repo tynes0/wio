@@ -1,5 +1,5 @@
-// Native-only compatibility coverage. VM user ToString invocation is still a
-// separately tracked WVM1062 gap; shared builtin-container tests do not hide it.
+// Scalar ToString now has shared-call lowering. Object-array hooks remain a
+// separately tracked WVM1062 gap; the scalar success must not hide that boundary.
 object Label
 {
     private value: i32;

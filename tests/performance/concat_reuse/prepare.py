@@ -109,6 +109,12 @@ def prepare(args, fixture=None):
     artifacts += [ROOT / "compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
                   ROOT / "compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
                   ROOT / "compiler/include/wio/codegen/wir_cpp_storage_plan.h"]
+    # A frozen compiler image still delegates --version to its CLI companion.
+    # Keep that declared input visible instead of silently recording an unfrozen
+    # or missing executable beside a relocated compiler.
+    companion = wio.with_name("wio-selfhost" + suffix)
+    if companion.is_file():
+        artifacts.append(companion)
     if (ROOT / "runtime/include/string_concat.h").is_file():
         artifacts.append(ROOT / "runtime/include/string_concat.h")
     for extra in fixture.get("artifacts", ()):

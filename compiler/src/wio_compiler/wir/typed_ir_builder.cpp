@@ -2136,14 +2136,14 @@ namespace wio::wir::typed
         }
 
         void appendMethodLayout(const Ref<sema::Symbol>& methodSymbol, std::vector<MethodLayout>& methods,
-                                const ASTNode* source)
+                                const ASTNode* source, const bool interfaceDefault = false)
         {
             if (!methodSymbol)
                 return;
             if (methodSymbol->kind == sema::SymbolKind::FunctionGroup)
             {
                 for (const Ref<sema::Symbol>& overload : methodSymbol->overloads)
-                    appendMethodLayout(overload, methods, source);
+                    appendMethodLayout(overload, methods, source, interfaceDefault);
                 return;
             }
             if (methodSymbol->kind != sema::SymbolKind::Function || isLifecycleMethod(methodSymbol->name))
@@ -2164,7 +2164,9 @@ namespace wio::wir::typed
                                               !isNativeFunction(*function)};
             for (const Ref<sema::Type>& parameterType : functionType->paramTypes)
                 layout.parameterTypes.push_back(mapType(parameterType, source));
-            layout.visibility = methodSymbol->flags.get_isPublic()      ? FieldVisibility::Public
+            const bool publicByDefault = interfaceDefault && !methodSymbol->flags.get_isPrivate() &&
+                                         !methodSymbol->flags.get_isProtected();
+            layout.visibility = (methodSymbol->flags.get_isPublic() || publicByDefault) ? FieldVisibility::Public
                                 : methodSymbol->flags.get_isProtected() ? FieldVisibility::Protected
                                                                         : FieldVisibility::Private;
 
@@ -2563,7 +2565,7 @@ namespace wio::wir::typed
                     for (const auto& [name, member] : layoutScope->getSymbols())
                     {
                         WIO_UNUSED(name);
-                        appendMethodLayout(member, methods, source);
+                        appendMethodLayout(member, methods, source, identity->isInterface);
                     }
                 }
 

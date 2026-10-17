@@ -232,15 +232,21 @@ Native C++ negative-zero constants could be emitted as integer `-0`, losing the
 sign when converted to double. The N03 formatting slice corrects those builtin
 paths with typed, bounded array/dictionary formatting and shared scalar helpers.
 
-**Still open:** interpolation of objects with user-defined ToString is not
-materialized as a shared WIR call or scheduled by the VM; it still returns
-WVM1062 in the VM. Generic ToString
-and object-container formatting inherit that missing hook surface. Native
-stateful ToString/object-array behavior is covered separately; the VM case is an
-explicit negative test, not a parity success. Track this under remaining N03
+**Scalar slice fixed:** synchronous scalar public zero-argument ToString calls
+are now materialized as ordinary WIR virtual/interface calls, including concrete
+generic std::ToString callers, view receivers and temporary objects. Evaluation
+and hook order have shared native O0/O2 + VM coverage.
+
+**Still open:** object-containing containers, async/coroutine contexts and
+native/still-open generic hook declarations are not enabled by this slice. The
+object-array VM case remains an explicit WVM1062 negative test, not a parity
+success. Track this under remaining N03
 correctness work before claiming complete formatting conformance or v1 parity.
 Resolve this through shared callable lowering (and continuation support where
 needed), not arbitrary callbacks inside the low-level builtin formatter.
+
+See [the scalar call-lowering report](WIO_FORMATTING_CALL_LOWERING.md) for the
+implemented bounds and retained failure evidence.
 
 See [the new fixtures](../tests/performance/formatting/README.md). The failed
 baseline and initial failing user-hook test remain visible in the saved evidence.

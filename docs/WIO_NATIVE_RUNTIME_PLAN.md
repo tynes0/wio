@@ -242,3 +242,14 @@ The MSVC/libstdc++ fast path remains; libc++ performance is explicitly pending,
 not assumed equal. The finite-value counterexample has permanent oracle
 coverage. Six new N03 tests pass locally; failed macOS evidence is retained,
 and cross-platform CI must be checked independently. N03 is still in progress.
+
+## N03: shared scalar ToString call lowering, 2026-10-17
+
+[The scalar hook slice](WIO_FORMATTING_CALL_LOWERING.md) materializes synchronous
+public zero-argument object/interface ToString in Typed WIR after specialization.
+Expression evaluation, ordered formatting, null/call/merge and cleanup are shared
+by C++ and VM. Concrete generic callers, views and temporary objects have native
+O0/O2 + VM coverage. Implicit interface public visibility is also retained in WIR.
+Object-container traversal, async frames and native/open-generic hook declarations
+remain KI-008 work; N03 and N14 are not closed. The preceding libc++ correction's
+CI passed Windows Debug, Ubuntu Release and macOS Release.

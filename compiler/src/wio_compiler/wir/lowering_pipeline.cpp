@@ -1,4 +1,5 @@
 #include "wio/wir/lowering_pipeline.h"
+#include "wio/wir/formatting_call_lowerer.h"
 #include "wio/wir/hierarchy_lowering.h"
 
 #include "wio/common/profiling.h"
@@ -650,6 +651,11 @@ namespace wio::wir
         if (!result.diagnostics_.empty())
             return result;
         result.completedPasses_.push_back("materialize-generic-functions");
+        {
+            common::profiling::Scope scope("WIR.Lower.FormattingCalls");
+            static_cast<void>(FormattingCallLowerer::lower(specialized));
+        }
+        result.completedPasses_.push_back("materialize-formatting-calls");
         const auto specializedVerification = [&]
         {
             common::profiling::Scope scope("WIR.Lower.VerifySpecialized");

@@ -94,6 +94,12 @@ jobs:
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
           -R "^wio_n03_numeric_builder_(plan|unit|semantics)$"
+      - name: Build new N03 formatting-call proof
+        run: cmake --build build --target wio_formatting_call_lowerer_test --parallel 2
+      - name: Qualify N03 shared scalar formatting calls
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_n03_formatting_call_(plan|semantics)$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -110,5 +116,6 @@ jobs:
             build/n02-concat-semantics/**/results.json
             build/n03-format-semantics/**/results.json
             build/n03-numeric-builder-semantics/**/results.json
+            build/n03-formatting-call-semantics/**/results.json
             build/wio-benchmark-contract/**/results.json
             build/wio-benchmark-contract/**/report.md

@@ -32,6 +32,11 @@ add_library(wio_compiler STATIC
 add_library(wio-compiler ALIAS wio_compiler)
 
 if(BUILD_TESTING)
+    add_executable(wio_formatting_call_lowerer_test "${CMAKE_SOURCE_DIR}/tests/formatting_call_lowerer_test.cpp")
+    target_link_libraries(wio_formatting_call_lowerer_test PRIVATE wio_compiler)
+    add_test(NAME wio_n03_formatting_call_plan COMMAND wio_formatting_call_lowerer_test)
+    set_tests_properties(wio_n03_formatting_call_plan PROPERTIES LABELS "wir;native;vm;formatting;ownership" TIMEOUT 60)
+
     add_executable(wio_numeric_append_optimizer_test "${CMAKE_SOURCE_DIR}/tests/numeric_append_optimizer_test.cpp")
     target_link_libraries(wio_numeric_append_optimizer_test PRIVATE wio_compiler)
     add_test(NAME wio_n03_numeric_builder_plan COMMAND wio_numeric_append_optimizer_test)

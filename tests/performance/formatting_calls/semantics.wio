@@ -1,0 +1,78 @@
+use std::convert;
+
+object Trace
+{
+    private value: string;
+
+    public fn Add(value: string)
+    {
+        self.value.Append(value);
+    }
+
+    public fn Value() -> string
+    {
+        return self.value;
+    }
+}
+
+interface IPrintable
+{
+    fn ToString() -> string;
+}
+
+[from(IPrintable)]
+object Label
+{
+    private name: string;
+
+    private trace: Trace;
+
+    private count: i32;
+
+    public fn OnConstruct(name: string, trace: Trace)
+    {
+        self.name = name;
+        self.trace = trace;
+    }
+
+    public fn ToString() -> string
+    {
+        self.count += 1;
+        self.trace.Add(self.name);
+        return $"${self.name}:${self.count}";
+    }
+}
+
+fn Evaluate(value: Label, trace: Trace) -> Label
+{
+    trace.Add("E");
+    return value;
+}
+
+fn Generic<T>(value: T) -> string
+{
+    return $"${value}";
+}
+
+fn Read(value: view Label) -> string
+{
+    return $"${value}";
+}
+
+fn Entry() -> i32
+{
+    let trace = Trace();
+    let a = Label("a", trace);
+    let b = Label("b", trace);
+    if ($"${a}|${Evaluate(b, trace)}" != "a:1|b:1") return 1;
+    if (trace.Value() != "Eab") return 2;
+    if ($"prefix\0${a}|${b}|${17i64}|${true}" != "prefix\0a:2|b:2|17|true") return 3;
+    if (Generic(a) != "a:3") return 4;
+    if (std::ToString(a) != "a:4") return 5;
+    if ($"${Label("t", trace)}" != "t:1") return 7;
+    if (trace.Value() != "Eababaat") return 8;
+    if (Read(ref a) != "a:5") return 9;
+    let printable = ref a fit IPrintable;
+    if ($"${printable}" != "a:6") return 10;
+    return 0;
+}

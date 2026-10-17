@@ -10,6 +10,17 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 shared scalar user ToString — 2026-10-17
+
+- [x] Materialize synchronous scalar object/interface hook calls in shared WIR,
+  with ordered evaluation/formatting, exactly-once dispatch and explicit cleanup.
+- [x] Cover view/temporary receivers, concrete generic std::ToString callers,
+  NUL and implicit interface public visibility; native O0/O2 + VM gate passed.
+- [x] Two new tests passed locally (63.76 seconds); preceding portability CI is
+  green on all three platforms. See [the report](docs/WIO_FORMATTING_CALL_LOWERING.md).
+- [ ] Object-container hooks, async frames and native/open-generic hook declarations
+  remain KI-008/N03 work. This correctness slice does not establish a speed budget.
+
 ## N03 libc++ floating display correction — 2026-10-17
 
 - [x] Preserve the host stream spelling on libc++ after CI exposed a finite
