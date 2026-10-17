@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-MSBuild"
+	tests="6"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="DESKTOP-0G3MR0G"
+	time="131"
+	timestamp="2026-10-17T05:17:02"
+	>
+	<testcase name="wio_n03_numeric_builder_plan" classname="wio_n03_numeric_builder_plan" time="0.0227486" status="run">
+		<properties>
+			<property name="cmake_labels" value="formatting;native;optimization;ownership;vm;wir"/>
+		</properties>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="wio_n03_numeric_builder_unit" classname="wio_n03_numeric_builder_unit" time="0.552915" status="run">
+		<properties>
+			<property name="cmake_labels" value="float;formatting;memory;native;optimization"/>
+		</properties>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="wio_n03_value_format" classname="wio_n03_value_format" time="1.80331" status="run">
+		<properties>
+			<property name="cmake_labels" value="float;formatting;locale;native;optimization"/>
+		</properties>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="wio_n03_vm_format" classname="wio_n03_vm_format" time="0.292232" status="run">
+		<properties>
+			<property name="cmake_labels" value="float;formatting;parity;unicode;vm"/>
+		</properties>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="wio_n03_numeric_builder_semantics" classname="wio_n03_numeric_builder_semantics" time="41.8636" status="run">
+		<properties>
+			<property name="cmake_labels" value="float;formatting;memory;native;optimization;ownership;vm"/>
+		</properties>
+		<system-out>N03 numeric builder: exact primitive types, snapshots/capacity, native O0/O2 + VM, semantic rejection
+</system-out>
+	</testcase>
+	<testcase name="wio_n03_format_semantics" classname="wio_n03_format_semantics" time="85.1765" status="run">
+		<properties>
+			<property name="cmake_labels" value="float;formatting;native;optimization;ownership;vm"/>
+		</properties>
+		<system-out>N03 native O0/O2 + VM: float precision/signed zero, scalar/nested containers, char/NUL and builder snapshots
+</system-out>
+	</testcase>
+</testsuite>

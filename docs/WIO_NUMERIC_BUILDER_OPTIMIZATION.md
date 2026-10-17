@@ -66,7 +66,8 @@ An old VM host does not implement this new typed intrinsic surface and must not
 be substituted for the matching rebuilt host.
 
 Display remains defaultfloat precision 6, not shortest-roundtrip or JSON number
-serialization. Classic-locale/nearest finite floats take the stack-buffer path;
+serialization. Classic-locale/nearest finite floats on qualified MSVC/libstdc++
+hosts take the stack-buffer path; libc++ retains the host stream contract;
 locale, non-default rounding and nonfinite fallbacks retain stream behavior.
 Numeric i8/u8/byte keep their locale-independent decimal policy. Snapshot, NUL,
 signed-zero and exact integer transport are covered separately from timing.
@@ -174,8 +175,11 @@ iteration. The observed requested-byte delta is 620062; this is allocation
 traffic, not measured copied-byte volume. Short float/bool strings already fit
 small-string storage, so their allocation counts need not improve. Final owning
 snapshots remain deliberately allocated. Peak requested memory is unchanged,
-not halved along with allocation count. The isolated pre-reserved C++ primitive
-helper loop observes zero allocations, not the whole builder object/VM machine.
+not halved along with allocation count. The original isolated pre-reserved C++
+primitive helper loop observed zero allocations on the local Windows hosts,
+not the whole builder object/VM machine. The portability follow-up scopes the
+cross-platform zero-allocation assertion to integer/bool append; floating
+fallback may allocate inside the host stream.
 
 After comparison median root-process peak RSS, KiB:
 

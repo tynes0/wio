@@ -8,10 +8,14 @@ CI run 38965482262 passed. N01 residual coverage and N14 acceptance stay open.
 
 `floating_format.h` implements the existing native display contract: defaultfloat,
 six significant digits, current host locale. Finite f32/f64 values in classic
-locale and FE_TONEAREST use `to_chars(general, 6)` into a fixed stack buffer,
+locale and FE_TONEAREST on qualified MSVC/libstdc++ hosts use
+`to_chars(general, 6)` into a fixed stack buffer,
 appending directly without creating a stream or an owning temporary string.
 Non-classic locale, non-default rounding, nonfinite values, unavailable floating
 to_chars overloads or conversion errors use the existing stream behavior.
+libc++ also retains stream behavior: CI found a finite/classic/nearest
+counterexample, so equivalent output there cannot be inferred from the other
+standard libraries. See [the portability follow-up](WIO_N03_PORTABILITY.md).
 This is **not** shortest-roundtrip formatting, fixed six decimal places, a new
 precision option or JSON serialization policy. No rounding mode/locale is changed.
 Existing FP exception flags are not cleared; exact incidental stream exception-

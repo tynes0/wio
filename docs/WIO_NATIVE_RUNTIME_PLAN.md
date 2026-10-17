@@ -233,3 +233,12 @@ it is not an unmodified release. The previous macOS const vector<bool> proxy
 compile failure is corrected here, not erased from its CI record. N03 stays open
 for richer formatting, legacy Format and KI-008 user-hook lowering. N04 has not
 started; timing budgets and the fixed remaining passes are not renumbered.
+
+## N03: libc++ floating-contract correction, 2026-10-17
+
+[The portability follow-up](WIO_N03_PORTABILITY.md) fixes a macOS CI output
+regression by conservatively retaining host stream formatting on libc++.
+The MSVC/libstdc++ fast path remains; libc++ performance is explicitly pending,
+not assumed equal. The finite-value counterexample has permanent oracle
+coverage. Six new N03 tests pass locally; failed macOS evidence is retained,
+and cross-platform CI must be checked independently. N03 is still in progress.

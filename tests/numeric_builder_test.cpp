@@ -70,22 +70,28 @@ int main()
             builder.append("a\0b", 3);
             AppendNumeric(builder, std::numeric_limits<std::int64_t>::min());
             AppendNumeric(builder, std::numeric_limits<std::uint64_t>::max());
-            AppendNumeric(builder, -0.0);
-            AppendNumeric(builder, 1.23456789f);
             AppendNumeric(builder, true);
             AppendNumeric(builder, false);
         }
 
         const auto counters = memory::EndAllocations();
-        expect(counters.allocations == 0 && counters.liveBlocks == 0, "reserved numeric append allocated");
+        expect(counters.allocations == 0 && counters.liveBlocks == 0, "reserved integer/bool append allocated");
         expect(builder.capacity() == capacity, "reserved capacity was discarded");
-        expect(builder == std::string("a\0b", 3) + "-922337203685477580818446744073709551615-01.23457truefalse",
+        expect(builder == std::string("a\0b", 3) + "-922337203685477580818446744073709551615truefalse",
                "numeric append truncated or widened an exact value");
+        // Float fallback may allocate on a host standard library or under a
+        // custom locale. Do not turn the primitive integer allocation contract
+        // into a cross-platform promise about iostream internals.
+        builder.clear();
+        AppendNumeric(builder, -0.0);
+        AppendNumeric(builder, 1.23456789f);
+        expect(builder == "-01.23457", "floating numeric append changed its display contract");
+        builder.insert(0, std::string("a\0b", 3));
         const auto snapshot = builder;
         builder.clear();
         AppendNumeric(builder, 9007199254740993ULL);
         expect(builder == "9007199254740993", "u64 was widened through lossy double");
-        expect(snapshot.size() > builder.size() && snapshot[1] == '\0', "owning snapshot was mutated");
+        expect(snapshot == std::string("a\0b", 3) + "-01.23457", "owning snapshot was mutated");
         std::locale::global(std::locale(std::locale::classic(), new Grouping));
         builder.clear();
         AppendNumeric(builder, 1234567);

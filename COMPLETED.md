@@ -10,6 +10,17 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 libc++ floating display correction — 2026-10-17
+
+- [x] Preserve the host stream spelling on libc++ after CI exposed a finite
+  six-digit-formatting mismatch; retain the qualified MSVC/libstdc++ fast path.
+- [x] Pin the counterexample as f32/f64 and retain the 60,000-value oracle;
+  scope cross-platform allocation-free builder proof to integer/bool leaves.
+- [x] Six new N03 tests pass locally (131.76 seconds); failed macOS CI evidence
+  is preserved in [the portability report](docs/WIO_N03_PORTABILITY.md).
+- [ ] libc++ fast-path optimization and cross-platform CI qualification are
+  separate work; N03, KI-008 and N14 are not declared complete by this fix.
+
 ## N03 direct primitive builder append — 2026-10-17
 
 - [x] Constrained numeric/bool StringBuilder Append and AppendLine overloads,

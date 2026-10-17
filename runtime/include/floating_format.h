@@ -17,6 +17,11 @@ namespace wio::runtime
         requires(std::is_same_v<T, float> || std::is_same_v<T, double>)
     void AppendFloating(std::string& target, const T value)
     {
+        // libc++'s stream and to_chars implementations do not always produce
+        // identical defaultfloat text (for example -0x1.a349dp+20). Preserve
+        // the existing host-stream contract until that fast path is qualified
+        // independently; selecting a different spelling is not an optimization.
+#if !defined(_LIBCPP_VERSION)
         if (std::isfinite(value) && std::fegetround() == FE_TONEAREST && std::locale() == std::locale::classic())
         {
             char buffer[128];
@@ -33,6 +38,7 @@ namespace wio::runtime
                 }
             }
         }
+#endif
 
         // Retain platform stream spellings for signed NaNs/infinities too.
         std::ostringstream stream;

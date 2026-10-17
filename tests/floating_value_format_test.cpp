@@ -74,6 +74,11 @@ int main()
     {
         std::locale::global(std::locale::classic());
         std::fesetround(FE_TONEAREST);
+        // Keep the macOS CI counterexample explicit, independent of the random
+        // bit-pattern sequence. The reference is the current host's stream, not
+        // a hard-coded spelling from another C++ standard library.
+        check(-0x1.a349dp+20f);
+        check(-0x1.a349dp+20);
         std::uint64_t bits = 0x123456789abcdef0ULL;
         for (int index = 0; index < 30000; ++index)
         {
