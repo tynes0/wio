@@ -28,6 +28,32 @@ The order is fixed; dependency-related work can be shared without renumbering.
 Do not close a whole item because a single narrow case improved. No universal
 5-10% overhead guarantee and no permission to weaken safety, arithmetic or ABI.
 
+## Required late-native revisit: indexed numeric formatting
+
+User priority recorded 2026-10-18: revisit **indexed integer and indexed float**
+near the end of the native optimization pass, at the N13 -> N14 checkpoint.
+N03 implementation closure does not accept their current performance or remove
+this follow-up. This note does not start a new optimization slice immediately.
+
+The latest comparison observations are native/C++ 1.7596/0.5864 ms for integer
+and 1.8330/0.7132 ms for float (10001 calls). These sessions are timing-unqualified,
+but the observed gap remains a priority to investigate, not an acceptable final
+result merely because output correctness passes. Retain the original samples
+and the [N03 closure evidence](WIO_N03_CLOSURE.md).
+
+- Profile indexed-format parsing/dispatch separately from numeric conversion,
+  alignment, output assembly, allocations and copies. Measure rather than assume
+  which stage dominates; consider reusable/compiled format plans for repeated
+  constant formats if they preserve the existing public contract.
+- Keep the existing specialized C++ `to_chars` lane as a lower bound, and add a
+  comparable indexed-parser/reference lane before attributing the entire gap
+  to code generation. Different reference contracts explain costs to isolate,
+  not a reason to dismiss the user's native performance target.
+- Follow measure -> optimize -> measure, with matching bytes/error/locale/FP
+  behavior, unchanged workloads, heap/live/peak memory and size accounting.
+  Re-run Wio native, C++ and C# comparisons, then separate final Wio native/VM
+  repetitions. Report raw samples and qualification, not selected best times.
+
 ## Std consolidation policy
 
 The std pass includes **removing unnecessary APIs/modules and merging overlapping
