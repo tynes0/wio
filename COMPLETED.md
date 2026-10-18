@@ -20,8 +20,12 @@ Notes:
 - [x] Two local scoped gates pass in 107.91s, including 21 I/O processes and
   O0/O2 native bridges. Runtime-only install/hash/profile checks pass. Archive
   shrinks 7344752 -> 1721974 bytes; no RSS or accepted speedup claim follows.
-- [ ] Source CI and final measurements remain separately qualified; N04/N14,
-  KI-010 and the remaining buffer/batching/std work stay open.
+- [x] Selected Wio-owned session completes with 84/84 correct samples; preserve
+  unqualified comparison/final timings, unchanged allocation counts and smaller
+  executable/bridge images. No accepted execution-speed gain is established.
+- [x] Source `87c4d70` passes scoped Windows Debug, Ubuntu Release and macOS 15
+  Release CI 39174868641, including both expanded N04 gates.
+- [ ] N04/N14, KI-010 and the remaining buffer/batching/std work stay open.
   Report: `docs/WIO_RUNTIME_PROFILE_OPTIMIZATION.md`.
 
 ## N04 first slice: direct owned byte reads — 2026-10-19

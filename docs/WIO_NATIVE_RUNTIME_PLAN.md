@@ -549,5 +549,12 @@ Known runtime/bridge provenance cannot be silently relabeled on reuse.
 
 Two scoped local gates pass (107.91s), including 21 I/O processes with both
 O0/O2 bridge builds; runtime-only install/profile checks pass. The archive
-shrinks 7344752 -> 1721974 bytes. Performance/platform qualification remains
-separate in the slice report; N04 and N14 remain open.
+shrinks 7344752 -> 1721974 bytes, native.exe 6873283 -> 5744602 and bridge.dll
+6050285 -> 2452902. The selected Wio-owned session has 84/84 correct samples,
+unchanged native heap counts (514 allocations/live-zero), and unchanged tool
+images. Timing is unqualified: native comparison medians 39.3734/39.0302ms,
+VM 5789.2383/4310.3273ms; the unchanged C++ reference also moves substantially
+between sessions. Preserve the worse final Wio observations and make no accepted
+speedup claim. Reusable/bulk transport remains work, not solved by O2. Source
+`87c4d70` passes scoped Windows Debug, Ubuntu Release and macOS 15 Release
+CI 39174868641. N04/N14 remain open.
