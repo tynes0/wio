@@ -12,7 +12,7 @@ then pass 3 (compiler and build throughput). SDK remains a separate v1 blocker.
 | N01 | Measurement and cost map | Qualified workloads, raw samples/checksums, clear coverage gaps; distinguish timing, allocation, copies, RC and memory metrics |
 | N02 | String/text/concat (implemented 2026-10-16) | Last-use buffers, transactional append and pure-tree flattening; bounded correctness gate complete; noisy timing acceptance remains N14 |
 | N03 | Formatting/builders (implementation complete 2026-10-18) | Direct numeric append, float/locale costs, capacity reuse and shared hook/native bridge closure; qualification below |
-| N04 | Byte/buffer/I/O | Avoid encoding/string/byte round trips, batch writes, reuse buffers; same-format comparisons stay separate from format changes |
+| N04 | Byte/buffer/I/O (in progress 2026-10-19) | First slice removes duplicate owned-read payload buffers; batching/reuse/remaining inventory stay open; same-format comparisons stay separate from format changes |
 | N05 | Value/place/component representation | Proven stack storage, direct fields, fewer temporaries and unnecessary optional/shared/type-erased cells; exact lifetimes and cleanup |
 | N06 | Containers | Growth/reserve/bulk operations, iteration/index copies, map/set key/hash/rehash costs, span/view and sorting callbacks |
 | N07 | Objects/intrusive RC | Remove redundant retain/release and handle transfers with lifetime/thread proofs; measure weak refs and destruction too |
@@ -147,9 +147,9 @@ measurement requirement; do not silently alter the user's system power policy.
 Every update names its current N01-N14 item. Closing one item and starting another
 in the same turn must state both the closure and transition explicitly. A narrow
 subsystem slice is not a whole-item closure. The earlier controller passes were
-N01-only; N02 is closed within its recorded bounds and the current production
-change is N03 formatting/builders. Remaining N01 attribution and coverage gaps above
-remain open.
+N01-only; N02 and N03 are closed within their recorded implementation bounds.
+The current production work is N04 byte/buffer/I/O. Remaining N01 attribution,
+coverage gaps and N14 timing acceptance above remain open.
 
 The next ownership-attribution slice adds Wio object argument/view/return cases
 and native weak/control calibration, with Python build/collection. See
@@ -503,3 +503,21 @@ so this is implementation closure, not accepted N14/native or VM speedup.
 N03 implementation is complete. N04 is next, not started here. N01 coverage,
 N14 timing acceptance and KI-007/KI-009 remain independent open work; no universal
 1.05-1.10x C++ guarantee or VM-core speedup is claimed.
+
+## N04 first slice: owned byte reads, 2026-10-19
+
+[Direct byte reads](WIO_BYTE_IO_OPTIMIZATION.md) remove the intermediate
+`vector<std::byte>` plus per-byte push conversion from Wio's unsigned-byte
+read helpers. Full reads allocate only the final payload; large short-read
+capacities are compacted and EOF discards speculative storage. Raw read/exact
+primitives, byte/error/cursor semantics, explicit file lifetime and public Wio
+signatures remain intact. WriteBytes already uses a span and does not need this
+particular fix. No changes to user-owned dirty buffer/playground files.
+
+The first measured fixture exposed VM computed-global initialization defect
+KI-010. Preserve its failed samples separately; both matched before/after
+fixtures use the same explicit local mode flags. This workaround does not
+close that correctness defect. Tests, measurements and qualification are recorded
+in the slice report. N04 remains open for reusable buffers, bulk/pool paths,
+batching/syscall and streaming/encoding work plus coordinated std consolidation.
+N05 has not started; N14 timing acceptance remains separate.

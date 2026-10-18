@@ -399,25 +399,9 @@ namespace wio::runtime::std_io
     #endif
     }
 
-    [[nodiscard]] inline std::vector<unsigned char> ReadSomeByteValues(File& file, const std::size_t maxSize)
-    {
-        const auto bytes = ReadSomeBytes(file, maxSize);
-        std::vector<unsigned char> result;
-        result.reserve(bytes.size());
-        for (const auto byteValue : bytes)
-            result.push_back(static_cast<unsigned char>(byteValue));
-        return result;
-    }
+    [[nodiscard]] std::vector<unsigned char> ReadSomeByteValues(File& file, std::size_t maxSize);
 
-    [[nodiscard]] inline std::vector<unsigned char> ReadByteValues(File& file, const std::size_t size)
-    {
-        const auto bytes = ReadBytes(file, size);
-        std::vector<unsigned char> result;
-        result.reserve(bytes.size());
-        for (const auto byteValue : bytes)
-            result.push_back(static_cast<unsigned char>(byteValue));
-        return result;
-    }
+    [[nodiscard]] std::vector<unsigned char> ReadByteValues(File& file, std::size_t size);
 
     [[nodiscard]] inline std::size_t WriteByteValues(File& file, std::span<const unsigned char> bytes)
     {

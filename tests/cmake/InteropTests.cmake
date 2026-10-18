@@ -1667,6 +1667,13 @@ if(Python3_Interpreter_FOUND)
             --cxx "${WIO_BACKEND_CXX_COMPILER}" --output "${CMAKE_BINARY_DIR}/n03-generated-stream-semantics")
     wio_test_labels(wio_n03_generated_stream native vm formatting memory ownership)
     set_tests_properties(wio_n03_generated_stream PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+    add_test(NAME wio_n04_byte_io
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/byte_io/verify.py"
+            --wio "$<TARGET_FILE:wio_app>" --vm "$<TARGET_FILE:wio_vm_runner>"
+            --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}" --cxx "${WIO_BACKEND_CXX_COMPILER}"
+            --output "${CMAKE_BINARY_DIR}/n04-byte-io-contract")
+    wio_test_labels(wio_n04_byte_io native vm io memory optimization ownership)
+    set_tests_properties(wio_n04_byte_io PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
     add_test(NAME wio_n03_indexed_format
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/indexed_format/verify.py"
             --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}" --cxx "${WIO_BACKEND_CXX_COMPILER}"

@@ -289,6 +289,25 @@ the native declaration directly. Closure requires shared native dispatch for
 indirect calls with argument/return marshalling, lifetime, callback and exception
 tests, not removal of the external-function safety check.
 
+### KI-010 — VM computed module globals retain default values (P1)
+
+Found during the N04 byte-I/O baseline on 2026-10-18/19 (Windows x64,
+compiler sources based on `5db6595`). Passing `std::io::OpenReadBinary` to
+`OpenRaw` works in native output but fails with VM WVM1222/`invalid_mode`.
+The equivalent local flagset expression opens the same file correctly.
+`tests/performance/byte_io/global_mode_repro.wio` isolates the named global
+versus local expression comparison: its expected success exit is 0; the current
+Release VM exits 17. The first byte-I/O session retains all 20 failed VM samples.
+
+Bytecode contains a `$global.init::std_io::OpenReadBinary` function, but the VM
+module setup installs default global storage without running its initializer.
+This is a correctness defect, not an I/O performance result or a claim that all
+constant expressions fail. Closure needs exactly-once initializer execution,
+dependency/order and reentry rules, error/cleanup behavior and module lifecycle
+tests, not a special case for this mode constant. N04 uses the explicit local
+flagset in **both** matched before/after workloads; that workaround does not
+close this issue or imply full native/VM parity.
+
 ## 2. Native, VM, ownership and SDK limitations
 
 | ID | Priority / state | Current boundary and closure requirement |

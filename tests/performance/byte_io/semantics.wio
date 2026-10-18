@@ -1,0 +1,49 @@
+use std::console as console;
+use std::io as io;
+
+using cpp::header("probe.h");
+
+[native, cpp::name(byte_io::Setup)]
+fn Setup();
+
+fn Entry(args: string[]) -> i32
+{
+    Setup();
+    let modeFlags = io::OpenMode::read | io::OpenMode::share_read |
+        io::OpenMode::sequential | io::OpenMode::binary;
+    mut file = io::OpenRaw("payload.bin", modeFlags);
+    if (args.Count() > 1usize)
+    {
+        if (args[1usize] == "partial")
+        {
+            io::ReadBytes(ref file, 65537usize);
+            return 20;
+        }
+
+        io::CloseRaw(ref file);
+        io::ReadSomeBytes(ref file, 1usize);
+        return 21;
+    }
+
+    let first = io::ReadBytes(ref file, 256usize);
+    if (first.Count() != 256usize) return 1;
+    for (index in 0usize..<256usize)
+    {
+        let expected = ((index * 17usize + 3usize) & 255usize) fit u8;
+        if (first[index] != expected) return 2;
+    }
+
+    io::Seek(ref file, 0i64);
+    let second = io::ReadSomeBytes(ref file, 17usize);
+    if (second.Count() != 17usize or first.Count() != 256usize) return 3;
+    if (second[0usize] != 3u8 or first[255usize] != 242u8) return 4;
+    io::Seek(ref file, 65530i64);
+    let tail = io::ReadSomeBytes(ref file, 65536usize);
+    if (tail.Count() != 6usize) return 5;
+    if (io::ReadSomeBytes(ref file, 65536usize).Count() != 0usize) return 6;
+    io::CloseRaw(ref file);
+    if (io::ReadBytes(ref file, 0usize).Count() != 0usize) return 7;
+    if (io::ReadSomeBytes(ref file, 0usize).Count() != 0usize) return 8;
+    console::PrintLine("byte-io-ok");
+    return 0;
+}

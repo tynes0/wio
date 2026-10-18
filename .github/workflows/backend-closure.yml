@@ -102,12 +102,17 @@ jobs:
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
           -R "^wio_n03_(formatting_call_(plan|semantics)|native_string_borrow_plan|scalar_field_plan|formatted_size|receiver_plan|integer_hot_path|string_transfer_plan|string_init_plan|inline_string_init|scalar_format_plan|rendered_integer)$"
+      - name: Qualify N04 owned byte reads (native O0/O2 and VM)
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_n04_byte_io$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: backend-closure-${{ matrix.os }}-${{ matrix.config }}
           path: |
+            build/n04-byte-io-contract/**/results.json
             build/Testing/Temporary/
             build/measurement-contract-*/evidence/results.json
             build/native-cost-python-contract-*/**/results.json

@@ -10,6 +10,20 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N04 first slice: direct owned byte reads — 2026-10-19
+
+- [x] Read Wio unsigned-byte arrays directly into their final native payload,
+  eliminating the intermediate std::byte vector and per-byte push conversion.
+  Preserve exact/partial/EOF/error/cursor behavior and owning snapshots; compact
+  excessive short-read capacity and discard EOF speculative storage.
+- [x] New scoped gate passes 1/1 in 115.61s (17 processes): native O0/O2,
+  allocation/control tests and VM/native bridge. Isolated full-read allocations
+  fall 2 -> 1, requested/peak bytes 131072 -> 65536. No local old full suite.
+- [ ] N04 remains open. After measurements/platform CI are pending for this
+  source slice; KI-010 computed VM globals are a separately recorded defect,
+  not fixed by the identical local-mode workaround in both benchmark fixtures.
+  Report: `docs/WIO_BYTE_IO_OPTIMIZATION.md`.
+
 ## N03 formatting/builders implementation closure — 2026-10-18
 
 - [x] Complete shared hook rendering for object/nested containers, concrete
