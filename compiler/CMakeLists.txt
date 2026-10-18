@@ -32,6 +32,14 @@ add_library(wio_compiler STATIC
 add_library(wio-compiler ALIAS wio_compiler)
 
 if(BUILD_TESTING)
+    add_executable(wio_format_stream_ownership_test "${CMAKE_SOURCE_DIR}/tests/format_stream_ownership_test.cpp")
+    target_include_directories(wio_format_stream_ownership_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
+    if(MINGW)
+        target_link_options(wio_format_stream_ownership_test PRIVATE -static-libstdc++ -static-libgcc)
+    endif()
+    add_test(NAME wio_n03_stream_ownership COMMAND wio_format_stream_ownership_test)
+    set_tests_properties(wio_n03_stream_ownership PROPERTIES LABELS "native;formatting;memory;ownership" TIMEOUT 60)
+
     add_executable(wio_stream_fallback_test "${CMAKE_SOURCE_DIR}/tests/stream_fallback_test.cpp")
     target_include_directories(wio_stream_fallback_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
     if(MINGW)

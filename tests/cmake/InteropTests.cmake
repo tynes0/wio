@@ -1661,6 +1661,12 @@ if(Python3_Interpreter_FOUND)
             --cxx "${WIO_BACKEND_CXX_COMPILER}" --output "${CMAKE_BINARY_DIR}/n03-numeric-builder-semantics")
     wio_test_labels(wio_n03_numeric_builder_semantics native vm formatting float memory optimization ownership)
     set_tests_properties(wio_n03_numeric_builder_semantics PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+    add_test(NAME wio_n03_stream_ownership_semantics
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/stream_ownership/verify.py"
+            --wio "$<TARGET_FILE:wio_app>" --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}"
+            --cxx "${WIO_BACKEND_CXX_COMPILER}" --output "${CMAKE_BINARY_DIR}/n03-stream-ownership-semantics")
+    wio_test_labels(wio_n03_stream_ownership_semantics native vm formatting memory ownership)
+    set_tests_properties(wio_n03_stream_ownership_semantics PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
     add_test(NAME wio_n03_format_semantics
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/formatting/verify.py"
             --wio "$<TARGET_FILE:wio_app>" --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}"

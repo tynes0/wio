@@ -123,6 +123,9 @@ namespace wio::runtime
     {
         std::ostringstream stream;
         detail::appendFormatLiterals(stream, format, std::forward<TArgs>(args)...);
-        return stream.str();
+        // The stream is finished. Return its owning buffer, never a view into
+        // this local object. This avoids the final payload copy, at the cost
+        // of retaining any spare capacity already owned by the stream buffer.
+        return std::move(stream).str();
     }
 }

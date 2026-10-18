@@ -403,3 +403,24 @@ unqualified; the C++ stream reference is not a to_chars lower bound. No general
 speedup, RSS win or N14 budget closure is claimed. N03 remains open for
 richer/legacy formatting and KI-008 hooks; N04 has not started. The previous
 scalar-fragment commit's three-platform CI passed; this change needs its own.
+
+## N03: legacy stream ownership, 2026-10-18
+
+[The legacy extraction slice](WIO_STREAM_OWNERSHIP_OPTIMIZATION.md) takes the
+owning result from a finished `runtime::Format` stream instead of copying its
+payload. This is the native compatibility helper, not normal interpolation or
+indexed console formatting. Wio benchmarks reach it through a test-only native
+wrapper; the VM bridge also runs the native helper, not a new VM-core formatter.
+
+Two new gates pass in 13.65s, native O0/O2 + VM bridge and host stream behavior.
+The 2001-call allocation workloads fall 4004 -> 2003 and 14009 -> 12008;
+requested bytes fall 1466872 -> 1026762 and 81012621 -> 64564511. Final tracked
+live bytes remain zero. Ownership transfer retains spare capacity: a 216-byte
+GCC result goes from capacity 216 to 512. Native binary size grows 1296 bytes.
+No universal retained-memory/size win is claimed.
+
+All 168/168 benchmark outputs are correct. Small native observations fall,
+large comparison native rises slightly and both comparison VM observations
+rise; global timing remains unqualified. Preserve the mixed results and initial
+setup failures. N03 remains open, N04 has not started. The prior floating/stream
+commit's three-platform CI passed; this slice needs its own qualification.

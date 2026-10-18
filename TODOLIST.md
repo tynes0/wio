@@ -1332,6 +1332,13 @@ Rider, and CLion are defined in
    diagnostics remove one payload allocation per call. Production classic heap
    is unchanged; final mixed-builder timing rises and global qualification is
    still false. N03 remains open; neither N04 nor N14 closure is implied.
+   The native legacy `runtime::Format` compatibility template now extracts a
+   finished stream's owning buffer. See `docs/WIO_STREAM_OWNERSHIP_OPTIMIZATION.md`:
+   2/2 new gates and 168/168 benchmark outputs pass; 2001-call allocation counts
+   fall 4004 -> 2003 / 14009 -> 12008, but returned spare capacity can increase
+   and the native binary grows 1296 bytes. Mixed/unqualified timings are retained.
+   Normal interpolation, indexed console formatting and VM-core behavior are
+   not changed. N03 remains open; N04 has not started.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

@@ -50,10 +50,11 @@ def prepare(args, fixture=None):
     diagnostic = folder / ("memory" + suffix)
     bridge = folder / ("bridge.dll" if os.name == "nt" else "bridge.dylib" if sys.platform == "darwin" else "bridge.so")
     bytecode = folder / "main.wiob"
-    commands = []
+    commands = (json.loads((folder / "build.json").read_text(encoding="utf-8"))
+                if args.reuse_build and args.rebuild_diagnostics else [])
 
-    def run(command):
-        if args.reuse_build:
+    def run(command, force=False):
+        if args.reuse_build and not force:
             return
         command = [str(x) for x in command]
         row = dict(command=command)
@@ -71,9 +72,10 @@ def prepare(args, fixture=None):
     generated = folder / "frozen.cpp"
     if not args.reuse_build:
         shutil.copyfile(folder / "main.wio.cpp", generated)
-    for target, extra in ((native, []), (diagnostic, ["-DWIO_BENCHMARK_ALLOCATIONS"])):
+    for target, extra in ((native, []), (diagnostic, ["-DWIO_BENCHMARK_ALLOCATIONS", *fixture.get("diagnostic_flags", ())])):
         run([cxx, *flags, *extra, generated, f"-I{folder}", f"-I{ROOT / 'runtime/include'}",
-             f"-I{ROOT / 'sdk/include'}", runtime, *links, "-o", target])
+             f"-I{ROOT / 'sdk/include'}", runtime, *links, "-o", target],
+            force=target == diagnostic and args.rebuild_diagnostics)
     run([cxx, *flags, f"-I{folder}", folder / "main.cpp", "-o", cpp])
     run([dotnet, "build", folder / fixture["project"], "-c", "Release", "-o", folder / "csharp", "--nologo"])
     run([wio, folder / "main.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder,
@@ -124,7 +126,8 @@ def prepare(args, fixture=None):
                     repetitions=args.repetitions, finalRepetitions=3, timeoutMs=60000, outputLimit=1048576, cpu=args.cpu,
                     environment=dict(WIO_ROOT=str(ROOT), DOTNET_NOLOGO="1"),
                     maximumRange=.15, maximumDrift=.10, maximumControlDifference=.10,
-                    metadata=dict(label=args.label, nativeFlags=flags, vm="Release host; unchanged bytecode semantics",
+                    metadata=dict(label=args.label, nativeFlags=flags, diagnosticFlags=fixture.get("diagnostic_flags", []),
+                                  vm="Release host; unchanged bytecode semantics",
                                   contracts=fixture["contracts"],
                                   revision=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()),
                     versions=[dict(program=str(program), args=argv, cwd=str(folder))
@@ -139,7 +142,10 @@ def arguments(default_sources=HERE):
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--label", required=True)
     p.add_argument("--sources", type=Path, default=default_sources, help="Frozen workload source directory for an exact-input rebuild")
-    p.add_argument("--reuse-build", action="store_true", help="Explicitly finish an existing frozen build; no compilation")
+    p.add_argument("--reuse-build", action="store_true",
+                   help="Reuse the frozen build; no compilation unless --rebuild-diagnostics is explicit")
+    p.add_argument("--rebuild-diagnostics", action="store_true",
+                   help="With --reuse-build, explicitly rebuild only the allocation diagnostic and append its build record")
     p.add_argument("--wio", type=Path, default=ROOT / "build/app/Debug/wio.exe")
     p.add_argument("--runtime", type=Path, default=ROOT / "build/runtime/backend/libwio_runtime.a")
     p.add_argument("--vm", type=Path, default=ROOT / "build/app/Release/wio-vm.exe")
@@ -151,6 +157,8 @@ def arguments(default_sources=HERE):
     parsed = p.parse_args()
     if not 1 <= parsed.count <= 100000 or parsed.repetitions < 3:
         p.error("Invalid count/repetitions")
+    if parsed.rebuild_diagnostics and not parsed.reuse_build:
+        p.error("--rebuild-diagnostics requires --reuse-build")
     return parsed
 
 

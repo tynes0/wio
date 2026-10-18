@@ -1,0 +1,72 @@
+[
+  {
+    "command": [
+      "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+      "F:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18\\main.wio",
+      "--emit-cpp"
+    ],
+    "exitCode": 0,
+    "stdout": "Generated C++ output: F:/Projects/wio/build/n03-stream-own-before-2026-10-18/main.wio.cpp\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "C:\\mingw64\\bin\\g++.exe",
+      "-std=c++20",
+      "-O2",
+      "-ffp-contract=off",
+      "F:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18\\frozen.cpp",
+      "-IF:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18",
+      "-IF:\\Projects\\wio\\runtime\\include",
+      "-IF:\\Projects\\wio\\sdk\\include",
+      "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+      "-lws2_32",
+      "-lshell32",
+      "-lpsapi",
+      "-Wa,-mbig-obj",
+      "-o",
+      "F:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18\\native.exe"
+    ],
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "C:\\mingw64\\bin\\g++.exe",
+      "-std=c++20",
+      "-O2",
+      "-ffp-contract=off",
+      "-DWIO_BENCHMARK_ALLOCATIONS",
+      "F:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18\\frozen.cpp",
+      "-IF:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18",
+      "-IF:\\Projects\\wio\\runtime\\include",
+      "-IF:\\Projects\\wio\\sdk\\include",
+      "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+      "-lws2_32",
+      "-lshell32",
+      "-lpsapi",
+      "-Wa,-mbig-obj",
+      "-o",
+      "F:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18\\memory.exe"
+    ],
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "C:\\mingw64\\bin\\g++.exe",
+      "-std=c++20",
+      "-O2",
+      "-ffp-contract=off",
+      "-IF:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18",
+      "F:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18\\main.cpp",
+      "-o",
+      "F:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18\\cpp.exe"
+    ],
+    "exitCode": 1,
+    "stdout": "",
+    "stderr": "In file included from F:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18\\main.cpp:1:\nF:\\Projects\\wio\\build\\n03-stream-own-before-2026-10-18\\probe.h:3:10: fatal error: format.h: No such file or directory\n    3 | #include \"format.h\"\n      |          ^~~~~~~~~~\ncompilation terminated.\n"
+  }
+]

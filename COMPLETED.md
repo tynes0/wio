@@ -10,6 +10,22 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 legacy stream-result ownership — 2026-10-18
+
+- [x] Extract the owning string from a finished native compatibility `Format`
+  stream, avoiding its final payload copy. Retain placeholder/hook order,
+  counted bytes, locale/fenv and partial/throw behavior. This is not normal Wio
+  interpolation, indexed console formatting or VM-core optimization.
+- [x] Two new gates pass in 13.65s with native O0/O2 and VM bridge; standalone
+  GCC allocation proof also passes. Initial include/diagnostic-runtime setup
+  failures are retained, not used as timing baselines.
+- [x] Same-source Wio-owned sessions have 168/168 correct outputs. Allocation
+  workloads fall 4004 -> 2003 / 14009 -> 12008 per 2001 calls, ending live-zero.
+  Retained capacity can rise (GCC 216 -> 512 for a 216-byte result); the native
+  executable grows 1296 bytes. Timing observations are mixed/unqualified, not
+  an accepted native/VM speedup or universal memory win. N03 remains open.
+  Evidence: `docs/WIO_STREAM_OWNERSHIP_OPTIMIZATION.md`.
+
 ## N03 bounded stream views and floating hot-frame reduction — 2026-10-18
 
 - [x] Outline floating stream/EH work and reduce precision-6 scratch 128 -> 32
