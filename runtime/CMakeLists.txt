@@ -8,6 +8,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/wir_task_abi.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/wir_inline_place.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/integer_format.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/stream_format.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/formatted_size.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/floating_format.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/value_format.h"

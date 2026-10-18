@@ -1,5 +1,13 @@
 # N03 float / builder / container formatting
 
+The 2026-10-18 follow-up outlines floating stream/EH construction and uses
+bounded non-growing-target stream views for integer/float fallback. The new
+`wio_n03_stream_fallback` unit checks reserved/growing targets, allocation
+attribution, long/NUL/partial facets and host float/rounding behavior. The Wio
+gate adds exponent/Text loops and a reserved custom-facet native probe, run at
+O0/O2 and via the VM bridge. See
+[the follow-up evidence](../../../docs/WIO_FLOAT_STREAM_OPTIMIZATION.md).
+
 Use the Wio-owned controller; Python prepares serial builds and the independent
 Python `.6g` + full UTF-8 FNV oracle, not timing samples:
 

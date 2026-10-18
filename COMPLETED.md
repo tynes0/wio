@@ -10,6 +10,27 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 bounded stream views and floating hot-frame reduction — 2026-10-18
+
+- [x] Outline floating stream/EH work and reduce precision-6 scratch 128 -> 32
+  bytes, retaining conversion-failure fallback, live locale/rounding and libc++
+  stream policy. Share a stream-buffer append helper with integer formatting;
+  use a view only for non-growing targets and retain snapshots at allocation
+  boundaries. No ABI/WIR/bytecode shape changes.
+- [x] Final new/expanded gates pass 2/2 in 85.41s with native O0/O2 + VM,
+  boundaries/random bits, rounding modes, custom long/NUL/partial-output facets,
+  reserved/growing targets and owning snapshots. The initial MSVC Debug exact-
+  allocation-count assumption failed and remains visible; portable bounds pass.
+- [x] GCC reserved long-facet diagnostics: 256 -> 128 allocations, requested
+  99200 -> 65664 bytes per 128 integer/float calls. Growing target stays equal
+  to the copy control. Production classic heap is unchanged. Actual f64 helper
+  stack reservation falls 504 -> 112 bytes; Work stays 856. Production binary
+  shrinks 1594 bytes. Both sessions retain 252/252 correct outputs.
+- [x] All three native comparison observations fall, but final mixed builder
+  rises 4.2792 -> 4.4872 ms. Global timing remains unqualified; no accepted
+  speedup percentage, VM gain, whole-process memory win or C++ budget closure.
+  N03 remains open. Evidence: `docs/WIO_FLOAT_STREAM_OPTIMIZATION.md`.
+
 ## N03 private rendered scalar fragments — 2026-10-18
 
 - [x] Keep integer formatting at its original instruction but retain private

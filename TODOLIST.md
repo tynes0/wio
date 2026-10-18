@@ -1323,6 +1323,15 @@ Rider, and CLion are defined in
    O0/O2 locale/counted-facet checks and VM NUL/Text/hook checks pass. Work stack
    reservation falls 584 -> 520 bytes; heap is unchanged. Native ordered medians
    fall in noisy sessions, not qualified C++ budget closure. N03 remains open.
+   Floating stream/EH construction is now outlined from the finite/classic
+   path and its conversion scratch is smaller. Shared integer/float fallback
+   uses a buffer view only when existing target capacity is enough; growing
+   targets retain the owning snapshot boundary. See
+   `docs/WIO_FLOAT_STREAM_OPTIMIZATION.md`: 2/2 focused gates pass, the measured
+   f64 helper reservation falls 504 -> 112 bytes, and reserved long-facet GCC
+   diagnostics remove one payload allocation per call. Production classic heap
+   is unchanged; final mixed-builder timing rises and global qualification is
+   still false. N03 remains open; neither N04 nor N14 closure is implied.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

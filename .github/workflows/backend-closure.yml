@@ -86,10 +86,12 @@ jobs:
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
           -R "^wio_n02_concat_(plan|runtime|semantics)$"
+      - name: Build N03 stream fallback proof
+        run: cmake --build build --target wio_stream_fallback_test --parallel 2
       - name: Qualify new N03 formatting (float oracle, native O0/O2 and VM)
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
-          -R "^wio_n03_(value_format|format_semantics|vm_format)$"
+          -R "^wio_n03_(value_format|format_semantics|vm_format|stream_fallback)$"
       - name: Qualify N03 direct numeric builder append
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1

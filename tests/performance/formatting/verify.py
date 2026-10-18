@@ -16,6 +16,7 @@ def verify(args):
     folder = args.output.resolve() / uuid.uuid4().hex
     folder.mkdir(parents=True)
     shutil.copyfile(HERE / "semantics.wio", folder / "main.wio")
+    shutil.copyfile(HERE / "stream_probe.h", folder / "stream_probe.h")
     rows = []
 
     def run(command, expected=0):
@@ -34,7 +35,7 @@ def verify(args):
     run([args.cxx, "-std=c++20", "-O2", ROOT / "tests/floating_value_format_test.cpp",
          f"-I{ROOT / 'runtime/include'}", "-o", native_probe])
     run([native_probe])
-    run([wio, folder / "main.wio", "--emit-cpp"])
+    run([wio, folder / "main.wio", "--emit-cpp", "--include-dir", folder])
     generated = folder / "main.wio.cpp"
     source = generated.read_text(encoding="utf-8")
     if "AppendBasicFormatted(target, value)" not in source or "StringifyFloating(value)" not in source:
@@ -43,12 +44,12 @@ def verify(args):
     for optimization in ("-O0", "-O2"):
         program = folder / ("native.exe" if os.name == "nt" else "native")
         run([args.cxx, "-std=c++20", optimization, "-ffp-contract=off", generated,
-             f"-I{ROOT / 'runtime/include'}", f"-I{ROOT / 'sdk/include'}", args.runtime.resolve(),
+             f"-I{folder}", f"-I{ROOT / 'runtime/include'}", f"-I{ROOT / 'sdk/include'}", args.runtime.resolve(),
              *links, "-o", program])
         run([program])
     bridge = folder / ("bridge.dll" if os.name == "nt" else "bridge.dylib" if sys.platform == "darwin" else "bridge.so")
     bytecode = folder / "main.wiob"
-    run([wio, folder / "main.wio", "--target", "shared", "--native-bridge-only", "--output", bridge,
+    run([wio, folder / "main.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder, "--output", bridge,
          "--bytecode-sidecar", bytecode])
     run([wio, "--vm-run-bytecode", bytecode, "--native-library", bridge])
     shutil.copyfile(HERE / "custom.wio", folder / "custom.wio")

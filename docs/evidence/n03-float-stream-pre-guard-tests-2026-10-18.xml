@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-MSBuild"
+	tests="2"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="DESKTOP-0G3MR0G"
+	time="85"
+	timestamp="2026-10-18T11:23:03"
+	>
+	<testcase name="wio_n03_stream_fallback" classname="wio_n03_stream_fallback" time="1.40469" status="run">
+		<properties>
+			<property name="cmake_labels" value="float;formatting;locale;memory;native"/>
+		</properties>
+		<system-out>{"kind":"integer","iterations":128,"copyAllocations":896,"currentAllocations":640,"copyRequestedBytes":163840,"currentRequestedBytes":126976,"copyPeakBytes":800,"currentPeakBytes":768,"currentLiveBytes":0}
+{"kind":"floating","iterations":128,"copyAllocations":896,"currentAllocations":640,"copyRequestedBytes":163840,"currentRequestedBytes":126976,"copyPeakBytes":800,"currentPeakBytes":768,"currentLiveBytes":0}
+</system-out>
+	</testcase>
+	<testcase name="wio_n03_format_semantics" classname="wio_n03_format_semantics" time="82.7067" status="run">
+		<properties>
+			<property name="cmake_labels" value="float;formatting;native;optimization;ownership;vm"/>
+		</properties>
+		<system-out>N03 native O0/O2 + VM: float precision/signed zero, scalar/nested containers, char/NUL and builder snapshots
+</system-out>
+	</testcase>
+</testsuite>

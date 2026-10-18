@@ -32,6 +32,14 @@ add_library(wio_compiler STATIC
 add_library(wio-compiler ALIAS wio_compiler)
 
 if(BUILD_TESTING)
+    add_executable(wio_stream_fallback_test "${CMAKE_SOURCE_DIR}/tests/stream_fallback_test.cpp")
+    target_include_directories(wio_stream_fallback_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
+    if(MINGW)
+        target_link_options(wio_stream_fallback_test PRIVATE -static-libstdc++ -static-libgcc)
+    endif()
+    add_test(NAME wio_n03_stream_fallback COMMAND wio_stream_fallback_test)
+    set_tests_properties(wio_n03_stream_fallback PROPERTIES LABELS "native;formatting;float;locale;memory" TIMEOUT 60)
+
     add_executable(wio_scalar_format_plan_test "${CMAKE_SOURCE_DIR}/tests/scalar_format_plan_test.cpp")
     target_link_libraries(wio_scalar_format_plan_test PRIVATE wio_compiler)
     add_test(NAME wio_n03_scalar_format_plan COMMAND wio_scalar_format_plan_test)

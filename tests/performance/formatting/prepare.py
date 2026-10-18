@@ -34,6 +34,8 @@ if __name__ == "__main__":
         cases=("float-scalar", "mixed-builder", "float-vector"), expected=expected,
         contracts="Defaultfloat precision6/classic/nearest; full UTF8 FNV; C# G6 lowercase exponent; two warmups; builder snapshot",
         artifacts=("runtime/include/floating_format.h", "runtime/include/value_format.h",
+                   "runtime/include/stream_format.h",
+                   "tests/stream_fallback_test.cpp",
                    "runtime/include/integer_format.h", "std/builders.wio", "runtime/include/std_builders.h",
                    "vm/src/value_format_internal.cpp", "vm/src/value_format_internal.h", "vm/src/machine.cpp",
                    "tests/performance/formatting/prepare.py", "tests/performance/concat_reuse/prepare.py")))

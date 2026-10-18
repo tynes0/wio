@@ -378,3 +378,28 @@ N03 remains open for locale/richer/legacy formatting and KI-008 hooks. N04 has
 not started; N05 sharing does not close/renumber it. KI-007/KI-009 and N01/N14
 acceptance remain. The previous initialization commit's platform CI passed;
 this change requires its own Windows/Ubuntu/macOS qualification.
+
+## N03: floating hot frame and bounded stream-buffer views, 2026-10-18
+
+[The floating/stream slice](WIO_FLOAT_STREAM_OPTIMIZATION.md) outlines stream
+construction/EH state from the normal finite/classic path and shrinks its
+precision-6 scratch. The libc++ stream-only policy remains, without a cold
+annotation on its usual path. Integer/float fallback share a counted buffer
+view only when the target cannot grow; the old owning snapshot remains at
+allocation boundaries, preserving native reentrancy safety. Locale, fenv,
+nonfinite spelling, partial output, ABI and WIR/VM shape stay unchanged.
+
+Two final gates pass in 85.41s with native O0/O2 + VM and host-stream oracles.
+The initial Windows Debug count assumption is retained, not a waived code bug.
+GCC long-facet reserved diagnostics fall 256 -> 128 allocations and
+99200 -> 65664 requested bytes per 128 calls; growing targets keep the copy
+control's allocation shape. Production classic heap does not change. The f64
+helper's actual O2 reservation falls 504 -> 112 bytes; Work remains 856 bytes.
+Production size falls 1594 bytes. Both sessions retain 252/252 correct outputs.
+
+Comparison native medians fall 0.7818/4.2988/6.3691 -> 0.7533/4.2397/6.1426 ms,
+but final mixed builder rises 4.2792 -> 4.4872. Global timing remains
+unqualified; the C++ stream reference is not a to_chars lower bound. No general
+speedup, RSS win or N14 budget closure is claimed. N03 remains open for
+richer/legacy formatting and KI-008 hooks; N04 has not started. The previous
+scalar-fragment commit's three-platform CI passed; this change needs its own.

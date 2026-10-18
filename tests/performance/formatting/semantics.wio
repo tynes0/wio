@@ -1,6 +1,11 @@
 use std::builders as builders;
 use std::convert;
 
+using cpp::header("stream_probe.h");
+
+[native, cpp::name(stream_probe::Check)]
+fn CheckStreamFallback() -> bool;
+
 fn Entry() -> i32
 {
     let scalar = 1.23456789f64;
@@ -36,5 +41,14 @@ fn Entry() -> i32
     if ($"${letter}:${nul}" != "A:\0") return 15;
     let chars: char[] = ['A', '\0'];
     if ($"${chars}" != "[A, \0]") return 16;
+    if (not CheckStreamFallback()) return 17;
+    let extremes: f64[] = [1.0e300f64, -1.0e-300f64];
+    for (index in 0..<32)
+    {
+        let rendered = $"prefix\0${extremes}:${small}";
+        if (rendered != "prefix\0[1e+300, -1e-300]:1.25e-05") return 18;
+        if (u$"🌍${large}:${negativeZero}" != u"🌍1.25e+07:-0") return 19;
+    }
+
     return 0;
 }

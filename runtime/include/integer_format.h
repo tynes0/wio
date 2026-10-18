@@ -1,5 +1,7 @@
 #pragma once
 
+#include "stream_format.h"
+
 #include <charconv>
 #include <limits>
 #include <locale>
@@ -29,7 +31,7 @@ namespace wio::runtime
                 stream << +value;
             else
                 stream << value;
-            target.append(stream.str());
+            AppendStreamBuffer(target, stream);
         }
     } // namespace detail
 

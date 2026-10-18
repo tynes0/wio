@@ -1,5 +1,7 @@
 #pragma once
 
+#include "stream_format.h"
+
 #include <cfenv>
 #include <charconv>
 #include <cmath>
@@ -10,6 +12,31 @@
 
 namespace wio::runtime
 {
+    namespace detail
+    {
+        // Keep stream construction/EH state out of the usual finite/classic
+        // path. libc++ currently uses this path for all values, so do not label
+        // it cold there. Reading the buffer leaves stream state/lifetime intact.
+        template <class T>
+            requires(std::is_same_v<T, float> || std::is_same_v<T, double>)
+#if defined(_MSC_VER)
+        __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#if defined(_LIBCPP_VERSION)
+        __attribute__((noinline))
+#else
+        __attribute__((noinline, cold))
+#endif
+#endif
+        void
+        AppendFloatingStream(std::string& target, const T value)
+        {
+            std::ostringstream stream;
+            stream << value;
+            AppendStreamBuffer(target, stream);
+        }
+    } // namespace detail
+
     // Wio's existing stream contract is defaultfloat/precision 6. Never replace
     // it with shortest-roundtrip formatting or silently discard native locale
     // facets / a non-default floating rounding mode.
@@ -24,7 +51,10 @@ namespace wio::runtime
 #if !defined(_LIBCPP_VERSION)
         if (std::isfinite(value) && std::fegetround() == FE_TONEAREST && std::locale() == std::locale::classic())
         {
-            char buffer[128];
+            // General precision 6 needs only a small spelling, even at the
+            // supported float/double exponent extremes. Preserve the fallback
+            // on conversion failure rather than weakening the stream contract.
+            char buffer[32];
             if constexpr (requires {
                               std::to_chars(buffer, buffer + sizeof(buffer), value, std::chars_format::general, 6);
                           })
@@ -41,9 +71,7 @@ namespace wio::runtime
 #endif
 
         // Retain platform stream spellings for signed NaNs/infinities too.
-        std::ostringstream stream;
-        stream << value;
-        target.append(stream.str());
+        detail::AppendFloatingStream(target, value);
     }
 
     template <class T>
