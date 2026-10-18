@@ -44,6 +44,12 @@ adapters are foundations, not proof of full kit parity. Kit work may reveal a
 backend bug that must be fixed, but cannot silently expand the backend milestone
 with the entire kit backlog. Report these two acceptance states separately.
 
+Future ecosystem note (2026-10-18): a **Wio.NET** C# hosting library for ordinary
+.NET is recorded in the [post-v1 roadmap](WIO_POST_V1_ROADMAP.md#wionet-ordinary-net-hosting-idea-recorded-2026-10-18).
+It should reuse this SDK/ABI through a C adapter and P/Invoke/NativeLibrary,
+not depend on Mono InternalCall. It is not part of the current pre-v1 SDK parity
+gate or backend sprint, and does not yet have a scheduled implementation.
+
 ## 2. Meaning of Wio 1.0 parity
 
 Before Wio `1.0.0`, every stable, host-observable Wio language/runtime feature
