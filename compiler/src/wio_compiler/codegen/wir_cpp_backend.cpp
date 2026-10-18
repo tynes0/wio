@@ -1511,7 +1511,7 @@ template<class T> std::string stringify(const T& value) {
     } else if constexpr (requires(std::ostringstream& stream) { stream << value; }) {
         std::ostringstream stream;
         stream << value;
-        return stream.str();
+        return std::move(stream).str();
     } else {
         static_assert(!sizeof(T), "Wio value has no string conversion");
     }
@@ -1569,6 +1569,36 @@ template<class T> void append_formatted(std::string& target, const T& value) {
         wio::runtime::AppendBasicFormatted(target, value);
     } else {
         target.append(stringify(value));
+    }
+}
+template<class T> std::string format_single(const T& value) {
+    if constexpr (wio::runtime::IsBasicFormattable<T>) {
+        // Preserve direct builtin append and live container locale policy.
+        std::string result;
+        append_formatted(result, value);
+        return result;
+    } else {
+        // No affixes: avoid another assembly buffer. Native formatters may
+        // reserve far more than they write; do not retain that excess in an
+        // escaping result. Subtraction avoids overflow in the 2x comparison.
+        auto result = stringify(value);
+        if (result.capacity() - result.size() > result.size()) return std::string(result);
+        return result;
+    }
+}
+template<class T> void append_formatted_literal_tail(std::string& target, const T& value, std::string_view tail) {
+    if constexpr (wio::runtime::IsBasicFormattable<T>) {
+        append_formatted(target, value);
+        target.append(tail);
+    } else {
+        // Finish native/user formatting once before reading lengths. The tail
+        // is an independent literal emitted by the backend, never a target view.
+        const auto rendered = stringify(value);
+        const auto required = wio::runtime::detail::CheckedFormattedSize(
+            target.max_size(), target.size(), rendered.size(), tail.size());
+        if (required > target.capacity()) target.reserve(required);
+        target.append(rendered);
+        target.append(tail);
     }
 }
 }
@@ -2034,7 +2064,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
 
             std::string functionSignature(const lowered::Function& function, const bool declaration,
                                           const std::string_view emittedName = {},
-                                          const bool directStringBorrow = false, const bool directReceiver = false) const
+                                          const bool directStringBorrow = false,
+                                          const bool directReceiver = false) const
             {
                 std::string signature;
                 signature.reserve(48 + function.parameters.size() * 32);
@@ -2086,7 +2117,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     {
                         output_ << functionSignature(function, true) << '\n';
                         if (receiverPlans_.contains(function.id.value()))
-                            output_ << functionSignature(function, true, receiverEntryName(function), false, true) << '\n';
+                            output_ << functionSignature(function, true, receiverEntryName(function), false, true)
+                                    << '\n';
                         if (WirCppStoragePlan::supportsCallScopedStringAbi(module_, function))
                             output_ << functionSignature(function, true, functionName(function.id) + "_borrow", true)
                                     << '\n';
@@ -2168,7 +2200,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                 }
                 for (const auto& block : function.blocks)
                     for (const auto& instruction : block.instructions)
-                        if (instruction.result && storagePlan_.borrowedStringCopies.contains(instruction.result.value()))
+                        if (instruction.result &&
+                            storagePlan_.borrowedStringCopies.contains(instruction.result.value()))
                             suppressedInstructions_.insert(&instruction);
 
                 for (const auto sum : storagePlan_.elidedConcatValues)
@@ -2178,7 +2211,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                 }
                 for (const auto& block : function.blocks)
                     for (const auto& instruction : block.instructions)
-                        if ((instruction.result && storagePlan_.elidedConcatValues.contains(instruction.result.value())) ||
+                        if ((instruction.result &&
+                             storagePlan_.elidedConcatValues.contains(instruction.result.value())) ||
                             ((instruction.opcode == lowered::Opcode::DropValue ||
                               instruction.opcode == lowered::Opcode::Release) &&
                              instruction.operands.size() == 1 &&
@@ -2217,7 +2251,7 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     directValues_.erase(cell.value());
                 }
                 suppressedInstructions_.insert(stringInitPlan_.suppressedInstructions.begin(),
-                                                stringInitPlan_.suppressedInstructions.end());
+                                               stringInitPlan_.suppressedInstructions.end());
 
                 scalarFormatPlan_ = WirCppScalarFormatPlan::build(module_, function);
                 for (const auto& [value, storage] : scalarFormatPlan_.fragments)
@@ -2810,17 +2844,18 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                         const auto concatOperand = [&](const ValueId value)
                         {
                             return storagePlan_.consumedConcatOperands.contains(value.value()) ? movedOperand(value)
-                                                                                              : operand(value);
+                                                                                               : operand(value);
                         };
                         assignResult(instruction, "(" + concatOperand(instruction.operands[0]) + " + " +
                                                       concatOperand(instruction.operands[1]) + ")");
                     }
                     else if (!instruction.operands.empty() &&
-                        module_.types.get(valueType(instruction.operands.front())).kind == TypeKind::Nullable &&
-                        module_.types.get(module_.types.get(valueType(instruction.operands.front())).arguments.front())
-                                .kind != TypeKind::Opaque &&
-                        (instruction.binaryOperator == typed::BinaryOperator::Equal ||
-                         instruction.binaryOperator == typed::BinaryOperator::NotEqual))
+                             module_.types.get(valueType(instruction.operands.front())).kind == TypeKind::Nullable &&
+                             module_.types
+                                     .get(module_.types.get(valueType(instruction.operands.front())).arguments.front())
+                                     .kind != TypeKind::Opaque &&
+                             (instruction.binaryOperator == typed::BinaryOperator::Equal ||
+                              instruction.binaryOperator == typed::BinaryOperator::NotEqual))
                     {
                         const std::string equality = "wio::wir_backend::nullable_equal(" +
                                                      operand(instruction.operands[0]) + ", " +
@@ -2872,9 +2907,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                                  functionName(instruction.callee) + "(" + callArguments(instruction, 0, true) + ")");
                     break;
                 case lowered::Opcode::MethodCall:
-                    assignResult(instruction,
-                                 receiverEntryName(*functions_.at(instruction.callee.value())) + "(" +
-                                     directMethodArguments(instruction) + ")");
+                    assignResult(instruction, receiverEntryName(*functions_.at(instruction.callee.value())) + "(" +
+                                                  directMethodArguments(instruction) + ")");
                     break;
                 case lowered::Opcode::NativeInvoke:
                 {
@@ -3047,10 +3081,25 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     }
                     const std::string_view prefix =
                         instruction.stringSegments.empty() ? std::string_view{} : instruction.stringSegments.front();
+                    if (instruction.resultType == module_.types.stringType() && instruction.operands.size() == 1 &&
+                        instruction.stringSegments.size() == 2 && prefix.empty() &&
+                        instruction.stringSegments[1].empty() &&
+                        !scalarFormatPlan_.fragments.contains(instruction.operands[0].value()))
+                    {
+                        // Rendered integer/bool fragments are private non-string
+                        // storage: their existing view append path must remain.
+                        assignResult(instruction,
+                                     "wio::wir_backend::format_single(" + operand(instruction.operands[0]) + ")");
+                        break;
+                    }
                     const bool renderedStrings =
                         instruction.operands.size() > 1 &&
                         std::ranges::all_of(instruction.operands, [&](const ValueId value)
                                             { return module_.types.get(valueType(value)).kind == TypeKind::String; });
+                    const bool singleLiteralTail =
+                        instruction.resultType == module_.types.stringType() && instruction.operands.size() == 1 &&
+                        instruction.stringSegments.size() == 2 && !instruction.stringSegments[1].empty() &&
+                        !scalarFormatPlan_.fragments.contains(instruction.operands[0].value());
                     std::string expression = renderedStrings ? "([&]() { std::string _formatted; "
                                                              : "([&]() { std::string _formatted(" + cppString(prefix) +
                                                                    ", " + std::to_string(prefix.size()) + "); ";
@@ -3076,13 +3125,18 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                         const ValueId value = instruction.operands[index];
                         if (const auto fragment = scalarFormatPlan_.fragments.find(value.value());
                             fragment != scalarFormatPlan_.fragments.end())
-                            expression += "_formatted.append(" + operand(value) +
-                                          (fragment->second == WirCppScalarFormatPlan::Storage::IntegerBytes ? ".view()"
-                                                                                                           : "") +
-                                          "); ";
+                            expression +=
+                                "_formatted.append(" + operand(value) +
+                                (fragment->second == WirCppScalarFormatPlan::Storage::IntegerBytes ? ".view()" : "") +
+                                "); ";
+                        else if (singleLiteralTail)
+                            expression += "wio::wir_backend::append_formatted_literal_tail(_formatted, " +
+                                          operand(value) + ", std::string_view{" +
+                                          cppString(instruction.stringSegments[1]) + ", " +
+                                          std::to_string(instruction.stringSegments[1].size()) + "}); ";
                         else
                             expression += "wio::wir_backend::append_formatted(_formatted, " + operand(value) + "); ";
-                        if (index + 1 < instruction.stringSegments.size())
+                        if (!singleLiteralTail && index + 1 < instruction.stringSegments.size())
                         {
                             const auto& segment = instruction.stringSegments[index + 1];
                             if (!segment.empty())
@@ -3271,8 +3325,8 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                                     << ".read() += " << operand(suffixes.front()) << "; // Wio local append reuse\n";
                         else
                         {
-                            output_ << "                wio::runtime::AppendConcat("
-                                    << operand(instruction.operands[0]) << ".read()";
+                            output_ << "                wio::runtime::AppendConcat(" << operand(instruction.operands[0])
+                                    << ".read()";
                             for (const auto suffix : suffixes)
                                 output_ << ", " << operand(suffix);
                             output_ << "); // Wio transactional concat reuse\n";
@@ -3434,7 +3488,7 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     {
                         output_ << "                " << valueName(instruction.operands[0])
                                 << (fragment->second == WirCppScalarFormatPlan::Storage::IntegerBytes ? ".clear();\n"
-                                                                                                    : " = {};\n");
+                                                                                                      : " = {};\n");
                         break;
                     }
                     output_ << "                " << valueName(resolveValueAlias(instruction.operands[0]))
@@ -3638,8 +3692,9 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     output_ << "    ";
                     if (directValues_.contains(function.parameters[index].id.value()))
                         output_ << (directReceiver ? valueStorageType(function.parameters[index].id.value(),
-                                                                       function.parameters[index].type)
-                                                   : cppType(function.parameters[index].type)) << ' ';
+                                                                      function.parameters[index].type)
+                                                   : cppType(function.parameters[index].type))
+                                << ' ';
                     output_ << valueName(function.parameters[index].id) << " = std::move(_p" << index << ");\n";
                 }
 

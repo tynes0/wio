@@ -245,6 +245,15 @@ correctness work before claiming complete formatting conformance or v1 parity.
 Resolve this through shared callable lowering (and continuation support where
 needed), not arbitrary callbacks inside the low-level builtin formatter.
 
+Concrete native POD components that rely only on a C++ `operator<<` also remain
+native-only for display. The analyzer/C++ compiler can accept that operator, but
+the VM has no declared formatter thunk for the POD value and rejects its
+interpolation with WVM1062. The generated-stream fixture now explicitly retains
+this negative case alongside positive native O0/O2 behavior; supported VM builtin
+and scalar Wio ToString cases still pass. A native codegen optimization is not
+closure of this native-formatting bridge limitation. See
+[the fixture](../tests/performance/generated_stream/README.md).
+
 See [the scalar call-lowering report](WIO_FORMATTING_CALL_LOWERING.md) for the
 implemented bounds and retained failure evidence.
 

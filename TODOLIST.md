@@ -1339,6 +1339,15 @@ Rider, and CLion are defined in
    and the native binary grows 1296 bytes. Mixed/unqualified timings are retained.
    Normal interpolation, indexed console formatting and VM-core behavior are
    not changed. N03 remains open; N04 has not started.
+   Actual generated native POD formatting now extracts stream ownership, avoids
+   redundant bare assembly with a capacity guard, and reserves rendered value
+   plus literal tail once. See `docs/WIO_GENERATED_STREAM_OPTIMIZATION.md`:
+   2/2 new/expanded gates pass; selected heap counts fall 8004 -> 6003 and
+   20010 -> 16008 per 2001 calls. Unbounded intermediate evidence is retained;
+   the selected result avoids its oversized bare capacity. Timings remain
+   unqualified, native binary grows 3003 bytes, and native POD operator<< is
+   still VM-unsupported WVM1062 (KI-008), not a zero-cost VM result. N03 remains
+   open for richer/indexed formatting and remaining hooks; N04 has not started.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

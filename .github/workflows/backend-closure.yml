@@ -91,7 +91,7 @@ jobs:
       - name: Qualify new N03 formatting (float oracle, native O0/O2 and VM)
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
-          -R "^wio_n03_(value_format|format_semantics|vm_format|stream_fallback|stream_ownership|stream_ownership_semantics)$"
+          -R "^wio_n03_(value_format|format_semantics|vm_format|stream_fallback|stream_ownership|stream_ownership_semantics|generated_stream)$"
       - name: Qualify N03 direct numeric builder append
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1

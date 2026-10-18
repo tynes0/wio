@@ -1,0 +1,14 @@
+[
+  {
+    "mode": "pod-bare-192",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1,\"operations\":2001,\"schemaVersion\":1}\n\n{\"allocations\":6003,\"available\":true,\"failures\":0,\"freedBytes\":1546663,\"frees\":6003,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":3,\"peakBytes\":774,\"requestedBytes\":1546663,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  },
+  {
+    "mode": "pod-affix-8192",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":1,\"operations\":2001,\"schemaVersion\":1}\n\n{\"allocations\":16008,\"available\":true,\"failures\":0,\"freedBytes\":81110425,\"frees\":16008,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":3,\"peakBytes\":24659,\"requestedBytes\":81110425,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  }
+]

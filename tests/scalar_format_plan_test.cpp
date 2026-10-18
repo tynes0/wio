@@ -146,6 +146,22 @@ int main()
             expect(body.find(candidate == &module ? "_formatted.append(_v1.view())" : "_formatted.append(_v1)") !=
                        std::string::npos,
                    "consumer reformatted or copied fragment");
+            for (const auto& segments : {std::vector<std::string>{"", ""}, std::vector<std::string>{"", "tail"}})
+            {
+                auto single = *candidate;
+                single.functions[0].blocks[0].instructions[2].stringSegments = segments;
+                const auto result = wio::codegen::WirCppBackend{}.generate(
+                    single, {.emitMain = false, .emitLineDirectives = false, .verifyInput = false});
+                const auto start = result.code().find("std::string _wio_f0() {");
+                expect(result.succeeded() && start != std::string::npos, "missing fragment guard fixture");
+                const auto content = result.code().substr(start, result.code().find("\n}\n", start) - start);
+                expect(content.find("format_single(_v1)") == std::string::npos &&
+                           content.find("append_formatted_literal_tail(_formatted, _v1") == std::string::npos,
+                       "private integer/bool fragment entered an owning formatter");
+                expect(content.find(candidate == &module ? "_formatted.append(_v1.view())"
+                                                         : "_formatted.append(_v1)") != std::string::npos,
+                       "bare/suffix fragment lost its direct view append");
+            }
         }
     }
     catch (const std::exception& error)

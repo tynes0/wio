@@ -10,6 +10,25 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 generated native stream copies and bounded capacity — 2026-10-18
+
+- [x] Optimize actual emitted C++ native stream formatting: move out the finished
+  stream, avoid redundant bare assembly with an excessive-capacity guard, and
+  reserve once for a rendered single operand plus independent literal suffix.
+  Keep private integer/bool fragments, Text and multi-operand ordering intact.
+- [x] New/expanded gates pass 2/2 in 31.06s: native O0/O2, actual emitted-helper
+  allocation/snapshot/seek/partial/throw tests, 1 MiB reserve compaction, IR
+  fragment guards and supported VM builtins. Native POD operator<< rejection
+  WVM1062 remains explicit KI-008 work, not VM parity.
+- [x] Selected heap counts per 2001 calls fall 8004 -> 6003 / 20010 -> 16008;
+  tracked live bytes end at zero. Preserve the unbounded intermediate, whose
+  lower bare allocations retained more capacity. Selected bare sample capacity
+  stays 217, affix falls 442 -> 225. Isolated affix peak rises 8 bytes and native
+  executable grows 3003 bytes; no universal memory/size win is claimed.
+- [ ] N03 remains open. Each retained session has 64 correct supported samples
+  and 20 VM rejections; global timing is unqualified. No accepted speedup or
+  C++ budget closure. Evidence: `docs/WIO_GENERATED_STREAM_OPTIMIZATION.md`.
+
 ## N03 legacy stream-result ownership — 2026-10-18
 
 - [x] Extract the owning string from a finished native compatibility `Format`

@@ -424,3 +424,28 @@ large comparison native rises slightly and both comparison VM observations
 rise; global timing remains unqualified. Preserve the mixed results and initial
 setup failures. N03 remains open, N04 has not started. The prior floating/stream
 commit's three-platform CI passed; this slice needs its own qualification.
+
+## N03: actual generated native stream copies and capacity, 2026-10-18
+
+[The generated-stream slice](WIO_GENERATED_STREAM_OPTIMIZATION.md) applies owning
+stream extraction to the actual C++ backend, forwards bare nonbasic formatted
+results with an excessive-capacity compaction guard, and preflights a rendered
+single value plus literal suffix once. Private integer/bool fragments and Text
+retain existing paths; Typed/Lowered WIR, bytecode and native ABI do not change.
+
+New/expanded gates pass 2/2 in 31.06s. The selected 2001-call Wio heap counts
+fall 8004 -> 6003 / 20010 -> 16008, with zero final tracked live bytes. An
+unbounded intermediate saved more bare allocations but retained capacity 512
+for 217 bytes; selected bare capacity is 217, with a 1 MiB native-reserve test.
+Affix returned capacity falls 442 -> 225; isolated affix peak rises 8 bytes and
+native executable size rises 3003 bytes. This is not a universal memory win.
+
+Comparison native observations fall 1.3622/26.8820 -> 0.9553/22.8379 ms; final
+native is 1.3615/23.1462 ms. Large noise/A/A differences and moving reference
+lanes prevent timing acceptance. Each of three retained sessions has 64/64
+correct supported samples and 20 VM failures WVM1062: native POD `operator<<`
+has no VM formatter thunk, now explicitly tracked under KI-008. No VM timing
+or parity closure is claimed. N03 remains open for richer/indexed formatting
+and remaining hooks; N04 has not started. KI-007/KI-009 and N01/N14 acceptance
+remain open. The preceding commit's three-platform CI passed; this patch needs
+its own qualification.

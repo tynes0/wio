@@ -1,0 +1,177 @@
+{
+  "baseline": "c28cddff273abce951e56ab71e1cb5c123e1f41e",
+  "sourceFiles": [
+    {
+      "file": "main.wio",
+      "before": "1B4632514920DC2EB2F4CE70D575F80A0DC29593B3B45DDB3AC8C535BC2AA12E",
+      "unbounded": "1B4632514920DC2EB2F4CE70D575F80A0DC29593B3B45DDB3AC8C535BC2AA12E",
+      "selected": "1B4632514920DC2EB2F4CE70D575F80A0DC29593B3B45DDB3AC8C535BC2AA12E",
+      "identical": true
+    },
+    {
+      "file": "probe.h",
+      "before": "8E9577933059AED24395C3C5B5C415017F1D288DE878D74BE26383D9CADF7F81",
+      "unbounded": "8E9577933059AED24395C3C5B5C415017F1D288DE878D74BE26383D9CADF7F81",
+      "selected": "8E9577933059AED24395C3C5B5C415017F1D288DE878D74BE26383D9CADF7F81",
+      "identical": true
+    },
+    {
+      "file": "main.cpp",
+      "before": "0652ACB00BA4251B8CC90D7013C674362AC79B6D7818137F93394FDB1791ABF7",
+      "unbounded": "0652ACB00BA4251B8CC90D7013C674362AC79B6D7818137F93394FDB1791ABF7",
+      "selected": "0652ACB00BA4251B8CC90D7013C674362AC79B6D7818137F93394FDB1791ABF7",
+      "identical": true
+    },
+    {
+      "file": "Program.cs",
+      "before": "C2B1DED70DC63A4180AA9A5C55E0F8BF4C98483B80F11985A6CE7776A0838E3A",
+      "unbounded": "C2B1DED70DC63A4180AA9A5C55E0F8BF4C98483B80F11985A6CE7776A0838E3A",
+      "selected": "C2B1DED70DC63A4180AA9A5C55E0F8BF4C98483B80F11985A6CE7776A0838E3A",
+      "identical": true
+    },
+    {
+      "file": "GeneratedStream.csproj",
+      "before": "F65EFCB0F9104FCBFE4F39BEF63BCA6EF067ACCBB2861EC0FC71DD76486330FC",
+      "unbounded": "F65EFCB0F9104FCBFE4F39BEF63BCA6EF067ACCBB2861EC0FC71DD76486330FC",
+      "selected": "F65EFCB0F9104FCBFE4F39BEF63BCA6EF067ACCBB2861EC0FC71DD76486330FC",
+      "identical": true
+    }
+  ],
+  "artifacts": [
+    {
+      "stage": "before",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-before-2026-10-18\\native.exe",
+      "bytes": 6394397,
+      "sha256": "A0FA8CB603A10632A5FDC844D1A60205D8C4F951ACB3D9086037345401E0657B"
+    },
+    {
+      "stage": "before",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-before-2026-10-18\\memory.exe",
+      "bytes": 9530321,
+      "sha256": "34D5974F1B3416F1AB59813326112306D5D997CBF20751BD3A880CC06BD3511A"
+    },
+    {
+      "stage": "before",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-before-2026-10-18\\cpp.exe",
+      "bytes": 73866,
+      "sha256": "C5EE3375B91B07A25AE7906BF10DCF46F505066440716AECEDBD560FCC46F7FE"
+    },
+    {
+      "stage": "before",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-before-2026-10-18\\frozen.cpp",
+      "bytes": 3262306,
+      "sha256": "FABD95D9315DBA0B8CDA210CDD6E943807AD39B747935DD19672CCF1F0964DA2"
+    },
+    {
+      "stage": "after",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-after-2026-10-18\\native.exe",
+      "bytes": 6390744,
+      "sha256": "692FEDBE38B3AB55066BB45EF96026AC7287FB64D8629E3AEC9B8E3F1358F0CF"
+    },
+    {
+      "stage": "after",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-after-2026-10-18\\memory.exe",
+      "bytes": 9531152,
+      "sha256": "89BC71046C00C2D0EC99D391873B74128158EBF0464739FAA5010F1F1C83CB23"
+    },
+    {
+      "stage": "after",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-after-2026-10-18\\cpp.exe",
+      "bytes": 73866,
+      "sha256": "E3EF9254EF608278830656996EF21F157570AE0B42B3D9D0439BDAAC477CFBFA"
+    },
+    {
+      "stage": "after",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-after-2026-10-18\\frozen.cpp",
+      "bytes": 3263078,
+      "sha256": "21153EA974EFA4D3FBDA7FA15D2E92E16C1A2B3237E1B78784F3DC2C8B35FEC8"
+    },
+    {
+      "stage": "bounded",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\native.exe",
+      "bytes": 6397400,
+      "sha256": "26501181D46F5DBD6C8B2E6A5558478FD4369C8081E50CFED0D50F160427E1BE"
+    },
+    {
+      "stage": "bounded",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\memory.exe",
+      "bytes": 9531152,
+      "sha256": "C628CA612C5DA203DA824B4E56CC473B7CC975A2DACA0A7DB63B8336B0C82AE4"
+    },
+    {
+      "stage": "bounded",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\cpp.exe",
+      "bytes": 73866,
+      "sha256": "8436536FCDF3684DF2D394EE91284EDC3B9028B89AA698051D7E9B8A5DC88B8E"
+    },
+    {
+      "stage": "bounded",
+      "path": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\frozen.cpp",
+      "bytes": 3263276,
+      "sha256": "389BDC880212AE8A9BB2FDB45723AF429DD5F8C892280358E7F363F1D9AB4196"
+    }
+  ],
+  "selectedToolchain": [
+    {
+      "path": "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+      "bytes": 20424704,
+      "sha256": "35320925D6E5DDB2A4D7E3D9D4B616F7737792EC7FB40D0A4DABCE12A847FCD7"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+      "bytes": 1306112,
+      "sha256": "D5897FA48BBF346C5B3C2F5F979DCABF66E589534AED6CAB5D92CB7B9B035879"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+      "bytes": 12501644,
+      "sha256": "D281D70686E6585D4382770C283ACBC3C54580ED81C00DAFACFA93726EBE6362"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+      "bytes": 7281434,
+      "sha256": "59FF4005117CB2C7CFF701629B98D7A599D4550B18FF40B3AA402923F8863941"
+    }
+  ],
+  "sessions": [
+    {
+      "label": "before",
+      "meaning": "baseline",
+      "complete": true,
+      "outputsCorrect": false,
+      "timingQualified": false,
+      "supportedSamples": 64,
+      "supportedCorrect": 64,
+      "vmFailedWVM1062": 20,
+      "affinity": true,
+      "artifactsUnchanged": true,
+      "powerUnchanged": true
+    },
+    {
+      "label": "after",
+      "meaning": "unbounded intermediate, not selected",
+      "complete": true,
+      "outputsCorrect": false,
+      "timingQualified": false,
+      "supportedSamples": 64,
+      "supportedCorrect": 64,
+      "vmFailedWVM1062": 20,
+      "affinity": true,
+      "artifactsUnchanged": true,
+      "powerUnchanged": true
+    },
+    {
+      "label": "bounded",
+      "meaning": "selected capacity-guarded candidate",
+      "complete": true,
+      "outputsCorrect": false,
+      "timingQualified": false,
+      "supportedSamples": 64,
+      "supportedCorrect": 64,
+      "vmFailedWVM1062": 20,
+      "affinity": true,
+      "artifactsUnchanged": true,
+      "powerUnchanged": true
+    }
+  ]
+}

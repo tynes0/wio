@@ -1,0 +1,74 @@
+using cpp::header("probe.h");
+
+[native, cpp::name(generated_stream::Label)]
+component Label
+{
+    size: i64;
+    index: i64;
+}
+
+[native, cpp::name(generated_stream::Reset)]
+fn Reset(mode: i32);
+
+[native, cpp::name(generated_stream::Calls)]
+fn Calls() -> i32;
+
+object Named
+{
+    public fn ToString() -> string
+    {
+        return "named";
+    }
+}
+
+fn Entry(args: string[]) -> i32
+{
+    let text = "a\0b🌍";
+    if ($"${text}" != text) return 10;
+    let letter = '\0';
+    if ($"${letter}" != "\0") return 11;
+    let number = 1.25f64;
+    if ($"${number}" != "1.25") return 12;
+    if ($"pre${number}post" != "pre1.25post") return 18;
+    let values: i64[] = [1, 2, 3];
+    if ($"${values}" != "[1, 2, 3]") return 13;
+    if ($"pre${values}post" != "pre[1, 2, 3]post") return 19;
+    let named = Named();
+    if ($"${named}" != "named") return 14;
+    let integer = (args.Count() fit i64) + 12344i64;
+    let fragment = $"${integer}";
+    let expected = args.Count() == 1usize ? "12345" : "12346";
+    if ($"${fragment}" != expected) return 15;
+    let boolean = $"${true}";
+    if ($"${boolean}" != "true") return 16;
+    if (u$"${number}" != u"1.25") return 17;
+    let unicode = u"🌍";
+    if ($"${unicode}" != "🌍") return 21;
+    if (args.Count() > 1usize)
+    {
+        if (args[1usize] == "throw")
+        {
+            Reset(3);
+            let failure = $"${Label(3, 7)}";
+            if (failure.Count() != 0usize) return 20;
+        }
+
+        return 0;
+    }
+
+    Reset(0);
+    let value = Label(3, 7);
+    let rendered = $"${value}";
+    if (rendered != "payload=\0bc;index=7;ok=false" or Calls() != 1) return 1;
+    let prefixed = $"pre\0${value}post";
+    if (prefixed != "pre\0payload=\0bc;index=7;ok=falsepost" or Calls() != 2) return 2;
+    let nulTail = $"pre${value}\0🌍";
+    if (nulTail != "prepayload=\0bc;index=7;ok=false\0🌍" or Calls() != 3) return 6;
+    Reset(1);
+    if ($"${value}" != "payXYZd=\0bc;index=7;ok=false" or Calls() != 1) return 3;
+    Reset(2);
+    if ($"prefix${value}suffix" != "prefixpayload=\0bc;index=7;ok=falsesuffix" or Calls() != 1) return 4;
+    Reset(0);
+    if (rendered != "payload=\0bc;index=7;ok=false") return 5;
+    return 0;
+}
