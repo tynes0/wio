@@ -990,10 +990,18 @@ namespace wio::runtime::console
                     std::string_view Format;
                 };
 
+                struct UninitializedScratch final {};
+
                 template <std::size_t Size = 1024>
                 class StackText final
                 {
                 public:
+                    StackText() noexcept : m_Buffer {} {}
+
+                    // Numeric conversion writes every byte before Resize/View.
+                    // Keep the ordinary constructor zeroed for other callers.
+                    explicit StackText(UninitializedScratch) noexcept {}
+
                     [[nodiscard]] char* Data() noexcept { return m_Buffer.data(); }
                     [[nodiscard]] const char* Data() const noexcept { return m_Buffer.data(); }
                     [[nodiscard]] char* End() noexcept { return m_Buffer.data() + m_Buffer.size(); }
@@ -1037,7 +1045,7 @@ namespace wio::runtime::console
                     }
 
                 private:
-                    std::array<char, Size> m_Buffer {};
+                    std::array<char, Size> m_Buffer;
                     std::size_t m_Size = 0;
                 };
 
@@ -2180,7 +2188,7 @@ namespace wio::runtime::console
                     }
                     else if constexpr (std::is_integral_v<ValueType>)
                     {
-                        StackText<1024> storage;
+                        StackText<1024> storage { UninitializedScratch {} };
                         auto view = FormatIntegral(value, spec, storage);
                         if (!view)
                             return view.Error();
@@ -2188,7 +2196,7 @@ namespace wio::runtime::console
                     }
                     else if constexpr (std::is_floating_point_v<ValueType>)
                     {
-                        StackText<1024> storage;
+                        StackText<1024> storage { UninitializedScratch {} };
                         auto view = FormatFloating(value, spec, storage);
                         if (!view)
                             return view.Error();

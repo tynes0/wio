@@ -6,9 +6,10 @@
 
 namespace wio::wir
 {
-    // Materialize synchronous scalar object formatting as ordinary, null-safe
-    // WIR method dispatch. This pass runs after generic specialization and
-    // before coroutine/control-flow lowering; unsupported surfaces are retained.
+    // Materialize synchronous formatting hooks, including container traversal,
+    // as ordinary WIR calls/CFG. Native POD display uses a registered native
+    // boundary, not a VM callback. Runs after specialization and before coroutine
+    // lowering, so synchronous hooks also work inside async functions.
     class FormattingCallLowerer final
     {
     public:

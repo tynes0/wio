@@ -1,4 +1,4 @@
-"""Actual generated-helper correctness and allocation proofs; retain VM native-POD rejection."""
+"""Actual generated-helper correctness and allocation proofs, including native-POD VM dispatch."""
 import argparse
 import json
 import os
@@ -54,9 +54,11 @@ def verify(args):
     run([wio, folder / "main.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder,
          "--output", bridge, "--bytecode-sidecar", bytecode])
     run([wio, "--vm-run-bytecode", bytecode, "--native-library", bridge, "--", "builtin"])
-    run([wio, "--vm-run-bytecode", bytecode, "--native-library", bridge], expected=1, contains="WVM1062")
+    run([wio, "--vm-run-bytecode", bytecode, "--native-library", bridge])
+    run([wio, "--vm-run-bytecode", bytecode, "--native-library", bridge, "--", "throw"],
+        expected=1, contains="generated stream hook failure")
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
-    print("Generated stream: native O0/O2, actual helper allocations/snapshot/seek/partial/throw; VM builtins pass, POD WVM1062 retained")
+    print("Generated stream: native O0/O2, actual helper allocations/snapshot/seek/partial/throw; VM builtins and POD native formatter dispatch pass")
 
 
 if __name__ == "__main__":

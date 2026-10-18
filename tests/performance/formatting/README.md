@@ -56,10 +56,10 @@ Wio gate also compiles that oracle with the actual generated-code C++ compiler.
 Wio cases cover native O0/O2 + VM, nested containers, bytes/bools/chars/NUL,
 Unicode strings, dictionary syntax, generic ToString and builder snapshots.
 
-`custom.wio` is native-only positive coverage for stateful user ToString calls,
-including object arrays. It is a deliberate **negative VM case** expecting
-WVM1062: VM callback/continuation support for user formatting is still open.
-Do not present that bounded rejection as native/VM feature parity.
+`custom.wio` now requires positive native and VM output for stateful user
+ToString calls, including object arrays. The N03 closure materializes ordinary
+WIR traversal/calls rather than a hidden callback in the builtin VM formatter.
+Original failed WVM1062 evidence remains historical, not a zero-time denominator.
 
 The original VM also rejected builtin float arrays. Its failed baseline records
 are kept, not replaced with a zero duration. After the typed formatting fix the

@@ -1738,10 +1738,10 @@ namespace wio::wir::typed
                         if (instruction.operands.size() != 1 ||
                             !isAnyPayloadTypeCompatible(module.types, valueType(instruction.operands.front()),
                                                         instruction.resultType) ||
-                            !copiedType || !requiresCleanup(*copiedType) ||
+                            !copiedType || !supportsOwnedCopy(*copiedType) ||
                             instruction.resultOwnership != ValueOwnership::Owned)
                         {
-                            report("WIR1466", "Typed WIR copy must create one owned claim for a cleanup-bearing value.",
+                            report("WIR1466", "Typed WIR copy must create one owned claim for a copyable owned value.",
                                    instruction.source, function.id, block.id);
                         }
                     }

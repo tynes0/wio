@@ -515,10 +515,18 @@ namespace wio::bytecode
                     else if (instruction.opcode == Opcode::CopyValue || instruction.opcode == Opcode::Retain)
                     {
                         const bool retain = instruction.opcode == Opcode::Retain;
+                        const auto* copied = instruction.resultType < module.types.size()
+                                                 ? &module.types[instruction.resultType]
+                                                 : nullptr;
+                        const bool podCopy = !retain && copied && copied->kind == 28 && copied->nominalKind == 1 &&
+                                             copied->nominalRepresentation == 1 && copied->ownership == 1 &&
+                                             copied->cleanup == 0 && copied->hasNativeBinding &&
+                                             copied->nativeBinding.standardLayout &&
+                                             copied->nativeBinding.triviallyCopyable;
                         const bool valid =
                             instruction.operands.size() == 1 && instruction.resultType < module.types.size() &&
                             instruction.resultOwnership == 2 &&
-                            module.types[instruction.resultType].cleanup == (retain ? 2 : 1) &&
+                            (module.types[instruction.resultType].cleanup == (retain ? 2 : 1) || podCopy) &&
                             (retain ? instruction.resultType == valueType(instruction.operands.front())
                                     : compatibleAnyPayload(module, valueType(instruction.operands.front()),
                                                            instruction.resultType));

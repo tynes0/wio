@@ -698,7 +698,9 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1582](../compi
 
 ### WIR1466
 
-- Typed WIR copy must create one owned claim for a cleanup-bearing value.
+- Typed WIR copy must create one owned claim for a copyable owned value.
+  Trivially-copyable native POD values can own a copied SSA claim without
+  requiring a destructor; primitive trivial values do not gain owned claims.
 
 Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1744](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1744).
 

@@ -3093,12 +3093,15 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
                         break;
                     }
                     const bool renderedStrings =
-                        instruction.operands.size() > 1 &&
+                        (instruction.operands.size() > 1 ||
+                         (instruction.operands.size() == 1 &&
+                          !scalarFormatPlan_.fragments.contains(instruction.operands[0].value()))) &&
                         std::ranges::all_of(instruction.operands, [&](const ValueId value)
                                             { return module_.types.get(valueType(value)).kind == TypeKind::String; });
                     const bool singleLiteralTail =
-                        instruction.resultType == module_.types.stringType() && instruction.operands.size() == 1 &&
-                        instruction.stringSegments.size() == 2 && !instruction.stringSegments[1].empty() &&
+                        !renderedStrings && instruction.resultType == module_.types.stringType() &&
+                        instruction.operands.size() == 1 && instruction.stringSegments.size() == 2 &&
+                        !instruction.stringSegments[1].empty() &&
                         !scalarFormatPlan_.fragments.contains(instruction.operands[0].value());
                     std::string expression = renderedStrings ? "([&]() { std::string _formatted; "
                                                              : "([&]() { std::string _formatted(" + cppString(prefix) +
@@ -3911,6 +3914,11 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
                                 if (index == 0 && function.nativeBinding->receiver != NativeReceiverKind::None)
                                 {
                                     const Type* owner = module_.types.tryGet(function.ownerType);
+                                    if (!owner && function.name.starts_with("$format.native-method.") &&
+                                        !function.parameters.empty())
+                                    {
+                                        owner = module_.types.tryGet(function.parameters[0].type);
+                                    }
                                     if (owner && (owner->nominalKind == NominalKind::Object ||
                                                   owner->nominalKind == NominalKind::Interface))
                                         argument = "wio::wir_backend::object_ptr(_p0)";

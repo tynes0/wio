@@ -51,16 +51,40 @@ def verify(args):
     run([wio, folder / "main.wio", "--target", "shared", "--native-bridge-only", "--output", bridge,
          "--bytecode-sidecar", bytecode])
     run([wio, "--vm-run-bytecode", bytecode, "--native-library", bridge])
-    # The old object-array fixture deliberately remains unsupported in VM.
-    # Its scalar hook now succeeds; the array hole must not be called parity.
+    # The former object-array boundary must now execute shared WIR traversal.
     shutil.copyfile(HERE.parent / "formatting/custom.wio", folder / "container.wio")
     container_bridge = folder / ("container.dll" if os.name == "nt" else "container.dylib" if sys.platform == "darwin" else "container.so")
     container_bytecode = folder / "container.wiob"
     run([wio, folder / "container.wio", "--target", "shared", "--native-bridge-only", "--output", container_bridge,
          "--bytecode-sidecar", container_bytecode])
-    rejected = run([wio, "--vm-run-bytecode", container_bytecode, "--native-library", container_bridge], expected=1)
-    if "WVM1062" not in rejected.stderr:
-        raise RuntimeError("Expected explicit remaining user-container formatting boundary")
+    run([wio, "--vm-run-bytecode", container_bytecode, "--native-library", container_bridge])
+    shutil.copyfile(HERE / "closure.wio", folder / "closure.wio")
+    run([wio, folder / "closure.wio", "--emit-cpp"])
+    for optimization in ("-O0", "-O2"):
+        program = folder / ("closure.exe" if os.name == "nt" else "closure")
+        run([args.cxx, "-std=c++20", optimization, folder / "closure.wio.cpp",
+             f"-I{ROOT / 'runtime/include'}", f"-I{ROOT / 'sdk/include'}", args.runtime.resolve(),
+             *links, "-o", program])
+        run([program])
+    closure_bridge = folder / ("closure.dll" if os.name == "nt" else "closure.dylib" if sys.platform == "darwin" else "closure.so")
+    closure_bytecode = folder / "closure.wiob"
+    run([wio, folder / "closure.wio", "--target", "shared", "--native-bridge-only", "--output", closure_bridge,
+         "--bytecode-sidecar", closure_bytecode])
+    run([wio, "--vm-run-bytecode", closure_bytecode, "--native-library", closure_bridge])
+    for source in ("native_hook.wio", "native_hook.h"):
+        shutil.copyfile(HERE / source, folder / source)
+    run([wio, folder / "native_hook.wio", "--emit-cpp", "--include-dir", folder])
+    for optimization in ("-O0", "-O2"):
+        program = folder / ("native_hook.exe" if os.name == "nt" else "native_hook")
+        run([args.cxx, "-std=c++20", optimization, folder / "native_hook.wio.cpp",
+             f"-I{folder}", f"-I{ROOT / 'runtime/include'}", f"-I{ROOT / 'sdk/include'}", args.runtime.resolve(),
+             *links, "-o", program])
+        run([program])
+    hook_bridge = folder / ("hook.dll" if os.name == "nt" else "hook.dylib" if sys.platform == "darwin" else "hook.so")
+    hook_bytecode = folder / "hook.wiob"
+    run([wio, folder / "native_hook.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder,
+         "--output", hook_bridge, "--bytecode-sidecar", hook_bytecode])
+    run([wio, "--vm-run-bytecode", hook_bytecode, "--native-library", hook_bridge])
     shutil.copyfile(HERE / "borrow.wio", folder / "borrow.wio")
     shutil.copyfile(HERE / "borrow_probe.h", folder / "borrow_probe.h")
     run([wio, folder / "borrow.wio", "--emit-cpp", "--include-dir", folder])

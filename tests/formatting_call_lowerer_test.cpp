@@ -1,5 +1,8 @@
 #include "wio/wir/formatting_call_lowerer.h"
 #include "wio/wir/typed_ir_verifier.h"
+#include "wio/wir/lowering_pipeline.h"
+#include "wio/bytecode/compiler.h"
+#include "wio/bytecode/verifier.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -112,8 +115,15 @@ int main()
             }
         expect(calls == 2 && identities == 2 && drops == 5, "call/null/temporary cleanup contract changed");
         expect(FormattingCallLowerer::lower(module) == 0, "format lowering is not idempotent");
-        rejects([](auto& value) { value.functions[0].isAsync = true; }, "async frame was rewritten");
-        rejects([](auto& value) { value.functions[0].coroutine = CoroutineLayout{}; }, "coroutine was rewritten");
+        for (const bool coroutine : {false, true})
+        {
+            auto async = fixture();
+            async.functions[0].isAsync = true;
+            if (coroutine)
+                async.functions[0].coroutine = CoroutineLayout{};
+            expect(FormattingCallLowerer::lower(async) == 1, "sync formatter in async context was not lowered");
+            expect(FormattingCallLowerer::lower(async) == 0, "async format lowering is not idempotent");
+        }
         rejects([](auto& value) { value.functions[1].isAsync = true; }, "async ToString was invoked synchronously");
         rejects([](auto& value) { value.functions[1].genericParameters.push_back(value.types.i32Type()); },
                 "unspecialized formatter was selected");
@@ -139,16 +149,70 @@ int main()
                 value.types.getMutable(owner).methods.push_back(std::move(duplicate));
             },
             "ambiguous formatter was guessed");
-        rejects(
-            [](auto& value)
-            {
-                const auto array = value.types.intern({.kind = TypeKind::Array,
-                                                       .arguments = {value.functions[1].ownerType},
-                                                       .ownership = OwnershipModel::OwnedValue,
-                                                       .cleanup = CleanupKind::DestroyValue});
-                value.functions[0].blocks[0].instructions[0].signatureTypes[1] = array;
-            },
-            "unsupported mixed user-container formatting was partially reordered");
+        auto container = fixture();
+        const auto array = container.types.intern({.kind = TypeKind::Array,
+                                                   .arguments = {container.functions[1].ownerType},
+                                                   .ownership = OwnershipModel::OwnedValue,
+                                                   .cleanup = CleanupKind::DestroyValue});
+        container.functions[0].parameters[0].type = array;
+        container.functions[0].callableType =
+            container.types.intern({.kind = TypeKind::Function, .arguments = {array, container.types.stringType()}});
+        container.functions[0].blocks[0].instructions[0].signatureTypes = {array, array};
+        expect(FormattingCallLowerer::lower(container) == 2, "container traversal and child hook were not lowered");
+        const auto containerVerified = Verifier{}.verify(container);
+        for (const auto& diagnostic : containerVerified.diagnostics())
+            std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+        expect(containerVerified.succeeded(), "container formatting failed verification");
+        expect(container.functions.size() == 3, "container helper identity not interned");
+        expect(FormattingCallLowerer::lower(container) == 0, "container formatting duplicated helpers");
+        auto pod = fixture();
+        const auto podType = pod.types.internNominal({.kind = TypeKind::Named,
+                                                      .name = "NativePod",
+                                                      .nominalKind = NominalKind::Component,
+                                                      .nominalRepresentation = NominalRepresentation::NativePod,
+                                                      .ownership = OwnershipModel::OwnedValue,
+                                                      .nativeBinding = NativeTypeBinding{.cppName = "NativePod"}});
+        expect(!requiresCleanup(pod.types.get(podType)) && supportsOwnedCopy(pod.types.get(podType)),
+               "trivial native POD copy and cleanup protocols were conflated");
+        expect(!supportsOwnedCopy(pod.types.get(pod.types.i32Type())), "primitive ownership protocol widened");
+        pod.contract.reflection.push_back({.stableTypeId = stableModuleHash("formatting-calls.NativePod"),
+                                           .logicalName = "NativePod",
+                                           .type = podType,
+                                           .nominalKind = NominalKind::Component});
+        pod.functions[0].parameters[0].type = podType;
+        pod.functions[0].callableType =
+            pod.types.intern({.kind = TypeKind::Function, .arguments = {podType, pod.types.stringType()}});
+        pod.functions[0].blocks[0].instructions[0].signatureTypes = {podType, podType};
+        pod.functions[0].blocks[0].instructions.erase(pod.functions[0].blocks[0].instructions.begin() + 1);
+        expect(FormattingCallLowerer::lower(pod) == 1, "native POD formatter was not materialized");
+        const auto lowered = LoweringPipeline{}.lower(pod);
+        for (const auto& diagnostic : lowered.diagnostics())
+            std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+        expect(lowered.succeeded(), "POD owned-copy lowering failed");
+        const auto bytecode = wio::bytecode::Compiler{}.compile(lowered.module());
+        expect(bytecode.succeeded(), "POD formatter bytecode compilation failed");
+        const auto checked = wio::bytecode::Verifier{}.verify(bytecode.module());
+        for (const auto& diagnostic : checked.diagnostics())
+            std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
+        expect(checked.succeeded(), "POD owned-copy bytecode protocol rejected");
+        for (const int invalidCase : {0, 1, 2, 3})
+        {
+            auto invalidPod = bytecode.module();
+            auto& invalidType = invalidPod.types[podType.value()];
+            if (invalidCase == 0)
+                invalidType.nativeBinding.triviallyCopyable = false;
+            if (invalidCase == 1)
+                invalidType.nativeBinding.standardLayout = false;
+            if (invalidCase == 2)
+                invalidType.nominalKind = 2; // not an object/RC escape hatch
+            if (invalidCase == 3)
+                invalidType.cleanup = 2; // retain and POD copy remain distinct
+            const auto rejectedPod = wio::bytecode::Verifier{}.verify(invalidPod);
+            bool rejectedCopy = false;
+            for (const auto& diagnostic : rejectedPod.diagnostics())
+                rejectedCopy |= diagnostic.code == "WBC1119";
+            expect(rejectedCopy, "native copy protocol accepted a forged non-POD ownership contract");
+        }
     }
     catch (const std::exception& error)
     {

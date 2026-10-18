@@ -11,7 +11,7 @@ then pass 3 (compiler and build throughput). SDK remains a separate v1 blocker.
 | --- | --- | --- |
 | N01 | Measurement and cost map | Qualified workloads, raw samples/checksums, clear coverage gaps; distinguish timing, allocation, copies, RC and memory metrics |
 | N02 | String/text/concat (implemented 2026-10-16) | Last-use buffers, transactional append and pure-tree flattening; bounded correctness gate complete; noisy timing acceptance remains N14 |
-| N03 | Formatting/builders | Direct numeric append, float/locale costs, capacity reuse; preserve formatting and snapshot contracts |
+| N03 | Formatting/builders (implementation complete 2026-10-18) | Direct numeric append, float/locale costs, capacity reuse and shared hook/native bridge closure; qualification below |
 | N04 | Byte/buffer/I/O | Avoid encoding/string/byte round trips, batch writes, reuse buffers; same-format comparisons stay separate from format changes |
 | N05 | Value/place/component representation | Proven stack storage, direct fields, fewer temporaries and unnecessary optional/shared/type-erased cells; exact lifetimes and cleanup |
 | N06 | Containers | Growth/reserve/bulk operations, iteration/index copies, map/set key/hash/rehash costs, span/view and sorting callbacks |
@@ -449,3 +449,24 @@ or parity closure is claimed. N03 remains open for richer/indexed formatting
 and remaining hooks; N04 has not started. KI-007/KI-009 and N01/N14 acceptance
 remain open. The preceding commit's three-platform CI passed; this patch needs
 its own qualification.
+
+## N03 implementation closure, 2026-10-18
+
+[The closure](WIO_N03_CLOSURE.md) completes user-hook container traversal,
+synchronous hooks in async callers, concrete generic/native method hooks and
+registered native POD display. Shared WIR calls/CFG keep hook order and cleanup;
+ref/view operand signatures and no-destructor POD owned-copy validation agree
+through Typed/Lowered WIR and bytecode. Open generic native owners no longer
+produce bogus C++ registry entries. KI-008's former VM negatives are positive
+gates now; implicit awaiting of async ToString is not added.
+
+Bare helper results are forwarded, private completed container strings move out,
+and single rendered string affixes preflight capacity. Indexed numeric conversion
+avoids zeroing unused 1 KiB scratch while keeping default StackText initialization
+and all formatting/error contracts. Six local gates pass in 323.90s; final
+verifier hardening has a separate 2/2 recheck in 23.47s. CI qualification remains
+explicit and the measurement supplement records costs independently.
+
+N03 implementation is complete. N04 is next, not started here. N01 coverage,
+N14 timing acceptance and KI-007/KI-009 remain independent open work; no universal
+1.05-1.10x C++ guarantee or VM-core speedup is claimed.

@@ -1,0 +1,52 @@
+use std::benchmark as bench;
+use std::console as console;
+use std::convert as convert;
+use std::json as json;
+
+using cpp::header("probe.h");
+
+[native, cpp::name(indexed_format::Hash)]
+fn Hash(value: view string) -> u64;
+
+fn Work(mode: i64, count: i64) -> u64
+{
+    mut checksum = 0u64;
+    for (index in 0i64..<count)
+    {
+        let row = mode == 0
+            ? console::Format("{0:D8}/{1:X8}", index, index)
+            : console::Format("{0:F3}/{1,-8}", (index fit f64) / 8.0f64, "hi");
+        checksum += Hash(ref row);
+    }
+
+    return checksum;
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() < 3usize or args.Count() > 4usize) return 1;
+    let modeResult = convert::ParseI64(args[1usize]);
+    let countResult = convert::ParseI64(args[2usize]);
+    if (modeResult.IsError() or countResult.IsError()) return 1;
+    let mode = modeResult.Value();
+    let count = countResult.Value();
+    if (mode < 0 or mode > 1 or count < 1 or count > 100000) return 1;
+    bench::Consume(Work(mode, bench::Input(count)));
+    bench::Consume(Work(mode, bench::Input(count)));
+    if (args.Count() == 4usize)
+    {
+        if (bench::BeginAllocations().IsError()) return 2;
+        let checksum = Work(mode, bench::Input(count));
+        let counters = bench::EndAllocations();
+        console::PrintLine(bench::Protocol(1i64, count fit u64, checksum));
+        console::PrintLine(json::Write(bench::AllocationJson(counters)));
+        if (counters.liveBlocks != 0u64 or counters.liveBytes != 0u64) return 3;
+        return 0;
+    }
+
+    let start = bench::Now();
+    let checksum = Work(mode, bench::Input(count));
+    bench::Consume(checksum);
+    console::PrintLine(bench::Protocol(bench::Now() - start, count fit u64, checksum));
+    return 0;
+}

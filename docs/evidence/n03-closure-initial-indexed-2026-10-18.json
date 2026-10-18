@@ -1,0 +1,31 @@
+{
+  "passed": false,
+  "processes": [
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "F:\\Projects\\wio\\tests\\performance\\indexed_format\\contract.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n03-indexed-format-contract\\9fb601d1b1184eeab9d48277bd550dbd\\contract.exe"
+      ],
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-indexed-format-contract\\9fb601d1b1184eeab9d48277bd550dbd\\contract.exe"
+      ],
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "invalid indexed format accepted\n"
+    }
+  ]
+}

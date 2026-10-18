@@ -1,0 +1,18 @@
+{
+  "passed": false,
+  "processes": [
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\1deddae23b574193a1f68f3f01fc9c85\\main.wio",
+        "--emit-cpp",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\1deddae23b574193a1f68f3f01fc9c85"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 1,
+      "stdout": "Error [F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\1deddae23b574193a1f68f3f01fc9c85\\main.wio:26:13]: Lowered WIR WIR1458 (verify-typed-wir): Typed WIR interpolation requires string/text identity, one more segment than values, and concrete value signatures.\n",
+      "stderr": ""
+    }
+  ]
+}

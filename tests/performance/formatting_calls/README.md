@@ -1,5 +1,12 @@
 # N03 shared scalar formatting calls
 
+The [N03 closure](../../../docs/WIO_N03_CLOSURE.md) extends the gate to nested
+object containers, concrete generic owners, async callers, native ToString
+declarations and native-to-Wio reentry. Former object-array rejection assertions
+now require positive VM output. Private/ambiguous and async hook declarations
+are not implicitly selected/awaited. The separate KI-009 indirect-native-call
+negative remains, independently of formatting support.
+
 The workload and benchmark controller are Wio. Python performs serial builds and
 computes independent UTF-8 FNV fingerprints; it does not own timing samples.
 

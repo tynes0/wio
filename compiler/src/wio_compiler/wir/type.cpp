@@ -14,12 +14,11 @@ namespace wio::wir
             seed ^= value + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
         }
 
-        template <typename T>
-        void hashValue(std::size_t& seed, const T value)
+        template <typename T> void hashValue(std::size_t& seed, const T value)
         {
             hashCombine(seed, std::hash<T>{}(value));
         }
-    }
+    } // namespace
 
     TypeTable::TypeTable()
     {
@@ -85,8 +84,7 @@ namespace wio::wir
         for (const TypeId argument : type.arguments)
             hashValue(result, argument.value());
         hashValue(result, static_cast<std::underlying_type_t<NominalKind>>(type.nominalKind));
-        hashValue(result,
-                  static_cast<std::underlying_type_t<NominalRepresentation>>(type.nominalRepresentation));
+        hashValue(result, static_cast<std::underlying_type_t<NominalRepresentation>>(type.nominalRepresentation));
         hashValue(result, static_cast<std::underlying_type_t<NominalValueModel>>(type.nominalValueModel));
 
         // Nominal identity deliberately excludes mutable layout/reflection
@@ -572,6 +570,14 @@ namespace wio::wir
     bool requiresCleanup(const Type& type)
     {
         return type.cleanup != CleanupKind::None;
+    }
+
+    bool supportsOwnedCopy(const Type& type)
+    {
+        return requiresCleanup(type) || (type.kind == TypeKind::Named && type.nominalKind == NominalKind::Component &&
+                                         type.nominalRepresentation == NominalRepresentation::NativePod &&
+                                         type.ownership == OwnershipModel::OwnedValue && type.nativeBinding &&
+                                         type.nativeBinding->standardLayout && type.nativeBinding->triviallyCopyable);
     }
 
     namespace

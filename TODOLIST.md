@@ -1278,7 +1278,10 @@ Rider, and CLion are defined in
    transactional append, pure-tree flattening and last-use owned buffers; see
    `docs/WIO_CONCAT_OPTIMIZATION.md`. N01 residual profiling and N14 qualified
    timing acceptance stay open; all three N02 timing sessions remain noisy.
-   N03 formatting/builders is in progress: finite float stack formatting and
+   N03 formatting/builders implementation is complete; current closure and
+   qualification are in `docs/WIO_N03_CLOSURE.md`. N14 timing acceptance remains
+   open. The following paragraphs are the historical N03 slice log, not a new
+   set of remaining N03 blockers. Finite float stack formatting and
    direct builtin-container interpolation are implemented, with VM display
    conformance fixes and frozen related four-implementation measurements.
    Direct primitive builder Append/AppendLine now use canonical formatting fusion
@@ -1348,6 +1351,13 @@ Rider, and CLion are defined in
    unqualified, native binary grows 3003 bytes, and native POD operator<< is
    still VM-unsupported WVM1062 (KI-008), not a zero-cost VM result. N03 remains
    open for richer/indexed formatting and remaining hooks; N04 has not started.
+   Closure supersedes those historical bounds: shared container hooks,
+   sync formatting in async contexts, concrete generic/native hooks and native
+   POD thunks are implemented; formerly negative VM cases now pass. Bare results
+   forward, completed container buffers move, and indexed numeric scratch avoids
+   redundant zeroing. Six scoped gates plus the final two-gate protocol recheck
+   pass. N03 implementation is complete; N04 is next. Platform qualification and
+   noisy timing acceptance stay explicit in `docs/WIO_N03_CLOSURE.md` and N14.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

@@ -10,6 +10,24 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 formatting/builders implementation closure — 2026-10-18
+
+- [x] Complete shared hook rendering for object/nested containers, concrete
+  generic owners and synchronous hooks in async callers. Native ToString uses
+  explicit owned-receiver native adapters with tested native-to-Wio reentry.
+  Native POD scalar/view/array display now has registered formatter thunks.
+- [x] Fix emitted interpolation ref/view signatures and separate POD owned-copy
+  from destruction across all three verifiers. Reject forged nontrivial/layout/
+  object/RC metadata. Skip open generic owners in native thunk/registry emission.
+- [x] Forward bare completed results, move private container output buffers and
+  preflight single rendered string affixes. Audit indexed formats and remove
+  only unused numeric scratch zeroing; ordinary StackText stays initialized.
+- [x] Six scoped gates pass in 323.90s; final verifier/POD recheck passes 2/2
+  in 23.47s. Initial failures and intermediate candidates remain as evidence.
+- [ ] Platform/timing qualification remains explicit, not a universal speedup
+  or whole-backend parity claim. N04 is next; KI-007/KI-009 and N14 remain open.
+  Report: `docs/WIO_N03_CLOSURE.md`.
+
 ## N03 generated native stream copies and bounded capacity — 2026-10-18
 
 - [x] Optimize actual emitted C++ native stream formatting: move out the finished

@@ -21,6 +21,11 @@ object Named
     }
 }
 
+fn RenderView(value: view Label) -> string
+{
+    return $"${value}";
+}
+
 fn Entry(args: string[]) -> i32
 {
     let text = "a\0b🌍";
@@ -70,5 +75,9 @@ fn Entry(args: string[]) -> i32
     if ($"prefix${value}suffix" != "prefixpayload=\0bc;index=7;ok=falsesuffix" or Calls() != 1) return 4;
     Reset(0);
     if (rendered != "payload=\0bc;index=7;ok=false") return 5;
+    if (RenderView(ref value) != rendered or Calls() != 1) return 22;
+    Reset(0);
+    let labels: Label[] = [value];
+    if ($"${labels}" != "[payload=\0bc;index=7;ok=false]" or Calls() != 1) return 23;
     return 0;
 }

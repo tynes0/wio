@@ -23,8 +23,7 @@ namespace wio::wir
 
         struct IdHash
         {
-            template<typename Tag>
-            std::size_t operator()(const Id<Tag> id) const noexcept
+            template <typename Tag> std::size_t operator()(const Id<Tag> id) const noexcept
             {
                 return id.value();
             }
@@ -119,8 +118,7 @@ namespace wio::wir
                                     !openFunction(source->second))
                                     continue;
                                 instruction.callee = instantiate(instruction);
-                                if (const auto key = instanceKeys_.find(instruction.callee);
-                                    key != instanceKeys_.end())
+                                if (const auto key = instanceKeys_.find(instruction.callee); key != instanceKeys_.end())
                                     instruction.specializationKey = key->second;
                                 const auto concrete =
                                     std::ranges::find(module_.functions, instruction.callee, &Function::id);
@@ -144,9 +142,9 @@ namespace wio::wir
                                     instruction.signatureTypes[argumentIndex] = concreteType;
                                     for (auto& definingBlock : function.blocks)
                                     {
-                                        const auto definition = std::ranges::find(
-                                            definingBlock.instructions, instruction.operands[argumentIndex],
-                                            &Instruction::result);
+                                        const auto definition = std::ranges::find(definingBlock.instructions,
+                                                                                  instruction.operands[argumentIndex],
+                                                                                  &Instruction::result);
                                         if (definition == definingBlock.instructions.end() ||
                                             definition->resultType != oldType)
                                             continue;
@@ -232,8 +230,8 @@ namespace wio::wir
                 if (const auto found = processedMethods_.find(id);
                     found != processedMethods_.end() && found->second == currentType.methods)
                     return;
-                const bool hasLifecycle = currentType.nominalKind == NominalKind::Object &&
-                                          lifecycleTemplates_.contains(currentType.name);
+                const bool hasLifecycle =
+                    currentType.nominalKind == NominalKind::Object && lifecycleTemplates_.contains(currentType.name);
                 if (currentType.methods.empty() && !hasLifecycle)
                     return;
 
@@ -241,8 +239,9 @@ namespace wio::wir
                 for (auto& method : methods)
                 {
                     const auto source = templates_.find(method.function);
-                    if (method.isAbstract || source == templates_.end() || source->second.isExternal ||
-                        !openFunction(source->second) || !source->second.genericParameters.empty())
+                    if (method.isAbstract || source == templates_.end() ||
+                        (source->second.isExternal && !source->second.nativeBinding) || !openFunction(source->second) ||
+                        !source->second.genericParameters.empty())
                         continue;
                     TypeId owner = id;
                     const std::string ownerName = module_.types.get(source->second.ownerType).name;
@@ -354,8 +353,7 @@ namespace wio::wir
                         materializeTypeMethods(TypeId{static_cast<TypeId::ValueType>(i)}, openNominalsByName);
                     }
                 } while (diagnostics_.empty() &&
-                         (observedTypeCount != module_.types.size() ||
-                          observedGeneration != typeMutationGeneration_));
+                         (observedTypeCount != module_.types.size() || observedGeneration != typeMutationGeneration_));
 
                 materializedTypeCount_ = module_.types.size();
                 materializedTypeGeneration_ = typeMutationGeneration_;
@@ -494,11 +492,10 @@ namespace wio::wir
                     encounteredCycle |= result.encounteredCycle;
                     return result.open;
                 };
-                const bool open = observe(type->extentParameter) ||
-                                  std::ranges::any_of(type->arguments, observe) ||
-                                  std::ranges::any_of(type->baseTypes, observe) ||
-                                  std::ranges::any_of(type->fields,
-                                                      [&](const FieldLayout& field) { return observe(field.type); });
+                const bool open =
+                    observe(type->extentParameter) || std::ranges::any_of(type->arguments, observe) ||
+                    std::ranges::any_of(type->baseTypes, observe) ||
+                    std::ranges::any_of(type->fields, [&](const FieldLayout& field) { return observe(field.type); });
                 state = open ? 3 : encounteredCycle ? 0 : 2;
                 return {.open = open, .encounteredCycle = encounteredCycle};
             }
@@ -553,15 +550,14 @@ namespace wio::wir
                                                std::unordered_set<TypeId, IdHash> visiting;
                                                if (typeReferencesBindings(method.returnType, bindings, visiting))
                                                    return true;
-                                               return std::ranges::any_of(method.parameterTypes,
-                                                                          [&](const TypeId parameter)
-                                                                          {
-                                                                              std::unordered_set<TypeId, IdHash>
-                                                                                  parameterVisiting;
-                                                                              return typeReferencesBindings(
-                                                                                  parameter, bindings,
-                                                                                  parameterVisiting);
-                                                                          });
+                                               return std::ranges::any_of(
+                                                   method.parameterTypes,
+                                                   [&](const TypeId parameter)
+                                                   {
+                                                       std::unordered_set<TypeId, IdHash> parameterVisiting;
+                                                       return typeReferencesBindings(parameter, bindings,
+                                                                                     parameterVisiting);
+                                                   });
                                            });
             }
             bool openFunction(const Function& function) const

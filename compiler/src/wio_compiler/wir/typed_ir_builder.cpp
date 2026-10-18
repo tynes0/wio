@@ -3852,7 +3852,9 @@ namespace wio::wir::typed
                         continue;
                     }
                     const ValueId value = buildAutoReadableExpression(part, state);
-                    const TypeId valueType = part ? mapType(part->refType.Lock(), part.Get()) : TypeId{};
+                    // Auto-readable projection can load through a view/ref.
+                    // Pin the emitted value type, not its source reference type.
+                    const TypeId valueType = value ? emittedValueType(value, state) : TypeId{};
                     if (!value || !valueType)
                         return {};
                     instruction.operands.push_back(value);

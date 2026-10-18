@@ -223,7 +223,20 @@ locks the unchanged fallback. Shared [N02 semantics](../tests/performance/concat
 use an explicit snapshot. The first failing cross-backend test was retained in
 the local `build/n02-concat-semantics/` evidence, not hidden as a parity success.
 
-### KI-008 — Display formatting parity (partly fixed, user hooks still open)
+### KI-008 — Display formatting parity (implementation fixed; qualification tracked separately)
+
+The [N03 closure](WIO_N03_CLOSURE.md) implements the remaining supported display
+paths: object-containing/nested containers, synchronous hooks in async callers,
+concrete generic owners, native ToString declarations and native POD formatter
+thunks. POD view signatures and the no-destructor owned-copy verifier protocol
+are corrected. Current gates require positive VM output where older gates below
+expected WVM1062. Platform CI and N14 performance acceptance are separate; this
+does not claim that every possible type is implicitly formattable.
+
+The contract is a public unambiguous synchronous zero-argument string-returning
+hook. Async hooks must be awaited explicitly; open generic declarations are not
+executable runtime values. Other external-member/indirect-native dispatch is not
+silently implemented by the formatting adapter. Historical discovery follows.
 
 The N03 baseline on 2026-10-17 exposed WVM1062 for builtin f64 array
 interpolation. VM scalar floating interpolation also used shortest output where
@@ -237,21 +250,17 @@ are now materialized as ordinary WIR virtual/interface calls, including concrete
 generic std::ToString callers, view receivers and temporary objects. Evaluation
 and hook order have shared native O0/O2 + VM coverage.
 
-**Still open:** object-containing containers, async/coroutine contexts and
-native/still-open generic hook declarations are not enabled by this slice. The
-object-array VM case remains an explicit WVM1062 negative test, not a parity
-success. Track this under remaining N03
-correctness work before claiming complete formatting conformance or v1 parity.
-Resolve this through shared callable lowering (and continuation support where
-needed), not arbitrary callbacks inside the low-level builtin formatter.
+**Earlier scalar-slice bounds:** object-containing containers, async/coroutine
+contexts and native/generic-owner declarations were not enabled by that slice.
+Its object-array WVM1062 negatives remain in historical evidence. The closure
+now uses shared WIR traversal/call lowering, not arbitrary callbacks inside the
+low-level builtin formatter, and the regression gates require successful output.
 
-Concrete native POD components that rely only on a C++ `operator<<` also remain
-native-only for display. The analyzer/C++ compiler can accept that operator, but
-the VM has no declared formatter thunk for the POD value and rejects its
-interpolation with WVM1062. The generated-stream fixture now explicitly retains
-this negative case alongside positive native O0/O2 behavior; supported VM builtin
-and scalar Wio ToString cases still pass. A native codegen optimization is not
-closure of this native-formatting bridge limitation. See
+Native POD components relying on C++ `operator<<` originally had no declared VM
+formatter thunk and failed WVM1062. The closure registers that thunk and tests
+scalar/view/array paths, counted affixes, independent snapshots and translated
+exceptions in both backends. Old failed benchmark samples remain missing VM
+observations, not zero timings or speedup denominators. See
 [the fixture](../tests/performance/generated_stream/README.md).
 
 See [the scalar call-lowering report](WIO_FORMATTING_CALL_LOWERING.md) for the

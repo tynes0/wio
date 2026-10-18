@@ -1510,7 +1510,7 @@ namespace wio::wir::lowered
                                  ? valueType(instruction.operands.front()) != instruction.resultType
                                  : !isAnyPayloadTypeCompatible(module.types, valueType(instruction.operands.front()),
                                                                instruction.resultType)) ||
-                            !copiedType || !requiresCleanup(*copiedType) ||
+                            !copiedType || !supportsOwnedCopy(*copiedType) ||
                             (expectsReferenceCounted != (copiedType->cleanup == CleanupKind::ReleaseReference)) ||
                             instruction.resultOwnership != typed::ValueOwnership::Owned)
                         {

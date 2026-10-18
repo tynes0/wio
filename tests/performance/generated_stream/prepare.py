@@ -30,7 +30,9 @@ if __name__ == "__main__":
         project="GeneratedStream.csproj", assembly="GeneratedStream", stage="n03", title="N03 generated stream",
         cases=("pod-bare-192", "pod-affix-8192"), expected=expected,
         diagnostic_flags=["-static-libstdc++", "-static-libgcc"] if os.name == "nt" else [],
-        contracts="Native POD operator<< interpolation; cached immutable ASCII/NUL input after two warmups; exact index/bool; full UTF8 FNV; VM WVM1062 unsupported, not zero time; C++ owning-copy stream; C# UTF16 builder",
+        contracts="Native POD operator<< interpolation via registered native formatter; cached immutable ASCII/NUL input after two warmups; exact index/bool; full UTF8 FNV; historical VM WVM1062 has no timing; C++ owning-copy stream; C# UTF16 builder",
         artifacts=("compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp", "runtime/include/value_format.h",
                    "runtime/include/floating_format.h", "runtime/include/integer_format.h",
+                   "compiler/src/wio_compiler/wir/formatting_call_lowerer.cpp",
+                   "compiler/src/wio_compiler/bytecode/verifier.cpp", "runtime/include/std_console.h",
                    "tests/performance/generated_stream/prepare.py", "tests/performance/concat_reuse/prepare.py")))

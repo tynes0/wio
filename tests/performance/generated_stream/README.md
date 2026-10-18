@@ -7,13 +7,11 @@ literals. Native `operator<<` executes once per value. Immutable input payloads
 are cached in all supported implementations before timing via two in-process
 warmups. Every result is fully FNV-hashed with an independent Python oracle.
 
-The native stream operator is currently **unsupported in the VM** (`WVM1062`).
-All four-implementation sessions deliberately retain these failed VM launches.
-The controller's overall `outputsCorrect` and `timingQualified` are false; there
-is no usable VM duration/speedup. Do not quote an empty-summary zero as a VM time.
-The separate correctness gate verifies supported VM builtin/object ToString
-formatting and the explicit native-POD rejection. This patch does not add a VM
-native formatter thunk or close KI-008.
+The N03 closure adds a registered native formatter thunk, including POD view and
+array cases. The original sessions before that change deliberately retain their
+VM WVM1062 failures: those have no usable VM duration/speedup, not zero cost.
+The current gate requires positive native O0/O2 and VM output, including a
+translated thrown operator. See [the closure](../../../docs/WIO_N03_CLOSURE.md).
 
 ```sh
 python tests/performance/generated_stream/prepare.py --output build/generated-before --label before --count 2001

@@ -64,9 +64,7 @@ def verify(args):
     custom_bytecode = folder / "custom.wiob"
     run([wio, folder / "custom.wio", "--target", "shared", "--native-bridge-only", "--output", custom_bridge,
          "--bytecode-sidecar", custom_bytecode])
-    rejected = run([wio, "--vm-run-bytecode", custom_bytecode, "--native-library", custom_bridge], expected=1)
-    if "WVM1062" not in rejected.stderr:
-        raise RuntimeError("User ToString rejection changed unexpectedly")
+    run([wio, "--vm-run-bytecode", custom_bytecode, "--native-library", custom_bridge])
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
     print("N03 native O0/O2 + VM: float precision/signed zero, scalar/nested containers, char/NUL and builder snapshots")
 

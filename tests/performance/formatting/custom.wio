@@ -1,5 +1,4 @@
-// Scalar ToString now has shared-call lowering. Object-array hooks remain a
-// separately tracked WVM1062 gap; the scalar success must not hide that boundary.
+// Scalar and object-array ToString calls share WIR dispatch and ordering.
 object Label
 {
     private value: i32;

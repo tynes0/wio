@@ -500,7 +500,9 @@ namespace wio::codegen
         std::vector<const lowered::Function*> natives;
         std::set<std::string> nativeKeys;
         for (const auto& f : module.functions)
-            if (f.nativeBinding && f.genericParameters.empty() && concrete(f.callableType))
+            if (f.nativeBinding && f.genericParameters.empty() && concrete(f.callableType) &&
+                (!f.ownerType || concrete(f.ownerType)) &&
+                std::ranges::all_of(f.parameters, [&](const auto& parameter) { return concrete(parameter.type); }))
             {
                 // Multiple Wio aliases may name the same concrete C++ binding.
                 if (!nativeKeys.insert(f.nativeBinding->stableKey).second)
