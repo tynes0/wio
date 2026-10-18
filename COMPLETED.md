@@ -10,6 +10,20 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N04 runtime/native-bridge profile slice — 2026-10-19
+
+- [x] Explicit host-independent backend runtime profiles default to Release/O2;
+  Debug O0/symbols remains selectable. Share C++/C99/PIC policy, preserve checks/
+  exceptions/FP semantics, track profile changes and install build-profile.txt.
+- [x] Byte-I/O benchmark selects an O2 native bridge, records build provenance
+  and durations, and rejects reuse that would mislabel known runtime/bridge flags.
+- [x] Two local scoped gates pass in 107.91s, including 21 I/O processes and
+  O0/O2 native bridges. Runtime-only install/hash/profile checks pass. Archive
+  shrinks 7344752 -> 1721974 bytes; no RSS or accepted speedup claim follows.
+- [ ] Source CI and final measurements remain separately qualified; N04/N14,
+  KI-010 and the remaining buffer/batching/std work stay open.
+  Report: `docs/WIO_RUNTIME_PROFILE_OPTIMIZATION.md`.
+
 ## N04 first slice: direct owned byte reads — 2026-10-19
 
 - [x] Read Wio unsigned-byte arrays directly into their final native payload,

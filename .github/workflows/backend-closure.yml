@@ -105,7 +105,7 @@ jobs:
       - name: Qualify N04 owned byte reads (native O0/O2 and VM)
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
-          -R "^wio_n04_byte_io$"
+          -R "^wio_n04_(byte_io|runtime_profile)$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -52,6 +54,21 @@ def prepare(args, fixture=None):
     bytecode = folder / "main.wiob"
     commands = (json.loads((folder / "build.json").read_text(encoding="utf-8"))
                 if args.reuse_build and args.rebuild_diagnostics else [])
+    bridge_flags = ([] if args.bridge_optimization == "default"
+                    else ["-" + args.bridge_optimization, "-ffp-contract=off"])
+    runtime_profile = runtime.with_name("build-profile.txt")
+    runtime_build = dict(sha256=hashlib.sha256(runtime.read_bytes()).hexdigest(),
+                         profile=runtime_profile.read_text(encoding="utf-8") if runtime_profile.is_file() else None)
+    if args.reuse_build:
+        previous = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+        if previous.get("metadata", {}).get("bridgeFlags", []) != bridge_flags:
+            raise RuntimeError("--reuse-build cannot change bridge optimization; rebuild in a new output directory")
+        old_runtime = previous.get("metadata", {}).get("runtimeBuild")
+        if old_runtime is not None and old_runtime != runtime_build:
+            raise RuntimeError("--reuse-build cannot relabel a changed runtime; rebuild in a new output directory")
+        # Historical manifests did not freeze build-input provenance. Preserve
+        # that unknown state rather than claiming the current archive built them.
+        runtime_build = old_runtime
 
     def run(command, force=False):
         if args.reuse_build and not force:
@@ -59,9 +76,11 @@ def prepare(args, fixture=None):
         command = [str(x) for x in command]
         row = dict(command=command)
         commands.append(row)
+        start = time.perf_counter_ns()
         result = subprocess.run(command, cwd=folder, env=dict(os.environ, WIO_ROOT=str(ROOT)),
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
-        row.update(exitCode=result.returncode, stdout=result.stdout, stderr=result.stderr)
+        row.update(exitCode=result.returncode, stdout=result.stdout, stderr=result.stderr,
+                   elapsedNanoseconds=time.perf_counter_ns() - start)
         (folder / "build.json").write_text(json.dumps(commands, indent=2) + "\n", encoding="utf-8")
         print(result.stdout, end="", flush=True)
         print(result.stderr, end="", flush=True)
@@ -79,7 +98,8 @@ def prepare(args, fixture=None):
     run([cxx, *flags, f"-I{folder}", folder / "main.cpp", "-o", cpp])
     run([dotnet, "build", folder / fixture["project"], "-c", "Release", "-o", folder / "csharp", "--nologo"])
     run([wio, folder / "main.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder,
-         "--output", bridge, "--bytecode-sidecar", bytecode])
+         "--output", bridge, "--bytecode-sidecar", bytecode,
+         *["--backend-arg=" + flag for flag in bridge_flags]])
     cases = []
     memory = []
     for mode, name in enumerate(fixture["cases"]):
@@ -119,6 +139,8 @@ def prepare(args, fixture=None):
         artifacts.append(companion)
     if (ROOT / "runtime/include/string_concat.h").is_file():
         artifacts.append(ROOT / "runtime/include/string_concat.h")
+    if runtime_profile.is_file():
+        artifacts.append(runtime_profile)
     for extra in fixture.get("artifacts", ()):
         if (ROOT / extra).is_file():
             artifacts.append(ROOT / extra)
@@ -127,7 +149,8 @@ def prepare(args, fixture=None):
                     environment=dict(WIO_ROOT=str(ROOT), DOTNET_NOLOGO="1"),
                     maximumRange=.15, maximumDrift=.10, maximumControlDifference=.10,
                     metadata=dict(label=args.label, nativeFlags=flags, diagnosticFlags=fixture.get("diagnostic_flags", []),
-                                  vm="Release host; unchanged bytecode semantics",
+                                  vm="Release host; unchanged bytecode semantics", bridgeFlags=bridge_flags,
+                                  runtimeBuild=runtime_build,
                                   contracts=fixture["contracts"],
                                   revision=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()),
                     versions=[dict(program=str(program), args=argv, cwd=str(folder))
@@ -137,7 +160,7 @@ def prepare(args, fixture=None):
     print(folder / "manifest.json")
 
 
-def arguments(default_sources=HERE):
+def arguments(default_sources=HERE, default_bridge_optimization="default"):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--label", required=True)
@@ -154,6 +177,8 @@ def arguments(default_sources=HERE):
     p.add_argument("--count", type=int, default=2001)
     p.add_argument("--repetitions", type=int, default=5)
     p.add_argument("--cpu", type=int, default=2)
+    p.add_argument("--bridge-optimization", choices=("default", "O0", "O2"), default=default_bridge_optimization,
+                   help="Explicit native bridge level; default preserves driver behavior, reuse cannot relabel flags")
     parsed = p.parse_args()
     if not 1 <= parsed.count <= 100000 or parsed.repetitions < 3:
         p.error("Invalid count/repetitions")

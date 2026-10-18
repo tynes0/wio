@@ -1,5 +1,11 @@
 # Runtime test registrations. Included in the app directory scope.
 
+add_test(NAME wio_n04_runtime_profile
+    COMMAND "${CMAKE_COMMAND}" "-DWIO_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+        -P "${CMAKE_SOURCE_DIR}/tests/cmake/backend_runtime_profile_test.cmake")
+wio_test_labels(wio_n04_runtime_profile runtime configuration optimization)
+set_tests_properties(wio_n04_runtime_profile PROPERTIES TIMEOUT 30)
+
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
 if(BUILD_TESTING AND Python3_Interpreter_FOUND)

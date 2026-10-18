@@ -85,10 +85,20 @@ set(WIO_BACKEND_RUNTIME_OBJ_UTF8PROC "${WIO_BACKEND_RUNTIME_DIR}/utf8proc.o")
 
 file(MAKE_DIRECTORY "${WIO_BACKEND_RUNTIME_DIR}")
 
-set(WIO_BACKEND_RUNTIME_COMPILE_ARGS -std=c++20)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/WioBackendRuntimeProfile.cmake")
+# The backend archive is shared by all host configurations in this build tree.
+# Select its own profile explicitly rather than letting the last host config win.
+set(WIO_BACKEND_RUNTIME_PROFILE "Release" CACHE STRING "Build profile of the generated-program runtime archive, independent of the host configuration")
+set_property(CACHE WIO_BACKEND_RUNTIME_PROFILE PROPERTY STRINGS Release Debug RelWithDebInfo MinSizeRel)
+wio_backend_runtime_profile_flags("${WIO_BACKEND_RUNTIME_PROFILE}" WIO_BACKEND_RUNTIME_PROFILE_ARGS)
 if(NOT WIN32)
-    list(APPEND WIO_BACKEND_RUNTIME_COMPILE_ARGS -fPIC)
+    list(APPEND WIO_BACKEND_RUNTIME_PROFILE_ARGS -fPIC)
 endif()
+set(WIO_BACKEND_RUNTIME_PROFILE_FILE "${WIO_BACKEND_RUNTIME_DIR}/build-profile.txt")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backend-runtime-profile.txt.in"
+    "${WIO_BACKEND_RUNTIME_PROFILE_FILE}" @ONLY)
+set(WIO_BACKEND_RUNTIME_COMPILE_ARGS -std=c++20 ${WIO_BACKEND_RUNTIME_PROFILE_ARGS})
+message(STATUS "Backend runtime profile: ${WIO_BACKEND_RUNTIME_PROFILE} (${WIO_BACKEND_RUNTIME_PROFILE_ARGS})")
 
 add_library(wio_runtime_headers INTERFACE)
 target_include_directories(wio_runtime_headers INTERFACE "${WIO_RUNTIME_INCLUDE_DIR}")
@@ -116,6 +126,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/entry_args.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_ENTRY_ARGS}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/entry_args.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/entry_args.h"
     VERBATIM
@@ -131,6 +142,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_hash.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_HASH}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_hash.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_hash.h"
     VERBATIM
@@ -147,6 +159,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_assert.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_ASSERT}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_assert.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_assert.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -164,6 +177,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_console.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_CONSOLE}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_console.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/io_detail/io_helpers.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_console.h"
@@ -180,6 +194,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_convert.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_CONVERT}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_convert.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_convert.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/float_parse.h"
@@ -198,6 +213,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_fs.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_FS}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_fs.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_fs.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -215,6 +231,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_math.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_MATH}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_math.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_math.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -231,6 +248,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_net.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_NET}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_net.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_net.h"
     VERBATIM
@@ -247,6 +265,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_io.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_IO}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_io.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_io.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -265,6 +284,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_process.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_PROCESS}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_process.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_process.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -281,6 +301,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_random.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_RANDOM}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_random.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_random.h"
     VERBATIM
@@ -296,6 +317,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_regex.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_REGEX}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_regex.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_regex.h"
     VERBATIM
@@ -311,6 +333,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_time.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_TIME}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_time.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_time.h"
     VERBATIM
@@ -323,12 +346,14 @@ add_custom_command(
         ${WIO_BACKEND_CXX_COMPILER}
         -x c
         -std=c99
+        ${WIO_BACKEND_RUNTIME_PROFILE_ARGS}
         -DUTF8PROC_STATIC
         -I "${WIO_RUNTIME_INCLUDE_DIR}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc"
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc/utf8proc.c"
         -o "${WIO_BACKEND_RUNTIME_OBJ_UTF8PROC}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc/utf8proc.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc/utf8proc_data.c"
         "${WIO_RUNTIME_INCLUDE_DIR}/utf8proc.h"
@@ -392,6 +417,7 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/utf8proc/LICENSE.md"
 install(FILES "${WIO_BACKEND_RUNTIME_LIB}"
     DESTINATION runtime/lib
 )
+install(FILES "${WIO_BACKEND_RUNTIME_PROFILE_FILE}" DESTINATION runtime/lib)
 
 if(BUILD_TESTING)
     add_executable(wio_runtime_unicode_grapheme_test

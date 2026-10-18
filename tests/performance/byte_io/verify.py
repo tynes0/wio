@@ -46,11 +46,13 @@ def verify(args):
         run([contract], contains="byte-io-contract-ok")
     bridge = folder / ("bridge.dll" if os.name == "nt" else "bridge.dylib" if sys.platform == "darwin" else "bridge.so")
     bytecode = folder / "main.wiob"
-    run([wio, folder / "main.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder,
-         "--output", bridge, "--bytecode-sidecar", bytecode])
-    run([args.vm.resolve(), bytecode, "--native-library", bridge], contains="byte-io-ok")
-    run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "partial"], expected=1, contains="partial")
-    run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "closed"], expected=1)
+    for optimization in ("-O0", "-O2"):
+        run([wio, folder / "main.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder,
+             "--output", bridge, "--bytecode-sidecar", bytecode, "--backend-arg=" + optimization,
+             "--backend-arg=-ffp-contract=off"])
+        run([args.vm.resolve(), bytecode, "--native-library", bridge], contains="byte-io-ok")
+        run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "partial"], expected=1, contains="partial")
+        run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "closed"], expected=1)
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
     print(folder / "results.json")
 

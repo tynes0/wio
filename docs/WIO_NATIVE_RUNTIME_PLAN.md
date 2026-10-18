@@ -537,3 +537,17 @@ package flags
 as a distinct candidate rather than relabeling the current experiment Release
 or changing its runtime flags mid-measurement. This prerequisite does not close
 N12 or the third compile-time pass.
+
+## N04 profile slice, 2026-10-19
+
+The [explicit runtime/bridge profile slice](WIO_RUNTIME_PROFILE_OPTIMIZATION.md)
+adds a host-independent backend runtime profile (default Release/O2), a rebuild
+fingerprint and installed profile metadata. C++ and C99/PIC flags agree; no
+NDEBUG/fast-math or exception weakening is introduced. The byte-I/O benchmark
+explicitly selects an O2 bridge without changing unrelated fixture/CLI defaults.
+Known runtime/bridge provenance cannot be silently relabeled on reuse.
+
+Two scoped local gates pass (107.91s), including 21 I/O processes with both
+O0/O2 bridge builds; runtime-only install/profile checks pass. The archive
+shrinks 7344752 -> 1721974 bytes. Performance/platform qualification remains
+separate in the slice report; N04 and N14 remain open.

@@ -32,10 +32,20 @@ builds and the independent byte oracle; Wio owns sample scheduling, A/A controls
 and the separate final native/VM phase. Retain failures, noise and all samples;
 do not trim or rerun for a preferred result. Run builds, tests and timing serially.
 
+The current fixture defaults to an explicit O2 native bridge with FP contraction
+off. Select `--bridge-optimization default` or `O0` only for an intentionally
+recorded control. Other fixtures using the shared harness keep their previous
+default. `--reuse-build` cannot relabel bridge flags or a known runtime build
+fingerprint; historical manifests without that fingerprint remain unknown.
+Build the backend archive with the intended `WIO_BACKEND_RUNTIME_PROFILE` and
+retain its profile file. The old default-flag N04 evidence is historical, not a
+fully optimized native-boundary VM result.
+
 The separate diagnostic image reports global new/delete traffic, not malloc,
 VM heap accounting or RSS. `contract.cpp` compares the actual new runtime reads
 with the previous two-vector conversion in the same process. It checks full-read
 allocation/requested/peak storage, partial-read error counts/cursor, owning
 snapshots, all byte values, speculative capacity at short reads/EOF and the
 existing zero-count invalid-handle behavior. `semantics.wio` covers native O0/O2
-and the Release VM/native bridge, including translated partial/closed errors.
+and the VM with both O0/O2 native bridges, including translated partial/closed
+errors. Performance sampling uses the Release VM host independently.

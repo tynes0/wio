@@ -102,6 +102,10 @@ the subsequent measurement/report commit changes no production code.
 
 ### Runtime build-policy finding
 
+This is the historical finding at `3c9e268`. The subsequent
+[explicit profile slice](WIO_RUNTIME_PROFILE_OPTIMIZATION.md) addresses it;
+the following original before/after observations retain their original flags.
+
 The generated programs in this experiment use GCC O2, but the local CMake
 backend-archive command for `std_io.cpp` supplies **no explicit optimization
 flag**. The same archive build policy is used in the matched before/after pair;

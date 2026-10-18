@@ -40,6 +40,14 @@ cmake -S . -B build
 cmake --build build
 ```
 
+The generated-program runtime archive has its own CMake profile:
+`-DWIO_BACKEND_RUNTIME_PROFILE=Release` (default), `Debug`, `RelWithDebInfo` or
+`MinSizeRel`. It is independent of the compiler/VM host configuration because
+one backend archive is shared in a build tree. Release uses O2 without disabling
+runtime assertions or enabling fast-math. Use Debug for an O0, symbol-bearing
+runtime; profile changes rebuild its objects. Installation includes the selected
+`runtime/lib/build-profile.txt` beside the archive.
+
 Once the compiler has been built at least once, the preferred repo-local flow
 is now the Wio CLI itself:
 
