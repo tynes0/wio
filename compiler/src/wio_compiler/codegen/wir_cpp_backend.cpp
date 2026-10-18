@@ -1,6 +1,7 @@
 #include "wio/codegen/wir_cpp_backend.h"
 #include "wio/codegen/wir_cpp_receiver_plan.h"
 #include "wio/codegen/wir_cpp_storage_plan.h"
+#include "wio/codegen/wir_cpp_scalar_format_plan.h"
 #include "wio/codegen/wir_cpp_string_transfer_plan.h"
 #include "wio/codegen/wir_cpp_string_init_plan.h"
 #include "wio/codegen/wir_intrinsics.h"
@@ -355,6 +356,7 @@ namespace wio::codegen
             WirCppStoragePlan storagePlan_;
             WirCppStringTransferPlan stringTransferPlan_;
             WirCppStringInitPlan stringInitPlan_;
+            WirCppScalarFormatPlan scalarFormatPlan_;
             std::unordered_map<std::uint32_t, WirCppReceiverPlan> receiverPlans_;
             const WirCppReceiverPlan* currentReceiverPlan_ = nullptr;
             std::unordered_set<std::uint32_t> structuralAliases_;
@@ -1248,7 +1250,7 @@ namespace wio::codegen
                        "#include <any.h>\n#include <entry_args.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include "
                        "<std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n"
                        "#include <wir_inline_place.h>\n#include <integer_format.h>\n#include <value_format.h>\n"
-                       "#include <formatted_size.h>\n";
+                       "#include <formatted_size.h>\n#include <rendered_integer.h>\n";
                 output_ << "#include <wir_abi.h>\n#include <wir_task_abi.h>\n#include <wir_native.h>\n#include "
                            "<module_api.h>\n#include "
                            "<wio_values.h>\n#include "
@@ -2216,6 +2218,17 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                 }
                 suppressedInstructions_.insert(stringInitPlan_.suppressedInstructions.begin(),
                                                 stringInitPlan_.suppressedInstructions.end());
+
+                scalarFormatPlan_ = WirCppScalarFormatPlan::build(module_, function);
+                for (const auto& [value, storage] : scalarFormatPlan_.fragments)
+                {
+                    (void)storage;
+                    storagePlan_.plainValues.insert(value);
+                    ownedValues_.erase(value);
+                    // Integer fragments are noncopyable and formatted in place.
+                    // Keep both fragment kinds predeclared across CFG blocks.
+                    directValues_.erase(value);
+                }
             }
 
             void collectLinearPlaceAliases(const lowered::Function& function)
@@ -2313,6 +2326,11 @@ template<class T> void append_formatted(std::string& target, const T& value) {
 
             std::string valueStorageType(const std::uint32_t id, const TypeId type) const
             {
+                if (const auto fragment = scalarFormatPlan_.fragments.find(id);
+                    fragment != scalarFormatPlan_.fragments.end())
+                    return fragment->second == WirCppScalarFormatPlan::Storage::BooleanView
+                               ? "std::string_view"
+                               : "wio::runtime::detail::RenderedInteger";
                 if (currentReceiverPlan_ && currentReceiverPlan_->receiverValues.contains(id))
                     return "wio::wir_backend::ObjectBorrow<" + objectName(currentFunction_->ownerType) + ">";
                 if (storagePlan_.scalarFieldPlaces.contains(id))
@@ -3016,6 +3034,17 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     break;
                 case lowered::Opcode::Interpolate:
                 {
+                    if (const auto fragment = scalarFormatPlan_.fragments.find(instruction.result.value());
+                        fragment != scalarFormatPlan_.fragments.end())
+                    {
+                        if (fragment->second == WirCppScalarFormatPlan::Storage::BooleanView)
+                            assignResult(instruction, "std::string_view{" + operand(instruction.operands[0]) +
+                                                          " ? \"true\" : \"false\"}");
+                        else
+                            output_ << "                " << valueName(instruction.result) << ".format("
+                                    << operand(instruction.operands[0]) << ");\n";
+                        break;
+                    }
                     const std::string_view prefix =
                         instruction.stringSegments.empty() ? std::string_view{} : instruction.stringSegments.front();
                     const bool renderedStrings =
@@ -3044,8 +3073,15 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     }
                     for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                     {
-                        expression += "wio::wir_backend::append_formatted(_formatted, " +
-                                      operand(instruction.operands[index]) + "); ";
+                        const ValueId value = instruction.operands[index];
+                        if (const auto fragment = scalarFormatPlan_.fragments.find(value.value());
+                            fragment != scalarFormatPlan_.fragments.end())
+                            expression += "_formatted.append(" + operand(value) +
+                                          (fragment->second == WirCppScalarFormatPlan::Storage::IntegerBytes ? ".view()"
+                                                                                                           : "") +
+                                          "); ";
+                        else
+                            expression += "wio::wir_backend::append_formatted(_formatted, " + operand(value) + "); ";
                         if (index + 1 < instruction.stringSegments.size())
                         {
                             const auto& segment = instruction.stringSegments[index + 1];
@@ -3393,6 +3429,14 @@ template<class T> void append_formatted(std::string& target, const T& value) {
                     break;
                 case lowered::Opcode::Release:
                 case lowered::Opcode::DropValue:
+                    if (const auto fragment = scalarFormatPlan_.fragments.find(instruction.operands[0].value());
+                        fragment != scalarFormatPlan_.fragments.end())
+                    {
+                        output_ << "                " << valueName(instruction.operands[0])
+                                << (fragment->second == WirCppScalarFormatPlan::Storage::IntegerBytes ? ".clear();\n"
+                                                                                                    : " = {};\n");
+                        break;
+                    }
                     output_ << "                " << valueName(resolveValueAlias(instruction.operands[0]))
                             << ".reset();\n";
                     break;

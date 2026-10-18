@@ -1315,6 +1315,14 @@ Rider, and CLion are defined in
    reservation falls 696 -> 584 bytes, heap is unchanged, and 168/168 session
    outputs are correct. Native medians fall but global timing remains noisy;
    N03/C++ acceptance is still open and N04 has not started.
+   Private sole-consumer scalar rendering now retains integer bytes / bool
+   literal views instead of intermediate strings, without deferring conversion
+   across hooks or changing WIR/VM. Custom locales retain stream/owned fallback;
+   unsafe uses and other scalar surfaces retain the original representation.
+   See `docs/WIO_SCALAR_FRAGMENT_OPTIMIZATION.md`: 3/3 focused gates, native
+   O0/O2 locale/counted-facet checks and VM NUL/Text/hook checks pass. Work stack
+   reservation falls 584 -> 520 bytes; heap is unchanged. Native ordered medians
+   fall in noisy sessions, not qualified C++ budget closure. N03 remains open.
    The pre-existing mutating-RHS/borrowed-LHS
    native/VM parity defect (KI-007) remains a separate correctness fix before v1.
    `std::benchmark` and

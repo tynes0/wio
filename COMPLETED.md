@@ -10,6 +10,25 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N03 private rendered scalar fragments — 2026-10-18
+
+- [x] Keep integer formatting at its original instruction but retain private
+  rendered bytes instead of a sole-consumer string. Bool uses stable literal
+  views. Custom locales use the same stream formatter and owning fallback.
+  Escape/extra/metadata/edge uses, unsafe cleanup and excluded types keep strings;
+  ordinary ABI and WIR/VM instructions remain unchanged.
+- [x] New/expanded gates pass 3/3 in 145.87s, with runtime boundary/random/
+  long-NUL-locale checks, native O0/O2 hook-driven locale/counting facets and
+  unchanged mixed-hook NUL/Text/8-bit fallback in VM. Strict GCC syntax and
+  standalone runtime unit pass. Initial fixture accessor typo is retained.
+- [x] Before/after retain 168/168 correct outputs. Native ordered comparison
+  observations: 2.1909 -> 1.8798 ms; separate final 2.9425 -> 1.9695. Work loses
+  two optional-string slots, O2 stack reservation falls 584 -> 520 bytes, and
+  production executable size falls 4804 bytes. Heap is unchanged; diagnostic
+  executable grows 892 bytes. All timing remains globally unqualified: no
+  accepted speedup percentage, VM gain or C++ budget closure. N03 remains open.
+  Evidence: `docs/WIO_SCALAR_FRAGMENT_OPTIMIZATION.md`.
+
 ## N03 direct construction into proven-empty string cells — 2026-10-17
 
 - [x] Construct fresh, sole-use owned string results directly in closed local

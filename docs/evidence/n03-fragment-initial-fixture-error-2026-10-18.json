@@ -1,0 +1,10 @@
+{
+  "scope": "Diagnostic excerpt from initial unit-fixture compilation, not a production Wio failure",
+  "command": "cmake --build build --config Debug --target wio_app wio_scalar_format_plan_test wio_rendered_integer_test -- /m:1 /nodeReuse:false",
+  "exitCode": 1,
+  "diagnosticsEnglishSummary": [
+    "tests/scalar_format_plan_test.cpp(22,59): error C2039: 'i64Type': not a member of wio::wir::TypeTable",
+    "tests/scalar_format_plan_test.cpp(28,64): error C2039: 'i64Type': not a member of wio::wir::TypeTable"
+  ],
+  "correction": "Use the existing TypeTable::intern({.kind = TypeKind::I64}) API; do not invent a builtin convenience accessor"
+}

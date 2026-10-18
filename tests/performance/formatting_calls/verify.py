@@ -182,6 +182,27 @@ namespace {{ const bool receiver_probe_{index} = []() {{
                   "--", "init-fail"], expected=1)
     if "transfer-probe failure" not in failed.stdout + failed.stderr:
         raise RuntimeError("VM direct string initialization changed exception propagation")
+    shutil.copyfile(HERE / "fragments.wio", folder / "fragments.wio")
+    shutil.copyfile(HERE / "fragment_probe.h", folder / "fragment_probe.h")
+    run([wio, folder / "fragments.wio", "--emit-cpp", "--include-dir", folder])
+    fragment_source = (folder / "fragments.wio.cpp").read_text(encoding="utf-8")
+    for required in ("wio::runtime::detail::RenderedInteger _v", ".format(", ".view())", " = std::string_view{"):
+        if required not in fragment_source:
+            raise RuntimeError("Missing rendered scalar fragment representation: " + required)
+    for optimization in ("-O0", "-O2"):
+        program = folder / ("fragments.exe" if os.name == "nt" else "fragments")
+        run([args.cxx, "-std=c++20", optimization, folder / "fragments.wio.cpp",
+             f"-I{folder}", f"-I{ROOT / 'runtime/include'}", f"-I{ROOT / 'sdk/include'}", args.runtime.resolve(),
+             *links, "-o", program])
+        run([program])
+    fragment_bridge = folder / ("fragments.dll" if os.name == "nt" else "fragments.dylib" if sys.platform == "darwin" else "fragments.so")
+    fragment_bytecode = folder / "fragments.wiob"
+    run([wio, folder / "fragments.wio", "--target", "shared", "--native-bridge-only", "--include-dir", folder,
+         "--output", fragment_bridge, "--bytecode-sidecar", fragment_bytecode])
+    # MSVC host / GCC bridge may not share std::locale::global. Runtime
+    # custom-facet tests and native O0/O2 cover that representation contract;
+    # VM checks the unchanged NUL/Text/bool/integer mixed-hook surface.
+    run([wio, "--vm-run-bytecode", fragment_bytecode, "--native-library", fragment_bridge, "--", "vm"])
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
     print("N03 scalar ToString: ordered/null-safe dispatch, view/interface/generic calls, native O0/O2 + VM")
 

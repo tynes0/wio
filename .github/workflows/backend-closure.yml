@@ -95,11 +95,11 @@ jobs:
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
           -R "^wio_n03_numeric_builder_(plan|unit|semantics)$"
       - name: Build new N03 formatting-call proof
-        run: cmake --build build --target wio_formatting_call_lowerer_test wio_native_string_borrow_plan_test wio_scalar_field_plan_test wio_formatted_size_test wio_receiver_plan_test wio_integer_hot_path_test wio_string_transfer_plan_test wio_string_init_plan_test wio_inline_string_init_test --parallel 2
+        run: cmake --build build --target wio_formatting_call_lowerer_test wio_native_string_borrow_plan_test wio_scalar_field_plan_test wio_formatted_size_test wio_receiver_plan_test wio_integer_hot_path_test wio_string_transfer_plan_test wio_string_init_plan_test wio_inline_string_init_test wio_scalar_format_plan_test wio_rendered_integer_test --parallel 2
       - name: Qualify N03 shared scalar formatting calls
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
-          -R "^wio_n03_(formatting_call_(plan|semantics)|native_string_borrow_plan|scalar_field_plan|formatted_size|receiver_plan|integer_hot_path|string_transfer_plan|string_init_plan|inline_string_init)$"
+          -R "^wio_n03_(formatting_call_(plan|semantics)|native_string_borrow_plan|scalar_field_plan|formatted_size|receiver_plan|integer_hot_path|string_transfer_plan|string_init_plan|inline_string_init|scalar_format_plan|rendered_integer)$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4

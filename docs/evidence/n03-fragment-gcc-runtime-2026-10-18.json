@@ -1,0 +1,17 @@
+{
+  "syntax": {
+    "command": "g++ -std=c++20 -Wall -Wextra -Werror -fsyntax-only -Icompiler/include -Iruntime/include compiler/src/wio_compiler/codegen/wir_cpp_scalar_format_plan.cpp tests/rendered_integer_test.cpp",
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "runtime": {
+    "build": "g++ -std=c++20 -O2 -Wall -Wextra -Werror -Iruntime/include tests/rendered_integer_test.cpp -o build/n03-rendered-integer-gcc-2026-10-18.exe",
+    "buildExitCode": 0,
+    "command": "build/n03-rendered-integer-gcc-2026-10-18.exe",
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "scope": "Standalone GCC runtime representation/unit checks, separate from Wio/native O0/O2 integration, MSVC CTest and production timing"
+}

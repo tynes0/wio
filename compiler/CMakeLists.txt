@@ -32,6 +32,16 @@ add_library(wio_compiler STATIC
 add_library(wio-compiler ALIAS wio_compiler)
 
 if(BUILD_TESTING)
+    add_executable(wio_scalar_format_plan_test "${CMAKE_SOURCE_DIR}/tests/scalar_format_plan_test.cpp")
+    target_link_libraries(wio_scalar_format_plan_test PRIVATE wio_compiler)
+    add_test(NAME wio_n03_scalar_format_plan COMMAND wio_scalar_format_plan_test)
+    set_tests_properties(wio_n03_scalar_format_plan PROPERTIES LABELS "native;formatting;ownership;memory" TIMEOUT 60)
+
+    add_executable(wio_rendered_integer_test "${CMAKE_SOURCE_DIR}/tests/rendered_integer_test.cpp")
+    target_include_directories(wio_rendered_integer_test PRIVATE "${CMAKE_SOURCE_DIR}/runtime/include")
+    add_test(NAME wio_n03_rendered_integer COMMAND wio_rendered_integer_test)
+    set_tests_properties(wio_n03_rendered_integer PROPERTIES LABELS "native;formatting;locale;memory" TIMEOUT 60)
+
     add_executable(wio_string_init_plan_test "${CMAKE_SOURCE_DIR}/tests/string_init_plan_test.cpp")
     target_link_libraries(wio_string_init_plan_test PRIVATE wio_compiler)
     add_test(NAME wio_n03_string_init_plan COMMAND wio_string_init_plan_test)

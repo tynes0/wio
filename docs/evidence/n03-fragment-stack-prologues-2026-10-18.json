@@ -1,0 +1,55 @@
+{
+  "scope": "Exact Windows x64 GCC 15.2 O2 Work prologue reservation; not whole-program peak stack or heap",
+  "command": "objdump -d --disassemble=_Z9_wio_f780xx <native.exe>",
+  "parentRevision": "b0add13d5d04669b3b6fbbf06b8d5a3f8672f218",
+  "before": {
+    "path": "build/n03-fragment-before-2026-10-18/native.exe",
+    "sha256": "6344b7426fb1a135b74aa58b25bab651793602c28f900511385aa2de236e7291",
+    "generatedSha256": "5435ff05707452f9d767075b7a91d412a279d7f8f50a0ff0ac2a740eb81939d3",
+    "generatedBytes": 3262483,
+    "executableBytes": 6397581,
+    "workSourceCharacters": 9864,
+    "workOptionalStringSlots": 5,
+    "workIntegerFragments": 0,
+    "workBooleanViews": 0,
+    "stackReservationBytes": 584,
+    "savedGprCount": 8,
+    "prologue": [
+      "0000000140046680 <_Z9_wio_f780xx>:",
+      "140046680: 41 57 push %r15",
+      "140046682: 41 56 push %r14",
+      "140046684: 41 55 push %r13",
+      "140046686: 41 54 push %r12",
+      "140046688: 55 push %rbp",
+      "140046689: 57 push %rdi",
+      "14004668a: 56 push %rsi",
+      "14004668b: 53 push %rbx",
+      "14004668c: 48 81 ec 48 02 00 00 sub $0x248,%rsp"
+    ]
+  },
+  "after": {
+    "path": "build/n03-fragment-after-2026-10-18/native.exe",
+    "sha256": "aa974bf4b89a034619f44b40980cbbe5bf0690f32d45aba92da5a8bc68243d2c",
+    "generatedSha256": "38b390da200378d6e959a395bc5901ccfe28bc320a22a67a7d4a5ed7e016c3ff",
+    "generatedBytes": 3262273,
+    "executableBytes": 6392777,
+    "workSourceCharacters": 9620,
+    "workOptionalStringSlots": 3,
+    "workIntegerFragments": 1,
+    "workBooleanViews": 1,
+    "stackReservationBytes": 520,
+    "savedGprCount": 8,
+    "prologue": [
+      "0000000140046240 <_Z9_wio_f780xx>:",
+      "140046240: 41 57 push %r15",
+      "140046242: 41 56 push %r14",
+      "140046244: 41 55 push %r13",
+      "140046246: 41 54 push %r12",
+      "140046248: 55 push %rbp",
+      "140046249: 57 push %rdi",
+      "14004624a: 56 push %rsi",
+      "14004624b: 53 push %rbx",
+      "14004624c: 48 81 ec 08 02 00 00 sub $0x208,%rsp"
+    ]
+  }
+}

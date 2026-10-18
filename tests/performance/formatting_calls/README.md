@@ -68,3 +68,13 @@ hot/cold split. See [the receiver report](../../../docs/WIO_RECEIVER_OPTIMIZATIO
 Object-containing containers, async frames, native/generic hook declarations,
 ambiguous/private hooks and unsupported mixed surfaces are not enabled by this
 bounded pass. The user-container WVM1062 fixture stays an explicit negative gate.
+
+`wio_n03_scalar_format_plan` selects sole-consumer private integer/bool rendered
+fragments, not deferred formatting. `wio_n03_rendered_integer` checks numeric
+boundaries/random values, custom grouped/long/NUL facets, locale snapshots and
+fallback cleanup/reuse. `fragments.wio` checks O0/O2 native hooks switching
+locales between integer operands and counted facets (exactly once, in order).
+Mixed NUL/Text/bool/8-bit fallback cases also run in VM. Its `vm` argument skips
+native locale-global mutation assertions because an MSVC host and GCC bridge
+can use distinct C++ runtimes. The WIR/VM instruction stream remains unchanged.
+See [the scalar-fragment report](../../../docs/WIO_SCALAR_FRAGMENT_OPTIMIZATION.md).

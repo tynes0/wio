@@ -353,3 +353,28 @@ formatting and KI-008 hooks. KI-007/KI-009 and N01/N14 qualification remain;
 N04 has not started. This shares N05 proof work without renumbering/closing it.
 The previous string-transfer commit's Windows/Ubuntu/macOS CI passed; this
 change requires its own platform qualification.
+
+## N03: private already-rendered scalar fragments, 2026-10-18
+
+[The scalar-fragment slice](WIO_SCALAR_FRAGMENT_OPTIMIZATION.md) replaces private
+sole-consumer integer strings with inline rendered bytes and bool strings with
+literal views. Conversion stays at the original instruction, even across
+intervening hooks/CFG blocks. Live locale guards remain; custom facets retain
+stream formatting and owning fallback. Extra/escaping/metadata/edge uses and
+unsafe cleanup retain strings. This changes neither public ABI nor WIR/VM.
+
+Three new/expanded gates pass with native O0/O2 locale-switch/counting-facet
+checks, runtime boundary/random/long-NUL formatting and VM mixed-hook NUL/Text
+fallback checks. Native bridge and VM host locale globals may belong to distinct
+C++ runtimes, so native facet mutation is not asserted as a cross-runtime ABI.
+Before/after retain 168/168 correct outputs. Native ordered observations fall
+2.1909 -> 1.8798 ms (final 2.9425 -> 1.9695). Work stack reservation falls
+584 -> 520 bytes; heap traffic is unchanged, production size -4804 bytes and
+the separate diagnostic executable +892 bytes. All timing remains globally
+unqualified. C++ is still ahead and its invariant to_chars control does not
+implement Wio's whole live-locale contract; no budget closure is claimed.
+
+N03 remains open for locale/richer/legacy formatting and KI-008 hooks. N04 has
+not started; N05 sharing does not close/renumber it. KI-007/KI-009 and N01/N14
+acceptance remain. The previous initialization commit's platform CI passed;
+this change requires its own Windows/Ubuntu/macOS qualification.
