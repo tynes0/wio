@@ -521,3 +521,19 @@ close that correctness defect. Tests, measurements and qualification are recorde
 in the slice report. N04 remains open for reusable buffers, bulk/pool paths,
 batching/syscall and streaming/encoding work plus coordinated std consolidation.
 N05 has not started; N14 timing acceptance remains separate.
+
+The new local gate passes 1/1 in 115.61s (17 processes); source `3c9e268` passes
+Windows Debug, Ubuntu Release and macOS 15 Release CI 39169819998. Both matched
+Wio-controlled sessions have 84/84 correct samples. Actual native allocations
+fall 771 -> 514 and requested bytes 33697840 -> 16855088 per 257 reads, live-zero.
+Timing stays unqualified and binary sizes rise; the slice report preserves both
+comparison and final native/VM observations without claiming N14 acceptance.
+
+An additional build-policy audit is required before N14: the local backend
+archive's std_io.cpp command has no explicit optimization flag, although the
+generated workload is O2; this fixture's native bridge also uses driver-default
+flags despite its Release VM host. Qualify optimized runtime/archive, bridge and
+package flags
+as a distinct candidate rather than relabeling the current experiment Release
+or changing its runtime flags mid-measurement. This prerequisite does not close
+N12 or the third compile-time pass.

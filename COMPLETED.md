@@ -19,8 +19,13 @@ Notes:
 - [x] New scoped gate passes 1/1 in 115.61s (17 processes): native O0/O2,
   allocation/control tests and VM/native bridge. Isolated full-read allocations
   fall 2 -> 1, requested/peak bytes 131072 -> 65536. No local old full suite.
-- [ ] N04 remains open. After measurements/platform CI are pending for this
-  source slice; KI-010 computed VM globals are a separately recorded defect,
+- [x] Both same-source Wio-controlled sessions have 84/84 correct samples.
+  Actual Wio heap allocations fall 771 -> 514 and requested bytes 33697840 ->
+  16855088 per 257 reads, ending live-zero. Preserve noisy/unqualified timings,
+  increased binary sizes and the unoptimized local runtime/bridge build caveat.
+- [x] Source `3c9e268` passes scoped Windows Debug, Ubuntu Release and macOS 15
+  Release CI, run 39169819998, including the new N04 gate.
+- [ ] N04 remains open. KI-010 computed VM globals are a separately recorded defect,
   not fixed by the identical local-mode workaround in both benchmark fixtures.
   Report: `docs/WIO_BYTE_IO_OPTIMIZATION.md`.
 
