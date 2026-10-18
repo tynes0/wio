@@ -42,8 +42,9 @@ retaining arbitrary native buffer excess. The unbounded intermediate build and
 all its samples remain separate evidence, not a favorable replacement run.
 
 `wio_n03_generated_stream` runs native O0/O2, the actual-helper diagnostic, native
-exception/order/snapshot cases, supported VM builtins and the native POD negative
-case. Expanded `wio_n03_scalar_format_plan` IR cases ensure private rendered
-integer/bool fragments cannot enter the new bare/tail owning helpers. Existing
+exception/order/snapshot cases, supported VM builtins and positive native POD
+scalar/view/array cases. The former WVM1062 case is historical, not the current
+expected outcome. Expanded `wio_n03_scalar_format_plan` IR cases ensure private
+rendered integer/bool fragments cannot enter the new bare/tail owning helpers. Existing
 fragment views, Text interpolation, multi-operand ordering and builtin locale
 policy retain their existing paths.

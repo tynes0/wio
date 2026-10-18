@@ -464,8 +464,15 @@ Bare helper results are forwarded, private completed container strings move out,
 and single rendered string affixes preflight capacity. Indexed numeric conversion
 avoids zeroing unused 1 KiB scratch while keeping default StackText initialization
 and all formatting/error contracts. Six local gates pass in 323.90s; final
-verifier hardening has a separate 2/2 recheck in 23.47s. CI qualification remains
-explicit and the measurement supplement records costs independently.
+verifier hardening has a separate 2/2 recheck in 23.47s. Source `29fabf1` passes
+all three scoped platform jobs (Windows Debug, Ubuntu Release, macOS 15 Release),
+CI 39149670456. The measurement supplement records costs independently.
+
+The two final Wio-owned benchmark sessions each have 84/84 correct samples,
+including working native POD VM formatting. Native heap windows are unchanged
+from the selected before artifacts and end live-zero; binaries grow slightly.
+Timing remains unqualified (mixed indexed observations and noisy POD affixes),
+so this is implementation closure, not accepted N14/native or VM speedup.
 
 N03 implementation is complete. N04 is next, not started here. N01 coverage,
 N14 timing acceptance and KI-007/KI-009 remain independent open work; no universal

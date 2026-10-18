@@ -24,8 +24,13 @@ Notes:
   only unused numeric scratch zeroing; ordinary StackText stays initialized.
 - [x] Six scoped gates pass in 323.90s; final verifier/POD recheck passes 2/2
   in 23.47s. Initial failures and intermediate candidates remain as evidence.
-- [ ] Platform/timing qualification remains explicit, not a universal speedup
-  or whole-backend parity claim. N04 is next; KI-007/KI-009 and N14 remain open.
+- [x] Final indexed and native-POD sessions each have 84/84 correct samples.
+  POD VM formatting now works; native heap windows remain equal/live-zero.
+  Preserve mixed/noisy timings and binary-size costs without speedup claims.
+- [x] Source `29fabf1` passes the scoped Windows Debug, Ubuntu Release and
+  macOS 15 Release workflow: CI 39149670456.
+- [ ] Timing qualification remains open, not a universal speedup or whole-backend
+  parity claim. N04 is next; KI-007/KI-009 and N14 remain open.
   Report: `docs/WIO_N03_CLOSURE.md`.
 
 ## N03 generated native stream copies and bounded capacity — 2026-10-18
