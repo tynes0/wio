@@ -403,6 +403,22 @@ namespace wio::runtime::std_io
 
     [[nodiscard]] std::vector<unsigned char> ReadByteValues(File& file, std::size_t size);
 
+    // Write only existing elements. Neither size nor capacity changes, including
+    // on EOF/error. Exact reads may partially overwrite the destination on error.
+    [[nodiscard]] std::size_t ReadByteValuesInto(File& file, std::span<unsigned char> buffer);
+
+    [[nodiscard]] std::size_t ReadSomeByteValuesInto(File& file, std::span<unsigned char> buffer);
+
+    [[nodiscard]] inline std::size_t ReadByteValuesInto(File& file, std::vector<unsigned char>& buffer)
+    {
+        return ReadByteValuesInto(file, std::span<unsigned char>(buffer.data(), buffer.size()));
+    }
+
+    [[nodiscard]] inline std::size_t ReadSomeByteValuesInto(File& file, std::vector<unsigned char>& buffer)
+    {
+        return ReadSomeByteValuesInto(file, std::span<unsigned char>(buffer.data(), buffer.size()));
+    }
+
     [[nodiscard]] inline std::size_t WriteByteValues(File& file, std::span<const unsigned char> bytes)
     {
         if (bytes.empty())

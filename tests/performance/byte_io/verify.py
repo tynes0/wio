@@ -40,6 +40,8 @@ def verify(args):
         run([program], contains="byte-io-ok")
         run([program, "partial"], expected=1, contains="partial")
         run([program, "closed"], expected=1)
+        run([program, "reuse-partial"], expected=1, contains="partial")
+        run([program, "reuse-closed"], expected=1)
         contract = folder / ("contract.exe" if os.name == "nt" else "contract")
         run([args.cxx, "-std=c++20", optimization, *static, folder / "contract.cpp", f"-I{folder}",
              f"-I{ROOT / 'runtime/include'}", args.runtime.resolve(), *links, "-o", contract])
@@ -53,6 +55,8 @@ def verify(args):
         run([args.vm.resolve(), bytecode, "--native-library", bridge], contains="byte-io-ok")
         run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "partial"], expected=1, contains="partial")
         run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "closed"], expected=1)
+        run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "reuse-partial"], expected=1, contains="partial")
+        run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "reuse-closed"], expected=1)
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
     print(folder / "results.json")
 

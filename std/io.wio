@@ -265,6 +265,15 @@ realm std {
         @CppName(wio::runtime::std_io::ReadByteValues)
         fn ReadBytes(file: ref File, size: usize) -> u8[];
 
+        // Fill existing elements without resizing; capacity alone is not writable length.
+        // Some returns the valid prefix length and leaves the remaining suffix intact.
+        // Exact throws on a short read; buffer contents on failure are unspecified.
+        [native, cpp::name(wio::runtime::std_io::ReadByteValuesInto)]
+        fn ReadBytesInto(file: ref File, buffer: ref u8[]) -> usize;
+
+        [native, cpp::name(wio::runtime::std_io::ReadSomeByteValuesInto)]
+        fn ReadSomeBytesInto(file: ref File, buffer: ref u8[]) -> usize;
+
         @Native
         @CppName(wio::runtime::std_io::ReadChar)
         fn ReadChar(file: ref File) -> char;

@@ -27,6 +27,28 @@ fn Work(file: ref io::File, mode: i64, count: i64) -> u64
     return checksum;
 }
 
+fn WorkReused(file: ref io::File, buffer: ref u8[], mode: i64, count: i64) -> u64
+{
+    mut checksum = 0u64;
+    for (index in 0i64..<count)
+    {
+        io::Seek(file, 0i64);
+        let read = mode == 2
+            ? io::ReadBytesInto(file, buffer)
+            : io::ReadSomeBytesInto(file, buffer);
+        if (read != 65536usize) std::Panic("Incomplete reusable benchmark payload.");
+        checksum += Hash(buffer);
+    }
+
+    return checksum;
+}
+
+fn RunWork(file: ref io::File, buffer: ref u8[], mode: i64, count: i64) -> u64
+{
+    if (mode < 2) return Work(file, mode, count);
+    return WorkReused(file, buffer, mode, count);
+}
+
 fn Entry(args: string[]) -> i32
 {
     if (args.Count() < 3usize or args.Count() > 4usize) return 1;
@@ -35,17 +57,28 @@ fn Entry(args: string[]) -> i32
     if (modeResult.IsError() or countResult.IsError()) return 1;
     let mode = modeResult.Value();
     let count = countResult.Value();
-    if (mode < 0 or mode > 1 or count < 1 or count > 100000) return 1;
+    if (mode < 0 or mode > 3 or count < 1 or count > 100000) return 1;
     Setup();
     let modeFlags = io::OpenMode::read | io::OpenMode::share_read |
         io::OpenMode::sequential | io::OpenMode::binary;
     mut file = io::OpenRaw("payload.bin", modeFlags);
-    bench::Consume(Work(ref file, mode, bench::Input(count)));
-    bench::Consume(Work(ref file, mode, bench::Input(count)));
+    // Caller storage is prepared outside both the kernel and allocation window.
+    mut buffer: u8[] = [];
+    if (mode >= 2)
+    {
+        buffer.Reserve(65536usize);
+        for (index in 0usize..<65536usize)
+        {
+            buffer.Push(0u8);
+        }
+    }
+
+    bench::Consume(RunWork(ref file, ref buffer, mode, bench::Input(count)));
+    bench::Consume(RunWork(ref file, ref buffer, mode, bench::Input(count)));
     if (args.Count() == 4usize)
     {
         if (bench::BeginAllocations().IsError()) return 2;
-        let checksum = Work(ref file, mode, bench::Input(count));
+        let checksum = RunWork(ref file, ref buffer, mode, bench::Input(count));
         let counters = bench::EndAllocations();
         io::CloseRaw(ref file);
         console::PrintLine(bench::Protocol(1i64, count fit u64, checksum));
@@ -55,7 +88,7 @@ fn Entry(args: string[]) -> i32
     }
 
     let start = bench::Now();
-    let checksum = Work(ref file, mode, bench::Input(count));
+    let checksum = RunWork(ref file, ref buffer, mode, bench::Input(count));
     bench::Consume(checksum);
     let elapsed = bench::Now() - start;
     io::CloseRaw(ref file);

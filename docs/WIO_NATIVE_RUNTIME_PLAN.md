@@ -558,3 +558,19 @@ between sessions. Preserve the worse final Wio observations and make no accepted
 speedup claim. Reusable/bulk transport remains work, not solved by O2. Source
 `87c4d70` passes scoped Windows Debug, Ubuntu Release and macOS 15 Release
 CI 39174868641. N04/N14 remain open.
+
+## N04 caller-owned buffer slice, 2026-10-19
+
+[Reusable byte reads](WIO_REUSABLE_BYTE_IO_OPTIMIZATION.md) add ordinary mutable
+array-borrow APIs for exact and some reads into existing elements. Native span/
+vector paths bypass intermediate payload allocation without resizing; some reads
+preserve the unread suffix and return its valid prefix length. Existing owning
+reads and low-level error/cursor rules remain intact; failed exact reads promise
+no transactional destination rollback. Reserved-but-empty buffers request zero.
+
+The expanded scoped gate passes 1/1 in 117.64s (29 processes), including native
+O0/O2 and O0/O2 VM bridges, repeated zero-allocation C++ reads, span canaries,
+snapshot/EOF and partial/closed errors. The Wio-owned fixture adds matching reuse
+cases for all languages, with storage initialization outside measurement. Actual
+Wio heap, timing and source CI evidence are separate; no VM zero-copy or N04/N14
+closure claim follows from the native span implementation alone.

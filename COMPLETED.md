@@ -10,6 +10,20 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N04 caller-owned read buffers — 2026-10-19
+
+- [x] Add ReadBytesInto/ReadSomeBytesInto with fixed destination length,
+  prefix counts, preserved unread suffix and existing exact/error/cursor rules.
+  Native mutable span/vector reads use caller storage without payload allocation.
+- [x] Expanded local gate passes 1/1 in 117.64s (29 processes), native O0/O2 and
+  both O0/O2 VM bridges. Repeated C++ reuse allocates zero; span canaries and
+  empty/partial/closed/snapshot checks pass. Preserve the initial fixture failure.
+- [x] Extend the Wio-owned comparison with matching reusable C++/C# cases;
+  preallocate all caller buffers outside kernel/allocation windows.
+- [ ] Actual Wio allocation/timing/platform qualification remains separate;
+  N04/N14 and VM bulk transport are not closed.
+  Report: `docs/WIO_REUSABLE_BYTE_IO_OPTIMIZATION.md`.
+
 ## N04 runtime/native-bridge profile slice — 2026-10-19
 
 - [x] Explicit host-independent backend runtime profiles default to Release/O2;

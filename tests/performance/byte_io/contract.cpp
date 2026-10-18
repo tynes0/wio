@@ -79,6 +79,56 @@ int main()
 
     partialError(file, true);
     partialError(file, false);
+
+    // Reusing a caller-owned payload must do no heap work in either read path.
+    std::vector<unsigned char> buffer(65536, 0xCC);
+    const auto* storage = buffer.data();
+    const auto capacity = buffer.capacity();
+    for (const bool exact : {true, false})
+    {
+        io::Seek(file, 0);
+        expect(memory::BeginAllocations(), "reuse allocation diagnostic unavailable");
+        for (int iteration = 0; iteration < 17; ++iteration)
+        {
+            io::Seek(file, 0);
+            const auto count = exact ? io::ReadByteValuesInto(file, buffer) : io::ReadSomeByteValuesInto(file, buffer);
+            expect(count == buffer.size() && buffer[0] == 3 && buffer[255] == 242, "reuse payload changed");
+        }
+
+        const auto counters = memory::EndAllocations();
+        expect(counters.allocations == 0 && counters.frees == 0 && counters.requestedBytes == 0 &&
+                   counters.liveBytes == 0 && counters.liveBlocks == 0 && counters.failures == 0,
+               "reuse allocated or released payload storage");
+        expect(buffer.data() == storage && buffer.capacity() == capacity && buffer.size() == 65536,
+               "reuse changed caller storage");
+    }
+
+    io::Seek(file, 65530);
+    std::fill(buffer.begin(), buffer.end(), 0xCC);
+    expect(io::ReadSomeByteValuesInto(file, buffer) == 6, "reuse short-read count changed");
+    expect(buffer[0] == ((65530 * 17 + 3) & 255) && buffer[5] == 242 && buffer[6] == 0xCC,
+           "reuse overwrote the unread suffix");
+    expect(io::ReadSomeByteValuesInto(file, buffer) == 0 && buffer[6] == 0xCC,
+           "reuse EOF changed storage");
+    io::Seek(file, 65530);
+    try
+    {
+        (void)io::ReadByteValuesInto(file, buffer);
+        throw std::runtime_error("reuse exact accepted a partial read");
+    }
+    catch (const io::FileReadException& error)
+    {
+        expect(error.Error() == wio::runtime::detail::io::ReadError::partial_read &&
+                   error.BytesRequested() == 65536 && error.BytesRead() == 6 && io::Tell(file) == 65536,
+               "reuse exact partial-read metadata changed");
+    }
+
+    // A span can target a subrange without touching neighboring canaries.
+    io::Seek(file, 0);
+    std::vector<unsigned char> guarded(258, 0xCC);
+    expect(io::ReadByteValuesInto(file, std::span<unsigned char>(guarded).subspan(1, 256)) == 256 &&
+               guarded.front() == 0xCC && guarded.back() == 0xCC && guarded[1] == 3 && guarded[256] == 242,
+           "reuse span escaped its destination range");
     io::Seek(file, 65530);
     const auto tail = io::ReadSomeByteValues(file, 1024 * 1024);
     expect(tail.size() == 6 && tail.capacity() <= 12, "excessive short-read capacity retained");
@@ -96,6 +146,22 @@ int main()
     }
 
     io::Close(file);
+    std::vector<unsigned char> empty;
+    empty.reserve(1024);
+    expect(io::ReadByteValuesInto(file, empty) == 0 && io::ReadSomeByteValuesInto(file, empty) == 0 &&
+               empty.size() == 0 && empty.capacity() >= 1024,
+           "reuse treated spare capacity as initialized elements");
+    try
+    {
+        (void)io::ReadSomeByteValuesInto(file, buffer);
+        throw std::runtime_error("reuse accepted a closed handle");
+    }
+    catch (const io::FileReadException& error)
+    {
+        expect(error.Error() == wio::runtime::detail::io::ReadError::null_file && buffer.data() == storage &&
+                   buffer.size() == 65536 && buffer.capacity() == capacity,
+               "reuse closed-handle contract changed");
+    }
     expect(io::ReadByteValues(file, 0).empty() && io::ReadSomeByteValues(file, 0).empty(),
            "zero-count invalid-handle compatibility changed");
     try
@@ -108,5 +174,5 @@ int main()
         expect(error.Error() == wio::runtime::detail::io::ReadError::null_file, "closed-handle error changed");
     }
 
-    std::cout << "byte-io-contract-ok: allocations 2->1, requested/peak 131072->65536; exact/partial/EOF/snapshot\n";
+    std::cout << "byte-io-contract-ok: owned allocations 2->1; reused payload zero allocations; exact/partial/EOF/span\n";
 }

@@ -21,15 +21,15 @@ static class Program
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static ulong Work(FileStream file, long mode, long count)
+    private static ulong Work(FileStream file, byte[] buffer, long mode, long count)
     {
         ulong checksum = 0;
         for (long index = 0; index < count; ++index)
         {
             file.Seek(0, SeekOrigin.Begin);
-            byte[] bytes = new byte[65536];
+            byte[] bytes = mode < 2 ? new byte[65536] : buffer;
             int size;
-            if (mode == 0)
+            if (mode == 0 || mode == 2)
             {
                 file.ReadExactly(bytes);
                 size = bytes.Length;
@@ -39,7 +39,8 @@ static class Program
                 size = file.Read(bytes);
             }
 
-            if (size != bytes.Length) Array.Resize(ref bytes, size);
+            if (mode >= 2 && size != bytes.Length) throw new IOException("Incomplete reusable benchmark payload.");
+            if (mode < 2 && size != bytes.Length) Array.Resize(ref bytes, size);
             checksum = unchecked(checksum + Hash(bytes));
         }
 
@@ -49,7 +50,7 @@ static class Program
     private static int Main(string[] args)
     {
         if (args.Length != 2 || !long.TryParse(args[0], out long mode) || !long.TryParse(args[1], out long count)
-            || mode < 0 || mode > 1 || count < 1 || count > 100000) return 1;
+            || mode < 0 || mode > 3 || count < 1 || count > 100000) return 1;
         byte[] payload = new byte[65536];
         for (int index = 0; index < payload.Length; ++index)
         {
@@ -58,10 +59,11 @@ static class Program
 
         File.WriteAllBytes("payload.bin", payload);
         using var file = new FileStream("payload.bin", FileMode.Open, FileAccess.Read, FileShare.Read, 1);
-        sink = Work(file, mode, count);
-        sink = Work(file, mode, count);
+        byte[] buffer = mode >= 2 ? new byte[65536] : Array.Empty<byte>();
+        sink = Work(file, buffer, mode, count);
+        sink = Work(file, buffer, mode, count);
         long start = Stopwatch.GetTimestamp();
-        ulong checksum = Work(file, mode, count);
+        ulong checksum = Work(file, buffer, mode, count);
         System.Threading.Volatile.Write(ref sink, checksum);
         long elapsed = (long)((Stopwatch.GetTimestamp() - start) * (1_000_000_000.0 / Stopwatch.Frequency));
         Console.WriteLine("{\"schemaVersion\":1,\"checksum\":\"" + checksum.ToString(CultureInfo.InvariantCulture)

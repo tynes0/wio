@@ -1176,6 +1176,22 @@ namespace wio::runtime::std_io
         return result;
     }
 
+    std::size_t ReadByteValuesInto(File& file, const std::span<unsigned char> buffer)
+    {
+        if (buffer.empty())
+            return 0;
+
+        return ReadExactInto(file, buffer.data(), buffer.size());
+    }
+
+    std::size_t ReadSomeByteValuesInto(File& file, const std::span<unsigned char> buffer)
+    {
+        if (buffer.empty())
+            return 0;
+
+        return ReadSomeInto(file, buffer.data(), buffer.size());
+    }
+
     char ReadChar(File& file)
     {
         char value = '\0';
