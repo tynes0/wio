@@ -18,8 +18,16 @@ Notes:
 - [x] Native O0/O2, supported VM paths, aliasing, exception and generated-Wio heap
   controls pass; KI-009 indirect-native VM calls stay explicit known-gap negatives.
   Two semantics gates pass in 278.47s, three final proof/selector gates in 5.53s.
-- [ ] After measurement/heap/platform qualification is pending; N04/N05/N14 and
-  general array storage, owning overhead and VM performance remain open.
+- [x] Same-source before/after sessions complete 84/84 correct each. Owning
+  global-new/delete traffic drops 514 -> 257 calls, requested bytes
+  16855088 -> 16842752. Native comparison medians 34.0282/35.9776 ->
+  27.8940/28.2631ms are unqualified observations, not accepted speedup/parity.
+- [x] Bound structured native diagnostic matching; preserve oversized output
+  verbatim. New short/16-KiB real compiler error regression passes locally.
+- [ ] Platform qualification remains open: initial Windows CI passes, Ubuntu
+  bridge build times out and macOS bridge failure hits diagnostic regex limits.
+  Diagnostic repair is pushed for requalification, not a claimed bridge fix.
+  N04/N05/N14, general arrays, owning overhead and VM performance remain open.
   Report: `docs/WIO_BYTE_ARRAY_CELL_OPTIMIZATION.md`.
 
 ## N04 caller-owned read buffers — 2026-10-19

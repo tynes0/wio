@@ -1,0 +1,187 @@
+{
+  "scope": "C++ runtime-only diagnostic, no affinity or timing qualification; not generated Wio or four-language acceptance",
+  "modes": [
+    "hash-only",
+    "owning-read-hash",
+    "reused-read-hash",
+    "owning-read-probe",
+    "reused-read-probe"
+  ],
+  "samples": [
+    {
+      "round": 0,
+      "mode": 0,
+      "count": 4097,
+      "nanoseconds": 350100900,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 0,
+      "mode": 1,
+      "count": 4097,
+      "nanoseconds": 359766600,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 0,
+      "mode": 2,
+      "count": 4097,
+      "nanoseconds": 352908200,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 0,
+      "mode": 3,
+      "count": 4097,
+      "nanoseconds": 22128200,
+      "checksum": "269504757"
+    },
+    {
+      "round": 0,
+      "mode": 4,
+      "count": 4097,
+      "nanoseconds": 17498700,
+      "checksum": "269504757"
+    },
+    {
+      "round": 1,
+      "mode": 0,
+      "count": 4097,
+      "nanoseconds": 327430500,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 1,
+      "mode": 4,
+      "count": 4097,
+      "nanoseconds": 14678900,
+      "checksum": "269504757"
+    },
+    {
+      "round": 1,
+      "mode": 3,
+      "count": 4097,
+      "nanoseconds": 22562100,
+      "checksum": "269504757"
+    },
+    {
+      "round": 1,
+      "mode": 2,
+      "count": 4097,
+      "nanoseconds": 364217300,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 1,
+      "mode": 1,
+      "count": 4097,
+      "nanoseconds": 371930500,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 2,
+      "mode": 2,
+      "count": 4097,
+      "nanoseconds": 366434000,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 2,
+      "mode": 3,
+      "count": 4097,
+      "nanoseconds": 23425900,
+      "checksum": "269504757"
+    },
+    {
+      "round": 2,
+      "mode": 4,
+      "count": 4097,
+      "nanoseconds": 16373200,
+      "checksum": "269504757"
+    },
+    {
+      "round": 2,
+      "mode": 0,
+      "count": 4097,
+      "nanoseconds": 340951800,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 2,
+      "mode": 1,
+      "count": 4097,
+      "nanoseconds": 373013400,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 3,
+      "mode": 2,
+      "count": 4097,
+      "nanoseconds": 363995500,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 3,
+      "mode": 1,
+      "count": 4097,
+      "nanoseconds": 382601900,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 3,
+      "mode": 0,
+      "count": 4097,
+      "nanoseconds": 350548900,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 3,
+      "mode": 4,
+      "count": 4097,
+      "nanoseconds": 18677800,
+      "checksum": "269504757"
+    },
+    {
+      "round": 3,
+      "mode": 3,
+      "count": 4097,
+      "nanoseconds": 24620400,
+      "checksum": "269504757"
+    },
+    {
+      "round": 4,
+      "mode": 4,
+      "count": 4097,
+      "nanoseconds": 17232000,
+      "checksum": "269504757"
+    },
+    {
+      "round": 4,
+      "mode": 0,
+      "count": 4097,
+      "nanoseconds": 411580400,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 4,
+      "mode": 1,
+      "count": 4097,
+      "nanoseconds": 457657600,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 4,
+      "mode": 2,
+      "count": 4097,
+      "nanoseconds": 412624900,
+      "checksum": "347700852595258149"
+    },
+    {
+      "round": 4,
+      "mode": 3,
+      "count": 4097,
+      "nanoseconds": 28043500,
+      "checksum": "269504757"
+    }
+  ]
+}
