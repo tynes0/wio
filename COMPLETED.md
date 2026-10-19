@@ -20,8 +20,13 @@ Notes:
   New focused contract passes locally; corrected Unix borrow fixture passes too.
 - [x] Three-platform CI 39305065595 passes on source b14ea3e, confirming the Unix
   include-shadow fix and the new controller contract on Windows/Ubuntu/macOS.
-- [ ] First real 12096-process session is in progress. No new runtime
-  optimization or accepted speedup is claimed.
+- [x] First real session finishes 12096/12096 correct, with unchanged artifacts,
+  power profile and applied affinity. Independent verifier agrees with all
+  twelve statistical summaries and exact journal/report equality; retain raw ZIP.
+  Native comparison medians 45.16115/44.34620ms versus C++ 46.11340/45.74710ms
+  are descriptive. Same native image's final medians 27.50345/27.53785ms expose
+  phase/nonstationarity effects. Timing remains unqualified; no new runtime
+  optimization, accepted speedup or N04/N14 closure is claimed.
   Report: `docs/WIO_HIGH_SAMPLE_BENCHMARKING.md`.
 
 ## N04 closed byte-array cells — 2026-10-19

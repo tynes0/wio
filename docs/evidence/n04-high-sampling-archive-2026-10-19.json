@@ -1,0 +1,73 @@
+{
+  "archive": "docs\\evidence\\n04-high-sampling-raw-2026-10-19.zip",
+  "bytes": 677744,
+  "sha256": "8af3bcadb80cdcbda99c67ea9d2ff71698e4fb436445f544643063ad7c5cb534",
+  "rawEqualityVerified": true,
+  "entries": [
+    {
+      "name": "collector/main.wio",
+      "bytes": 34134,
+      "sha256": "5bddfeb1d7b42a39e5b33279e6a8cf64b8b12f8f1892ac91bbb6082ea86f9bb7"
+    },
+    {
+      "name": "collector/sampling_profile.py",
+      "bytes": 2542,
+      "sha256": "5a1eb879a0f97d14d4e84552683ac10bd502a19cbcd14587d17c4e6b45f74266"
+    },
+    {
+      "name": "fixture/ByteIo.csproj",
+      "bytes": 280,
+      "sha256": "ed79971229072fc23993b4a8387a5f926190c278ffa45ea28794108e2e71de98"
+    },
+    {
+      "name": "fixture/main.cpp",
+      "bytes": 1952,
+      "sha256": "73356abca9748affed76839317197f0b791cc30c9eac10c6db3ed04254fa6601"
+    },
+    {
+      "name": "fixture/main.wio",
+      "bytes": 3110,
+      "sha256": "8ba9fab84fb0c956463e2182f7cce747b44e99959e76b936e3c19c91bc0e6598"
+    },
+    {
+      "name": "fixture/payload.bin",
+      "bytes": 65536,
+      "sha256": "f779dbe3aeaa609beb32212579f3aea441f244621d13c977cb8b52d7ec3016d9"
+    },
+    {
+      "name": "fixture/probe.h",
+      "bytes": 881,
+      "sha256": "23cc1ccccc06e0f0e08a1995a523bc3377728b09df61b2c8d142526bc34923fe"
+    },
+    {
+      "name": "fixture/Program.cs",
+      "bytes": 2716,
+      "sha256": "376cebff45fa1f9033d5baf4133f98437c3c900968b26eaddd31ddf3b2c700b6"
+    },
+    {
+      "name": "manifest.json",
+      "bytes": 10252,
+      "sha256": "0b2b94a4d89db8dac875e7e71cf9f95fbed84225e02134e00fd79e33646237a5"
+    },
+    {
+      "name": "report.md",
+      "bytes": 1733,
+      "sha256": "75b39a382ba53bbdc09b64a4f4ba079ee04b39d3843eca66dec144984654d486"
+    },
+    {
+      "name": "results.json",
+      "bytes": 10463837,
+      "sha256": "ba486096b3f28a38dfb656047544a3ace5cd92a98cac51857f4f14ea1a5ebaaa"
+    },
+    {
+      "name": "samples.jsonl",
+      "bytes": 7480123,
+      "sha256": "64e571cf3fd13cd45f86d9b90e20d1dcb285ac45f9541d3fb0e1094b21a98b79"
+    },
+    {
+      "name": "verify.py",
+      "bytes": 6284,
+      "sha256": "8fcf77b4ddaa762b2dc67e36d8f9fdd73ccf974b1926d30afc781177e84014cc"
+    }
+  ]
+}

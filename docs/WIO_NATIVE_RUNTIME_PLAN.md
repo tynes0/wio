@@ -40,6 +40,15 @@ system noise or justify selecting best-case values. See
 `tools/wio-bench/README.md` for the explicit profile; smoke/contract tests keep
 small synthetic counts and are not performance acceptance evidence.
 
+The first high-sample session completes 12096/12096 correct with frozen images,
+power profile and affinity, plus independently verified statistics and raw-data
+archive in `docs/WIO_HIGH_SAMPLE_BENCHMARKING.md`. Native comparison medians
+45.16115/44.34620ms versus C++ 46.11340/45.74710ms are unqualified observations;
+the same image's final 27.50345/27.53785ms demonstrate phase/nonstationarity
+effects. Do not combine cross-phase values or attribute the change to code.
+Sampling/byte-cell platform CI is green on all three platforms. N04 bounded
+write/bulk/stream implementation and N14 timing acceptance remain open.
+
 ## Required late-native revisit: indexed numeric formatting
 
 User priority recorded 2026-10-18: revisit **indexed integer and indexed float**
