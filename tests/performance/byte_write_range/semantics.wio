@@ -1,0 +1,56 @@
+use std::console as console;
+use std::io as io;
+
+using cpp::header("probe.h");
+
+[native, cpp::name(byte_write_range::Setup)]
+fn Setup();
+
+fn Entry(args: string[]) -> i32
+{
+    Setup();
+    mut input = io::OpenRaw("payload.bin", io::OpenMode::read | io::OpenMode::binary);
+    mut buffer = io::ReadBytes(ref input, 256usize);
+    let capacity = buffer.Capacity();
+    io::Seek(ref input, 65530i64);
+    let read = io::ReadSomeBytesInto(ref input, ref buffer);
+    if (read != 6usize) return 2;
+    io::CloseRaw(ref input);
+    mut output = io::OpenRaw("output.bin", io::OpenMode::write | io::OpenMode::create |
+        io::OpenMode::truncate | io::OpenMode::binary);
+    if (args.Count() > 1usize)
+    {
+        if (args[1usize] == "range")
+        {
+            io::WriteBytesRange(ref output, ref buffer, 255usize, 2usize);
+            return 20;
+        }
+
+        if (args[1usize] == "overflow")
+        {
+            io::WriteBytesRange(ref output, ref buffer, 1usize, 18446744073709551615usize);
+            return 21;
+        }
+
+        io::CloseRaw(ref output);
+        io::WriteBytesRange(ref output, ref buffer, 0usize, 1usize);
+        return 22;
+    }
+
+    if (io::WriteBytesRange(ref output, ref buffer, 0usize, read) != read) return 3;
+    if (io::WriteBytesRange(ref output, ref buffer, buffer.Count(), 0usize) != 0usize) return 4;
+    if (buffer.Count() != 256usize or buffer.Capacity() != capacity or buffer[6usize] != 105u8) return 5;
+    io::CloseRaw(ref output);
+    if (io::WriteBytesRange(ref output, ref buffer, 0usize, 0usize) != 0usize) return 6;
+    input = io::OpenRaw("output.bin", io::OpenMode::read | io::OpenMode::binary);
+    let actual = io::ReadSomeBytes(ref input, 256usize);
+    io::CloseRaw(ref input);
+    if (actual.Count() != 6usize) return 7;
+    for (index in 0usize..<6usize)
+    {
+        if (actual[index] != buffer[index]) return 8;
+    }
+
+    console::PrintLine("byte-write-range-ok");
+    return 0;
+}

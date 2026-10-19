@@ -12,7 +12,7 @@ then pass 3 (compiler and build throughput). SDK remains a separate v1 blocker.
 | N01 | Measurement and cost map | Qualified workloads, raw samples/checksums, clear coverage gaps; distinguish timing, allocation, copies, RC and memory metrics |
 | N02 | String/text/concat (implemented 2026-10-16) | Last-use buffers, transactional append and pure-tree flattening; bounded correctness gate complete; noisy timing acceptance remains N14 |
 | N03 | Formatting/builders (implementation complete 2026-10-18) | Direct numeric append, float/locale costs, capacity reuse and shared hook/native bridge closure; qualification below |
-| N04 | Byte/buffer/I/O (in progress 2026-10-19) | First slice removes duplicate owned-read payload buffers; batching/reuse/remaining inventory stay open; same-format comparisons stay separate from format changes |
+| N04 | Byte/buffer/I/O (in progress 2026-10-20) | Direct owned reads, caller-buffer reuse, closed byte cells and checked borrowed-range writes implemented; ByteBuffer bulk/remaining inventory and timing acceptance stay open |
 | N05 | Value/place/component representation | Proven stack storage, direct fields, fewer temporaries and unnecessary optional/shared/type-erased cells; exact lifetimes and cleanup |
 | N06 | Containers | Growth/reserve/bulk operations, iteration/index copies, map/set key/hash/rehash costs, span/view and sorting callbacks |
 | N07 | Objects/intrusive RC | Remove redundant retain/release and handle transfers with lifetime/thread proofs; measure weak refs and destruction too |
@@ -46,8 +46,11 @@ archive in `docs/WIO_HIGH_SAMPLE_BENCHMARKING.md`. Native comparison medians
 45.16115/44.34620ms versus C++ 46.11340/45.74710ms are unqualified observations;
 the same image's final 27.50345/27.53785ms demonstrate phase/nonstationarity
 effects. Do not combine cross-phase values or attribute the change to code.
-Sampling/byte-cell platform CI is green on all three platforms. N04 bounded
-write/bulk/stream implementation and N14 timing acceptance remain open.
+Sampling/byte-cell platform CI is green on all three platforms. The 2026-10-20
+borrowed-range write slice passes its new local 25-process native/VM contract;
+see `docs/WIO_BYTE_RANGE_WRITE_OPTIMIZATION.md`. It avoids the native owned Slice
+for bounded output without changing legacy WriteBytes or VM transport. N04
+ByteBuffer bulk/remaining I/O inventory and N14 timing acceptance remain open.
 
 ## Required late-native revisit: indexed numeric formatting
 

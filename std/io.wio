@@ -314,6 +314,11 @@ realm std {
         @CppName(wio::runtime::std_io::WriteByteValues)
         fn WriteBytes(file: ref File, bytes: u8[]) -> usize;
 
+        // Write a checked range without making an owned Slice. A zero-length
+        // range is a no-op; invalid ranges fail before writing any bytes.
+        [native, cpp::name(wio::runtime::std_io::WriteByteValuesRange)]
+        fn WriteBytesRange(file: ref File, bytes: view u8[], offset: usize, count: usize) -> usize;
+
         @Native
         @CppName(wio::runtime::std_io::WriteLine)
         fn WriteLineRaw(file: ref File) -> usize;

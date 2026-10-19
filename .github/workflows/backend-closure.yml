@@ -104,10 +104,10 @@ jobs:
           -R "^wio_n03_(formatting_call_(plan|semantics)|native_string_borrow_plan|scalar_field_plan|formatted_size|receiver_plan|integer_hot_path|string_transfer_plan|string_init_plan|inline_string_init|scalar_format_plan|rendered_integer)$"
       - name: Build N04 closed byte-array borrow proof
         run: cmake --build build --target wio_native_byte_array_borrow_plan_test --parallel 2
-      - name: Qualify N04 byte reads and closed borrows (native O0/O2 and VM)
+      - name: Qualify N04 byte reads, range writes and closed borrows (native O0/O2 and VM)
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
-          -R "^wio_n04_(byte_io|runtime_profile|manifest_selection|backend_diagnostics|byte_array_borrow_(plan|semantics))$"
+          -R "^wio_n04_(byte_io|byte_write_range|runtime_profile|manifest_selection|backend_diagnostics|byte_array_borrow_(plan|semantics))$"
       - name: Build updated Wio benchmark controller
         run: cmake --build build --target wio_bench --parallel 1
       - name: Qualify per-implementation sampling and journal
@@ -121,6 +121,7 @@ jobs:
           name: backend-closure-${{ matrix.os }}-${{ matrix.config }}
           path: |
             build/n04-byte-io-contract/**/results.json
+            build/n04-byte-write-range-contract/**/results.json
             build/n04-byte-array-borrow-contract/**/results.json
             build/n04-byte-array-borrow-contract/**/*.cpp
             build/n04-byte-array-borrow-contract/**/probe.h

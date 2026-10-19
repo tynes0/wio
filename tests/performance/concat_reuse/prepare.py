@@ -49,7 +49,7 @@ def prepare(args, fixture=None):
     links = ["-lws2_32", "-lshell32", "-lpsapi", "-Wa,-mbig-obj"] if os.name == "nt" else ["-pthread"]
     flags = ["-std=c++20", "-O2", "-ffp-contract=off"]
     native, cpp = folder / ("native" + suffix), folder / ("cpp" + suffix)
-    diagnostic = folder / ("memory" + suffix)
+    diagnostic = folder / (fixture.get("diagnostic_name", "memory") + suffix)
     bridge = folder / ("bridge.dll" if os.name == "nt" else "bridge.dylib" if sys.platform == "darwin" else "bridge.so")
     bytecode = folder / "main.wiob"
     commands = (json.loads((folder / "build.json").read_text(encoding="utf-8"))

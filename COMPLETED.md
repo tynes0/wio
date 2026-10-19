@@ -10,6 +10,18 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N04 borrowed byte-range writes — 2026-10-20
+
+- [x] Add checked readonly `WriteBytesRange` without changing existing owned
+  `WriteBytes`. Valid short-read prefixes no longer require an owned Slice in
+  native code. Overflow-safe range checks run before I/O; existing file-error
+  metadata and empty-write behavior are preserved.
+- [x] New 25-process native O0/O2 and VM bridge contract passes locally. Native
+  helper: 257 writes, zero allocations/frees, caller storage prepared outside
+  the window. Add same-output slice/range fixtures for Wio native/VM, C++ and C#.
+  VM transport is not zero-copy. ByteBuffer bulk work and N14 acceptance remain
+  open. Report: `docs/WIO_BYTE_RANGE_WRITE_OPTIMIZATION.md`.
+
 ## N04 high-sample measurement policy — 2026-10-19
 
 - [x] Wio controller supports per-implementation comparison/final budgets;

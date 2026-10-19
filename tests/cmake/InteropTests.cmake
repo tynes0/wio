@@ -1681,6 +1681,13 @@ if(Python3_Interpreter_FOUND)
             --output "${CMAKE_BINARY_DIR}/n04-byte-io-contract")
     wio_test_labels(wio_n04_byte_io native vm io memory optimization ownership)
     set_tests_properties(wio_n04_byte_io PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+    add_test(NAME wio_n04_byte_write_range
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/byte_write_range/verify.py"
+            --wio "$<TARGET_FILE:wio_app>" --vm "$<TARGET_FILE:wio_vm_runner>"
+            --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}" --cxx "${WIO_BACKEND_CXX_COMPILER}"
+            --output "${CMAKE_BINARY_DIR}/n04-byte-write-range-contract")
+    wio_test_labels(wio_n04_byte_write_range native vm io memory optimization ownership)
+    set_tests_properties(wio_n04_byte_write_range PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
     add_test(NAME wio_n04_byte_array_borrow_semantics
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/byte_borrow/verify.py"
             --wio "$<TARGET_FILE:wio_app>" --vm "$<TARGET_FILE:wio_vm_runner>"

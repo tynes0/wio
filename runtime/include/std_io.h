@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cinttypes>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -434,5 +435,32 @@ namespace wio::runtime::std_io
     [[nodiscard]] inline std::size_t WriteByteValues(File& file, const std::vector<unsigned char>& bytes)
     {
         return WriteByteValues(file, std::span<const unsigned char>(bytes.data(), bytes.size()));
+    }
+
+    // Borrow initialized elements only. Check subtraction rather than offset +
+    // count so even an overflowing caller-supplied range fails before any I/O.
+    [[nodiscard]] inline std::size_t WriteByteValuesRange(
+        File& file, const std::span<const unsigned char> bytes,
+        const std::size_t offset, const std::size_t count)
+    {
+        if (offset > bytes.size() || count > bytes.size() - offset)
+        {
+            throw std::out_of_range("WriteBytesRange range is outside the input");
+        }
+
+        // Match WriteByteValues: an empty range is a no-op, even for a closed file.
+        if (count == 0)
+        {
+            return 0;
+        }
+
+        return WriteByteValues(file, bytes.subspan(offset, count));
+    }
+
+    [[nodiscard]] inline std::size_t WriteByteValuesRange(
+        File& file, const std::vector<unsigned char>& bytes,
+        const std::size_t offset, const std::size_t count)
+    {
+        return WriteByteValuesRange(file, std::span<const unsigned char>(bytes.data(), bytes.size()), offset, count);
     }
 }
