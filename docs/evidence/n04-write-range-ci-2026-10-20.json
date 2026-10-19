@@ -1,0 +1,11 @@
+{
+  "runId": 39329704323,
+  "sourceCommit": "e253f7b31b4adf50ec553230b21e56a3d0d4affd",
+  "url": "https://github.com/tynes0/wio/actions/runs/39329704323",
+  "jobs": [
+    {"name": "macos-15 / Release", "id": 118324507588, "conclusion": "success", "n04Gate": "success"},
+    {"name": "windows-latest / Debug", "id": 118324508026, "conclusion": "success", "n04Gate": "success"},
+    {"name": "ubuntu-latest / Release", "id": 118324508165, "conclusion": "success", "n04Gate": "success"}
+  ],
+  "scope": "Checked borrowed byte-range write and existing scoped backend/N03/N04/controller contracts. Not a full historical suite or a timing qualification."
+}

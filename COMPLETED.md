@@ -21,6 +21,14 @@ Notes:
   the window. Add same-output slice/range fixtures for Wio native/VM, C++ and C#.
   VM transport is not zero-copy. ByteBuffer bulk work and N14 acceptance remain
   open. Report: `docs/WIO_BYTE_RANGE_WRITE_OPTIMIZATION.md`.
+- [x] Generated native same-output counter comparison removes 514 allocation/free
+  pairs and 33676766 transient requested bytes across 257 writes. Whole-process
+  RSS remains essentially unchanged; do not call it zero total memory.
+- [x] All three platform CI jobs pass on e253f7b. The 1000-native/C++/C#, 20-VM
+  session finishes 12096/12096 correct with frozen images. Independent live and
+  extracted-ZIP verification agree. Comparison native medians 16.10180 → 0.87995ms
+  are API-strategy observations, not unchanged-source compiler speedups; timing
+  remains unqualified and all outliers are retained.
 
 ## N04 high-sample measurement policy — 2026-10-19
 

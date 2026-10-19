@@ -1,0 +1,14 @@
+[
+  {
+    "mode": "slice-copy-64k",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"18032860802463305489\",\"elapsedNanoseconds\":1,\"operations\":257,\"schemaVersion\":1}\n\n{\"allocations\":514,\"available\":true,\"failures\":0,\"freedBytes\":33676766,\"frees\":514,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":2,\"peakBytes\":131038,\"requestedBytes\":33676766,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  },
+  {
+    "mode": "borrow-range-64k",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"18032860802463305489\",\"elapsedNanoseconds\":1,\"operations\":257,\"schemaVersion\":1}\n\n{\"allocations\":0,\"available\":true,\"failures\":0,\"freedBytes\":0,\"frees\":0,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":0,\"peakBytes\":0,\"requestedBytes\":0,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  }
+]

@@ -52,6 +52,14 @@ see `docs/WIO_BYTE_RANGE_WRITE_OPTIMIZATION.md`. It avoids the native owned Slic
 for bounded output without changing legacy WriteBytes or VM transport. N04
 ByteBuffer bulk/remaining I/O inventory and N14 timing acceptance remain open.
 
+The range-write slice also passes all three CI platforms on e253f7b, with a
+verified 12096-row same-output copy/range session. Native comparison medians
+16.10180 → 0.87995ms versus C++ range 0.86305ms are unqualified observations for
+different API/storage strategies, not an automatic legacy-code compiler gain.
+Generated native transient allocations 514 → 0 and requested bytes 33676766 → 0
+are measured separately; total process RSS is essentially unchanged. Raw ZIP,
+independent statistics and qualification are in the range-write report above.
+
 ## Required late-native revisit: indexed numeric formatting
 
 User priority recorded 2026-10-18: revisit **indexed integer and indexed float**
