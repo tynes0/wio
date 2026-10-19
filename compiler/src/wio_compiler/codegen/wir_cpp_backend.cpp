@@ -2064,7 +2064,7 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
 
             std::string functionSignature(const lowered::Function& function, const bool declaration,
                                           const std::string_view emittedName = {},
-                                          const bool directStringBorrow = false,
+                                          const bool directNativeBorrow = false,
                                           const bool directReceiver = false) const
             {
                 std::string signature;
@@ -2083,8 +2083,8 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
                     const auto& type = module_.types.get(parameter);
                     signature += directReceiver && index == 0
                                      ? "wio::wir_backend::ObjectBorrow<" + objectName(function.ownerType) + ">"
-                                 : directStringBorrow && type.kind == TypeKind::Reference
-                                     ? (type.isMutable ? "std::string&" : "const std::string&")
+                                 : directNativeBorrow && type.kind == TypeKind::Reference
+                                     ? (type.isMutable ? "" : "const ") + cppType(type.arguments.front()) + "&"
                                      : cppType(parameter);
                     signature += " _p";
                     signature += std::to_string(index);
@@ -2119,7 +2119,7 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
                         if (receiverPlans_.contains(function.id.value()))
                             output_ << functionSignature(function, true, receiverEntryName(function), false, true)
                                     << '\n';
-                        if (WirCppStoragePlan::supportsCallScopedStringAbi(module_, function))
+                        if (WirCppStoragePlan::supportsCallScopedBorrowAbi(module_, function))
                             output_ << functionSignature(function, true, functionName(function.id) + "_borrow", true)
                                     << '\n';
                         if (!function.isExternal && !behavioralPipeline(function.id).empty())
@@ -2371,7 +2371,7 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
                     return placeValueType(type) + "*";
                 if (storagePlan_.scalarPlaces.contains(id))
                     return "wio::wir_backend::ScalarPlace<" + placeValueType(type) + ">";
-                if (storagePlan_.stringPlaces.contains(id))
+                if (storagePlan_.stringPlaces.contains(id) || storagePlan_.byteArrayPlaces.contains(id))
                     return "wio::wir_backend::InlinePlace<" + placeValueType(type) + ">";
                 if (objectBorrowedLoads_.contains(id))
                     return "wio::wir_backend::ObjectBorrow<" + objectName(type) + ">";
@@ -2503,10 +2503,11 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
 
             std::string nativeCall(const lowered::Function& callee, const lowered::Instruction& instruction) const
             {
-                bool directBorrow = WirCppStoragePlan::supportsCallScopedStringAbi(module_, callee);
+                bool directBorrow = WirCppStoragePlan::supportsCallScopedBorrowAbi(module_, callee);
                 for (std::size_t index = 0; directBorrow && index < instruction.operands.size(); ++index)
                     if (module_.types.get(callee.parameters[index].type).kind == TypeKind::Reference &&
-                        !storagePlan_.stringPlaces.contains(instruction.operands[index].value()))
+                        !storagePlan_.stringPlaces.contains(instruction.operands[index].value()) &&
+                        !storagePlan_.byteArrayPlaces.contains(instruction.operands[index].value()))
                         directBorrow = false;
                 std::string arguments;
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
@@ -2514,10 +2515,11 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
                     if (index)
                         arguments += ", ";
                     const ValueId value = instruction.operands[index];
-                    if (storagePlan_.stringPlaces.contains(value.value()))
+                    if (storagePlan_.stringPlaces.contains(value.value()) ||
+                        storagePlan_.byteArrayPlaces.contains(value.value()))
                     {
-                        // The storage proof permits only call-scoped UTF-8
-                        // borrows with scalar/void results and no callbacks.
+                        // Closed UTF-8/byte cells can use only call-scoped
+                        // leaf borrows with scalar/void results and no callbacks.
                         const TypeId parameter = callee.parameters[index].type;
                         const bool mutableBorrow = module_.types.get(parameter).isMutable;
                         arguments += directBorrow
@@ -3871,12 +3873,12 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
                             if (nativeSource.begin.line > 1)
                                 --nativeSource.begin.line;
                             emitSource(nativeSource);
-                            const bool directStringBorrow =
-                                WirCppStoragePlan::supportsCallScopedStringAbi(module_, function);
+                            const bool directNativeBorrow =
+                                WirCppStoragePlan::supportsCallScopedBorrowAbi(module_, function);
                             output_ << functionSignature(function, false,
-                                                         directStringBorrow ? functionName(function.id) + "_borrow"
+                                                         directNativeBorrow ? functionName(function.id) + "_borrow"
                                                                             : std::string{},
-                                                         directStringBorrow)
+                                                         directNativeBorrow)
                                     << " {\n  ";
                             if (!runtimeAsyncBinding(function) &&
                                 std::ranges::any_of(function.parameters, [&](const auto& p)
@@ -3906,7 +3908,7 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
                                 std::string argument =
                                     (passing == NativePassingMode::Borrow || passing == NativePassingMode::BorrowMut)
                                         ? std::string(passing == NativePassingMode::Borrow ? "std::as_const(" : "") +
-                                              "_p" + std::to_string(index) + (directStringBorrow ? "" : ".read()") +
+                                              "_p" + std::to_string(index) + (directNativeBorrow ? "" : ".read()") +
                                               (passing == NativePassingMode::Borrow ? ")" : "")
                                     : passing == NativePassingMode::Consume
                                         ? "std::move(_p" + std::to_string(index) + ")"
@@ -4020,7 +4022,7 @@ template<class T> void append_formatted_literal_tail(std::string& target, const 
                             output_ << "return " << call << ';';
                             emitNativeExceptionCatch(*function.nativeBinding);
                             output_ << "\n}\n\n";
-                            if (directStringBorrow)
+                            if (directNativeBorrow)
                             {
                                 // Keep the ordinary Place ABI for function values,
                                 // exports and unproven callers. Only the private

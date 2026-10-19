@@ -10,6 +10,18 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N04 closed byte-array cells — 2026-10-19
+
+- [x] Prove closed local dynamic u8/byte cells with readonly call-scoped native
+  leaf observers. Use InlinePlace for the cell and a private raw-reference leaf;
+  retain ordinary Place/wire/function-value entries and reject escape/unknown use.
+- [x] Native O0/O2, supported VM paths, aliasing, exception and generated-Wio heap
+  controls pass; KI-009 indirect-native VM calls stay explicit known-gap negatives.
+  Two semantics gates pass in 278.47s, three final proof/selector gates in 5.53s.
+- [ ] After measurement/heap/platform qualification is pending; N04/N05/N14 and
+  general array storage, owning overhead and VM performance remain open.
+  Report: `docs/WIO_BYTE_ARRAY_CELL_OPTIMIZATION.md`.
+
 ## N04 caller-owned read buffers — 2026-10-19
 
 - [x] Add ReadBytesInto/ReadSomeBytesInto with fixed destination length,

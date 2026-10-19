@@ -193,8 +193,19 @@ namespace wio::codegen
             return scalarCellUse(instruction, operand);
         }
 
-        bool callScopedStringUse(const wir::lowered::Module& module, const wir::lowered::Instruction& instruction,
-                                 const std::size_t operand)
+        bool byteArray(const wir::TypeTable& types, const wir::TypeId id)
+        {
+            const auto* type = types.tryGet(id);
+            if (!type || type->kind != wir::TypeKind::Array || type->ownership != wir::OwnershipModel::OwnedValue ||
+                type->arguments.size() != 1 || type->staticExtent || type->extentParameter || type->nativeBinding)
+                return false;
+            const auto* element = types.tryGet(type->arguments.front());
+            return element && (element->kind == wir::TypeKind::U8 || element->kind == wir::TypeKind::Byte) &&
+                   element->ownership == wir::OwnershipModel::Trivial;
+        }
+
+        bool callScopedBorrowUse(const wir::lowered::Module& module, const wir::lowered::Instruction& instruction,
+                                 const std::size_t operand, const bool bytes = false)
         {
             using namespace wir;
             if (instruction.opcode != lowered::Opcode::NativeInvoke || !instruction.callee)
@@ -210,7 +221,8 @@ namespace wio::codegen
                 if (found != module.functions.end())
                     callee = &*found;
             }
-            if (!callee || !WirCppStoragePlan::supportsCallScopedStringAbi(module, *callee))
+            if (!callee || !(bytes ? WirCppStoragePlan::supportsCallScopedByteArrayAbi(module, *callee)
+                                   : WirCppStoragePlan::supportsCallScopedStringAbi(module, *callee)))
                 return false;
             const NativeBinding& binding = *callee->nativeBinding;
             if (binding.parameters.size() != instruction.operands.size() ||
@@ -220,15 +232,22 @@ namespace wio::codegen
             for (std::size_t index = 0; index < binding.parameters.size(); ++index)
                 if (binding.parameters[index].type != instruction.signatureTypes[index])
                     return false;
-            return binding.parameters[operand].marshalling == NativeMarshallingKind::Utf8String;
+            return binding.parameters[operand].marshalling ==
+                   (bytes ? NativeMarshallingKind::RuntimeValue : NativeMarshallingKind::Utf8String);
         }
 
-        bool callScopedStringAbi(const wir::lowered::Module& module, const wir::lowered::Function& callee)
+        bool callScopedBorrowAbi(const wir::lowered::Module& module, const wir::lowered::Function& callee,
+                                 const bool bytes)
         {
             using namespace wir;
             if (!callee.isExternal || !callee.nativeBinding || callee.isAsync || callee.isMethod || callee.isExtension)
                 return false;
             const auto& binding = *callee.nativeBinding;
+            if (bytes && (binding.language != NativeSymbolLanguage::Cpp ||
+                          binding.callingConvention != NativeCallingConvention::PlatformDefault ||
+                          !callee.genericParameters.empty() || callee.coroutine || binding.result.nullable ||
+                          binding.result.type != callee.returnType))
+                return false;
             const Type* result = module.types.tryGet(callee.returnType);
             if (binding.receiver != NativeReceiverKind::None || !result ||
                 (binding.result.passing != NativePassingMode::Value &&
@@ -240,7 +259,7 @@ namespace wio::codegen
                 binding.result.callbackThread != NativeCallbackThread::Caller ||
                 binding.parameters.size() != callee.parameters.size())
                 return false;
-            bool hasString = false;
+            bool hasBorrow = false;
             for (std::size_t index = 0; index < binding.parameters.size(); ++index)
             {
                 const auto& parameter = binding.parameters[index];
@@ -252,16 +271,19 @@ namespace wio::codegen
                 if (parameter.marshalling == NativeMarshallingKind::Scalar &&
                     parameter.passing == NativePassingMode::Value && primitive(module.types, parameter.type))
                     continue;
-                if (parameter.marshalling != NativeMarshallingKind::Utf8String ||
+                if (parameter.marshalling !=
+                        (bytes ? NativeMarshallingKind::RuntimeValue : NativeMarshallingKind::Utf8String) ||
                     (parameter.passing != NativePassingMode::Borrow &&
                      parameter.passing != NativePassingMode::BorrowMut) ||
                     type->kind != TypeKind::Reference || type->arguments.size() != 1 ||
                     type->isMutable != (parameter.passing == NativePassingMode::BorrowMut) ||
-                    module.types.get(type->arguments.front()).kind != TypeKind::String)
+                    (bytes ? (parameter.passing != NativePassingMode::Borrow ||
+                              !byteArray(module.types, type->arguments.front()))
+                           : module.types.get(type->arguments.front()).kind != TypeKind::String))
                     return false;
-                hasString = true;
+                hasBorrow = true;
             }
-            return hasString;
+            return hasBorrow;
         }
 
         bool observesString(const wir::lowered::Instruction& instruction, const wir::ValueId value)
@@ -312,7 +334,19 @@ namespace wio::codegen
     bool WirCppStoragePlan::supportsCallScopedStringAbi(const wir::lowered::Module& module,
                                                         const wir::lowered::Function& function)
     {
-        return callScopedStringAbi(module, function);
+        return callScopedBorrowAbi(module, function, false);
+    }
+
+    bool WirCppStoragePlan::supportsCallScopedByteArrayAbi(const wir::lowered::Module& module,
+                                                           const wir::lowered::Function& function)
+    {
+        return callScopedBorrowAbi(module, function, true);
+    }
+
+    bool WirCppStoragePlan::supportsCallScopedBorrowAbi(const wir::lowered::Module& module,
+                                                        const wir::lowered::Function& function)
+    {
+        return supportsCallScopedStringAbi(module, function) || supportsCallScopedByteArrayAbi(module, function);
     }
 
     WirCppStoragePlan WirCppStoragePlan::build(const wir::lowered::Module& module,
@@ -355,13 +389,21 @@ namespace wio::codegen
                     (instruction.escapeClass == wir::lowered::EscapeClass::Local ||
                      instruction.escapeClass == wir::lowered::EscapeClass::Store))
                     plan.stringPlaces.insert(instruction.result.value());
+                if (instruction.opcode == wir::lowered::Opcode::LocalPlace && instruction.result && type &&
+                    type->kind == wir::TypeKind::Reference && type->arguments.size() == 1 &&
+                    byteArray(module.types, type->arguments.front()) &&
+                    instruction.storageClass == wir::lowered::StorageClass::Stack &&
+                    (instruction.escapeClass == wir::lowered::EscapeClass::Local ||
+                     instruction.escapeClass == wir::lowered::EscapeClass::Store))
+                    plan.byteArrayPlaces.insert(instruction.result.value());
             }
         }
         // Store classification also includes writes *into* the cell in current
         // canonical metadata. Distinguish those from storing the cell itself.
         // Escape metadata is necessary, not sufficient: prove a closed direct
-        // load/store use set. References, projections, phi edges, calls, native
-        // borrows and captures keep the full Place representation.
+        // load/store use set. References, projections, phi edges, unknown calls
+        // and captures keep full Place. Only proven native leaf borrows may
+        // observe inline storage without a shared cell identity.
         for (const auto& block : function.blocks)
             for (const auto& instruction : block.instructions)
             {
@@ -370,19 +412,26 @@ namespace wio::codegen
                     if (!scalarCellUse(instruction, index))
                         plan.scalarPlaces.erase(instruction.operands[index].value());
                     if (plan.stringPlaces.contains(instruction.operands[index].value()) &&
-                        !stringCellUse(instruction, index) && !callScopedStringUse(module, instruction, index))
+                        !stringCellUse(instruction, index) && !callScopedBorrowUse(module, instruction, index))
                         plan.stringPlaces.erase(instruction.operands[index].value());
+                    if (plan.byteArrayPlaces.contains(instruction.operands[index].value()) &&
+                        !(instruction.opcode != wir::lowered::Opcode::Load && scalarCellUse(instruction, index)) &&
+                        !callScopedBorrowUse(module, instruction, index, true))
+                        plan.byteArrayPlaces.erase(instruction.operands[index].value());
                 }
                 if (instruction.borrowOrigin && !(instruction.opcode == wir::lowered::Opcode::Load &&
                                                   instruction.resultOwnership == wir::typed::ValueOwnership::Trivial))
                     plan.scalarPlaces.erase(instruction.borrowOrigin.value());
                 if (instruction.borrowOrigin && instruction.opcode != wir::lowered::Opcode::Load)
                     plan.stringPlaces.erase(instruction.borrowOrigin.value());
+                if (instruction.borrowOrigin)
+                    plan.byteArrayPlaces.erase(instruction.borrowOrigin.value());
                 for (const auto& target : instruction.targets)
                     for (const auto value : target.arguments)
                     {
                         plan.scalarPlaces.erase(value.value());
                         plan.stringPlaces.erase(value.value());
+                        plan.byteArrayPlaces.erase(value.value());
                     }
                 if (instruction.opcode == wir::lowered::Opcode::Release ||
                     instruction.opcode == wir::lowered::Opcode::DropValue)
@@ -392,6 +441,7 @@ namespace wio::codegen
         plan.plainValues.insert(plan.scalarPlaces.begin(), plan.scalarPlaces.end());
         plan.plainValues.insert(plan.scalarFieldPlaces.begin(), plan.scalarFieldPlaces.end());
         plan.plainValues.insert(plan.stringPlaces.begin(), plan.stringPlaces.end());
+        plan.plainValues.insert(plan.byteArrayPlaces.begin(), plan.byteArrayPlaces.end());
 
         // An adjacent, sole-use snapshot can borrow for a known observer, or
         // Append's self-alias-safe suffix. Count uses across the whole CFG but

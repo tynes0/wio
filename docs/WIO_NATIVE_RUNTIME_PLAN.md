@@ -580,3 +580,18 @@ C++ 28.2641/29.2004ms. Keep the remaining owning-path gap and worse VM reused
 time/RSS visible; no accepted parity or VM gain follows. Source `a1fb581` passes
 scoped Windows Debug, Ubuntu Release and macOS 15 Release CI 39177619566.
 Bounded write-prefix/bulk-buffer/streaming work and N14 acceptance remain open.
+
+## N04 existing owning-array cell candidate, 2026-10-19
+
+[Closed byte-array cells](WIO_BYTE_ARRAY_CELL_OPTIMIZATION.md) target the existing
+ReadBytes/ReadSomeBytes loop without changing its owning API or source workload.
+A local dynamic u8/byte array seen only by readonly call-scoped C++ native leaves
+can use InlinePlace plus a private const-vector entry. Ordinary Place/function
+value/wire entries remain; references, captures, CFG cell arguments, unknown
+calls and unsupported lifetimes/results retain the original representation.
+This narrow N04 dependency is not general N05 array-place closure.
+
+Local gates cover proof rejection, native O0/O2, supported VM behavior, aliasing,
+exceptions and generated-Wio allocation. KI-009 stays an explicitly recorded VM
+negative, not a fixed feature. Before has 84/84 correct but unqualified samples;
+after heap/timing/platform evidence remains pending at the source checkpoint.

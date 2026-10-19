@@ -17,6 +17,9 @@ namespace wio::codegen
         // interval. The receiver is checked when forming the address.
         std::unordered_set<std::uint32_t> scalarFieldPlaces;
         std::unordered_set<std::uint32_t> stringPlaces;
+        // Closed local byte arrays observed only by synchronous native leaves.
+        // References/captures/CFG edges and unknown calls retain full Place.
+        std::unordered_set<std::uint32_t> byteArrayPlaces;
         std::unordered_set<std::uint32_t> plainValues;
         std::unordered_map<std::uint32_t, wir::ValueId> borrowedStringCopies;
         // Sole-use concat tree followed by a store into its freshly loaded,
@@ -36,6 +39,14 @@ namespace wio::codegen
         // A synchronous native leaf with only scalar values and call-scoped
         // UTF-8 borrows. It cannot return or carry a retained reference/callback.
         [[nodiscard]] static bool supportsCallScopedStringAbi(const wir::lowered::Module& module,
+                                                              const wir::lowered::Function& function);
+
+        // Immutable dynamic u8/byte borrows, C++/default ABI, no callbacks or
+        // escaping results. The ordinary Place/wire entry is retained.
+        [[nodiscard]] static bool supportsCallScopedByteArrayAbi(const wir::lowered::Module& module,
+                                                                 const wir::lowered::Function& function);
+
+        [[nodiscard]] static bool supportsCallScopedBorrowAbi(const wir::lowered::Module& module,
                                                               const wir::lowered::Function& function);
 
         [[nodiscard]] static WirCppStoragePlan build(const wir::lowered::Module& module,
