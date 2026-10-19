@@ -37,9 +37,11 @@ The final scoped gate passes 1/1 in 7.08 seconds (test body 6.96s).
 
 The Unix borrow-fixture executable is renamed from `memory` to
 `allocation-probe`: its include directory previously caused `<memory>` to read
-the executable as a header on macOS. This explains the revealed macOS native
-failure rather than a byte-cell optimization defect; Ubuntu confirmation and
-three-platform requalification are pending CI. Updated native O0/O2, supported
+the executable as a header on macOS. This explains the revealed native fixture
+failure rather than a byte-cell optimization defect. Source `b14ea3e` passes
+Windows Debug, Ubuntu Release and macOS 15 Release, including the new sampling
+gate, in [CI 39305065595](https://github.com/tynes0/wio/actions/runs/39305065595).
+Updated native O0/O2, supported
 VM O0/O2 bridges, heap/alias/error/function-value controls pass locally in
 113.13s. KI-009 indirect-native VM calls remain explicit known-gap negatives.
 

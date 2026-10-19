@@ -610,7 +610,9 @@ allocation calls halve 514 -> 257 while payload ownership remains. Native
 comparison medians 34.0282/35.9776 -> 27.8940/28.2631ms remain timing
 unqualified, as do apparent C++ ratios 1.014x/1.058x. RSS is essentially unchanged.
 Neither VM speedup nor 5-10% native parity is accepted. Initial CI passes Windows,
-but the new O0 bridge fixture fails on Ubuntu/macOS. A bounded diagnostic-output
-repair and long-message regression are pushed to expose/resolve that failure;
-three-platform closure remains pending. Full comparison/heap/build/cost-probe
+but the new O0 bridge fixture initially fails on Ubuntu/macOS. Bounded diagnostic
+matching exposes a Unix executable named `memory` shadowing `<memory>`; eb3f811
+renames it. Source b14ea3e passes all scoped Windows Debug, Ubuntu Release and
+macOS 15 Release jobs in CI 39305065595, including the new high-sample controller.
+The byte-cell platform gap is closed. Full comparison/heap/build/cost-probe
 evidence is in the report. N04/N14 and bounded bulk/write/stream work stay open.

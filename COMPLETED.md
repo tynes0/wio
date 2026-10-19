@@ -18,8 +18,10 @@ Notes:
 - [x] Append every raw row to a journal; batch full checkpoints without trimming
   failures. Report sample counts and per-case versus session qualification.
   New focused contract passes locally; corrected Unix borrow fixture passes too.
-- [ ] First real 12096-process session and three-platform requalification are
-  in progress. No new runtime optimization or accepted speedup is claimed.
+- [x] Three-platform CI 39305065595 passes on source b14ea3e, confirming the Unix
+  include-shadow fix and the new controller contract on Windows/Ubuntu/macOS.
+- [ ] First real 12096-process session is in progress. No new runtime
+  optimization or accepted speedup is claimed.
   Report: `docs/WIO_HIGH_SAMPLE_BENCHMARKING.md`.
 
 ## N04 closed byte-array cells — 2026-10-19
@@ -36,10 +38,12 @@ Notes:
   27.8940/28.2631ms are unqualified observations, not accepted speedup/parity.
 - [x] Bound structured native diagnostic matching; preserve oversized output
   verbatim. New short/16-KiB real compiler error regression passes locally.
-- [ ] Platform qualification remains open: initial Windows CI passes, Ubuntu
-  bridge build times out and macOS bridge failure hits diagnostic regex limits.
-  Diagnostic repair is pushed for requalification, not a claimed bridge fix.
-  N04/N05/N14, general arrays, owning overhead and VM performance remain open.
+- [x] Platform qualification: preserve the initial Ubuntu timeout/macOS regex
+  failure. The revealed cause is the fixture's Unix executable shadowing
+  `<memory>`; eb3f811 renames it. Source b14ea3e passes all three platform jobs
+  in CI 39305065595, including the new controller contract.
+- [ ] Broader N04/N05/N14, general arrays, owning overhead, VM performance and
+  timing acceptance remain open.
   Report: `docs/WIO_BYTE_ARRAY_CELL_OPTIMIZATION.md`.
 
 ## N04 caller-owned read buffers — 2026-10-19

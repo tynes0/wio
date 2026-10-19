@@ -134,6 +134,14 @@ the new borrow/diagnostic evidence. The native bridge root error and three-platf
 closure still need qualification; N04/N14 stay open. Diagnostic changes are not
 included in the measured candidate.
 
+Follow-up: the revealed native error was a fixture executable named `memory`
+inside an include directory, shadowing the standard `<memory>` header on Unix.
+`eb3f811` renames it to `allocation-probe`. Source `b14ea3e` (also adding the
+high-sample controller) passes all scoped Windows Debug, Ubuntu Release and
+macOS 15 Release jobs in
+[CI 39305065595](https://github.com/tynes0/wio/actions/runs/39305065595).
+The byte-cell platform qualification gap is closed; broader N04/N14 work is not.
+
 Raw evidence: `docs/evidence/n04-byte-cell-{before,after,build,memory,costs}-2026-10-19.json`;
 the before allocation counters are in `n04-reuse-memory-2026-10-19.json`.
 
