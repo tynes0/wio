@@ -1681,6 +1681,12 @@ if(Python3_Interpreter_FOUND)
             --output "${CMAKE_BINARY_DIR}/n04-byte-array-borrow-contract")
     wio_test_labels(wio_n04_byte_array_borrow_semantics native vm io memory optimization ownership)
     set_tests_properties(wio_n04_byte_array_borrow_semantics PROPERTIES TIMEOUT 900 RUN_SERIAL TRUE)
+    add_test(NAME wio_n04_backend_diagnostics
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/byte_borrow/diagnostics.py"
+            --wio "$<TARGET_FILE:wio_app>" --cxx "${WIO_BACKEND_CXX_COMPILER}"
+            --output "${CMAKE_BINARY_DIR}/n04-backend-diagnostics")
+    wio_test_labels(wio_n04_backend_diagnostics native cli diagnostic)
+    set_tests_properties(wio_n04_backend_diagnostics PROPERTIES TIMEOUT 180 RUN_SERIAL TRUE)
     add_test(NAME wio_n04_manifest_selection
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/byte_io/test_select.py")
     wio_test_labels(wio_n04_manifest_selection benchmark provenance)

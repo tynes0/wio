@@ -1867,7 +1867,7 @@ namespace wio
             return std::nullopt;
         }
 
-        std::optional<BackendDiagnostic> parseBackendDiagnosticLine(std::string_view rawLine)
+        std::optional<BackendDiagnostic> parseStructuredBackendDiagnosticLine(std::string_view rawLine)
         {
             static const std::regex gccWithColumnPattern(
                 R"(^(.*):([0-9]+):([0-9]+):\s*(fatal error|error|warning|note):\s*(.*)$)");
@@ -1961,6 +1961,25 @@ namespace wio
             }
 
             return std::nullopt;
+        }
+
+        std::optional<BackendDiagnostic> parseBackendDiagnosticLine(std::string_view rawLine)
+        {
+            // Template diagnostics and generated source excerpts can contain
+            // unbounded physical lines. Recursive std::regex implementations
+            // may overflow or exceed their complexity budget on those lines.
+            // Keep them verbatim in the existing raw-output fallback instead.
+            if (rawLine.size() > 2048)
+                return std::nullopt;
+
+            try
+            {
+                return parseStructuredBackendDiagnosticLine(rawLine);
+            }
+            catch (const std::regex_error&)
+            {
+                return std::nullopt;
+            }
         }
 
         bool isIgnorableBackendOutputLine(std::string_view rawLine)

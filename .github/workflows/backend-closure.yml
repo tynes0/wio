@@ -107,7 +107,7 @@ jobs:
       - name: Qualify N04 byte reads and closed borrows (native O0/O2 and VM)
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
-          -R "^wio_n04_(byte_io|runtime_profile|manifest_selection|byte_array_borrow_(plan|semantics))$"
+          -R "^wio_n04_(byte_io|runtime_profile|manifest_selection|backend_diagnostics|byte_array_borrow_(plan|semantics))$"
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -115,6 +115,10 @@ jobs:
           name: backend-closure-${{ matrix.os }}-${{ matrix.config }}
           path: |
             build/n04-byte-io-contract/**/results.json
+            build/n04-byte-array-borrow-contract/**/results.json
+            build/n04-byte-array-borrow-contract/**/*.cpp
+            build/n04-byte-array-borrow-contract/**/probe.h
+            build/n04-backend-diagnostics/**/results.json
             build/Testing/Temporary/
             build/measurement-contract-*/evidence/results.json
             build/native-cost-python-contract-*/**/results.json
