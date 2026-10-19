@@ -45,7 +45,8 @@ def verify(args):
         run([program], contains="byte-borrow-ok")
         run([program, "indirect"], contains="byte-borrow-indirect-ok")
         run([program, "fail"], expected=1, contains="byte-borrow-failure")
-    diagnostic = folder / ("memory.exe" if os.name == "nt" else "memory")
+    # A Unix executable named "memory" in an -I directory shadows <memory>.
+    diagnostic = folder / ("allocation-probe.exe" if os.name == "nt" else "allocation-probe")
     static = ["-static-libstdc++", "-static-libgcc"] if os.name == "nt" else []
     run([args.cxx, "-std=c++20", "-O2", "-ffp-contract=off", "-DWIO_BENCHMARK_ALLOCATIONS", *static,
          folder / "main.wio.cpp", f"-I{folder}", f"-I{ROOT / 'runtime/include'}", f"-I{ROOT / 'sdk/include'}",
