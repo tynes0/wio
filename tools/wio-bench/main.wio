@@ -51,6 +51,13 @@ fn Error(message: string) -> std::UnitResult
     return bench::Failure<std::ResultUnit>(message);
 }
 
+fn Repetitions(manifest: json::Value, phase: string, implementation: string) -> usize
+{
+    let final = phase == "final";
+    let overrides = Field(manifest, final ? "implementationFinalRepetitions" : "implementationRepetitions");
+    return Integer(overrides, implementation, Integer(manifest, final ? "finalRepetitions" : "repetitions", 3)) fit usize;
+}
+
 fn ValidateCommand(command: json::Value) -> std::UnitResult
 {
     if (not command.IsObject() or Text(command, "program", "") == "") return Error("Command requires program.");
@@ -85,7 +92,7 @@ fn Validate(manifest: json::Value) -> std::UnitResult
                 or Field(entries, key).stringValue.Contains("\0")) return Error("Invalid environment entry.");
         }
     }
-    for (key in ["repetitions", "finalRepetitions", "warmups", "cpu", "timeoutMs", "outputLimit"])
+    for (key in ["repetitions", "finalRepetitions", "warmups", "cpu", "timeoutMs", "outputLimit", "checkpointInterval"])
     {
         if (manifest.Contains(key) and Field(manifest, key).I64().IsError())
         {
@@ -136,6 +143,39 @@ fn Validate(manifest: json::Value) -> std::UnitResult
 
     let cases = Field(manifest, "cases");
     if (not cases.IsArray() or cases.Count() == 0usize or cases.Count() > 128usize) return Error("Require 1..128 cases.");
+    if (Integer(manifest, "checkpointInterval", 1) < 1 or Integer(manifest, "checkpointInterval", 1) > 10000)
+    {
+        return Error("checkpointInterval must be 1..10000.");
+    }
+
+    for (key in ["implementationRepetitions", "implementationFinalRepetitions"])
+    {
+        if (not manifest.Contains(key)) continue;
+        let overrides = Field(manifest, key);
+        if (not overrides.IsObject()) return Error(key + " must be an object.");
+        for (implementation in overrides.objectValue.Keys())
+        {
+            let value = Field(overrides, implementation);
+            if (value.I64().IsError() or Integer(overrides, implementation, 0) < 3
+                or Integer(overrides, implementation, 0) > 10000)
+            {
+                return Error("Implementation repetition counts must be integers in 3..10000.");
+            }
+
+            mut found = false;
+            for (item in cases.arrayValue)
+            {
+                if (Text(item, "implementation", "") == implementation) found = true;
+            }
+
+            if (not found) return Error("Unknown repetition implementation: " + implementation);
+            if (key == "implementationFinalRepetitions" and implementation != "wio-native" and implementation != "wio-vm")
+            {
+                return Error("Only Wio native/VM execute in the final phase.");
+            }
+        }
+    }
+
     if (not Field(manifest, "artifacts").IsArray() or Field(manifest, "artifacts").Count() == 0usize)
     {
         return Error("List source, runtime, toolchain and workload artifacts to freeze.");
@@ -373,7 +413,7 @@ fn Summarize(report: json::Value, manifest: json::Value) -> bool
             if (phase == "final" and implementation != "wio-native" and implementation != "wio-vm") continue;
             let name = Text(item, "name", "");
             let values = SamplesFor(report, name, phase, false);
-            let expected = phase == "final" ? Integer(manifest, "finalRepetitions", 3) : Integer(manifest, "repetitions", 3);
+            let expected = Repetitions(manifest, phase, implementation);
             let summary = bench::AnalyzeWithLimits(values, Number(manifest, "maximumRange", 0.15),
                 Number(manifest, "maximumDrift", 0.10));
             mut fields: Dict<string, json::Value> = {};
@@ -384,7 +424,8 @@ fn Summarize(report: json::Value, manifest: json::Value) -> bool
             fields.Set("metric", json::StringValue(Text(item, "metric", "kernel")));
             fields.Set("processCpuNanoseconds", ProcessMetric(report, name, phase, "cpuNanoseconds"));
             fields.Set("processPeakResidentBytes", ProcessMetric(report, name, phase, "peakResidentBytes"));
-            mut accepted = summary.IsOk() and values.Count() == (expected fit usize);
+            mut accepted = summary.IsOk() and values.Count() == expected;
+            fields.Set("expectedSamples", json::IntegerValue(expected fit u64));
             if (summary.IsOk())
             {
                 fields.Set("statistics", bench::SummaryJson(summary.Value()));
@@ -426,15 +467,17 @@ fn Markdown(report: json::Value) -> string
 {
     mut text = "# " + Text(report, "name", "wio-bench") + "\n\n";
     text += "All raw samples, warmups and failures are retained in results.json. No trimming or retries.\n\n";
-    text += "| Phase | Case | Metric | Median ns | CPU ms | Peak RSS KiB | Qualified |\n| --- | --- | --- | ---: | ---: | ---: | --- |\n";
+    text += "| Phase | Case | Samples | Metric | Median ns | CPU ms | Peak RSS KiB | Statistics stable | Session qualified |\n| --- | --- | ---: | --- | ---: | ---: | ---: | --- | --- |\n";
     for (row in Field(report, "summary").arrayValue)
     {
         text += "| " + Text(row, "phase", "") + " | " + Text(row, "case", "")
+            + " | " + std::ToString<i64>(Integer(Field(row, "statistics"), "count", 0))
             + " | " + Text(row, "metric", "") + " | " + std::ToString<f64>(Number(Field(row, "statistics"), "median", 0.0))
             + " | " + (Field(row, "processCpuNanoseconds").IsNull() ? "n/a"
                 : std::ToString<f64>(Number(Field(row, "processCpuNanoseconds"), "median", 0.0) / 1000000.0))
             + " | " + (Field(row, "processPeakResidentBytes").IsNull() ? "n/a"
                 : std::ToString<f64>(Number(Field(row, "processPeakResidentBytes"), "median", 0.0) / 1024.0))
+            + " | " + (Field(row, "statisticsQualified").BoolOr(false) ? "yes" : "no")
             + " | " + (Field(row, "timingQualified").BoolOr(false) ? "yes" : "no") + " |\n";
     }
 
@@ -457,13 +500,15 @@ fn Run(manifest: json::Value, root: string, output: string, skipBuild: bool) -> 
     if (fs::CreateDirectories(output).IsError()) return 1;
     mut fields: Dict<string, json::Value> = {};
     fields.Set("schemaVersion", json::IntegerValue(1));
-    fields.Set("toolVersion", json::StringValue("wio-bench/1"));
+    fields.Set("toolVersion", json::StringValue("wio-bench/1.1"));
     fields.Set("name", Field(manifest, "name"));
     fields.Set("manifest", manifest);
     fields.Set("complete", json::BoolValue(false));
     fields.Set("outputsCorrect", json::BoolValue(false));
     fields.Set("timingQualified", json::BoolValue(false));
     fields.Set("samples", json::ArrayValue([]));
+    fields.Set("sampleJournal", json::StringValue("samples.jsonl"));
+    fields.Set("schedule", json::StringValue("comparison then final; non-VM then VM; rotating/reversing within each block"));
     let report = json::ObjectValue(fields);
     let environment = bench::Environment();
     if (environment.IsError()) return 1;
@@ -521,40 +566,61 @@ fn Run(manifest: json::Value, root: string, output: string, skipBuild: bool) -> 
     mut samples: json::Value[] = [];
     mut correct = true;
     let warmups = Integer(manifest, "warmups", 1) fit usize;
+    let checkpointInterval = Integer(manifest, "checkpointInterval", 1) fit usize;
     for (phase in ["comparison", "final"])
     {
-        mut lanes: json::Value[] = [];
-        mut controls: bool[] = [];
-        for (item in Field(manifest, "cases").arrayValue)
+        for (vmBlock in [false, true])
         {
-            let implementation = Text(item, "implementation", "");
-            if (phase == "comparison" or implementation == "wio-native" or implementation == "wio-vm")
+            mut lanes: json::Value[] = [];
+            mut controls: bool[] = [];
+            mut repeats = 0usize;
+            for (item in Field(manifest, "cases").arrayValue)
             {
-                lanes.Push(item);
-                controls.Push(false);
-                if (implementation == "wio-native")
+                let implementation = Text(item, "implementation", "");
+                if ((implementation == "wio-vm") == vmBlock
+                    and (phase == "comparison" or implementation == "wio-native" or implementation == "wio-vm"))
                 {
                     lanes.Push(item);
-                    controls.Push(true);
+                    controls.Push(false);
+                    let count = Repetitions(manifest, phase, implementation);
+                    if (count > repeats) repeats = count;
+                    if (implementation == "wio-native")
+                    {
+                        lanes.Push(item);
+                        controls.Push(true);
+                    }
+                }
+            }
+
+            for (round in 0usize..<warmups + repeats)
+            {
+                for (position in 0usize..<lanes.Count())
+                {
+                    let ordered = round % 2usize == 0usize ? position : lanes.Count() - 1usize - position;
+                    let index = (ordered + (round / 2usize)) % lanes.Count();
+                    if (round >= warmups + Repetitions(manifest, phase, Text(lanes[index], "implementation", ""))) continue;
+                    let sample = Sample(lanes[index], manifest, root, phase, round, round < warmups, controls[index]);
+                    correct = correct and Field(sample, "correct").BoolOr(false);
+                    samples.Push(sample);
+                    if (fs::AppendText(path::Join(output, "samples.jsonl"), json::Write(sample) + "\n").IsError())
+                    {
+                        console::PrintLine("Cannot append raw sample journal; stopping.");
+                        report.objectValue.Set("samples", json::ArrayValue(samples));
+                        Save(output, report);
+                        return 1;
+                    }
+
+                    if (samples.Count() % checkpointInterval == 0usize or not Field(sample, "correct").BoolOr(false))
+                    {
+                        report.objectValue.Set("samples", json::ArrayValue(samples));
+                        if (not Save(output, report)) return 1;
+                    }
                 }
             }
         }
 
-        let repeats = (phase == "final" ? Integer(manifest, "finalRepetitions", 3)
-            : Integer(manifest, "repetitions", 3)) fit usize;
-        for (round in 0usize..<warmups + repeats)
-        {
-            for (position in 0usize..<lanes.Count())
-            {
-                let ordered = round % 2usize == 0usize ? position : lanes.Count() - 1usize - position;
-                let index = (ordered + (round / 2usize)) % lanes.Count();
-                let sample = Sample(lanes[index], manifest, root, phase, round, round < warmups, controls[index]);
-                correct = correct and Field(sample, "correct").BoolOr(false);
-                samples.Push(sample);
-                report.objectValue.Set("samples", json::ArrayValue(samples));
-                if (not Save(output, report)) return 1;
-            }
-        }
+        report.objectValue.Set("samples", json::ArrayValue(samples));
+        if (not Save(output, report)) return 1;
     }
 
     let after = Snapshot(manifest, root);
@@ -672,7 +738,7 @@ fn Entry(args: string[]) -> i32
 
     if (args[1usize] == "--version")
     {
-        console::PrintLine("wio-bench/1");
+        console::PrintLine("wio-bench/1.1");
         return 0;
     }
 

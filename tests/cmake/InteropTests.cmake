@@ -1649,6 +1649,13 @@ if(Python3_Interpreter_FOUND)
             ${WIO_BENCHMARK_TEST_RUNNER_ARGS})
     wio_test_labels(wio_benchmark_contract native vm benchmark performance diagnostic memory wio)
     set_tests_properties(wio_benchmark_contract PROPERTIES TIMEOUT 1800 RUN_SERIAL TRUE)
+    add_test(NAME wio_benchmark_sampling
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/benchmark/sampling.py"
+            --runner "${CMAKE_BINARY_DIR}/tools/wio-bench/$<CONFIG>/wio-bench${CMAKE_EXECUTABLE_SUFFIX}"
+            --cxx "${WIO_BACKEND_CXX_COMPILER}"
+            --output "${CMAKE_BINARY_DIR}/benchmark-sampling")
+    wio_test_labels(wio_benchmark_sampling benchmark native vm diagnostic)
+    set_tests_properties(wio_benchmark_sampling PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE)
     add_test(NAME wio_n03_formatting_call_semantics
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/performance/formatting_calls/verify.py"
             --wio "$<TARGET_FILE:wio_app>" --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}"

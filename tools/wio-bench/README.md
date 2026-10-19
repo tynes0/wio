@@ -77,8 +77,9 @@ of hashing/executing a zero-byte App Execution Alias.
    humans must also review sources and flags; matching output alone is not proof
    of equivalent semantics. Do not publish qualified speedups from rejected runs.
 
-Builds are sequential and outside workload timings. Measurement order rotates
-and reverses by round. Every native lane has an identical-command control lane.
+Builds are sequential and outside workload timings. Each phase runs non-VM
+implementations first, then a separate VM block; order rotates and reverses by
+round within each block. Every native lane has an identical-command control lane.
 Warmup samples remain in raw data but not summary statistics. Other languages do
 not run in the final phase. Missing C#/VM cases are errors, not silent skips.
 
@@ -91,6 +92,9 @@ not run in the final phase. Missing C#/VM cases are errors, not silent skips.
   "warmups": 1,
   "repetitions": 15,
   "finalRepetitions": 5,
+  "implementationRepetitions": {"wio-vm": 10},
+  "implementationFinalRepetitions": {"wio-vm": 10},
+  "checkpointInterval": 1,
   "timeoutMs": 30000,
   "outputLimit": 1048576,
   "cpu": -1,
@@ -148,6 +152,45 @@ output, positive bounded deadlines. CPU `-1` leaves affinity unchanged; other
 values request child-only affinity before execution (Windows/Linux). Unsupported
 or denied affinity is a failure, never silently ignored. This changes no power
 policy, priority, system-wide affinity or other applications.
+
+### Native optimization sampling profile (2026-10-19)
+
+Use 1000 independent measured **process runs** per Wio native/C++/C# case by
+default; 10000 is selectable. VM uses 20 (or explicitly 10) because this pass
+does not target VM speed. This does not change the operations performed inside
+each timed run, any checksum, flags or acceptance limits. Final Wio runs use
+the same native/VM repetition budgets; the native A/A lane has its own full
+sample budget. Warmups remain additional and excluded from statistics.
+
+```sh
+python tools/wio-bench/sampling_profile.py --manifest FROZEN_MANIFEST.json --output NEW_PROFILE.json --repetitions 1000 --vm-repetitions 20
+wio-bench validate NEW_PROFILE.json
+wio-bench run NEW_PROFILE.json --output NEW_RESULTS_DIRECTORY
+```
+
+The profile script only derives a new manifest; Wio collects and analyzes every
+sample. It preserves source-manifest SHA256/provenance and never overwrites old
+evidence. Native workload/reference images are not rebuilt. Optional
+`implementationRepetitions` overrides the comparison fallback `repetitions` for
+known implementation tags. `implementationFinalRepetitions` overrides
+`finalRepetitions` for Wio native/VM only. Omitted maps retain existing counts.
+
+Every completed sample is appended to `samples.jsonl`, including warmups,
+controls, wrong checksums and process failures. `checkpointInterval` (1..10000,
+default 1; high-sample profile 100) limits full `results.json` rewrites. Failures,
+phase boundaries and final completion force full checkpoints. The final report
+contains the entire journal's sample sequence; an interrupted report can lag
+the journal by up to a checkpoint interval. The journal is evidence, not an
+automatic resume facility; no power-loss/fsync guarantee is made. Do not truncate
+or retry until a distribution passes. The Markdown table distinguishes each
+case's statistical checks from overall session qualification and shows counts.
+
+More samples improve distribution visibility, not immunity to scheduling,
+frequency/cache drift or correlated noise. Existing min/max range, drift and
+A/A acceptance limits are deliberately unchanged; 1000 samples do not turn a
+noisy session into an accepted speedup by themselves. Keep medians, p95/p99,
+standard deviation, MAD and raw outliers visible. Do not compare the new
+1000-sample protocol against an old five-sample run as a controlled optimization.
 
 ### Workload output protocol
 

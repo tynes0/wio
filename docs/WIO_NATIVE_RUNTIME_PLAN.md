@@ -28,6 +28,18 @@ The order is fixed; dependency-related work can be shared without renumbering.
 Do not close a whole item because a single narrow case improved. No universal
 5-10% overhead guarantee and no permission to weaken safety, arithmetic or ABI.
 
+### Sampling policy update, 2026-10-19
+
+User-approved native-pass policy: 1000 independent measured runs per native,
+C++ and C# case (10000 selectable), 10-20 VM runs. Workload operation counts,
+checksums and acceptance limits remain identical across languages. Native A/A
+and the separate final Wio phase keep their declared budgets. The Wio controller
+supports per-implementation budgets, isolated VM blocks and append-only raw
+sample journaling with batched full checkpoints. Higher counts alone do not fix
+system noise or justify selecting best-case values. See
+`tools/wio-bench/README.md` for the explicit profile; smoke/contract tests keep
+small synthetic counts and are not performance acceptance evidence.
+
 ## Required late-native revisit: indexed numeric formatting
 
 User priority recorded 2026-10-18: revisit **indexed integer and indexed float**
