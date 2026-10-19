@@ -572,5 +572,11 @@ The expanded scoped gate passes 1/1 in 117.64s (29 processes), including native
 O0/O2 and O0/O2 VM bridges, repeated zero-allocation C++ reads, span canaries,
 snapshot/EOF and partial/closed errors. The Wio-owned fixture adds matching reuse
 cases for all languages, with storage initialization outside measurement. Actual
-Wio heap, timing and source CI evidence are separate; no VM zero-copy or N04/N14
-closure claim follows from the native span implementation alone.
+Wio native heap traffic drops 514 allocations/16855088 requested bytes -> zero/
+zero in the hot-loop window, retaining the preexisting caller buffer. Native RSS
+is essentially unchanged, not zero. The selected session has 168/168 correct
+samples, but timing stays unqualified: reused native medians 28.1145/29.0215ms,
+C++ 28.2641/29.2004ms. Keep the remaining owning-path gap and worse VM reused
+time/RSS visible; no accepted parity or VM gain follows. Source `a1fb581` passes
+scoped Windows Debug, Ubuntu Release and macOS 15 Release CI 39177619566.
+Bounded write-prefix/bulk-buffer/streaming work and N14 acceptance remain open.

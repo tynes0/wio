@@ -20,8 +20,15 @@ Notes:
   empty/partial/closed/snapshot checks pass. Preserve the initial fixture failure.
 - [x] Extend the Wio-owned comparison with matching reusable C++/C# cases;
   preallocate all caller buffers outside kernel/allocation windows.
-- [ ] Actual Wio allocation/timing/platform qualification remains separate;
-  N04/N14 and VM bulk transport are not closed.
+- [x] Actual generated Wio native loop: owned 514 allocations/16855088 requested
+  bytes -> reused zero/zero, with caller storage prepared outside the window.
+  Preserve essentially unchanged native RSS; zero tracked peak is not zero memory.
+- [x] Selected session has 168/168 correct samples. Reused native comparison
+  medians 28.1145/29.0215ms versus C++ 28.2641/29.2004ms are noisy/unqualified;
+  owning gap remains. Record worse VM reusable times and RSS, not a VM win.
+- [x] Source `a1fb581` passes scoped Windows Debug, Ubuntu Release and macOS 15
+  Release CI 39177619566, including the expanded N04 gates.
+- [ ] N04/N14, owning-path overhead and VM bulk transport remain open.
   Report: `docs/WIO_REUSABLE_BYTE_IO_OPTIMIZATION.md`.
 
 ## N04 runtime/native-bridge profile slice — 2026-10-19
