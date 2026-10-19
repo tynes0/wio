@@ -1,0 +1,237 @@
+{
+  "passed": true,
+  "processes": [
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "-static",
+        "F:\\Projects\\wio\\tests\\benchmark\\sampling_child.cpp",
+        "-o",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\protocol-child.exe"
+      ],
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "run",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\legacy.json",
+        "--output",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\legacy-run"
+      ],
+      "exitCode": 2,
+      "stdout": "comparison / wio-native warmup ok\n\ncomparison / wio-native [A/A] warmup ok\n\ncomparison / cpp warmup ok\n\ncomparison / csharp warmup ok\n\ncomparison / csharp sample ok\n\ncomparison / cpp sample ok\n\ncomparison / wio-native [A/A] sample ok\n\ncomparison / wio-native sample ok\n\ncomparison / wio-native [A/A] sample ok\n\ncomparison / cpp sample ok\n\ncomparison / csharp sample ok\n\ncomparison / wio-native sample ok\n\ncomparison / wio-native sample ok\n\ncomparison / csharp sample ok\n\ncomparison / cpp sample ok\n\ncomparison / wio-native [A/A] sample ok\n\ncomparison / wio-vm warmup ok\n\ncomparison / wio-vm sample ok\n\ncomparison / wio-vm sample ok\n\ncomparison / wio-vm sample ok\n\nfinal / wio-native warmup ok\n\nfinal / wio-native [A/A] warmup ok\n\nfinal / wio-native [A/A] sample ok\n\nfinal / wio-native sample ok\n\nfinal / wio-native [A/A] sample ok\n\nfinal / wio-native sample ok\n\nfinal / wio-native sample ok\n\nfinal / wio-native [A/A] sample ok\n\nfinal / wio-vm warmup ok\n\nfinal / wio-vm sample ok\n\nfinal / wio-vm sample ok\n\nfinal / wio-vm sample ok\n\nSaved F:/Projects/wio/build/benchmark-sampling/f9e3bad1d77a497bb49a36d98cef2afd/legacy-run/results.json\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "run",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\legacy.json",
+        "--output",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\legacy-run"
+      ],
+      "exitCode": 1,
+      "stdout": "Output already exists; choose a fresh directory. Nothing overwritten.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "run",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\custom.json",
+        "--output",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\custom-run"
+      ],
+      "exitCode": 2,
+      "stdout": "comparison / wio-native warmup ok\n\ncomparison / wio-native [A/A] warmup ok\n\ncomparison / cpp warmup ok\n\ncomparison / csharp warmup ok\n\ncomparison / csharp sample ok\n\ncomparison / cpp sample ok\n\ncomparison / wio-native [A/A] sample ok\n\ncomparison / wio-native sample ok\n\ncomparison / wio-native [A/A] sample ok\n\ncomparison / cpp sample ok\n\ncomparison / csharp sample ok\n\ncomparison / wio-native sample ok\n\ncomparison / wio-native sample ok\n\ncomparison / csharp sample ok\n\ncomparison / cpp sample ok\n\ncomparison / wio-native [A/A] sample ok\n\ncomparison / cpp sample ok\n\ncomparison / wio-native sample ok\n\ncomparison / wio-native [A/A] sample ok\n\ncomparison / wio-native [A/A] sample ok\n\ncomparison / wio-native sample ok\n\ncomparison / wio-vm warmup ok\n\ncomparison / wio-vm sample ok\n\ncomparison / wio-vm sample ok\n\ncomparison / wio-vm sample ok\n\nfinal / wio-native warmup ok\n\nfinal / wio-native [A/A] warmup ok\n\nfinal / wio-native [A/A] sample ok\n\nfinal / wio-native sample ok\n\nfinal / wio-native [A/A] sample ok\n\nfinal / wio-native sample ok\n\nfinal / wio-native sample ok\n\nfinal / wio-native [A/A] sample ok\n\nfinal / wio-native sample ok\n\nfinal / wio-native [A/A] sample ok\n\nfinal / wio-vm warmup ok\n\nfinal / wio-vm sample ok\n\nfinal / wio-vm sample ok\n\nfinal / wio-vm sample ok\n\nfinal / wio-vm sample ok\n\nfinal / wio-vm sample ok\n\nSaved F:/Projects/wio/build/benchmark-sampling/f9e3bad1d77a497bb49a36d98cef2afd/custom-run/results.json\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "run",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\custom.json",
+        "--output",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\custom-run"
+      ],
+      "exitCode": 1,
+      "stdout": "Output already exists; choose a fresh directory. Nothing overwritten.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\bad-0.json"
+      ],
+      "exitCode": 1,
+      "stdout": "implementationRepetitions must be an object.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\bad-1.json"
+      ],
+      "exitCode": 1,
+      "stdout": "Implementation repetition counts must be integers in 3..10000.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\bad-2.json"
+      ],
+      "exitCode": 1,
+      "stdout": "Implementation repetition counts must be integers in 3..10000.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\bad-3.json"
+      ],
+      "exitCode": 1,
+      "stdout": "Implementation repetition counts must be integers in 3..10000.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\bad-4.json"
+      ],
+      "exitCode": 1,
+      "stdout": "Implementation repetition counts must be integers in 3..10000.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\bad-5.json"
+      ],
+      "exitCode": 1,
+      "stdout": "Unknown repetition implementation: wio-vmm\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\bad-6.json"
+      ],
+      "exitCode": 1,
+      "stdout": "Only Wio native/VM execute in the final phase.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\bad-7.json"
+      ],
+      "exitCode": 1,
+      "stdout": "checkpointInterval must be 1..10000.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\bad-8.json"
+      ],
+      "exitCode": 1,
+      "stdout": "Expected an integer for checkpointInterval\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\bad-9.json"
+      ],
+      "exitCode": 1,
+      "stdout": "checkpointInterval must be 1..10000.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\high-validate-only.json"
+      ],
+      "exitCode": 0,
+      "stdout": "Manifest valid.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "run",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\wrong.json",
+        "--output",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\wrong-checksum"
+      ],
+      "exitCode": 1,
+      "stdout": "comparison / wio-native warmup FAILED\n\ncomparison / wio-native [A/A] warmup FAILED\n\ncomparison / cpp warmup ok\n\ncomparison / csharp warmup ok\n\ncomparison / csharp sample ok\n\ncomparison / cpp sample ok\n\ncomparison / wio-native [A/A] sample FAILED\n\ncomparison / wio-native sample FAILED\n\ncomparison / wio-native [A/A] sample FAILED\n\ncomparison / cpp sample ok\n\ncomparison / csharp sample ok\n\ncomparison / wio-native sample FAILED\n\ncomparison / wio-native sample FAILED\n\ncomparison / csharp sample ok\n\ncomparison / cpp sample ok\n\ncomparison / wio-native [A/A] sample FAILED\n\ncomparison / wio-vm warmup ok\n\ncomparison / wio-vm sample ok\n\ncomparison / wio-vm sample ok\n\ncomparison / wio-vm sample ok\n\nfinal / wio-native warmup FAILED\n\nfinal / wio-native [A/A] warmup FAILED\n\nfinal / wio-native [A/A] sample FAILED\n\nfinal / wio-native sample FAILED\n\nfinal / wio-native [A/A] sample FAILED\n\nfinal / wio-native sample FAILED\n\nfinal / wio-native sample FAILED\n\nfinal / wio-native [A/A] sample FAILED\n\nfinal / wio-vm warmup ok\n\nfinal / wio-vm sample ok\n\nfinal / wio-vm sample ok\n\nfinal / wio-vm sample ok\n\nSaved F:/Projects/wio/build/benchmark-sampling/f9e3bad1d77a497bb49a36d98cef2afd/wrong-checksum/results.json\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\profile-1000.json"
+      ],
+      "exitCode": 0,
+      "stdout": "Manifest valid.\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+        "validate",
+        "F:\\Projects\\wio\\build\\benchmark-sampling\\f9e3bad1d77a497bb49a36d98cef2afd\\profile-10000.json"
+      ],
+      "exitCode": 0,
+      "stdout": "Manifest valid.\n\n",
+      "stderr": ""
+    }
+  ],
+  "checks": [
+    "legacy 32/custom 41 samples",
+    "native A/A exact counts",
+    "separate VM blocks",
+    "raw journal equals report",
+    "10 invalid manifests",
+    "1000/10000 profiles validate",
+    "no overwrite",
+    "all wrong-checksum samples retained"
+  ],
+  "negativeSampleCounts": {
+    "('comparison', 'wio-native', False, True)": 1,
+    "('comparison', 'wio-native', True, True)": 1,
+    "('comparison', 'cpp', False, True)": 1,
+    "('comparison', 'csharp', False, True)": 1,
+    "('comparison', 'csharp', False, False)": 3,
+    "('comparison', 'cpp', False, False)": 3,
+    "('comparison', 'wio-native', True, False)": 3,
+    "('comparison', 'wio-native', False, False)": 3,
+    "('comparison', 'wio-vm', False, True)": 1,
+    "('comparison', 'wio-vm', False, False)": 3,
+    "('final', 'wio-native', False, True)": 1,
+    "('final', 'wio-native', True, True)": 1,
+    "('final', 'wio-native', True, False)": 3,
+    "('final', 'wio-native', False, False)": 3,
+    "('final', 'wio-vm', False, True)": 1,
+    "('final', 'wio-vm', False, False)": 3
+  }
+}

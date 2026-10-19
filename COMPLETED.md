@@ -10,6 +10,18 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N04 high-sample measurement policy — 2026-10-19
+
+- [x] Wio controller supports per-implementation comparison/final budgets;
+  native/C++/C# profile 1000 (10000 selectable), VM 20 in isolated blocks.
+  Preserve operation/checksum/flag contracts and full native A/A controls.
+- [x] Append every raw row to a journal; batch full checkpoints without trimming
+  failures. Report sample counts and per-case versus session qualification.
+  New focused contract passes locally; corrected Unix borrow fixture passes too.
+- [ ] First real 12096-process session and three-platform requalification are
+  in progress. No new runtime optimization or accepted speedup is claimed.
+  Report: `docs/WIO_HIGH_SAMPLE_BENCHMARKING.md`.
+
 ## N04 closed byte-array cells — 2026-10-19
 
 - [x] Prove closed local dynamic u8/byte cells with readonly call-scoped native

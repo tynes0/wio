@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-MSBuild"
+	tests="1"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="DESKTOP-0G3MR0G"
+	time="6"
+	timestamp="2026-10-19T21:44:08"
+	>
+	<testcase name="wio_benchmark_sampling" classname="wio_benchmark_sampling" time="6.95775" status="run">
+		<properties>
+			<property name="cmake_labels" value="benchmark;diagnostic;native;vm"/>
+		</properties>
+		<system-out>F:\Projects\wio\build\benchmark-sampling\f9e3bad1d77a497bb49a36d98cef2afd\profile-1000.json
+F:\Projects\wio\build\benchmark-sampling\f9e3bad1d77a497bb49a36d98cef2afd\profile-10000.json
+F:\Projects\wio\build\benchmark-sampling\f9e3bad1d77a497bb49a36d98cef2afd\results.json
+</system-out>
+	</testcase>
+</testsuite>
