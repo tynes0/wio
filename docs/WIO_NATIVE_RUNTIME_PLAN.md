@@ -68,6 +68,17 @@ array resize discarding caller reserve. See `docs/WIO_BYTE_BUFFER_BULK_OPTIMIZAT
 Its legacy/block measurement is an API-strategy comparison, not an automatic
 speedup of old Write callers. Remaining N04 inventory and N14 acceptance stay open.
 
+That session completes 10094/10094 correct with independent live/extracted-ZIP
+verification. Native transient allocations 105 -> 3 and requested bytes
+55776 -> 1104; native comparison medians 12.80880 -> 0.02020ms, VM
+212.98645 -> 13.65755ms. C++/C# block medians are 0.00100/0.00090ms: the remaining
+gap is not accepted and timing fails the unchanged full-range gate. Native RSS
+falls only 24 KiB; VM RSS rises slightly. See the block report for reference
+boundaries, A/A/final distributions, reserve behavior and the Ubuntu CMake
+differential-driver policy correction. N04 and N14 remain open, N05 not started.
+Corrected-source CI 39348265979 on bf98249 passes all three platforms, including
+block/shape/reserve and sampling gates; this does not qualify the noisy timings.
+
 ## Required late-native revisit: indexed numeric formatting
 
 User priority recorded 2026-10-18: revisit **indexed integer and indexed float**

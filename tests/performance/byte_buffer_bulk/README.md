@@ -59,7 +59,7 @@ borrowed in Wio/C++/C#. Reference class/struct/GC/RC machinery is not identical.
 
 Freeze legacy images before modifying std; keep their imported std input hashes.
 Prepare the block images after the change. `combine.py` verifies the bounded
-source delta, equal payload/flags/runtime/count/checksum and creates one session
+source delta, equal payload/flags/runtime profile/count/checksum and creates one session
 with legacy/native+VM, block/native+VM and current C++/C# block references. Each
 native lane has A/A controls and a final phase; 1000 native/C++/C# and 20 VM
 samples. No overlapping heavy local jobs, trimming or retries.

@@ -24,6 +24,20 @@ Notes:
   alias combinations, zero-heap reserved helper loops and bad_alloc injection.
   The affected container-shape gate passes too. Timing/platform acceptance is
   recorded separately; N04 remains open. Report: `docs/WIO_BYTE_BUFFER_BULK_OPTIMIZATION.md`.
+- [x] Freeze legacy/block images and finish 10094/10094 correct high-sample rows;
+  independently verify live and extracted-ZIP statistics, source bounds and
+  allocation windows. Native transient allocations 105 -> 3, requested bytes
+  55776 -> 1104. Comparison medians: native 12.80880 -> 0.02020ms, VM
+  212.98645 -> 13.65755ms; C++/C# block references 0.00100/0.00090ms. Timing
+  remains unqualified; the remaining reference gap is not accepted. RSS is not
+  the allocation counter, and existing Write callers do not gain automatically.
+- [x] Correct the native/VM differential CMake driver's CMP0054 script policy
+  after Ubuntu CI exposed a missing native executable; retain both comparison
+  lanes. The affected local gate passes again after this correction (25.06s).
+- [x] Corrected-source CI 39348265979 on bf98249 passes Windows Debug, Ubuntu
+  Release and macOS 15 Release, including the new N04 block, affected shape/
+  reserve and sampling/journal gates. Preserve original failed/cancelled CI
+  outcomes in the evidence rather than relabeling the first run green.
 
 ## N04 borrowed byte-range writes — 2026-10-20
 

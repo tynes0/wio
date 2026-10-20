@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-MSBuild"
+	tests="1"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="DESKTOP-0G3MR0G"
+	time="25"
+	timestamp="2026-10-20T03:41:11"
+	>
+	<testcase name="wio_vm_native_container_shape" classname="wio_vm_native_container_shape" time="25.0558" status="run">
+		<properties>
+			<property name="cmake_labels" value="borrow;cleanup;container;differential;interop;native;release-gate;vm"/>
+		</properties>
+		<system-out>-- POD layout differential passed: native-container-shape-ok:30
+
+-- Container shape mapping, staging, borrow invalidation and recovery qualification passed
+</system-out>
+	</testcase>
+</testsuite>
