@@ -25,8 +25,10 @@ namespace wio::vm::detail
                                        std::string& error, unsigned depth);
     };
 
-    // The target and replacement graphs must stay live and unchanged until
-    // commit. Plan children before their dictionary parent is rebuilt.
+    // Keep both graphs live until commit. Planning never changes caller storage;
+    // a shape-changing incoming array may detach/reserve before its action is
+    // published. Do not otherwise mutate graphs between planning and commit.
+    // Plan children before their dictionary parent is rebuilt.
     [[nodiscard]] inline bool planNativeCopyBack(Value& target, Value& replacement,
                                                  std::vector<NativeCopyBackAction>& actions, std::string& error,
                                                  unsigned depth = 0)

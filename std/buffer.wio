@@ -8,6 +8,9 @@ realm std {
         fn NextPoolOwnerIdNative() -> u64
             with native, cpp::name(wio::runtime::std_heap::NextPoolOwnerId);
 
+        [native, cpp::name(wio::runtime::std_heap::WriteByteBuffer)]
+        fn WriteByteBufferNative(destination: ref byte[], position: usize, source: view byte[]) -> usize;
+
         component PoolHandle {
             owner: u64;
             index: usize;
@@ -99,6 +102,14 @@ realm std {
                 for (value in values) {
                     self.Write(value);
                 }
+            }
+
+            // Borrowed binary block write; intentionally does not invoke the
+            // virtual per-byte Write hook. Existing Write overloads are unchanged.
+            public fn WriteBlock(values: view byte[]) {
+                if (values.Empty()) return;
+
+                self.position = WriteByteBufferNative(ref self.data, self.position, values);
             }
 
             public fn WriteU16LE(value: u16) {
@@ -202,7 +213,7 @@ realm std {
 
             public fn Clone() -> ByteBuffer {
                 let copy = ByteBuffer(self.Capacity());
-                copy.Write(self.data);
+                copy.WriteBlock(ref self.data);
                 copy.Seek(self.position);
                 return copy;
             }

@@ -72,6 +72,17 @@ namespace wio::vm::detail
                     "qualified";
             return false;
         }
+        if (target.kind() == Value::Kind::Array && replacement.kind() == Value::Kind::Array &&
+            replacement.elementCapacity() < target.elementCapacity())
+        {
+            // A sequence wire result carries length, not the caller's reserve.
+            // Prepare capacity before commit, without touching caller storage.
+            // Shape-changing arrays have no child actions into this subtree.
+            // Detach shared incoming storage before moving its element cells.
+            if (replacement.strongReferenceCount() != 1)
+                replacement = replacement.cloneOwned();
+            replacement.arrayReserve(target.elementCapacity());
+        }
         actions.push_back({NativeCopyBackAction::Kind::Replace, &target, &replacement, {}});
         return true;
     }

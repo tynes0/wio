@@ -7,13 +7,59 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace wio::runtime::std_heap
 {
+    inline std::size_t WriteByteBuffer(
+        std::vector<std::uint8_t>& destination, const std::size_t position,
+        const std::vector<std::uint8_t>& source)
+    {
+        if (position > destination.size())
+        {
+            throw std::out_of_range("ByteBuffer write position is outside the buffer");
+        }
+
+        const auto count = source.size();
+        if (count > destination.max_size() - position)
+        {
+            throw std::length_error("ByteBuffer write exceeds maximum size");
+        }
+
+        if (count == 0)
+        {
+            return position;
+        }
+
+        const auto end = position + count;
+        if (&destination == &source)
+        {
+            // Read the pointer after growth: a self-alias may have reallocated.
+            // Existing elements survive resize; memmove preserves snapshot bytes.
+            destination.resize(std::max(destination.size(), end));
+            std::memmove(destination.data() + position, destination.data(), count);
+        }
+        else
+        {
+            const auto overwrite = std::min(count, destination.size() - position);
+            // Complete possibly-throwing growth before modifying existing bytes.
+            // Inserting the known tail avoids resize's redundant zero fill.
+            destination.insert(destination.end(), source.begin() + overwrite, source.end());
+            if (overwrite != 0)
+            {
+                std::memcpy(destination.data() + position, source.data(), overwrite);
+            }
+        }
+
+        return end;
+    }
+
     inline std::uint64_t NextPoolOwnerId() noexcept
     {
         static std::atomic<std::uint64_t> next{1u};

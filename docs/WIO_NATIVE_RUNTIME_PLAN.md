@@ -12,7 +12,7 @@ then pass 3 (compiler and build throughput). SDK remains a separate v1 blocker.
 | N01 | Measurement and cost map | Qualified workloads, raw samples/checksums, clear coverage gaps; distinguish timing, allocation, copies, RC and memory metrics |
 | N02 | String/text/concat (implemented 2026-10-16) | Last-use buffers, transactional append and pure-tree flattening; bounded correctness gate complete; noisy timing acceptance remains N14 |
 | N03 | Formatting/builders (implementation complete 2026-10-18) | Direct numeric append, float/locale costs, capacity reuse and shared hook/native bridge closure; qualification below |
-| N04 | Byte/buffer/I/O (in progress 2026-10-20) | Direct owned reads, caller-buffer reuse, closed byte cells and checked borrowed-range writes implemented; ByteBuffer bulk/remaining inventory and timing acceptance stay open |
+| N04 | Byte/buffer/I/O (in progress 2026-10-20) | Direct/reused reads, closed byte cells, checked range writes and explicit borrowed ByteBuffer blocks implemented; legacy hooks retained, Clone bulk copying and VM reserve consistency fixed; remaining inventory/timing acceptance stay open |
 | N05 | Value/place/component representation | Proven stack storage, direct fields, fewer temporaries and unnecessary optional/shared/type-erased cells; exact lifetimes and cleanup |
 | N06 | Containers | Growth/reserve/bulk operations, iteration/index copies, map/set key/hash/rehash costs, span/view and sorting callbacks |
 | N07 | Objects/intrusive RC | Remove redundant retain/release and handle transfers with lifetime/thread proofs; measure weak refs and destruction too |
@@ -59,6 +59,14 @@ different API/storage strategies, not an automatic legacy-code compiler gain.
 Generated native transient allocations 514 → 0 and requested bytes 33676766 → 0
 are measured separately; total process RSS is essentially unchanged. Raw ZIP,
 independent statistics and qualification are in the range-write report above.
+
+The next slice adds explicit borrowed ByteBuffer WriteBlock and moves Clone's
+exact newly constructed destination to it. Legacy Write(byte[]) retains its
+owned arguments and virtual per-byte hooks. New 17-process native/VM coverage
+and the affected container-shape gate pass locally, including a fix for VM native
+array resize discarding caller reserve. See `docs/WIO_BYTE_BUFFER_BULK_OPTIMIZATION.md`.
+Its legacy/block measurement is an API-strategy comparison, not an automatic
+speedup of old Write callers. Remaining N04 inventory and N14 acceptance stay open.
 
 ## Required late-native revisit: indexed numeric formatting
 

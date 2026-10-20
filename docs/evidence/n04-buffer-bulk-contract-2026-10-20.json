@@ -1,0 +1,248 @@
+{
+  "passed": true,
+  "processes": [
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\main.wio",
+        "--emit-cpp",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-buffer-bulk-final-contract-2026-10-20/21e5a7325a0949488b72ae1f51574efc/main.wio.cpp\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-buffer-bulk-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\contract.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\contract.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\contract.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-buffer-bulk-contract-ok: exhaustive overwrite/grow/empty/self-alias; reserved writes zero heap\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\failure.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\failure.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\failure.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-buffer-bulk-failure-ok: alias/nonalias allocation failure leaves destination unchanged\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-buffer-bulk-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\contract.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\contract.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\contract.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-buffer-bulk-contract-ok: exhaustive overwrite/grow/empty/self-alias; reserved writes zero heap\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\failure.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\failure.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\failure.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-buffer-bulk-failure-ok: alias/nonalias allocation failure leaves destination unchanged\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\main.wio",
+        "--target",
+        "shared",
+        "--native-bridge-only",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc",
+        "--output",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\bridge.dll",
+        "--bytecode-sidecar",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\main.wiob",
+        "--backend-arg=-O0",
+        "--backend-arg=-ffp-contract=off"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-buffer-bulk-final-contract-2026-10-20/21e5a7325a0949488b72ae1f51574efc/bridge.wio.cpp\nGenerated backend output: F:/Projects/wio/build/n04-buffer-bulk-final-contract-2026-10-20/21e5a7325a0949488b72ae1f51574efc/bridge.dll\nGenerated bytecode output: F:/Projects/wio/build/n04-buffer-bulk-final-contract-2026-10-20/21e5a7325a0949488b72ae1f51574efc/main.wiob\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\bridge.dll"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-buffer-bulk-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\main.wio",
+        "--target",
+        "shared",
+        "--native-bridge-only",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc",
+        "--output",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\bridge.dll",
+        "--bytecode-sidecar",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\main.wiob",
+        "--backend-arg=-O2",
+        "--backend-arg=-ffp-contract=off"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-buffer-bulk-final-contract-2026-10-20/21e5a7325a0949488b72ae1f51574efc/bridge.wio.cpp\nGenerated backend output: F:/Projects/wio/build/n04-buffer-bulk-final-contract-2026-10-20/21e5a7325a0949488b72ae1f51574efc/bridge.dll\nGenerated bytecode output: F:/Projects/wio/build/n04-buffer-bulk-final-contract-2026-10-20/21e5a7325a0949488b72ae1f51574efc/main.wiob\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-buffer-bulk-final-contract-2026-10-20\\21e5a7325a0949488b72ae1f51574efc\\bridge.dll"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-buffer-bulk-ok\n\n",
+      "stderr": ""
+    }
+  ]
+}

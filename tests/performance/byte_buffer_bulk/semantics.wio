@@ -1,0 +1,110 @@
+use std::buffer as heap;
+use std::console as console;
+
+[From(heap::ByteBuffer)]
+object CustomBuffer
+{
+    public calls: usize;
+
+    public fn OnConstruct()
+    {
+        self.calls = 0usize;
+    }
+
+    public fn Write(value: byte)
+    {
+        self.calls += 1usize;
+        super.Write(value);
+    }
+}
+
+fn FillCustom(buffer: view heap::ByteBuffer, values: byte[])
+{
+    buffer.Write(values);
+}
+
+mut cleaned: usize = 0usize;
+
+[From(heap::ByteBuffer)]
+object FinalizingBuffer
+{
+    public fn OnConstruct()
+    {
+    }
+
+    public fn OnDestruct()
+    {
+        self.Clear();
+        let values: byte[] = [7u8, 8u8];
+        self.WriteBlock(ref values);
+        if (self.Count() != 2usize or self.Position() != 2usize) std::Panic("Finalizer block write changed.");
+        cleaned += 1usize;
+    }
+}
+
+fn Entry() -> i32
+{
+    let buffer = heap::ByteBuffer(16usize);
+    let capacity = buffer.Capacity();
+    let values: byte[] = [1u8, 2u8, 3u8, 4u8];
+    buffer.WriteBlock(ref values);
+    if (buffer.Count() != 4usize or buffer.Position() != 4usize) return 1;
+    if (not buffer.Seek(1usize)) return 2;
+    buffer.WriteBlock(ref values);
+    if (buffer.Count() != 5usize or buffer.Position() != 5usize) return 3;
+    let expected: byte[] = [1u8, 1u8, 2u8, 3u8, 4u8];
+    for (index in 0usize..<expected.Count())
+    {
+        if (buffer.At(index) != expected[index]) return 4;
+    }
+
+    buffer.Rewind();
+    let prefix: byte[] = [8u8, 9u8];
+    buffer.WriteBlock(ref prefix);
+    if (buffer.Count() != 5usize or buffer.Position() != 2usize) return 5;
+    if (buffer.At(0usize) != 8u8 or buffer.At(1usize) != 9u8 or buffer.At(4usize) != 4u8) return 6;
+    let snapshot = buffer.ToArray();
+    let empty: byte[] = [];
+    buffer.WriteBlock(ref empty);
+    if (buffer.Position() != 2usize or buffer.Count() != 5usize) return 7;
+    if (buffer.Seek(6usize)) return 8;
+    if (buffer.Position() != 2usize or buffer.Capacity() != capacity) return 9;
+    let copy = buffer.Clone();
+    if (copy.Position() != 2usize or copy.Count() != 5usize) return 10;
+    copy.Set(0usize, 99u8);
+    if (buffer.At(0usize) != 8u8 or snapshot[0usize] != 8u8 or values[0usize] != 1u8) return 11;
+    buffer.Clear();
+    buffer.WriteBlock(ref values);
+    if (buffer.Count() != 4usize or buffer.Position() != 4usize or buffer.Capacity() != capacity) return 12;
+    let small = heap::ByteBuffer();
+    small.WriteBlock(ref values);
+    small.WriteBlock(ref values);
+    if (small.Count() != 8usize or small.Position() != 8usize) return 13;
+    small.Clear();
+    small.WriteU16LE(0x1234u16);
+    small.WriteU32LE(0x12345678u32);
+    small.WriteU64LE(0x0123456789ABCDEFu64);
+    small.Rewind();
+    mut u16Value = 0u16;
+    mut u32Value = 0u32;
+    mut u64Value = 0u64;
+    if (not small.TryReadU16LE(ref u16Value) or u16Value != 0x1234u16) return 14;
+    if (not small.TryReadU32LE(ref u32Value) or u32Value != 0x12345678u32) return 15;
+    if (not small.TryReadU64LE(ref u64Value) or u64Value != 0x0123456789ABCDEFu64) return 16;
+    let custom = CustomBuffer();
+    FillCustom(custom, values);
+    if (custom.calls != 4usize or custom.Count() != 4usize or custom.Position() != 4usize) return 17;
+    custom.Set(0usize, 42u8);
+    FillCustom(custom, empty);
+    if (custom.calls != 4usize or custom.At(0usize) != 42u8) return 18;
+    custom.WriteBlock(ref values);
+    if (custom.calls != 4usize or custom.Count() != 8usize or custom.Position() != 8usize) return 19;
+    {
+        let finalizing = FinalizingBuffer();
+        finalizing.WriteBlock(ref values);
+    }
+
+    if (cleaned != 1usize) return 20;
+    console::PrintLine("byte-buffer-bulk-ok");
+    return 0;
+}

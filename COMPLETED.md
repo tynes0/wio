@@ -10,6 +10,21 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## N04 ByteBuffer block writes — 2026-10-20
+
+- [x] Add borrowed WriteBlock with checked native tail insertion/overwrite,
+  reserve reuse and overlap-safe self-alias handling. Preserve legacy owned
+  Write's virtual per-byte hooks; Clone uses block copying into its exact new
+  ByteBuffer destination. No owning-self/RTTI guard or object field changes.
+- [x] Fix structural VM native-array copy-back losing caller reserve. Prepare
+  incoming capacity before commit and detach shared incoming storage; retain
+  target exclusivity, validation, projection and cleanup contracts.
+- [x] New 17-process gate passes native O0/O2 and both VM bridge levels, including
+  subclass/finalizer/Clone/reserve cases, 23001 distinct-input and 1122 native
+  alias combinations, zero-heap reserved helper loops and bad_alloc injection.
+  The affected container-shape gate passes too. Timing/platform acceptance is
+  recorded separately; N04 remains open. Report: `docs/WIO_BYTE_BUFFER_BULK_OPTIMIZATION.md`.
+
 ## N04 borrowed byte-range writes — 2026-10-20
 
 - [x] Add checked readonly `WriteBytesRange` without changing existing owned

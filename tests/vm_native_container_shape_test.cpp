@@ -86,6 +86,33 @@ namespace
         actions.clear();
         check(!bridge::planNativeCopyBack(old, wrong, actions, error) && actions.empty(),
               "dictionary type mismatch reached commit planning");
+        auto reserved = Value::array({Value::signedInteger(7)});
+        check(reserved.arrayReserve(32), "array reserve setup failed");
+        const auto capacity = reserved.elementCapacity();
+        const auto* originalCell = reserved.element(0);
+        auto resized = Value::array({Value::signedInteger(9), Value::signedInteger(11)});
+        const auto incomingSnapshot = resized;
+        const auto incomingCapacity = incomingSnapshot.elementCapacity();
+        actions.clear();
+        check(bridge::planNativeCopyBack(reserved, resized, actions, error) && actions.size() == 1 &&
+                  actions[0].kind == bridge::NativeCopyBackAction::Kind::Replace &&
+                  reserved.elementCount() == 1 && reserved.elementCapacity() == capacity &&
+                  reserved.element(0) == originalCell && reserved.element(0)->asSignedInteger() == 7 &&
+                  resized.elementCapacity() >= capacity && incomingSnapshot.elementCapacity() == incomingCapacity &&
+                  incomingSnapshot.element(0)->asSignedInteger() == 9,
+              "capacity preparation mutated caller or shared incoming storage");
+        reserved = std::move(resized);
+        check(reserved.elementCapacity() >= capacity && reserved.elementCount() == 2 &&
+                  reserved.element(1)->asSignedInteger() == 11,
+              "shape-changing native array copy-back discarded caller reserve");
+        auto empty = Value::array({});
+        actions.clear();
+        check(bridge::planNativeCopyBack(reserved, empty, actions, error) && reserved.elementCount() == 2 &&
+                  empty.elementCount() == 0 && empty.elementCapacity() >= capacity,
+              "native clear planning discarded reserve or changed caller early");
+        reserved = std::move(empty);
+        check(reserved.elementCount() == 0 && reserved.elementCapacity() >= capacity,
+              "native empty replacement discarded reserve");
     }
 
     struct Library final

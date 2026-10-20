@@ -1,0 +1,68 @@
+use std::benchmark as bench;
+use std::buffer as heap;
+use std::console as console;
+use std::convert as convert;
+use std::json as json;
+
+using cpp::header("probe.h");
+
+[native, cpp::name(byte_buffer_bulk::Make)]
+fn Make() -> byte[];
+
+[native, cpp::name(byte_buffer_bulk::Check)]
+fn Check(bytes: view byte[]) -> u64;
+
+fn Work(buffer: heap::ByteBuffer, source: byte[], count: i64) -> u64
+{
+    mut checksum = 0u64;
+    for (index in 0i64..<count)
+    {
+        buffer.Clear();
+        buffer.WriteBlock(ref source);
+        if (not buffer.Seek(512usize)) std::Panic("ByteBuffer bulk seek failed.");
+        buffer.WriteBlock(ref source);
+        buffer.Rewind();
+        buffer.WriteBlock(ref source);
+        if (buffer.Count() != 1536usize or buffer.Position() != 1024usize)
+        {
+            std::Panic("ByteBuffer bulk state changed.");
+        }
+
+        checksum += (buffer.Count() + buffer.Position()) fit u64;
+    }
+
+    return checksum;
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() < 3usize or args.Count() > 4usize) return 1;
+    let modeResult = convert::ParseI64(args[1usize]);
+    let countResult = convert::ParseI64(args[2usize]);
+    if (modeResult.IsError() or countResult.IsError()) return 1;
+    let count = countResult.Value();
+    if (modeResult.Value() != 0i64 or count < 1i64 or count > 100000i64) return 1;
+    let source = Make();
+    let buffer = heap::ByteBuffer(2048usize);
+    bench::Consume(Work(buffer, source, bench::Input(count)));
+    bench::Consume(Work(buffer, source, bench::Input(count)));
+    if (args.Count() == 4usize)
+    {
+        if (bench::BeginAllocations().IsError()) return 2;
+        let checksum = Work(buffer, source, bench::Input(count));
+        let counters = bench::EndAllocations();
+        let bytes = buffer.ToArray();
+        console::PrintLine(bench::Protocol(1i64, count fit u64, checksum ^ Check(ref bytes)));
+        console::PrintLine(json::Write(bench::AllocationJson(counters)));
+        if (counters.liveBlocks != 0u64 or counters.liveBytes != 0u64) return 3;
+        return 0;
+    }
+
+    let start = bench::Now();
+    let checksum = Work(buffer, source, bench::Input(count));
+    bench::Consume(checksum);
+    let elapsed = bench::Now() - start;
+    let bytes = buffer.ToArray();
+    console::PrintLine(bench::Protocol(elapsed, count fit u64, checksum ^ Check(ref bytes)));
+    return 0;
+}
