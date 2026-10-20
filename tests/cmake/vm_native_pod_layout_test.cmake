@@ -1,3 +1,9 @@
+cmake_policy(PUSH)
+# Script mode does not inherit the top-level project's policy version. Without
+# CMP0054, the quoted "native" label can expand the native output-path variable
+# on older CMake versions, selecting the shared build for both iterations.
+cmake_policy(SET CMP0054 NEW)
+
 foreach(required WIO_EXECUTABLE WIO_ROOT WIO_OUTPUT_DIR WIO_SHARED_SUFFIX)
     if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
         message(FATAL_ERROR "POD layout differential test requires ${required}")
@@ -40,3 +46,4 @@ if(NOT "${native_result}" STREQUAL "0" OR NOT "${vm_result}" STREQUAL "0" OR
     message(FATAL_ERROR "POD layout differential failed: C++=${native_result}, VM=${vm_result}\nC++: ${native_output}\n${native_error}\nVM: ${vm_output}\n${vm_error}")
 endif()
 message(STATUS "POD layout differential passed: ${native_output}")
+cmake_policy(POP)
