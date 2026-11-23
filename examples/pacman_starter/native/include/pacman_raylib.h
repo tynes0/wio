@@ -30,4 +30,3 @@ namespace pacman_raylib
         TakeScreenshot(path);
     }
 }
-

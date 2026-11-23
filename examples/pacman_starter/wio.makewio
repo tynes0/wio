@@ -33,4 +33,3 @@ hostName = "pacman_starter.host"
 passLibraryPath = false
 args = []
 workingDirectory = "."
-
