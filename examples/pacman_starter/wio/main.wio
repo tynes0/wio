@@ -1,0 +1,125 @@
+use raylib;
+use model;
+use renderer;
+use logic;
+use std::console as console;
+
+fn ReadInput() -> pac::InputFrame {
+    return pac::InputFrame(
+        pac::rl::KeyDown(265) or pac::rl::KeyDown(87),
+        pac::rl::KeyDown(264) or pac::rl::KeyDown(83),
+        pac::rl::KeyDown(263) or pac::rl::KeyDown(65),
+        pac::rl::KeyDown(262) or pac::rl::KeyDown(68),
+        pac::rl::KeyPressed(32) or pac::rl::KeyPressed(257),
+        pac::rl::KeyPressed(80),
+        pac::rl::KeyPressed(82));
+}
+
+fn Check(state: pac::GameState) -> i32 {
+    if (state.columns != 28 or state.rows != 31 or state.tiles.Count() != 868usize) return 1;
+    mut powers = 0;
+    mut pellets = 0;
+    for (tile in state.tiles) {
+        if (tile == pac::Tile::power) powers += 1;
+        if (tile == pac::Tile::pellet) pellets += 1;
+    }
+
+    if (powers != 4 or pellets != 240) return 2;
+    if (state.TileAt(-1, 0) != pac::Tile::outside or state.SetTile(28, 0, pac::Tile::floor)) return 3;
+    if (state.ghosts.Count() != 4usize) return 4;
+    if (state.player.position.x != 13.5f32 or state.player.position.y != 23.0f32) return 6;
+    if (state.score != 0 or state.lives != 3 or state.phase != pac::Phase::ready) return 7;
+    for (ghost in state.ghosts) {
+        if (ghost.mode != pac::GhostMode::normal) return 8;
+    }
+
+    let original = state.TileAt(1, 1);
+    if (not state.SetTile(1, 1, pac::Tile::floor) or state.TileAt(1, 1) != pac::Tile::floor) return 5;
+    state.SetTile(1, 1, original);
+    console::PrintLine($"pacman-scene-ok: ${state.columns}x${state.rows}, ${pellets} pellets, ${powers} powers");
+    return 0;
+}
+
+fn Entry(args: string[]) -> i32 {
+    let state = pac::GameState();
+    mut smoke = false;
+    mut modes = false;
+    mut small = false;
+    for (arg in args) {
+        if (arg == "--check") return Check(state);
+        if (arg == "--smoke") smoke = true;
+        if (arg == "--smoke-small") {
+            smoke = true;
+            small = true;
+        }
+
+        if (arg == "--smoke-modes") {
+            smoke = true;
+            modes = true;
+        }
+
+    }
+
+    pac::rl::Open(small ? 800 : 1120, small ? 780 : 960, "Pac / Maze - Wio + raylib rendering starter");
+    pac::logic::Start(state);
+    mut presentation = pac::Presentation(false, 0, 0);
+    mut frame = 0;
+    while (not pac::rl::ShouldClose()) {
+        let rawDelta = pac::rl::Delta();
+        let delta = rawDelta > 0.05f32 ? 0.05f32 : rawDelta;
+        let input = ReadInput();
+        if (pac::rl::KeyPressed(290)) presentation.grid = not presentation.grid;
+        if (pac::rl::KeyPressed(291)) presentation.ghostPreview = (presentation.ghostPreview + 1) % 3;
+        if (pac::rl::KeyPressed(292)) presentation.overlayPreview = (presentation.overlayPreview + 1) % 6;
+        pac::logic::Update(state, input, delta);
+        pac::draw::Frame(state, input, presentation, smoke ? 0.35f32 : (pac::rl::Time() fit f32));
+        frame += 1;
+        if (smoke and frame == 3) {
+            pac::rl::Screenshot(small ? ".wio-build/pacman-small.png" : ".wio-build/pacman-preview.png");
+            if (not modes) break;
+            presentation.grid = true;
+            presentation.overlayPreview = 2;
+        }
+
+        if (modes and frame == 6) {
+            pac::rl::Screenshot(".wio-build/pacman-grid.png");
+            presentation.grid = false;
+            presentation.ghostPreview = 1;
+        }
+
+        if (modes and frame == 9) {
+            pac::rl::Screenshot(".wio-build/pacman-frightened.png");
+            presentation.ghostPreview = 2;
+        }
+
+        if (modes and frame == 12) {
+            pac::rl::Screenshot(".wio-build/pacman-eyes.png");
+            presentation.ghostPreview = 0;
+            presentation.overlayPreview = 3;
+        }
+
+        if (modes and frame == 15) {
+            pac::rl::Screenshot(".wio-build/pacman-paused.png");
+            presentation.overlayPreview = 4;
+        }
+
+        if (modes and frame == 18) {
+            pac::rl::Screenshot(".wio-build/pacman-won.png");
+            presentation.overlayPreview = 5;
+        }
+
+        if (modes and frame == 21) {
+            pac::rl::Screenshot(".wio-build/pacman-game-over.png");
+            break;
+        }
+
+        if (pac::rl::KeyPressed(301)) {
+            pac::rl::Screenshot(".wio-build/pacman-preview.png");
+        }
+
+    }
+
+    pac::rl::Close();
+    if (smoke) return Check(state);
+    return 0;
+}

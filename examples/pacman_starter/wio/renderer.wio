@@ -1,0 +1,368 @@
+use raylib;
+use model;
+
+realm pac {
+    component Presentation {
+        grid: bool;
+        ghostPreview: i32;
+        overlayPreview: i32;
+    }
+
+    component Layout {
+        origin: rl::Vec2;
+        cell: f32;
+        rail: f32;
+        railWidth: f32;
+    }
+
+    realm draw {
+        fn Ink() -> rl::Color {
+            return rl::Rgb(235u8, 241u8, 255u8);
+        }
+
+        fn Muted() -> rl::Color {
+            return rl::Rgb(120u8, 139u8, 170u8);
+        }
+
+        fn Yellow() -> rl::Color {
+            return rl::Rgb(255u8, 218u8, 76u8);
+        }
+
+        fn Background() -> rl::Color {
+            return rl::Rgb(8u8, 12u8, 23u8);
+        }
+
+        fn Measure(state: GameState) -> Layout {
+            let width = rl::Width() fit f32;
+            let height = rl::Height() fit f32;
+            let horizontal = (width - 336.0f32) / (state.columns fit f32);
+            let vertical = (height - 204.0f32) / (state.rows fit f32);
+            let cell = horizontal < vertical ? horizontal : vertical;
+            let rail = 28.0f32 + (state.columns fit f32) * cell + 32.0f32;
+            return Layout(rl::Vec2(28.0f32, 116.0f32), cell, rail, width - rail - 28.0f32);
+        }
+
+        fn Pixel(layout: Layout, position: Point) -> rl::Vec2 {
+            return rl::Vec2(layout.origin.x + (position.x + 0.5f32) * layout.cell,
+                layout.origin.y + (position.y + 0.5f32) * layout.cell);
+        }
+
+        fn CenterText(value: string, center: f32, y: f32, size: i32, color: rl::Color) {
+            rl::Text(value, center - (rl::TextWidth(value, size) fit f32) * 0.5f32, y, size, color);
+        }
+
+        fn RightText(value: string, right: f32, y: f32, size: i32, color: rl::Color) {
+            rl::Text(value, right - (rl::TextWidth(value, size) fit f32), y, size, color);
+        }
+
+        fn Panel(x: f32, y: f32, width: f32, height: f32) {
+            let bounds = rl::Rect(x, y, width, height);
+            rl::Box(bounds, rl::Rgb(14u8, 21u8, 37u8));
+            rl::Outline(bounds, 1.0f32, rl::Rgb(36u8, 49u8, 74u8));
+        }
+
+        fn WallEdge(a: rl::Vec2, b: rl::Vec2) {
+            rl::Line(a, b, 5.0f32, rl::Color(36u8, 96u8, 244u8, 32u8));
+            rl::Line(a, b, 1.8f32, rl::Rgb(68u8, 124u8, 255u8));
+        }
+
+        fn Maze(state: GameState, layout: Layout, clock: f32) {
+            let cell = layout.cell;
+            let ox = layout.origin.x;
+            let oy = layout.origin.y;
+            let width = (state.columns fit f32) * cell;
+            let height = (state.rows fit f32) * cell;
+            rl::Outline(rl::Rect(ox - 9.0f32, oy - 9.0f32, width + 18.0f32, height + 18.0f32),
+                1.0f32, rl::Rgb(29u8, 43u8, 68u8));
+            for (y in 0i32..<state.rows) {
+                for (x in 0i32..<state.columns) {
+                    let tile = state.TileAt(x, y);
+                    let px = ox + (x fit f32) * cell;
+                    let py = oy + (y fit f32) * cell;
+                    let center = rl::Vec2(px + cell * 0.5f32, py + cell * 0.5f32);
+                    if (tile == Tile::wall) {
+                        rl::Box(rl::Rect(px, py, cell, cell), rl::Rgb(13u8, 25u8, 54u8));
+                        if (state.TileAt(x, y - 1) != Tile::wall) {
+                            WallEdge(rl::Vec2(px, py), rl::Vec2(px + cell, py));
+                        }
+
+                        if (state.TileAt(x, y + 1) != Tile::wall) {
+                            WallEdge(rl::Vec2(px, py + cell), rl::Vec2(px + cell, py + cell));
+                        }
+
+                        if (state.TileAt(x - 1, y) != Tile::wall) {
+                            WallEdge(rl::Vec2(px, py), rl::Vec2(px, py + cell));
+                        }
+
+                        if (state.TileAt(x + 1, y) != Tile::wall) {
+                            WallEdge(rl::Vec2(px + cell, py), rl::Vec2(px + cell, py + cell));
+                        }
+
+                    }
+
+                    if (tile == Tile::pellet) {
+                        rl::Circle(center, cell * 0.095f32, rl::Rgb(244u8, 211u8, 169u8));
+                    }
+
+                    if (tile == Tile::power) {
+                        let pulse = 0.84f32 + 0.16f32 * rl::Sin(clock * 5.0f32);
+                        rl::Circle(center, cell * 0.38f32, rl::Color(255u8, 221u8, 158u8, 20u8));
+                        rl::Circle(center, cell * 0.23f32 * pulse, rl::Rgb(255u8, 224u8, 177u8));
+                    }
+
+                    if (tile == Tile::door) {
+                        rl::Line(rl::Vec2(px, center.y), rl::Vec2(px + cell, center.y),
+                            3.0f32, rl::Rgb(246u8, 162u8, 221u8));
+                    }
+
+                }
+
+            }
+
+        }
+
+        fn Pacman(center: rl::Vec2, radius: f32, direction: Direction, clock: f32) {
+            mut angle = 0.0f32;
+            if (direction == Direction::down) angle = 90.0f32;
+            if (direction == Direction::left) angle = 180.0f32;
+            if (direction == Direction::up) angle = 270.0f32;
+            let mouth = 8.0f32 + 18.0f32 * (0.5f32 + 0.5f32 * rl::Sin(clock * 11.0f32));
+            rl::Circle(center, radius + 3.0f32, rl::Color(255u8, 214u8, 64u8, 14u8));
+            rl::Sector(center, radius, angle + mouth, angle + 360.0f32 - mouth, 48, Yellow());
+        }
+
+        fn Eyes(center: rl::Vec2, radius: f32, direction: Direction) {
+            mut dx = 0.0f32;
+            mut dy = 0.0f32;
+            if (direction == Direction::right) dx = 1.0f32;
+            if (direction == Direction::left) dx = -1.0f32;
+            if (direction == Direction::down) dy = 1.0f32;
+            if (direction == Direction::up) dy = -1.0f32;
+            for (side in 0i32..<2i32) {
+                let x = center.x + ((side fit f32) * 0.72f32 - 0.36f32) * radius;
+                let y = center.y - radius * 0.23f32;
+                rl::Circle(rl::Vec2(x, y), radius * 0.32f32, Ink());
+                rl::Circle(rl::Vec2(x + dx * radius * 0.13f32, y + dy * radius * 0.13f32),
+                    radius * 0.16f32, rl::Rgb(25u8, 63u8, 146u8));
+            }
+
+        }
+
+        fn GhostBody(center: rl::Vec2, radius: f32, color: rl::Color, clock: f32) {
+            rl::Circle(rl::Vec2(center.x, center.y - radius * 0.15f32), radius, color);
+            rl::Box(rl::Rect(center.x - radius, center.y - radius * 0.15f32,
+                radius * 2.0f32, radius), color);
+            for (tooth in 0i32..<3i32) {
+                let x = center.x - radius + (tooth fit f32) * radius * 0.6667f32;
+                let wiggle = 0.08f32 * rl::Sin(clock * 9.0f32);
+                // Counter-clockwise triangles cut the skirt, using board background.
+                rl::Triangle(rl::Vec2(x, center.y + radius),
+                    rl::Vec2(x + radius * 0.6667f32, center.y + radius),
+                    rl::Vec2(x + radius * 0.3333f32, center.y + radius * (0.58f32 + wiggle)), Background());
+            }
+
+        }
+
+        fn GhostSprite(ghost: Ghost, center: rl::Vec2, radius: f32, clock: f32, flash: bool) {
+            if (ghost.mode == GhostMode::eyes) {
+                Eyes(center, radius, ghost.actor.direction);
+                return;
+            }
+
+            if (ghost.mode == GhostMode::frightened) {
+                let white = flash and rl::Sin(clock * 12.0f32) > 0.0f32;
+                GhostBody(center, radius, white ? Ink() : rl::Rgb(54u8, 82u8, 218u8), clock);
+                let face = white ? rl::Rgb(230u8, 67u8, 97u8) : Ink();
+                rl::Circle(rl::Vec2(center.x - radius * 0.33f32, center.y - radius * 0.2f32), radius * 0.12f32, face);
+                rl::Circle(rl::Vec2(center.x + radius * 0.33f32, center.y - radius * 0.2f32), radius * 0.12f32, face);
+                for (segment in 0i32..<4i32) {
+                    let x = center.x - radius * 0.55f32 + (segment fit f32) * radius * 0.275f32;
+                    let a = segment % 2 == 0 ? 0.32f32 : 0.48f32;
+                    let b = segment % 2 == 0 ? 0.48f32 : 0.32f32;
+                    rl::Line(rl::Vec2(x, center.y + radius * a),
+                        rl::Vec2(x + radius * 0.275f32, center.y + radius * b), 1.5f32, face);
+                }
+
+                return;
+            }
+
+            GhostBody(center, radius, ghost.color, clock);
+            Eyes(center, radius, ghost.actor.direction);
+        }
+
+        fn Cherry(center: rl::Vec2, size: f32) {
+            let stem = rl::Rgb(111u8, 206u8, 137u8);
+            rl::Line(rl::Vec2(center.x - size * 0.38f32, center.y),
+                rl::Vec2(center.x + size * 0.2f32, center.y - size), 2.0f32, stem);
+            rl::Line(rl::Vec2(center.x + size * 0.4f32, center.y + size * 0.12f32),
+                rl::Vec2(center.x + size * 0.2f32, center.y - size), 2.0f32, stem);
+            rl::Circle(rl::Vec2(center.x - size * 0.38f32, center.y + size * 0.2f32), size * 0.48f32,
+                rl::Rgb(245u8, 72u8, 101u8));
+            rl::Circle(rl::Vec2(center.x + size * 0.4f32, center.y + size * 0.32f32), size * 0.48f32,
+                rl::Rgb(219u8, 50u8, 85u8));
+            rl::Circle(rl::Vec2(center.x - size * 0.52f32, center.y + size * 0.03f32), size * 0.13f32, Ink());
+        }
+
+        fn Grid(state: GameState, layout: Layout) {
+            let color = rl::Color(134u8, 170u8, 222u8, 40u8);
+            let width = (state.columns fit f32) * layout.cell;
+            let height = (state.rows fit f32) * layout.cell;
+            for (x in 0i32..<(state.columns + 1)) {
+                let px = layout.origin.x + (x fit f32) * layout.cell;
+                rl::Line(rl::Vec2(px, layout.origin.y), rl::Vec2(px, layout.origin.y + height), 1.0f32, color);
+            }
+
+            for (y in 0i32..<(state.rows + 1)) {
+                let py = layout.origin.y + (y fit f32) * layout.cell;
+                rl::Line(rl::Vec2(layout.origin.x, py), rl::Vec2(layout.origin.x + width, py), 1.0f32, color);
+            }
+
+        }
+
+        fn DisplayPhase(actual: Phase, preview: i32) -> Phase {
+            return match (preview) {
+                1: Phase::ready;
+                2: Phase::playing;
+                3: Phase::paused;
+                4: Phase::won;
+                5: Phase::gameOver;
+                assumed: actual;
+            };
+        }
+
+        fn Overlay(state: GameState, layout: Layout, preview: i32) {
+            let phase = DisplayPhase(state.phase, preview);
+            if (phase == Phase::playing) return;
+            let width = (state.columns fit f32) * layout.cell;
+            let height = (state.rows fit f32) * layout.cell;
+            let cx = layout.origin.x + width * 0.5f32;
+            let cy = layout.origin.y + height * 0.565f32;
+            if (phase == Phase::ready) {
+                rl::Box(rl::Rect(cx - 90.0f32, cy - 15.0f32, 180.0f32, 31.0f32), Background());
+                CenterText("READY!", cx, cy - 12.0f32, 24, Yellow());
+                return;
+            }
+
+            rl::Box(rl::Rect(layout.origin.x, layout.origin.y, width, height), rl::Color(8u8, 12u8, 23u8, 175u8));
+            let cardWidth = width < 350.0f32 ? width - 30.0f32 : 320.0f32;
+            Panel(cx - cardWidth * 0.5f32, cy - 50.0f32, cardWidth, 112.0f32);
+            mut title = "PAUSED";
+            mut color = Ink();
+            if (phase == Phase::won) {
+                title = "MAZE CLEAR";
+                color = rl::Rgb(112u8, 228u8, 174u8);
+            }
+
+            if (phase == Phase::gameOver) {
+                title = "GAME OVER";
+                color = rl::Rgb(255u8, 110u8, 128u8);
+            }
+
+            CenterText(title, cx, cy - 23.0f32, 28, color);
+            CenterText("Your logic controls this state", cx, cy + 21.0f32, 14, Muted());
+        }
+
+        fn InputKey(label: string, x: f32, y: f32, active: bool) {
+            let bounds = rl::Rect(x, y, 34.0f32, 30.0f32);
+            rl::Box(bounds, active ? Yellow() : rl::Rgb(23u8, 34u8, 55u8));
+            rl::Outline(bounds, 1.0f32, active ? Yellow() : rl::Rgb(49u8, 66u8, 94u8));
+            CenterText(label, x + 17.0f32, y + 8.0f32, 14, active ? Background() : Muted());
+        }
+
+        fn Hud(state: GameState, input: InputFrame, layout: Layout, clock: f32, presentation: Presentation) {
+            let width = rl::Width() fit f32;
+            rl::Text("PAC", 28.0f32, 28.0f32, 38, Yellow());
+            rl::Text("/ MAZE", 110.0f32, 28.0f32, 38, Ink());
+            rl::Text("WIO + RAYLIB    /    YOUR LOGIC, READY-MADE PIXELS", 30.0f32, 76.0f32, 14, Muted());
+            RightText("RENDER STARTER", width - 28.0f32, 37.0f32, 16, Muted());
+            rl::Line(rl::Vec2(28.0f32, 99.0f32), rl::Vec2(width - 28.0f32, 99.0f32),
+                1.0f32, rl::Rgb(32u8, 45u8, 68u8));
+            let x = layout.rail;
+            let w = layout.railWidth;
+            let y = layout.origin.y;
+            Panel(x, y, w, 145.0f32);
+            rl::Text("SCORE", x + 18.0f32, y + 18.0f32, 14, Muted());
+            rl::Text($"${state.score}", x + 18.0f32, y + 42.0f32, 34, Yellow());
+            rl::Text("BEST", x + 18.0f32, y + 100.0f32, 14, Muted());
+            RightText($"${state.bestScore}", x + w - 18.0f32, y + 98.0f32, 18, Ink());
+            Panel(x, y + 161.0f32, w, 151.0f32);
+            rl::Text("THE USUAL SUSPECTS", x + 18.0f32, y + 178.0f32, 14, Muted());
+            let names: string[] = ["BLINKY", "PINKY", "INKY", "CLYDE"];
+            for (index in 0usize..<state.ghosts.Count()) {
+                if (index >= 4usize) break;
+                let ghost = state.ghosts[index];
+                let gy = y + 216.0f32 + (index fit f32) * 23.0f32;
+                GhostSprite(ghost, rl::Vec2(x + 28.0f32, gy), 7.0f32, clock, false);
+                rl::Text(names[index], x + 48.0f32, gy - 6.0f32, 14, ghost.color);
+            }
+
+            Panel(x, y + 328.0f32, w, 100.0f32);
+            rl::Text("THE STAGE IS YOURS", x + 18.0f32, y + 345.0f32, 16, Ink());
+            rl::Text("Drawing + animation: ready.", x + 18.0f32, y + 374.0f32, 14, Muted());
+            rl::Text("Add gameplay in logic.wio", x + 18.0f32, y + 398.0f32, 14, Yellow());
+            Panel(x, y + 444.0f32, w, 127.0f32);
+            rl::Text("LIVE INPUT", x + 18.0f32, y + 461.0f32, 14, Muted());
+            InputKey("W", x + 56.0f32, y + 487.0f32, input.up);
+            InputKey("A", x + 18.0f32, y + 521.0f32, input.left);
+            InputKey("S", x + 56.0f32, y + 521.0f32, input.down);
+            InputKey("D", x + 94.0f32, y + 521.0f32, input.right);
+            rl::Text("+ arrows", x + 142.0f32, y + 528.0f32, 14, Muted());
+            let bottom = layout.origin.y + (state.rows fit f32) * layout.cell + 27.0f32;
+            mut shownLives = state.lives;
+            if (shownLives < 0) shownLives = 0;
+            if (shownLives > 8) shownLives = 8;
+            for (life in 0i32..<shownLives) {
+                Pacman(rl::Vec2(40.0f32 + (life fit f32) * 27.0f32, bottom + 7.0f32), 9.0f32, Direction::right, 0.0f32);
+            }
+
+            RightText($"LEVEL ${state.level}", layout.rail - 65.0f32, bottom, 16, Muted());
+            Cherry(rl::Vec2(layout.rail - 40.0f32, bottom + 7.0f32), 9.0f32);
+            let footer = (rl::Height() fit f32) - 29.0f32;
+            rl::Text("F1 GRID    F2 GHOSTS    F3 OVERLAYS", 28.0f32, footer, 14, Muted());
+            RightText("SPACE / P / R: YOUR HOOKS    ESC CLOSE", width - 28.0f32, footer, 14, Muted());
+            if (presentation.ghostPreview != 0 or presentation.overlayPreview != 0) {
+                rl::Text("VISUAL PREVIEW", x + 18.0f32, y + 591.0f32, 14, Yellow());
+            }
+
+        }
+
+        // Read-only by convention: no simulation or state mutation in Draw.
+        fn Frame(state: GameState, input: InputFrame, presentation: Presentation, clock: f32) {
+            let layout = Measure(state);
+            rl::Begin();
+            rl::Clear(Background());
+            Maze(state, layout, clock);
+            if (state.fruitVisible) {
+                Cherry(Pixel(layout, state.fruitPosition), layout.cell * 0.38f32);
+            }
+
+            if (state.player.visible) {
+                Pacman(Pixel(layout, state.player.position), layout.cell * 0.43f32, state.player.direction, clock);
+            }
+
+            for (index in 0usize..<state.ghosts.Count()) {
+                mut ghost = state.ghosts[index];
+                if (ghost.actor.visible) {
+                    if (presentation.ghostPreview == 1) ghost.mode = GhostMode::frightened;
+                    if (presentation.ghostPreview == 2) ghost.mode = GhostMode::eyes;
+                    let position = Pixel(layout, ghost.actor.position);
+                    let bob = rl::Sin(clock * 5.0f32 + (index fit f32) * 1.6f32) * layout.cell * 0.045f32;
+                    GhostSprite(ghost, rl::Vec2(position.x, position.y + bob), layout.cell * 0.41f32,
+                        clock, state.frightenedFlash);
+                }
+
+            }
+
+            if (presentation.grid) {
+                Grid(state, layout);
+            }
+
+            Overlay(state, layout, presentation.overlayPreview);
+            Hud(state, input, layout, clock, presentation);
+            rl::End();
+        }
+
+    }
+
+}
+

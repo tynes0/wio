@@ -1,0 +1,32 @@
+use model;
+
+realm pac {
+    realm logic {
+        fn Start(state: GameState) {
+            // Your initial game state / level setup goes here.
+        }
+
+        fn Update(state: GameState, input: InputFrame, delta: f32) {
+            // YOUR GAME LOGIC GOES HERE. This function is called once per frame.
+            //
+            // input.up/down/left/right: held arrow keys or WASD
+            // input.actionPressed: Space or Enter (one-frame pulse)
+            // input.pausePressed: P (one-frame pulse)
+            // input.resetPressed: R (one-frame pulse; not handled by the shell)
+            // delta: seconds, capped at 0.05 to avoid huge steps after dragging
+            //
+            // Example state writes (intentionally not active):
+            // state.phase = Phase::playing;
+            // state.player.position.x += 3.0f32 * delta;
+            // state.player.direction = Direction::right;
+            // state.SetTile(1, 1, Tile::floor);
+            // state.score += 10;
+            // state.ghosts[0usize].mode = GhostMode::frightened;
+            //
+            // The renderer only reads state. It never moves actors, consumes
+            // pellets, changes the score or runs ghost AI.
+        }
+
+    }
+
+}
