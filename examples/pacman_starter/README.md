@@ -28,8 +28,10 @@ two example directories in their current relative locations. Raylib's license
 notice is in `../atlas_desk/LICENSES/raylib-zlib.txt`. Other platforms need their
 own raylib build and platform libraries in the manifest.
 
-The drawing uses raylib's built-in pixel font and procedural shapes, without
-image, audio or font downloads. The window is resizable;
+The UI uses bundled Manrope Medium and Bold fonts, with bilinear filtering and
+matching text measurement. Their SIL Open Font License is in
+`LICENSES/Manrope-OFL.txt`. The scene uses procedural shapes, without image or
+audio downloads. The window is resizable;
 the maze and side panel adapt down to 800 by 780 pixels.
 
 ## Connect your logic
@@ -99,7 +101,7 @@ keys do not secretly move the player, and Space/P/R have no preset game rules.
 - `wio/renderer.wio`: all maze, character, HUD and overlay drawing.
 - `wio/raylib.wio`: typed native Color/Vector2/Rectangle and raylib declarations.
 - `wio/main.wio`: window/input/frame loop and visual-preview controls.
-- `native/include/pacman_raylib.h`: small C-string and pixel-position adapters;
+- `native/include/pacman_raylib.h`: C-string, text measurement and owned-font adapters;
   no gameplay or scene renderer lives in C++.
 
 ## Check the initial scene

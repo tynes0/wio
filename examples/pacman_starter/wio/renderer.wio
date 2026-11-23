@@ -272,7 +272,8 @@ realm pac {
         fn Hud(state: GameState, input: InputFrame, layout: Layout, clock: f32, presentation: Presentation) {
             let width = rl::Width() fit f32;
             rl::Text("PAC", 28.0f32, 28.0f32, 38, Yellow());
-            rl::Text("/ MAZE", 110.0f32, 28.0f32, 38, Ink());
+            let titleX = 28.0f32 + (rl::TextWidth("PAC", 38) fit f32) + 18.0f32;
+            rl::Text("/ MAZE", titleX, 28.0f32, 38, Ink());
             rl::Text("WIO + RAYLIB    /    YOUR LOGIC, READY-MADE PIXELS", 30.0f32, 76.0f32, 14, Muted());
             RightText("RENDER STARTER", width - 28.0f32, 37.0f32, 16, Muted());
             rl::Line(rl::Vec2(28.0f32, 99.0f32), rl::Vec2(width - 28.0f32, 99.0f32),

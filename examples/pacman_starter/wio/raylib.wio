@@ -27,7 +27,7 @@ realm pac {
         [native, cpp::name(pacman_raylib::Open)]
         fn Open(width: i32, height: i32, title: string);
 
-        [native, cpp::name(CloseWindow)]
+        [native, cpp::name(pacman_raylib::Close)]
         fn Close();
 
         [native, cpp::name(WindowShouldClose)]
