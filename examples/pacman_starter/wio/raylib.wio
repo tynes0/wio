@@ -39,6 +39,9 @@ realm pac {
         [native, cpp::name(GetScreenHeight)]
         fn Height() -> i32;
 
+        [native, cpp::name(SetWindowSize)]
+        fn Resize(width: i32, height: i32);
+
         [native, cpp::name(GetFrameTime)]
         fn Delta() -> f32;
 
@@ -83,6 +86,9 @@ realm pac {
 
         [native, cpp::name(pacman_raylib::TextWidth)]
         fn TextWidth(value: string, size: i32) -> i32;
+
+        [native, cpp::name(pacman_raylib::TextHeight)]
+        fn TextHeight(value: string, size: i32) -> i32;
 
         [native, cpp::name(pacman_raylib::Screenshot)]
         fn Screenshot(path: string);

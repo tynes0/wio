@@ -127,6 +127,12 @@ namespace pacman_raylib
             static_cast<float>(size) * TextScale, 0.3f).x));
     }
 
+    inline int TextHeight(const char* value, int size)
+    {
+        return static_cast<int>(std::ceil(MeasureTextEx(TextFont(size), value,
+            static_cast<float>(size) * TextScale, 0.3f).y));
+    }
+
     inline void Screenshot(const char* path)
     {
         TakeScreenshot(path);

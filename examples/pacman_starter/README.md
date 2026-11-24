@@ -87,7 +87,6 @@ collision behavior; decide those rules in your logic.
 | F1 | Toggle tile grid |
 | F2 | Preview normal/frightened/eyes graphics without changing actual ghost modes |
 | F3 | Preview overlays; cycle back to actual gameplay state |
-| F12 | Save `.wio-build/pacman-preview.png` |
 | Escape | Close the window |
 
 Preview controls belong to the shell's `Presentation`, not `GameState`. The
@@ -98,23 +97,63 @@ keys do not secretly move the player, and Space/P/R have no preset game rules.
 
 - `wio/logic.wio`: your gameplay hook; start here.
 - `wio/model.wio`: editable tile map and public scene data.
-- `wio/renderer.wio`: all maze, character, HUD and overlay drawing.
+- `wio/ui.wio`: local panel coordinates, row/column flows, alignment and grid cells.
+- `wio/appearance.wio`: named spacing, dimensions, font sizes and palette.
+- `wio/renderer.wio`: responsive page composition, maze, HUD and overlays.
+- `wio/sprites.wio`: scalable player/ghost/cherry geometry and animation.
 - `wio/raylib.wio`: typed native Color/Vector2/Rectangle and raylib declarations.
 - `wio/main.wio`: window/input/frame loop and visual-preview controls.
 - `native/include/pacman_raylib.h`: C-string, text measurement and owned-font adapters;
   no gameplay or scene renderer lives in C++.
 
-## Check the initial scene
+## Relative panels and automatic layout
 
-```powershell
-wio project run -- --check
-wio project run --no-build -- --smoke-modes
-wio project run --no-build -- --smoke-small
+Each `ui::Area` is a local coordinate space. `Panel` draws its frame and returns
+the padded inner area. Enter that area with `Column` or `Row`; `Take` advances
+automatically, `TakeEnd` reserves space from the opposite end, and `Rest` returns
+what remains. No global current-panel state or matching Begin/End calls are needed.
+
+For example, a score panel can be composed without a single screen position:
+
+```wio
+mut sidebar = layout.sidebar.Column(metrics::SectionGap);
+let bounds = sidebar.Take(metrics::ScorePanelHeight);
+let panel = bounds.Panel(metrics::PanelPadding, colors::Surface(), colors::Border());
+mut content = panel.Column(metrics::ItemGap);
+content.Label("SCORE", fonts::Caption, colors::Muted());
+content.Label($"${state.score}", fonts::Score, colors::Yellow());
+let best = content.Take(metrics::ValueRowHeight);
+best.Label("BEST", fonts::Caption, colors::Muted(), ui::Align::start, ui::Align::center);
+best.Label($"${state.bestScore}", fonts::Value, colors::Ink(), ui::Align::end, ui::Align::center);
 ```
 
-`--check` validates the initial 28 by 31 scene, 240 pellets, four power pellets,
-four ghosts and bounded tile writes without opening a window. `--smoke-modes`
-renders seven screenshots to `.wio-build`, previews every ghost mode and overlay,
-checks the initial state is unchanged, then exits. `--smoke-small` captures the
-minimum window size. Adjust these initial-state checks once your own gameplay
-deliberately changes the scene.
+Remove a card's `Take`/draw call and the following cards move up automatically.
+Move or resize a parent and all descendants follow it. The actual sidebar is
+three independent functions: `ScoreCard`, `LegendCard` and `InputCard`.
+
+- `Child(x, y, width, height)` is relative to its parent, never the window.
+- `Inset` supplies padding; `Sized` aligns a child at start, center or end.
+- `Anchor(u, v)` uses normalized coordinates, from top-left `(0, 0)` to
+  bottom-right `(1, 1)`; `Center()` is its midpoint.
+- `Cell(column, row, columns, rows, gap)` places the keypad without pixel offsets.
+- `Label` measures the selected font for alignment and reduces its size if its
+  text exceeds the available width. `Line` and `StrokeEdge` use parent coordinates.
+
+`Arrange` is the only viewport-level calculation. It reserves the header/footer,
+fits square maze cells, and gives remaining width to the sidebar. Areas are
+independent value components, not heap-owned widgets. They provide layout, not
+automatic clipping or a scrolling UI framework. Shape proportions and animation
+rates remain in `sprites.wio`; they are not page/panel position constants.
+
+## Check layout and rendering
+
+```powershell
+wio project test --filter relative_
+```
+
+`tests/relative_layout.wio` checks nested coordinates, padding, alignment,
+independent cursors, opposite-end allocation, panel removal/reflow and four
+viewport sizes without opening a window. `tests/relative_render.wio` opens a
+temporary window and captures all visual modes, the minimum window and a large
+score into `.wio-build/ui-*.png`. It verifies rendering does not change gameplay
+state. Tests stay outside the normal application's entry loop.

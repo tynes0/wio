@@ -1,0 +1,192 @@
+use raylib;
+
+realm pac {
+    realm ui {
+        enum Align { start, center, end };
+
+        enum Edge { top, bottom, left, right };
+
+        // A local coordinate space. Children contain their own absolute origin;
+        // no global current-panel state, parent pointers or push/pop balancing.
+        component Area {
+            bounds: rl::Rect;
+        }
+
+        // Stack-resident row/column cursor. Take and TakeEnd consume opposite
+        // ends; Rest is the remaining space. Removing an item reflows siblings.
+        component Flow {
+            area: Area;
+            start: f32;
+            finish: f32;
+            gap: f32;
+            horizontal: bool;
+        }
+
+        fn Positive(value: f32) -> f32 {
+            return value > 0.0f32 ? value : 0.0f32;
+        }
+
+        fn Limit(value: f32, maximum: f32) -> f32 {
+            return value < maximum ? Positive(value) : Positive(maximum);
+        }
+
+        fn Offset(space: f32, align: Align) -> f32 {
+            return match (align) {
+                Align::center: space * 0.5f32;
+                Align::end: space;
+                assumed: 0.0f32;
+            };
+        }
+
+        fn At(x: f32, y: f32, width: f32, height: f32) -> Area {
+            return Area(rl::Rect(x, y, Positive(width), Positive(height)));
+        }
+
+        fn Centered(center: rl::Vec2, width: f32, height: f32) -> Area {
+            return At(center.x - width * 0.5f32, center.y - height * 0.5f32, width, height);
+        }
+
+        extension AreaCommands for Area {
+            public view fn Width() -> f32 {
+                return self.bounds.width;
+            }
+
+            public view fn Height() -> f32 {
+                return self.bounds.height;
+            }
+
+            public view fn Local(x: f32, y: f32) -> rl::Vec2 {
+                return rl::Vec2(self.bounds.x + x, self.bounds.y + y);
+            }
+
+            // Normalized parent coordinates: (0,0) top-left, (1,1) bottom-right.
+            public view fn Anchor(u: f32, v: f32) -> rl::Vec2 {
+                return self.Local(u * self.bounds.width, v * self.bounds.height);
+            }
+
+            public view fn Center() -> rl::Vec2 {
+                return self.Anchor(0.5f32, 0.5f32);
+            }
+
+            public view fn Child(x: f32, y: f32, width: f32, height: f32) -> Area {
+                return At(self.bounds.x + x, self.bounds.y + y, width, height);
+            }
+
+            public view fn Inset(padding: f32) -> Area {
+                let horizontal = Limit(padding, self.bounds.width * 0.5f32);
+                let vertical = Limit(padding, self.bounds.height * 0.5f32);
+                return self.Child(horizontal, vertical, self.bounds.width - horizontal * 2.0f32,
+                    self.bounds.height - vertical * 2.0f32);
+            }
+
+            public view fn Expand(padding: f32) -> Area {
+                return self.Child(-padding, -padding, self.bounds.width + padding * 2.0f32,
+                    self.bounds.height + padding * 2.0f32);
+            }
+
+            public view fn Sized(width: f32, height: f32, x: Align, y: Align) -> Area {
+                let w = Limit(width, self.bounds.width);
+                let h = Limit(height, self.bounds.height);
+                return self.Child(Offset(self.bounds.width - w, x), Offset(self.bounds.height - h, y), w, h);
+            }
+
+            public view fn Cell(column: i32, row: i32, columns: i32, rows: i32, gap: f32) -> Area {
+                if (columns <= 0 or rows <= 0 or column < 0 or row < 0 or column >= columns or row >= rows) {
+                    std::Panic("UI grid cell is outside its parent grid.");
+                }
+
+                let w = Positive((self.bounds.width - gap * ((columns - 1) fit f32)) / (columns fit f32));
+                let h = Positive((self.bounds.height - gap * ((rows - 1) fit f32)) / (rows fit f32));
+                return self.Child((column fit f32) * (w + gap), (row fit f32) * (h + gap), w, h);
+            }
+
+            public view fn Column(gap: f32 = 0.0f32) -> Flow {
+                return Flow(deref self, 0.0f32, self.bounds.height, Positive(gap), false);
+            }
+
+            public view fn Row(gap: f32 = 0.0f32) -> Flow {
+                return Flow(deref self, 0.0f32, self.bounds.width, Positive(gap), true);
+            }
+
+            public view fn Fill(color: rl::Color) {
+                rl::Box(self.bounds, color);
+            }
+
+            public view fn Outline(thickness: f32, color: rl::Color) {
+                rl::Outline(self.bounds, thickness, color);
+            }
+
+            public view fn Panel(padding: f32, fill: rl::Color, border: rl::Color) -> Area {
+                self.Fill(fill);
+                self.Outline(1.0f32, border);
+                return self.Inset(padding);
+            }
+
+            public view fn Label(value: string, size: i32, color: rl::Color,
+                x: Align = Align::start, y: Align = Align::start) {
+                if (self.bounds.width <= 0.0f32 or self.bounds.height <= 0.0f32) return;
+                mut fittedSize = size;
+                mut width = rl::TextWidth(value, fittedSize) fit f32;
+                while (width > self.bounds.width and fittedSize > 1) {
+                    fittedSize -= 1;
+                    width = rl::TextWidth(value, fittedSize) fit f32;
+                }
+
+                let height = rl::TextHeight(value, fittedSize) fit f32;
+                let position = self.Local(Offset(self.bounds.width - width, x), Offset(self.bounds.height - height, y));
+                rl::Text(value, position.x, position.y, fittedSize, color);
+            }
+
+            public view fn Line(u1: f32, v1: f32, u2: f32, v2: f32, thickness: f32, color: rl::Color) {
+                rl::Line(self.Anchor(u1, v1), self.Anchor(u2, v2), thickness, color);
+            }
+
+            public view fn StrokeEdge(edge: Edge, thickness: f32, color: rl::Color) {
+                match (edge) {
+                    Edge::top: self.Line(0.0f32, 0.0f32, 1.0f32, 0.0f32, thickness, color);
+                    Edge::bottom: self.Line(0.0f32, 1.0f32, 1.0f32, 1.0f32, thickness, color);
+                    Edge::left: self.Line(0.0f32, 0.0f32, 0.0f32, 1.0f32, thickness, color);
+                    Edge::right: self.Line(1.0f32, 0.0f32, 1.0f32, 1.0f32, thickness, color);
+                }
+
+            }
+
+        }
+
+        extension FlowCommands for Flow {
+            public view fn Rest() -> Area {
+                let remaining = Positive(self.finish - self.start);
+                if (self.horizontal) return self.area.Child(self.start, 0.0f32, remaining, self.area.Height());
+                return self.area.Child(0.0f32, self.start, self.area.Width(), remaining);
+            }
+
+            public ref fn Take(size: f32) -> Area {
+                let extent = Limit(size, self.finish - self.start);
+                let start = self.start;
+                self.start += extent + Limit(self.gap, self.finish - start - extent);
+                if (self.horizontal) return self.area.Child(start, 0.0f32, extent, self.area.Height());
+                return self.area.Child(0.0f32, start, self.area.Width(), extent);
+            }
+
+            public ref fn TakeEnd(size: f32) -> Area {
+                let extent = Limit(size, self.finish - self.start);
+                let start = self.finish - extent;
+                self.finish = start - Limit(self.gap, start - self.start);
+                if (self.horizontal) return self.area.Child(start, 0.0f32, extent, self.area.Height());
+                return self.area.Child(0.0f32, start, self.area.Width(), extent);
+            }
+
+            public ref fn Space(size: f32) {
+                self.start += Limit(size, self.finish - self.start);
+            }
+
+            public ref fn Label(value: string, size: i32, color: rl::Color, align: Align = Align::start) {
+                let line = self.Take(rl::TextHeight(value, size) fit f32);
+                line.Label(value, size, color, align);
+            }
+
+        }
+
+    }
+
+}

@@ -1,0 +1,40 @@
+use raylib;
+use model;
+use renderer;
+use std::console as console;
+
+fn Capture(state: pac::GameState, presentation: pac::Presentation, path: string) {
+    let input = pac::InputFrame(false, false, false, false, false, false, false);
+    // Two presents also allow resize events to settle before capture.
+    for (frame in 0i32..<3i32) {
+        pac::draw::Frame(state, input, presentation, 0.35f32);
+    }
+
+    pac::rl::Screenshot(path);
+}
+
+fn Entry() -> i32 {
+    let state = pac::GameState();
+    pac::rl::Open(1120, 960, "Pacman relative UI checks");
+    Capture(state, pac::Presentation(false, 0, 0), ".wio-build/ui-default.png");
+    Capture(state, pac::Presentation(true, 0, 2), ".wio-build/ui-grid.png");
+    Capture(state, pac::Presentation(false, 1, 2), ".wio-build/ui-frightened.png");
+    Capture(state, pac::Presentation(false, 2, 2), ".wio-build/ui-eyes.png");
+    Capture(state, pac::Presentation(false, 0, 3), ".wio-build/ui-paused.png");
+    Capture(state, pac::Presentation(false, 0, 4), ".wio-build/ui-won.png");
+    Capture(state, pac::Presentation(false, 0, 5), ".wio-build/ui-game-over.png");
+    pac::rl::Resize(800, 780);
+    Capture(state, pac::Presentation(false, 0, 0), ".wio-build/ui-small.png");
+    state.score = 2147483647;
+    Capture(state, pac::Presentation(false, 0, 0), ".wio-build/ui-large-score.png");
+    state.score = 0;
+    pac::rl::Close();
+    if (state.player.position.x != 13.5f32 or state.player.position.y != 23.0f32 or
+        state.score != 0 or state.phase != pac::Phase::ready) std::Panic("Renderer modified gameplay state.");
+    for (ghost in state.ghosts) {
+        if (ghost.mode != pac::GhostMode::normal) std::Panic("Preview modified actual ghost modes.");
+    }
+
+    console::PrintLine("relative-render-ok: default, modes, minimum size, large score, unchanged gameplay");
+    return 0;
+}
