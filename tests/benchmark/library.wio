@@ -1,13 +1,16 @@
 use std::benchmark as bench;
 use std::json as json;
 use std::hash as hash;
+use std::console as console;
 
 fn Work(iterations: usize) -> u64
 {
     mut sum = 0u64;
     for (index in 0usize..<iterations)
     {
-        sum += index fit u64;
+        // Exercise the library's optimizer barrier, not a foldable closed-form
+        // sum which can complete inside one timer tick on faster CI machines.
+        sum += bench::Input(index fit u64);
     }
 
     return sum;
@@ -39,7 +42,11 @@ fn Entry() -> i32
     if (stable.IsError() or not stable.Value().stable) return 7;
     if (stable.Value().standardDeviation != 0.0) return 8;
     let report = bench::Run("sum", 1000usize, 1usize, 3usize, Work, 499500u64);
-    if (report.IsError()) return 9;
+    if (report.IsError())
+    {
+        console::PrintLine!(report.ErrorValue().message);
+        return 9;
+    }
     if (report.Value().Samples().Count() != 3usize or report.Value().Checksum() != 499500u64) return 10;
     if (bench::Run("bad", 1000usize, 0usize, 3usize, Work, 0u64).IsOk()) return 11;
     let memory = bench::Memory();
