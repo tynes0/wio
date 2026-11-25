@@ -29,7 +29,8 @@ This is a release checkpoint, not a new optimization sprint or v1 sign-off.
 - [ ] Three-platform candidate CI (Windows, Linux, macOS), recorded by run URL.
 - [ ] Review KI-011's full C++ DLL loader-startup limitation before publication;
   general post-load global construction is not implemented by this candidate.
-- [ ] Clean staged-package smoke outside the source/build tree.
+- [x] Clean staged-package smoke outside the source/build tree: 60 std modules
+  independently/together, external project build/run/test/package and native interop.
 - [x] VS Code checks, 32 unit tests, nine compiler integration tests and VSIX package.
 - [x] Web catalog/version checks, all 56 source paths and production build.
 - [ ] Package hashes and exact candidate commit recorded before publication.
@@ -59,3 +60,14 @@ producer's DLL static initialization**, and was stopped with a recorded failure.
 The targeted callback fixture now tests native executables and the pruned VM
 producer; pure globals continue to test both producer modes. This is explicit
 scope separation, not a fix or a passing observation for KI-011.
+
+The package smoke initially failed launching bare `cmake` on Windows, exposing
+KI-012. After its regression/fix and rebuilding both CLI and benchmark tool, the
+maintained installed-package qualification passed from
+`build/release-019-qualification/installed`, outside this candidate checkout.
+No persistent user environment or existing Wio installation was changed.
+
+The synthetic all-std external project uses its template's Debug configuration:
+9,550,718 generated C++ bytes and a 58,650,915-byte executable in this local run.
+This is functionality evidence, not a compile-time/size optimization success;
+KI-004 and the planned heavy optimization passes remain open.

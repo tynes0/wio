@@ -108,6 +108,12 @@ initialization concurrency/reentry, failure caching, bytecode validation and
 exactly-once native global cleanup. Local and CI results are tracked separately
 in the [release checklist](WIO_0_19_RELEASE_CHECKLIST.md).
 
+The Windows installed-package gate passed with 60 public std modules checked
+independently and together, an external project build/run/test/package lifecycle
+and native interop. VS Code's 32 unit tests and nine compiler integration tests,
+VSIX packaging and the web production build also passed locally. This is not
+yet cross-platform candidate CI acceptance or a published release.
+
 Open work remains in the [known-issues register](WIO_KNOWN_ISSUES.md), including
 escaping local-borrow diagnostics, code/build scalability, formal performance
 budgets, SDK-kit parity, IDE expansion and the std consistency pass. No
