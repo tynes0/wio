@@ -327,6 +327,18 @@ namespace wio::runtime::std_process
             return result;
         }
 
+        std::wstring windowsProcessApplication(const std::string_view program)
+        {
+            const auto application = widenProcessText(program);
+            if (application.empty() || std::filesystem::path(application).has_parent_path())
+                return application;
+            // An explicit lpApplicationName does not search PATH. Resolve only
+            // bare names; keep explicit UTF-8 paths and argv[0] unchanged, and
+            // never introduce shell interpretation for arguments or scripts.
+            const auto resolved = WhichExecutable(program);
+            return resolved.empty() ? application : widenProcessText(resolved);
+        }
+
         std::wstring quoteWindowsProcessArgument(const std::string_view value)
         {
             const std::wstring wide = widenProcessText(value);
@@ -624,7 +636,7 @@ namespace wio::runtime::std_process
         }
 
 #if defined(_WIN32)
-        const auto application = widenProcessText(program);
+        const auto application = windowsProcessApplication(program);
         auto commandLine = joinWindowsProcessCommand(program, args);
         const auto directory = widenProcessText(workingDirectory);
         if (application.empty() || commandLine.empty() || (!workingDirectory.empty() && directory.empty()))
@@ -739,7 +751,7 @@ namespace wio::runtime::std_process
             return false;
         }
 #if defined(_WIN32)
-        const auto application = widenProcessText(program);
+        const auto application = windowsProcessApplication(program);
         auto commandLine = joinWindowsProcessCommand(program, args);
         const auto directory = widenProcessText(workingDirectory);
         if (application.empty() || commandLine.empty() || (!workingDirectory.empty() && directory.empty()))
@@ -880,10 +892,24 @@ namespace wio::runtime::std_process
             message = "process program cannot be empty";
             return false;
         }
+#if defined(_WIN32)
+        const auto directory = widenProcessText(workingDirectory);
+        if (!workingDirectory.empty() && directory.empty())
+        {
+            setProcessError(error, nativeError, message, ProcessError::launch_failed, ERROR_NO_UNICODE_TRANSLATION,
+                            "process working directory is not valid UTF-8");
+            return false;
+        }
+#endif
         if (!workingDirectory.empty())
         {
             std::error_code pathError;
-            if (!std::filesystem::is_directory(std::filesystem::path(std::string(workingDirectory)), pathError))
+#if defined(_WIN32)
+            const auto requestedDirectory = std::filesystem::path(directory);
+#else
+            const auto requestedDirectory = std::filesystem::path(std::string(workingDirectory));
+#endif
+            if (!std::filesystem::is_directory(requestedDirectory, pathError))
             {
                 setProcessError(error, nativeError, message, ProcessError::invalid_working_directory, pathError.value(),
                                 "working directory does not exist: " + std::string(workingDirectory));
@@ -931,9 +957,8 @@ namespace wio::runtime::std_process
         startup.hStdOutput = childStdoutWrite;
         startup.hStdError = childStderrWrite;
         PROCESS_INFORMATION information{};
-        const std::wstring application = widenProcessText(program);
+        const std::wstring application = windowsProcessApplication(program);
         std::wstring commandLine = joinWindowsProcessCommand(program, args);
-        const std::wstring directory = widenProcessText(workingDirectory);
         if (application.empty() || commandLine.empty() || (!workingDirectory.empty() && directory.empty()))
         {
             closeAll();

@@ -359,6 +359,11 @@ initialize under the Windows loader lock, before the worker can enter. The
 initial new release gate hung at this boundary; it was stopped, not counted as
 a success or performance observation.
 
+This is consistent with Microsoft's documented restriction against thread
+synchronization during loader-locked DLL initialization; see
+[DLL best practices](https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-best-practices).
+No debugger stack capture is claimed by this bounded reproduction.
+
 The [callback global fixture](../tests/release_019/callback_globals.wio) is kept
 and qualified as a native executable and through the **pruned** VM producer,
 where Wio initialization happens after native registration and DLL loading.
@@ -368,6 +373,19 @@ native shared library; initialize such resources from an explicit post-load
 lifecycle/host entry instead. General post-load C++ global initialization and
 matching teardown remain open module/SDK work. Do not infer that KI-010 fixes
 the producer's independent C++ static initialization.
+
+### KI-012 — Bare Windows process names fail PATH lookup (fixed in 0.19 candidate)
+
+Package qualification found `process::Run("cmake", ...)` failing to launch even
+though `WhichExecutable` and the shell found the installed executable. The
+Windows implementation passed an unresolved name as `lpApplicationName`, which
+does not perform PATH search. Run/Capture/Spawn now share bare-name resolution,
+while preserving explicit paths, argv and no-shell semantics. The new process
+regression reproduces failure before the fix and passes after it, covering a
+PATH directory with spaces and all three APIs. It also exposed and fixes Spawn's
+narrow filesystem validation of a UTF-8 working directory. This does not claim
+new implicit `.cmd`/`.bat` shell execution or qualification of arbitrary Unicode
+PATH search entries. Full staged-package qualification is tracked separately.
 
 ## 2. Native, VM, ownership and SDK limitations
 

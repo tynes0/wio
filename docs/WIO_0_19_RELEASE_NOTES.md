@@ -24,6 +24,17 @@ the VM optimization pass, SDK-kit parity, or the v1 blocker list.
 
 ## Correctness fixes prepared for this release
 
+### Windows process lookup and package CLI
+
+`Run`, `Capture` and `Spawn` now resolve bare executable names through PATH
+before passing an explicit application path to `CreateProcessW`. This repairs
+`wio package` invoking a PATH-installed CMake. Explicit paths and argument
+quoting remain unchanged; no implicit shell is introduced. `Spawn` also
+validates UTF-8 working directories through a wide filesystem path, like the
+other two APIs. The updated process regression failed before the fix and passes
+with an executable in a PATH directory containing spaces, Unicode arguments
+and working directory, captured output, and preserved exit codes.
+
 ### Operand snapshots across side effects (KI-007)
 
 Value operands are evaluated left-to-right. A borrowed managed LHS is copied

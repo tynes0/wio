@@ -52,11 +52,11 @@ jobs:
       - name: Build compiler, CLI and runtime artifacts
         run: cmake --build build --target wio_playground wio_vm_runner wio_backend_workspace_test wio_float_parse_portability_test wio_wir_cpp_storage_plan_test wio_vm_string_capacity_test wio_wir_cpp_managed_storage_test wio_integer_format_test wio_wir_cpp_string_fast_paths_test wio_wir_cpp_append_reuse_plan_test wio_wir_cpp_concat_plan_test wio_concat_runtime_test wio_floating_value_format_test wio_vm_value_format_test wio_numeric_builder_test wio_numeric_append_optimizer_test --parallel 2
       - name: Build interim-release native entry and global initialization proofs
-        run: cmake --build build --target wio_vm_native_bridge_test wio_vm_global_initialization_test --parallel 2
+        run: cmake --build build --target wio_vm_native_bridge_test wio_vm_global_initialization_test wio_process_utf8_project_test --parallel 2
       - name: Qualify interim-release correctness
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
-          -R "^(wio_release_019_semantics|wio_vm_native_bridge|wio_vm_global_initialization)$"
+          -R "^(wio_release_019_semantics|wio_vm_native_bridge|wio_vm_global_initialization|wio_process_utf8_project)$"
       - name: Preserve functional and scalar release gates
         if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
         run: >-

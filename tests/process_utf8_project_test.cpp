@@ -2,6 +2,7 @@
 #include "std_process.h"
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -88,6 +89,35 @@ int main(int argc, char* argv[])
         expect(output.size() >= 200006 && output.find("stderr") != std::string::npos, "large capture was truncated");
 #if defined(_WIN32)
         expect(output.find(std::string("a\0b", 3)) != std::string::npos, "binary capture lost embedded NUL");
+        const auto pathDirectory = root / "PATH folder with spaces";
+        fs::create_directories(pathDirectory);
+        fs::copy_file(source, pathDirectory / "wio-process-path-selftest.exe");
+        struct ScopedPath
+        {
+            std::string previous = std::getenv("PATH") ? std::getenv("PATH") : "";
+            ~ScopedPath()
+            {
+                _putenv_s("PATH", previous.c_str());
+            }
+        } restorePath;
+        const auto testPath = pathText(pathDirectory) + ";" + restorePath.previous;
+        expect(_putenv_s("PATH", testPath.c_str()) == 0, "test PATH must be scoped to this process");
+        expect(!process::WhichExecutable("wio-process-path-selftest").empty(), "Which must find the PATH helper");
+        expect(process::TryRunResult("wio-process-path-selftest", values, pathText(directory), code, error, nativeError,
+                                     message) &&
+                   code == 17,
+               "Run must resolve bare executable names through PATH");
+        expect(process::TryRunCapture("wio-process-path-selftest", values, pathText(directory), code, output, error,
+                                      nativeError, message) &&
+                   code == 17 && output.find("process-utf8-ok") != std::string::npos,
+               "Capture must resolve bare executable names through PATH");
+        void* handle = nullptr;
+        expect(process::Spawn("wio-process-path-selftest", values, pathText(directory), handle, error, nativeError,
+                              message),
+               "Spawn must resolve bare executable names through PATH");
+        const auto waited = process::ProcessWait(handle, code, error, nativeError, message);
+        process::ProcessClose(handle);
+        expect(waited && code == 17, "PATH child must preserve its exit code and Unicode arguments");
         expect(!process::TryRunResult(pathText(root / "missing.exe"), {}, {}, code, error, nativeError, message) &&
                    error == process::ProcessError::launch_failed,
                "missing program must be a launch failure");
