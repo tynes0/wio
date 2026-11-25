@@ -1,0 +1,19 @@
+using cpp::header("release_probe.h");
+use std::attribute as attribute;
+
+[native, cpp::name(release_probe::OnThread)]
+fn OnThread([attribute::NativeCallback("retained", "any")] callback: fn() -> i32) -> i32;
+
+let first: i32 = 10;
+let second: i32 = 20;
+let fromThread: i32 = OnThread(ReadEarlierGlobals);
+
+fn ReadEarlierGlobals() -> i32
+{
+    return first + second;
+}
+
+fn Entry() -> i32
+{
+    return fromThread == 30 ? 0 : 1;
+}

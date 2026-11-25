@@ -32,10 +32,10 @@ def verify(args):
     wio = args.wio.resolve()
     links = ["-lws2_32", "-lshell32", "-Wa,-mbig-obj"] if os.name == "nt" else ["-pthread"]
     shared = ".dll" if os.name == "nt" else ".dylib" if sys.platform == "darwin" else ".so"
-    for name in ("release_probe.h", "semantics.wio", "globals.wio"):
+    for name in ("release_probe.h", "semantics.wio", "globals.wio", "callback_globals.wio"):
         shutil.copyfile(HERE / name, folder / name)
     shutil.copyfile(HERE.parent / "performance/byte_io/global_mode_repro.wio", folder / "io_globals.wio")
-    for name in ("semantics", "globals", "io_globals"):
+    for name in ("semantics", "globals", "io_globals", "callback_globals"):
         source = folder / (name + ".wio")
         run([wio, source, "--emit-cpp", "--include-dir", folder])
         for optimization in ("-O0", "-O2"):
@@ -46,7 +46,12 @@ def verify(args):
             run([program])
             if name == "semantics":
                 run([program, "fail"], expected=1, contains="release-probe failure")
-            for mode in ("full", "pruned"):
+            # Full producers run their independent C++ static initializers
+            # during DLL loading. Starting/joining a thread there deadlocks
+            # under Windows loader lock (KI-011). This separate fixture tests
+            # VM initializer callback reentry, not unsupported DLL startup.
+            modes = ("pruned",) if name == "callback_globals" else ("full", "pruned")
+            for mode in modes:
                 # Keep the module basename identical across producer modes.
                 output = folder / (name + optimization + mode)
                 output.mkdir()
@@ -61,7 +66,8 @@ def verify(args):
                     run([wio, "--vm-run-bytecode", bytecode, "--native-library", bridge,
                          "--", "fail"], expected=1, contains="release-probe failure")
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
-    print("0.19 correctness: native O0/O2, full/pruned VM bridges, exceptions and globals passed")
+    print("0.19 correctness: native O0/O2, full/pruned VM bridges, exceptions and globals passed; "
+          "threaded global callback uses pruned VM producer only (KI-011)")
 
 
 if __name__ == "__main__":

@@ -72,6 +72,11 @@ instead of retrying side effects. Recreate the machine after a failed load.
 Global initialization does not topologically sort declarations, merge a C++
 producer's independent static globals with VM storage, or add tracing cycle
 collection. Do not rely on later resource globals being constructed early.
+Thread-dependent global initializers must not run during Windows DLL loading:
+full C++ producers still use static initialization under the loader lock
+(KI-011). Use an explicit post-load lifecycle entry for those native modules.
+The separate callback-in-global fixture qualifies native executables and the
+pruned VM producer only; it does not hide that full-producer limitation.
 
 ## Version and ABI
 

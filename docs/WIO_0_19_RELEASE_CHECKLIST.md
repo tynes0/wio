@@ -24,6 +24,8 @@ This is a release checkpoint, not a new optimization sprint or v1 sign-off.
 - [ ] Affected N02 concat and N03 formatting-call regression gates.
 - [ ] SDK version contract and generated diagnostic reference freshness.
 - [ ] Three-platform candidate CI (Windows, Linux, macOS), recorded by run URL.
+- [ ] Review KI-011's full C++ DLL loader-startup limitation before publication;
+  general post-load global construction is not implemented by this candidate.
 - [ ] Clean staged-package smoke outside the source/build tree.
 - [ ] VS Code checks, tests, compiler integration and VSIX package.
 - [x] Web catalog/version checks, all 56 source paths and production build.
@@ -46,3 +48,9 @@ tests pending the fresh companion. VSIX 0.19.0 was generated. Its Windows/Linux
 Draft companion PRs: [VS Code #10](https://github.com/tynes0/wio-vscode/pull/10),
 [web #7](https://github.com/tynes0/wio-web/pull/7). The web catalog must not deploy
 before the new compiler documentation is on main.
+
+The first foreign-thread initializer rerun exposed KI-011 in the **full C++
+producer's DLL static initialization**, and was stopped with a recorded failure.
+The targeted callback fixture now tests native executables and the pruned VM
+producer; pure globals continue to test both producer modes. This is explicit
+scope separation, not a fix or a passing observation for KI-011.

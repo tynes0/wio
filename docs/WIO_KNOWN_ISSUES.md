@@ -350,6 +350,25 @@ tests, not a special case for this mode constant. N04 uses the explicit local
 flagset in **both** matched before/after workloads; that workaround does not
 close this issue or imply full native/VM parity.
 
+### KI-011 — Thread-dependent global startup in full C++ DLL producers (open)
+
+Discovered on Windows during 0.19 preparation on 2026-11-25. A global initializer
+which starts a thread and synchronously waits for a callback deadlocks while
+loading a full C++ producer with `LoadLibrary`: its independent static globals
+initialize under the Windows loader lock, before the worker can enter. The
+initial new release gate hung at this boundary; it was stopped, not counted as
+a success or performance observation.
+
+The [callback global fixture](../tests/release_019/callback_globals.wio) is kept
+and qualified as a native executable and through the **pruned** VM producer,
+where Wio initialization happens after native registration and DLL loading.
+Pure/declaration-order globals still run against full and pruned producers in
+the separate fixture. Do not use thread-dependent module globals in a full
+native shared library; initialize such resources from an explicit post-load
+lifecycle/host entry instead. General post-load C++ global initialization and
+matching teardown remain open module/SDK work. Do not infer that KI-010 fixes
+the producer's independent C++ static initialization.
+
 ## 2. Native, VM, ownership and SDK limitations
 
 | ID | Priority / state | Current boundary and closure requirement |
