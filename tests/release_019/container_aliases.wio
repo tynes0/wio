@@ -1,5 +1,14 @@
 using cpp::header("release_probe.h");
 
+[native, cpp::name(Container)]
+component NativeValue
+{
+    public value: i32;
+}
+
+[native, cpp::name(release_probe::NestedNativeName)]
+fn NestedNativeName(values: ref Dict<string, NativeValue[]>, item: ref NativeValue) -> bool;
+
 [native, cpp::name(release_probe::ContainerAlias), Instantiate(u64), Instantiate(usize),
  Instantiate(i64), Instantiate(isize), Instantiate(u8)]
 fn SequenceAlias<T>(values: ref T[], item: ref T) -> bool;
@@ -38,5 +47,12 @@ fn Entry() -> i32
     if (!DictionaryAlias(ref mappedWide, ref mappedWide["first"])) return 11;
     if (!DictionaryAlias(ref mappedSize, ref mappedSize["first"])) return 12;
     if (mappedWide["first"] != 8u64 or mappedSize["first"] != 8usize) return 13;
+
+    mut value = NativeValue();
+    value.value = 5;
+    let row: NativeValue[] = [value];
+    mut nested: Dict<string, NativeValue[]> = { "first": row };
+    if (!NestedNativeName(ref nested, ref nested["first"][0])) return 14;
+    if (nested["first"][0].value != 8) return 15;
     return 0;
 }

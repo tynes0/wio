@@ -32,6 +32,8 @@ specialization, dispatching on each original stable Wio identity, rather than
 defining conflicting specializations for different spellings of one C++ type.
 This applies to dynamic/fixed arrays and dictionaries; it does not merge their
 logical type identities or relax reference validation.
+Compiler-owned template parameter names also keep unqualified native C++ type
+names such as `Container` visible in nested container projections.
 
 ### Windows process lookup and package CLI
 

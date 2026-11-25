@@ -51,22 +51,24 @@ namespace wio::codegen
             {
                 if (constraint.tellp() > 0)
                     constraint << " || ";
-                constraint << "std::is_same_v<Container, " << spelling << ">";
+                constraint << "std::is_same_v<_WioProjectionContainer, " << spelling << ">";
             }
-            const auto declaration = "template<class Container> requires (" + constraint.str() + ")\n";
+            const auto declaration = "template<class _WioProjectionContainer> requires (" + constraint.str() + ")\n";
             out << "namespace wio::wir_backend::abi {\n";
-            out << declaration << "struct NativeContainerProjectionAccess<Container> { static void* resolve("
+            out << declaration
+                << "struct NativeContainerProjectionAccess<_WioProjectionContainer> { static void* resolve("
                 << signature << "); };\n";
-            out << declaration << "inline void* NativeContainerProjectionAccess<Container>::resolve(" << signature
-                << ") {\n"
-                << "    if (!count) return resolveContainerTerminal<Container>(storage, nodeId, projection, count, "
+            out << declaration << "inline void* NativeContainerProjectionAccess<_WioProjectionContainer>::resolve("
+                << signature << ") {\n"
+                << "    if (!count) return resolveContainerTerminal<_WioProjectionContainer>(storage, nodeId, "
+                   "projection, count, "
                    "requested);\n"
                 << "    if (!storage || !steps || count > 64 || steps->reserved || steps->containerTypeId != nodeId) "
                    "return nullptr;\n"
-                << "    auto& value = *static_cast<Container*>(storage);\n";
+                << "    auto& value = *static_cast<_WioProjectionContainer*>(storage);\n";
             for (const auto& [spelling, ids] : groups)
             {
-                out << "    if constexpr (std::is_same_v<Container, " << spelling << ">) {\n";
+                out << "    if constexpr (std::is_same_v<_WioProjectionContainer, " << spelling << ">) {\n";
                 for (const auto id : ids)
                 {
                     const auto& type = module.types.get(id);

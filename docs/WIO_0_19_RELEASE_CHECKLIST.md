@@ -120,3 +120,13 @@ The final six-test local triage selection passes 6/6 in 252.95 seconds,
 including all five release-specific Wio fixtures. An earlier local authoring
 run used an invalid byte-literal suffix in the new fixture and failed; it is
 retained in scratch evidence, not counted as a passing run.
+
+Post-triage review also exercised an unqualified native C++ type literally named
+`Container`. In candidate `25bb15d`, the new projection template parameter could
+shadow that name: flat sequence access passed, but a dictionary-to-array-to-POD
+reference failed with WVM1222. The generated parameter now uses a compiler-owned
+identifier, and the container-alias fixture includes this exact nested native
+name/alias mutation case. Packages built from `25bb15d` are superseded until this
+follow-up is rebuilt and qualified; the failure is not waived as a native limit.
+The extended container-alias case passes locally in native O0/O2 and both VM
+producer modes after the follow-up; the isolated failing VM probe also passes.

@@ -398,6 +398,8 @@ branches; stable semantic identities, key checks and borrowed-place validation
 remain distinct. The new `release_019/container_aliases.wio` fixture exercises
 dynamic arrays, fixed arrays and dictionaries, including native element-alias
 identity and mutation/copy-back in native O0/O2 and full/pruned VM producers.
+The follow-up also protects unqualified native C++ names from generated template
+parameter shadowing, with an actual `Container` POD in a dictionary/array path.
 Fresh cross-platform qualification is required before calling this published.
 
 ## 2. Native, VM, ownership and SDK limitations

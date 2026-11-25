@@ -9,9 +9,26 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <unordered_map>
+#include <vector>
+
+// Deliberately unqualified: generated template parameters must not shadow
+// a native C++ type with this common name.
+struct Container
+{
+    std::int32_t value;
+};
 
 namespace release_probe
 {
+    inline bool NestedNativeName(std::unordered_map<std::string, std::vector<Container>>& values, Container& item)
+    {
+        if (&values.at("first").at(0) != &item)
+            return false;
+        item.value += 3;
+        return values.at("first")[0].value == 8;
+    }
+
     template <class Container, class T> bool ContainerAlias(Container& values, T& item)
     {
         T* first;
