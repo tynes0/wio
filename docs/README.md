@@ -2,9 +2,9 @@
 
 This directory is the main documentation map for Wio.
 
-Current release preparation: [0.19.0 notes](WIO_0_19_RELEASE_NOTES.md) and
-[acceptance checklist](WIO_0_19_RELEASE_CHECKLIST.md). A prepared candidate is
-not a published release.
+Wio 0.19.0: [release scope](WIO_0_19_RELEASE_NOTES.md) and
+[preparation evidence](WIO_0_19_RELEASE_CHECKLIST.md). Published versions and
+downloads are listed on [GitHub Releases](https://github.com/tynes0/wio/releases).
 
 The current docs strategy is:
 

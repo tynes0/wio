@@ -352,6 +352,10 @@ close this issue or imply full native/VM parity.
 
 ### KI-011 — Thread-dependent global startup in full C++ DLL producers (open)
 
+Release disposition (2026-11-26): the project owner accepted this documented
+limitation for the interim 0.19 release, with the explicit post-load lifecycle
+workaround below. This acceptance does not close the underlying architecture work.
+
 Discovered on Windows during 0.19 preparation on 2026-11-25. A global initializer
 which starts a thread and synchronously waits for a callback deadlocks while
 loading a full C++ producer with `LoadLibrary`: its independent static globals

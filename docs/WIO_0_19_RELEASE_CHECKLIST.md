@@ -2,6 +2,11 @@
 
 Preparation date: 2026-11-25. Candidate branch: `releases/0.19.0`.
 This is a release checkpoint, not a new optimization sprint or v1 sign-off.
+This file preserves preparation-time observations, including superseded
+candidates and failed runs. Final CI, merge and publication decisions are
+recorded in [release PR #18](https://github.com/tynes0/wio/pull/18) and
+[GitHub Releases](https://github.com/tynes0/wio/releases); unchecked items below
+must not be interpreted as live publication status after this snapshot.
 
 ## Scope
 
@@ -27,7 +32,7 @@ This is a release checkpoint, not a new optimization sprint or v1 sign-off.
 - [x] Windows PATH lookup in Run/Capture/Spawn and Unicode Spawn working directory;
   the updated process regression fails before the fix and passes after it.
 - [ ] Three-platform candidate CI (Windows, Linux, macOS), recorded by run URL.
-- [ ] Review KI-011's full C++ DLL loader-startup limitation before publication;
+- [x] Review KI-011's full C++ DLL loader-startup limitation before publication;
   general post-load global construction is not implemented by this candidate.
 - [x] Clean staged-package smoke outside the source/build tree: 60 std modules
   independently/together, external project build/run/test/package and native interop.
@@ -130,3 +135,10 @@ name/alias mutation case. Packages built from `25bb15d` are superseded until thi
 follow-up is rebuilt and qualified; the failure is not waived as a native limit.
 The extended container-alias case passes locally in native O0/O2 and both VM
 producer modes after the follow-up; the isolated failing VM probe also passes.
+
+The final nine-test local selection on implementation `433898e` passes 9/9 in
+293.09 seconds, including the extended native name/alias case. Installed-package
+qualification on `25bb15d` also passes all 60 std modules and the external
+project lifecycle/native interop; that result is not relabeled as a later build.
+On 2026-11-26 the project owner accepted publishing KI-011 as a documented
+limitation with explicit post-load initialization, not as a fixed architecture.

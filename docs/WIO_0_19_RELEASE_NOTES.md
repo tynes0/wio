@@ -1,6 +1,6 @@
 # Wio 0.19.0 Interim Release
 
-**Release preparation: not yet published.** This checkpoint brings the native
+**Interim release scope.** This checkpoint brings the native
 C++ backend, bytecode/VM work and runtime improvements since 0.18.1 into one
 versioned package. It is not the completion of the native optimization plan,
 the VM optimization pass, SDK-kit parity, or the v1 blocker list.
@@ -22,7 +22,7 @@ the VM optimization pass, SDK-kit parity, or the v1 blocker list.
   evidence, per-implementation sampling, correctness checks and memory probes.
   These tools do not make historical timing samples a new performance guarantee.
 
-## Correctness fixes prepared for this release
+## Correctness fixes
 
 ### Native container projections on aliased C++ types (KI-013)
 
@@ -103,8 +103,8 @@ pruned VM producer only; it does not hide that full-producer limitation.
 ## Version and ABI
 
 Compiler, CLI, runtime, std, bundled SDK version headers, VS Code metadata and
-documentation are prepared for **0.19.0**. Module ABI descriptor **11** and the
-existing bytecode format remain unchanged by these candidate fixes. Product-version
+documentation are versioned at **0.19.0**. Module ABI descriptor **11** and the
+existing bytecode format remain unchanged by these fixes. Product-version
 alignment does not mean that every v1 SDK-kit adapter is complete.
 
 The C++ backend remains the default. VM execution is explicit; this release
@@ -122,8 +122,10 @@ in the [release checklist](WIO_0_19_RELEASE_CHECKLIST.md).
 The Windows installed-package gate passed with 60 public std modules checked
 independently and together, an external project build/run/test/package lifecycle
 and native interop. VS Code's 32 unit tests and nine compiler integration tests,
-VSIX packaging and the web production build also passed locally. This is not
-yet cross-platform candidate CI acceptance or a published release.
+VSIX packaging and the web production build also passed locally. Local results
+alone do not establish cross-platform acceptance or publication. The final CI,
+merge and publication record is maintained in [release PR #18](https://github.com/tynes0/wio/pull/18)
+and the [published release listing](https://github.com/tynes0/wio/releases).
 
 Open work remains in the [known-issues register](WIO_KNOWN_ISSUES.md), including
 escaping local-borrow diagnostics, code/build scalability, formal performance
