@@ -29,23 +29,30 @@ namespace wio::wir_backend::abi
                             [&]
                             {
                                 require(result && (!count || elements), WIO_NATIVE_ABI_INVALID_ARGUMENT);
-                                if constexpr (requires(T value) { value.reserve(std::size_t{}); })
-                                {
-                                    T value;
-                                    require(count <= value.max_size(), WIO_NATIVE_ABI_INVALID_ARGUMENT);
-                                    value.reserve(static_cast<std::size_t>(count));
-                                    for (std::uint64_t index = 0; index < count; ++index)
-                                        value.push_back(Codec<Element, ElementId>::read(elements[index]));
-                                    *result = Codec<T, Id>::write(std::move(value));
-                                }
-                                else
-                                {
-                                    constexpr auto extent = std::tuple_size_v<T>;
-                                    require(count == extent, WIO_NATIVE_ABI_INVALID_ARGUMENT);
-                                    *result =
-                                        Codec<T, Id>::write(fixedValue(elements, std::make_index_sequence<extent>{}));
-                                }
+                                *result = Codec<T, Id>::write(materialize(elements, count));
                             });
+        }
+
+        static T materialize(const WioNativeAbiValue* elements, std::uint64_t count)
+        {
+            // Keep dependent branch selection outside the boundary lambda.
+            // Newer MSVC otherwise instantiates tuple_size_v<vector<...>> in
+            // the discarded fixed-array branch while compiling the callback.
+            if constexpr (requires(T& value) { value.reserve(std::size_t{}); })
+            {
+                T value;
+                require(count <= value.max_size(), WIO_NATIVE_ABI_INVALID_ARGUMENT);
+                value.reserve(static_cast<std::size_t>(count));
+                for (std::uint64_t index = 0; index < count; ++index)
+                    value.push_back(Codec<Element, ElementId>::read(elements[index]));
+                return value;
+            }
+            else
+            {
+                constexpr auto extent = std::tuple_size_v<T>;
+                require(count == extent, WIO_NATIVE_ABI_INVALID_ARGUMENT);
+                return fixedValue(elements, std::make_index_sequence<extent>{});
+            }
         }
 
         static WioNativeAbiStatus read(const WioNativeAbiValue* value, std::uint64_t index, WioNativeAbiValue* result,

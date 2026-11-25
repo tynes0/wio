@@ -16,7 +16,10 @@ endfunction()
 set(compiler "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}" "${WIO_EXECUTABLE}")
 run(${compiler} "${root}/main.wio" --emit-cpp --include-dir "${WIO_ROOT}/tests/native")
 file(READ "${root}/main.wio.cpp" generated)
-if(NOT generated MATCHES "append_formatted\\(_formatted," OR NOT generated MATCHES "AppendInteger\\(target, value\\)")
+file(READ "${WIO_ROOT}/runtime/include/value_format.h" formatter)
+if(NOT generated MATCHES "append_formatted\\(_formatted," OR
+   NOT generated MATCHES "AppendBasicFormatted\\(target, value\\)" OR
+   NOT formatter MATCHES "AppendInteger\\(target, value\\)")
     message(FATAL_ERROR "Generated interpolation did not select direct append formatting")
 endif()
 set(flags -std=c++20 -ffp-contract=off)

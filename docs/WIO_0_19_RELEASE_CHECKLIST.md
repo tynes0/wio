@@ -71,3 +71,20 @@ The synthetic all-std external project uses its template's Debug configuration:
 9,550,718 generated C++ bytes and a 58,650,915-byte executable in this local run.
 This is functionality evidence, not a compile-time/size optimization success;
 KI-004 and the planned heavy optimization passes remain open.
+
+## First cross-platform CI triage
+
+The new interim-release correctness group passed on Windows, Linux and macOS,
+and the release sanitizer job passed. The complete workflows were nevertheless
+red: Linux rejected an ownership-test callback inferred as `unsigned long long`
+instead of `uint64_t`; newer MSVC instantiated the sequence adapter's discarded
+fixed-array branch inside a dependent lambda; and an old string fast-path gate
+still searched generated text for integer formatting now delegated to the
+shared runtime header. These are not waived gates.
+
+The callback now declares its exact ABI return type. Sequence materialization
+selects vector/array construction outside the boundary lambda, preserving direct
+fixed-array construction and native failure translation. The formatting gate
+checks the actual generated-to-runtime delegation while keeping its execution
+and allocation budgets unchanged. All four affected local tests pass; fresh CI
+on the newer compiler/platform matrix remains required before publication.

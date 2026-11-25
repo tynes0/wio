@@ -162,7 +162,7 @@ namespace
                                                --owner.references;
                                                ++owner.releases;
                                            },
-                                           [](const void*) noexcept { return 901ULL; }};
+                                           [](const void*) noexcept -> std::uint64_t { return 901; }};
     void ownership()
     {
         Owner owner;
