@@ -41,21 +41,32 @@ namespace wio::codegen
             const std::string signature =
                 "void* storage, std::uint64_t nodeId, const WioNativeAbiContainerProjection& projection, "
                 "const WioNativeAbiContainerStep* steps, std::uint64_t count, const std::type_info& requested";
-            out << "namespace wio::wir_backend::abi {\n";
-            for (const auto& [spelling, ids] : groups)
-                out << "template<> struct NativeContainerProjectionAccess<" << spelling << "> { static void* resolve("
-                    << signature << "); };\n";
+            // Different Wio types may be aliases in the target C++ ABI (for
+            // example u64 and usize on LP64). A spelling-keyed specialization
+            // per group would redefine the same C++ type on those targets.
+            // One constrained specialization retains every stable Wio identity
+            // and lets the target compiler decide physical type equivalence.
+            std::ostringstream constraint;
             for (const auto& [spelling, ids] : groups)
             {
-                out << "inline void* NativeContainerProjectionAccess<" << spelling << ">::resolve(" << signature
-                    << ") {\n"
-                    << "    using Container = " << spelling << ";\n"
-                    << "    if (!count) return resolveContainerTerminal<Container>(storage, nodeId, projection, count, "
-                       "requested);\n"
-                    << "    if (!storage || !steps || count > 64 || steps->reserved || steps->containerTypeId != "
-                       "nodeId) "
-                       "return nullptr;\n"
-                    << "    auto& value = *static_cast<Container*>(storage);\n";
+                if (constraint.tellp() > 0)
+                    constraint << " || ";
+                constraint << "std::is_same_v<Container, " << spelling << ">";
+            }
+            const auto declaration = "template<class Container> requires (" + constraint.str() + ")\n";
+            out << "namespace wio::wir_backend::abi {\n";
+            out << declaration << "struct NativeContainerProjectionAccess<Container> { static void* resolve("
+                << signature << "); };\n";
+            out << declaration << "inline void* NativeContainerProjectionAccess<Container>::resolve(" << signature
+                << ") {\n"
+                << "    if (!count) return resolveContainerTerminal<Container>(storage, nodeId, projection, count, "
+                   "requested);\n"
+                << "    if (!storage || !steps || count > 64 || steps->reserved || steps->containerTypeId != nodeId) "
+                   "return nullptr;\n"
+                << "    auto& value = *static_cast<Container*>(storage);\n";
+            for (const auto& [spelling, ids] : groups)
+            {
+                out << "    if constexpr (std::is_same_v<Container, " << spelling << ">) {\n";
                 for (const auto id : ids)
                 {
                     const auto& type = module.types.get(id);
@@ -90,8 +101,9 @@ namespace wio::codegen
                     }
                     out << "    }\n";
                 }
-                out << "    return nullptr;\n}\n";
+                out << "    }\n";
             }
+            out << "    return nullptr;\n}\n";
             out << "} // namespace wio::wir_backend::abi\n";
             return out.str();
         }

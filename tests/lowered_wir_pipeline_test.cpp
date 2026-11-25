@@ -87,10 +87,11 @@ int main()
     }
     ok &= expect(lowering.completedPasses() ==
                      std::vector<std::string>{
-                         "verify-typed-wir", "materialize-generic-functions", "verify-specialized-wir",
-                         "lower-canonical-control-flow", "lower-object-hierarchy", "fold-canonical-constants",
-                         "simplify-control-flow", "propagate-trivial-values", "eliminate-dead-values",
-                         "classify-storage-and-escapes", "eliminate-proven-bounds-checks", "verify-lowered-wir"},
+                         "verify-typed-wir", "materialize-generic-functions", "materialize-formatting-calls",
+                         "verify-specialized-wir", "lower-canonical-control-flow", "lower-object-hierarchy",
+                         "fold-canonical-constants", "simplify-control-flow", "propagate-trivial-values",
+                         "eliminate-dead-values", "classify-storage-and-escapes", "eliminate-proven-bounds-checks",
+                         "verify-lowered-wir"},
                  "Lowering pipeline must expose deterministic completed-pass order");
     ok &= expect(lowering.module().functions.front().blocks.size() == 2,
                  "Canonical optimization must bypass select trampoline blocks");

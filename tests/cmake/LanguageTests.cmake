@@ -172,7 +172,7 @@ add_test(
         ${CMAKE_COMMAND}
         -DWIO_EXE=$<TARGET_FILE:wio_app>
         -DEXAMPLE_ROOT=${CMAKE_SOURCE_DIR}/examples/telemetry_pipeline
-        -DWIO_EXPECT=Telemetry\ pipeline:\ Wio\ 0.18.1
+        "-DWIO_EXPECT=Telemetry pipeline: Wio ${PROJECT_VERSION}"
         -P "${CMAKE_SOURCE_DIR}/cmake/RunWioExampleProject.cmake"
 )
 wio_test_labels(wio_test_example_telemetry_pipeline_run language freeze)
@@ -292,7 +292,7 @@ wio_test_labels(wio_test_realm_qualified_from_run language traceability)
 add_wio_output_test(
     wio_test_object_component_access_semantics_run
     "${CMAKE_SOURCE_DIR}/tests/object_component_access_semantics.wio"
-    "Object/component access semantics: 17"
+    "Object/component access semantics: 24"
     --run
 )
 wio_test_labels(wio_test_object_component_access_semantics_run language traceability)

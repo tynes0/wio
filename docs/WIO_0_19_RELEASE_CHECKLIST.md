@@ -88,3 +88,35 @@ fixed-array construction and native failure translation. The formatting gate
 checks the actual generated-to-runtime delegation while keeping its execution
 and allocation budgets unchanged. All four affected local tests pass; fresh CI
 on the newer compiler/platform matrix remains required before publication.
+
+## Broad freeze triage
+
+The backend closure workflow on candidate `3a38369` passed Windows Debug,
+Ubuntu Release and macOS Release:
+[backend CI](https://github.com/tynes0/wio/actions/runs/45688037886).
+The general validation sanitizer job also passed. These do not replace the
+broader release workflow, whose Ubuntu freeze selection passed 386/390 tests
+and failed four; later matrix stages therefore did not run on that job.
+
+Three failures were stale expectations: the lowering pass-order list omitted
+`materialize-formatting-calls`, telemetry hard-coded the old product version,
+and an object/component access test expected 17 although 15 + 2 + 7 is 24.
+The corrected access fixture checks each operand as well as the total. The
+same stale pass-order list in the canonical optimizer test is updated too.
+
+The fourth failure was a real target-ABI code-generation defect (KI-013): two
+different C++ spellings can denote the same container type. The new constrained
+projection specialization preserves all Wio stable identities and adds actual
+native/VM alias mutation coverage, not just a generated-text assertion.
+The earlier local ZIP/setup artifacts predate this compiler fix and must be
+regenerated and rehashed before publication. No failing CI is waived.
+
+The container-alias reproducer fails with duplicate-specialization diagnostics
+using the previous staged compiler, and passes native O0/O2 plus full/pruned VM
+producers with the new compiler. The existing sequence, POD-sequence and
+dictionary projection differential/host-validation gates also pass locally,
+3/3 in 85.42 seconds. Their identity/expiry/invalid-projection checks are retained.
+The final six-test local triage selection passes 6/6 in 252.95 seconds,
+including all five release-specific Wio fixtures. An earlier local authoring
+run used an invalid byte-literal suffix in the new fixture and failed; it is
+retained in scratch evidence, not counted as a passing run.

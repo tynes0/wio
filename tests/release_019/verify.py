@@ -10,6 +10,7 @@ import uuid
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+CASES = ("semantics", "globals", "io_globals", "callback_globals", "container_aliases")
 
 
 def verify(args):
@@ -32,10 +33,10 @@ def verify(args):
     wio = args.wio.resolve()
     links = ["-lws2_32", "-lshell32", "-Wa,-mbig-obj"] if os.name == "nt" else ["-pthread"]
     shared = ".dll" if os.name == "nt" else ".dylib" if sys.platform == "darwin" else ".so"
-    for name in ("release_probe.h", "semantics.wio", "globals.wio", "callback_globals.wio"):
+    for name in ("release_probe.h", "semantics.wio", "globals.wio", "callback_globals.wio", "container_aliases.wio"):
         shutil.copyfile(HERE / name, folder / name)
     shutil.copyfile(HERE.parent / "performance/byte_io/global_mode_repro.wio", folder / "io_globals.wio")
-    for name in ("semantics", "globals", "io_globals", "callback_globals"):
+    for name in args.case or CASES:
         source = folder / (name + ".wio")
         run([wio, source, "--emit-cpp", "--include-dir", folder])
         for optimization in ("-O0", "-O2"):
@@ -66,7 +67,8 @@ def verify(args):
                     run([wio, "--vm-run-bytecode", bytecode, "--native-library", bridge,
                          "--", "fail"], expected=1, contains="release-probe failure")
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
-    print("0.19 correctness: native O0/O2, full/pruned VM bridges, exceptions and globals passed; "
+    print("0.19 correctness: " + ", ".join(args.case or CASES) +
+          "; native O0/O2 and applicable full/pruned VM bridges passed; "
           "threaded global callback uses pruned VM producer only (KI-011)")
 
 
@@ -76,4 +78,6 @@ if __name__ == "__main__":
     parser.add_argument("--runtime", type=Path, required=True)
     parser.add_argument("--cxx", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--case", action="append", choices=CASES,
+                        help="Run only the named case; the registered CTest gate runs every case")
     verify(parser.parse_args())

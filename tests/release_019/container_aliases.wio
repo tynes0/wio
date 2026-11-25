@@ -1,0 +1,42 @@
+using cpp::header("release_probe.h");
+
+[native, cpp::name(release_probe::ContainerAlias), Instantiate(u64), Instantiate(usize),
+ Instantiate(i64), Instantiate(isize), Instantiate(u8)]
+fn SequenceAlias<T>(values: ref T[], item: ref T) -> bool;
+
+[native, cpp::name(release_probe::ContainerAlias), Instantiate(u64), Instantiate(usize)]
+fn FixedAlias<T>(values: ref [T; 2], item: ref T) -> bool;
+
+[native, cpp::name(release_probe::ContainerAlias), Instantiate(u64), Instantiate(usize)]
+fn DictionaryAlias<T>(values: ref Dict<string, T>, item: ref T) -> bool;
+
+fn Entry() -> i32
+{
+    mut wide: u64[] = [5u64];
+    mut size: usize[] = [5usize];
+    mut signedWide: i64[] = [5i64];
+    mut signedSize: isize[] = [5isize];
+    mut small: u8[] = [5u8];
+    mut octets: byte[] = [5u8 fit byte];
+    if (!SequenceAlias(ref wide, ref wide[0])) return 1;
+    if (!SequenceAlias(ref size, ref size[0])) return 2;
+    if (!SequenceAlias(ref signedWide, ref signedWide[0])) return 3;
+    if (!SequenceAlias(ref signedSize, ref signedSize[0])) return 4;
+    if (!SequenceAlias(ref small, ref small[0])) return 5;
+    if (!SequenceAlias(ref octets, ref octets[0])) return 6;
+    if (wide[0] != 8u64 or size[0] != 8usize or signedWide[0] != 8i64 or
+        signedSize[0] != 8isize or small[0] != 8u8 or octets[0] != (8u8 fit byte)) return 7;
+
+    mut fixedWide: [u64; 2] = [5u64, 9u64];
+    mut fixedSize: [usize; 2] = [5usize, 9usize];
+    if (!FixedAlias(ref fixedWide, ref fixedWide[0])) return 8;
+    if (!FixedAlias(ref fixedSize, ref fixedSize[0])) return 9;
+    if (fixedWide[0] != 8u64 or fixedSize[0] != 8usize) return 10;
+
+    mut mappedWide: Dict<string, u64> = { "first": 5u64 };
+    mut mappedSize: Dict<string, usize> = { "first": 5usize };
+    if (!DictionaryAlias(ref mappedWide, ref mappedWide["first"])) return 11;
+    if (!DictionaryAlias(ref mappedSize, ref mappedSize["first"])) return 12;
+    if (mappedWide["first"] != 8u64 or mappedSize["first"] != 8usize) return 13;
+    return 0;
+}

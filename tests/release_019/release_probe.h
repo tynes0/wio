@@ -12,6 +12,19 @@
 
 namespace release_probe
 {
+    template <class Container, class T> bool ContainerAlias(Container& values, T& item)
+    {
+        T* first;
+        if constexpr (requires { values.find(std::string{"first"}); })
+            first = &values.at("first");
+        else
+            first = &values[0];
+        if (first != &item || item != T{5})
+            return false;
+        item += T{3};
+        return *first == T{8};
+    }
+
     inline std::int32_t OnThread(std::function<std::int32_t()> callback)
     {
         std::int32_t result = -1;

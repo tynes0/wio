@@ -24,6 +24,15 @@ the VM optimization pass, SDK-kit parity, or the v1 blocker list.
 
 ## Correctness fixes prepared for this release
 
+### Native container projections on aliased C++ types (KI-013)
+
+Wio identities such as `u64` and `usize` can have identical target C++ storage
+types. Generated container projection access now uses one constrained C++
+specialization, dispatching on each original stable Wio identity, rather than
+defining conflicting specializations for different spellings of one C++ type.
+This applies to dynamic/fixed arrays and dictionaries; it does not merge their
+logical type identities or relax reference validation.
+
 ### Windows process lookup and package CLI
 
 `Run`, `Capture` and `Spawn` now resolve bare executable names through PATH
@@ -93,7 +102,7 @@ pruned VM producer only; it does not hide that full-producer limitation.
 
 Compiler, CLI, runtime, std, bundled SDK version headers, VS Code metadata and
 documentation are prepared for **0.19.0**. Module ABI descriptor **11** and the
-existing bytecode format remain unchanged by these three fixes. Product-version
+existing bytecode format remain unchanged by these candidate fixes. Product-version
 alignment does not mean that every v1 SDK-kit adapter is complete.
 
 The C++ backend remains the default. VM execution is explicit; this release

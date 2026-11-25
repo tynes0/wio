@@ -387,6 +387,19 @@ narrow filesystem validation of a UTF-8 working directory. This does not claim
 new implicit `.cmd`/`.bat` shell execution or qualification of arbitrary Unicode
 PATH search entries. Full staged-package qualification is tracked separately.
 
+### KI-013 — Native container projections redefine aliased C++ types (candidate fix)
+
+The 0.19 candidate's broad Ubuntu freeze run found duplicate
+`NativeContainerProjectionAccess<std::vector<unsigned long>>` definitions in
+the attribute-composition fixture. Grouping by generated spelling did not
+account for `uint64_t` and `size_t` being the same physical type on that target.
+The fix uses a single constrained container specialization with per-Wio-ID
+branches; stable semantic identities, key checks and borrowed-place validation
+remain distinct. The new `release_019/container_aliases.wio` fixture exercises
+dynamic arrays, fixed arrays and dictionaries, including native element-alias
+identity and mutation/copy-back in native O0/O2 and full/pruned VM producers.
+Fresh cross-platform qualification is required before calling this published.
+
 ## 2. Native, VM, ownership and SDK limitations
 
 | ID | Priority / state | Current boundary and closure requirement |
