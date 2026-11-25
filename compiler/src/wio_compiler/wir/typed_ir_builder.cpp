@@ -3702,6 +3702,17 @@ namespace wio::wir::typed
             return payload;
         }
 
+        ValueId materializeBeforeRhs(const ValueId left, const NodePtr<Expression>& right,
+                                     const ASTNode* source, FunctionState& state)
+        {
+            // Value operands are evaluated left-to-right. A borrowed load must
+            // become an owning value before a later expression can mutate or
+            // replace its source. Proven pure RHS expressions stay borrow-only.
+            if (!left || valueOwnership(state, left) != ValueOwnership::Borrowed || isSideEffectFree(right))
+                return left;
+            return ensureOwned(left, builtValueType(state, left), source, state);
+        }
+
         ValueId buildLeftAssociativeAddition(const BinaryExpression& expression, FunctionState& state)
         {
             std::vector<const BinaryExpression*> chain;
@@ -3723,6 +3734,7 @@ namespace wio::wir::typed
             for (auto iterator = chain.rbegin(); iterator != chain.rend(); ++iterator)
             {
                 const BinaryExpression& operation = **iterator;
+                accumulated = materializeBeforeRhs(accumulated, operation.right, operation.left.Get(), state);
                 const ValueId right = buildAutoReadableExpression(operation.right, state);
                 if (!right)
                     return {};
@@ -4642,11 +4654,12 @@ namespace wio::wir::typed
                 const bool identityComparison =
                     (binary->op.type == TokenType::opEqual || binary->op.type == TokenType::opNotEqual) &&
                     objectComparisonType(leftReadableType) && objectComparisonType(rightReadableType);
-                const ValueId left = identityComparison ? buildExpressionAs(binary->left, leftReadableType, state)
+                ValueId left = identityComparison ? buildExpressionAs(binary->left, leftReadableType, state)
                                      : operandType      ? buildExpressionAs(binary->left, operandType, state)
                                      : leftLiteral && !rightLiteral
                                          ? buildExpressionAs(binary->left, rightReadableType, state)
                                          : buildAutoReadableExpression(binary->left, state);
+                left = materializeBeforeRhs(left, binary->right, binary->left.Get(), state);
                 const ValueId right = identityComparison ? buildExpressionAs(binary->right, rightReadableType, state)
                                       : operandType      ? buildExpressionAs(binary->right, operandType, state)
                                       : rightLiteral && !leftLiteral
@@ -7337,10 +7350,12 @@ namespace wio::wir::typed
                 return true;
             }
             if (const auto* unary = expression->as<UnaryExpression>())
-                return unary->op.type != TokenType::opIncrement && unary->op.type != TokenType::opDecrement &&
+                return unary->operatorDispatchKind == OperatorDispatchKind::None &&
+                       unary->op.type != TokenType::opIncrement && unary->op.type != TokenType::opDecrement &&
                        isSideEffectFree(unary->operand);
             if (const auto* binary = expression->as<BinaryExpression>())
-                return isSideEffectFree(binary->left) && isSideEffectFree(binary->right);
+                return binary->operatorDispatchKind == OperatorDispatchKind::None &&
+                       isSideEffectFree(binary->left) && isSideEffectFree(binary->right);
             if (const auto* conditional = expression->as<ConditionalExpression>())
             {
                 return isSideEffectFree(conditional->condition) && isSideEffectFree(conditional->whenTrue) &&

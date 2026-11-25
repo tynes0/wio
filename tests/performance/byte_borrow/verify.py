@@ -19,10 +19,8 @@ def verify(args):
         shutil.copyfile(HERE / name, folder / name)
     rows = []
 
-    def run(command, expected=0, contains=None, known_gap=None):
+    def run(command, expected=0, contains=None):
         row = dict(command=[str(x) for x in command], expectedExitCode=expected)
-        if known_gap:
-            row["expectedKnownGap"] = known_gap
         rows.append(row)
         result = subprocess.run(row["command"], cwd=folder, env=dict(os.environ, WIO_ROOT=str(ROOT)),
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
@@ -59,8 +57,8 @@ def verify(args):
              "--output", bridge, "--bytecode-sidecar", bytecode, "--backend-arg=" + optimization,
              "--backend-arg=-ffp-contract=off"])
         run([args.vm.resolve(), bytecode, "--native-library", bridge], contains="byte-borrow-ok")
-        run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "indirect"], expected=1,
-            contains="WVM1003", known_gap="KI-009 indirect native function value; not fixed by this optimization")
+        run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "indirect"],
+            contains="byte-borrow-indirect-ok")
         run([args.vm.resolve(), bytecode, "--native-library", bridge, "--", "fail"], expected=1,
             contains="byte-borrow-failure")
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")

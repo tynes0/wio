@@ -14,6 +14,11 @@ Incremental qualification updates on 2026-10-15 are recorded under KI-002 and
 KI-003 below. Other entries retain their original snapshot scope; this update
 does not claim a new full-repository or external-tooling audit.
 
+2026-11-25 interim-release preparation adds fixes for KI-007, KI-009 and KI-010
+on `releases/0.19.0`. Their focused Windows results do not qualify all old tests
+or imply a published 0.19 package. See the
+[candidate checklist](WIO_0_19_RELEASE_CHECKLIST.md) for outstanding gates.
+
 The inventory was checked against the active backlog, completion records,
 native/VM/backend/SDK contracts, source rejection paths, performance audit, and
 GitHub issue/PR/release metadata. There were no open GitHub issues or PRs in
@@ -203,7 +208,19 @@ an actionable early diagnostic (or explicitly document a checked-runtime-only
 boundary); do not silently extend local lifetimes to hide the failure. No fix
 or cross-platform reproduction is claimed by this scoped optimization.
 
-### KI-007 — Borrowed string LHS across a mutating RHS differs by backend (P1)
+### KI-007 — Borrowed string LHS across a mutating RHS (fixed in 0.19 candidate)
+
+The builder now materializes a borrowed managed LHS before evaluating a
+side-effecting binary RHS; pure RHS expressions remain borrow-only. The new
+[release fixture](../tests/release_019/semantics.wio) passed native O0/O2 and
+full/pruned VM producers locally, covering strings, text, field/index operands,
+alias snapshots and chained evaluation. The former N02 compatibility fixture
+now expects `"originaltail"` and requires VM parity. This is not a change to
+explicit ref/view observation or compound-assignment destination-place rules.
+Cross-platform candidate CI remains a separate release gate.
+
+**Historical discovery retained below; its open-state wording and old expected
+fallback describe the earlier snapshot, not the corrected candidate.**
 
 Confirmed by the new N02 tests on 2026-10-16. For
 `value = value + Change(ref value)`, starting with `"original"`, where Change
@@ -271,7 +288,19 @@ baseline and initial failing user-hook test remain visible in the saved evidence
 Nonfinite spellings retain each host's standard-stream behavior; do not assume a
 universal cross-CRT spelling for every signaling/payload NaN.
 
-### KI-009 — VM indirect native function values bypass native dispatch (P1)
+### KI-009 — VM indirect native function values (fixed in 0.19 candidate)
+
+Native declaration entries now delegate through a private per-machine plan to
+canonical `NativeInvoke`. The new release gate passed native O0/O2 and
+full/pruned VM producers for indirect scalar/string/void calls, counted NUL
+strings, ref mutation, a native declaration passed back as a C++ callback and
+translated failure. Host coverage verifies missing registration, wrong arity,
+repeated entry and resource cleanup. Existing formatting/byte-borrow gates now
+require success, not WVM1003. Unbound external declarations are still rejected.
+Cross-platform CI and broader performance budgets are not inferred.
+
+**Historical discovery retained below; it describes the old rejection path and
+the original negative gate, not the corrected candidate or current gate.**
 
 Found during the N03 native string transport tests on 2026-10-17 (working tree
 based on `7633af4`, Windows x64). A native `fn Read(view string) -> usize` works
@@ -289,7 +318,20 @@ the native declaration directly. Closure requires shared native dispatch for
 indirect calls with argument/return marshalling, lifetime, callback and exception
 tests, not removal of the external-function safety check.
 
-### KI-010 — VM computed module globals retain default values (P1)
+### KI-010 — VM computed module globals (fixed in 0.19 candidate)
+
+Global initializers now execute once per machine, in declaration order, on
+first entry after native registration. The named io mode regression and
+dependent string/text/scalar globals passed native O0/O2 and full/pruned VM
+producers locally. Host tests passed lazy initialization, synchronous reentry,
+eight concurrent first entries, cached failure and malformed initializer
+rejection; the native bridge host gate passed partial-init/shutdown resource
+cleanup exactly once. A foreign-thread initializer callback is included in the
+final candidate gate. See [the runtime contract](WIO_VM_RUNTIME.md) for failure,
+reentry and producer-global boundaries. Cross-platform release CI is pending.
+
+**Historical discovery retained below; it describes the old default-only VM,
+not the corrected candidate. Failed historical timing samples remain failed.**
 
 Found during the N04 byte-I/O baseline on 2026-10-18/19 (Windows x64,
 compiler sources based on `5db6595`). Passing `std::io::OpenReadBinary` to

@@ -369,6 +369,13 @@ if(BUILD_TESTING)
     target_link_libraries(wio_vm_native_bridge_test PRIVATE wio_vm)
     add_test(NAME wio_vm_native_bridge COMMAND wio_vm_native_bridge_test)
 
+    add_executable(wio_vm_global_initialization_test
+        "${CMAKE_SOURCE_DIR}/tests/vm_global_initialization_test.cpp"
+    )
+    target_link_libraries(wio_vm_global_initialization_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_global_initialization COMMAND wio_vm_global_initialization_test)
+    set_tests_properties(wio_vm_global_initialization PROPERTIES TIMEOUT 30 LABELS "vm;global;ownership;release-019")
+
     add_executable(wio_vm_native_async_bridge_test
         "${CMAKE_SOURCE_DIR}/tests/vm_native_async_bridge_test.cpp"
     )

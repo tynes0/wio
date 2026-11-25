@@ -108,12 +108,8 @@ def verify(args):
     run([wio, folder / "borrow.wio", "--target", "shared", "--native-bridge-only", "--output", borrow_bridge,
          "--include-dir", folder, "--bytecode-sidecar", borrow_bytecode])
     run([wio, "--vm-run-bytecode", borrow_bytecode, "--native-library", borrow_bridge])
-    # Native function values still reach the VM's external-function rejection;
-    # direct native borrows above must succeed independently of that old gap.
-    indirect = run([wio, "--vm-run-bytecode", borrow_bytecode, "--native-library", borrow_bridge,
-                    "--", "indirect"], expected=1)
-    if "WVM1003" not in indirect.stderr:
-        raise RuntimeError("Expected explicit VM indirect native-function boundary")
+    run([wio, "--vm-run-bytecode", borrow_bytecode, "--native-library", borrow_bridge,
+         "--", "indirect"])
     failed = run([wio, "--vm-run-bytecode", borrow_bytecode, "--native-library", borrow_bridge, "--", "fail"], expected=1)
     if "borrow-probe failure" not in failed.stdout + failed.stderr:
         raise RuntimeError("VM native borrow exception boundary changed")

@@ -181,6 +181,19 @@ namespace wio::bytecode
                 report("WBC1007", "Global ids must be valid and unique");
             if (!validString(global.name) || !validType(global.type))
                 report("WBC1008", "Global references invalid string or type metadata");
+            if (global.initializer != InvalidIndex)
+            {
+                if (!validFunction(global.initializer))
+                    report("WBC1008", "Global initializer references an invalid function");
+                else
+                {
+                    const auto& initializer = module.functions[global.initializer];
+                    if (!initializer.parameters.empty() || initializer.captureParameterCount != 0 ||
+                        initializer.returnType != global.type ||
+                        (initializer.flags & (FunctionTemplateDeclaration | 0x0001u)) != 0)
+                        report("WBC1008", "Global initializer must be synchronous, closed, zero-argument and return the global type");
+                }
+            }
         }
 
         std::unordered_set<std::uint32_t> functionIds;

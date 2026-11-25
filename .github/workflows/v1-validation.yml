@@ -105,7 +105,12 @@ jobs:
           -DWIO_BUILD_APP=OFF
 
       - name: Build sanitizer targets
-        run: cmake --build build-sanitize --target wio_async_runtime_stress wio_process_runtime_stress wio_function_type_cpp_string_test wio_filesystem_policy_test
+        run: cmake --build build-sanitize --target wio_async_runtime_stress wio_process_runtime_stress wio_function_type_cpp_string_test wio_filesystem_policy_test wio_vm_native_bridge_test wio_vm_global_initialization_test
+
+      - name: Run interim-release VM ownership and initialization sanitizer tests
+        run: >
+          ctest --test-dir build-sanitize --output-on-failure --no-tests=error
+          -R "^(wio_vm_native_bridge|wio_vm_global_initialization)$"
 
       - name: Run async runtime sanitizer tests
         if: always()

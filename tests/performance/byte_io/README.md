@@ -82,6 +82,10 @@ existing zero-count invalid-handle behavior. `semantics.wio` covers native O0/O2
 and the VM with both O0/O2 native bridges, including translated partial/closed
 errors. Performance sampling uses the Release VM host independently.
 
+The 0.19 correctness gate now also runs `global_mode_repro.wio` successfully
+with native O0/O2 and full/pruned VM producers. Historical failed VM benchmark
+samples are retained; this does not turn them into valid timing observations.
+
 The extended contract also checks repeated reusable reads with zero C++ payload
 allocations, fixed storage identity/size/capacity, short-read suffix preservation,
 span canaries, exact error counts, reserved-but-empty buffers, and Wio native/VM

@@ -1003,6 +1003,10 @@ namespace wio::vm
         {
             std::uint32_t registerCount = 0;
             std::unordered_map<std::uint32_t, const bytecode::Block*> blocks;
+            // Lazily built VM entry for function values/host callbacks naming
+            // a native declaration. It delegates to canonical NativeInvoke,
+            // never a second ABI encoder or unchecked external frame.
+            std::unique_ptr<bytecode::Function> nativeEntry;
         };
 
         struct NativeFunction
@@ -1176,6 +1180,19 @@ namespace wio::vm
         detail::ObjectLayouts objectLayouts;
         PlaceProjectionDomain projections;
         std::vector<std::unique_ptr<PlaceStorage>> globals;
+        enum class GlobalState : std::uint8_t
+        {
+            Pending,
+            Running,
+            Ready,
+            Failed
+        };
+        std::mutex globalMutex;
+        std::condition_variable globalChanged;
+        GlobalState globalState = GlobalState::Pending;
+        std::thread::id globalThread;
+        ExecutionError globalError;
+        std::vector<bool> globalConstructed;
         std::mutex timerMutex;
         std::unique_ptr<TimerScheduler> timers;
         std::mutex continuationMutex;
@@ -1593,18 +1610,89 @@ namespace wio::vm
         }
     }
 
-    void Machine::cleanupGlobals()
+    ExecutionResult Machine::initializeGlobals()
+    {
+        {
+            std::unique_lock lock{program_->globalMutex};
+            // Initializers may call native code which synchronously calls back
+            // into this machine. Such callbacks observe the declaration-order
+            // state, rather than starting initialization again. Unrelated host
+            // entries wait until the first entry publishes success or failure.
+            while (program_->globalState == Program::GlobalState::Running)
+            {
+                if (program_->globalThread == std::this_thread::get_id() || nativeCallbackInvocation)
+                    return ExecutionResult::success();
+                program_->globalChanged.wait(lock);
+            }
+            if (program_->globalState == Program::GlobalState::Ready)
+                return ExecutionResult::success();
+            if (program_->globalState == Program::GlobalState::Failed)
+                return ExecutionResult::failure(program_->globalError);
+            program_->globalState = Program::GlobalState::Running;
+            program_->globalThread = std::this_thread::get_id();
+        }
+
+        // Do not hold executionMutex across execute(): a native initializer
+        // can temporarily release it to allow a callback from a foreign thread.
+        ExecutionError error;
+        try
+        {
+            for (const bytecode::Global& global : program_->module->globals)
+            {
+                if (global.initializer == bytecode::InvalidIndex)
+                    continue;
+                auto result = execute(global.initializer, {}, nullptr);
+                if (!result.succeeded())
+                {
+                    error = result.error();
+                    break;
+                }
+                std::scoped_lock executionLock{program_->executionMutex};
+                auto& storage = *program_->globals[global.id];
+                storage.retireProjections();
+                storage.value = result.value();
+                storage.initialized = true;
+                program_->globalConstructed[global.id] = true;
+            }
+        }
+        catch (const std::exception& exception)
+        {
+            error = {"WVM1242", std::string{"Global initialization failed: "} + exception.what()};
+        }
+        catch (...)
+        {
+            error = {"WVM1242", "Global initialization failed with an unknown host exception"};
+        }
+        if (!error.code.empty())
+        {
+            cleanupGlobals(&error);
+            cleanupNativeObjects(false, &error);
+        }
+        {
+            std::scoped_lock lock{program_->globalMutex};
+            program_->globalError = error;
+            program_->globalState = error.code.empty() ? Program::GlobalState::Ready : Program::GlobalState::Failed;
+            program_->globalThread = {};
+        }
+        program_->globalChanged.notify_all();
+        return error.code.empty() ? ExecutionResult::success() : ExecutionResult::failure(std::move(error));
+    }
+
+    void Machine::cleanupGlobals(ExecutionError* primaryError)
     {
         if (!program_)
             return;
         std::scoped_lock executionLock{program_->executionMutex};
         ExecutionError cleanupError;
+        auto& error = primaryError ? *primaryError : cleanupError;
         for (auto global = program_->globals.rbegin(); global != program_->globals.rend(); ++global)
         {
-            if (!(*global)->initialized)
+            const auto index = static_cast<std::size_t>(std::distance(global, program_->globals.rend()) - 1);
+            if (!program_->globalConstructed[index])
                 continue;
+            program_->globalConstructed[index] = false;
             (*global)->retireProjections();
-            cleanupValue((*global)->value, cleanupError);
+            cleanupValue((*global)->value, error);
             (*global)->initialized = false;
         }
     }
@@ -1642,6 +1730,7 @@ namespace wio::vm
                 plan.blocks.emplace(block.id, &block);
         }
         program_->globals.reserve(module.globals.size());
+        program_->globalConstructed.reserve(module.globals.size());
         for (const bytecode::Global& global : module.globals)
         {
             auto storage = std::make_unique<PlaceStorage>();
@@ -1649,6 +1738,7 @@ namespace wio::vm
             storage->initialized = !storage->value.isEmpty();
             storage->mutableValue = (global.flags & 0x01u) != 0;
             program_->globals.push_back(std::move(storage));
+            program_->globalConstructed.push_back(global.initializer == bytecode::InvalidIndex);
         }
         program_->valid = true;
     }
@@ -1754,7 +1844,11 @@ namespace wio::vm
         if ((program_->module->functions[functionId].flags & bytecode::FunctionTemplateDeclaration) != 0)
             return ExecutionResult::failure(
                 {"WVM1240", "Generic declaration requires a concrete function specialization", functionId});
-        if ((program_->module->functions[functionId].flags & 0x0001u) != 0)
+        auto initialization = initializeGlobals();
+        if (!initialization.succeeded())
+            return initialization;
+        if ((program_->module->functions[functionId].flags & 0x0001u) != 0 &&
+            !program_->module->functions[functionId].hasNativeBinding)
             return ExecutionResult::success(startTask(functionId, arguments));
         auto result = execute(functionId, arguments, nullptr, {}, callable);
         cleanupNativeObjects();
@@ -3651,15 +3745,56 @@ namespace wio::vm
         const Value* stateTask = state->activeTask.kind() == Value::Kind::AsyncTask ? &state->activeTask : nullptr;
         const auto failWithStack = [&](ExecutionError error)
         { return ExecutionResult::failure(unwind(*state, std::move(error))); };
-        auto pushFrame = [&](const bytecode::Function& function, const std::span<const Value> values,
+        auto pushFrame = [&](const bytecode::Function& declaration, const std::span<const Value> values,
                              FrameContinuation continuation, const Value* callable = nullptr) -> ExecutionResult
         {
-            if ((function.flags & bytecode::FunctionTemplateDeclaration) != 0)
+            if ((declaration.flags & bytecode::FunctionTemplateDeclaration) != 0)
                 return failWithStack(
-                    {"WVM1240", "Generic declaration requires a concrete function specialization", function.id});
-            if ((function.flags & 0x0002u) != 0)
-                return failWithStack(
-                    {"WVM1003", "External function requires the Sprint 20 native bridge", function.id});
+                    {"WVM1240", "Generic declaration requires a concrete function specialization", declaration.id});
+            auto& plan = program_->functions[declaration.id];
+            const bytecode::Function* executable = &declaration;
+            if ((declaration.flags & 0x0002u) != 0)
+            {
+                if (!declaration.hasNativeBinding || declaration.captureParameterCount != 0)
+                    return failWithStack(
+                        {"WVM1003", "External function has no callable native binding", declaration.id});
+                if (!plan.nativeEntry)
+                {
+                    // Execution is serialized by executionMutex, including
+                    // callback reentry. Once published these blocks stay stable.
+                    auto entry = std::make_unique<bytecode::Function>(declaration);
+                    entry->flags &= ~std::uint16_t{0x0003u};
+                    entry->hasNativeBinding = false;
+                    entry->hasCoroutine = false;
+                    entry->blocks.clear();
+                    bytecode::Instruction call;
+                    call.opcode = bytecode::Opcode::NativeInvoke;
+                    call.callee = declaration.id;
+                    call.resultType = declaration.returnType;
+                    call.source = declaration.source;
+                    for (const auto& parameter : declaration.parameters)
+                        call.operands.push_back(parameter.value);
+                    if (module.types[declaration.returnType].kind != TypeVoid)
+                        call.result = registerCount(declaration);
+                    bytecode::Instruction returned;
+                    returned.opcode = bytecode::Opcode::Return;
+                    returned.source = declaration.source;
+                    if (call.result != bytecode::InvalidIndex)
+                        returned.operands.push_back(call.result);
+                    bytecode::Block block;
+                    block.id = 0;
+                    block.source = declaration.source;
+                    block.instructions.push_back(std::move(call));
+                    block.instructions.push_back(std::move(returned));
+                    entry->blocks.push_back(std::move(block));
+                    plan.registerCount = registerCount(*entry);
+                    plan.blocks.clear();
+                    plan.blocks.emplace(0, &entry->blocks.front());
+                    plan.nativeEntry = std::move(entry);
+                }
+                executable = plan.nativeEntry.get();
+            }
+            const auto& function = *executable;
             if (values.size() != function.parameters.size())
                 return failWithStack(
                     {"WVM1004", "Call argument count does not match the function signature", function.id});
@@ -6041,7 +6176,7 @@ namespace wio::vm
                 const auto operandIds = std::span{instruction.operands}.subspan(1);
                 const auto callerIndex = frames.size() - 1;
                 const std::uint32_t result = instruction.result;
-                if ((module.functions[target].flags & 0x0001u) != 0)
+                if ((module.functions[target].flags & 0x0001u) != 0 && !module.functions[target].hasNativeBinding)
                 {
                     if (!write(result, startTask(target, callArguments)))
                         return fail("WVM1168", "Async indirect-call result register is invalid");

@@ -1,3 +1,6 @@
+cmake_policy(PUSH)
+cmake_policy(SET CMP0054 NEW)
+
 foreach(required WIO_EXECUTABLE WIO_ROOT WIO_OUTPUT_DIR WIO_SHARED_SUFFIX)
     if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
         message(FATAL_ERROR "Native bridge pruning test requires ${required}")
@@ -57,3 +60,4 @@ foreach(options IN ITEMS "--target;exe" "--target;shared" "--emit-bytecode")
     endif()
 endforeach()
 message(STATUS "Pruned/full/native parity and identical bytecode passed")
+cmake_policy(POP)

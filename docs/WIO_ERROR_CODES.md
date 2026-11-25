@@ -16,7 +16,7 @@ This is the current development-source inventory, not a promise that every code 
 Regenerate: `pwsh -File tools/Update-DiagnosticReference.ps1`.
 Check freshness: `pwsh -File tools/Update-DiagnosticReference.ps1 -Check`.
 
-Distinct diagnostic IDs: **693**.
+Distinct diagnostic IDs: **694**.
 
 ## Diagnostic families
 
@@ -27,7 +27,7 @@ Distinct diagnostic IDs: **693**.
 | [WIRN](#wirn) | 6 | Native ABI/thunk planning invariants. |
 | [WCPP](#wcpp) | 25 | Lowered WIR C++ backend validation and emission. |
 | [WBC](#wbc) | 94 | Bytecode compilation, format decoding and verification. |
-| [WVM](#wvm) | 218 | VM loading/execution, intrinsics, native transport and lifetime failures. |
+| [WVM](#wvm) | 219 | VM loading/execution, intrinsics, native transport and lifetime failures. |
 
 ## WIR
 
@@ -699,8 +699,6 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1582](../compi
 ### WIR1466
 
 - Typed WIR copy must create one owned claim for a copyable owned value.
-  Trivially-copyable native POD values can own a copied SSA claim without
-  requiring a destructor; primitive trivial values do not gain owned claims.
 
 Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1744](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1744).
 
@@ -933,140 +931,140 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:40](../compiler
 
 - Semantic type is missing while building Typed WIR.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2201](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2201).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2203](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2203).
 
 ### WIR2002
 
 - Unsupported semantic primitive type '{dynamic context}' while mapping {dynamic context}an unknown source{dynamic context}.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2231](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2231).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2233](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2233).
 
 ### WIR2003
 
 - Semantic type '{dynamic context}' has no backend-neutral WIR representation.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2606](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2606).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2608](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2608).
 
 ### WIR2100
 
 - Function declaration is missing its resolved semantic function type.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3064](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3064).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3066](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3066).
 
 ### WIR2101
 
 - Function parameter is missing its resolved semantic symbol or type.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3138](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3138).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3140](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3140).
 
 ### WIR2102
 
 - Non-void function does not end with a return.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3253](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3253).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3255](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3255).
 
 ### WIR2103
 
 - Async function must have a resolved coroutine&lt;T&gt; return type.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3087](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3087).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3089](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3089).
 
 ### WIR2201
 
 - Statement kind '{dynamic context}' has no Typed WIR lowering.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3459](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3459).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3461](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3461).
 
 ### WIR2202
 
 - Local variable declaration is missing its semantic symbol.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3339](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3339).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3341](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3341).
 
 ### WIR2203
 
 - Default initialization for type '{dynamic context}' is not supported by Typed WIR.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5923](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5923).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5940](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5940).
 
 ### WIR2204
 
 - Loop-carried local value is unavailable on a control-flow edge.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6808](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6808).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6825](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6825).
 
 ### WIR2205
 
 Definition: Break statement has no active Typed WIR loop target.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6821](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6821).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6838](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6838).
 
 ### WIR2206
 
 Definition: Continue statement has no active Typed WIR loop target.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6821](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6821).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6838](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6838).
 
 ### WIR2210
 
 - For-in requires a range, array, or dictionary iterator source.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:7010](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L7010).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:7027](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L7027).
 
 ### WIR2211
 
 - For-in binding is missing its semantic symbol.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:7100](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L7100).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:7117](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L7117).
 
 ### WIR2300
 
 - Integer literal has no representable WIR integer type.
 - Integer literal cannot be represented by the initial Typed WIR literal model.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3789](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3789), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3796](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3796).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3803](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3803), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3810](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3810).
 
 ### WIR2301
 
 - Identifier is not a value available in the current Typed WIR function.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4182](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4182).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4198](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4198).
 
 ### WIR2302
 
 - Unary expression could not be lowered to Typed WIR.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4511](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4511).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4527](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4527).
 
 ### WIR2303
 
 - Binary expression could not be lowered to Typed WIR.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4653](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4653).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4670](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4670).
 
 ### WIR2304
 
 - Call target has no indexed WIR function identity.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5137](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5137).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5154](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5154).
 
 ### WIR2305
 
 - Expression kind '{dynamic context}' has no Typed WIR lowering.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5242](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5242).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5259](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5259).
 
 ### WIR2306
 
 - Await requires a resolved coroutine&lt;T&gt; operand.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4423](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4423).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4439](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4439).
 
 ### WIR2308
 
 - Compound assignment operator is not supported by Typed WIR.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4381](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4381).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4397](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4397).
 
 ### WIR2309
 
@@ -1074,68 +1072,68 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4381](../compil
 - Float literal cannot be represented by the Typed WIR literal model.
 - Assignment target did not lower to a reference place.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3810](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3810), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3816](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3816), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4368](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4368).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3824](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3824), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3830](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3830), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4384](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4384).
 
 ### WIR2310
 
 - Char literal must contain exactly one byte-sized character.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3871](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3871).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3887](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3887).
 
 ### WIR2311
 
 - Byte literal is outside the u8 range.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3884](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3884).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3900](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3900).
 
 ### WIR2313
 
 - Typed WIR fit lowering requires numeric or object/interface operands.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4101](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4101).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4117](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4117).
 
 ### WIR2314
 
 - Duration literal cannot be represented by Typed WIR.
 - Expression requires a conversion that is not allowed by Wio numeric promotion.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3920](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3920), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5854](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5854).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3936](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3936), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5871](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5871).
 
 ### WIR2315
 
 - Match expression requires at least one case.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6091](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6091).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6108](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6108).
 
 ### WIR2316
 
 - Typed WIR does not recognize destructuring variant '{dynamic context}'.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5979](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5979).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5996](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5996).
 
 ### WIR2317
 
 - Value-producing Typed WIR match cases require expression bodies.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6105](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6105).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6122](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6122).
 
 ### WIR2319
 
 - Match binding is missing its semantic symbol.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6003](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6003).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6020](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6020).
 
 ### WIR2320
 
 - Array literal requires a resolved WIR array element type.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3930](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3930).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3946](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3946).
 
 ### WIR2322
 
 - Typed WIR index access requires an array, dictionary, string, or text value.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4330](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4330).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4346](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4346).
 
 ### WIR2323
 
@@ -1153,129 +1151,129 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:937](../compile
 
 - Initial Typed WIR member reads currently require a resolved data field.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4280](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4280).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4296](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4296).
 
 ### WIR2326
 
 - Addressable identifier is missing its semantic symbol.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5274](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5274).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5291](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5291).
 
 ### WIR2327
 
 - Addressable identifier is not available in the current Typed WIR function.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5309](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5309).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5326](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5326).
 
 ### WIR2328
 
 - Only array and dictionary index expressions are addressable WIR places.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5368](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5368).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5385](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5385).
 
 ### WIR2329
 
 - Addressable member must resolve to a data field.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5392](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5392).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5409](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5409).
 
 ### WIR2330
 
 - Expression kind '{dynamic context}' is not an addressable Typed WIR place.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5530](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5530).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5547](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5547).
 
 ### WIR2331
 
 - 'self' is unavailable outside a receiver-aware WIR function.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4068](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4068), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5256](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5256).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4084](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4084), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5273](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5273).
 
 ### WIR2332
 
 - 'super' is unavailable outside a receiver-aware WIR function.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4075](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4075).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4091](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4091).
 
 ### WIR2333
 
 - Object/interface type test is missing a representable target type.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4546](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4546).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4562](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4562).
 
 ### WIR2340
 
 - Lambda parameter is missing its resolved callable type.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2867](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2867).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2869](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2869).
 
 ### WIR2341
 
 - Non-void lambda does not end with a return.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2951](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2951).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2953](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2953).
 
 ### WIR2342
 
 - Lambda capture '{dynamic context}' is unavailable in the enclosing callable.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4014](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4014).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4030](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4030).
 
 ### WIR2343
 
 - Lambda requested a self capture outside a receiver-aware callable.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4040](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4040).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4056](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4056).
 
 ### WIR2344
 
 - Indirect call requires a resolved function value.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5103](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5103).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5120](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5120).
 
 ### WIR2345
 
 - Dictionary literal requires resolved key and value types.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3960](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3960).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3976](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3976).
 
 ### WIR2350
 
 - Result unwrap/propagation requires a canonical std::Result&lt;T&gt; value.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3643](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3643).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3645](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3645).
 
 ### WIR2351
 
 - The backend-neutral 'in' operation currently requires a range.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4563](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4563).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4579](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4579).
 
 ### WIR2352
 
 - Overloaded operator is missing its resolved callable identity.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3571](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3571).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3573](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3573).
 
 ### WIR2353
 
 - Member operator is missing its nominal owner slot.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3587](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3587).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3589](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3589).
 
 ### WIR2357
 
 - Increment/decrement operand did not lower to a mutable place.
 - Derived extension is missing its processor method layout.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4458](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4458), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4867](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4867).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4474](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4474), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4884](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4884).
 
 ### WIR2358
 
 - Increment/decrement requires a representable numeric WIR type.
 - Extension call is missing a materializable default argument.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4469](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4469), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4964](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4964).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4485](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4485), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4981](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4981).
 
 ### WIR2359
 
@@ -1285,7 +1283,7 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4469](../compil
 - Implicit self method call is missing a materializable default argument.
 - Function call is missing a materializable default argument.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4764](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4764), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4911](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4911), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5057](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5057), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5182](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5182), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5219](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5219).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4781](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4781), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4928](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4928), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5074](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5074), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5199](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5199), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5236](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5236).
 
 ### WIR2360
 
@@ -1297,13 +1295,13 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:871](../compile
 
 - Pack array materialization requires a runtime value pack.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4236](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4236).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4252](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4252).
 
 ### WIR2362
 
 - Implicit self method call is missing its canonical owner slot.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5155](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5155).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5172](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5172).
 
 ### WIR2370
 
@@ -1333,31 +1331,31 @@ Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:659](../compile
 
 - NativeConsume is only supported on native function parameters.
 
-Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3196](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3196).
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3198](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3198).
 
 ### WIR3001
 
 - Typed select instruction has an invalid shape.
 
-Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:532](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L532).
+Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:533](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L533).
 
 ### WIR3002
 
 - Typed branch requires exactly one target before lowering.
 
-Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:575](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L575).
+Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:576](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L576).
 
 ### WIR3003
 
 - Typed conditional branch has an invalid shape before lowering.
 
-Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:591](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L591).
+Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:592](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L592).
 
 ### WIR3004
 
 - Suspension instruction appears outside an async function.
 
-Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:468](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L468).
+Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:469](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L469).
 
 ### WIR3100
 
@@ -1366,19 +1364,19 @@ Definition: Generic function/type materialization failed. The detailed message i
 Detailed message: dynamically supplied by the reporting path.
 Message expression: `std::move(message)`.
 
-Definitions: [compiler/src/wio_compiler/wir/generic_specializer.cpp:575](../compiler/src/wio_compiler/wir/generic_specializer.cpp#L575).
+Definitions: [compiler/src/wio_compiler/wir/generic_specializer.cpp:571](../compiler/src/wio_compiler/wir/generic_specializer.cpp#L571).
 
 ### WIR3101
 
 - Generic materialization of '{dynamic context}' exceeded its body limit ({dynamic context}); possible expanding polymorphic recursion.
 
-Definitions: [compiler/src/wio_compiler/wir/generic_specializer.cpp:1585](../compiler/src/wio_compiler/wir/generic_specializer.cpp#L1585).
+Definitions: [compiler/src/wio_compiler/wir/generic_specializer.cpp:1581](../compiler/src/wio_compiler/wir/generic_specializer.cpp#L1581).
 
 ### WIR3200
 
 - lower-object-hierarchy
 
-Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:674](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L674).
+Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:680](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L680).
 
 ## LIR
 
@@ -2174,37 +2172,37 @@ Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:696](../comp
 
 - Native thunk plan references a function without native binding metadata.
 
-Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:53](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L53).
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:72](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L72).
 
 ### WIRN1002
 
 - NativeInvoke does not resolve to a native declaration.
 
-Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:104](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L104).
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:125](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L125).
 
 ### WIRN1003
 
 - Generic native invocation requires a concrete specialization key.
 
-Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:112](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L112).
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:133](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L133).
 
 ### WIRN1004
 
 - Concrete native thunk has an invalid identity or ABI signature.
 
-Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:143](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L143).
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:164](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L164).
 
 ### WIRN1005
 
 - Concrete native thunk symbol is not unique.
 
-Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:149](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L149).
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:170](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L170).
 
 ### WIRN1006
 
 - NativeInvoke specialization identity does not match its concrete native callee.
 
-Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:119](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L119).
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:140](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L140).
 
 ## WCPP
 
@@ -2213,155 +2211,155 @@ Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:119](../compiler
 - invalid Lowered WIR: {dynamic context}: {dynamic context}
 - {dynamic context}invalid Lowered WIR: {dynamic context}: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:239](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L239), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:3798](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L3798).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:244](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L244), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:4168](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L4168).
 
 ### WCPP1100
 
 - unresolved type reached the C++ backend: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:452](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L452).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:474](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L474).
 
 ### WCPP1101
 
 - const-value type has no canonical value
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:459](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L459).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:481](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L481).
 
 ### WCPP1102
 
 - type {dynamic context} requires one argument
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:467](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L467).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:489](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L489).
 
 ### WCPP1103
 
 - dictionary type requires key and value arguments
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:471](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L471).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:493](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L493).
 
 ### WCPP1104
 
 - function type requires a return type
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:475](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L475).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:497](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L497).
 
 ### WCPP1105
 
 - native POD type requires a C++ type binding
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:522](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L522).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:544](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L544).
 
 ### WCPP1106
 
 - object/interface requires canonical hierarchy lowering
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:481](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L481).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:503](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L503).
 
 ### WCPP1107
 
 - enum/flagset requires canonical underlying-type and case layout metadata
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:527](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L527).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:549](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L549).
 
 ### WCPP1108
 
 - global value requires a concrete specialized type
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:537](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L537).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:559](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L559).
 
 ### WCPP1201
 
 - opcode is not implemented by the WIR C++ backend: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:669](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L669).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:691](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L691).
 
 ### WCPP1202
 
 - native invocation requires an adapter thunk not implemented by this backend
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:782](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L782).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:804](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L804).
 
 ### WCPP1203
 
 - constructor identity does not match its canonical argument signature
 - constructor '{dynamic context}' requires a callable constructor adapter; only canonical field-wise construction is enabled (operands={dynamic context}, fields={dynamic context})
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:806](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L806), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:828](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L828).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:828](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L828), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:850](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L850).
 
 ### WCPP1205
 
 - intrinsic family is not implemented by this C++ backend slice: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:739](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L739).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:761](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L761).
 
 ### WCPP1206
 
 - enum/flagset intrinsic is not recognized: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:747](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L747).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:769](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L769).
 
 ### WCPP1207
 
 - enum/flagset constant does not exist in canonical layout: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:754](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L754).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:776](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L776).
 
 ### WCPP1208
 
 - payload variants currently require canonical Option/Result layout
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:770](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L770).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:792](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L792).
 
 ### WCPP1209
 
 - generic call requires a concrete specialized function body
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:728](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L728).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:750](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L750).
 
 ### WCPP1210
 
 - iterator source or operand count is not supported
 - iterator projection is not supported: {dynamic context}
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:690](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L690), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:718](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L718).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:712](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L712), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:740](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L740).
 
 ### WCPP1211
 
 - cannot construct an object with abstract method contracts
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:794](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L794).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:816](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L816).
 
 ### WCPP1212
 
 - object lifecycle requires a concrete receiver-only body
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:508](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L508), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:517](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L517).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:530](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L530), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:539](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L539).
 
 ### WCPP1213
 
 - wire ABI requires owned results and forbids ref/view parameters on asynchronous calls
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:611](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L611).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:633](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L633).
 
 ### WCPP1214
 
 - application requires canonical exit-state fields
 - worker application stages require a thread-transfer lowering contract
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:548](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L548), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:551](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L551).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:570](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L570), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:573](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L573).
 
 ### WCPP1215
 
 - behavioral attribute requires a concrete processor object and pinned hook function
 - around processors are not valid on asynchronous functions
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:572](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L572), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:579](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L579).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:594](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L594), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:601](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L601).
 
 ### WCPP1220
 
 - {dynamic context}native-only bridge requires no main and native task sidecars
 
-Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:3790](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L3790).
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:4160](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L4160).
 
 ## WBC
 
@@ -2410,62 +2408,64 @@ Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:181](../compiler/s
 ### WBC1008
 
 - Global references invalid string or type metadata
+- Global initializer references an invalid function
+- Global initializer must be synchronous, closed, zero-argument and return the global type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:183](../compiler/src/wio_compiler/bytecode/verifier.cpp#L183).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:183](../compiler/src/wio_compiler/bytecode/verifier.cpp#L183), [compiler/src/wio_compiler/bytecode/verifier.cpp:187](../compiler/src/wio_compiler/bytecode/verifier.cpp#L187), [compiler/src/wio_compiler/bytecode/verifier.cpp:194](../compiler/src/wio_compiler/bytecode/verifier.cpp#L194).
 
 ### WBC1009
 
 - Function ids must be valid and unique
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:191](../compiler/src/wio_compiler/bytecode/verifier.cpp#L191).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:204](../compiler/src/wio_compiler/bytecode/verifier.cpp#L204).
 
 ### WBC1010
 
 - Function references invalid string or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:194](../compiler/src/wio_compiler/bytecode/verifier.cpp#L194).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:207](../compiler/src/wio_compiler/bytecode/verifier.cpp#L207).
 
 ### WBC1011
 
 - Block ids must be valid and unique within a function
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:274](../compiler/src/wio_compiler/bytecode/verifier.cpp#L274).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:287](../compiler/src/wio_compiler/bytecode/verifier.cpp#L287).
 
 ### WBC1012
 
 - Instruction contains an unknown opcode
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:363](../compiler/src/wio_compiler/bytecode/verifier.cpp#L363).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:376](../compiler/src/wio_compiler/bytecode/verifier.cpp#L376).
 
 ### WBC1013
 
 - Instruction references an invalid type id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:366](../compiler/src/wio_compiler/bytecode/verifier.cpp#L366).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:379](../compiler/src/wio_compiler/bytecode/verifier.cpp#L379).
 
 ### WBC1014
 
 - Instruction references an invalid constant id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:369](../compiler/src/wio_compiler/bytecode/verifier.cpp#L369).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:382](../compiler/src/wio_compiler/bytecode/verifier.cpp#L382).
 
 ### WBC1015
 
 - Instruction references an invalid string id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:372](../compiler/src/wio_compiler/bytecode/verifier.cpp#L372).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:385](../compiler/src/wio_compiler/bytecode/verifier.cpp#L385).
 
 ### WBC1016
 
 - Interpolation segment references an invalid string id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:412](../compiler/src/wio_compiler/bytecode/verifier.cpp#L412).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:425](../compiler/src/wio_compiler/bytecode/verifier.cpp#L425).
 
 ### WBC1017
 
 - Branch target references a block outside the function
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:418](../compiler/src/wio_compiler/bytecode/verifier.cpp#L418).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:431](../compiler/src/wio_compiler/bytecode/verifier.cpp#L431).
 
 ### WBC1018
 
@@ -2519,157 +2519,157 @@ Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:173](../compiler/s
 
 - Function capture count does not match its capture table
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:196](../compiler/src/wio_compiler/bytecode/verifier.cpp#L196).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:209](../compiler/src/wio_compiler/bytecode/verifier.cpp#L209).
 
 ### WBC1027
 
 - Closure capture references invalid string or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:200](../compiler/src/wio_compiler/bytecode/verifier.cpp#L200).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:213](../compiler/src/wio_compiler/bytecode/verifier.cpp#L213).
 
 ### WBC1028
 
 - Native binding references invalid string or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:207](../compiler/src/wio_compiler/bytecode/verifier.cpp#L207).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:220](../compiler/src/wio_compiler/bytecode/verifier.cpp#L220).
 
 ### WBC1029
 
 - Native parameter references an invalid type id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:211](../compiler/src/wio_compiler/bytecode/verifier.cpp#L211).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:224](../compiler/src/wio_compiler/bytecode/verifier.cpp#L224).
 
 ### WBC1030
 
 - Native template argument references an invalid type id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:265](../compiler/src/wio_compiler/bytecode/verifier.cpp#L265).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:278](../compiler/src/wio_compiler/bytecode/verifier.cpp#L278).
 
 ### WBC1031
 
 - Coroutine layout does not match its async task return type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:328](../compiler/src/wio_compiler/bytecode/verifier.cpp#L328).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:341](../compiler/src/wio_compiler/bytecode/verifier.cpp#L341).
 
 ### WBC1032
 
 - Coroutine frame slot is not dense or does not match a live typed value
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:336](../compiler/src/wio_compiler/bytecode/verifier.cpp#L336).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:349](../compiler/src/wio_compiler/bytecode/verifier.cpp#L349).
 
 ### WBC1033
 
 - Coroutine state references invalid block or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:346](../compiler/src/wio_compiler/bytecode/verifier.cpp#L346).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:359](../compiler/src/wio_compiler/bytecode/verifier.cpp#L359).
 
 ### WBC1034
 
 - External/template declarations must have no code and defined functions must have code
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:282](../compiler/src/wio_compiler/bytecode/verifier.cpp#L282).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:295](../compiler/src/wio_compiler/bytecode/verifier.cpp#L295).
 
 ### WBC1035
 
 - Function value ids must be valid, typed, and unique
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:300](../compiler/src/wio_compiler/bytecode/verifier.cpp#L300).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:313](../compiler/src/wio_compiler/bytecode/verifier.cpp#L313).
 
 ### WBC1036
 
 - Function parameter references an invalid name
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:302](../compiler/src/wio_compiler/bytecode/verifier.cpp#L302).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:315](../compiler/src/wio_compiler/bytecode/verifier.cpp#L315).
 
 ### WBC1037
 
 - Value-producing instruction requires a unique typed result
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:316](../compiler/src/wio_compiler/bytecode/verifier.cpp#L316).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:329](../compiler/src/wio_compiler/bytecode/verifier.cpp#L329).
 
 ### WBC1038
 
 - Defined bytecode block cannot be empty
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:355](../compiler/src/wio_compiler/bytecode/verifier.cpp#L355).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:368](../compiler/src/wio_compiler/bytecode/verifier.cpp#L368).
 
 ### WBC1039
 
 - Every block must end in exactly one final terminator
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:375](../compiler/src/wio_compiler/bytecode/verifier.cpp#L375).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:388](../compiler/src/wio_compiler/bytecode/verifier.cpp#L388).
 
 ### WBC1040
 
 - Instruction result shape does not match its opcode
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:385](../compiler/src/wio_compiler/bytecode/verifier.cpp#L385).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:398](../compiler/src/wio_compiler/bytecode/verifier.cpp#L398).
 
 ### WBC1041
 
 - Non-value instruction cannot carry a result type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:389](../compiler/src/wio_compiler/bytecode/verifier.cpp#L389).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:402](../compiler/src/wio_compiler/bytecode/verifier.cpp#L402).
 
 ### WBC1042
 
 - Pack expansion metadata must align with instruction operands
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:393](../compiler/src/wio_compiler/bytecode/verifier.cpp#L393).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:406](../compiler/src/wio_compiler/bytecode/verifier.cpp#L406).
 
 ### WBC1043
 
 - Instruction references an invalid callee
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:396](../compiler/src/wio_compiler/bytecode/verifier.cpp#L396).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:409](../compiler/src/wio_compiler/bytecode/verifier.cpp#L409).
 
 ### WBC1044
 
 - Instruction references an invalid global
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:401](../compiler/src/wio_compiler/bytecode/verifier.cpp#L401).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:414](../compiler/src/wio_compiler/bytecode/verifier.cpp#L414).
 
 ### WBC1045
 
 - Instruction references an undefined function value
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:406](../compiler/src/wio_compiler/bytecode/verifier.cpp#L406).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:419](../compiler/src/wio_compiler/bytecode/verifier.cpp#L419).
 
 ### WBC1046
 
 - Branch argument count does not match target parameters
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:424](../compiler/src/wio_compiler/bytecode/verifier.cpp#L424).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:437](../compiler/src/wio_compiler/bytecode/verifier.cpp#L437).
 
 ### WBC1047
 
 - Branch argument type does not match target parameter
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:433](../compiler/src/wio_compiler/bytecode/verifier.cpp#L433).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:446](../compiler/src/wio_compiler/bytecode/verifier.cpp#L446).
 
 ### WBC1048
 
 - Control-flow instruction has an invalid operand or target shape
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:446](../compiler/src/wio_compiler/bytecode/verifier.cpp#L446).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:459](../compiler/src/wio_compiler/bytecode/verifier.cpp#L459).
 
 ### WBC1049
 
 - Function reference does not match a known callable declaration
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:703](../compiler/src/wio_compiler/bytecode/verifier.cpp#L703).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:724](../compiler/src/wio_compiler/bytecode/verifier.cpp#L724).
 
 ### WBC1050
 
 - Closure creation does not match its callable capture layout
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:732](../compiler/src/wio_compiler/bytecode/verifier.cpp#L732).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:753](../compiler/src/wio_compiler/bytecode/verifier.cpp#L753).
 
 ### WBC1051
 
 - Indirect call does not match its function value signature
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:765](../compiler/src/wio_compiler/bytecode/verifier.cpp#L765).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:786](../compiler/src/wio_compiler/bytecode/verifier.cpp#L786).
 
 ### WBC1052
 
@@ -2687,248 +2687,248 @@ Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:161](../compiler/s
 
 - Dynamic call does not match its receiver, contract, slot, or declaration
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:803](../compiler/src/wio_compiler/bytecode/verifier.cpp#L803).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:824](../compiler/src/wio_compiler/bytecode/verifier.cpp#L824).
 
 ### WBC1056
 
 - Object cast or type-test has invalid source or target metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:822](../compiler/src/wio_compiler/bytecode/verifier.cpp#L822).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:843](../compiler/src/wio_compiler/bytecode/verifier.cpp#L843).
 
 ### WBC1057
 
 - Object identity comparison has invalid operand or operator metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:832](../compiler/src/wio_compiler/bytecode/verifier.cpp#L832).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:853](../compiler/src/wio_compiler/bytecode/verifier.cpp#L853).
 
 ### WBC1058
 
 - Async bytecode function is missing its coroutine layout
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:350](../compiler/src/wio_compiler/bytecode/verifier.cpp#L350).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:363](../compiler/src/wio_compiler/bytecode/verifier.cpp#L363).
 
 ### WBC1059
 
 - Cancellation check must precede its matching coroutine suspension
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:842](../compiler/src/wio_compiler/bytecode/verifier.cpp#L842).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:863](../compiler/src/wio_compiler/bytecode/verifier.cpp#L863).
 
 ### WBC1060
 
 - Coroutine suspension does not match its canonical state and resume edge
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:874](../compiler/src/wio_compiler/bytecode/verifier.cpp#L874).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:895](../compiler/src/wio_compiler/bytecode/verifier.cpp#L895).
 
 ### WBC1061
 
 - Coroutine resume does not materialize its canonical state payload
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:885](../compiler/src/wio_compiler/bytecode/verifier.cpp#L885).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:906](../compiler/src/wio_compiler/bytecode/verifier.cpp#L906).
 
 ### WBC1062
 
 - Coroutine completion does not match its async payload type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:898](../compiler/src/wio_compiler/bytecode/verifier.cpp#L898).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:919](../compiler/src/wio_compiler/bytecode/verifier.cpp#L919).
 
 ### WBC1063
 
 - Executable bytecode cannot contain an unresolved generic constant
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:496](../compiler/src/wio_compiler/bytecode/verifier.cpp#L496).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:509](../compiler/src/wio_compiler/bytecode/verifier.cpp#L509).
 
 ### WBC1064
 
 - Enum constant does not match a declared enum/flagset case
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:512](../compiler/src/wio_compiler/bytecode/verifier.cpp#L512).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:525](../compiler/src/wio_compiler/bytecode/verifier.cpp#L525).
 
 ### WBC1065
 
 - Any box does not preserve its materialized payload type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:538](../compiler/src/wio_compiler/bytecode/verifier.cpp#L538).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:559](../compiler/src/wio_compiler/bytecode/verifier.cpp#L559).
 
 ### WBC1066
 
 - Any test/cast has invalid source, target, or result metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:551](../compiler/src/wio_compiler/bytecode/verifier.cpp#L551).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:572](../compiler/src/wio_compiler/bytecode/verifier.cpp#L572).
 
 ### WBC1067
 
 - Nullable wrap does not match its payload type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:564](../compiler/src/wio_compiler/bytecode/verifier.cpp#L564).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:585](../compiler/src/wio_compiler/bytecode/verifier.cpp#L585).
 
 ### WBC1068
 
 - Nullable unwrap does not match its payload result type
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:575](../compiler/src/wio_compiler/bytecode/verifier.cpp#L575).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:596](../compiler/src/wio_compiler/bytecode/verifier.cpp#L596).
 
 ### WBC1069
 
 - Variant operation does not match its option/result layout
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:599](../compiler/src/wio_compiler/bytecode/verifier.cpp#L599).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:620](../compiler/src/wio_compiler/bytecode/verifier.cpp#L620).
 
 ### WBC1070
 
 - Iterator creation has invalid source or signature metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:640](../compiler/src/wio_compiler/bytecode/verifier.cpp#L640).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:661](../compiler/src/wio_compiler/bytecode/verifier.cpp#L661).
 
 ### WBC1071
 
 - Iterator operation has invalid cursor or result metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:661](../compiler/src/wio_compiler/bytecode/verifier.cpp#L661).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:682](../compiler/src/wio_compiler/bytecode/verifier.cpp#L682).
 
 ### WBC1072
 
 - Result operation does not match its canonical result layout
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:690](../compiler/src/wio_compiler/bytecode/verifier.cpp#L690).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:711](../compiler/src/wio_compiler/bytecode/verifier.cpp#L711).
 
 ### WBC1073
 
 - Native invocation does not match its external ABI declaration
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:491](../compiler/src/wio_compiler/bytecode/verifier.cpp#L491).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:504](../compiler/src/wio_compiler/bytecode/verifier.cpp#L504).
 
 ### WBC1074
 
 - Native parameter has an invalid ABI mode or no stable type identity ({dynamic context}, type #{dynamic context}, marshalling {dynamic context})
 - Native result has an invalid ABI mode or no stable type identity
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:242](../compiler/src/wio_compiler/bytecode/verifier.cpp#L242), [compiler/src/wio_compiler/bytecode/verifier.cpp:261](../compiler/src/wio_compiler/bytecode/verifier.cpp#L261).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:255](../compiler/src/wio_compiler/bytecode/verifier.cpp#L255), [compiler/src/wio_compiler/bytecode/verifier.cpp:274](../compiler/src/wio_compiler/bytecode/verifier.cpp#L274).
 
 ### WBC1080
 
 - Template declaration must have an open signature and no runtime binding or coroutine
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:291](../compiler/src/wio_compiler/bytecode/verifier.cpp#L291).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:304](../compiler/src/wio_compiler/bytecode/verifier.cpp#L304).
 
 ### WBC1100
 
 - Module import contains invalid identity or string metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:909](../compiler/src/wio_compiler/bytecode/verifier.cpp#L909).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:930](../compiler/src/wio_compiler/bytecode/verifier.cpp#L930).
 
 ### WBC1101
 
 - Module import symbol references an invalid string id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:913](../compiler/src/wio_compiler/bytecode/verifier.cpp#L913).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:934](../compiler/src/wio_compiler/bytecode/verifier.cpp#L934).
 
 ### WBC1102
 
 - Module export contains invalid identity, symbol, or target metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:922](../compiler/src/wio_compiler/bytecode/verifier.cpp#L922).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:943](../compiler/src/wio_compiler/bytecode/verifier.cpp#L943).
 
 ### WBC1103
 
 - Module export parameter references an invalid type id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:926](../compiler/src/wio_compiler/bytecode/verifier.cpp#L926).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:947](../compiler/src/wio_compiler/bytecode/verifier.cpp#L947).
 
 ### WBC1104
 
 - Attribute application contains invalid identity or target metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:934](../compiler/src/wio_compiler/bytecode/verifier.cpp#L934).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:955](../compiler/src/wio_compiler/bytecode/verifier.cpp#L955).
 
 ### WBC1105
 
 - Attribute argument contains invalid string or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:938](../compiler/src/wio_compiler/bytecode/verifier.cpp#L938).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:959](../compiler/src/wio_compiler/bytecode/verifier.cpp#L959).
 
 ### WBC1106
 
 - Attribute processor contains invalid identity or hook metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:946](../compiler/src/wio_compiler/bytecode/verifier.cpp#L946).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:967](../compiler/src/wio_compiler/bytecode/verifier.cpp#L967).
 
 ### WBC1107
 
 - Reflection descriptor contains invalid identity or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:952](../compiler/src/wio_compiler/bytecode/verifier.cpp#L952).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:973](../compiler/src/wio_compiler/bytecode/verifier.cpp#L973).
 
 ### WBC1108
 
 - Reflection generic parameter references an invalid string id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:956](../compiler/src/wio_compiler/bytecode/verifier.cpp#L956).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:977](../compiler/src/wio_compiler/bytecode/verifier.cpp#L977).
 
 ### WBC1109
 
 - Reflected field contains invalid identity or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:961](../compiler/src/wio_compiler/bytecode/verifier.cpp#L961).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:982](../compiler/src/wio_compiler/bytecode/verifier.cpp#L982).
 
 ### WBC1110
 
 - Reflected method contains invalid identity or callable metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:967](../compiler/src/wio_compiler/bytecode/verifier.cpp#L967).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:988](../compiler/src/wio_compiler/bytecode/verifier.cpp#L988).
 
 ### WBC1111
 
 - Reflected case contains invalid identity or string metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:972](../compiler/src/wio_compiler/bytecode/verifier.cpp#L972).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:993](../compiler/src/wio_compiler/bytecode/verifier.cpp#L993).
 
 ### WBC1112
 
 - System descriptor contains invalid lifecycle metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:979](../compiler/src/wio_compiler/bytecode/verifier.cpp#L979).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1000](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1000).
 
 ### WBC1113
 
 - Application descriptor contains invalid lifecycle metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:988](../compiler/src/wio_compiler/bytecode/verifier.cpp#L988).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1009](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1009).
 
 ### WBC1114
 
 - Application stage contains invalid identity or string metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:992](../compiler/src/wio_compiler/bytecode/verifier.cpp#L992).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1013](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1013).
 
 ### WBC1115
 
 - Application stage run contains invalid target metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:997](../compiler/src/wio_compiler/bytecode/verifier.cpp#L997).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1018](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1018).
 
 ### WBC1116
 
 - Application resource contains invalid string or type metadata
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1001](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1001).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1022](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1022).
 
 ### WBC1117
 
 - Module lifecycle references an invalid function id
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1010](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1010).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1031](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1031).
 
 ### WBC1118
 
 - SDK call table identity or export cardinality is invalid
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1013](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1013).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1034](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1034).
 
 ### WBC1119
 
 - Retain/copy-value must preserve the owned type cleanup protocol
 
-Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:526](../compiler/src/wio_compiler/bytecode/verifier.cpp#L526).
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:547](../compiler/src/wio_compiler/bytecode/verifier.cpp#L547).
 
 ## WVM
 
@@ -2937,55 +2937,55 @@ Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:526](../compiler/s
 - The virtual machine has no loaded module
 - Timer scheduling requires a loaded VM program
 
-Definitions: [vm/src/machine.cpp:1774](../vm/src/machine.cpp#L1774), [vm/src/machine.cpp:3277](../vm/src/machine.cpp#L3277), [vm/src/machine.cpp:3658](../vm/src/machine.cpp#L3658).
+Definitions: [vm/src/machine.cpp:1839](../vm/src/machine.cpp#L1839), [vm/src/machine.cpp:3346](../vm/src/machine.cpp#L3346), [vm/src/machine.cpp:3727](../vm/src/machine.cpp#L3727).
 
 ### WVM1001
 
 - Bytecode verification failed ({dynamic context}): {dynamic context}
 
-Definitions: [vm/src/machine.cpp:1648](../vm/src/machine.cpp#L1648).
+Definitions: [vm/src/machine.cpp:1711](../vm/src/machine.cpp#L1711).
 
 ### WVM1002
 
 - Entry function id is outside the module
 
-Definitions: [vm/src/machine.cpp:1778](../vm/src/machine.cpp#L1778), [vm/src/machine.cpp:3664](../vm/src/machine.cpp#L3664).
+Definitions: [vm/src/machine.cpp:1843](../vm/src/machine.cpp#L1843), [vm/src/machine.cpp:3733](../vm/src/machine.cpp#L3733).
 
 ### WVM1003
 
-- External function requires the Sprint 20 native bridge
+- External function has no callable native binding
 
-Definitions: [vm/src/machine.cpp:3687](../vm/src/machine.cpp#L3687).
+Definitions: [vm/src/machine.cpp:3760](../vm/src/machine.cpp#L3760).
 
 ### WVM1004
 
 - Call argument count does not match the function signature
 
-Definitions: [vm/src/machine.cpp:3690](../vm/src/machine.cpp#L3690).
+Definitions: [vm/src/machine.cpp:3800](../vm/src/machine.cpp#L3800).
 
 ### WVM1005
 
 - VM call depth limit exceeded
 
-Definitions: [vm/src/machine.cpp:3692](../vm/src/machine.cpp#L3692).
+Definitions: [vm/src/machine.cpp:3802](../vm/src/machine.cpp#L3802).
 
 ### WVM1006
 
 - Function register limit exceeded
 
-Definitions: [vm/src/machine.cpp:3695](../vm/src/machine.cpp#L3695).
+Definitions: [vm/src/machine.cpp:3805](../vm/src/machine.cpp#L3805).
 
 ### WVM1007
 
 - Instruction cursor escaped its basic block
 
-Definitions: [vm/src/machine.cpp:3832](../vm/src/machine.cpp#L3832).
+Definitions: [vm/src/machine.cpp:3942](../vm/src/machine.cpp#L3942).
 
 ### WVM1008
 
 - VM instruction limit exceeded
 
-Definitions: [vm/src/machine.cpp:3834](../vm/src/machine.cpp#L3834).
+Definitions: [vm/src/machine.cpp:3944](../vm/src/machine.cpp#L3944).
 
 ### WVM1009
 
@@ -3012,206 +3012,206 @@ Definitions: [vm/src/machine.cpp:3834](../vm/src/machine.cpp#L3834).
 - Iterator value result register is invalid
 - Aggregate result register is invalid
 
-Definitions: [vm/src/machine.cpp:3948](../vm/src/machine.cpp#L3948), [vm/src/machine.cpp:3974](../vm/src/machine.cpp#L3974), [vm/src/machine.cpp:4174](../vm/src/machine.cpp#L4174), [vm/src/machine.cpp:4215](../vm/src/machine.cpp#L4215), [vm/src/machine.cpp:4307](../vm/src/machine.cpp#L4307), [vm/src/machine.cpp:4393](../vm/src/machine.cpp#L4393), [vm/src/machine.cpp:4490](../vm/src/machine.cpp#L4490), [vm/src/machine.cpp:4508](../vm/src/machine.cpp#L4508), [vm/src/machine.cpp:4935](../vm/src/machine.cpp#L4935), [vm/src/machine.cpp:4952](../vm/src/machine.cpp#L4952), [vm/src/machine.cpp:4966](../vm/src/machine.cpp#L4966), [vm/src/machine.cpp:5019](../vm/src/machine.cpp#L5019), [vm/src/machine.cpp:5036](../vm/src/machine.cpp#L5036), [vm/src/machine.cpp:5047](../vm/src/machine.cpp#L5047), [vm/src/machine.cpp:5060](../vm/src/machine.cpp#L5060), [vm/src/machine.cpp:5081](../vm/src/machine.cpp#L5081), [vm/src/machine.cpp:5086](../vm/src/machine.cpp#L5086), [vm/src/machine.cpp:5098](../vm/src/machine.cpp#L5098), [vm/src/machine.cpp:5123](../vm/src/machine.cpp#L5123), [vm/src/machine.cpp:5144](../vm/src/machine.cpp#L5144), [vm/src/machine.cpp:5216](../vm/src/machine.cpp#L5216), [vm/src/machine.cpp:5243](../vm/src/machine.cpp#L5243), [vm/src/machine.cpp:5309](../vm/src/machine.cpp#L5309), [vm/src/machine.cpp:5312](../vm/src/machine.cpp#L5312), [vm/src/machine.cpp:5734](../vm/src/machine.cpp#L5734).
+Definitions: [vm/src/machine.cpp:4058](../vm/src/machine.cpp#L4058), [vm/src/machine.cpp:4084](../vm/src/machine.cpp#L4084), [vm/src/machine.cpp:4284](../vm/src/machine.cpp#L4284), [vm/src/machine.cpp:4325](../vm/src/machine.cpp#L4325), [vm/src/machine.cpp:4416](../vm/src/machine.cpp#L4416), [vm/src/machine.cpp:4502](../vm/src/machine.cpp#L4502), [vm/src/machine.cpp:4602](../vm/src/machine.cpp#L4602), [vm/src/machine.cpp:4620](../vm/src/machine.cpp#L4620), [vm/src/machine.cpp:5047](../vm/src/machine.cpp#L5047), [vm/src/machine.cpp:5064](../vm/src/machine.cpp#L5064), [vm/src/machine.cpp:5078](../vm/src/machine.cpp#L5078), [vm/src/machine.cpp:5131](../vm/src/machine.cpp#L5131), [vm/src/machine.cpp:5148](../vm/src/machine.cpp#L5148), [vm/src/machine.cpp:5159](../vm/src/machine.cpp#L5159), [vm/src/machine.cpp:5172](../vm/src/machine.cpp#L5172), [vm/src/machine.cpp:5193](../vm/src/machine.cpp#L5193), [vm/src/machine.cpp:5198](../vm/src/machine.cpp#L5198), [vm/src/machine.cpp:5210](../vm/src/machine.cpp#L5210), [vm/src/machine.cpp:5235](../vm/src/machine.cpp#L5235), [vm/src/machine.cpp:5256](../vm/src/machine.cpp#L5256), [vm/src/machine.cpp:5328](../vm/src/machine.cpp#L5328), [vm/src/machine.cpp:5355](../vm/src/machine.cpp#L5355), [vm/src/machine.cpp:5421](../vm/src/machine.cpp#L5421), [vm/src/machine.cpp:5424](../vm/src/machine.cpp#L5424), [vm/src/machine.cpp:5846](../vm/src/machine.cpp#L5846).
 
 ### WVM1010
 
 - Default value is not implemented for this bytecode type
 
-Definitions: [vm/src/machine.cpp:3972](../vm/src/machine.cpp#L3972).
+Definitions: [vm/src/machine.cpp:4082](../vm/src/machine.cpp#L4082).
 
 ### WVM1011
 
 - Unary instruction reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:3982](../vm/src/machine.cpp#L3982).
+Definitions: [vm/src/machine.cpp:4092](../vm/src/machine.cpp#L4092).
 
 ### WVM1012
 
 - Unary operator is invalid for the runtime value kind
 
-Definitions: [vm/src/machine.cpp:3997](../vm/src/machine.cpp#L3997).
+Definitions: [vm/src/machine.cpp:4107](../vm/src/machine.cpp#L4107).
 
 ### WVM1013
 
 - Binary instruction requires two available values of the same kind
 
-Definitions: [vm/src/machine.cpp:4017](../vm/src/machine.cpp#L4017).
+Definitions: [vm/src/machine.cpp:4127](../vm/src/machine.cpp#L4127).
 
 ### WVM1014
 
 - Integer division by zero
 
-Definitions: [vm/src/machine.cpp:4037](../vm/src/machine.cpp#L4037), [vm/src/machine.cpp:4090](../vm/src/machine.cpp#L4090).
+Definitions: [vm/src/machine.cpp:4147](../vm/src/machine.cpp#L4147), [vm/src/machine.cpp:4200](../vm/src/machine.cpp#L4200).
 
 ### WVM1015
 
 - Signed integer division overflow
 
-Definitions: [vm/src/machine.cpp:4039](../vm/src/machine.cpp#L4039).
+Definitions: [vm/src/machine.cpp:4149](../vm/src/machine.cpp#L4149).
 
 ### WVM1016
 
 - Integer shift count is outside [0, 63]
 
-Definitions: [vm/src/machine.cpp:4051](../vm/src/machine.cpp#L4051), [vm/src/machine.cpp:4102](../vm/src/machine.cpp#L4102).
+Definitions: [vm/src/machine.cpp:4161](../vm/src/machine.cpp#L4161), [vm/src/machine.cpp:4212](../vm/src/machine.cpp#L4212).
 
 ### WVM1017
 
 - Signed integer binary operator is not implemented
 
-Definitions: [vm/src/machine.cpp:4063](../vm/src/machine.cpp#L4063).
+Definitions: [vm/src/machine.cpp:4173](../vm/src/machine.cpp#L4173).
 
 ### WVM1018
 
 - Unsigned integer binary operator is not implemented
 
-Definitions: [vm/src/machine.cpp:4106](../vm/src/machine.cpp#L4106).
+Definitions: [vm/src/machine.cpp:4216](../vm/src/machine.cpp#L4216).
 
 ### WVM1019
 
 - Floating-point binary operator is not implemented
 
-Definitions: [vm/src/machine.cpp:4125](../vm/src/machine.cpp#L4125).
+Definitions: [vm/src/machine.cpp:4235](../vm/src/machine.cpp#L4235).
 
 ### WVM1020
 
 - String binary operator is not implemented
 
-Definitions: [vm/src/machine.cpp:4138](../vm/src/machine.cpp#L4138).
+Definitions: [vm/src/machine.cpp:4248](../vm/src/machine.cpp#L4248).
 
 ### WVM1021
 
 - Binary operator is invalid for the runtime value kind
 
-Definitions: [vm/src/machine.cpp:4155](../vm/src/machine.cpp#L4155).
+Definitions: [vm/src/machine.cpp:4265](../vm/src/machine.cpp#L4265).
 
 ### WVM1022
 
 - Range instruction has an invalid operand shape
 
-Definitions: [vm/src/machine.cpp:5378](../vm/src/machine.cpp#L5378).
+Definitions: [vm/src/machine.cpp:5490](../vm/src/machine.cpp#L5490).
 
 ### WVM1023
 
 - Range instruction reads incompatible values
 
-Definitions: [vm/src/machine.cpp:5383](../vm/src/machine.cpp#L5383).
+Definitions: [vm/src/machine.cpp:5495](../vm/src/machine.cpp#L5495).
 
 ### WVM1024
 
 - Range containment requires numeric runtime values
 
-Definitions: [vm/src/machine.cpp:5399](../vm/src/machine.cpp#L5399).
+Definitions: [vm/src/machine.cpp:5511](../vm/src/machine.cpp#L5511).
 
 ### WVM1025
 
 - Conversion reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:5408](../vm/src/machine.cpp#L5408).
+Definitions: [vm/src/machine.cpp:5520](../vm/src/machine.cpp#L5520).
 
 ### WVM1026
 
 - Numeric conversion is out of range or invalid
 
-Definitions: [vm/src/machine.cpp:5423](../vm/src/machine.cpp#L5423), [vm/src/machine.cpp:5437](../vm/src/machine.cpp#L5437), [vm/src/machine.cpp:5450](../vm/src/machine.cpp#L5450).
+Definitions: [vm/src/machine.cpp:5535](../vm/src/machine.cpp#L5535), [vm/src/machine.cpp:5549](../vm/src/machine.cpp#L5549), [vm/src/machine.cpp:5562](../vm/src/machine.cpp#L5562).
 
 ### WVM1027
 
 - Conversion target is not a numeric bytecode type
 
-Definitions: [vm/src/machine.cpp:5455](../vm/src/machine.cpp#L5455).
+Definitions: [vm/src/machine.cpp:5567](../vm/src/machine.cpp#L5567).
 
 ### WVM1028
 
 - Call target is outside the module
 
-Definitions: [vm/src/machine.cpp:6954](../vm/src/machine.cpp#L6954).
+Definitions: [vm/src/machine.cpp:7066](../vm/src/machine.cpp#L7066).
 
 ### WVM1029
 
 - Call reads an unavailable argument value
 - Dynamic call reads an unavailable argument value
 
-Definitions: [vm/src/machine.cpp:6961](../vm/src/machine.cpp#L6961), [vm/src/machine.cpp:7009](../vm/src/machine.cpp#L7009).
+Definitions: [vm/src/machine.cpp:7073](../vm/src/machine.cpp#L7073), [vm/src/machine.cpp:7121](../vm/src/machine.cpp#L7121).
 
 ### WVM1030
 
 - Conditional jump requires an available bool value
 
-Definitions: [vm/src/machine.cpp:7200](../vm/src/machine.cpp#L7200).
+Definitions: [vm/src/machine.cpp:7312](../vm/src/machine.cpp#L7312).
 
 ### WVM1031
 
 - Branch target block does not exist
 
-Definitions: [vm/src/machine.cpp:7207](../vm/src/machine.cpp#L7207).
+Definitions: [vm/src/machine.cpp:7319](../vm/src/machine.cpp#L7319).
 
 ### WVM1032
 
 - Branch reads an unavailable argument value
 
-Definitions: [vm/src/machine.cpp:7215](../vm/src/machine.cpp#L7215).
+Definitions: [vm/src/machine.cpp:7327](../vm/src/machine.cpp#L7327).
 
 ### WVM1033
 
 - Return reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:7232](../vm/src/machine.cpp#L7232).
+Definitions: [vm/src/machine.cpp:7344](../vm/src/machine.cpp#L7344).
 
 ### WVM1034
 
 - Call result register is invalid
 
-Definitions: [vm/src/machine.cpp:3785](../vm/src/machine.cpp#L3785).
+Definitions: [vm/src/machine.cpp:3895](../vm/src/machine.cpp#L3895).
 
 ### WVM1035
 
 - Execution reached an unreachable instruction
 
-Definitions: [vm/src/machine.cpp:7240](../vm/src/machine.cpp#L7240).
+Definitions: [vm/src/machine.cpp:7352](../vm/src/machine.cpp#L7352).
 
 ### WVM1036
 
 - Opcode is not implemented by this VM runtime slice: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:7242](../vm/src/machine.cpp#L7242).
+Definitions: [vm/src/machine.cpp:7354](../vm/src/machine.cpp#L7354).
 
 ### WVM1037
 
 - VM exited without producing a result
 
-Definitions: [vm/src/machine.cpp:7245](../vm/src/machine.cpp#L7245).
+Definitions: [vm/src/machine.cpp:7357](../vm/src/machine.cpp#L7357).
 
 ### WVM1038
 
 - Local place result register is invalid
 
-Definitions: [vm/src/machine.cpp:5467](../vm/src/machine.cpp#L5467).
+Definitions: [vm/src/machine.cpp:5579](../vm/src/machine.cpp#L5579).
 
 ### WVM1039
 
 - Global place id or result register is invalid
 
-Definitions: [vm/src/machine.cpp:5475](../vm/src/machine.cpp#L5475).
+Definitions: [vm/src/machine.cpp:5587](../vm/src/machine.cpp#L5587).
 
 ### WVM1040
 
 - Place write requires an available place and source value
 
-Definitions: [vm/src/machine.cpp:5486](../vm/src/machine.cpp#L5486).
+Definitions: [vm/src/machine.cpp:5598](../vm/src/machine.cpp#L5598).
 
 ### WVM1041
 
 - Place can only be initialized once
 
-Definitions: [vm/src/machine.cpp:5488](../vm/src/machine.cpp#L5488).
+Definitions: [vm/src/machine.cpp:5600](../vm/src/machine.cpp#L5600).
 
 ### WVM1042
 
 - Store requires an initialized mutable place
 
-Definitions: [vm/src/machine.cpp:5490](../vm/src/machine.cpp#L5490).
+Definitions: [vm/src/machine.cpp:5602](../vm/src/machine.cpp#L5602).
 
 ### WVM1043
 
@@ -3219,97 +3219,97 @@ Definitions: [vm/src/machine.cpp:5490](../vm/src/machine.cpp#L5490).
 - Load requires an initialized place
 - Dynamic dispatch requires an initialized receiver place
 
-Definitions: [vm/src/machine.cpp:3765](../vm/src/machine.cpp#L3765), [vm/src/machine.cpp:5564](../vm/src/machine.cpp#L5564), [vm/src/machine.cpp:6991](../vm/src/machine.cpp#L6991).
+Definitions: [vm/src/machine.cpp:3875](../vm/src/machine.cpp#L3875), [vm/src/machine.cpp:5676](../vm/src/machine.cpp#L5676), [vm/src/machine.cpp:7103](../vm/src/machine.cpp#L7103).
 
 ### WVM1044
 
 - Borrow requires an available place or object value
 
-Definitions: [vm/src/machine.cpp:5660](../vm/src/machine.cpp#L5660), [vm/src/machine.cpp:5666](../vm/src/machine.cpp#L5666).
+Definitions: [vm/src/machine.cpp:5772](../vm/src/machine.cpp#L5772), [vm/src/machine.cpp:5778](../vm/src/machine.cpp#L5778).
 
 ### WVM1045
 
 - Copy/retain reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:5854](../vm/src/machine.cpp#L5854).
+Definitions: [vm/src/machine.cpp:5966](../vm/src/machine.cpp#L5966).
 
 ### WVM1046
 
 - Move requires an initialized place
 
-Definitions: [vm/src/machine.cpp:5866](../vm/src/machine.cpp#L5866).
+Definitions: [vm/src/machine.cpp:5978](../vm/src/machine.cpp#L5978).
 
 ### WVM1047
 
 - Value cleanup reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:5918](../vm/src/machine.cpp#L5918).
+Definitions: [vm/src/machine.cpp:6030](../vm/src/machine.cpp#L6030).
 
 ### WVM1048
 
 - Place cleanup requires an initialized place
 
-Definitions: [vm/src/machine.cpp:5936](../vm/src/machine.cpp#L5936).
+Definitions: [vm/src/machine.cpp:6048](../vm/src/machine.cpp#L6048).
 
 ### WVM1049
 
 - Unicode text constant is not valid UTF-8
 
-Definitions: [vm/src/machine.cpp:3946](../vm/src/machine.cpp#L3946).
+Definitions: [vm/src/machine.cpp:4056](../vm/src/machine.cpp#L4056).
 
 ### WVM1050
 
 - Unicode text binary operator is not implemented
 
-Definitions: [vm/src/machine.cpp:4152](../vm/src/machine.cpp#L4152).
+Definitions: [vm/src/machine.cpp:4262](../vm/src/machine.cpp#L4262).
 
 ### WVM1051
 
 - Array creation result type is not an array
 
-Definitions: [vm/src/machine.cpp:4163](../vm/src/machine.cpp#L4163).
+Definitions: [vm/src/machine.cpp:4273](../vm/src/machine.cpp#L4273).
 
 ### WVM1052
 
 - Array creation reads an unavailable element
 
-Definitions: [vm/src/machine.cpp:4170](../vm/src/machine.cpp#L4170).
+Definitions: [vm/src/machine.cpp:4280](../vm/src/machine.cpp#L4280).
 
 ### WVM1053
 
 - Array length requires an available array
 
-Definitions: [vm/src/machine.cpp:4182](../vm/src/machine.cpp#L4182).
+Definitions: [vm/src/machine.cpp:4292](../vm/src/machine.cpp#L4292).
 
 ### WVM1054
 
 - Array index is invalid or outside the array bounds
 
-Definitions: [vm/src/machine.cpp:4195](../vm/src/machine.cpp#L4195).
+Definitions: [vm/src/machine.cpp:4305](../vm/src/machine.cpp#L4305).
 
 ### WVM1055
 
 - Interpolation segment shape is invalid
 
-Definitions: [vm/src/machine.cpp:4263](../vm/src/machine.cpp#L4263).
+Definitions: [vm/src/machine.cpp:4374](../vm/src/machine.cpp#L4374).
 
 ### WVM1056
 
 - Interpolation reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:4272](../vm/src/machine.cpp#L4272).
+Definitions: [vm/src/machine.cpp:4383](../vm/src/machine.cpp#L4383).
 
 ### WVM1057
 
 - Unicode interpolation produced invalid UTF-8
 
-Definitions: [vm/src/machine.cpp:4284](../vm/src/machine.cpp#L4284).
+Definitions: [vm/src/machine.cpp:4393](../vm/src/machine.cpp#L4393).
 
 ### WVM1058
 
 - Intrinsic call has no available receiver
 
-Definitions: [vm/src/machine.cpp:4404](../vm/src/machine.cpp#L4404).
+Definitions: [vm/src/machine.cpp:4513](../vm/src/machine.cpp#L4513).
 
 ### WVM1059
 
@@ -3330,25 +3330,25 @@ Definitions: [vm/src/text_intrinsics.cpp:166](../vm/src/text_intrinsics.cpp#L166
 - Text intrinsic is not implemented: {dynamic context}
 - Container or text intrinsic is not implemented: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:4485](../vm/src/machine.cpp#L4485), [vm/src/machine.cpp:4503](../vm/src/machine.cpp#L4503), [vm/src/machine.cpp:4927](../vm/src/machine.cpp#L4927).
+Definitions: [vm/src/machine.cpp:4597](../vm/src/machine.cpp#L4597), [vm/src/machine.cpp:4615](../vm/src/machine.cpp#L4615), [vm/src/machine.cpp:5039](../vm/src/machine.cpp#L5039).
 
 ### WVM1062
 
 - Interpolation value has no VM string representation
 
-Definitions: [vm/src/machine.cpp:4275](../vm/src/machine.cpp#L4275).
+Definitions: [vm/src/machine.cpp:4385](../vm/src/machine.cpp#L4385).
 
 ### WVM1063
 
 - Field place reads an unavailable base
 
-Definitions: [vm/src/machine.cpp:5588](../vm/src/machine.cpp#L5588).
+Definitions: [vm/src/machine.cpp:5700](../vm/src/machine.cpp#L5700).
 
 ### WVM1064
 
 - Field place base is not initialized
 
-Definitions: [vm/src/machine.cpp:5596](../vm/src/machine.cpp#L5596).
+Definitions: [vm/src/machine.cpp:5708](../vm/src/machine.cpp#L5708).
 
 ### WVM1065
 
@@ -3356,37 +3356,37 @@ Definitions: [vm/src/machine.cpp:5596](../vm/src/machine.cpp#L5596).
 - Field owner is outside the concrete object hierarchy
 - Field projection is outside the aggregate layout
 
-Definitions: [vm/src/machine.cpp:5607](../vm/src/machine.cpp#L5607), [vm/src/machine.cpp:5611](../vm/src/machine.cpp#L5611), [vm/src/machine.cpp:5618](../vm/src/machine.cpp#L5618).
+Definitions: [vm/src/machine.cpp:5719](../vm/src/machine.cpp#L5719), [vm/src/machine.cpp:5723](../vm/src/machine.cpp#L5723), [vm/src/machine.cpp:5730](../vm/src/machine.cpp#L5730).
 
 ### WVM1066
 
 - Array place requires an available base and non-negative index
 
-Definitions: [vm/src/machine.cpp:5631](../vm/src/machine.cpp#L5631).
+Definitions: [vm/src/machine.cpp:5743](../vm/src/machine.cpp#L5743).
 
 ### WVM1067
 
 - Array place base is not an initialized array
 
-Definitions: [vm/src/machine.cpp:5639](../vm/src/machine.cpp#L5639).
+Definitions: [vm/src/machine.cpp:5751](../vm/src/machine.cpp#L5751).
 
 ### WVM1068
 
 - Array place index is outside the array bounds
 
-Definitions: [vm/src/machine.cpp:5649](../vm/src/machine.cpp#L5649).
+Definitions: [vm/src/machine.cpp:5761](../vm/src/machine.cpp#L5761).
 
 ### WVM1069
 
 - Aggregate construction references an invalid type
 
-Definitions: [vm/src/machine.cpp:5674](../vm/src/machine.cpp#L5674).
+Definitions: [vm/src/machine.cpp:5786](../vm/src/machine.cpp#L5786).
 
 ### WVM1070
 
 - Aggregate construction kind does not match its result type
 
-Definitions: [vm/src/machine.cpp:5679](../vm/src/machine.cpp#L5679).
+Definitions: [vm/src/machine.cpp:5791](../vm/src/machine.cpp#L5791).
 
 ### WVM1071
 
@@ -3394,19 +3394,19 @@ Definitions: [vm/src/machine.cpp:5679](../vm/src/machine.cpp#L5679).
 - Component aggregate reads an unavailable field argument
 - Aggregate constructor reads an unavailable argument
 
-Definitions: [vm/src/machine.cpp:5742](../vm/src/machine.cpp#L5742), [vm/src/machine.cpp:5747](../vm/src/machine.cpp#L5747), [vm/src/machine.cpp:5774](../vm/src/machine.cpp#L5774).
+Definitions: [vm/src/machine.cpp:5854](../vm/src/machine.cpp#L5854), [vm/src/machine.cpp:5859](../vm/src/machine.cpp#L5859), [vm/src/machine.cpp:5886](../vm/src/machine.cpp#L5886).
 
 ### WVM1072
 
 - Reference release reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:5891](../vm/src/machine.cpp#L5891).
+Definitions: [vm/src/machine.cpp:6003](../vm/src/machine.cpp#L6003).
 
 ### WVM1073
 
 - Reference release requires an owned object or callable handle
 
-Definitions: [vm/src/machine.cpp:5896](../vm/src/machine.cpp#L5896).
+Definitions: [vm/src/machine.cpp:6008](../vm/src/machine.cpp#L6008).
 
 ### WVM1074
 
@@ -3414,308 +3414,308 @@ Definitions: [vm/src/machine.cpp:5896](../vm/src/machine.cpp#L5896).
 - Construction continuation references an invalid function
 - Component construction references an invalid lifecycle function
 
-Definitions: [vm/src/machine.cpp:3801](../vm/src/machine.cpp#L3801), [vm/src/machine.cpp:3815](../vm/src/machine.cpp#L3815), [vm/src/machine.cpp:5782](../vm/src/machine.cpp#L5782).
+Definitions: [vm/src/machine.cpp:3911](../vm/src/machine.cpp#L3911), [vm/src/machine.cpp:3925](../vm/src/machine.cpp#L3925), [vm/src/machine.cpp:5894](../vm/src/machine.cpp#L5894).
 
 ### WVM1078
 
 - Dictionary creation has an invalid result type or entry shape
 
-Definitions: [vm/src/machine.cpp:4203](../vm/src/machine.cpp#L4203).
+Definitions: [vm/src/machine.cpp:4313](../vm/src/machine.cpp#L4313).
 
 ### WVM1079
 
 - Dictionary creation reads an unavailable key or value
 
-Definitions: [vm/src/machine.cpp:4210](../vm/src/machine.cpp#L4210).
+Definitions: [vm/src/machine.cpp:4320](../vm/src/machine.cpp#L4320).
 
 ### WVM1080
 
 - Dictionary key was not found
 
-Definitions: [vm/src/machine.cpp:4225](../vm/src/machine.cpp#L4225), [vm/src/machine.cpp:4253](../vm/src/machine.cpp#L4253), [vm/src/machine.cpp:4766](../vm/src/machine.cpp#L4766).
+Definitions: [vm/src/machine.cpp:4335](../vm/src/machine.cpp#L4335), [vm/src/machine.cpp:4363](../vm/src/machine.cpp#L4363), [vm/src/machine.cpp:4878](../vm/src/machine.cpp#L4878).
 
 ### WVM1081
 
 - Dictionary place requires an available base and key
 
-Definitions: [vm/src/machine.cpp:4235](../vm/src/machine.cpp#L4235).
+Definitions: [vm/src/machine.cpp:4345](../vm/src/machine.cpp#L4345).
 
 ### WVM1082
 
 - Dictionary place base is not an initialized dictionary
 
-Definitions: [vm/src/machine.cpp:4243](../vm/src/machine.cpp#L4243).
+Definitions: [vm/src/machine.cpp:4353](../vm/src/machine.cpp#L4353).
 
 ### WVM1083
 
 - Array Contains reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:4525](../vm/src/machine.cpp#L4525).
+Definitions: [vm/src/machine.cpp:4637](../vm/src/machine.cpp#L4637).
 
 ### WVM1084
 
 - Dictionary GetOr reads unavailable operands
 
-Definitions: [vm/src/machine.cpp:4776](../vm/src/machine.cpp#L4776).
+Definitions: [vm/src/machine.cpp:4888](../vm/src/machine.cpp#L4888).
 
 ### WVM1085
 
 - Dictionary TryGet requires a mutable initialized output place
 
-Definitions: [vm/src/machine.cpp:4788](../vm/src/machine.cpp#L4788).
+Definitions: [vm/src/machine.cpp:4900](../vm/src/machine.cpp#L4900).
 
 ### WVM1086
 
 - Dictionary Set requires a mutable receiver and available operands
 
-Definitions: [vm/src/machine.cpp:4801](../vm/src/machine.cpp#L4801).
+Definitions: [vm/src/machine.cpp:4913](../vm/src/machine.cpp#L4913).
 
 ### WVM1087
 
 - Dictionary GetOrAdd requires a mutable receiver and operands
 
-Definitions: [vm/src/machine.cpp:4811](../vm/src/machine.cpp#L4811).
+Definitions: [vm/src/machine.cpp:4923](../vm/src/machine.cpp#L4923).
 
 ### WVM1088
 
 - Dictionary Merge requires another dictionary
 
-Definitions: [vm/src/machine.cpp:4839](../vm/src/machine.cpp#L4839).
+Definitions: [vm/src/machine.cpp:4951](../vm/src/machine.cpp#L4951).
 
 ### WVM1089
 
 - Dictionary Extend requires a mutable receiver and dictionary
 
-Definitions: [vm/src/machine.cpp:4851](../vm/src/machine.cpp#L4851).
+Definitions: [vm/src/machine.cpp:4963](../vm/src/machine.cpp#L4963).
 
 ### WVM1090
 
 - Dictionary Clear requires a mutable receiver
 
-Definitions: [vm/src/machine.cpp:4868](../vm/src/machine.cpp#L4868).
+Definitions: [vm/src/machine.cpp:4980](../vm/src/machine.cpp#L4980).
 
 ### WVM1091
 
 - Dictionary Remove requires a mutable receiver and key
 
-Definitions: [vm/src/machine.cpp:4888](../vm/src/machine.cpp#L4888).
+Definitions: [vm/src/machine.cpp:5000](../vm/src/machine.cpp#L5000).
 
 ### WVM1092
 
 - Ordered dictionary endpoint requires a non-empty ordered dictionary
 
-Definitions: [vm/src/machine.cpp:4909](../vm/src/machine.cpp#L4909).
+Definitions: [vm/src/machine.cpp:5021](../vm/src/machine.cpp#L5021).
 
 ### WVM1093
 
 - Ordered dictionary bound lookup has invalid operands
 
-Definitions: [vm/src/machine.cpp:4921](../vm/src/machine.cpp#L4921).
+Definitions: [vm/src/machine.cpp:5033](../vm/src/machine.cpp#L5033).
 
 ### WVM1094
 
 - Array index search reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:4539](../vm/src/machine.cpp#L4539).
+Definitions: [vm/src/machine.cpp:4651](../vm/src/machine.cpp#L4651).
 
 ### WVM1095
 
 - Array endpoint intrinsic requires a non-empty array
 
-Definitions: [vm/src/machine.cpp:4569](../vm/src/machine.cpp#L4569).
+Definitions: [vm/src/machine.cpp:4681](../vm/src/machine.cpp#L4681).
 
 ### WVM1096
 
 - Array intrinsic index is outside the array bounds
 
-Definitions: [vm/src/machine.cpp:4578](../vm/src/machine.cpp#L4578).
+Definitions: [vm/src/machine.cpp:4690](../vm/src/machine.cpp#L4690).
 
 ### WVM1097
 
 - Array GetOr reads an unavailable fallback
 
-Definitions: [vm/src/machine.cpp:4587](../vm/src/machine.cpp#L4587).
+Definitions: [vm/src/machine.cpp:4699](../vm/src/machine.cpp#L4699).
 
 ### WVM1098
 
 - Array Slice requires non-negative start and count operands
 
-Definitions: [vm/src/machine.cpp:4602](../vm/src/machine.cpp#L4602).
+Definitions: [vm/src/machine.cpp:4714](../vm/src/machine.cpp#L4714).
 
 ### WVM1099
 
 - Array Take/Skip requires a non-negative count
 
-Definitions: [vm/src/machine.cpp:4610](../vm/src/machine.cpp#L4610).
+Definitions: [vm/src/machine.cpp:4722](../vm/src/machine.cpp#L4722).
 
 ### WVM1100
 
 - Array Concat requires another array
 
-Definitions: [vm/src/machine.cpp:4619](../vm/src/machine.cpp#L4619).
+Definitions: [vm/src/machine.cpp:4731](../vm/src/machine.cpp#L4731).
 
 ### WVM1101
 
 - Array Join requires a string separator
 
-Definitions: [vm/src/machine.cpp:4633](../vm/src/machine.cpp#L4633).
+Definitions: [vm/src/machine.cpp:4745](../vm/src/machine.cpp#L4745).
 
 ### WVM1102
 
 - Array Join requires string elements
 
-Definitions: [vm/src/machine.cpp:4639](../vm/src/machine.cpp#L4639).
+Definitions: [vm/src/machine.cpp:4751](../vm/src/machine.cpp#L4751).
 
 ### WVM1103
 
 - Array Push requires a mutable receiver and available value
 
-Definitions: [vm/src/machine.cpp:4651](../vm/src/machine.cpp#L4651).
+Definitions: [vm/src/machine.cpp:4763](../vm/src/machine.cpp#L4763).
 
 ### WVM1104
 
 - Array Pop requires a mutable non-empty array
 
-Definitions: [vm/src/machine.cpp:4658](../vm/src/machine.cpp#L4658).
+Definitions: [vm/src/machine.cpp:4770](../vm/src/machine.cpp#L4770).
 
 ### WVM1105
 
 - Array Insert index is invalid or receiver is not mutable
 
-Definitions: [vm/src/machine.cpp:4666](../vm/src/machine.cpp#L4666).
+Definitions: [vm/src/machine.cpp:4778](../vm/src/machine.cpp#L4778).
 
 ### WVM1106
 
 - Array RemoveAt index is invalid or receiver is not mutable
 
-Definitions: [vm/src/machine.cpp:4673](../vm/src/machine.cpp#L4673).
+Definitions: [vm/src/machine.cpp:4785](../vm/src/machine.cpp#L4785).
 
 ### WVM1107
 
 - Array Remove requires a mutable receiver and available value
 
-Definitions: [vm/src/machine.cpp:4680](../vm/src/machine.cpp#L4680).
+Definitions: [vm/src/machine.cpp:4792](../vm/src/machine.cpp#L4792).
 
 ### WVM1108
 
 - Array Clear requires a mutable receiver
 
-Definitions: [vm/src/machine.cpp:4687](../vm/src/machine.cpp#L4687).
+Definitions: [vm/src/machine.cpp:4799](../vm/src/machine.cpp#L4799).
 
 ### WVM1109
 
 - Array Extend requires a mutable receiver and another array
 
-Definitions: [vm/src/machine.cpp:4695](../vm/src/machine.cpp#L4695).
+Definitions: [vm/src/machine.cpp:4807](../vm/src/machine.cpp#L4807).
 
 ### WVM1110
 
 - Array Reserve requires a mutable receiver and valid capacity
 
-Definitions: [vm/src/machine.cpp:4702](../vm/src/machine.cpp#L4702).
+Definitions: [vm/src/machine.cpp:4814](../vm/src/machine.cpp#L4814).
 
 ### WVM1111
 
 - Array ShrinkToFit requires a mutable receiver
 
-Definitions: [vm/src/machine.cpp:4708](../vm/src/machine.cpp#L4708).
+Definitions: [vm/src/machine.cpp:4820](../vm/src/machine.cpp#L4820).
 
 ### WVM1112
 
 - Array Fill requires a mutable receiver and available value
 
-Definitions: [vm/src/machine.cpp:4716](../vm/src/machine.cpp#L4716).
+Definitions: [vm/src/machine.cpp:4828](../vm/src/machine.cpp#L4828).
 
 ### WVM1113
 
 - Array Reverse requires a mutable receiver
 
-Definitions: [vm/src/machine.cpp:4723](../vm/src/machine.cpp#L4723).
+Definitions: [vm/src/machine.cpp:4835](../vm/src/machine.cpp#L4835).
 
 ### WVM1114
 
 - Array Sort requires a mutable array of orderable values
 
-Definitions: [vm/src/machine.cpp:4730](../vm/src/machine.cpp#L4730).
+Definitions: [vm/src/machine.cpp:4842](../vm/src/machine.cpp#L4842).
 
 ### WVM1115
 
 - Array Sorted requires orderable values
 
-Definitions: [vm/src/machine.cpp:4737](../vm/src/machine.cpp#L4737).
+Definitions: [vm/src/machine.cpp:4849](../vm/src/machine.cpp#L4849).
 
 ### WVM1116
 
 - String intrinsic receiver is not a string
 
-Definitions: [vm/src/string_intrinsics.cpp:242](../vm/src/string_intrinsics.cpp#L242).
+Definitions: [vm/src/string_intrinsics.cpp:294](../vm/src/string_intrinsics.cpp#L294).
 
 ### WVM1117
 
 - String Contains requires a string or byte-sized char
 
-Definitions: [vm/src/string_intrinsics.cpp:256](../vm/src/string_intrinsics.cpp#L256).
+Definitions: [vm/src/string_intrinsics.cpp:308](../vm/src/string_intrinsics.cpp#L308).
 
 ### WVM1118
 
 - String prefix/suffix query requires a string
 
-Definitions: [vm/src/string_intrinsics.cpp:262](../vm/src/string_intrinsics.cpp#L262).
+Definitions: [vm/src/string_intrinsics.cpp:314](../vm/src/string_intrinsics.cpp#L314).
 
 ### WVM1119
 
 - String index query requires a string or byte-sized char
 
-Definitions: [vm/src/string_intrinsics.cpp:278](../vm/src/string_intrinsics.cpp#L278).
+Definitions: [vm/src/string_intrinsics.cpp:330](../vm/src/string_intrinsics.cpp#L330).
 
 ### WVM1120
 
 - String endpoint intrinsic requires a non-empty string
 
-Definitions: [vm/src/string_intrinsics.cpp:285](../vm/src/string_intrinsics.cpp#L285).
+Definitions: [vm/src/string_intrinsics.cpp:337](../vm/src/string_intrinsics.cpp#L337).
 
 ### WVM1121
 
 - String indexing requires a non-negative index
 
-Definitions: [vm/src/string_intrinsics.cpp:294](../vm/src/string_intrinsics.cpp#L294).
+Definitions: [vm/src/string_intrinsics.cpp:346](../vm/src/string_intrinsics.cpp#L346).
 
 ### WVM1122
 
 - String index is outside the byte bounds
 
-Definitions: [vm/src/string_intrinsics.cpp:300](../vm/src/string_intrinsics.cpp#L300).
+Definitions: [vm/src/string_intrinsics.cpp:352](../vm/src/string_intrinsics.cpp#L352).
 
 ### WVM1123
 
 - String slicing requires a non-negative index or count
 - String Slice requires a non-negative count
 
-Definitions: [vm/src/string_intrinsics.cpp:309](../vm/src/string_intrinsics.cpp#L309), [vm/src/string_intrinsics.cpp:322](../vm/src/string_intrinsics.cpp#L322).
+Definitions: [vm/src/string_intrinsics.cpp:361](../vm/src/string_intrinsics.cpp#L361), [vm/src/string_intrinsics.cpp:374](../vm/src/string_intrinsics.cpp#L374).
 
 ### WVM1124
 
 - String replacement requires old and new string values
 
-Definitions: [vm/src/string_intrinsics.cpp:344](../vm/src/string_intrinsics.cpp#L344), [vm/src/string_intrinsics.cpp:540](../vm/src/string_intrinsics.cpp#L540).
+Definitions: [vm/src/string_intrinsics.cpp:396](../vm/src/string_intrinsics.cpp#L396), [vm/src/string_intrinsics.cpp:586](../vm/src/string_intrinsics.cpp#L586).
 
 ### WVM1125
 
 - String Repeat count exceeds runtime limits
 
-Definitions: [vm/src/string_intrinsics.cpp:353](../vm/src/string_intrinsics.cpp#L353).
+Definitions: [vm/src/string_intrinsics.cpp:405](../vm/src/string_intrinsics.cpp#L405).
 
 ### WVM1126
 
 - String Split requires a separator
 
-Definitions: [vm/src/string_intrinsics.cpp:367](../vm/src/string_intrinsics.cpp#L367).
+Definitions: [vm/src/string_intrinsics.cpp:419](../vm/src/string_intrinsics.cpp#L419).
 
 ### WVM1127
 
 - String padding requires a width and optional byte-sized char
 
-Definitions: [vm/src/string_intrinsics.cpp:412](../vm/src/string_intrinsics.cpp#L412).
+Definitions: [vm/src/string_intrinsics.cpp:464](../vm/src/string_intrinsics.cpp#L464).
 
 ### WVM1128
 
@@ -3725,50 +3725,50 @@ Definitions: [vm/src/string_intrinsics.cpp:412](../vm/src/string_intrinsics.cpp#
 - String signed conversion is out of range
 - String integer conversion base is invalid
 
-Definitions: [vm/src/string_intrinsics.cpp:196](../vm/src/string_intrinsics.cpp#L196), [vm/src/string_intrinsics.cpp:201](../vm/src/string_intrinsics.cpp#L201), [vm/src/string_intrinsics.cpp:212](../vm/src/string_intrinsics.cpp#L212), [vm/src/string_intrinsics.cpp:220](../vm/src/string_intrinsics.cpp#L220), [vm/src/string_intrinsics.cpp:430](../vm/src/string_intrinsics.cpp#L430).
+Definitions: [vm/src/string_intrinsics.cpp:248](../vm/src/string_intrinsics.cpp#L248), [vm/src/string_intrinsics.cpp:253](../vm/src/string_intrinsics.cpp#L253), [vm/src/string_intrinsics.cpp:264](../vm/src/string_intrinsics.cpp#L264), [vm/src/string_intrinsics.cpp:272](../vm/src/string_intrinsics.cpp#L272), [vm/src/string_intrinsics.cpp:482](../vm/src/string_intrinsics.cpp#L482).
 
 ### WVM1129
 
 - String f32 conversion failed
 - String floating-point conversion failed
 
-Definitions: [vm/src/string_intrinsics.cpp:447](../vm/src/string_intrinsics.cpp#L447), [vm/src/string_intrinsics.cpp:455](../vm/src/string_intrinsics.cpp#L455).
+Definitions: [vm/src/string_intrinsics.cpp:498](../vm/src/string_intrinsics.cpp#L498), [vm/src/string_intrinsics.cpp:505](../vm/src/string_intrinsics.cpp#L505).
 
 ### WVM1130
 
 - String boolean conversion failed
 
-Definitions: [vm/src/string_intrinsics.cpp:467](../vm/src/string_intrinsics.cpp#L467).
+Definitions: [vm/src/string_intrinsics.cpp:517](../vm/src/string_intrinsics.cpp#L517).
 
 ### WVM1131
 
-- String Append requires a string suffix
+- String Append requires a string, numeric or bool suffix
 
-Definitions: [vm/src/string_intrinsics.cpp:481](../vm/src/string_intrinsics.cpp#L481), [vm/src/string_intrinsics.cpp:504](../vm/src/string_intrinsics.cpp#L504).
+Definitions: [vm/src/string_intrinsics.cpp:530](../vm/src/string_intrinsics.cpp#L530), [vm/src/string_intrinsics.cpp:551](../vm/src/string_intrinsics.cpp#L551).
 
 ### WVM1132
 
 - String Push requires a byte-sized char
 
-Definitions: [vm/src/string_intrinsics.cpp:489](../vm/src/string_intrinsics.cpp#L489), [vm/src/string_intrinsics.cpp:511](../vm/src/string_intrinsics.cpp#L511).
+Definitions: [vm/src/string_intrinsics.cpp:537](../vm/src/string_intrinsics.cpp#L537), [vm/src/string_intrinsics.cpp:557](../vm/src/string_intrinsics.cpp#L557).
 
 ### WVM1133
 
 - String Insert requires an index and fragment
 
-Definitions: [vm/src/string_intrinsics.cpp:519](../vm/src/string_intrinsics.cpp#L519).
+Definitions: [vm/src/string_intrinsics.cpp:565](../vm/src/string_intrinsics.cpp#L565).
 
 ### WVM1134
 
 - String Erase requires index and count operands
 
-Definitions: [vm/src/string_intrinsics.cpp:527](../vm/src/string_intrinsics.cpp#L527).
+Definitions: [vm/src/string_intrinsics.cpp:573](../vm/src/string_intrinsics.cpp#L573).
 
 ### WVM1135
 
 - String mutation requires a mutable receiver
 
-Definitions: [vm/src/string_intrinsics.cpp:231](../vm/src/string_intrinsics.cpp#L231).
+Definitions: [vm/src/string_intrinsics.cpp:283](../vm/src/string_intrinsics.cpp#L283).
 
 ### WVM1136
 
@@ -3792,159 +3792,159 @@ Definitions: [vm/src/text_intrinsics.cpp:204](../vm/src/text_intrinsics.cpp#L204
 
 - Function reference requires a known function and callable type
 
-Definitions: [vm/src/machine.cpp:5956](../vm/src/machine.cpp#L5956).
+Definitions: [vm/src/machine.cpp:6068](../vm/src/machine.cpp#L6068).
 
 ### WVM1140
 
 - Function reference result register is invalid
 
-Definitions: [vm/src/machine.cpp:5958](../vm/src/machine.cpp#L5958).
+Definitions: [vm/src/machine.cpp:6070](../vm/src/machine.cpp#L6070).
 
 ### WVM1141
 
 - Closure creation does not match a known callable capture layout
 
-Definitions: [vm/src/machine.cpp:5967](../vm/src/machine.cpp#L5967).
+Definitions: [vm/src/machine.cpp:6079](../vm/src/machine.cpp#L6079).
 
 ### WVM1142
 
 - Closure creation reads an unavailable capture value
 
-Definitions: [vm/src/machine.cpp:5975](../vm/src/machine.cpp#L5975).
+Definitions: [vm/src/machine.cpp:6087](../vm/src/machine.cpp#L6087).
 
 ### WVM1143
 
 - Reference capture requires a live borrowed place
 
-Definitions: [vm/src/machine.cpp:5984](../vm/src/machine.cpp#L5984).
+Definitions: [vm/src/machine.cpp:6096](../vm/src/machine.cpp#L6096).
 
 ### WVM1144
 
 - Retained-self capture requires a live component or object
 
-Definitions: [vm/src/machine.cpp:6002](../vm/src/machine.cpp#L6002).
+Definitions: [vm/src/machine.cpp:6114](../vm/src/machine.cpp#L6114).
 
 ### WVM1145
 
 - Closure creation contains an unknown capture kind
 
-Definitions: [vm/src/machine.cpp:6007](../vm/src/machine.cpp#L6007).
+Definitions: [vm/src/machine.cpp:6119](../vm/src/machine.cpp#L6119).
 
 ### WVM1146
 
 - Closure result register is invalid
 - Native callable result register is invalid
 
-Definitions: [vm/src/machine.cpp:6011](../vm/src/machine.cpp#L6011), [vm/src/machine.cpp:6038](../vm/src/machine.cpp#L6038).
+Definitions: [vm/src/machine.cpp:6123](../vm/src/machine.cpp#L6123), [vm/src/machine.cpp:6150](../vm/src/machine.cpp#L6150).
 
 ### WVM1147
 
 - Indirect call requires an available function value
 
-Definitions: [vm/src/machine.cpp:6019](../vm/src/machine.cpp#L6019).
+Definitions: [vm/src/machine.cpp:6131](../vm/src/machine.cpp#L6131).
 
 ### WVM1148
 
 - Indirect call target is outside the module
 
-Definitions: [vm/src/machine.cpp:6044](../vm/src/machine.cpp#L6044).
+Definitions: [vm/src/machine.cpp:6156](../vm/src/machine.cpp#L6156).
 
 ### WVM1149
 
 - Indirect call lost a closure capture
 
-Definitions: [vm/src/machine.cpp:6052](../vm/src/machine.cpp#L6052).
+Definitions: [vm/src/machine.cpp:6164](../vm/src/machine.cpp#L6164).
 
 ### WVM1150
 
 - Native indirect call reads an unavailable argument
 - Indirect call reads an unavailable argument value
 
-Definitions: [vm/src/machine.cpp:6030](../vm/src/machine.cpp#L6030), [vm/src/machine.cpp:6059](../vm/src/machine.cpp#L6059).
+Definitions: [vm/src/machine.cpp:6142](../vm/src/machine.cpp#L6142), [vm/src/machine.cpp:6171](../vm/src/machine.cpp#L6171).
 
 ### WVM1151
 
 - Object cast requires a live object value
 
-Definitions: [vm/src/machine.cpp:6088](../vm/src/machine.cpp#L6088).
+Definitions: [vm/src/machine.cpp:6200](../vm/src/machine.cpp#L6200).
 
 ### WVM1152
 
 Definition: Upcast target is incompatible with the concrete object type.
 
-Definitions: [vm/src/machine.cpp:6090](../vm/src/machine.cpp#L6090).
+Definitions: [vm/src/machine.cpp:6202](../vm/src/machine.cpp#L6202).
 
 ### WVM1153
 
 Definition: Checked object cast failed for the concrete object type.
 
-Definitions: [vm/src/machine.cpp:6090](../vm/src/machine.cpp#L6090).
+Definitions: [vm/src/machine.cpp:6202](../vm/src/machine.cpp#L6202).
 
 ### WVM1154
 
 - Object cast result register is invalid
 
-Definitions: [vm/src/machine.cpp:6102](../vm/src/machine.cpp#L6102).
+Definitions: [vm/src/machine.cpp:6214](../vm/src/machine.cpp#L6214).
 
 ### WVM1155
 
 - Object type-test result register is invalid
 
-Definitions: [vm/src/machine.cpp:6112](../vm/src/machine.cpp#L6112).
+Definitions: [vm/src/machine.cpp:6224](../vm/src/machine.cpp#L6224).
 
 ### WVM1156
 
 - Object identity comparison requires two operands
 
-Definitions: [vm/src/machine.cpp:6119](../vm/src/machine.cpp#L6119).
+Definitions: [vm/src/machine.cpp:6231](../vm/src/machine.cpp#L6231).
 
 ### WVM1157
 
 - Object identity comparison reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:6123](../vm/src/machine.cpp#L6123).
+Definitions: [vm/src/machine.cpp:6235](../vm/src/machine.cpp#L6235).
 
 ### WVM1158
 
 - Object identity comparison requires object or null operands
 
-Definitions: [vm/src/machine.cpp:6130](../vm/src/machine.cpp#L6130).
+Definitions: [vm/src/machine.cpp:6242](../vm/src/machine.cpp#L6242).
 
 ### WVM1159
 
 - Object identity comparison has an invalid comparison operator
 
-Definitions: [vm/src/machine.cpp:6137](../vm/src/machine.cpp#L6137).
+Definitions: [vm/src/machine.cpp:6249](../vm/src/machine.cpp#L6249).
 
 ### WVM1160
 
 - Object identity comparison result register is invalid
 
-Definitions: [vm/src/machine.cpp:6139](../vm/src/machine.cpp#L6139).
+Definitions: [vm/src/machine.cpp:6251](../vm/src/machine.cpp#L6251).
 
 ### WVM1161
 
 - Dynamic dispatch requires a live object receiver
 
-Definitions: [vm/src/machine.cpp:6995](../vm/src/machine.cpp#L6995).
+Definitions: [vm/src/machine.cpp:7107](../vm/src/machine.cpp#L7107).
 
 ### WVM1162
 
 - Concrete object type has no implementation for the requested method slot
 
-Definitions: [vm/src/machine.cpp:6999](../vm/src/machine.cpp#L6999).
+Definitions: [vm/src/machine.cpp:7111](../vm/src/machine.cpp#L7111).
 
 ### WVM1163
 
 - Dynamic dispatch resolved outside the module function table
 
-Definitions: [vm/src/machine.cpp:7001](../vm/src/machine.cpp#L7001).
+Definitions: [vm/src/machine.cpp:7113](../vm/src/machine.cpp#L7113).
 
 ### WVM1164
 
 - Wait requires an async task value
 
-Definitions: [vm/src/machine.cpp:3375](../vm/src/machine.cpp#L3375).
+Definitions: [vm/src/machine.cpp:3444](../vm/src/machine.cpp#L3444).
 
 ### WVM1165
 
@@ -3954,85 +3954,85 @@ Definitions: [vm/src/machine.cpp:3375](../vm/src/machine.cpp#L3375).
 - Async task was cancelled before its continuation resumed
 - Async task was cancelled at a cooperative suspension point
 
-Definitions: [vm/src/machine.cpp:1615](../vm/src/machine.cpp#L1615), [vm/src/machine.cpp:2908](../vm/src/machine.cpp#L2908), [vm/src/machine.cpp:2939](../vm/src/machine.cpp#L2939), [vm/src/machine.cpp:3389](../vm/src/machine.cpp#L3389), [vm/src/machine.cpp:3404](../vm/src/machine.cpp#L3404), [vm/src/machine.cpp:3433](../vm/src/machine.cpp#L3433), [vm/src/machine.cpp:3445](../vm/src/machine.cpp#L3445), [vm/src/machine.cpp:3465](../vm/src/machine.cpp#L3465), [vm/src/machine.cpp:3534](../vm/src/machine.cpp#L3534), [vm/src/machine.cpp:3596](../vm/src/machine.cpp#L3596), [vm/src/machine.cpp:7033](../vm/src/machine.cpp#L7033), [vm/src/machine.cpp:7069](../vm/src/machine.cpp#L7069).
+Definitions: [vm/src/machine.cpp:1607](../vm/src/machine.cpp#L1607), [vm/src/machine.cpp:2977](../vm/src/machine.cpp#L2977), [vm/src/machine.cpp:3008](../vm/src/machine.cpp#L3008), [vm/src/machine.cpp:3458](../vm/src/machine.cpp#L3458), [vm/src/machine.cpp:3473](../vm/src/machine.cpp#L3473), [vm/src/machine.cpp:3502](../vm/src/machine.cpp#L3502), [vm/src/machine.cpp:3514](../vm/src/machine.cpp#L3514), [vm/src/machine.cpp:3534](../vm/src/machine.cpp#L3534), [vm/src/machine.cpp:3603](../vm/src/machine.cpp#L3603), [vm/src/machine.cpp:3665](../vm/src/machine.cpp#L3665), [vm/src/machine.cpp:7145](../vm/src/machine.cpp#L7145), [vm/src/machine.cpp:7181](../vm/src/machine.cpp#L7181).
 
 ### WVM1166
 
 - Async task is already running or has an invalid state
 
-Definitions: [vm/src/machine.cpp:3408](../vm/src/machine.cpp#L3408).
+Definitions: [vm/src/machine.cpp:3477](../vm/src/machine.cpp#L3477).
 
 ### WVM1167
 
 - Async task lost a captured argument
 
-Definitions: [vm/src/machine.cpp:3417](../vm/src/machine.cpp#L3417), [vm/src/machine.cpp:3419](../vm/src/machine.cpp#L3419).
+Definitions: [vm/src/machine.cpp:3486](../vm/src/machine.cpp#L3486), [vm/src/machine.cpp:3488](../vm/src/machine.cpp#L3488).
 
 ### WVM1168
 
 - Async indirect-call result register is invalid
 
-Definitions: [vm/src/machine.cpp:6070](../vm/src/machine.cpp#L6070).
+Definitions: [vm/src/machine.cpp:6182](../vm/src/machine.cpp#L6182).
 
 ### WVM1169
 
 - Async call result register is invalid
 
-Definitions: [vm/src/machine.cpp:6968](../vm/src/machine.cpp#L6968).
+Definitions: [vm/src/machine.cpp:7080](../vm/src/machine.cpp#L7080).
 
 ### WVM1170
 
 - Async dynamic-call result register is invalid
 
-Definitions: [vm/src/machine.cpp:7016](../vm/src/machine.cpp#L7016).
+Definitions: [vm/src/machine.cpp:7128](../vm/src/machine.cpp#L7128).
 
 ### WVM1171
 
 - Coroutine suspension does not match its function state table
 
-Definitions: [vm/src/machine.cpp:7042](../vm/src/machine.cpp#L7042).
+Definitions: [vm/src/machine.cpp:7154](../vm/src/machine.cpp#L7154).
 
 ### WVM1172
 
 - Coroutine suspension state does not match its resume edge
 
-Definitions: [vm/src/machine.cpp:7047](../vm/src/machine.cpp#L7047).
+Definitions: [vm/src/machine.cpp:7159](../vm/src/machine.cpp#L7159).
 
 ### WVM1173
 
 - Coroutine await requires an async task operand
 
-Definitions: [vm/src/machine.cpp:7056](../vm/src/machine.cpp#L7056).
+Definitions: [vm/src/machine.cpp:7168](../vm/src/machine.cpp#L7168).
 
 ### WVM1174
 
 - Coroutine suspension carries an unsupported async operation
 
-Definitions: [vm/src/machine.cpp:7132](../vm/src/machine.cpp#L7132).
+Definitions: [vm/src/machine.cpp:7244](../vm/src/machine.cpp#L7244).
 
 ### WVM1175
 
 - Coroutine resume block does not exist
 
-Definitions: [vm/src/machine.cpp:3561](../vm/src/machine.cpp#L3561), [vm/src/machine.cpp:7136](../vm/src/machine.cpp#L7136).
+Definitions: [vm/src/machine.cpp:3630](../vm/src/machine.cpp#L3630), [vm/src/machine.cpp:7248](../vm/src/machine.cpp#L7248).
 
 ### WVM1176
 
 - Coroutine resume has no matching suspended payload
 
-Definitions: [vm/src/machine.cpp:7160](../vm/src/machine.cpp#L7160).
+Definitions: [vm/src/machine.cpp:7272](../vm/src/machine.cpp#L7272).
 
 ### WVM1177
 
 - Coroutine resume result register is invalid
 
-Definitions: [vm/src/machine.cpp:7162](../vm/src/machine.cpp#L7162).
+Definitions: [vm/src/machine.cpp:7274](../vm/src/machine.cpp#L7274).
 
 ### WVM1178
 
 - Enum constant does not match its canonical type metadata
 
-Definitions: [vm/src/machine.cpp:4301](../vm/src/machine.cpp#L4301).
+Definitions: [vm/src/machine.cpp:4410](../vm/src/machine.cpp#L4410).
 
 ### WVM1179
 
@@ -4040,31 +4040,31 @@ Definitions: [vm/src/machine.cpp:4301](../vm/src/machine.cpp#L4301).
 - Enum intrinsic target metadata is invalid
 - Enum intrinsic receiver is not an integer value
 
-Definitions: [vm/src/machine.cpp:4317](../vm/src/machine.cpp#L4317), [vm/src/machine.cpp:4322](../vm/src/machine.cpp#L4322), [vm/src/machine.cpp:4334](../vm/src/machine.cpp#L4334).
+Definitions: [vm/src/machine.cpp:4426](../vm/src/machine.cpp#L4426), [vm/src/machine.cpp:4431](../vm/src/machine.cpp#L4431), [vm/src/machine.cpp:4443](../vm/src/machine.cpp#L4443).
 
 ### WVM1180
 
 - Flagset intrinsic requires an integer mask operand
 
-Definitions: [vm/src/machine.cpp:4369](../vm/src/machine.cpp#L4369).
+Definitions: [vm/src/machine.cpp:4478](../vm/src/machine.cpp#L4478).
 
 ### WVM1181
 
 - Enum or flagset intrinsic is not implemented: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:4385](../vm/src/machine.cpp#L4385).
+Definitions: [vm/src/machine.cpp:4494](../vm/src/machine.cpp#L4494).
 
 ### WVM1182
 
 - Any boxing requires an available payload
 
-Definitions: [vm/src/machine.cpp:4944](../vm/src/machine.cpp#L4944).
+Definitions: [vm/src/machine.cpp:5056](../vm/src/machine.cpp#L5056).
 
 ### WVM1183
 
 - Any test or cast requires a live boxed value
 
-Definitions: [vm/src/machine.cpp:5007](../vm/src/machine.cpp#L5007).
+Definitions: [vm/src/machine.cpp:5119](../vm/src/machine.cpp#L5119).
 
 ### WVM1184
 
@@ -4072,86 +4072,86 @@ Definitions: [vm/src/machine.cpp:5007](../vm/src/machine.cpp#L5007).
 - Checked any cast failed for the requested target type
 - Checked any cast cannot borrow a non-object payload
 
-Definitions: [vm/src/machine.cpp:4964](../vm/src/machine.cpp#L4964), [vm/src/machine.cpp:5024](../vm/src/machine.cpp#L5024), [vm/src/machine.cpp:5032](../vm/src/machine.cpp#L5032).
+Definitions: [vm/src/machine.cpp:5076](../vm/src/machine.cpp#L5076), [vm/src/machine.cpp:5136](../vm/src/machine.cpp#L5136), [vm/src/machine.cpp:5144](../vm/src/machine.cpp#L5144).
 
 ### WVM1185
 
 - Nullable wrapping requires an available payload
 
-Definitions: [vm/src/machine.cpp:5045](../vm/src/machine.cpp#L5045).
+Definitions: [vm/src/machine.cpp:5157](../vm/src/machine.cpp#L5157).
 
 ### WVM1186
 
 - Nullable unwrap requires an available value
 
-Definitions: [vm/src/machine.cpp:5056](../vm/src/machine.cpp#L5056).
+Definitions: [vm/src/machine.cpp:5168](../vm/src/machine.cpp#L5168).
 
 ### WVM1187
 
 - Nullable value does not contain a payload
 
-Definitions: [vm/src/machine.cpp:5058](../vm/src/machine.cpp#L5058).
+Definitions: [vm/src/machine.cpp:5170](../vm/src/machine.cpp#L5170).
 
 ### WVM1188
 
 - Variant operation requires canonical option/result storage
 
-Definitions: [vm/src/machine.cpp:5074](../vm/src/machine.cpp#L5074).
+Definitions: [vm/src/machine.cpp:5186](../vm/src/machine.cpp#L5186).
 
 ### WVM1189
 
 - Result does not contain a success value
 
-Definitions: [vm/src/machine.cpp:5093](../vm/src/machine.cpp#L5093).
+Definitions: [vm/src/machine.cpp:5205](../vm/src/machine.cpp#L5205).
 
 ### WVM1190
 
 - Variant payload is outside its canonical field layout
 
-Definitions: [vm/src/machine.cpp:5096](../vm/src/machine.cpp#L5096).
+Definitions: [vm/src/machine.cpp:5208](../vm/src/machine.cpp#L5208).
 
 ### WVM1191
 
 - Iterator creation result type is not an iterator
 
-Definitions: [vm/src/machine.cpp:5108](../vm/src/machine.cpp#L5108).
+Definitions: [vm/src/machine.cpp:5220](../vm/src/machine.cpp#L5220).
 
 ### WVM1192
 
 - Range iterator requires three compatible integer values
 
-Definitions: [vm/src/machine.cpp:5116](../vm/src/machine.cpp#L5116).
+Definitions: [vm/src/machine.cpp:5228](../vm/src/machine.cpp#L5228).
 
 ### WVM1193
 
 - Range iterator step cannot be zero
 
-Definitions: [vm/src/machine.cpp:5120](../vm/src/machine.cpp#L5120).
+Definitions: [vm/src/machine.cpp:5232](../vm/src/machine.cpp#L5232).
 
 ### WVM1194
 
 - Container iterator source does not match its selector
 - Container iterator has an invalid operand shape
 
-Definitions: [vm/src/machine.cpp:5131](../vm/src/machine.cpp#L5131), [vm/src/machine.cpp:5142](../vm/src/machine.cpp#L5142).
+Definitions: [vm/src/machine.cpp:5243](../vm/src/machine.cpp#L5243), [vm/src/machine.cpp:5254](../vm/src/machine.cpp#L5254).
 
 ### WVM1195
 
 - Container iterator step must be a positive integer
 
-Definitions: [vm/src/machine.cpp:5138](../vm/src/machine.cpp#L5138).
+Definitions: [vm/src/machine.cpp:5250](../vm/src/machine.cpp#L5250).
 
 ### WVM1196
 
 - Iterator selector is not implemented: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:5147](../vm/src/machine.cpp#L5147).
+Definitions: [vm/src/machine.cpp:5259](../vm/src/machine.cpp#L5259).
 
 ### WVM1197
 
 - Iterator operation requires a live iterator value
 
-Definitions: [vm/src/machine.cpp:5159](../vm/src/machine.cpp#L5159).
+Definitions: [vm/src/machine.cpp:5271](../vm/src/machine.cpp#L5271).
 
 ### WVM1198
 
@@ -4160,7 +4160,7 @@ Definitions: [vm/src/machine.cpp:5159](../vm/src/machine.cpp#L5159).
 - Range iterator state is not integer-compatible
 - Container iterator source is unavailable
 
-Definitions: [vm/src/machine.cpp:5214](../vm/src/machine.cpp#L5214), [vm/src/machine.cpp:5328](../vm/src/machine.cpp#L5328), [vm/src/machine.cpp:5355](../vm/src/machine.cpp#L5355), [vm/src/machine.cpp:5361](../vm/src/machine.cpp#L5361).
+Definitions: [vm/src/machine.cpp:5326](../vm/src/machine.cpp#L5326), [vm/src/machine.cpp:5440](../vm/src/machine.cpp#L5440), [vm/src/machine.cpp:5467](../vm/src/machine.cpp#L5467), [vm/src/machine.cpp:5473](../vm/src/machine.cpp#L5473).
 
 ### WVM1199
 
@@ -4168,19 +4168,19 @@ Definitions: [vm/src/machine.cpp:5214](../vm/src/machine.cpp#L5214), [vm/src/mac
 - Container iterator has no current value
 - Iterator current value is unavailable
 
-Definitions: [vm/src/machine.cpp:5229](../vm/src/machine.cpp#L5229), [vm/src/machine.cpp:5238](../vm/src/machine.cpp#L5238), [vm/src/machine.cpp:5293](../vm/src/machine.cpp#L5293).
+Definitions: [vm/src/machine.cpp:5341](../vm/src/machine.cpp#L5341), [vm/src/machine.cpp:5350](../vm/src/machine.cpp#L5350), [vm/src/machine.cpp:5405](../vm/src/machine.cpp#L5405).
 
 ### WVM1200
 
 - Array iterator field projection is invalid
 
-Definitions: [vm/src/machine.cpp:5265](../vm/src/machine.cpp#L5265), [vm/src/machine.cpp:5270](../vm/src/machine.cpp#L5270).
+Definitions: [vm/src/machine.cpp:5377](../vm/src/machine.cpp#L5377), [vm/src/machine.cpp:5382](../vm/src/machine.cpp#L5382).
 
 ### WVM1201
 
 - Dictionary iterator projection is invalid
 
-Definitions: [vm/src/machine.cpp:5289](../vm/src/machine.cpp#L5289).
+Definitions: [vm/src/machine.cpp:5401](../vm/src/machine.cpp#L5401).
 
 ### WVM1202
 
@@ -4188,26 +4188,26 @@ Definitions: [vm/src/machine.cpp:5289](../vm/src/machine.cpp#L5289).
 - Result propagation target has no canonical result layout
 - Result propagation target fields are unavailable
 
-Definitions: [vm/src/machine.cpp:7176](../vm/src/machine.cpp#L7176), [vm/src/machine.cpp:7181](../vm/src/machine.cpp#L7181), [vm/src/machine.cpp:7186](../vm/src/machine.cpp#L7186).
+Definitions: [vm/src/machine.cpp:7288](../vm/src/machine.cpp#L7288), [vm/src/machine.cpp:7293](../vm/src/machine.cpp#L7293), [vm/src/machine.cpp:7298](../vm/src/machine.cpp#L7298).
 
 ### WVM1204
 
 - Async task failure lost its terminal-state race
 - Async task completion lost its terminal-state race
 
-Definitions: [vm/src/machine.cpp:3448](../vm/src/machine.cpp#L3448), [vm/src/machine.cpp:3468](../vm/src/machine.cpp#L3468).
+Definitions: [vm/src/machine.cpp:3517](../vm/src/machine.cpp#L3517), [vm/src/machine.cpp:3537](../vm/src/machine.cpp#L3537).
 
 ### WVM1205
 
 - VM execution was aborted by the debug observer
 
-Definitions: [vm/src/machine.cpp:3858](../vm/src/machine.cpp#L3858).
+Definitions: [vm/src/machine.cpp:3968](../vm/src/machine.cpp#L3968).
 
 ### WVM1206
 
 - VM debug observer threw across the runtime boundary
 
-Definitions: [vm/src/machine.cpp:3851](../vm/src/machine.cpp#L3851).
+Definitions: [vm/src/machine.cpp:3961](../vm/src/machine.cpp#L3961).
 
 ### WVM1207
 
@@ -4215,7 +4215,7 @@ Definitions: [vm/src/machine.cpp:3851](../vm/src/machine.cpp#L3851).
 - VM executor owner dispatch failed
 - VM executor continuation threw across the runtime boundary
 
-Definitions: [vm/src/machine.cpp:3344](../vm/src/machine.cpp#L3344), [vm/src/machine.cpp:3509](../vm/src/machine.cpp#L3509), [vm/src/machine.cpp:3641](../vm/src/machine.cpp#L3641), [vm/src/machine.cpp:3646](../vm/src/machine.cpp#L3646).
+Definitions: [vm/src/machine.cpp:3413](../vm/src/machine.cpp#L3413), [vm/src/machine.cpp:3578](../vm/src/machine.cpp#L3578), [vm/src/machine.cpp:3710](../vm/src/machine.cpp#L3710), [vm/src/machine.cpp:3715](../vm/src/machine.cpp#L3715).
 
 ### WVM1208
 
@@ -4223,14 +4223,14 @@ Definitions: [vm/src/machine.cpp:3344](../vm/src/machine.cpp#L3344), [vm/src/mac
 - Coroutine executor switch has no runnable target
 - Coroutine executor queue rejected its continuation
 
-Definitions: [vm/src/machine.cpp:3581](../vm/src/machine.cpp#L3581), [vm/src/machine.cpp:7145](../vm/src/machine.cpp#L7145), [vm/src/machine.cpp:7149](../vm/src/machine.cpp#L7149).
+Definitions: [vm/src/machine.cpp:3650](../vm/src/machine.cpp#L3650), [vm/src/machine.cpp:7257](../vm/src/machine.cpp#L7257), [vm/src/machine.cpp:7261](../vm/src/machine.cpp#L7261).
 
 ### WVM1209
 
 - Await continuation lost its VM frame
 - Coroutine await has no owning async task
 
-Definitions: [vm/src/machine.cpp:3551](../vm/src/machine.cpp#L3551), [vm/src/machine.cpp:7084](../vm/src/machine.cpp#L7084).
+Definitions: [vm/src/machine.cpp:3620](../vm/src/machine.cpp#L3620), [vm/src/machine.cpp:7196](../vm/src/machine.cpp#L7196).
 
 ### WVM1210
 
@@ -4238,7 +4238,7 @@ Definitions: [vm/src/machine.cpp:3551](../vm/src/machine.cpp#L3551), [vm/src/mac
 - VM destructor threw a non-standard exception while unwinding
 - VM await continuation dispatch failed
 
-Definitions: [vm/src/machine.cpp:1524](../vm/src/machine.cpp#L1524), [vm/src/machine.cpp:1529](../vm/src/machine.cpp#L1529), [vm/src/machine.cpp:7114](../vm/src/machine.cpp#L7114).
+Definitions: [vm/src/machine.cpp:1516](../vm/src/machine.cpp#L1516), [vm/src/machine.cpp:1521](../vm/src/machine.cpp#L1521), [vm/src/machine.cpp:7226](../vm/src/machine.cpp#L7226).
 
 ### WVM1211
 
@@ -4249,13 +4249,13 @@ Definitions: [vm/src/machine.cpp:1524](../vm/src/machine.cpp#L1524), [vm/src/mac
 - Native callback cleanup failed while running a destructor
 - Native copy-back cleanup failed while running a destructor
 
-Definitions: [vm/src/machine.cpp:4930](../vm/src/machine.cpp#L4930), [vm/src/machine.cpp:5521](../vm/src/machine.cpp#L5521), [vm/src/machine.cpp:5902](../vm/src/machine.cpp#L5902), [vm/src/machine.cpp:5923](../vm/src/machine.cpp#L5923), [vm/src/machine.cpp:5945](../vm/src/machine.cpp#L5945), [vm/src/machine.cpp:6725](../vm/src/machine.cpp#L6725), [vm/src/machine.cpp:6817](../vm/src/machine.cpp#L6817).
+Definitions: [vm/src/machine.cpp:5042](../vm/src/machine.cpp#L5042), [vm/src/machine.cpp:5633](../vm/src/machine.cpp#L5633), [vm/src/machine.cpp:6014](../vm/src/machine.cpp#L6014), [vm/src/machine.cpp:6035](../vm/src/machine.cpp#L6035), [vm/src/machine.cpp:6057](../vm/src/machine.cpp#L6057), [vm/src/machine.cpp:6837](../vm/src/machine.cpp#L6837), [vm/src/machine.cpp:6929](../vm/src/machine.cpp#L6929).
 
 ### WVM1212
 
 - Async argument cleanup failed while running a destructor
 
-Definitions: [vm/src/machine.cpp:3454](../vm/src/machine.cpp#L3454), [vm/src/machine.cpp:3630](../vm/src/machine.cpp#L3630).
+Definitions: [vm/src/machine.cpp:3523](../vm/src/machine.cpp#L3523), [vm/src/machine.cpp:3699](../vm/src/machine.cpp#L3699).
 
 ### WVM1220
 
@@ -4263,13 +4263,13 @@ Definitions: [vm/src/machine.cpp:3454](../vm/src/machine.cpp#L3454), [vm/src/mac
 - Native invocation target has no native binding metadata
 - Native function is not registered: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:6146](../vm/src/machine.cpp#L6146), [vm/src/machine.cpp:6149](../vm/src/machine.cpp#L6149), [vm/src/machine.cpp:6233](../vm/src/machine.cpp#L6233).
+Definitions: [vm/src/machine.cpp:6258](../vm/src/machine.cpp#L6258), [vm/src/machine.cpp:6261](../vm/src/machine.cpp#L6261), [vm/src/machine.cpp:6345](../vm/src/machine.cpp#L6345).
 
 ### WVM1221
 
 - Native invocation argument count does not match its ABI plan
 
-Definitions: [vm/src/machine.cpp:6151](../vm/src/machine.cpp#L6151).
+Definitions: [vm/src/machine.cpp:6263](../vm/src/machine.cpp#L6263).
 
 ### WVM1222
 
@@ -4277,7 +4277,7 @@ Definitions: [vm/src/machine.cpp:6151](../vm/src/machine.cpp#L6151).
 - Native callable failed with ABI status {dynamic context}
 - Native invocation '{dynamic context}' failed: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:2149](../vm/src/machine.cpp#L2149), [vm/src/machine.cpp:2187](../vm/src/machine.cpp#L2187), [vm/src/machine.cpp:6826](../vm/src/machine.cpp#L6826).
+Definitions: [vm/src/machine.cpp:2218](../vm/src/machine.cpp#L2218), [vm/src/machine.cpp:2256](../vm/src/machine.cpp#L2256), [vm/src/machine.cpp:6938](../vm/src/machine.cpp#L6938).
 
 ### WVM1223
 
@@ -4299,7 +4299,7 @@ Definitions: [vm/src/machine.cpp:2149](../vm/src/machine.cpp#L2149), [vm/src/mac
 - Native thunk does not advertise task-source input support; rebuild its producer
 - Native callable result requires a task-source-aware producer
 
-Definitions: [vm/src/machine.cpp:2142](../vm/src/machine.cpp#L2142), [vm/src/machine.cpp:3967](../vm/src/machine.cpp#L3967), [vm/src/machine.cpp:5704](../vm/src/machine.cpp#L5704), [vm/src/machine.cpp:5712](../vm/src/machine.cpp#L5712), [vm/src/machine.cpp:5726](../vm/src/machine.cpp#L5726), [vm/src/machine.cpp:6338](../vm/src/machine.cpp#L6338), [vm/src/machine.cpp:6345](../vm/src/machine.cpp#L6345), [vm/src/machine.cpp:6348](../vm/src/machine.cpp#L6348), [vm/src/machine.cpp:6368](../vm/src/machine.cpp#L6368), [vm/src/machine.cpp:6383](../vm/src/machine.cpp#L6383), [vm/src/machine.cpp:6399](../vm/src/machine.cpp#L6399), [vm/src/machine.cpp:6405](../vm/src/machine.cpp#L6405), [vm/src/machine.cpp:6444](../vm/src/machine.cpp#L6444), [vm/src/machine.cpp:6503](../vm/src/machine.cpp#L6503), [vm/src/machine.cpp:6512](../vm/src/machine.cpp#L6512), [vm/src/machine.cpp:6533](../vm/src/machine.cpp#L6533), [vm/src/machine.cpp:6538](../vm/src/machine.cpp#L6538), [vm/src/machine.cpp:6562](../vm/src/machine.cpp#L6562), [vm/src/machine.cpp:6571](../vm/src/machine.cpp#L6571), [vm/src/machine.cpp:6652](../vm/src/machine.cpp#L6652), [vm/src/machine.cpp:6680](../vm/src/machine.cpp#L6680), [vm/src/machine.cpp:6705](../vm/src/machine.cpp#L6705), [vm/src/machine.cpp:6835](../vm/src/machine.cpp#L6835).
+Definitions: [vm/src/machine.cpp:2211](../vm/src/machine.cpp#L2211), [vm/src/machine.cpp:4077](../vm/src/machine.cpp#L4077), [vm/src/machine.cpp:5816](../vm/src/machine.cpp#L5816), [vm/src/machine.cpp:5824](../vm/src/machine.cpp#L5824), [vm/src/machine.cpp:5838](../vm/src/machine.cpp#L5838), [vm/src/machine.cpp:6450](../vm/src/machine.cpp#L6450), [vm/src/machine.cpp:6457](../vm/src/machine.cpp#L6457), [vm/src/machine.cpp:6460](../vm/src/machine.cpp#L6460), [vm/src/machine.cpp:6480](../vm/src/machine.cpp#L6480), [vm/src/machine.cpp:6495](../vm/src/machine.cpp#L6495), [vm/src/machine.cpp:6511](../vm/src/machine.cpp#L6511), [vm/src/machine.cpp:6517](../vm/src/machine.cpp#L6517), [vm/src/machine.cpp:6556](../vm/src/machine.cpp#L6556), [vm/src/machine.cpp:6615](../vm/src/machine.cpp#L6615), [vm/src/machine.cpp:6624](../vm/src/machine.cpp#L6624), [vm/src/machine.cpp:6645](../vm/src/machine.cpp#L6645), [vm/src/machine.cpp:6650](../vm/src/machine.cpp#L6650), [vm/src/machine.cpp:6674](../vm/src/machine.cpp#L6674), [vm/src/machine.cpp:6683](../vm/src/machine.cpp#L6683), [vm/src/machine.cpp:6764](../vm/src/machine.cpp#L6764), [vm/src/machine.cpp:6792](../vm/src/machine.cpp#L6792), [vm/src/machine.cpp:6817](../vm/src/machine.cpp#L6817), [vm/src/machine.cpp:6947](../vm/src/machine.cpp#L6947).
 
 ### WVM1224
 
@@ -4318,7 +4318,7 @@ Definitions: [vm/src/machine.cpp:2142](../vm/src/machine.cpp#L2142), [vm/src/mac
 - Native result conversion failed: {dynamic context}
 - Native result register is invalid
 
-Definitions: [vm/src/machine.cpp:4992](../vm/src/machine.cpp#L4992), [vm/src/machine.cpp:4994](../vm/src/machine.cpp#L4994), [vm/src/machine.cpp:4998](../vm/src/machine.cpp#L4998), [vm/src/machine.cpp:6235](../vm/src/machine.cpp#L6235), [vm/src/machine.cpp:6830](../vm/src/machine.cpp#L6830), [vm/src/machine.cpp:6856](../vm/src/machine.cpp#L6856), [vm/src/machine.cpp:6861](../vm/src/machine.cpp#L6861), [vm/src/machine.cpp:6897](../vm/src/machine.cpp#L6897), [vm/src/machine.cpp:6900](../vm/src/machine.cpp#L6900), [vm/src/machine.cpp:6910](../vm/src/machine.cpp#L6910), [vm/src/machine.cpp:6913](../vm/src/machine.cpp#L6913), [vm/src/machine.cpp:6931](../vm/src/machine.cpp#L6931), [vm/src/machine.cpp:6943](../vm/src/machine.cpp#L6943), [vm/src/machine.cpp:6946](../vm/src/machine.cpp#L6946).
+Definitions: [vm/src/machine.cpp:5104](../vm/src/machine.cpp#L5104), [vm/src/machine.cpp:5106](../vm/src/machine.cpp#L5106), [vm/src/machine.cpp:5110](../vm/src/machine.cpp#L5110), [vm/src/machine.cpp:6347](../vm/src/machine.cpp#L6347), [vm/src/machine.cpp:6942](../vm/src/machine.cpp#L6942), [vm/src/machine.cpp:6968](../vm/src/machine.cpp#L6968), [vm/src/machine.cpp:6973](../vm/src/machine.cpp#L6973), [vm/src/machine.cpp:7009](../vm/src/machine.cpp#L7009), [vm/src/machine.cpp:7012](../vm/src/machine.cpp#L7012), [vm/src/machine.cpp:7022](../vm/src/machine.cpp#L7022), [vm/src/machine.cpp:7025](../vm/src/machine.cpp#L7025), [vm/src/machine.cpp:7043](../vm/src/machine.cpp#L7043), [vm/src/machine.cpp:7055](../vm/src/machine.cpp#L7055), [vm/src/machine.cpp:7058](../vm/src/machine.cpp#L7058).
 
 ### WVM1225
 
@@ -4336,7 +4336,7 @@ Definitions: [vm/src/machine.cpp:4992](../vm/src/machine.cpp#L4992), [vm/src/mac
 - Native async result requires a registered task bridge and one payload
 - Native async payload cannot be represented by the VM ABI bridge
 
-Definitions: [vm/src/machine.cpp:1235](../vm/src/machine.cpp#L1235), [vm/src/machine.cpp:5987](../vm/src/machine.cpp#L5987), [vm/src/machine.cpp:6021](../vm/src/machine.cpp#L6021), [vm/src/machine.cpp:6340](../vm/src/machine.cpp#L6340), [vm/src/machine.cpp:6418](../vm/src/machine.cpp#L6418), [vm/src/machine.cpp:6429](../vm/src/machine.cpp#L6429), [vm/src/machine.cpp:6477](../vm/src/machine.cpp#L6477), [vm/src/machine.cpp:6501](../vm/src/machine.cpp#L6501), [vm/src/machine.cpp:6557](../vm/src/machine.cpp#L6557), [vm/src/machine.cpp:6559](../vm/src/machine.cpp#L6559), [vm/src/machine.cpp:6615](../vm/src/machine.cpp#L6615), [vm/src/machine.cpp:6646](../vm/src/machine.cpp#L6646), [vm/src/machine.cpp:6920](../vm/src/machine.cpp#L6920), [vm/src/machine.cpp:6924](../vm/src/machine.cpp#L6924).
+Definitions: [vm/src/machine.cpp:1227](../vm/src/machine.cpp#L1227), [vm/src/machine.cpp:6099](../vm/src/machine.cpp#L6099), [vm/src/machine.cpp:6133](../vm/src/machine.cpp#L6133), [vm/src/machine.cpp:6452](../vm/src/machine.cpp#L6452), [vm/src/machine.cpp:6530](../vm/src/machine.cpp#L6530), [vm/src/machine.cpp:6541](../vm/src/machine.cpp#L6541), [vm/src/machine.cpp:6589](../vm/src/machine.cpp#L6589), [vm/src/machine.cpp:6613](../vm/src/machine.cpp#L6613), [vm/src/machine.cpp:6669](../vm/src/machine.cpp#L6669), [vm/src/machine.cpp:6671](../vm/src/machine.cpp#L6671), [vm/src/machine.cpp:6727](../vm/src/machine.cpp#L6727), [vm/src/machine.cpp:6758](../vm/src/machine.cpp#L6758), [vm/src/machine.cpp:7032](../vm/src/machine.cpp#L7032), [vm/src/machine.cpp:7036](../vm/src/machine.cpp#L7036).
 
 ### WVM1226
 
@@ -4347,13 +4347,13 @@ Definitions: [vm/src/machine.cpp:1235](../vm/src/machine.cpp#L1235), [vm/src/mac
 - Native task result conversion failed: {dynamic context}
 - Native task cancellation failed with ABI status {dynamic context}
 
-Definitions: [vm/src/machine.cpp:1263](../vm/src/machine.cpp#L1263), [vm/src/machine.cpp:1286](../vm/src/machine.cpp#L1286), [vm/src/machine.cpp:1321](../vm/src/machine.cpp#L1321), [vm/src/machine.cpp:1340](../vm/src/machine.cpp#L1340), [vm/src/machine.cpp:1355](../vm/src/machine.cpp#L1355), [vm/src/machine.cpp:1391](../vm/src/machine.cpp#L1391).
+Definitions: [vm/src/machine.cpp:1255](../vm/src/machine.cpp#L1255), [vm/src/machine.cpp:1278](../vm/src/machine.cpp#L1278), [vm/src/machine.cpp:1313](../vm/src/machine.cpp#L1313), [vm/src/machine.cpp:1332](../vm/src/machine.cpp#L1332), [vm/src/machine.cpp:1347](../vm/src/machine.cpp#L1347), [vm/src/machine.cpp:1383](../vm/src/machine.cpp#L1383).
 
 ### WVM1240
 
 - Generic declaration requires a concrete function specialization
 
-Definitions: [vm/src/machine.cpp:1781](../vm/src/machine.cpp#L1781), [vm/src/machine.cpp:3684](../vm/src/machine.cpp#L3684).
+Definitions: [vm/src/machine.cpp:1846](../vm/src/machine.cpp#L1846), [vm/src/machine.cpp:3753](../vm/src/machine.cpp#L3753).
 
 ### WVM1241
 
@@ -4362,7 +4362,14 @@ Definition: VM object-layout indexing failed while loading the verified bytecode
 Detailed message: dynamically supplied by the reporting path.
 Message expression: `std::move(layoutError)`.
 
-Definitions: [vm/src/machine.cpp:1657](../vm/src/machine.cpp#L1657).
+Definitions: [vm/src/machine.cpp:1720](../vm/src/machine.cpp#L1720).
+
+### WVM1242
+
+- {dynamic context}Global initialization failed: {dynamic context}
+- Global initialization failed with an unknown host exception
+
+Definitions: [vm/src/machine.cpp:1660](../vm/src/machine.cpp#L1660), [vm/src/machine.cpp:1664](../vm/src/machine.cpp#L1664).
 
 ## Native, SDK and std status/error enums
 
@@ -4547,7 +4554,7 @@ Source: [runtime/include/std_fs.h](../runtime/include/std_fs.h#L12).
 
 ### FileError — runtime/include/std_io.h
 
-Source: [runtime/include/std_io.h](../runtime/include/std_io.h#L128).
+Source: [runtime/include/std_io.h](../runtime/include/std_io.h#L129).
 
 | Name | Value | Meaning / category |
 | --- | ---: | --- |
@@ -4831,6 +4838,7 @@ This section inventories MakeResultError calls in committed std sources. The std
 
 | Source | Domain | Code expression | Message / definition template |
 | --- | --- | --- | --- |
+| [std/benchmark.wio:151](../std/benchmark.wio#L151) | `std::ResultDomain::runtime` | `1` | Forwarded/dynamic message: message |
 | [std/binary.wio:52](../std/binary.wio#L52) | `std::ResultDomain::custom` | `1` | Binary frame header is truncated. |
 | [std/binary.wio:58](../std/binary.wio#L58) | `std::ResultDomain::custom` | `2` | Binary frame magic is invalid. |
 | [std/binary.wio:65](../std/binary.wio#L65) | `std::ResultDomain::custom` | `3` | Binary frame payload length is invalid. |
@@ -4845,9 +4853,9 @@ This section inventories MakeResultError calls in committed std sources. The std
 | [std/csv.wio:41](../std/csv.wio#L41) | `std::ResultDomain::custom` | `1` | CSV contains an unterminated quoted field. |
 | [std/fs.wio:129](../std/fs.wio#L129) | `std::ResultDomain::fs` | `code` | Forwarded/dynamic message: message |
 | [std/fs.wio:238](../std/fs.wio#L238) | `std::ResultDomain::fs` | `code` | Forwarded/dynamic message: message |
-| [std/io.wio:353](../std/io.wio#L353) | `ResultDomain::io` | `FileErrorCode(error)` | Forwarded/dynamic message: message |
-| [std/io.wio:357](../std/io.wio#L357) | `ResultDomain::io` | `ReadErrorCode(error)` | Forwarded/dynamic message: message |
-| [std/io.wio:361](../std/io.wio#L361) | `ResultDomain::io` | `WriteErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/io.wio:367](../std/io.wio#L367) | `ResultDomain::io` | `FileErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/io.wio:371](../std/io.wio#L371) | `ResultDomain::io` | `ReadErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/io.wio:375](../std/io.wio#L375) | `ResultDomain::io` | `WriteErrorCode(error)` | Forwarded/dynamic message: message |
 | [std/json.wio:76](../std/json.wio#L76) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
 | [std/json.wio:83](../std/json.wio#L83) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
 | [std/json.wio:90](../std/json.wio#L90) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |

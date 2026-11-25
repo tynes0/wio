@@ -236,7 +236,8 @@ namespace wio::vm
         void cleanupTaskArguments(const Value& task, ExecutionError& primaryError);
         [[nodiscard]] ExecutionError unwind(ExecutionState& state, ExecutionError error);
         void cancelAndUnwindContinuations();
-        void cleanupGlobals();
+        [[nodiscard]] ExecutionResult initializeGlobals();
+        void cleanupGlobals(ExecutionError* primaryError = nullptr);
         void cleanupNativeObjects(bool shutdown = false, ExecutionError* primaryError = nullptr) noexcept;
         void cleanupNativeTaskSources(bool shutdown, ExecutionError* primaryError = nullptr);
         [[nodiscard]] WioNativeAbiStatus dispatchNativeObjectMethod(const Value&, std::uint64_t,

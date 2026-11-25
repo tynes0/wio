@@ -1636,6 +1636,12 @@ endif()
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
+    add_test(NAME wio_release_019_semantics
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/release_019/verify.py"
+            --wio "$<TARGET_FILE:wio_app>" --runtime "${WIO_BACKEND_RUNTIME_LIBRARY}"
+            --cxx "${WIO_BACKEND_CXX_COMPILER}" --output "${CMAKE_BINARY_DIR}/release-019-semantics")
+    wio_test_labels(wio_release_019_semantics native vm ownership global release-019)
+    set_tests_properties(wio_release_019_semantics PROPERTIES TIMEOUT 1200 RUN_SERIAL TRUE)
     set(WIO_BENCHMARK_TEST_RUNNER "" CACHE FILEPATH "Explicit prebuilt wio-bench for its contract test (empty bootstraps from Wio)")
     set(WIO_BENCHMARK_TEST_RUNNER_ARGS)
     if(WIO_BENCHMARK_TEST_RUNNER)

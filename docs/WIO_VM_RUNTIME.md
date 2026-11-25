@@ -27,6 +27,29 @@ Branch arguments are copied to the target block parameters before control is
 transferred. This preserves canonical Lowered WIR phi semantics without a
 second language-specific control-flow model.
 
+## Module initialization and native declaration entries
+
+From 0.19, module globals run their verified zero-argument initializers once,
+in declaration order, before the first public entry executes. Constructing a
+`Machine` alone does not run user code: register native producers first. The
+initialization result belongs to each machine, not to the immutable module.
+Unrelated concurrent entries wait; synchronous initializer callbacks can
+re-enter without restarting the initializer sequence. A failure cleans up the
+already-constructed globals and is cached for subsequent entries. A fresh
+machine is required to retry after fixing a missing native dependency.
+
+The bytecode verifier rejects invalid initializer IDs, parameters/captures,
+async/template initializers and mismatched return types as `WBC1008`. Unexpected
+host exceptions in the initializer driver use `WVM1242`; ordinary Wio/native
+failures preserve their original error and cleanup-failure details.
+
+Native declarations used as callable values or host callback targets delegate
+through a lazily built private entry to canonical `NativeInvoke`. Missing
+registration, native wire validation, reference copy-back and cleanup retain
+the direct-call rules. An external declaration without a native binding is
+still not executable. These private entries are per-machine execution plans,
+not a second serialized bytecode format or a separate FFI implementation.
+
 ## Implemented in Sprint 19.1-19.8.5
 
 - compact tagged values for null, bool, signed/unsigned integer, float, and

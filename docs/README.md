@@ -2,6 +2,10 @@
 
 This directory is the main documentation map for Wio.
 
+Current release preparation: [0.19.0 notes](WIO_0_19_RELEASE_NOTES.md) and
+[acceptance checklist](WIO_0_19_RELEASE_CHECKLIST.md). A prepared candidate is
+not a published release.
+
 The current docs strategy is:
 
 - keep the root `README.md` fast and practical

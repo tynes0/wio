@@ -4,9 +4,9 @@
 #include <string_view>
 
 #define WIO_SDK_VERSION_MAJOR 0
-#define WIO_SDK_VERSION_MINOR 18
-#define WIO_SDK_VERSION_PATCH 1
-#define WIO_SDK_VERSION_STRING "0.18.1"
+#define WIO_SDK_VERSION_MINOR 19
+#define WIO_SDK_VERSION_PATCH 0
+#define WIO_SDK_VERSION_STRING "0.19.0"
 
 namespace wio::sdk
 {

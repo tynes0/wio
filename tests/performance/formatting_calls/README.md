@@ -45,8 +45,8 @@ The new `wio_n03_native_string_borrow_plan` proof and `borrow.wio` extend this
 with bounded native string borrow transport: stack cells/private reference
 adapters, mutable growth, NUL, independent snapshots, scalar arguments and
 exception translation. Native function values retain the ordinary ABI and pass
-O0/O2; VM indirect native invocation still reports WVM1003 (KI-009), an explicit
-negative boundary separate from passing direct VM calls. Unicode hook output is
+O0/O2. The 0.19 correctness fix also requires positive VM indirect invocation
+(formerly KI-009/WVM1003), alongside direct VM calls. Unicode hook output is
 also checked. See [the transport report](../../../docs/WIO_NATIVE_STRING_BORROW_OPTIMIZATION.md).
 
 `wio_n03_scalar_field_plan` proves bounded direct primitive field intervals, and

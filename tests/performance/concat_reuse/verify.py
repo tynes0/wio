@@ -47,9 +47,7 @@ def verify(args):
     run([wio, folder / "main.wio", "--target", "shared", "--native-bridge-only", "--output", bridge,
          "--bytecode-sidecar", bytecode])
     run([wio, "--vm-run-bytecode", bytecode, "--native-library", bridge])
-    # A mutating RHS must not accidentally acquire a new in-place fast path.
-    # The pre-existing native/VM borrowed-LHS divergence is recorded explicitly;
-    # this native-only compatibility test is not presented as parity evidence.
+    # A mutating RHS must snapshot the LHS, not acquire an in-place fast path.
     shutil.copyfile(HERE / "barrier.wio", folder / "barrier.wio")
     run([wio, folder / "barrier.wio", "--emit-cpp"])
     barrier = folder / "barrier.wio.cpp"
@@ -60,6 +58,11 @@ def verify(args):
         run([args.cxx, "-std=c++20", optimization, barrier, f"-I{ROOT / 'runtime/include'}",
              f"-I{ROOT / 'sdk/include'}", args.runtime.resolve(), *links, "-o", program])
         run([program])
+    barrier_bridge = folder / ("barrier" + bridge.suffix)
+    barrier_bytecode = folder / "barrier.wiob"
+    run([wio, folder / "barrier.wio", "--target", "shared", "--native-bridge-only",
+         "--output", barrier_bridge, "--bytecode-sidecar", barrier_bytecode])
+    run([wio, "--vm-run-bytecode", barrier_bytecode, "--native-library", barrier_bridge])
     (folder / "results.json").write_text(json.dumps(dict(passed=True, processes=rows), indent=2) + "\n")
     print("N02 concat: native O0/O2, transactional/owned paths and VM passed")
 

@@ -486,6 +486,9 @@ int main()
     const vm::ExecutionResult missing = machine.invoke(6, addArguments);
     ok &= expect(!missing.succeeded() && missing.error().code == "WVM1220",
                  "A native call must reject an unregistered stable key");
+    const auto missingEntry = machine.invoke(0, addArguments);
+    ok &= expect(!missingEntry.succeeded() && missingEntry.error().code == "WVM1220",
+                 "A native function entry must use the same unregistered-key boundary");
 
     std::string registryError;
     const WioNativeAbiRegistry invalidRegistry{WIO_NATIVE_ABI_VERSION + 1, 0, nullptr};
@@ -528,6 +531,15 @@ int main()
     ok &= expect(sum.succeeded() && sum.value().kind() == vm::Value::Kind::SignedInteger &&
                      sum.value().asSignedInteger() == 42,
                  "VM NativeInvoke must execute registered scalar wire-v2 thunks");
+    for (unsigned iteration = 0; iteration < 64; ++iteration)
+    {
+        const auto entry = machine.invoke(0, addArguments);
+        ok &= expect(entry.succeeded() && entry.value().asSignedInteger() == 42,
+                     "Native declaration entries must reuse canonical dispatch across calls");
+    }
+    const auto wrongEntryArity = machine.invoke(0, std::span{&twenty, 1});
+    ok &= expect(!wrongEntryArity.succeeded() && wrongEntryArity.error().code == "WVM1004",
+                 "Native declaration entry must reject wrong argument counts");
 
     const vm::Value ten = vm::Value::signedInteger(10);
     const vm::ExecutionResult incremented = machine.invoke(7, std::span{&ten, 1});
@@ -543,6 +555,9 @@ int main()
     const vm::ExecutionResult echoedString = machine.invoke(9, std::span{&bytes, 1});
     ok &= expect(echoedString.succeeded() && echoedString.value().asString() == bytes.asString(),
                  "Native UTF-8 strings must preserve embedded zero bytes");
+    const auto stringEntry = machine.invoke(4, std::span{&bytes, 1});
+    ok &= expect(stringEntry.succeeded() && stringEntry.value().asString() == bytes.asString(),
+                 "Native string declaration entries must preserve owned payloads and embedded zeros");
 
     const vm::ExecutionResult failed = machine.invoke(11);
     const vm::ExecutionResult copiedBack = machine.invoke(12);
@@ -664,5 +679,34 @@ int main()
     const WioNativeAbiRegistry conflictingRegistry{WIO_NATIVE_ABI_VERSION, 1, &conflict};
     ok &= expect(!machine.registerNativeRegistry(conflictingRegistry, &registryError),
                  "A stable native key cannot be rebound to a different thunk inside one machine");
+
+    const auto beforeGlobals = destroyedHandles.load();
+    {
+        auto globalModule = makeModule();
+        globalModule.globals.push_back(bytecode::Global{.id = 1, .type = ForeignObject, .initializer = 15});
+        vm::Machine globals{globalModule};
+        ok &= expect(globals.registerNativeRegistry(registry), "Global resources require registered native producers");
+        ok &= expect(globals.invoke(29, std::span{&twenty, 1}).succeeded(), "Native resource globals must initialize");
+        ok &= expect(destroyedHandles.load() == beforeGlobals, "Global resources must outlive individual entries");
+        globals.shutdown();
+        globals.shutdown();
+        ok &= expect(destroyedHandles.load() == beforeGlobals + 1, "Global native resource shutdown must release exactly once");
+    }
+    {
+        auto globalModule = makeModule();
+        globalModule.globals.push_back(bytecode::Global{.id = 1, .type = ForeignObject, .initializer = 15});
+        globalModule.globals.push_back(bytecode::Global{.id = 2, .type = I32, .initializer = 5});
+        vm::Machine globals{globalModule};
+        ok &= expect(globals.registerNativeRegistry(registry), "Failing global fixture must register");
+        const auto failed = globals.invoke(29, std::span{&twenty, 1});
+        ok &= expect(!failed.succeeded(), "Invalid native result must fail global initialization");
+        ok &= expect(destroyedHandles.load() == beforeGlobals + 2,
+                     "Partial initialization must release successfully constructed native resources");
+        const auto repeated = globals.invoke(29, std::span{&twenty, 1});
+        ok &= expect(!repeated.succeeded() && repeated.error().code == failed.error().code &&
+                         destroyedHandles.load() == beforeGlobals + 2,
+                     "Repeated failed entry must not reconstruct or double-release native globals");
+    }
+    ok &= expect(destroyedHandles.load() == beforeGlobals + 2, "Failed global shutdown must not double-release");
     return ok ? 0 : 1;
 }

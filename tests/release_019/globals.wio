@@ -1,0 +1,34 @@
+using cpp::header("release_probe.h");
+use std::attribute as attribute;
+
+[native, cpp::name(release_probe::OnThread)]
+fn OnThread([attribute::NativeCallback("retained", "any")] callback: fn() -> i32) -> i32;
+
+mut order: i32 = 0;
+let first: i32 = Next(1);
+let second: i32 = Next(2);
+let bytes: string = "a\0b";
+let unicode: text = u"🌍\0";
+let suffix: string = bytes + "tail";
+let fromThread: i32 = OnThread(ReadEarlierGlobals);
+
+fn ReadEarlierGlobals() -> i32
+{
+    return first + second;
+}
+
+fn Next(expected: i32) -> i32
+{
+    order += 1;
+    if (order != expected) return -1;
+    return order * 10;
+}
+
+fn Entry() -> i32
+{
+    if (order != 2 or first != 10 or second != 20) return 1;
+    if (bytes != "a\0b" or suffix != "a\0btail") return 2;
+    if (unicode != u"🌍\0") return 3;
+    if (fromThread != 30) return 4;
+    return 0;
+}
