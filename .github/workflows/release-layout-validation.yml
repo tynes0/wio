@@ -1,0 +1,53 @@
+name: release layout qualification
+
+# Targeted follow-up for build-tree/launcher-only changes. This is not a
+# replacement for the full compiler/runtime qualification of the base commit.
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  layout:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            config: Debug
+          - os: ubuntu-latest
+            config: Release
+          - os: macos-15
+            config: Release
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows'
+        with:
+          msystem: UCRT64
+          update: false
+          install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-binutils
+      - name: Select Windows generated-code toolchain
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '"C:/msys64/ucrt64/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append'
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+      - name: Build CLI, launcher and standalone runner
+        run: cmake --build build --target wio_playground wio_vm_runner --parallel 2
+      - name: Validate runner adjacency, launcher profiles and deployed artifacts
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^(wio_vm_(native_project_cli|executable_cohort|executable_artifact|platform_qualification)|wio_playground_launcher_(options|profiles|signature))$"
+      - name: Preserve targeted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-layout-${{ matrix.os }}-${{ matrix.config }}
+          path: build/Testing/Temporary/

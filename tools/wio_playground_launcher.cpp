@@ -154,9 +154,11 @@ int main(int argc, char* argv[])
             if (!WIO_PLAYGROUND_MULTI_CONFIG && options.config != WIO_PLAYGROUND_BUILD_CONFIG)
                 throw std::runtime_error("VM profile differs from this single-config CMake build; configure a "
                                          "matching CMAKE_BUILD_TYPE first");
+            auto runnerDirectory = std::filesystem::u8path(WIO_PLAYGROUND_BUILD_ROOT) / "app";
+            if (WIO_PLAYGROUND_MULTI_CONFIG)
+                runnerDirectory /= options.config;
             args.push_back("--vm-runner");
-            args.push_back(utf8(std::filesystem::u8path(WIO_PLAYGROUND_BUILD_ROOT) / "app" / options.config /
-                                ("wio-vm" + wio::runtime::std_process::ExecutableSuffix())));
+            args.push_back(utf8(runnerDirectory / ("wio-vm" + wio::runtime::std_process::ExecutableSuffix())));
         }
         if (!options.arguments.empty())
         {
