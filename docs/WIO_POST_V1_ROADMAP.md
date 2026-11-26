@@ -91,6 +91,19 @@ The existing `wio-web` repository remains the documentation frontend. Work in
 this track is site version selection, search, package metadata, API docs,
 migration views, and release compatibility tables—not recreating the site.
 
+### Incremental compiler self-hosting (idea recorded 2026-11-27)
+
+Linked compiler-stage libraries can later be replaced one at a time with Wio
+implementations, beginning with the lexer and then the parser/semantic stages.
+Use the existing compiler as a pinned seed, explicit data/ownership adapters
+where languages meet, and old/new differential conformance before replacing a
+stage. Define a reproducible stage-0/build chain when a bootstrap project is
+actually scoped; the already self-hosted CLI does not mean the compiler itself
+is self-hosted. No rewrite, delivery version, or new v1 blocker is committed by
+this note. The behavior-preserving CMake/library separation can happen earlier
+as an independent refactoring slice, with small interface changes where needed.
+See [the compiler reuse decision](WIO_EDITOR_ECOSYSTEM_PLAN.md).
+
 ### Wio.NET: ordinary .NET hosting (idea recorded 2026-10-18)
 
 Build a maintained C# library, potentially distributed as a NuGet package, for

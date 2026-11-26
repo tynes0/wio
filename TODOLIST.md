@@ -493,6 +493,16 @@ Rider, and CLion are defined in
    snippets; replace its lightweight source index with this compiler-owned
    language service instead of growing a second semantic implementation.
 
+   Accepted 2026-11-27: prepare compiler-stage library targets in the same
+   repository for frontend reuse and future lexer-first self-hosting. Start
+   with build/dependency separation; small interface changes are allowed where
+   necessary, without changing language behavior. This mechanical refactoring
+   may precede the IDE sprint; persistent incremental analysis remains separate.
+   Do not introduce per-stage executables/IPC or a second semantic implementation.
+   Keep analysis-only project checks independent of build-on-save. Target
+   boundaries and acceptance are in `docs/WIO_EDITOR_ECOSYSTEM_PLAN.md`.
+   Actual compiler rewrites/bootstrap are future work, not a new v1 blocker.
+
 2. [ ] Add debugger support.
    Source breakpoints, stepping, locals, watches, Wio stack traces, object/
    component/container visualization, panic mapping, generated-C++ source maps,

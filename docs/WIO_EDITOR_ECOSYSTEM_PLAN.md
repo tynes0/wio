@@ -46,6 +46,56 @@ No editor extension may silently invent different Wio semantics. A temporary
 source index may provide a fallback, but compiler results win and the fallback
 must be removable.
 
+### Compiler-stage libraries and future self-hosting (accepted 2026-11-27)
+
+Prepare the compiler for reuse and eventual incremental self-hosting by splitting
+its stages into linked library targets in the same repository/release. This is
+an architecture/refactoring decision, not authorization to rewrite the compiler
+in Wio now or an additional v1 feature gate. Small interface/dependency changes
+are acceptable when required; preserve language behavior, stable identities,
+source locations, ownership, diagnostics and native/VM results.
+
+Provisional target boundaries, subject to an actual dependency audit:
+
+- source management and diagnostics, with shared AST/type/IR models placed in
+  narrowly owned support libraries as needed;
+- lexer;
+- parser;
+- semantic analysis, name/type resolution, generics and attributes;
+- Typed WIR construction and verification;
+- canonical lowering;
+- IR optimization passes;
+- C++ backend;
+- bytecode backend;
+- a thin compiler orchestration/facade target that composes those stages.
+
+Begin with CMake/source ownership and dependency direction rather than a broad
+algorithm rewrite. Break genuine cycles with small interfaces instead of
+duplicating semantic logic or putting every private helper in a shared library.
+Retain convenient compiler-facing APIs and qualify target builds, installed
+headers/linking and existing behavior. The VM/runtime remain independently
+usable; this preparation must not pull the compiler into deployed VM programs.
+
+These are in-process libraries, normally static targets, not one executable or
+repository per stage. Do not introduce mandatory serialization, IPC, or temporary
+files between stages. Keep data/lifetime contracts explicit so a future Wio
+implementation can cross a deliberate language-neutral adapter boundary without
+depending on private C++ class layouts. This does not require adding an ABI
+adapter to every current C++-to-C++ call or claiming today's SDK can host every
+compiler-internal value.
+
+Delivery is separate from IDE incremental analysis: an independent mechanical
+refactoring slice may precede the IDE sprint; the language service then reuses
+the same frontend and adds persistent workspace state, dependency invalidation,
+unsaved buffers and request cancellation. Project-aware analysis-only checks
+must replace build-on-save independently of the larger split. Splitting targets
+alone does not implement incremental analysis or establish a compile-time win.
+
+Future self-hosting can replace the lexer first, then parser and later stages,
+using the existing compiler as the seed and differential tests at each boundary.
+Actual Wio rewrites/bootstrap are separately scheduled future work, distinct from
+the already self-hosted CLI; see [the roadmap](WIO_POST_V1_ROADMAP.md).
+
 ---
 
 ## 2. Version and Compatibility Contract
