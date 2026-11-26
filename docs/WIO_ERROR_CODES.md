@@ -3126,38 +3126,38 @@ Definitions: [vm/src/machine.cpp:5567](../vm/src/machine.cpp#L5567).
 
 - Call target is outside the module
 
-Definitions: [vm/src/machine.cpp:7066](../vm/src/machine.cpp#L7066).
+Definitions: [vm/src/machine.cpp:7068](../vm/src/machine.cpp#L7068).
 
 ### WVM1029
 
 - Call reads an unavailable argument value
 - Dynamic call reads an unavailable argument value
 
-Definitions: [vm/src/machine.cpp:7073](../vm/src/machine.cpp#L7073), [vm/src/machine.cpp:7121](../vm/src/machine.cpp#L7121).
+Definitions: [vm/src/machine.cpp:7075](../vm/src/machine.cpp#L7075), [vm/src/machine.cpp:7123](../vm/src/machine.cpp#L7123).
 
 ### WVM1030
 
 - Conditional jump requires an available bool value
 
-Definitions: [vm/src/machine.cpp:7312](../vm/src/machine.cpp#L7312).
+Definitions: [vm/src/machine.cpp:7314](../vm/src/machine.cpp#L7314).
 
 ### WVM1031
 
 - Branch target block does not exist
 
-Definitions: [vm/src/machine.cpp:7319](../vm/src/machine.cpp#L7319).
+Definitions: [vm/src/machine.cpp:7321](../vm/src/machine.cpp#L7321).
 
 ### WVM1032
 
 - Branch reads an unavailable argument value
 
-Definitions: [vm/src/machine.cpp:7327](../vm/src/machine.cpp#L7327).
+Definitions: [vm/src/machine.cpp:7329](../vm/src/machine.cpp#L7329).
 
 ### WVM1033
 
 - Return reads an unavailable value
 
-Definitions: [vm/src/machine.cpp:7344](../vm/src/machine.cpp#L7344).
+Definitions: [vm/src/machine.cpp:7346](../vm/src/machine.cpp#L7346).
 
 ### WVM1034
 
@@ -3169,19 +3169,19 @@ Definitions: [vm/src/machine.cpp:3895](../vm/src/machine.cpp#L3895).
 
 - Execution reached an unreachable instruction
 
-Definitions: [vm/src/machine.cpp:7352](../vm/src/machine.cpp#L7352).
+Definitions: [vm/src/machine.cpp:7354](../vm/src/machine.cpp#L7354).
 
 ### WVM1036
 
 - Opcode is not implemented by this VM runtime slice: {dynamic context}
 
-Definitions: [vm/src/machine.cpp:7354](../vm/src/machine.cpp#L7354).
+Definitions: [vm/src/machine.cpp:7356](../vm/src/machine.cpp#L7356).
 
 ### WVM1037
 
 - VM exited without producing a result
 
-Definitions: [vm/src/machine.cpp:7357](../vm/src/machine.cpp#L7357).
+Definitions: [vm/src/machine.cpp:7359](../vm/src/machine.cpp#L7359).
 
 ### WVM1038
 
@@ -3219,7 +3219,7 @@ Definitions: [vm/src/machine.cpp:5602](../vm/src/machine.cpp#L5602).
 - Load requires an initialized place
 - Dynamic dispatch requires an initialized receiver place
 
-Definitions: [vm/src/machine.cpp:3875](../vm/src/machine.cpp#L3875), [vm/src/machine.cpp:5676](../vm/src/machine.cpp#L5676), [vm/src/machine.cpp:7103](../vm/src/machine.cpp#L7103).
+Definitions: [vm/src/machine.cpp:3875](../vm/src/machine.cpp#L3875), [vm/src/machine.cpp:5676](../vm/src/machine.cpp#L5676), [vm/src/machine.cpp:7105](../vm/src/machine.cpp#L7105).
 
 ### WVM1044
 
@@ -3926,19 +3926,19 @@ Definitions: [vm/src/machine.cpp:6251](../vm/src/machine.cpp#L6251).
 
 - Dynamic dispatch requires a live object receiver
 
-Definitions: [vm/src/machine.cpp:7107](../vm/src/machine.cpp#L7107).
+Definitions: [vm/src/machine.cpp:7109](../vm/src/machine.cpp#L7109).
 
 ### WVM1162
 
 - Concrete object type has no implementation for the requested method slot
 
-Definitions: [vm/src/machine.cpp:7111](../vm/src/machine.cpp#L7111).
+Definitions: [vm/src/machine.cpp:7113](../vm/src/machine.cpp#L7113).
 
 ### WVM1163
 
 - Dynamic dispatch resolved outside the module function table
 
-Definitions: [vm/src/machine.cpp:7113](../vm/src/machine.cpp#L7113).
+Definitions: [vm/src/machine.cpp:7115](../vm/src/machine.cpp#L7115).
 
 ### WVM1164
 
@@ -3954,7 +3954,7 @@ Definitions: [vm/src/machine.cpp:3444](../vm/src/machine.cpp#L3444).
 - Async task was cancelled before its continuation resumed
 - Async task was cancelled at a cooperative suspension point
 
-Definitions: [vm/src/machine.cpp:1607](../vm/src/machine.cpp#L1607), [vm/src/machine.cpp:2977](../vm/src/machine.cpp#L2977), [vm/src/machine.cpp:3008](../vm/src/machine.cpp#L3008), [vm/src/machine.cpp:3458](../vm/src/machine.cpp#L3458), [vm/src/machine.cpp:3473](../vm/src/machine.cpp#L3473), [vm/src/machine.cpp:3502](../vm/src/machine.cpp#L3502), [vm/src/machine.cpp:3514](../vm/src/machine.cpp#L3514), [vm/src/machine.cpp:3534](../vm/src/machine.cpp#L3534), [vm/src/machine.cpp:3603](../vm/src/machine.cpp#L3603), [vm/src/machine.cpp:3665](../vm/src/machine.cpp#L3665), [vm/src/machine.cpp:7145](../vm/src/machine.cpp#L7145), [vm/src/machine.cpp:7181](../vm/src/machine.cpp#L7181).
+Definitions: [vm/src/machine.cpp:1607](../vm/src/machine.cpp#L1607), [vm/src/machine.cpp:2977](../vm/src/machine.cpp#L2977), [vm/src/machine.cpp:3008](../vm/src/machine.cpp#L3008), [vm/src/machine.cpp:3458](../vm/src/machine.cpp#L3458), [vm/src/machine.cpp:3473](../vm/src/machine.cpp#L3473), [vm/src/machine.cpp:3502](../vm/src/machine.cpp#L3502), [vm/src/machine.cpp:3514](../vm/src/machine.cpp#L3514), [vm/src/machine.cpp:3534](../vm/src/machine.cpp#L3534), [vm/src/machine.cpp:3603](../vm/src/machine.cpp#L3603), [vm/src/machine.cpp:3665](../vm/src/machine.cpp#L3665), [vm/src/machine.cpp:7147](../vm/src/machine.cpp#L7147), [vm/src/machine.cpp:7183](../vm/src/machine.cpp#L7183).
 
 ### WVM1166
 
@@ -3978,55 +3978,55 @@ Definitions: [vm/src/machine.cpp:6182](../vm/src/machine.cpp#L6182).
 
 - Async call result register is invalid
 
-Definitions: [vm/src/machine.cpp:7080](../vm/src/machine.cpp#L7080).
+Definitions: [vm/src/machine.cpp:7082](../vm/src/machine.cpp#L7082).
 
 ### WVM1170
 
 - Async dynamic-call result register is invalid
 
-Definitions: [vm/src/machine.cpp:7128](../vm/src/machine.cpp#L7128).
+Definitions: [vm/src/machine.cpp:7130](../vm/src/machine.cpp#L7130).
 
 ### WVM1171
 
 - Coroutine suspension does not match its function state table
 
-Definitions: [vm/src/machine.cpp:7154](../vm/src/machine.cpp#L7154).
+Definitions: [vm/src/machine.cpp:7156](../vm/src/machine.cpp#L7156).
 
 ### WVM1172
 
 - Coroutine suspension state does not match its resume edge
 
-Definitions: [vm/src/machine.cpp:7159](../vm/src/machine.cpp#L7159).
+Definitions: [vm/src/machine.cpp:7161](../vm/src/machine.cpp#L7161).
 
 ### WVM1173
 
 - Coroutine await requires an async task operand
 
-Definitions: [vm/src/machine.cpp:7168](../vm/src/machine.cpp#L7168).
+Definitions: [vm/src/machine.cpp:7170](../vm/src/machine.cpp#L7170).
 
 ### WVM1174
 
 - Coroutine suspension carries an unsupported async operation
 
-Definitions: [vm/src/machine.cpp:7244](../vm/src/machine.cpp#L7244).
+Definitions: [vm/src/machine.cpp:7246](../vm/src/machine.cpp#L7246).
 
 ### WVM1175
 
 - Coroutine resume block does not exist
 
-Definitions: [vm/src/machine.cpp:3630](../vm/src/machine.cpp#L3630), [vm/src/machine.cpp:7248](../vm/src/machine.cpp#L7248).
+Definitions: [vm/src/machine.cpp:3630](../vm/src/machine.cpp#L3630), [vm/src/machine.cpp:7250](../vm/src/machine.cpp#L7250).
 
 ### WVM1176
 
 - Coroutine resume has no matching suspended payload
 
-Definitions: [vm/src/machine.cpp:7272](../vm/src/machine.cpp#L7272).
+Definitions: [vm/src/machine.cpp:7274](../vm/src/machine.cpp#L7274).
 
 ### WVM1177
 
 - Coroutine resume result register is invalid
 
-Definitions: [vm/src/machine.cpp:7274](../vm/src/machine.cpp#L7274).
+Definitions: [vm/src/machine.cpp:7276](../vm/src/machine.cpp#L7276).
 
 ### WVM1178
 
@@ -4188,7 +4188,7 @@ Definitions: [vm/src/machine.cpp:5401](../vm/src/machine.cpp#L5401).
 - Result propagation target has no canonical result layout
 - Result propagation target fields are unavailable
 
-Definitions: [vm/src/machine.cpp:7288](../vm/src/machine.cpp#L7288), [vm/src/machine.cpp:7293](../vm/src/machine.cpp#L7293), [vm/src/machine.cpp:7298](../vm/src/machine.cpp#L7298).
+Definitions: [vm/src/machine.cpp:7290](../vm/src/machine.cpp#L7290), [vm/src/machine.cpp:7295](../vm/src/machine.cpp#L7295), [vm/src/machine.cpp:7300](../vm/src/machine.cpp#L7300).
 
 ### WVM1204
 
@@ -4223,14 +4223,14 @@ Definitions: [vm/src/machine.cpp:3413](../vm/src/machine.cpp#L3413), [vm/src/mac
 - Coroutine executor switch has no runnable target
 - Coroutine executor queue rejected its continuation
 
-Definitions: [vm/src/machine.cpp:3650](../vm/src/machine.cpp#L3650), [vm/src/machine.cpp:7257](../vm/src/machine.cpp#L7257), [vm/src/machine.cpp:7261](../vm/src/machine.cpp#L7261).
+Definitions: [vm/src/machine.cpp:3650](../vm/src/machine.cpp#L3650), [vm/src/machine.cpp:7259](../vm/src/machine.cpp#L7259), [vm/src/machine.cpp:7263](../vm/src/machine.cpp#L7263).
 
 ### WVM1209
 
 - Await continuation lost its VM frame
 - Coroutine await has no owning async task
 
-Definitions: [vm/src/machine.cpp:3620](../vm/src/machine.cpp#L3620), [vm/src/machine.cpp:7196](../vm/src/machine.cpp#L7196).
+Definitions: [vm/src/machine.cpp:3620](../vm/src/machine.cpp#L3620), [vm/src/machine.cpp:7198](../vm/src/machine.cpp#L7198).
 
 ### WVM1210
 
@@ -4238,7 +4238,7 @@ Definitions: [vm/src/machine.cpp:3620](../vm/src/machine.cpp#L3620), [vm/src/mac
 - VM destructor threw a non-standard exception while unwinding
 - VM await continuation dispatch failed
 
-Definitions: [vm/src/machine.cpp:1516](../vm/src/machine.cpp#L1516), [vm/src/machine.cpp:1521](../vm/src/machine.cpp#L1521), [vm/src/machine.cpp:7226](../vm/src/machine.cpp#L7226).
+Definitions: [vm/src/machine.cpp:1516](../vm/src/machine.cpp#L1516), [vm/src/machine.cpp:1521](../vm/src/machine.cpp#L1521), [vm/src/machine.cpp:7228](../vm/src/machine.cpp#L7228).
 
 ### WVM1211
 
@@ -4299,7 +4299,7 @@ Definitions: [vm/src/machine.cpp:2218](../vm/src/machine.cpp#L2218), [vm/src/mac
 - Native thunk does not advertise task-source input support; rebuild its producer
 - Native callable result requires a task-source-aware producer
 
-Definitions: [vm/src/machine.cpp:2211](../vm/src/machine.cpp#L2211), [vm/src/machine.cpp:4077](../vm/src/machine.cpp#L4077), [vm/src/machine.cpp:5816](../vm/src/machine.cpp#L5816), [vm/src/machine.cpp:5824](../vm/src/machine.cpp#L5824), [vm/src/machine.cpp:5838](../vm/src/machine.cpp#L5838), [vm/src/machine.cpp:6450](../vm/src/machine.cpp#L6450), [vm/src/machine.cpp:6457](../vm/src/machine.cpp#L6457), [vm/src/machine.cpp:6460](../vm/src/machine.cpp#L6460), [vm/src/machine.cpp:6480](../vm/src/machine.cpp#L6480), [vm/src/machine.cpp:6495](../vm/src/machine.cpp#L6495), [vm/src/machine.cpp:6511](../vm/src/machine.cpp#L6511), [vm/src/machine.cpp:6517](../vm/src/machine.cpp#L6517), [vm/src/machine.cpp:6556](../vm/src/machine.cpp#L6556), [vm/src/machine.cpp:6615](../vm/src/machine.cpp#L6615), [vm/src/machine.cpp:6624](../vm/src/machine.cpp#L6624), [vm/src/machine.cpp:6645](../vm/src/machine.cpp#L6645), [vm/src/machine.cpp:6650](../vm/src/machine.cpp#L6650), [vm/src/machine.cpp:6674](../vm/src/machine.cpp#L6674), [vm/src/machine.cpp:6683](../vm/src/machine.cpp#L6683), [vm/src/machine.cpp:6764](../vm/src/machine.cpp#L6764), [vm/src/machine.cpp:6792](../vm/src/machine.cpp#L6792), [vm/src/machine.cpp:6817](../vm/src/machine.cpp#L6817), [vm/src/machine.cpp:6947](../vm/src/machine.cpp#L6947).
+Definitions: [vm/src/machine.cpp:2211](../vm/src/machine.cpp#L2211), [vm/src/machine.cpp:4077](../vm/src/machine.cpp#L4077), [vm/src/machine.cpp:5816](../vm/src/machine.cpp#L5816), [vm/src/machine.cpp:5824](../vm/src/machine.cpp#L5824), [vm/src/machine.cpp:5838](../vm/src/machine.cpp#L5838), [vm/src/machine.cpp:6450](../vm/src/machine.cpp#L6450), [vm/src/machine.cpp:6457](../vm/src/machine.cpp#L6457), [vm/src/machine.cpp:6460](../vm/src/machine.cpp#L6460), [vm/src/machine.cpp:6480](../vm/src/machine.cpp#L6480), [vm/src/machine.cpp:6495](../vm/src/machine.cpp#L6495), [vm/src/machine.cpp:6511](../vm/src/machine.cpp#L6511), [vm/src/machine.cpp:6517](../vm/src/machine.cpp#L6517), [vm/src/machine.cpp:6556](../vm/src/machine.cpp#L6556), [vm/src/machine.cpp:6615](../vm/src/machine.cpp#L6615), [vm/src/machine.cpp:6624](../vm/src/machine.cpp#L6624), [vm/src/machine.cpp:6645](../vm/src/machine.cpp#L6645), [vm/src/machine.cpp:6650](../vm/src/machine.cpp#L6650), [vm/src/machine.cpp:6674](../vm/src/machine.cpp#L6674), [vm/src/machine.cpp:6683](../vm/src/machine.cpp#L6683), [vm/src/machine.cpp:6764](../vm/src/machine.cpp#L6764), [vm/src/machine.cpp:6792](../vm/src/machine.cpp#L6792), [vm/src/machine.cpp:6817](../vm/src/machine.cpp#L6817), [vm/src/machine.cpp:6949](../vm/src/machine.cpp#L6949).
 
 ### WVM1224
 
@@ -4307,7 +4307,7 @@ Definitions: [vm/src/machine.cpp:2211](../vm/src/machine.cpp#L2211), [vm/src/mac
 - Native any payload is unsupported or absent from its descriptor closure
 - Native any shared cell changed its payload identity
 - VM async service result register is invalid
-- Native mutable-reference copy-back failed: {dynamic context}
+- Native mutable-reference copy-back failed: {dynamic context} (native declaration '{dynamic context}')
 - Native borrowed result has an invalid reference contract
 - Native producer did not advertise projected borrowed results
 - Native borrowed result does not name a compatible caller reference
@@ -4318,7 +4318,7 @@ Definitions: [vm/src/machine.cpp:2211](../vm/src/machine.cpp#L2211), [vm/src/mac
 - Native result conversion failed: {dynamic context}
 - Native result register is invalid
 
-Definitions: [vm/src/machine.cpp:5104](../vm/src/machine.cpp#L5104), [vm/src/machine.cpp:5106](../vm/src/machine.cpp#L5106), [vm/src/machine.cpp:5110](../vm/src/machine.cpp#L5110), [vm/src/machine.cpp:6347](../vm/src/machine.cpp#L6347), [vm/src/machine.cpp:6942](../vm/src/machine.cpp#L6942), [vm/src/machine.cpp:6968](../vm/src/machine.cpp#L6968), [vm/src/machine.cpp:6973](../vm/src/machine.cpp#L6973), [vm/src/machine.cpp:7009](../vm/src/machine.cpp#L7009), [vm/src/machine.cpp:7012](../vm/src/machine.cpp#L7012), [vm/src/machine.cpp:7022](../vm/src/machine.cpp#L7022), [vm/src/machine.cpp:7025](../vm/src/machine.cpp#L7025), [vm/src/machine.cpp:7043](../vm/src/machine.cpp#L7043), [vm/src/machine.cpp:7055](../vm/src/machine.cpp#L7055), [vm/src/machine.cpp:7058](../vm/src/machine.cpp#L7058).
+Definitions: [vm/src/machine.cpp:5104](../vm/src/machine.cpp#L5104), [vm/src/machine.cpp:5106](../vm/src/machine.cpp#L5106), [vm/src/machine.cpp:5110](../vm/src/machine.cpp#L5110), [vm/src/machine.cpp:6347](../vm/src/machine.cpp#L6347), [vm/src/machine.cpp:6942](../vm/src/machine.cpp#L6942), [vm/src/machine.cpp:6970](../vm/src/machine.cpp#L6970), [vm/src/machine.cpp:6975](../vm/src/machine.cpp#L6975), [vm/src/machine.cpp:7011](../vm/src/machine.cpp#L7011), [vm/src/machine.cpp:7014](../vm/src/machine.cpp#L7014), [vm/src/machine.cpp:7024](../vm/src/machine.cpp#L7024), [vm/src/machine.cpp:7027](../vm/src/machine.cpp#L7027), [vm/src/machine.cpp:7045](../vm/src/machine.cpp#L7045), [vm/src/machine.cpp:7057](../vm/src/machine.cpp#L7057), [vm/src/machine.cpp:7060](../vm/src/machine.cpp#L7060).
 
 ### WVM1225
 
@@ -4336,7 +4336,7 @@ Definitions: [vm/src/machine.cpp:5104](../vm/src/machine.cpp#L5104), [vm/src/mac
 - Native async result requires a registered task bridge and one payload
 - Native async payload cannot be represented by the VM ABI bridge
 
-Definitions: [vm/src/machine.cpp:1227](../vm/src/machine.cpp#L1227), [vm/src/machine.cpp:6099](../vm/src/machine.cpp#L6099), [vm/src/machine.cpp:6133](../vm/src/machine.cpp#L6133), [vm/src/machine.cpp:6452](../vm/src/machine.cpp#L6452), [vm/src/machine.cpp:6530](../vm/src/machine.cpp#L6530), [vm/src/machine.cpp:6541](../vm/src/machine.cpp#L6541), [vm/src/machine.cpp:6589](../vm/src/machine.cpp#L6589), [vm/src/machine.cpp:6613](../vm/src/machine.cpp#L6613), [vm/src/machine.cpp:6669](../vm/src/machine.cpp#L6669), [vm/src/machine.cpp:6671](../vm/src/machine.cpp#L6671), [vm/src/machine.cpp:6727](../vm/src/machine.cpp#L6727), [vm/src/machine.cpp:6758](../vm/src/machine.cpp#L6758), [vm/src/machine.cpp:7032](../vm/src/machine.cpp#L7032), [vm/src/machine.cpp:7036](../vm/src/machine.cpp#L7036).
+Definitions: [vm/src/machine.cpp:1227](../vm/src/machine.cpp#L1227), [vm/src/machine.cpp:6099](../vm/src/machine.cpp#L6099), [vm/src/machine.cpp:6133](../vm/src/machine.cpp#L6133), [vm/src/machine.cpp:6452](../vm/src/machine.cpp#L6452), [vm/src/machine.cpp:6530](../vm/src/machine.cpp#L6530), [vm/src/machine.cpp:6541](../vm/src/machine.cpp#L6541), [vm/src/machine.cpp:6589](../vm/src/machine.cpp#L6589), [vm/src/machine.cpp:6613](../vm/src/machine.cpp#L6613), [vm/src/machine.cpp:6669](../vm/src/machine.cpp#L6669), [vm/src/machine.cpp:6671](../vm/src/machine.cpp#L6671), [vm/src/machine.cpp:6727](../vm/src/machine.cpp#L6727), [vm/src/machine.cpp:6758](../vm/src/machine.cpp#L6758), [vm/src/machine.cpp:7034](../vm/src/machine.cpp#L7034), [vm/src/machine.cpp:7038](../vm/src/machine.cpp#L7038).
 
 ### WVM1226
 

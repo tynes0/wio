@@ -2,6 +2,7 @@
 #include <wio_native_sdk.h>
 
 #include <iostream>
+#include <source_location>
 #include <functional>
 #include <stdexcept>
 #include <thread>
@@ -71,7 +72,7 @@ namespace
         return module;
     }
 
-    template <class F> void rejects(F action)
+    template <class F> void rejects(F action, std::source_location where = std::source_location::current())
     {
         try
         {
@@ -81,7 +82,7 @@ namespace
         {
             return;
         }
-        throw std::runtime_error("unsupported or invalid module was accepted");
+        throw std::runtime_error("unsupported or invalid module was accepted at line " + std::to_string(where.line()));
     }
 
     class ReentryObserver final : public wio::vm::DebugObserver
@@ -291,6 +292,9 @@ int main()
             []
             {
                 auto m = fixture();
+                // An actual suspension in a synchronous function is invalid.
+                // Setting an unused async tag on Return does not create one.
+                m.functions[0].blocks[0].instructions[0].opcode = bc::Opcode::CoroutineSuspend;
                 m.functions[0].blocks[0].instructions[0].asyncOperation = 1;
                 Adapter a{std::move(m)};
             });

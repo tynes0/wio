@@ -406,6 +406,36 @@ The follow-up also protects unqualified native C++ names from generated template
 parameter shadowing, with an actual `Container` POD in a dictionary/array path.
 Fresh cross-platform qualification is required before calling this published.
 
+### KI-014 — Enum reflection cycles overflow native POD projection discovery (candidate fix)
+
+The broader native differential preflight on implementation `433898e` found
+stack overflow during C++ generation for the existing native POD layout and
+fixed-array fixtures. Semantic analysis, Typed WIR and Lowered WIR succeeded.
+POD projection discovery recursively followed enum-case reflection fields,
+which refer to the same enum. The candidate fix visits type IDs once and walks
+only physical POD component fields/fixed-array elements, not enum metadata.
+The existing runtime differential fixtures cover enum/flagset generic fields,
+enum arrays, native padding, borrows, copies and async POD results; their fresh
+results are part of the pending final native qualification.
+
+### KI-015 — Nullable opaque producer uses the wrong payload identity (candidate fix)
+
+The native differential preflight also found WVM1224 on `ReplaceContext(ref
+opaque?, opaque)`. The producer used the nullable declaration's identity for
+copy-back, while the VM correctly required the underlying opaque payload ID.
+Native thunk/frame and result codec identity selection now normalize
+nullable opaque handles consistently. Frame slots distinguish semantic place
+identity (including nullable POD-field projections) from payload codec identity;
+both alias and wire-identity checks remain strict. The decoder's exact identity checks are
+not relaxed. Rebuild affected native producers; the ABI descriptor stays 11.
+The focused `release_019/opaque_nullable.wio` fixture exercises null/present
+results, aliased view/ref, copy-back and native function values in native O0/O2
+and full/pruned VM producer modes. Opaque callback payloads are a separate
+pre-existing VM limitation: a dedicated branch runs in native C++ and is
+required to reject with WVM1225 in the VM, not counted as positive parity.
+Final acceptance
+still requires fresh execution evidence; a code edit alone is not qualification.
+
 ## 2. Native, VM, ownership and SDK limitations
 
 | ID | Priority / state | Current boundary and closure requirement |

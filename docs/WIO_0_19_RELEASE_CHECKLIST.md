@@ -142,3 +142,31 @@ qualification on `25bb15d` also passes all 60 std modules and the external
 project lifecycle/native interop; that result is not relabeled as a later build.
 On 2026-11-26 the project owner accepted publishing KI-011 as a documented
 limitation with explicit post-load initialization, not as a fixed architecture.
+
+## Remaining native/artifact preflight
+
+The final release workflow on `9e24136` passed the 390-test freeze and the
+earlier product matrices on Windows/Ubuntu, then failed one stale C++ backend
+test that required the old switch dispatcher. Test-only `a9afd14` requires the
+optimized direct CFG and executes the enum/Option/Result fixture (expected 13).
+The production payload did not change in that commit.
+
+Preflighting the following native groups locally exposed KI-014 (enum metadata
+cycles during POD code generation) and KI-015 (nullable opaque copy-back codec
+identity). Their three original failed differential cases pass after the fixes
+in 48.43 seconds. A follow-up preserves logical place IDs for nullable POD-field
+projections separately from payload codec IDs; its POD alias differential passes,
+and a host test rejects conflicting codec identities for one place.
+
+The SDK adapter negative fixture now constructs an actual CoroutineSuspend in
+a synchronous function. Merely tagging Return with unused async metadata did
+not express that invalid operation. No SDK signature rejection was relaxed.
+The isolated four-test boundary selection passes 4/4 in 82.46 seconds, including
+shared/static project-library repair and deployment. An earlier overlapping
+preflight had failed its repair timestamp assertion; no CLI repair/cache code
+or acceptance condition was changed, and the stable-input rerun passes.
+
+Opaque callback payloads are not enabled by this correctness work. The new
+nullable-opaque fixture keeps their existing VM WVM1225 rejection as a distinct
+negative branch, while checking supported values/ref copy-back/function values
+positively. It is not reported as positive C++/VM callback parity.

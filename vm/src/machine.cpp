@@ -6939,7 +6939,9 @@ namespace wio::vm
                                                "' failed: " + detail::nativeFailureMessage(nativeFailure));
                 }
                 if (!copyBackError.empty())
-                    return fail("WVM1224", "Native mutable-reference copy-back failed: " + copyBackError);
+                    return fail("WVM1224", "Native mutable-reference copy-back failed: " + copyBackError +
+                                               " (native declaration '" + std::string(module.string(declaration.name)) +
+                                               "')");
 
                 const std::uint32_t nativeResultType = declaration.nativeBinding.result.type;
                 if (nativeResultType < module.types.size() && module.types[nativeResultType].kind == TypeFunction &&

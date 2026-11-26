@@ -24,6 +24,25 @@ the VM optimization pass, SDK-kit parity, or the v1 blocker list.
 
 ## Correctness fixes
 
+### Native POD enum fields and nullable opaque handles
+
+POD projection discovery now walks physical component/array subobjects once.
+Enum-case reflection fields refer back to their enum and are not physical
+subobjects; following them recursively previously overflowed code generation
+for native PODs containing enums or arrays of enums (KI-014).
+
+Nullable `opaque` values keep the underlying opaque wire identity when native
+thunks encode results and mutable-reference copy-back.
+Nullability remains in the declaration/wire null state; it does not create a
+different pointer payload identity (KI-015). Rebuild affected native producers.
+Projection checks still use the declared place identity, so nullable opaque
+POD fields retain their exact aliasing contract while standalone copy-back uses
+the canonical opaque payload codec.
+Opaque callback payloads remain outside the current VM callback contract and
+reject explicitly with WVM1225; this fix does not enable that separate surface.
+VM copy-back failures also identify the native declaration that failed, while
+retaining diagnostic code WVM1224 and strict identity validation.
+
 ### Native container projections on aliased C++ types (KI-013)
 
 Wio identities such as `u64` and `usize` can have identical target C++ storage

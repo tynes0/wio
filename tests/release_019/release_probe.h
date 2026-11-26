@@ -21,6 +21,44 @@ struct Container
 
 namespace release_probe
 {
+    inline std::int32_t opaqueToken = 7;
+
+    inline void* OpaqueToken()
+    {
+        return &opaqueToken;
+    }
+
+    inline void* OpaqueNull()
+    {
+        return nullptr;
+    }
+
+    inline void OpaqueReplace(void*& value)
+    {
+        value = &opaqueToken;
+    }
+
+    inline void OpaqueClear(void*& value)
+    {
+        value = nullptr;
+    }
+
+    inline bool OpaqueObserve(void*& left, void* const& right)
+    {
+        left = &opaqueToken;
+        return right == &opaqueToken;
+    }
+
+    inline bool OpaqueIsToken(void* value)
+    {
+        return value == &opaqueToken;
+    }
+
+    inline void* OpaqueCall(std::function<void*()> callback)
+    {
+        return callback();
+    }
+
     inline bool NestedNativeName(std::unordered_map<std::string, std::vector<Container>>& values, Container& item)
     {
         if (&values.at("first").at(0) != &item)

@@ -189,6 +189,32 @@ int main(int argc, char** argv)
     }
     passed &= expect(abi::Codec<Pod, PodId>::read(root.value).value == 42, "exception copy-back lost field edits");
 
+    {
+        constexpr std::uint64_t PlaceId = 900;
+        constexpr std::uint64_t PayloadId = 901;
+        std::int32_t token = 7;
+        WireGuard opaque{abi::Codec<void*, PayloadId>::write(nullptr)};
+        auto opaqueReference = reference(&opaque.value, sizeof(WioNativeAbiValue), true);
+        abi::Frame opaqueFrame;
+        auto& first = opaqueFrame.borrow<void*, PlaceId, PayloadId>(opaqueReference, true);
+        auto& second = opaqueFrame.borrow<void*, PlaceId, PayloadId>(opaqueReference, false);
+        passed &= expect(&first == &second, "opaque place/payload identities lost aliasing");
+        first = &token;
+        opaqueFrame.commit();
+        passed &= expect(opaque.value.typeId == PayloadId && opaque.value.payload.opaque == &token,
+                         "opaque copy-back used the place identity instead of the payload identity");
+        bool mismatchRejected = false;
+        try
+        {
+            (void)opaqueFrame.borrow<void*, PlaceId, PayloadId + 1>(opaqueReference, false);
+        }
+        catch (const abi::Error&)
+        {
+            mismatchRejected = true;
+        }
+        passed &= expect(mismatchRejected, "one opaque place accepted incompatible payload codec identities");
+    }
+
     const auto rejected = [&](const WioNativeAbiValue& wire, bool mutableAccess = false)
     {
         try

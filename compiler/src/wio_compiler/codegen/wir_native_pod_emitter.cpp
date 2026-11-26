@@ -81,16 +81,24 @@ namespace wio::codegen
             return stableModuleHash(nativeAbiTypeKey(module.types, id));
         };
         std::vector<TypeId> arrays;
+        std::vector<bool> visited(module.types.size(), false);
         const auto collect = [&](auto&& self, TypeId id) -> void
         {
+            if (visited[id.value()])
+                return;
+            visited[id.value()] = true;
             const auto& type = module.types.get(id);
-            if (type.kind == TypeKind::Array && type.staticExtent && std::ranges::find(arrays, id) == arrays.end())
+            if (type.kind == TypeKind::Array && type.staticExtent)
             {
                 arrays.push_back(id);
                 self(self, type.arguments.front());
             }
-            for (const auto& field : type.fields)
-                self(self, field.type);
+            // Enum case metadata contains fields of the enum's own type.
+            // Those are not physical subobjects and must not be traversed.
+            else if (type.kind == TypeKind::Named && type.nominalKind == NominalKind::Component &&
+                     type.nominalRepresentation == NominalRepresentation::NativePod)
+                for (const auto& field : type.fields)
+                    self(self, field.type);
         };
         for (const auto id : pods)
             collect(collect, id);

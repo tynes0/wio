@@ -585,6 +585,7 @@ namespace wio::wir_backend::abi
         struct Slot
         {
             std::uint64_t type;
+            std::uint64_t wireType;
             std::any storage;
             std::function<void()> commit;
             void* address;
@@ -635,7 +636,10 @@ namespace wio::wir_backend::abi
                 activeCallbackBorrow = std::move(previousLifetime_);
             }
         }
-        template <class T, std::uint64_t Id> T& borrow(const WioNativeAbiValue& wire, bool mutableAccess)
+        // Projection identity describes the declared place. A nullable opaque
+        // place keeps that identity while its pointer payload uses opaque's ID.
+        template <class T, std::uint64_t Id, std::uint64_t WireId = Id>
+        T& borrow(const WioNativeAbiValue& wire, bool mutableAccess)
         {
             require(wire.kind == WIO_NATIVE_ABI_REFERENCE && (wire.flags & WIO_NATIVE_ABI_VALUE_BORROWED) &&
                         !(wire.flags & WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS) &&
@@ -732,23 +736,23 @@ namespace wio::wir_backend::abi
             auto found = slots_.find(token);
             if (found == slots_.end())
             {
-                auto storage = std::make_shared<T>(Codec<T, Id>::read(*token));
+                auto storage = std::make_shared<T>(Codec<T, WireId>::read(*token));
                 auto commit = [token, storage]
                 {
-                    auto replacement = Codec<T, Id>::write(*storage);
+                    auto replacement = Codec<T, WireId>::write(*storage);
                     WioNativeAbiReleaseValue(token);
                     *token = replacement;
                 };
                 found =
                     slots_
                         .emplace(token,
-                                 Slot{Id, storage, std::move(commit), storage.get(), sizeof(T),
+                                 Slot{Id, WireId, storage, std::move(commit), storage.get(), sizeof(T),
                                       token->kind == WIO_NATIVE_ABI_POD, &NativePodProjectionAccess<T>::resolve,
                                       &SequenceProjectionAccess<T>::resolve, &SequenceProjectionAccess<T>::resolvePod,
                                       &NativeContainerProjectionAccess<T>::resolve})
                         .first;
             }
-            require(found->second.type == Id);
+            require(found->second.type == Id && found->second.wireType == WireId);
             const auto* storage = std::any_cast<std::shared_ptr<T>>(&found->second.storage);
             require(storage != nullptr);
             return bindCell<T, Id>(found->second, storage->get(), mutableAccess);

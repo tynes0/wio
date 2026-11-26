@@ -213,7 +213,8 @@ namespace wio::codegen
             if (module.types.get(value).kind == TypeKind::Reference)
                 value = module.types.get(value).arguments.front();
             if (module.types.get(value).kind == TypeKind::Nullable &&
-                module.types.get(module.types.get(value).arguments.front()).kind == TypeKind::Function)
+                (module.types.get(module.types.get(value).arguments.front()).kind == TypeKind::Function ||
+                 module.types.get(module.types.get(value).arguments.front()).kind == TypeKind::Opaque))
                 value = module.types.get(value).arguments.front();
             if (const auto object = nativeAbiObjectType(module.types, value))
                 value = object;
@@ -427,8 +428,12 @@ namespace wio::codegen
                 {
                     auto base = t.arguments.front();
                     out << type(id) << (t.isMutable ? "::borrow(" : "::borrowView(") << "frame.borrow<" << type(base)
-                        << ", " << wireId(base) << "ULL>(args[" << i << "], " << (t.isMutable ? "true" : "false")
-                        << "))";
+                        << ", " << wireId(base) << "ULL";
+                    const auto& placeType = module.types.get(base);
+                    if (placeType.kind == TypeKind::Nullable && placeType.arguments.size() == 1 &&
+                        module.types.get(placeType.arguments.front()).kind == TypeKind::Opaque)
+                        out << ", " << wireId(placeType.arguments.front()) << "ULL";
+                    out << ">(args[" << i << "], " << (t.isMutable ? "true" : "false") << "))";
                 }
                 else
                     out << codec(id) << "::read(" << input << ")";
