@@ -122,6 +122,53 @@ a v1 requirement, renumber the existing gates, or authorize a divergent ABI.
 Backend and kit conformance are reported separately. A backend milestone can
 close before full kit parity; Wio v1 cannot ship before the SDK gate closes.
 
+### 2.3 VM execution policy and bytecode-first builds (2026-11-26)
+
+The following are accepted, implementation-pending v1 blockers within the
+existing runtime/CLI correctness and compilation-cost gates. They do not add a
+fourth optimization pass, renumber the existing gates, or reopen all qualified
+backend functionality.
+
+- **Long-running VM execution:** ordinary application/game/service execution
+  must not eventually fail solely because a process-wide execution reaches a
+  small fixed instruction count. The current runner uses the default
+  `MachineOptions::instructionLimit` of 10,000,000; the counter accumulates in
+  an execution state across calls/loop iterations rather than resetting each
+  application frame, and exhaustion reports WVM1008. Separate trusted
+  long-running execution from explicitly bounded test/embedding workloads.
+  Expose and document the selected policy through CLI/project configuration
+  and embedding options, including counter scope, suspend/resume behavior,
+  disabled-limit semantics and any per-frame/per-slice policy. Do not simply
+  increase the constant or silently remove bounded-host protections. Preserve
+  cancellation, debugger abort, call-depth/register limits and exactly-once
+  cleanup. Acceptance must run an application beyond the old cumulative limit,
+  retain a deterministic finite-budget WVM1008 test, and qualify error/exit
+  cleanup. Report the exhausted location and policy usefully; a function ID
+  identifies where the budget ran out, not proof that that function is broken.
+- **Bytecode-first VM builds:** pure-Wio executable compilation/execution must
+  not require per-project C++ generation/compilation/linking; use bytecode and
+  a prebuilt compatible VM/runtime. The current project VM path always prepares
+  a native bridge producer with `--native-bridge-only` and a bytecode sidecar,
+  even for pure programs. Native-backed projects must compile only the required
+  adapter/dependency closure and reuse it when a Wio-only change leaves that
+  closure unchanged. Cache validity must include native ABI/layout/instantiation
+  requirements, transitive native inputs, generator/runtime versions, toolchain,
+  target and build flags, not only timestamps or a blanket Wio-source signature.
+  Reuse prebuilt std/runtime support where applicable. Preserve strict native
+  validation, identity, ownership and safe publication; never reuse a stale
+  adapter to obtain a faster build. Document necessary shared/static host-wrapper
+  compilation separately rather than claiming every artifact can avoid C++.
+  Acceptance must count actual backend compiler/linker invocations: zero for a
+  pure executable path and zero bridge rebuilds for binding-preserving script
+  edits, with rebuild/invalidation for changed native requirements. Qualify
+  cold/warm/incremental builds, bytecode/native parity and deployment behavior.
+
+The first blocker belongs to VM runtime/CLI correctness and pass 2; the second
+belongs to the existing generated-build-cost gate and pass 3. Required behavior
+must close before beta even if a narrow performance result has already passed.
+See [the optimization plan](WIO_BACKEND_OPTIMIZATION_PLAN.md) and the matching
+open entries in [the active backlog](../TODOLIST.md).
+
 ## 3. Planned Release Train
 
 ### v0.13.0 - Language Coherence

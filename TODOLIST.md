@@ -1410,6 +1410,33 @@ Rider, and CLion are defined in
   requalifies these budgets after later kit/std/IDE work; it does not postpone
   these passes or add a fourth heavy optimization package.
 
+- [ ] Close VM long-running execution policy (v1 blocker accepted 2026-11-26;
+  existing VM runtime/CLI correctness gate and optimization pass 2). The default
+  10,000,000-instruction execution-state budget currently accumulates across
+  calls/application frames and terminates legitimate game/app loops with
+  WVM1008. Separate trusted long-lived execution from explicitly bounded
+  embedding/tests; expose and document CLI/manifest/host policy, counter scope,
+  suspension and disabled-limit semantics. Keep finite-budget failure tests,
+  cancellation/debugger abort, other resource guards and exactly-once cleanup.
+  Prove a multi-frame application survives beyond the old cumulative ceiling;
+  only increasing the ceiling is not closure. Function IDs report the exhaustion
+  location, not necessarily a defective function. No implementation is claimed.
+
+- [ ] Close bytecode-first VM project builds (v1 blocker accepted 2026-11-26;
+  existing generated-build-cost gate and optimization pass 3). Pure executable
+  paths must not generate/compile/link a per-project C++ bridge; use bytecode
+  and prebuilt VM/runtime support. Current project VM commands always prepare
+  a shared native bridge producer and sidecar, even for pure programs. Native
+  projects must reuse adapters when script edits preserve the native dependency
+  closure. Validate cache keys against transitive native inputs, ABI/layout/
+  concrete instantiations, generator/runtime/toolchain/target/flags; retain
+  correct invalidation, ownership/identity and atomic publication. Count actual
+  backend compiler/linker invocations, require zero bridge builds for pure
+  executable paths and binding-preserving script edits, and test required
+  rebuilds. Qualify necessary shared/static host wrappers separately. See
+  `docs/WIO_V1_RELEASE_PLAN.md`, section 2.3, and
+  `docs/WIO_BACKEND_OPTIMIZATION_PLAN.md`. No implementation is claimed.
+
 - [ ] After the three passes, rerun the same Mandelbrot case across C++, Wio
   native, Wio VM, C# and Python, with separate compute/format-buffer/full-PPM
   measurements and matching hashes. Preserve original/previous/final evidence,

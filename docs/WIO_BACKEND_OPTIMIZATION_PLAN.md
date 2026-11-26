@@ -102,7 +102,46 @@ Preserve bytecode verification, safety budgets, source mapping, panic/cleanup,
 thread contracts and native ownership. Separate loader/startup time from steady
 execution, and publish baseline-relative gains with the same inputs/checksums.
 
+### Required VM execution-policy closure (accepted 2026-11-26)
+
+This subsection is part of pass 2 above, not a new pass. WVM1008 currently
+terminates execution after the default 10,000,000-instruction cumulative budget
+is consumed; ordinary application frames do not replenish that execution-state
+counter. Long-lived applications must have an explicit suitable policy instead
+of eventually failing merely because they continue running. Separate trusted
+long-running execution from intentionally bounded embedding/test execution,
+expose/document CLI, manifest and host controls, and define counter scope,
+suspension and disabled-limit semantics. Preserve finite-budget WVM1008 tests,
+cancellation/debugger abort, other resource guards and correct cleanup. Include
+a multi-frame application that exceeds the former total limit. Increasing the
+constant alone is not closure. This is an open v1 correctness blocker as well
+as a runtime-cost consideration; no policy change is implemented by this note.
+
 ## 3. Compilation and preparation time
+
+### Bytecode-first builds and native adapter reuse (accepted 2026-11-26)
+
+This is an open v1 blocker within pass 3. The current VM project command always
+selects a shared native producer with `--native-bridge-only` plus a bytecode
+sidecar; pruning unrelated bodies does not remove that C++ build dependency.
+Required outcomes:
+
+- pure-Wio executable builds use bytecode and prebuilt VM/runtime support,
+  without invoking a C++ compiler/linker for a per-project bridge;
+- native libraries such as raylib use only the required compiled adapters and
+  dependencies, with reusable versioned std/runtime support;
+- Wio-only edits that preserve the native adapter/dependency closure regenerate
+  bytecode without regenerating/recompiling the bridge;
+- actual native-header/source/transitive-input, ABI/layout/generic-instantiation,
+  code-generator/runtime/toolchain/target/flag changes invalidate the cache;
+- publication, native ownership/identity checks, callbacks and artifact deployment
+  remain correct; required shared/static embedding wrappers are reported
+  separately rather than hidden in a claim of C++-free builds.
+
+Measure compiler/linker invocations as well as cold/warm/incremental latency.
+Require zero bridge compilation for pure executable builds and binding-preserving
+script edits, plus positive invalidation tests for changed native requirements.
+Reusing stale code or merely skipping every build is not an optimization.
 
 Profile and optimize lexer, parser, semantic analyzer, Typed WIR, Lowered WIR,
 C++ emission, bytecode emission and VM decode/verify/index preparation. VM steady
@@ -127,8 +166,9 @@ paired measurements or a claim that host timing can never vary. Rebaseline the
 references if algorithm, input, checksum, toolchain or measurement policy changes.
 Use Release VM execution, retain raw samples, and report a timeout as a lower
 bound rather than inventing a completed duration. The diagnostic VM host has an
-explicit finite larger instruction budget; production safety defaults do not
-change. Fresh Wio-only measurements follow each implementation slice, not only
+explicit finite larger instruction budget; that benchmark override does not
+change current production defaults or close the execution-policy blocker above.
+Fresh Wio-only measurements follow each implementation slice, not only
 the end of a numbered pass. Pure explanations do not create new timing evidence.
 
 After all three passes, rerun the same Mandelbrot workload in all five rows:
