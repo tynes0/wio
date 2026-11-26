@@ -365,6 +365,8 @@ namespace wio::common
     {
         if (ch == '\\' || ch == '\'' || ch == '\"')
             return ch;
+        if (ch == '0') // null character
+            return '\0';
         if (ch == 'n') // newline
             return '\n';
         if (ch == 'r') // return
@@ -393,6 +395,7 @@ namespace wio::common
         {
             switch (c)
             {
+            case '\0': result += "\\000"; break;
             case '\n': result += "\\n"; break;
             case '\r': result += "\\r"; break;
             case '\a': result += "\\a"; break;

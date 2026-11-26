@@ -1,0 +1,75 @@
+using cpp::header("vm_pod_array_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_pod_array::Mode), Type(u8)]
+enum Mode { Idle = 0, Ready = 7 };
+
+[Native, CppName(vm_pod_array::Point)]
+component Point {
+    public x: f32;
+    public y: f32;
+}
+
+[Native, CppName(vm_pod_array::Triplet)]
+component Triplet<T> {
+    public values: [T; 3];
+}
+
+// The exposed declaration order is independent of the actual C++ field order.
+[Native, CppName(vm_pod_array::Bundle)]
+component Bundle {
+    public matrix: [[i16; 2]; 2];
+    public points: [Point; 2];
+    public markers: [char; 2];
+    public flags: [bool; 2];
+    public floats: [f32; 2];
+    public empty: [i32; 0];
+    public modes: [Mode; 2];
+}
+
+[Native, CppName(vm_pod_array::Make)] fn Make() -> Bundle;
+[Native, CppName(vm_pod_array::Echo)] fn Echo(value: Bundle) -> Bundle;
+[Native, CppName(vm_pod_array::Adjust)] fn Adjust(value: ref Bundle);
+[Native, CppName(vm_pod_array::Hidden)] fn Hidden(value: view Bundle) -> i32;
+[Native, CppName(vm_pod_array::Bump), instantiate(i32), instantiate(f64)]
+fn Bump<T>(value: Triplet<T>) -> Triplet<T>;
+[Native, CppName(vm_pod_array::Delayed)] async fn Delayed() -> Bundle;
+[Native, CppName(vm_pod_array::Code)] fn Code(value: char) -> u32;
+[Native, CppName(vm_pod_array::Print)] fn Print(value: string);
+
+async fn Entry() -> i32 {
+    let integers = Bump<i32>(Triplet<i32>([1, 2, 3]));
+    let doubles = Bump<f64>(Triplet<f64>([1.5f64, 2.5f64, 3.5f64]));
+    if (integers.values[1usize] != 12 or doubles.values[1usize] != 12.5f64) { return 1; }
+
+    mut local = Bundle([[1i16, 2i16], [3i16, 4i16]], [Point(1.0f32, 2.0f32), Point(3.0f32, 4.0f32)],
+                       ['\0', 'W'], [false, true], [1.25f32, -2.5f32], [], [Mode::Idle, Mode::Ready]);
+    let localCopy = Echo(local);
+    if (localCopy.matrix[1usize][1usize] != 4i16 or localCopy.points[0usize].x != 1.0f32) { return 2; }
+    if (Hidden(ref localCopy) != 34) { return 3; }
+
+    mut produced = Make();
+    if (Code(produced.markers[1usize]) != 255u32 or produced.markers[0usize] != '\0') { return 4; }
+    if (produced.flags[0usize] or !produced.flags[1usize] or produced.empty.Count() != 0usize) { return 5; }
+    if (produced.modes[0usize] != Mode::Idle or produced.modes[1usize] != Mode::Ready) { return 14; }
+    let borrowed: view i16 = ref produced.matrix[1usize][1usize];
+    let borrowedPoint: view f32 = ref produced.points[0usize].x;
+    Adjust(ref produced);
+    if (deref borrowed != 9i16 or deref borrowedPoint != 11.0f32) { return 6; }
+    if (Hidden(ref produced) != 84 or !produced.flags[0usize] or produced.markers[1usize] != 'W') { return 7; }
+    if (produced.floats[0usize] != 1.75f32) { return 8; }
+
+    let copy = Echo(produced);
+    produced.points[0usize].x = 99.0f32;
+    produced.matrix[0usize][0usize] = 100i16;
+    if (copy.points[0usize].x != 11.0f32 or copy.matrix[0usize][0usize] != 1i16) { return 9; }
+    if (Hidden(ref copy) != 84) { return 10; }
+    local.points[0usize].x = 10.0f32;
+    if (localCopy.points[0usize].x != 1.0f32) { return 11; }
+
+    let delayed = await Delayed();
+    if (delayed.points[1usize].y != 4.0f32 or delayed.matrix[1usize][1usize] != 4i16) { return 12; }
+    if (Hidden(ref delayed) != 83 or Code(delayed.markers[1usize]) != 255u32) { return 13; }
+    Print("native-pod-array-ok:local/nested/generic/empty/char/bool/ref/borrow/copy/hidden/async");
+    return 0;
+}

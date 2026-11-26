@@ -1,0 +1,82 @@
+using cpp::header("release_probe.h");
+
+[native, cpp::name(release_probe::Read)]
+fn Read(value: view string) -> usize;
+
+[native, cpp::name(release_probe::Grow)]
+fn Grow(value: ref string);
+
+[native, cpp::name(release_probe::Echo)]
+fn Echo(value: string) -> string;
+
+[native, cpp::name(release_probe::Apply)]
+fn Apply(callback: fn(view string) -> usize, value: view string) -> usize;
+
+[native, cpp::name(release_probe::Fail)]
+fn Fail(value: ref string);
+
+component Record
+{
+    public value: string;
+}
+
+fn Change(value: ref string) -> string
+{
+    value = "changed";
+    return "tail";
+}
+
+fn ChangeText(value: ref text) -> text
+{
+    value = u"changed";
+    return u"tail";
+}
+
+fn ReplaceForComparison(value: ref string) -> string
+{
+    value = "changed";
+    return "original";
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() > 1usize)
+    {
+        mut value = "before";
+        let fail: fn(ref string) = Fail;
+        fail(ref value);
+        return 99;
+    }
+
+    mut value = "original";
+    if (value + Change(ref value) != "originaltail") return 1;
+    value = "original";
+    if (value != ReplaceForComparison(ref value)) return 2;
+    if (value != "changed") return 3;
+    value = "original";
+    if (value + Change(ref value) + value != "originaltailchanged") return 4;
+    mut record = Record();
+    record.value = "field";
+    if (record.value + Change(ref record.value) != "fieldtail") return 5;
+    mut items: string[] = ["element"];
+    if (items[0] + Change(ref items[0]) != "elementtail") return 6;
+    mut unicode = u"🌍\0";
+    if (unicode + ChangeText(ref unicode) != u"🌍\0tail") return 7;
+
+    let reader: fn(view string) -> usize = Read;
+    let grower: fn(ref string) = Grow;
+    let echo: fn(string) -> string = Echo;
+    mut bytes = "a\0b";
+    let snapshot = bytes;
+    if (reader(ref bytes) != 3usize) return 8;
+    if (Apply(reader, ref bytes) != 3usize) return 9;
+    grower(ref bytes);
+    if (snapshot != "a\0b" or bytes != "a\0b-grown") return 10;
+    if (echo(bytes) != bytes) return 11;
+    for (index in 0..<64)
+    {
+        if (reader(ref bytes) != 9usize) return 12;
+    }
+
+    return 0;
+}

@@ -1,0 +1,23 @@
+{
+  "scope": "Selected actual GCC 15.2 Windows x64 O2 Work prologue instructions, not full disassembly or whole-process stack peak",
+  "function": "_wio_f780(long long, long long)",
+  "mangledSymbol": "_Z9_wio_f780xx",
+  "commands": [
+    "objdump -d -C build/n03-transfer-before-2026-10-17/native.exe",
+    "objdump -d -C build/n03-transfer-after-2026-10-17/native.exe"
+  ],
+  "before": {
+    "binarySha256": "41af4eb3f2863c344a990ee854711127f0a5b494f7312a2be94e19f3d08f9251",
+    "instruction": "14004690c: 48 81 ec 08 04 00 00  sub $0x408,%rsp",
+    "explicitStackReservationBytes": 1032,
+    "savedGeneralRegisters": 8
+  },
+  "after": {
+    "binarySha256": "68a5c2008a9e454febc332704ff29118c19e5ee2e3e09b460e4c5a574a660cf4",
+    "instruction": "14004690c: 48 81 ec b8 02 00 00  sub $0x2b8,%rsp",
+    "explicitStackReservationBytes": 696,
+    "savedGeneralRegisters": 8
+  },
+  "reservationReductionBytes": 336,
+  "limitations": "The reservation includes compiler spill/outgoing-call/layout decisions. Saved-register pushes are unchanged. Caller/callee frames, recursion, other platforms and full live stack peak are not measured by this diagnostic."
+}

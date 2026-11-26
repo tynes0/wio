@@ -1,0 +1,3553 @@
+{
+  "affinityQualified": true,
+  "artifactsAfter": [
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 6035607,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/bridge.dll",
+      "sha256": "776399f3884bd284968068e8a626cba729dd151a49ba58a8fbf9964e3ea7f199"
+    },
+    {
+      "bytes": 280,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/ByteIo.csproj",
+      "sha256": "ed79971229072fc23993b4a8387a5f926190c278ffa45ea28794108e2e71de98"
+    },
+    {
+      "bytes": 73299,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/cpp.exe",
+      "sha256": "678f4e4da5644d46a7384bf5d779189f710fe963644b0b715b819d204f9c46be"
+    },
+    {
+      "bytes": 3578835,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/frozen.cpp",
+      "sha256": "c0525f05e9345367845718ccd54a4827e252fc4a5a80f6f30e97e1059620514a"
+    },
+    {
+      "bytes": 1633,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/main.cpp",
+      "sha256": "2390fe80656098ec9eda1fa6297a2ecaa08d9cde866694703519c2c21eed639a"
+    },
+    {
+      "bytes": 2027,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/main.wio",
+      "sha256": "1da8af48809becc244a2c8b22fc5b9a3ffe9f5b7b122b2fa0bab9791be154cb1"
+    },
+    {
+      "bytes": 3578835,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/main.wio.cpp",
+      "sha256": "c0525f05e9345367845718ccd54a4827e252fc4a5a80f6f30e97e1059620514a"
+    },
+    {
+      "bytes": 2706360,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/main.wiob",
+      "sha256": "04d142ad3bc0b6dca37eff15909d23b0c0f2018e61dd321aa5a603dbd21b218a"
+    },
+    {
+      "bytes": 10033823,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/memory.exe",
+      "sha256": "236a8f9ac9581d4efaf67699898aac09d23cf59a631c363490a13cf0af767b96"
+    },
+    {
+      "bytes": 6853493,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/native.exe",
+      "sha256": "ccf5861da88343e4b0028434daa72c3f423815246b3eda6668c51cf76fd174e1"
+    },
+    {
+      "bytes": 65536,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/payload.bin",
+      "sha256": "f779dbe3aeaa609beb32212579f3aea441f244621d13c977cb8b52d7ec3016d9"
+    },
+    {
+      "bytes": 881,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/probe.h",
+      "sha256": "23cc1ccccc06e0f0e08a1995a523bc3377728b09df61b2c8d142526bc34923fe"
+    },
+    {
+      "bytes": 2441,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/Program.cs",
+      "sha256": "2bf1500084ace57c50b389861b94937fa74166a504e7189e0c99baa738663179"
+    },
+    {
+      "bytes": 20566016,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "7688dd04cb64a36f1078b81cf5abf7be1e1e8ff06e361763baab56d8f064f3e0"
+    },
+    {
+      "bytes": 7283396,
+      "ok": true,
+      "path": "F:/Projects/wio/build/runtime/backend/libwio_runtime.a",
+      "sha256": "180943c29108278cec17ffbb8648e3e2c237a3829a2fa4d17c86bbc7f0fb7660"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 6144,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/csharp/ByteIo.dll",
+      "sha256": "25b469339afb5f3b87e51075c07351823d76a61a7d19961d1dee572099db4f60"
+    },
+    {
+      "bytes": 390,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/csharp/ByteIo.runtimeconfig.json",
+      "sha256": "07f9f5efdb6012cd8f625b3134c4b4515e234157146916ad6f749b539098de32"
+    },
+    {
+      "bytes": 17841,
+      "ok": true,
+      "path": "F:/Projects/wio/std/benchmark.wio",
+      "sha256": "7c15522d769224a8f747f524e678047e4b55ea85a3c6919fc32a02d9a2e31d3d"
+    },
+    {
+      "bytes": 20395,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_benchmark.h",
+      "sha256": "01663a11e134bcc5bc56cf1825fd5a2b532823bb1693eaf6a956147521bb2bd9"
+    },
+    {
+      "bytes": 7068,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/text.h",
+      "sha256": "4fea764ce610eeb5a2a73a066fab91479ee3ef36ab573eb9a3ed671758b3dc18"
+    },
+    {
+      "bytes": 5672,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/wio_benchmark_allocations.h",
+      "sha256": "5dfee7c788a020e0abebb39a7d60fabd4e2e98a5efb84a30a794cf37d90a8254"
+    },
+    {
+      "bytes": 2205,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/benchmark_memory.h",
+      "sha256": "3b7fdfa98c419628e65e4e5945a5436263bf50f175d361c97526c67cefd1c7e9"
+    },
+    {
+      "bytes": 26902,
+      "ok": true,
+      "path": "F:/Projects/wio/std/json.wio",
+      "sha256": "63e6dfdaffdb36a85e8cdf172801f5ff5de74fea2150ee0743003a3d5291e179"
+    },
+    {
+      "bytes": 3594,
+      "ok": true,
+      "path": "F:/Projects/wio/std/serialization.wio",
+      "sha256": "5b383f0cfc3e60da933501de59c6595fab0c6e4af6ef9af7a226cc1e5229f3b8"
+    },
+    {
+      "bytes": 6551,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_serialization.h",
+      "sha256": "e6f4369c02a2433b304f03c5f70f64d3d006060df5613702dca0cd33f3e88642"
+    },
+    {
+      "bytes": 37705,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
+      "sha256": "9b838608f5b13e27b3759a43e1fec51809e9eb80711e104e9fa47a8e9cfb9383"
+    },
+    {
+      "bytes": 250925,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "sha256": "3433e73609ebb3309b21d0464e667e11f6460aac5f7e5825149eedec44439168"
+    },
+    {
+      "bytes": 2305,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/include/wio/codegen/wir_cpp_storage_plan.h",
+      "sha256": "10d076a5c5d528d2e55814b78aef1f2181e98377cb7bc6bddc9f6d7277b40009"
+    },
+    {
+      "bytes": 44133813,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio-selfhost.exe",
+      "sha256": "2d1deb3c635d9a26ca576000911888bbd6b864922495667f4abe9f9e1795df9b"
+    },
+    {
+      "bytes": 2532,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/string_concat.h",
+      "sha256": "567a054e9c27f54a4a690072016bb056ab8ce50e3a4bc5ca49341e632c39d997"
+    },
+    {
+      "bytes": 14203,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_io.h",
+      "sha256": "a6e4ac1303bd12a838254854bd6fd500432fc9fee343c0efc30e15804f1caec4"
+    },
+    {
+      "bytes": 52103,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/src/std_io.cpp",
+      "sha256": "b7da0758f08582271b5d6dd23cf5a090090b5bf13069a37d4bb1bcdc07ca2bcb"
+    },
+    {
+      "bytes": 21138,
+      "ok": true,
+      "path": "F:/Projects/wio/std/io.wio",
+      "sha256": "ac3f8c0f7965ce85405f56f61950804f14b9242218ff8bbc83ad4e00b943d93e"
+    },
+    {
+      "bytes": 1460,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/byte_io/prepare.py",
+      "sha256": "1790651248883cb155387c818268f63a7f95d90c927df2c57a227b197f223772"
+    },
+    {
+      "bytes": 10259,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/concat_reuse/prepare.py",
+      "sha256": "8804d5fd24b8c3bbd25c59638723f6bcaad2077deba73b60bc580e7779f76f63"
+    },
+    {
+      "bytes": 6853493,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/native.exe",
+      "sha256": "ccf5861da88343e4b0028434daa72c3f423815246b3eda6668c51cf76fd174e1"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 73299,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/cpp.exe",
+      "sha256": "678f4e4da5644d46a7384bf5d779189f710fe963644b0b715b819d204f9c46be"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 6853493,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/native.exe",
+      "sha256": "ccf5861da88343e4b0028434daa72c3f423815246b3eda6668c51cf76fd174e1"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 73299,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/cpp.exe",
+      "sha256": "678f4e4da5644d46a7384bf5d779189f710fe963644b0b715b819d204f9c46be"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 20566016,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "7688dd04cb64a36f1078b81cf5abf7be1e1e8ff06e361763baab56d8f064f3e0"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    }
+  ],
+  "artifactsBefore": [
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 6035607,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/bridge.dll",
+      "sha256": "776399f3884bd284968068e8a626cba729dd151a49ba58a8fbf9964e3ea7f199"
+    },
+    {
+      "bytes": 280,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/ByteIo.csproj",
+      "sha256": "ed79971229072fc23993b4a8387a5f926190c278ffa45ea28794108e2e71de98"
+    },
+    {
+      "bytes": 73299,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/cpp.exe",
+      "sha256": "678f4e4da5644d46a7384bf5d779189f710fe963644b0b715b819d204f9c46be"
+    },
+    {
+      "bytes": 3578835,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/frozen.cpp",
+      "sha256": "c0525f05e9345367845718ccd54a4827e252fc4a5a80f6f30e97e1059620514a"
+    },
+    {
+      "bytes": 1633,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/main.cpp",
+      "sha256": "2390fe80656098ec9eda1fa6297a2ecaa08d9cde866694703519c2c21eed639a"
+    },
+    {
+      "bytes": 2027,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/main.wio",
+      "sha256": "1da8af48809becc244a2c8b22fc5b9a3ffe9f5b7b122b2fa0bab9791be154cb1"
+    },
+    {
+      "bytes": 3578835,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/main.wio.cpp",
+      "sha256": "c0525f05e9345367845718ccd54a4827e252fc4a5a80f6f30e97e1059620514a"
+    },
+    {
+      "bytes": 2706360,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/main.wiob",
+      "sha256": "04d142ad3bc0b6dca37eff15909d23b0c0f2018e61dd321aa5a603dbd21b218a"
+    },
+    {
+      "bytes": 10033823,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/memory.exe",
+      "sha256": "236a8f9ac9581d4efaf67699898aac09d23cf59a631c363490a13cf0af767b96"
+    },
+    {
+      "bytes": 6853493,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/native.exe",
+      "sha256": "ccf5861da88343e4b0028434daa72c3f423815246b3eda6668c51cf76fd174e1"
+    },
+    {
+      "bytes": 65536,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/payload.bin",
+      "sha256": "f779dbe3aeaa609beb32212579f3aea441f244621d13c977cb8b52d7ec3016d9"
+    },
+    {
+      "bytes": 881,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/probe.h",
+      "sha256": "23cc1ccccc06e0f0e08a1995a523bc3377728b09df61b2c8d142526bc34923fe"
+    },
+    {
+      "bytes": 2441,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/Program.cs",
+      "sha256": "2bf1500084ace57c50b389861b94937fa74166a504e7189e0c99baa738663179"
+    },
+    {
+      "bytes": 20566016,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "7688dd04cb64a36f1078b81cf5abf7be1e1e8ff06e361763baab56d8f064f3e0"
+    },
+    {
+      "bytes": 7283396,
+      "ok": true,
+      "path": "F:/Projects/wio/build/runtime/backend/libwio_runtime.a",
+      "sha256": "180943c29108278cec17ffbb8648e3e2c237a3829a2fa4d17c86bbc7f0fb7660"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 6144,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/csharp/ByteIo.dll",
+      "sha256": "25b469339afb5f3b87e51075c07351823d76a61a7d19961d1dee572099db4f60"
+    },
+    {
+      "bytes": 390,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/csharp/ByteIo.runtimeconfig.json",
+      "sha256": "07f9f5efdb6012cd8f625b3134c4b4515e234157146916ad6f749b539098de32"
+    },
+    {
+      "bytes": 17841,
+      "ok": true,
+      "path": "F:/Projects/wio/std/benchmark.wio",
+      "sha256": "7c15522d769224a8f747f524e678047e4b55ea85a3c6919fc32a02d9a2e31d3d"
+    },
+    {
+      "bytes": 20395,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_benchmark.h",
+      "sha256": "01663a11e134bcc5bc56cf1825fd5a2b532823bb1693eaf6a956147521bb2bd9"
+    },
+    {
+      "bytes": 7068,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/text.h",
+      "sha256": "4fea764ce610eeb5a2a73a066fab91479ee3ef36ab573eb9a3ed671758b3dc18"
+    },
+    {
+      "bytes": 5672,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/wio_benchmark_allocations.h",
+      "sha256": "5dfee7c788a020e0abebb39a7d60fabd4e2e98a5efb84a30a794cf37d90a8254"
+    },
+    {
+      "bytes": 2205,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/benchmark_memory.h",
+      "sha256": "3b7fdfa98c419628e65e4e5945a5436263bf50f175d361c97526c67cefd1c7e9"
+    },
+    {
+      "bytes": 26902,
+      "ok": true,
+      "path": "F:/Projects/wio/std/json.wio",
+      "sha256": "63e6dfdaffdb36a85e8cdf172801f5ff5de74fea2150ee0743003a3d5291e179"
+    },
+    {
+      "bytes": 3594,
+      "ok": true,
+      "path": "F:/Projects/wio/std/serialization.wio",
+      "sha256": "5b383f0cfc3e60da933501de59c6595fab0c6e4af6ef9af7a226cc1e5229f3b8"
+    },
+    {
+      "bytes": 6551,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_serialization.h",
+      "sha256": "e6f4369c02a2433b304f03c5f70f64d3d006060df5613702dca0cd33f3e88642"
+    },
+    {
+      "bytes": 37705,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
+      "sha256": "9b838608f5b13e27b3759a43e1fec51809e9eb80711e104e9fa47a8e9cfb9383"
+    },
+    {
+      "bytes": 250925,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "sha256": "3433e73609ebb3309b21d0464e667e11f6460aac5f7e5825149eedec44439168"
+    },
+    {
+      "bytes": 2305,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/include/wio/codegen/wir_cpp_storage_plan.h",
+      "sha256": "10d076a5c5d528d2e55814b78aef1f2181e98377cb7bc6bddc9f6d7277b40009"
+    },
+    {
+      "bytes": 44133813,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio-selfhost.exe",
+      "sha256": "2d1deb3c635d9a26ca576000911888bbd6b864922495667f4abe9f9e1795df9b"
+    },
+    {
+      "bytes": 2532,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/string_concat.h",
+      "sha256": "567a054e9c27f54a4a690072016bb056ab8ce50e3a4bc5ca49341e632c39d997"
+    },
+    {
+      "bytes": 14203,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_io.h",
+      "sha256": "a6e4ac1303bd12a838254854bd6fd500432fc9fee343c0efc30e15804f1caec4"
+    },
+    {
+      "bytes": 52103,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/src/std_io.cpp",
+      "sha256": "b7da0758f08582271b5d6dd23cf5a090090b5bf13069a37d4bb1bcdc07ca2bcb"
+    },
+    {
+      "bytes": 21138,
+      "ok": true,
+      "path": "F:/Projects/wio/std/io.wio",
+      "sha256": "ac3f8c0f7965ce85405f56f61950804f14b9242218ff8bbc83ad4e00b943d93e"
+    },
+    {
+      "bytes": 1460,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/byte_io/prepare.py",
+      "sha256": "1790651248883cb155387c818268f63a7f95d90c927df2c57a227b197f223772"
+    },
+    {
+      "bytes": 10259,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/concat_reuse/prepare.py",
+      "sha256": "8804d5fd24b8c3bbd25c59638723f6bcaad2077deba73b60bc580e7779f76f63"
+    },
+    {
+      "bytes": 6853493,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/native.exe",
+      "sha256": "ccf5861da88343e4b0028434daa72c3f423815246b3eda6668c51cf76fd174e1"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 73299,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/cpp.exe",
+      "sha256": "678f4e4da5644d46a7384bf5d779189f710fe963644b0b715b819d204f9c46be"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 6853493,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/native.exe",
+      "sha256": "ccf5861da88343e4b0028434daa72c3f423815246b3eda6668c51cf76fd174e1"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 73299,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-io-before-ready-2026-10-18/cpp.exe",
+      "sha256": "678f4e4da5644d46a7384bf5d779189f710fe963644b0b715b819d204f9c46be"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 20566016,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "7688dd04cb64a36f1078b81cf5abf7be1e1e8ff06e361763baab56d8f064f3e0"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    }
+  ],
+  "artifactsUnchanged": true,
+  "complete": true,
+  "environmentAfter": {
+    "hardwareThreads": 16,
+    "os": "windows",
+    "pointerBits": 64,
+    "powerProfile": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+    "unixNanoseconds": 1792350970325315900
+  },
+  "environmentBefore": {
+    "hardwareThreads": 16,
+    "os": "windows",
+    "pointerBits": 64,
+    "powerProfile": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+    "unixNanoseconds": 1792350935086643900
+  },
+  "manifest": {
+    "artifacts": [
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\bridge.dll",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\ByteIo.csproj",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\cpp.exe",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\frozen.cpp",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\main.cpp",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\main.wio",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\main.wio.cpp",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\main.wiob",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\memory.exe",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\native.exe",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\payload.bin",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\probe.h",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\Program.cs",
+      "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+      "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+      "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+      "C:\\mingw64\\bin\\g++.exe",
+      "C:\\Program Files\\dotnet\\dotnet.exe",
+      "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\csharp\\ByteIo.dll",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\csharp\\ByteIo.runtimeconfig.json",
+      "F:\\Projects\\wio\\std\\benchmark.wio",
+      "F:\\Projects\\wio\\runtime\\include\\std_benchmark.h",
+      "F:\\Projects\\wio\\runtime\\include\\text.h",
+      "F:\\Projects\\wio\\runtime\\include\\wio_benchmark_allocations.h",
+      "F:\\Projects\\wio\\runtime\\include\\benchmark_memory.h",
+      "F:\\Projects\\wio\\std\\json.wio",
+      "F:\\Projects\\wio\\std\\serialization.wio",
+      "F:\\Projects\\wio\\runtime\\include\\std_serialization.h",
+      "F:\\Projects\\wio\\compiler\\src\\wio_compiler\\codegen\\wir_cpp_storage_plan.cpp",
+      "F:\\Projects\\wio\\compiler\\src\\wio_compiler\\codegen\\wir_cpp_backend.cpp",
+      "F:\\Projects\\wio\\compiler\\include\\wio\\codegen\\wir_cpp_storage_plan.h",
+      "F:\\Projects\\wio\\build\\app\\Debug\\wio-selfhost.exe",
+      "F:\\Projects\\wio\\runtime\\include\\string_concat.h",
+      "F:\\Projects\\wio\\runtime\\include\\std_io.h",
+      "F:\\Projects\\wio\\runtime\\src\\std_io.cpp",
+      "F:\\Projects\\wio\\std\\io.wio",
+      "F:\\Projects\\wio\\tests\\performance\\byte_io\\prepare.py",
+      "F:\\Projects\\wio\\tests\\performance\\concat_reuse\\prepare.py"
+    ],
+    "builds": [],
+    "cases": [
+      {
+        "args": [
+          "0",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "wio-native",
+        "metric": "kernel",
+        "name": "exact-64k-wio-native",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\native.exe",
+        "workload": "n04-exact-64k-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\main.wiob",
+          "--native-library",
+          "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\bridge.dll",
+          "--",
+          "0",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "wio-vm",
+        "metric": "kernel",
+        "name": "exact-64k-wio-vm",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "workload": "n04-exact-64k-v1"
+      },
+      {
+        "args": [
+          "0",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "cpp",
+        "metric": "kernel",
+        "name": "exact-64k-cpp",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\cpp.exe",
+        "workload": "n04-exact-64k-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\csharp\\ByteIo.dll",
+          "0",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "csharp",
+        "metric": "kernel",
+        "name": "exact-64k-csharp",
+        "operations": 257,
+        "program": "C:\\Program Files\\dotnet\\dotnet.exe",
+        "workload": "n04-exact-64k-v1"
+      },
+      {
+        "args": [
+          "1",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "wio-native",
+        "metric": "kernel",
+        "name": "some-64k-wio-native",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\native.exe",
+        "workload": "n04-some-64k-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\main.wiob",
+          "--native-library",
+          "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\bridge.dll",
+          "--",
+          "1",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "wio-vm",
+        "metric": "kernel",
+        "name": "some-64k-wio-vm",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "workload": "n04-some-64k-v1"
+      },
+      {
+        "args": [
+          "1",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "cpp",
+        "metric": "kernel",
+        "name": "some-64k-cpp",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\cpp.exe",
+        "workload": "n04-some-64k-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18\\csharp\\ByteIo.dll",
+          "1",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "csharp",
+        "metric": "kernel",
+        "name": "some-64k-csharp",
+        "operations": 257,
+        "program": "C:\\Program Files\\dotnet\\dotnet.exe",
+        "workload": "n04-some-64k-v1"
+      }
+    ],
+    "cpu": 2,
+    "environment": {
+      "DOTNET_NOLOGO": "1",
+      "WIO_ROOT": "F:\\Projects\\wio"
+    },
+    "finalRepetitions": 3,
+    "maximumControlDifference": 0.1,
+    "maximumDrift": 0.1,
+    "maximumRange": 0.15,
+    "metadata": {
+      "contracts": "Seek plus owning 64KiB read plus full-byte FNV; OS-cache hot after two warmups; file setup/open/close excluded; Wio raw OS handles, C++ ifstream, C# unbuffered FileStream; not cold disk throughput or identical syscall implementations",
+      "diagnosticFlags": [
+        "-static-libstdc++",
+        "-static-libgcc"
+      ],
+      "label": "before",
+      "nativeFlags": [
+        "-std=c++20",
+        "-O2",
+        "-ffp-contract=off"
+      ],
+      "revision": "5db65954965ae0cad6af5f1e0ec7cf8ecb5bbc7c",
+      "vm": "Release host; unchanged bytecode semantics"
+    },
+    "name": "N04 owned byte I/O before",
+    "outputLimit": 1048576,
+    "repetitions": 5,
+    "schemaVersion": 1,
+    "timeoutMs": 60000,
+    "versions": [
+      {
+        "args": [
+          "--version"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "program": "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe"
+      },
+      {
+        "args": [
+          "--version"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "program": "C:\\mingw64\\bin\\g++.exe"
+      },
+      {
+        "args": [
+          "--info"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-io-before-ready-2026-10-18",
+        "program": "C:\\Program Files\\dotnet\\dotnet.exe"
+      }
+    ],
+    "warmups": 1
+  },
+  "name": "N04 owned byte I/O before",
+  "outputsCorrect": false,
+  "powerProfileUnchanged": true,
+  "samples": [
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 43291400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 43291400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 10428416,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":43291400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 512531800
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 45344800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 45344800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":45344800,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 196495500
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18534400,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 59001200
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 19465100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 19465100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 6066176,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":19465100,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 140438700
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 21410100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 21410100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 37953536,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":21410100,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 177970200
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 45554600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 45554600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":45554600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 179175800
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 45195700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 45195700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":45195700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 185863600
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18563072,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 58013600
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 25973400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 25973400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 5550080,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":25973400,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 120658200
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 28296900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 28296900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 37949440,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":28296900,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 183048900
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 21683600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 21683600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 37933056,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":21683600,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 174362600
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 26417500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26417500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 5554176,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26417500,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 125841400
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18530304,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 56051000
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 43626400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 43626400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":43626400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 191596200
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 57280800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 57280800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":57280800,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 196067700
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20338400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20338400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 37900288,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20338400,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 170290000
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 27900900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27900900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 5545984,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27900900,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 131911300
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18538496,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 55145500
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 42203000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 42203000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":42203000,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 178067500
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 43486000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 43486000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":43486000,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 179934500
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 46568000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 46568000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9707520,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":46568000,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 224432600
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18530304,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 55255000
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 28204800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 28204800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 5554176,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":28204800,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 118600300
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20589500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20589500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 37908480,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20589500,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 169904300
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 44854000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 44854000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":44854000,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 176590900
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 43040800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 43040800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":43040800,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 168740500
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18538496,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 54547900
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 31940200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 31940200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 5550080,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":31940200,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 122617400
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 21669700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 21669700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 37916672,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":21669700,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 187027000
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 48752100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 48752100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 171875000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":48752100,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 186095200
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 42334400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 42334400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":42334400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 175376900
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 21779000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 21779000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 37883904,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":21779000,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 187967700
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 26508500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26508500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 5541888,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26508500,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 123921500
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18534400,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 53431200
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 47901600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 47901600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 171875000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":47901600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 190841100
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 50439500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 50439500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":50439500,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 204333900
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20569900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20569900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 37949440,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20569900,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 181837100
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 28593900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 28593900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 5554176,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":28593900,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 130977600
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 15625000,
+        "exitCode": 1,
+        "peakResidentBytes": 18530304,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 61000300
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 43100400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 43100400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":43100400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 185127600
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18526208,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 51016600
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 26909000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26909000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 5554176,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26909000,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 128673800
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 22333800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 22333800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 37949440,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":22333800,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 174627200
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 46883700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 46883700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":46883700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 203684600
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 47673900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 47673900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":47673900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 184211300
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18530304,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 55168400
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 27006100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27006100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 5545984,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27006100,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 124183400
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 24131900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 24131900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 171875000,
+        "exitCode": 0,
+        "peakResidentBytes": 37904384,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":24131900,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 175126800
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 46362700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 46362700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":46362700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 208230400
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 45219800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 45219800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":45219800,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 183732500
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 42861700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 42861700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":42861700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 175240200
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 46528700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 46528700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 171875000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":46528700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 184742600
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 23043600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 23043600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 37941248,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":23043600,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 186582400
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 26228400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26228400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 5545984,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26228400,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 116391600
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18526208,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 70905300
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 44977300,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 44977300,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":44977300,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 180973700
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 46576300,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 46576300,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":46576300,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 187717200
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20437800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20437800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 37949440,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20437800,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 177931100
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 26128300,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26128300,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 5554176,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26128300,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 113130400
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 1,
+        "peakResidentBytes": 18534400,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 53916100
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 44838600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 44838600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9707520,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":44838600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 177110600
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 42816200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 42816200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":42816200,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 182880000
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 1,
+        "peakResidentBytes": 18546688,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 70003300
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 45101000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 45101000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":45101000,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 191042500
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 44116700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 44116700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":44116700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 182307500
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18526208,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 53554600
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18538496,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 62665700
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 51213200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 51213200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":51213200,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 197447300
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 44238100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 44238100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":44238100,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 186196700
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18530304,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 58609400
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 51332400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 51332400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":51332400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 185858200
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 45218100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 45218100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 171875000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":45218100,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 181877500
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 53471600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 53471600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":53471600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 200740800
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18538496,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 69546100
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 46374500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 46374500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":46374500,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 192609600
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 43976300,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 43976300,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":43976300,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 186897800
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18550784,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 57332200
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 44220900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 44220900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":44220900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 180050800
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 48227200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 48227200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 171875000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":48227200,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 183135600
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 1,
+        "peakResidentBytes": 18554880,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 71148100
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 42196700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 42196700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":42196700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 179367100
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 43440700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 43440700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9703424,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":43440700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 207588300
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 18530304,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1222: Native invocation 'std_io::OpenRaw' failed: wio.native: std_io file error: invalid_mode (function 858)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 56119400
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 44223200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 44223200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9699328,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":44223200,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 184190100
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    }
+  ],
+  "schemaVersion": 1,
+  "summary": [
+    {
+      "case": "exact-64k-wio-native",
+      "control": {
+        "count": 5,
+        "maximum": 46568000.0,
+        "mean": 43990580.0,
+        "mean95HighApproximate": 45595885.117106602,
+        "mean95LowApproximate": 42385274.882893398,
+        "median": 43100400.0,
+        "medianAbsoluteDeviation": 897400.0,
+        "minimum": 42203000.0,
+        "p90": 46028720.0,
+        "p95": 46298360.0,
+        "p99": 46514072.0,
+        "relativeDrift": 0.0079987656727083731,
+        "relativeRange": 0.10127516217946933,
+        "stable": true,
+        "standardDeviation": 1831413.9624890927,
+        "standardError": 819033.22301357216
+      },
+      "controlRelativeDifference": 0.072930627264201658,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 180399.61089494164,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 171875000.0,
+        "median": 156250000.0,
+        "minimum": 125000000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 9703424.0,
+        "median": 9703424.0,
+        "minimum": 9699328.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 48752100.0,
+        "mean": 45492780.0,
+        "mean95HighApproximate": 47747018.089418381,
+        "mean95LowApproximate": 43238541.910581619,
+        "median": 46362700.0,
+        "medianAbsoluteDeviation": 2389400.0,
+        "minimum": 42334400.0,
+        "p90": 47862740.0,
+        "p95": 48307420.0,
+        "p99": 48663164.0,
+        "relativeDrift": 0.0070455344490290683,
+        "relativeRange": 0.13842377600959391,
+        "stable": true,
+        "standardDeviation": 2571749.7986779353,
+        "standardError": 1150121.4741930524
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "phase": "comparison",
+      "processCpuNanoseconds": null,
+      "processPeakResidentBytes": null,
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "implementation": "cpp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 108563.81322957198,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 109375000.0,
+        "median": 93750000.0,
+        "minimum": 78125000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 5554176.0,
+        "median": 5554176.0,
+        "minimum": 5545984.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 28593900.0,
+        "mean": 27547380.0,
+        "mean95HighApproximate": 28431956.753292918,
+        "mean95LowApproximate": 26662803.246707082,
+        "median": 27900900.0,
+        "medianAbsoluteDeviation": 693000.0,
+        "minimum": 26128300.0,
+        "p90": 28438260.0,
+        "p95": 28516080.0,
+        "p99": 28578336.0,
+        "relativeDrift": 0.054987473522359491,
+        "relativeRange": 0.088369909214398107,
+        "stable": true,
+        "standardDeviation": 1009170.2814688906,
+        "standardError": 451314.6700474071
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "implementation": "csharp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 80038.521400778205,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 140625000.0,
+        "median": 125000000.0,
+        "minimum": 93750000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 37949440.0,
+        "median": 37949440.0,
+        "minimum": 37900288.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 22333800.0,
+        "mean": 20853880.0,
+        "mean95HighApproximate": 21584561.431762323,
+        "mean95LowApproximate": 20123198.568237677,
+        "median": 20569900.0,
+        "medianAbsoluteDeviation": 132100.0,
+        "minimum": 20338400.0,
+        "p90": 21636080.0,
+        "p95": 21984940.0,
+        "p99": 22264028.0,
+        "relativeDrift": 0.044815482817125996,
+        "relativeRange": 0.097005819182397576,
+        "stable": true,
+        "standardDeviation": 833598.64863134199,
+        "standardError": 372796.64885832852
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": {
+        "count": 5,
+        "maximum": 47901600.0,
+        "mean": 45444000.0,
+        "mean95HighApproximate": 47419087.860013522,
+        "mean95LowApproximate": 43468912.139986478,
+        "median": 44977300.0,
+        "medianAbsoluteDeviation": 1936500.0,
+        "minimum": 43040800.0,
+        "p90": 47810520.0,
+        "p95": 47856060.0,
+        "p99": 47892492.0,
+        "relativeDrift": 0.066522445767086949,
+        "relativeRange": 0.10807229424620864,
+        "stable": true,
+        "standardDeviation": 2253280.9778187904,
+        "standardError": 1007697.8877620022
+      },
+      "controlRelativeDifference": 0.041506188698141759,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 182426.84824902724,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 156250000.0,
+        "median": 140625000.0,
+        "minimum": 140625000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 9703424.0,
+        "median": 9699328.0,
+        "minimum": 9699328.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 57280800.0,
+        "mean": 49206860.0,
+        "mean95HighApproximate": 53544889.902614981,
+        "mean95LowApproximate": 44868830.097385019,
+        "median": 46883700.0,
+        "medianAbsoluteDeviation": 2029700.0,
+        "minimum": 44854000.0,
+        "p90": 54544280.0,
+        "p95": 55912540.0,
+        "p99": 57007148.0,
+        "relativeDrift": 0.092514029396144074,
+        "relativeRange": 0.26505587229676841,
+        "stable": false,
+        "standardDeviation": 4949045.7911601504,
+        "standardError": 2213280.5625586649
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "phase": "comparison",
+      "processCpuNanoseconds": null,
+      "processPeakResidentBytes": null,
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "implementation": "cpp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 103145.91439688716,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 125000000.0,
+        "median": 93750000.0,
+        "minimum": 78125000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 5554176.0,
+        "median": 5545984.0,
+        "minimum": 5541888.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 31940200.0,
+        "mean": 27620140.0,
+        "mean95HighApproximate": 29751904.25524047,
+        "mean95LowApproximate": 25488375.74475953,
+        "median": 26508500.0,
+        "medianAbsoluteDeviation": 280100.0,
+        "minimum": 26228400.0,
+        "p90": 29966560.0,
+        "p95": 30953380.0,
+        "p99": 31742836.0,
+        "relativeDrift": 0.09663315540298395,
+        "relativeRange": 0.21547050945923005,
+        "stable": false,
+        "standardDeviation": 2432025.4013887271,
+        "standardError": 1087634.8241022809
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "implementation": "csharp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 84743.190661478598,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 171875000.0,
+        "median": 156250000.0,
+        "minimum": 140625000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 37941248.0,
+        "median": 37916672.0,
+        "minimum": 37883904.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 24131900.0,
+        "mean": 22461560.0,
+        "mean95HighApproximate": 23424452.610554345,
+        "mean95LowApproximate": 21498667.389445655,
+        "median": 21779000.0,
+        "medianAbsoluteDeviation": 109300.0,
+        "minimum": 21669700.0,
+        "p90": 23696580.0,
+        "p95": 23914240.0,
+        "p99": 24088368.0,
+        "relativeDrift": 0.087749667110519305,
+        "relativeRange": 0.11305385922218651,
+        "stable": true,
+        "standardDeviation": 1098517.0062406862,
+        "standardError": 491271.74007874698
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": {
+        "count": 3,
+        "maximum": 53471600.0,
+        "mean": 49675733.333333336,
+        "mean95HighApproximate": 55154583.001890823,
+        "mean95LowApproximate": 44196883.664775848,
+        "median": 51332400.0,
+        "medianAbsoluteDeviation": 2139200.0,
+        "minimum": 44223200.0,
+        "p90": 53043760.0,
+        "p95": 53257680.0,
+        "p99": 53428816.0,
+        "relativeDrift": 0.13849342715322097,
+        "relativeRange": 0.18016691212567501,
+        "stable": false,
+        "standardDeviation": 4841656.1188640138,
+        "standardError": 2795331.4635497374
+      },
+      "controlRelativeDifference": 0.12665496294685163,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 175945.91439688715,
+      "phase": "final",
+      "processCpuNanoseconds": {
+        "count": 3,
+        "maximum": 171875000.0,
+        "median": 171875000.0,
+        "minimum": 156250000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 3,
+        "maximum": 9703424.0,
+        "median": 9703424.0,
+        "minimum": 9699328.0
+      },
+      "statistics": {
+        "count": 3,
+        "maximum": 48227200.0,
+        "mean": 45888733.333333336,
+        "mean95HighApproximate": 48248864.63563817,
+        "mean95LowApproximate": 43528602.031028502,
+        "median": 45218100.0,
+        "medianAbsoluteDeviation": 997200.0,
+        "minimum": 44220900.0,
+        "p90": 47625380.0,
+        "p95": 47926290.0,
+        "p99": 48167018.0,
+        "relativeDrift": 0.066546360859921133,
+        "relativeRange": 0.088599476758200804,
+        "stable": true,
+        "standardDeviation": 2085646.5959824855,
+        "standardError": 1204148.6236249148
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "phase": "final",
+      "processCpuNanoseconds": null,
+      "processPeakResidentBytes": null,
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": {
+        "count": 3,
+        "maximum": 51213200.0,
+        "mean": 45795400.0,
+        "mean95HighApproximate": 51199477.185220808,
+        "mean95LowApproximate": 40391322.814779192,
+        "median": 43976300.0,
+        "medianAbsoluteDeviation": 1779600.0,
+        "minimum": 42196700.0,
+        "p90": 49765820.0,
+        "p95": 50489510.0,
+        "p99": 51068462.0,
+        "relativeDrift": 0.20503089163936028,
+        "relativeRange": 0.20503089163936028,
+        "stable": false,
+        "standardDeviation": 4775579.7208297132,
+        "standardError": 2757182.2373575531
+      },
+      "controlRelativeDifference": 0.0059355388689374981,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 172132.68482490271,
+      "phase": "final",
+      "processCpuNanoseconds": {
+        "count": 3,
+        "maximum": 156250000.0,
+        "median": 140625000.0,
+        "minimum": 140625000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 3,
+        "maximum": 9703424.0,
+        "median": 9703424.0,
+        "minimum": 9699328.0
+      },
+      "statistics": {
+        "count": 3,
+        "maximum": 46374500.0,
+        "mean": 44684433.333333336,
+        "mean95HighApproximate": 46401049.364124663,
+        "mean95LowApproximate": 42967817.302542008,
+        "median": 44238100.0,
+        "medianAbsoluteDeviation": 797400.0,
+        "minimum": 43440700.0,
+        "p90": 45947220.0,
+        "p95": 46160860.0,
+        "p99": 46331772.0,
+        "relativeDrift": 0.018025186434317931,
+        "relativeRange": 0.066318399750441362,
+        "stable": true,
+        "standardDeviation": 1516972.5420499002,
+        "standardError": 875824.50550578081
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "phase": "final",
+      "processCpuNanoseconds": null,
+      "processPeakResidentBytes": null,
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    }
+  ],
+  "timingQualified": false,
+  "toolVersion": "wio-bench/1",
+  "versions": [
+    {
+      "affinityApplied": true,
+      "cpuNanoseconds": 0,
+      "exitCode": 0,
+      "peakResidentBytes": 9986048,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "0.18.1\r\n",
+      "stdoutEncoding": "byte-as-latin1",
+      "wallNanoseconds": 82658100
+    },
+    {
+      "affinityApplied": true,
+      "cpuNanoseconds": 0,
+      "exitCode": 0,
+      "peakResidentBytes": 5644288,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "g++.exe (x86_64-posix-seh-rev0, Built by MinGW-Builds project) 15.2.0\r\nCopyright (C) 2025 Free Software Foundation, Inc.\r\nThis is free software; see the source for copying conditions.  There is NO\r\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\r\n\r\n",
+      "stdoutEncoding": "byte-as-latin1",
+      "wallNanoseconds": 29048400
+    },
+    {
+      "affinityApplied": true,
+      "cpuNanoseconds": 281250000,
+      "exitCode": 0,
+      "peakResidentBytes": 55164928,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ".NET SDK:\r\n Version:           9.0.311\r\n Commit:            354186e528\r\n Workload version:  9.0.300-manifests.ca3d52c5\r\n MSBuild version:   17.14.41+6f6d310b4\r\n\r\nÃalÄ±Åma ZamanÄ± OrtamÄ±:\r\n OS Name:     Windows\r\n OS Version:  10.0.26100\r\n OS Platform: Windows\r\n RID:         win-x64\r\n Base Path:   C:\\Program Files\\dotnet\\sdk\\9.0.311\\\r\n\r\n.NET iÅ yÃ¼kleri yÃ¼klendi:\r\nGÃ¶rÃ¼ntÃ¼lenecek yÃ¼klÃ¼ iÅ yÃ¼kÃ¼ yok.\r\nYeni bildirimler yÃ¼klenirken loose manifests kullanÄ±lacak Åekilde yapÄ±landÄ±rÄ±ldÄ±.\r\n\r\nHost:\r\n  Version:      9.0.13\r\n  Architecture: x64\r\n  Commit:       9ecbfd4f3f\r\n\r\n.NET SDKs installed:\r\n  9.0.311 [C:\\Program Files\\dotnet\\sdk]\r\n\r\n.NET runtimes installed:\r\n  Microsoft.AspNetCore.App 6.0.36 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 8.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 9.0.9 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 9.0.13 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.NETCore.App 6.0.36 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 8.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 9.0.9 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 9.0.13 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.WindowsDesktop.App 6.0.36 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 8.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 9.0.9 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 9.0.13 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n\r\nOther architectures found:\r\n  x86   [C:\\Program Files (x86)\\dotnet]\r\n    registered at [HKLM\\SOFTWARE\\dotnet\\Setup\\InstalledVersions\\x86\\InstallLocation]\r\n\r\nEnvironment variables:\r\n  Not set\r\n\r\nglobal.json file:\r\n  Not found\r\n\r\nLearn more:\r\n  https://aka.ms/dotnet/info\r\n\r\nDownload .NET:\r\n  https://aka.ms/dotnet/download\r\n",
+      "stdoutEncoding": "byte-as-latin1",
+      "wallNanoseconds": 358942100
+    }
+  ]
+}

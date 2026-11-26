@@ -1,0 +1,398 @@
+{
+  "passed": true,
+  "processes": [
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wio",
+        "--emit-cpp",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-byte-io-contract/c4c3a7cf55964f21b18ea977a92cc6ab/main.wio.cpp\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-io-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe",
+        "partial"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: std_io read error: partial_read | requested: 65537 | read: 65536\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe",
+        "closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: std_io read error: null_file | requested: 1 | read: 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe",
+        "reuse-partial"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: std_io read error: partial_read | requested: 65537 | read: 65536\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe",
+        "reuse-closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: std_io read error: null_file | requested: 1 | read: 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\contract.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\contract.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\contract.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-io-contract-ok: owned allocations 2->1; reused payload zero allocations; exact/partial/EOF/span\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-io-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe",
+        "partial"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: std_io read error: partial_read | requested: 65537 | read: 65536\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe",
+        "closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: std_io read error: null_file | requested: 1 | read: 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe",
+        "reuse-partial"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: std_io read error: partial_read | requested: 65537 | read: 65536\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\native.exe",
+        "reuse-closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: std_io read error: null_file | requested: 1 | read: 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\contract.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\contract.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\contract.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-io-contract-ok: owned allocations 2->1; reused payload zero allocations; exact/partial/EOF/span\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wio",
+        "--target",
+        "shared",
+        "--native-bridge-only",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab",
+        "--output",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll",
+        "--bytecode-sidecar",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--backend-arg=-O0",
+        "--backend-arg=-ffp-contract=off"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-byte-io-contract/c4c3a7cf55964f21b18ea977a92cc6ab/bridge.wio.cpp\nGenerated backend output: F:/Projects/wio/build/n04-byte-io-contract/c4c3a7cf55964f21b18ea977a92cc6ab/bridge.dll\nGenerated bytecode output: F:/Projects/wio/build/n04-byte-io-contract/c4c3a7cf55964f21b18ea977a92cc6ab/main.wiob\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-io-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll",
+        "--",
+        "partial"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::ReadBytes' failed: wio.native: std_io read error: partial_read | requested: 65537 | read: 65536 (function 298)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll",
+        "--",
+        "closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::ReadSomeBytes' failed: wio.native: std_io read error: null_file | requested: 1 | read: 0 (function 298)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll",
+        "--",
+        "reuse-partial"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::ReadBytesInto' failed: wio.native: std_io read error: partial_read | requested: 65537 | read: 65536 (function 298)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll",
+        "--",
+        "reuse-closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::ReadSomeBytesInto' failed: wio.native: std_io read error: null_file | requested: 1 | read: 0 (function 298)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wio",
+        "--target",
+        "shared",
+        "--native-bridge-only",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab",
+        "--output",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll",
+        "--bytecode-sidecar",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--backend-arg=-O2",
+        "--backend-arg=-ffp-contract=off"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-byte-io-contract/c4c3a7cf55964f21b18ea977a92cc6ab/bridge.wio.cpp\nGenerated backend output: F:/Projects/wio/build/n04-byte-io-contract/c4c3a7cf55964f21b18ea977a92cc6ab/bridge.dll\nGenerated bytecode output: F:/Projects/wio/build/n04-byte-io-contract/c4c3a7cf55964f21b18ea977a92cc6ab/main.wiob\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-io-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll",
+        "--",
+        "partial"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::ReadBytes' failed: wio.native: std_io read error: partial_read | requested: 65537 | read: 65536 (function 298)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll",
+        "--",
+        "closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::ReadSomeBytes' failed: wio.native: std_io read error: null_file | requested: 1 | read: 0 (function 298)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll",
+        "--",
+        "reuse-partial"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::ReadBytesInto' failed: wio.native: std_io read error: partial_read | requested: 65537 | read: 65536 (function 298)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\c4c3a7cf55964f21b18ea977a92cc6ab\\bridge.dll",
+        "--",
+        "reuse-closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::ReadSomeBytesInto' failed: wio.native: std_io read error: null_file | requested: 1 | read: 0 (function 298)\n"
+    }
+  ]
+}

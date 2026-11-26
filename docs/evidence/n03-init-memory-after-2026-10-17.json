@@ -1,0 +1,14 @@
+[
+  {
+    "mode": "single-hook",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"2315903250039024437\",\"elapsedNanoseconds\":1,\"operations\":10001,\"schemaVersion\":1}\n\n{\"allocations\":2,\"available\":true,\"failures\":0,\"freedBytes\":64,\"frees\":2,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":2,\"peakBytes\":64,\"requestedBytes\":64,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  },
+  {
+    "mode": "ordered-hooks",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"10270202940514028307\",\"elapsedNanoseconds\":1,\"operations\":10001,\"schemaVersion\":1}\n\n{\"allocations\":10003,\"available\":true,\"failures\":0,\"freedBytes\":315097,\"frees\":10003,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":3,\"peakBytes\":97,\"requestedBytes\":315097,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  }
+]

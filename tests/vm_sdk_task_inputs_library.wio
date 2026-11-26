@@ -1,0 +1,135 @@
+realm std
+{
+    realm async {}
+}
+
+[native, CppName(wio::runtime::AsyncSleep)]
+fn Sleep(milliseconds: u64) -> coroutine<void>;
+
+mut accepted: i32 = 0;
+
+enum Mode
+{
+    Idle = 0,
+    Active = 1
+};
+
+flagset Permission
+{
+    None = 0u32,
+    Read = 1u32,
+    Write = 2u32
+};
+
+[export]
+async fn ModeTask() -> Mode
+{
+    await main;
+    return Mode::Active;
+}
+
+[export]
+async fn EnumInput(task: coroutine<Mode>) -> i32
+{
+    let value = await task;
+    return value.Value();
+}
+
+[export]
+async fn FlagsTask() -> Permission
+{
+    await main;
+    return Permission::Read | Permission::Write;
+}
+
+[export]
+async fn FlagsInput(task: coroutine<Permission>) -> Permission
+{
+    return await task;
+}
+
+[export]
+fn Accepted() -> i32
+{
+    return accepted;
+}
+
+[export]
+fn InputOnly(task: coroutine<u32>)
+{
+}
+
+[export]
+async fn Number(value: i32) -> i32
+{
+    await main;
+    return value;
+}
+
+[export]
+async fn Pending() -> i32
+{
+    await Sleep(86400000);
+    return 7;
+}
+
+[export]
+async fn Broken() -> i32
+{
+    await main;
+    let values: i32[] = [];
+    return values[0];
+}
+
+[export]
+async fn Add(task: coroutine<i32>, value: i32) -> i32
+{
+    accepted += 1;
+    return await task + value;
+}
+
+[export, instantiate(i32), instantiate(string), instantiate(text)]
+fn Relay<T>(task: coroutine<T>) -> coroutine<T>
+{
+    accepted += 1;
+    return task;
+}
+
+[export]
+async fn Message(value: string) -> string
+{
+    await main;
+    return value;
+}
+
+[export]
+async fn Echo(task: coroutine<string>) -> string
+{
+    return "echo:" + await task;
+}
+
+[export]
+async fn Unicode(value: text) -> text
+{
+    await main;
+    return value;
+}
+
+[export]
+async fn UnicodeEcho(task: coroutine<text>) -> text
+{
+    return u"⟦" + await task + u"⟧";
+}
+
+[export]
+fn Timer(milliseconds: u64) -> coroutine<void>
+{
+    return Sleep(milliseconds);
+}
+
+[export]
+async fn Finish(task: coroutine<void>) -> i32
+{
+    await task;
+    return 23;
+}

@@ -1,0 +1,135 @@
+{
+  "checkedAtUtc": "2026-10-20 00:52:43 UTC",
+  "branch": "feature/backend-closure",
+  "implementationCommit": "14d381fbc21282e8068f8325304053490b3979b4",
+  "policyCorrectionCommit": "bf98249ab43f86a7a2b0ec1c3979300a11f85fca",
+  "originalRun": {
+    "id": 39346911579,
+    "conclusion": "cancelled",
+    "url": "https://github.com/tynes0/wio/actions/runs/39346911579",
+    "jobs": [
+      {
+        "id": 118381609286,
+        "name": "windows-latest / Debug",
+        "conclusion": "cancelled",
+        "url": "https://github.com/tynes0/wio/actions/runs/39346911579/job/118381609286"
+      },
+      {
+        "id": 118381609545,
+        "name": "macos-15 / Release",
+        "conclusion": "success",
+        "url": "https://github.com/tynes0/wio/actions/runs/39346911579/job/118381609545"
+      },
+      {
+        "id": 118381609610,
+        "name": "ubuntu-latest / Release",
+        "conclusion": "failure",
+        "url": "https://github.com/tynes0/wio/actions/runs/39346911579/job/118381609610"
+      }
+    ],
+    "failure": {
+      "jobId": 118381609610,
+      "step": "Preserve native container shape, reserve and atomic copy-back",
+      "reason": "Unspecified CMP0054 in CMake script mode expanded quoted native mode label to the native output-path variable, so both build iterations selected shared. Native executable missing; VM program returned 0.",
+      "logExcerpt": [
+        "2026-10-20T00:29:18.5965315Z   Policy CMP0054 is not set: Only interpret if() arguments as variables or",
+        "2026-10-20T00:29:18.5970941Z   POD layout differential failed: C++=no such file or directory, VM=0",
+        "2026-10-20T00:29:18.5971891Z   VM: native-container-shape-ok:30"
+      ]
+    }
+  },
+  "qualifiedRun": {
+    "id": 39348265979,
+    "url": "https://github.com/tynes0/wio/actions/runs/39348265979",
+    "sourceCommit": "bf98249ab43f86a7a2b0ec1c3979300a11f85fca",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "id": 118386156804,
+        "name": "ubuntu-latest / Release",
+        "url": "https://github.com/tynes0/wio/actions/runs/39348265979/job/118386156804",
+        "status": "completed",
+        "conclusion": "success",
+        "completedAt": "2026-10-20T00:46:01Z",
+        "gates": [
+          {
+            "name": "Qualify N04 byte reads, range writes and closed borrows (native O0/O2 and VM)",
+            "conclusion": "success",
+            "startedAt": "2026-10-20T00:40:52Z",
+            "completedAt": "2026-10-20T00:44:06Z"
+          },
+          {
+            "name": "Preserve native container shape, reserve and atomic copy-back",
+            "conclusion": "success",
+            "startedAt": "2026-10-20T00:44:06Z",
+            "completedAt": "2026-10-20T00:44:23Z"
+          },
+          {
+            "name": "Qualify per-implementation sampling and journal",
+            "conclusion": "success",
+            "startedAt": "2026-10-20T00:45:56Z",
+            "completedAt": "2026-10-20T00:45:57Z"
+          }
+        ]
+      },
+      {
+        "id": 118386157102,
+        "name": "windows-latest / Debug",
+        "url": "https://github.com/tynes0/wio/actions/runs/39348265979/job/118386157102",
+        "status": "completed",
+        "conclusion": "success",
+        "completedAt": "2026-10-20T00:52:31Z",
+        "gates": [
+          {
+            "name": "Qualify N04 byte reads, range writes and closed borrows (native O0/O2 and VM)",
+            "conclusion": "success",
+            "startedAt": "2026-10-20T00:45:18Z",
+            "completedAt": "2026-10-20T00:49:51Z"
+          },
+          {
+            "name": "Preserve native container shape, reserve and atomic copy-back",
+            "conclusion": "success",
+            "startedAt": "2026-10-20T00:49:51Z",
+            "completedAt": "2026-10-20T00:50:16Z"
+          },
+          {
+            "name": "Qualify per-implementation sampling and journal",
+            "conclusion": "success",
+            "startedAt": "2026-10-20T00:52:20Z",
+            "completedAt": "2026-10-20T00:52:24Z"
+          }
+        ]
+      },
+      {
+        "id": 118386157164,
+        "name": "macos-15 / Release",
+        "url": "https://github.com/tynes0/wio/actions/runs/39348265979/job/118386157164",
+        "status": "completed",
+        "conclusion": "success",
+        "completedAt": "2026-10-20T00:44:53Z",
+        "gates": [
+          {
+            "name": "Qualify N04 byte reads, range writes and closed borrows (native O0/O2 and VM)",
+            "conclusion": "success",
+            "startedAt": "2026-10-20T00:40:46Z",
+            "completedAt": "2026-10-20T00:43:09Z"
+          },
+          {
+            "name": "Preserve native container shape, reserve and atomic copy-back",
+            "conclusion": "success",
+            "startedAt": "2026-10-20T00:43:09Z",
+            "completedAt": "2026-10-20T00:43:20Z"
+          },
+          {
+            "name": "Qualify per-implementation sampling and journal",
+            "conclusion": "success",
+            "startedAt": "2026-10-20T00:44:42Z",
+            "completedAt": "2026-10-20T00:44:46Z"
+          }
+        ]
+      }
+    ]
+  },
+  "scope": "Configured affected N03/N04/sampling qualification, not the full historical suite or timing acceptance. All new block, affected shape/reserve and sampling steps pass on each platform."
+}

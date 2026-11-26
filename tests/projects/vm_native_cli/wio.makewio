@@ -1,0 +1,19 @@
+name = "VM Native CLI"
+template = "native-console"
+
+[wio]
+entry = "wio/main.wio"
+target = "exe"
+sourceRoots = ["wio"]
+includeDirs = ["native/include"]
+nativeSources = ["native/src/fixture.cpp"]
+
+[host]
+enabled = false
+
+[run]
+args = ["manifest-arg"]
+workingDirectory = "."
+
+[outputs]
+baseName = "vm_native_cli"

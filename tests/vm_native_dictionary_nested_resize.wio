@@ -1,0 +1,12 @@
+using cpp::header("vm_dictionary_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_dictionary::GrowRow)]
+fn GrowRow(values: ref Dict<string, i32[]>);
+
+fn Entry() -> i32 {
+    let row: i32[] = [1, 2];
+    mut values: Dict<string, i32[]> = { "row": row };
+    GrowRow(ref values);
+    return 0;
+}

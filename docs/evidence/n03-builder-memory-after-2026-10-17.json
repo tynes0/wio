@@ -1,0 +1,20 @@
+[
+  {
+    "mode": "growing-rows",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"7720742902985288378\",\"elapsedNanoseconds\":1,\"operations\":10001,\"schemaVersion\":1}\n\n{\"allocations\":18,\"available\":true,\"failures\":0,\"freedBytes\":1327595,\"frees\":18,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":5,\"peakBytes\":803358,\"requestedBytes\":1327595,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  },
+  {
+    "mode": "clear-integers",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"15171999456671605457\",\"elapsedNanoseconds\":1,\"operations\":10001,\"schemaVersion\":1}\n\n{\"allocations\":20005,\"available\":true,\"failures\":0,\"freedBytes\":1011570,\"frees\":20005,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":6,\"peakBytes\":311,\"requestedBytes\":1011570,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  },
+  {
+    "mode": "reserved-floats",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"17147135995219327556\",\"elapsedNanoseconds\":1,\"operations\":10001,\"schemaVersion\":1}\n\n{\"allocations\":5,\"available\":true,\"failures\":0,\"freedBytes\":215173,\"frees\":5,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":5,\"peakBytes\":215173,\"requestedBytes\":215173,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  }
+]

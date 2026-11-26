@@ -1,0 +1,25 @@
+using cpp::header("vm_artifact_fixture.h");
+
+[Native, CppName(vm_artifact_fixture::Add)]
+fn Add(a: i32, b: i32) -> i32;
+
+[Native, CppName(vm_artifact_fixture::Print)]
+fn Print(message: string);
+
+[Native, CppName(wio::runtime::AsyncSleep)]
+fn Sleep(milliseconds: u64) -> coroutine<void>;
+
+async fn Entry(args: string[]) -> i32
+{
+    if (args.Count() != 4usize or args[1] != "two words" or args[2] != "Türkçe 🌍" or args[3] != "--help")
+    {
+        return 11;
+    }
+    await Sleep(1);
+    if (Add(19, 23) != 42)
+    {
+        return 12;
+    }
+    Print("vm-artifact-native-ok");
+    return 0;
+}

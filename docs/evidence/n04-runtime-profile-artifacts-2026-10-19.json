@@ -1,0 +1,75 @@
+{
+  "sourceRevision": "87c4d70d9ba080d78c87e950e436ae3ead3779ef",
+  "sourceCi": {
+    "runId": 39174868641,
+    "conclusion": "success",
+    "url": "https://github.com/tynes0/wio/actions/runs/39174868641",
+    "passedJobs": ["windows-latest / Debug", "ubuntu-latest / Release", "macos-15 / Release"],
+    "scope": "Expanded N04 gates and workflow-scoped N03 regressions, not the full historical corpus"
+  },
+  "historicalBaseline": "n04-byte-io-after-2026-10-19.json",
+  "historicalBaselineTimingQualified": false,
+  "nativeCandidateChanges": ["backend runtime archive Release/O2 profile"],
+  "vmCandidateChanges": ["backend runtime archive Release/O2 profile", "native bridge O2 with FP contraction off"],
+  "unchangedToolSha256": {
+    "compiler": "7688dd04cb64a36f1078b81cf5abf7be1e1e8ff06e361763baab56d8f064f3e0",
+    "releaseVm": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa",
+    "wioBench": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+  },
+  "workloadSourceSha256": {
+    "main.wio": "255f693e19177c48bb3dc7a8db8272e44be07e5ffa9d1539c9065bbf0aec2b29",
+    "main.cpp": "2390fe80656098ec9eda1fa6297a2ecaa08d9cde866694703519c2c21eed639a",
+    "probe.h": "23cc1ccccc06e0f0e08a1995a523bc3377728b09df61b2c8d142526bc34923fe",
+    "Program.cs": "2bf1500084ace57c50b389861b94937fa74166a504e7189e0c99baa738663179",
+    "ByteIo.csproj": "ed79971229072fc23993b4a8387a5f926190c278ffa45ea28794108e2e71de98"
+  },
+  "allFiveSourcesMatchHistoricalBaseline": true,
+  "runtimeArchive": {
+    "beforeBytes": 7344752,
+    "beforeSha256": "edc34510c8068cf32a2b30d3438e28459c2cd633268c2e78148d55e60b99b36b",
+    "afterBytes": 1721974,
+    "afterSha256": "c107344518b9fdd231e7ef4bb0b466e2866e2b952b2d67e05c8e8789e2b72fcd",
+    "profile": "profile=Release\ncompiler=g++\nflags=-O2;-ffp-contract=off\n"
+  },
+  "candidateArtifacts": {
+    "native.exe": {
+      "bytes": 5744602,
+      "sha256": "0afac22ddd28bfe43335c39e9b0c77582393672ef01f1060054a4ecbdb509cbc"
+    },
+    "bridge.dll": {
+      "bytes": 2452902,
+      "sha256": "c252c12b224611fda342d6f1c934dd041b9ff1be97f074a2284ea7f5698868a4"
+    },
+    "memory.exe": {
+      "bytes": 8930797,
+      "sha256": "e0dc7f9a859411683dbfd3b3799896bcf19880fb7f5f5d44ed79d15f96422ce0"
+    },
+    "frozen.cpp": {
+      "bytes": 3579899,
+      "sha256": "ac7996fea61914a7a10eb41cb3d65c1fb86ca381b46fd4ce5a24048917a4dea8"
+    },
+    "main.wiob": {
+      "bytes": 2707472,
+      "sha256": "8a66e6d8e8ef51e89b2b0cef1b3b0dbc47fdbdab375503630d84efe4944fb193"
+    }
+  },
+  "checks": {
+    "localScopedTestsPassed": 2,
+    "byteIoContractProcesses": 21,
+    "runtimeOnlyInstallArchiveHashMatches": true,
+    "runtimeOnlyInstallProfileTextMatches": true,
+    "reuseChangedBridgeFlagsRejectedBeforeRewrite": true,
+    "reuseChangedRuntimeRejectedBeforeRewrite": true,
+    "fullCleanSdkDistributionMatrixRun": false,
+    "oldLocalCorpusRun": false,
+    "machinePowerSecurityPriorityChanged": false,
+    "localBuildOrTestOverlapsTiming": false
+  },
+  "limits": [
+    "Historical baseline is unqualified; no accepted before/after speedup follows.",
+    "VM candidate changes both runtime archive and bridge flags, not VM interpreter code.",
+    "C++/C#/Wio use matching bytes and ownership, not identical syscall/error implementations.",
+    "Computed VM global initialization defect KI-010 remains open; both fixtures use identical local mode flags.",
+    "Generated C++/bytecode sizes differ by two bytes, not a WIR optimization."
+  ]
+}

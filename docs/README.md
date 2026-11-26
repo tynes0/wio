@@ -2,6 +2,10 @@
 
 This directory is the main documentation map for Wio.
 
+Wio 0.19.0: [release scope](WIO_0_19_RELEASE_NOTES.md) and
+[preparation evidence](WIO_0_19_RELEASE_CHECKLIST.md). Published versions and
+downloads are listed on [GitHub Releases](https://github.com/tynes0/wio/releases).
+
 The current docs strategy is:
 
 - keep the root `README.md` fast and practical
@@ -41,6 +45,9 @@ That path gives you:
 - [Interop guide](./WIO_INTEROP_GUIDE.md)
 - [Examples guide](./WIO_EXAMPLES.md)
 - [Troubleshooting](./WIO_TROUBLESHOOTING.md)
+- [Known issues and qualification gaps](./WIO_KNOWN_ISSUES.md)
+- [Error and status code reference](./WIO_ERROR_CODES.md)
+- [Branch maintenance and recovery record](./WIO_BRANCH_MAINTENANCE.md)
 - [FAQ](./WIO_FAQ.md)
 
 These documents answer practical workflow questions such as:

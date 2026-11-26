@@ -1,0 +1,3565 @@
+{
+  "affinityQualified": true,
+  "artifactsAfter": [
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 5366307,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/bridge.dll",
+      "sha256": "066ab4ee9e99533753eef7dbcca7225e6b9d90ed2c0cf649bace9bf0d8a43b1b"
+    },
+    {
+      "bytes": 73866,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/cpp.exe",
+      "sha256": "8436536fcdf3684df2d394ee91284edc3b9028b89aa698051d7e9b8a5dc88b8e"
+    },
+    {
+      "bytes": 3263276,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/frozen.cpp",
+      "sha256": "389bdc880212ae8a9bb2fdb45723af429dd5f8c892280358e7f363f1d9ab4196"
+    },
+    {
+      "bytes": 321,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/GeneratedStream.csproj",
+      "sha256": "f65efcb0f9104fcbfe4f39bef63bca6ef067accbb2861ec0fc71dd76486330fc"
+    },
+    {
+      "bytes": 1389,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/main.cpp",
+      "sha256": "0652acb00ba4251b8cc90d7013c674362ac79b6d7818137f93394fdb1791abf7"
+    },
+    {
+      "bytes": 1868,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/main.wio",
+      "sha256": "1b4632514920dc2eb2f4ce70d575f80a0dc29593b3b45ddb3ac8c535bc2aa12e"
+    },
+    {
+      "bytes": 3263276,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/main.wio.cpp",
+      "sha256": "389bdc880212ae8a9bb2fdb45723af429dd5f8c892280358e7f363f1d9ab4196"
+    },
+    {
+      "bytes": 2515049,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/main.wiob",
+      "sha256": "a9195dcd0bf029ef549bfb4c8785dcc74ffe76cd685ec5dea5e354862c87878b"
+    },
+    {
+      "bytes": 9531152,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/memory.exe",
+      "sha256": "c628ca612c5da203da824b4e56cc473b7cc975a2daca0a7db63b8336b0c82ae4"
+    },
+    {
+      "bytes": 6397400,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/native.exe",
+      "sha256": "26501181d46f5dbd6c8b2e6a5558478fd4369c8081e50cfed0d50f160427e1be"
+    },
+    {
+      "bytes": 1995,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/probe.h",
+      "sha256": "8e9577933059aed24395c3c5b5c415017f1d288de878d74be26383d9cadf7f81"
+    },
+    {
+      "bytes": 2735,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/Program.cs",
+      "sha256": "c2b1ded70dc63a4180aa9a5c55e0f8bf4c98483b80f11985a6ce7776a0838e3a"
+    },
+    {
+      "bytes": 20424704,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "35320925d6e5ddb2a4d7e3d9d4b616f7737792ec7fb40d0a4dabce12a847fcd7"
+    },
+    {
+      "bytes": 7281434,
+      "ok": true,
+      "path": "F:/Projects/wio/build/runtime/backend/libwio_runtime.a",
+      "sha256": "59ff4005117cb2c7cff701629b98d7a599d4550b18ff40b3aa402923f8863941"
+    },
+    {
+      "bytes": 1306112,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "d5897fa48bbf346c5b3c2f5f979dcabf66e589534aed6cab5d92cb7b9b035879"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 6144,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/csharp/GeneratedStream.dll",
+      "sha256": "923d253847f03f8424b70ec513d597c6297836ca37bcc103f7c04f84be28fa88"
+    },
+    {
+      "bytes": 390,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/csharp/GeneratedStream.runtimeconfig.json",
+      "sha256": "07f9f5efdb6012cd8f625b3134c4b4515e234157146916ad6f749b539098de32"
+    },
+    {
+      "bytes": 17841,
+      "ok": true,
+      "path": "F:/Projects/wio/std/benchmark.wio",
+      "sha256": "7c15522d769224a8f747f524e678047e4b55ea85a3c6919fc32a02d9a2e31d3d"
+    },
+    {
+      "bytes": 20395,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_benchmark.h",
+      "sha256": "01663a11e134bcc5bc56cf1825fd5a2b532823bb1693eaf6a956147521bb2bd9"
+    },
+    {
+      "bytes": 7068,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/text.h",
+      "sha256": "4fea764ce610eeb5a2a73a066fab91479ee3ef36ab573eb9a3ed671758b3dc18"
+    },
+    {
+      "bytes": 5672,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/wio_benchmark_allocations.h",
+      "sha256": "5dfee7c788a020e0abebb39a7d60fabd4e2e98a5efb84a30a794cf37d90a8254"
+    },
+    {
+      "bytes": 2205,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/benchmark_memory.h",
+      "sha256": "3b7fdfa98c419628e65e4e5945a5436263bf50f175d361c97526c67cefd1c7e9"
+    },
+    {
+      "bytes": 26902,
+      "ok": true,
+      "path": "F:/Projects/wio/std/json.wio",
+      "sha256": "63e6dfdaffdb36a85e8cdf172801f5ff5de74fea2150ee0743003a3d5291e179"
+    },
+    {
+      "bytes": 3594,
+      "ok": true,
+      "path": "F:/Projects/wio/std/serialization.wio",
+      "sha256": "5b383f0cfc3e60da933501de59c6595fab0c6e4af6ef9af7a226cc1e5229f3b8"
+    },
+    {
+      "bytes": 6551,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_serialization.h",
+      "sha256": "e6f4369c02a2433b304f03c5f70f64d3d006060df5613702dca0cd33f3e88642"
+    },
+    {
+      "bytes": 37705,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
+      "sha256": "9b838608f5b13e27b3759a43e1fec51809e9eb80711e104e9fa47a8e9cfb9383"
+    },
+    {
+      "bytes": 250358,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "sha256": "6b5983a750e610d2f624f18a5fd8fdb84bd5c350891ec16d7ac069f8abc793f1"
+    },
+    {
+      "bytes": 2305,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/include/wio/codegen/wir_cpp_storage_plan.h",
+      "sha256": "10d076a5c5d528d2e55814b78aef1f2181e98377cb7bc6bddc9f6d7277b40009"
+    },
+    {
+      "bytes": 44133813,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio-selfhost.exe",
+      "sha256": "2d1deb3c635d9a26ca576000911888bbd6b864922495667f4abe9f9e1795df9b"
+    },
+    {
+      "bytes": 2532,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/string_concat.h",
+      "sha256": "567a054e9c27f54a4a690072016bb056ab8ce50e3a4bc5ca49341e632c39d997"
+    },
+    {
+      "bytes": 250358,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "sha256": "6b5983a750e610d2f624f18a5fd8fdb84bd5c350891ec16d7ac069f8abc793f1"
+    },
+    {
+      "bytes": 3982,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/value_format.h",
+      "sha256": "58e04be1743c33ca312bf7c2fb3bc931ca8d9ff27fabca4be69842c103eb7f65"
+    },
+    {
+      "bytes": 3108,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/floating_format.h",
+      "sha256": "553244ad2c63f7a6c7c317d86b395e2e0e5ed221a44bfc765d1798ea751992f8"
+    },
+    {
+      "bytes": 2204,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/integer_format.h",
+      "sha256": "86d865f8a3b21d2a7cfdd485f5614bca1bb48e83b17660ec9217da75bd9b9789"
+    },
+    {
+      "bytes": 1966,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/generated_stream/prepare.py",
+      "sha256": "03be0894bcee24020df9bd2280fef3cc1ac62406e5aa7bcf41bfaf7f0ef29ef4"
+    },
+    {
+      "bytes": 10259,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/concat_reuse/prepare.py",
+      "sha256": "8804d5fd24b8c3bbd25c59638723f6bcaad2077deba73b60bc580e7779f76f63"
+    },
+    {
+      "bytes": 6397400,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/native.exe",
+      "sha256": "26501181d46f5dbd6c8b2e6a5558478fd4369c8081e50cfed0d50f160427e1be"
+    },
+    {
+      "bytes": 1306112,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "d5897fa48bbf346c5b3c2f5f979dcabf66e589534aed6cab5d92cb7b9b035879"
+    },
+    {
+      "bytes": 73866,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/cpp.exe",
+      "sha256": "8436536fcdf3684df2d394ee91284edc3b9028b89aa698051d7e9b8a5dc88b8e"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 6397400,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/native.exe",
+      "sha256": "26501181d46f5dbd6c8b2e6a5558478fd4369c8081e50cfed0d50f160427e1be"
+    },
+    {
+      "bytes": 1306112,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "d5897fa48bbf346c5b3c2f5f979dcabf66e589534aed6cab5d92cb7b9b035879"
+    },
+    {
+      "bytes": 73866,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/cpp.exe",
+      "sha256": "8436536fcdf3684df2d394ee91284edc3b9028b89aa698051d7e9b8a5dc88b8e"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 20424704,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "35320925d6e5ddb2a4d7e3d9d4b616f7737792ec7fb40d0a4dabce12a847fcd7"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    }
+  ],
+  "artifactsBefore": [
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 5366307,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/bridge.dll",
+      "sha256": "066ab4ee9e99533753eef7dbcca7225e6b9d90ed2c0cf649bace9bf0d8a43b1b"
+    },
+    {
+      "bytes": 73866,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/cpp.exe",
+      "sha256": "8436536fcdf3684df2d394ee91284edc3b9028b89aa698051d7e9b8a5dc88b8e"
+    },
+    {
+      "bytes": 3263276,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/frozen.cpp",
+      "sha256": "389bdc880212ae8a9bb2fdb45723af429dd5f8c892280358e7f363f1d9ab4196"
+    },
+    {
+      "bytes": 321,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/GeneratedStream.csproj",
+      "sha256": "f65efcb0f9104fcbfe4f39bef63bca6ef067accbb2861ec0fc71dd76486330fc"
+    },
+    {
+      "bytes": 1389,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/main.cpp",
+      "sha256": "0652acb00ba4251b8cc90d7013c674362ac79b6d7818137f93394fdb1791abf7"
+    },
+    {
+      "bytes": 1868,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/main.wio",
+      "sha256": "1b4632514920dc2eb2f4ce70d575f80a0dc29593b3b45ddb3ac8c535bc2aa12e"
+    },
+    {
+      "bytes": 3263276,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/main.wio.cpp",
+      "sha256": "389bdc880212ae8a9bb2fdb45723af429dd5f8c892280358e7f363f1d9ab4196"
+    },
+    {
+      "bytes": 2515049,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/main.wiob",
+      "sha256": "a9195dcd0bf029ef549bfb4c8785dcc74ffe76cd685ec5dea5e354862c87878b"
+    },
+    {
+      "bytes": 9531152,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/memory.exe",
+      "sha256": "c628ca612c5da203da824b4e56cc473b7cc975a2daca0a7db63b8336b0c82ae4"
+    },
+    {
+      "bytes": 6397400,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/native.exe",
+      "sha256": "26501181d46f5dbd6c8b2e6a5558478fd4369c8081e50cfed0d50f160427e1be"
+    },
+    {
+      "bytes": 1995,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/probe.h",
+      "sha256": "8e9577933059aed24395c3c5b5c415017f1d288de878d74be26383d9cadf7f81"
+    },
+    {
+      "bytes": 2735,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/Program.cs",
+      "sha256": "c2b1ded70dc63a4180aa9a5c55e0f8bf4c98483b80f11985a6ce7776a0838e3a"
+    },
+    {
+      "bytes": 20424704,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "35320925d6e5ddb2a4d7e3d9d4b616f7737792ec7fb40d0a4dabce12a847fcd7"
+    },
+    {
+      "bytes": 7281434,
+      "ok": true,
+      "path": "F:/Projects/wio/build/runtime/backend/libwio_runtime.a",
+      "sha256": "59ff4005117cb2c7cff701629b98d7a599d4550b18ff40b3aa402923f8863941"
+    },
+    {
+      "bytes": 1306112,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "d5897fa48bbf346c5b3c2f5f979dcabf66e589534aed6cab5d92cb7b9b035879"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 6144,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/csharp/GeneratedStream.dll",
+      "sha256": "923d253847f03f8424b70ec513d597c6297836ca37bcc103f7c04f84be28fa88"
+    },
+    {
+      "bytes": 390,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/csharp/GeneratedStream.runtimeconfig.json",
+      "sha256": "07f9f5efdb6012cd8f625b3134c4b4515e234157146916ad6f749b539098de32"
+    },
+    {
+      "bytes": 17841,
+      "ok": true,
+      "path": "F:/Projects/wio/std/benchmark.wio",
+      "sha256": "7c15522d769224a8f747f524e678047e4b55ea85a3c6919fc32a02d9a2e31d3d"
+    },
+    {
+      "bytes": 20395,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_benchmark.h",
+      "sha256": "01663a11e134bcc5bc56cf1825fd5a2b532823bb1693eaf6a956147521bb2bd9"
+    },
+    {
+      "bytes": 7068,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/text.h",
+      "sha256": "4fea764ce610eeb5a2a73a066fab91479ee3ef36ab573eb9a3ed671758b3dc18"
+    },
+    {
+      "bytes": 5672,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/wio_benchmark_allocations.h",
+      "sha256": "5dfee7c788a020e0abebb39a7d60fabd4e2e98a5efb84a30a794cf37d90a8254"
+    },
+    {
+      "bytes": 2205,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/benchmark_memory.h",
+      "sha256": "3b7fdfa98c419628e65e4e5945a5436263bf50f175d361c97526c67cefd1c7e9"
+    },
+    {
+      "bytes": 26902,
+      "ok": true,
+      "path": "F:/Projects/wio/std/json.wio",
+      "sha256": "63e6dfdaffdb36a85e8cdf172801f5ff5de74fea2150ee0743003a3d5291e179"
+    },
+    {
+      "bytes": 3594,
+      "ok": true,
+      "path": "F:/Projects/wio/std/serialization.wio",
+      "sha256": "5b383f0cfc3e60da933501de59c6595fab0c6e4af6ef9af7a226cc1e5229f3b8"
+    },
+    {
+      "bytes": 6551,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_serialization.h",
+      "sha256": "e6f4369c02a2433b304f03c5f70f64d3d006060df5613702dca0cd33f3e88642"
+    },
+    {
+      "bytes": 37705,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
+      "sha256": "9b838608f5b13e27b3759a43e1fec51809e9eb80711e104e9fa47a8e9cfb9383"
+    },
+    {
+      "bytes": 250358,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "sha256": "6b5983a750e610d2f624f18a5fd8fdb84bd5c350891ec16d7ac069f8abc793f1"
+    },
+    {
+      "bytes": 2305,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/include/wio/codegen/wir_cpp_storage_plan.h",
+      "sha256": "10d076a5c5d528d2e55814b78aef1f2181e98377cb7bc6bddc9f6d7277b40009"
+    },
+    {
+      "bytes": 44133813,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio-selfhost.exe",
+      "sha256": "2d1deb3c635d9a26ca576000911888bbd6b864922495667f4abe9f9e1795df9b"
+    },
+    {
+      "bytes": 2532,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/string_concat.h",
+      "sha256": "567a054e9c27f54a4a690072016bb056ab8ce50e3a4bc5ca49341e632c39d997"
+    },
+    {
+      "bytes": 250358,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "sha256": "6b5983a750e610d2f624f18a5fd8fdb84bd5c350891ec16d7ac069f8abc793f1"
+    },
+    {
+      "bytes": 3982,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/value_format.h",
+      "sha256": "58e04be1743c33ca312bf7c2fb3bc931ca8d9ff27fabca4be69842c103eb7f65"
+    },
+    {
+      "bytes": 3108,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/floating_format.h",
+      "sha256": "553244ad2c63f7a6c7c317d86b395e2e0e5ed221a44bfc765d1798ea751992f8"
+    },
+    {
+      "bytes": 2204,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/integer_format.h",
+      "sha256": "86d865f8a3b21d2a7cfdd485f5614bca1bb48e83b17660ec9217da75bd9b9789"
+    },
+    {
+      "bytes": 1966,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/generated_stream/prepare.py",
+      "sha256": "03be0894bcee24020df9bd2280fef3cc1ac62406e5aa7bcf41bfaf7f0ef29ef4"
+    },
+    {
+      "bytes": 10259,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/concat_reuse/prepare.py",
+      "sha256": "8804d5fd24b8c3bbd25c59638723f6bcaad2077deba73b60bc580e7779f76f63"
+    },
+    {
+      "bytes": 6397400,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/native.exe",
+      "sha256": "26501181d46f5dbd6c8b2e6a5558478fd4369c8081e50cfed0d50f160427e1be"
+    },
+    {
+      "bytes": 1306112,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "d5897fa48bbf346c5b3c2f5f979dcabf66e589534aed6cab5d92cb7b9b035879"
+    },
+    {
+      "bytes": 73866,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/cpp.exe",
+      "sha256": "8436536fcdf3684df2d394ee91284edc3b9028b89aa698051d7e9b8a5dc88b8e"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 6397400,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/native.exe",
+      "sha256": "26501181d46f5dbd6c8b2e6a5558478fd4369c8081e50cfed0d50f160427e1be"
+    },
+    {
+      "bytes": 1306112,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "d5897fa48bbf346c5b3c2f5f979dcabf66e589534aed6cab5d92cb7b9b035879"
+    },
+    {
+      "bytes": 73866,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n03-generated-stream-bounded-2026-10-18/cpp.exe",
+      "sha256": "8436536fcdf3684df2d394ee91284edc3b9028b89aa698051d7e9b8a5dc88b8e"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 20424704,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "35320925d6e5ddb2a4d7e3d9d4b616f7737792ec7fb40d0a4dabce12a847fcd7"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    }
+  ],
+  "artifactsUnchanged": true,
+  "complete": true,
+  "environmentAfter": {
+    "hardwareThreads": 16,
+    "os": "windows",
+    "pointerBits": 64,
+    "powerProfile": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+    "unixNanoseconds": 1792322864262338100
+  },
+  "environmentBefore": {
+    "hardwareThreads": 16,
+    "os": "windows",
+    "pointerBits": 64,
+    "powerProfile": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+    "unixNanoseconds": 1792322833182473300
+  },
+  "manifest": {
+    "artifacts": [
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\bridge.dll",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\cpp.exe",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\frozen.cpp",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\GeneratedStream.csproj",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\main.cpp",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\main.wio",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\main.wio.cpp",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\main.wiob",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\memory.exe",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\native.exe",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\probe.h",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\Program.cs",
+      "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+      "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+      "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+      "C:\\mingw64\\bin\\g++.exe",
+      "C:\\Program Files\\dotnet\\dotnet.exe",
+      "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\csharp\\GeneratedStream.dll",
+      "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\csharp\\GeneratedStream.runtimeconfig.json",
+      "F:\\Projects\\wio\\std\\benchmark.wio",
+      "F:\\Projects\\wio\\runtime\\include\\std_benchmark.h",
+      "F:\\Projects\\wio\\runtime\\include\\text.h",
+      "F:\\Projects\\wio\\runtime\\include\\wio_benchmark_allocations.h",
+      "F:\\Projects\\wio\\runtime\\include\\benchmark_memory.h",
+      "F:\\Projects\\wio\\std\\json.wio",
+      "F:\\Projects\\wio\\std\\serialization.wio",
+      "F:\\Projects\\wio\\runtime\\include\\std_serialization.h",
+      "F:\\Projects\\wio\\compiler\\src\\wio_compiler\\codegen\\wir_cpp_storage_plan.cpp",
+      "F:\\Projects\\wio\\compiler\\src\\wio_compiler\\codegen\\wir_cpp_backend.cpp",
+      "F:\\Projects\\wio\\compiler\\include\\wio\\codegen\\wir_cpp_storage_plan.h",
+      "F:\\Projects\\wio\\build\\app\\Debug\\wio-selfhost.exe",
+      "F:\\Projects\\wio\\runtime\\include\\string_concat.h",
+      "F:\\Projects\\wio\\compiler\\src\\wio_compiler\\codegen\\wir_cpp_backend.cpp",
+      "F:\\Projects\\wio\\runtime\\include\\value_format.h",
+      "F:\\Projects\\wio\\runtime\\include\\floating_format.h",
+      "F:\\Projects\\wio\\runtime\\include\\integer_format.h",
+      "F:\\Projects\\wio\\tests\\performance\\generated_stream\\prepare.py",
+      "F:\\Projects\\wio\\tests\\performance\\concat_reuse\\prepare.py"
+    ],
+    "builds": [],
+    "cases": [
+      {
+        "args": [
+          "0",
+          "2001"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "expectedChecksum": "3874378050843431552",
+        "implementation": "wio-native",
+        "metric": "kernel",
+        "name": "pod-bare-192-wio-native",
+        "operations": 2001,
+        "program": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\native.exe",
+        "workload": "n03-pod-bare-192-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\main.wiob",
+          "--native-library",
+          "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\bridge.dll",
+          "--",
+          "0",
+          "2001"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "expectedChecksum": "3874378050843431552",
+        "implementation": "wio-vm",
+        "metric": "kernel",
+        "name": "pod-bare-192-wio-vm",
+        "operations": 2001,
+        "program": "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "workload": "n03-pod-bare-192-v1"
+      },
+      {
+        "args": [
+          "0",
+          "2001"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "expectedChecksum": "3874378050843431552",
+        "implementation": "cpp",
+        "metric": "kernel",
+        "name": "pod-bare-192-cpp",
+        "operations": 2001,
+        "program": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\cpp.exe",
+        "workload": "n03-pod-bare-192-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\csharp\\GeneratedStream.dll",
+          "0",
+          "2001"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "expectedChecksum": "3874378050843431552",
+        "implementation": "csharp",
+        "metric": "kernel",
+        "name": "pod-bare-192-csharp",
+        "operations": 2001,
+        "program": "C:\\Program Files\\dotnet\\dotnet.exe",
+        "workload": "n03-pod-bare-192-v1"
+      },
+      {
+        "args": [
+          "1",
+          "2001"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "expectedChecksum": "10887233074410487894",
+        "implementation": "wio-native",
+        "metric": "kernel",
+        "name": "pod-affix-8192-wio-native",
+        "operations": 2001,
+        "program": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\native.exe",
+        "workload": "n03-pod-affix-8192-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\main.wiob",
+          "--native-library",
+          "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\bridge.dll",
+          "--",
+          "1",
+          "2001"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "expectedChecksum": "10887233074410487894",
+        "implementation": "wio-vm",
+        "metric": "kernel",
+        "name": "pod-affix-8192-wio-vm",
+        "operations": 2001,
+        "program": "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "workload": "n03-pod-affix-8192-v1"
+      },
+      {
+        "args": [
+          "1",
+          "2001"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "expectedChecksum": "10887233074410487894",
+        "implementation": "cpp",
+        "metric": "kernel",
+        "name": "pod-affix-8192-cpp",
+        "operations": 2001,
+        "program": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\cpp.exe",
+        "workload": "n03-pod-affix-8192-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18\\csharp\\GeneratedStream.dll",
+          "1",
+          "2001"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "expectedChecksum": "10887233074410487894",
+        "implementation": "csharp",
+        "metric": "kernel",
+        "name": "pod-affix-8192-csharp",
+        "operations": 2001,
+        "program": "C:\\Program Files\\dotnet\\dotnet.exe",
+        "workload": "n03-pod-affix-8192-v1"
+      }
+    ],
+    "cpu": 2,
+    "environment": {
+      "DOTNET_NOLOGO": "1",
+      "WIO_ROOT": "F:\\Projects\\wio"
+    },
+    "finalRepetitions": 3,
+    "maximumControlDifference": 0.1,
+    "maximumDrift": 0.1,
+    "maximumRange": 0.15,
+    "metadata": {
+      "contracts": "Native POD operator<< interpolation; cached immutable ASCII/NUL input after two warmups; exact index/bool; full UTF8 FNV; VM WVM1062 unsupported, not zero time; C++ owning-copy stream; C# UTF16 builder",
+      "diagnosticFlags": [
+        "-static-libstdc++",
+        "-static-libgcc"
+      ],
+      "label": "bounded-generated-stream",
+      "nativeFlags": [
+        "-std=c++20",
+        "-O2",
+        "-ffp-contract=off"
+      ],
+      "revision": "c28cddff273abce951e56ab71e1cb5c123e1f41e",
+      "vm": "Release host; unchanged bytecode semantics"
+    },
+    "name": "N03 generated stream bounded-generated-stream",
+    "outputLimit": 1048576,
+    "repetitions": 5,
+    "schemaVersion": 1,
+    "timeoutMs": 60000,
+    "versions": [
+      {
+        "args": [
+          "--version"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "program": "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe"
+      },
+      {
+        "args": [
+          "--version"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "program": "C:\\mingw64\\bin\\g++.exe"
+      },
+      {
+        "args": [
+          "--info"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n03-generated-stream-bounded-2026-10-18",
+        "program": "C:\\Program Files\\dotnet\\dotnet.exe"
+      }
+    ],
+    "warmups": 1
+  },
+  "name": "N03 generated stream bounded-generated-stream",
+  "outputsCorrect": false,
+  "powerProfileUnchanged": true,
+  "samples": [
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 957500,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 957500,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 10285056,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":957500,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 496372800
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1910300,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1910300,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 0,
+        "peakResidentBytes": 9543680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1910300,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 67187300
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 17592320,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 96020800
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 2395000,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 2395000,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 5881856,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":2395000,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 289747100
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 3195600,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 3195600,
+        "managedAllocatedBytesCurrentThread": 3511680,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 35614720,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":3195600,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":3511680}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 166818900
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 31820900,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 31820900,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9842688,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":31820900,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 175799700
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 24511600,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 24511600,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":24511600,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 144219600
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 17571840,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 82662600
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 30065400,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 30065400,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 5709824,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":30065400,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 136977400
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 41263000,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 41263000,
+        "managedAllocatedBytesCurrentThread": 114867768,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 203125000,
+        "exitCode": 0,
+        "peakResidentBytes": 37478400,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":41263000,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":114867768}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 297068300
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 31717200,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 31717200,
+        "managedAllocatedBytesCurrentThread": 114867768,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 187500000,
+        "exitCode": 0,
+        "peakResidentBytes": 37515264,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":31717200,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":114867768}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 252921300
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 21861100,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 21861100,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 5705728,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":21861100,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 114953000
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 1,
+        "peakResidentBytes": 17580032,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 67481800
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 22939600,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 22939600,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 9850880,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":22939600,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 121402500
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 22224700,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 22224700,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":22224700,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 129569500
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-bare-192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 1854900,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1854900,
+        "managedAllocatedBytesCurrentThread": 3511680,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 0,
+        "peakResidentBytes": 35074048,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1854900,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":3511680}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 122982600
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 1013600,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1013600,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 15625000,
+        "exitCode": 0,
+        "peakResidentBytes": 5414912,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1013600,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 43002500
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 15625000,
+        "exitCode": 1,
+        "peakResidentBytes": 17571840,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 63947500
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1146800,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1146800,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9555968,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1146800,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 50065600
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1601800,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1601800,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 0,
+        "exitCode": 0,
+        "peakResidentBytes": 9539584,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1601800,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 57378600
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 973000,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 973000,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 15625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9543680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":973000,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 48573300
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 15625000,
+        "exitCode": 1,
+        "peakResidentBytes": 17563648,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 82627900
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 865000,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 865000,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 15625000,
+        "exitCode": 0,
+        "peakResidentBytes": 5414912,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":865000,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 43422900
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 2195800,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 2195800,
+        "managedAllocatedBytesCurrentThread": 3511680,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 35151872,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":2195800,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":3511680}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 124289600
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 22837900,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 22837900,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":22837900,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 120909200
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 22579100,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 22579100,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":22579100,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 128132200
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 17584128,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 69149300
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 23869200,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 23869200,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 5713920,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":23869200,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 135462800
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 36232600,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 36232600,
+        "managedAllocatedBytesCurrentThread": 114867768,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 37466112,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":36232600,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":114867768}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 234662600
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 929200,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 929200,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9539584,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":929200,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 55074800
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 955300,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 955300,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9543680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":955300,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 50473700
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-affix-8192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 34084100,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 34084100,
+        "managedAllocatedBytesCurrentThread": 114867768,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 187500000,
+        "exitCode": 0,
+        "peakResidentBytes": 37519360,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":34084100,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":114867768}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 228802100
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 23768400,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 23768400,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 0,
+        "peakResidentBytes": 5705728,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":23768400,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 116530300
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 17567744,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 71161800
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 26939000,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 26939000,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":26939000,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 134402400
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 22860100,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 22860100,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":22860100,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 133457000
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-bare-192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 2125800,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 2125800,
+        "managedAllocatedBytesCurrentThread": 3511680,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 35069952,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":2125800,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":3511680}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 134418800
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 1828000,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1828000,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 0,
+        "exitCode": 0,
+        "peakResidentBytes": 5410816,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1828000,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 46651900
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 1,
+        "peakResidentBytes": 17575936,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 65139200
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1073300,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1073300,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9543680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1073300,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 53816100
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 17563648,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 63979300
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 933600,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 933600,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 5410816,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":933600,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 41707000
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 3779200,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 3779200,
+        "managedAllocatedBytesCurrentThread": 3511680,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 35074048,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":3779200,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":3511680}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 134340000
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 22505500,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 22505500,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 0,
+        "peakResidentBytes": 9850880,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":22505500,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 116953200
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 24973500,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 24973500,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9842688,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":24973500,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 125890900
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 1,
+        "peakResidentBytes": 17563648,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 70330100
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 23198800,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 23198800,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 5713920,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":23198800,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 109781000
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 34156700,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 34156700,
+        "managedAllocatedBytesCurrentThread": 114867768,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 187500000,
+        "exitCode": 0,
+        "peakResidentBytes": 37470208,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":34156700,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":114867768}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 223788600
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1037800,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1037800,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9560064,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1037800,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 51389400
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1575100,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1575100,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9547776,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1575100,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 49303700
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 954100,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 954100,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 15625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9543680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":954100,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 56798000
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 950800,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 950800,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9539584,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":950800,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 49709600
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-affix-8192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 33064200,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 33064200,
+        "managedAllocatedBytesCurrentThread": 114867768,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 187500000,
+        "exitCode": 0,
+        "peakResidentBytes": 37511168,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":33064200,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":114867768}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 232789700
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 25552600,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 25552600,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 5709824,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":25552600,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 112177700
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 1,
+        "peakResidentBytes": 17567744,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 66349400
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 25459000,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 25459000,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":25459000,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 121725900
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 24158000,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 24158000,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9842688,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":24158000,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 124599800
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-bare-192-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 2808900,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 2808900,
+        "managedAllocatedBytesCurrentThread": 3511680,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 35147776,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":2808900,\"operations\":2001,\"managedAllocatedBytesCurrentThread\":3511680}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 127703600
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 1189000,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1189000,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 5414912,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1189000,\"operations\":2001}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 47432500
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 1,
+        "peakResidentBytes": 17559552,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 68655100
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1318300,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1318300,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 15625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9547776,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1318300,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 53429900
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1266200,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1266200,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9543680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1266200,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 66705000
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 17559552,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 69478000
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 23518100,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 23518100,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":23518100,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 125728700
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 23218600,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 23218600,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9850880,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":23218600,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 122145300
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 1,
+        "peakResidentBytes": 17555456,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 67997800
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 17559552,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 65096600
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 24575900,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 24575900,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":24575900,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 122058600
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 22427300,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 22427300,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":22427300,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 131094700
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 17567744,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 85541000
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 5293700,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 5293700,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9539584,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":5293700,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 63567800
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1470400,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1470400,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 15625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9543680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1470400,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 66752600
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 951600,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 951600,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 0,
+        "peakResidentBytes": 9543680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":951600,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 61981200
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 17559552,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 69239400
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 23146200,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 23146200,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":23146200,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 122237000
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 22404300,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 22404300,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9850880,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":22404300,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 128667300
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 1,
+        "peakResidentBytes": 17563648,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 64523400
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 959900,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 959900,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 15625000,
+        "exitCode": 0,
+        "peakResidentBytes": 9543680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":959900,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 53362300
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1361500,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1361500,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9543680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1361500,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 67256800
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 1,
+        "peakResidentBytes": 17567744,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 69379400
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 21831200,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 21831200,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9846784,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":21831200,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 115447600
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 25538800,
+      "payload": {
+        "checksum": "10887233074410487894",
+        "elapsedNanoseconds": 25538800,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 0,
+        "peakResidentBytes": 9850880,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"10887233074410487894\",\"elapsedNanoseconds\":25538800,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 134990800
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "control": false,
+      "correct": false,
+      "implementation": "wio-vm",
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 1,
+        "peakResidentBytes": 17575936,
+        "status": "nonzero-exit",
+        "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 779)\r\n",
+        "stdout": "",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 64479600
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 1013900,
+      "payload": {
+        "checksum": "3874378050843431552",
+        "elapsedNanoseconds": 1013900,
+        "operations": 2001,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 31250000,
+        "exitCode": 0,
+        "peakResidentBytes": 9547776,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1013900,\"operations\":2001,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 55971300
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n03-pod-bare-192-v1"
+    }
+  ],
+  "schemaVersion": 1,
+  "summary": [
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": {
+        "count": 5,
+        "maximum": 1575100.0,
+        "mean": 1144460.0,
+        "mean95HighApproximate": 1366276.0203938389,
+        "mean95LowApproximate": 922643.97960616101,
+        "median": 1073300.0,
+        "medianAbsoluteDeviation": 100300.0,
+        "minimum": 954100.0,
+        "p90": 1403780.0,
+        "p95": 1489440.0,
+        "p99": 1557968.0,
+        "relativeDrift": 0.1907202087021336,
+        "relativeRange": 0.57858939718624802,
+        "stable": false,
+        "standardDeviation": 253059.03066280799,
+        "standardError": 113171.43897644845
+      },
+      "controlRelativeDifference": 0.11633638962831509,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 477.41129435282357,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 31250000.0,
+        "median": 31250000.0,
+        "minimum": 0.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 9560064.0,
+        "median": 9539584.0,
+        "minimum": 9539584.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 1601800.0,
+        "mean": 1094980.0,
+        "mean95HighApproximate": 1345950.8816015117,
+        "mean95LowApproximate": 844009.11839848827,
+        "median": 955300.0,
+        "medianAbsoluteDeviation": 26100.0,
+        "minimum": 929200.0,
+        "p90": 1376200.0,
+        "p95": 1489000.0,
+        "p99": 1579240.0,
+        "relativeDrift": 0.28388987752538469,
+        "relativeRange": 0.70407201926096519,
+        "stable": false,
+        "standardDeviation": 286320.38348675071,
+        "standardError": 128046.36816403657
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "phase": "comparison",
+      "processCpuNanoseconds": null,
+      "processPeakResidentBytes": null,
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-cpp",
+      "implementation": "cpp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 506.54672663668168,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 31250000.0,
+        "median": 15625000.0,
+        "minimum": 0.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 5414912.0,
+        "median": 5414912.0,
+        "minimum": 5410816.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 1828000.0,
+        "mean": 1165840.0,
+        "mean95HighApproximate": 1507186.6449452229,
+        "mean95LowApproximate": 824493.35505477723,
+        "median": 1013600.0,
+        "medianAbsoluteDeviation": 148600.0,
+        "minimum": 865000.0,
+        "p90": 1572400.0,
+        "p95": 1700200.0,
+        "p99": 1802440.0,
+        "relativeDrift": 0.12036306235201263,
+        "relativeRange": 0.95007892659826365,
+        "stable": false,
+        "standardDeviation": 389425.66428010364,
+        "standardError": 174156.45150266468
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-csharp",
+      "implementation": "csharp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 1097.3513243378311,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 109375000.0,
+        "median": 93750000.0,
+        "minimum": 46875000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 35151872.0,
+        "median": 35074048.0,
+        "minimum": 35069952.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 3779200.0,
+        "mean": 2552920.0,
+        "mean95HighApproximate": 3227126.740144772,
+        "mean95LowApproximate": 1878713.259855228,
+        "median": 2195800.0,
+        "medianAbsoluteDeviation": 340900.0,
+        "minimum": 1854900.0,
+        "p90": 3391080.0,
+        "p95": 3585140.0,
+        "p99": 3740388.0,
+        "relativeDrift": 0.57778486200929047,
+        "relativeRange": 0.87635485927680112,
+        "stable": false,
+        "standardDeviation": 769169.4397205339,
+        "standardError": 343983.0306861081
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": {
+        "count": 5,
+        "maximum": 26939000.0,
+        "mean": 24578040.0,
+        "mean95HighApproximate": 26169558.673137378,
+        "mean95LowApproximate": 22986521.326862622,
+        "median": 24973500.0,
+        "medianAbsoluteDeviation": 1965500.0,
+        "minimum": 22579100.0,
+        "p90": 26347000.0,
+        "p95": 26643000.0,
+        "p99": 26879800.0,
+        "relativeDrift": 0.098380283100086091,
+        "relativeRange": 0.17458105591927442,
+        "stable": false,
+        "standardDeviation": 1815685.6839772677,
+        "standardError": 811999.32302927424
+      },
+      "controlRelativeDifference": 0.089334342855469623,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 11413.243378310844,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 93750000.0,
+        "median": 78125000.0,
+        "minimum": 31250000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 9850880.0,
+        "median": 9846784.0,
+        "minimum": 9842688.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 24158000.0,
+        "mean": 22917240.0,
+        "mean95HighApproximate": 23567030.501590904,
+        "mean95LowApproximate": 22267449.498409096,
+        "median": 22837900.0,
+        "medianAbsoluteDeviation": 332400.0,
+        "minimum": 22224700.0,
+        "p90": 23638840.0,
+        "p95": 23898420.0,
+        "p99": 24106084.0,
+        "relativeDrift": 0.035049194540653916,
+        "relativeRange": 0.084653142364227885,
+        "stable": true,
+        "standardDeviation": 741314.14933211682,
+        "standardError": 331525.7661178087
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "phase": "comparison",
+      "processCpuNanoseconds": null,
+      "processPeakResidentBytes": null,
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-cpp",
+      "implementation": "cpp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 11878.260869565218,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 78125000.0,
+        "median": 62500000.0,
+        "minimum": 46875000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 5713920.0,
+        "median": 5709824.0,
+        "minimum": 5705728.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 25552600.0,
+        "mean": 23650020.0,
+        "mean95HighApproximate": 24816648.042104527,
+        "mean95LowApproximate": 22483391.957895473,
+        "median": 23768400.0,
+        "medianAbsoluteDeviation": 569600.0,
+        "minimum": 21861100.0,
+        "p90": 24879240.0,
+        "p95": 25215920.0,
+        "p99": 25485264.0,
+        "relativeDrift": 0.063552868514498248,
+        "relativeRange": 0.15531125359721309,
+        "stable": false,
+        "standardDeviation": 1330948.7788791875,
+        "standardError": 595218.38882883987
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-csharp",
+      "implementation": "csharp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 17033.533233383307,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 187500000.0,
+        "median": 187500000.0,
+        "minimum": 140625000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 37519360.0,
+        "median": 37511168.0,
+        "minimum": 37466112.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 36232600.0,
+        "mean": 33850960.0,
+        "mean95HighApproximate": 35304003.811043069,
+        "mean95LowApproximate": 32397916.188956931,
+        "median": 34084100.0,
+        "medianAbsoluteDeviation": 1019900.0,
+        "minimum": 31717200.0,
+        "p90": 35402240.0,
+        "p95": 35817420.0,
+        "p99": 36149564.0,
+        "relativeDrift": 0.010692669015758081,
+        "relativeRange": 0.13247819364454394,
+        "stable": true,
+        "standardDeviation": 1657706.4978457435,
+        "standardError": 741348.88318523823
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-native",
+      "control": {
+        "count": 3,
+        "maximum": 5293700.0,
+        "mean": 2419733.3333333335,
+        "mean95HighApproximate": 5236441.2395835444,
+        "mean95LowApproximate": -396974.57291687746,
+        "median": 1013900.0,
+        "medianAbsoluteDeviation": 62300.0,
+        "minimum": 951600.0,
+        "p90": 4437740.0,
+        "p95": 4865720.0,
+        "p99": 5208104.0,
+        "relativeDrift": 4.2211263438208899,
+        "relativeRange": 4.2825722457836077,
+        "stable": false,
+        "standardDeviation": 2489123.0631154687,
+        "standardError": 1437095.8705358219
+      },
+      "controlRelativeDifference": 0.2926664982739749,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 680.40979510244881,
+      "phase": "final",
+      "processCpuNanoseconds": {
+        "count": 3,
+        "maximum": 31250000.0,
+        "median": 15625000.0,
+        "minimum": 15625000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 3,
+        "maximum": 9543680.0,
+        "median": 9543680.0,
+        "minimum": 9543680.0
+      },
+      "statistics": {
+        "count": 3,
+        "maximum": 1470400.0,
+        "mean": 1263933.3333333333,
+        "mean95HighApproximate": 1568190.3299690355,
+        "mean95LowApproximate": 959676.33669763093,
+        "median": 1361500.0,
+        "medianAbsoluteDeviation": 108900.0,
+        "minimum": 959900.0,
+        "p90": 1448620.0,
+        "p95": 1459510.0,
+        "p99": 1468222.0,
+        "relativeDrift": 0.079985310319500555,
+        "relativeRange": 0.37495409474843922,
+        "stable": false,
+        "standardDeviation": 268871.72282211704,
+        "standardError": 155233.16154882772
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-bare-192-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "phase": "final",
+      "processCpuNanoseconds": null,
+      "processPeakResidentBytes": null,
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-bare-192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-native",
+      "control": {
+        "count": 3,
+        "maximum": 24575900.0,
+        "mean": 22937133.333333332,
+        "mean95HighApproximate": 24575533.135098185,
+        "mean95LowApproximate": 21298733.531568479,
+        "median": 22404300.0,
+        "medianAbsoluteDeviation": 573100.0,
+        "minimum": 21831200.0,
+        "p90": 24141580.0,
+        "p95": 24358740.0,
+        "p99": 24532468.0,
+        "relativeDrift": 0.12250773289056119,
+        "relativeRange": 0.12250773289056119,
+        "stable": false,
+        "standardDeviation": 1447852.9080446439,
+        "standardError": 835918.26620655775
+      },
+      "controlRelativeDifference": 0.032574834524319161,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 11567.316341829086,
+      "phase": "final",
+      "processCpuNanoseconds": {
+        "count": 3,
+        "maximum": 93750000.0,
+        "median": 78125000.0,
+        "minimum": 46875000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 3,
+        "maximum": 9850880.0,
+        "median": 9846784.0,
+        "minimum": 9846784.0
+      },
+      "statistics": {
+        "count": 3,
+        "maximum": 25538800.0,
+        "mean": 23704100.0,
+        "mean95HighApproximate": 25547541.344930001,
+        "mean95LowApproximate": 21860658.655069999,
+        "median": 23146200.0,
+        "medianAbsoluteDeviation": 718900.0,
+        "minimum": 22427300.0,
+        "p90": 25060280.0,
+        "p95": 25299540.0,
+        "p99": 25490948.0,
+        "relativeDrift": 0.13442811347002964,
+        "relativeRange": 0.13442811347002964,
+        "stable": false,
+        "standardDeviation": 1629047.9949958504,
+        "standardError": 940531.29843367438
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-affix-8192-v1"
+    },
+    {
+      "case": "pod-affix-8192-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "phase": "final",
+      "processCpuNanoseconds": null,
+      "processPeakResidentBytes": null,
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n03-pod-affix-8192-v1"
+    }
+  ],
+  "timingQualified": false,
+  "toolVersion": "wio-bench/1",
+  "versions": [
+    {
+      "affinityApplied": true,
+      "cpuNanoseconds": 15625000,
+      "exitCode": 0,
+      "peakResidentBytes": 9949184,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "0.18.1\r\n",
+      "stdoutEncoding": "byte-as-latin1",
+      "wallNanoseconds": 139475100
+    },
+    {
+      "affinityApplied": true,
+      "cpuNanoseconds": 15625000,
+      "exitCode": 0,
+      "peakResidentBytes": 5644288,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "g++.exe (x86_64-posix-seh-rev0, Built by MinGW-Builds project) 15.2.0\r\nCopyright (C) 2025 Free Software Foundation, Inc.\r\nThis is free software; see the source for copying conditions.  There is NO\r\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\r\n\r\n",
+      "stdoutEncoding": "byte-as-latin1",
+      "wallNanoseconds": 52833800
+    },
+    {
+      "affinityApplied": true,
+      "cpuNanoseconds": 359375000,
+      "exitCode": 0,
+      "peakResidentBytes": 54550528,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ".NET SDK:\r\n Version:           9.0.311\r\n Commit:            354186e528\r\n Workload version:  9.0.300-manifests.ca3d52c5\r\n MSBuild version:   17.14.41+6f6d310b4\r\n\r\nÃalÄ±Åma ZamanÄ± OrtamÄ±:\r\n OS Name:     Windows\r\n OS Version:  10.0.26100\r\n OS Platform: Windows\r\n RID:         win-x64\r\n Base Path:   C:\\Program Files\\dotnet\\sdk\\9.0.311\\\r\n\r\n.NET iÅ yÃ¼kleri yÃ¼klendi:\r\nGÃ¶rÃ¼ntÃ¼lenecek yÃ¼klÃ¼ iÅ yÃ¼kÃ¼ yok.\r\nYeni bildirimler yÃ¼klenirken loose manifests kullanÄ±lacak Åekilde yapÄ±landÄ±rÄ±ldÄ±.\r\n\r\nHost:\r\n  Version:      9.0.13\r\n  Architecture: x64\r\n  Commit:       9ecbfd4f3f\r\n\r\n.NET SDKs installed:\r\n  9.0.311 [C:\\Program Files\\dotnet\\sdk]\r\n\r\n.NET runtimes installed:\r\n  Microsoft.AspNetCore.App 6.0.36 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 8.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 9.0.9 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 9.0.13 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.NETCore.App 6.0.36 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 8.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 9.0.9 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 9.0.13 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.WindowsDesktop.App 6.0.36 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 8.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 9.0.9 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 9.0.13 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n\r\nOther architectures found:\r\n  x86   [C:\\Program Files (x86)\\dotnet]\r\n    registered at [HKLM\\SOFTWARE\\dotnet\\Setup\\InstalledVersions\\x86\\InstallLocation]\r\n\r\nEnvironment variables:\r\n  Not set\r\n\r\nglobal.json file:\r\n  Not found\r\n\r\nLearn more:\r\n  https://aka.ms/dotnet/info\r\n\r\nDownload .NET:\r\n  https://aka.ms/dotnet/download\r\n",
+      "stdoutEncoding": "byte-as-latin1",
+      "wallNanoseconds": 519637200
+    }
+  ]
+}

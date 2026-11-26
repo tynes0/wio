@@ -1,0 +1,206 @@
+#include "wio/vm/module_session.h"
+
+#include <mutex>
+#include <stdexcept>
+
+namespace wio::vm
+{
+    struct ModuleSessionFactory::State
+    {
+        bytecode::Module module;
+        MachineOptions options;
+        std::vector<std::filesystem::path> nativeLibraries;
+        WioSdkModuleSessionApi api{};
+        WioSdkModuleTaskApi tasks{};
+        std::mutex defaultMutex;
+        std::unique_ptr<ModuleAdapter> legacy;
+
+        static ModuleAdapter* adapter(const WioSdkModuleSession* session) noexcept
+        {
+            if (!session || !session->context || !session->contract)
+                return nullptr;
+            auto* result = static_cast<ModuleAdapter*>(session->context);
+            return &result->contract() == session->contract ? result : nullptr;
+        }
+
+        explicit State(bytecode::Module input, MachineOptions machineOptions,
+                       std::vector<std::filesystem::path> dependencies)
+            : module(std::move(input)), options(machineOptions), nativeLibraries(std::move(dependencies))
+        {
+            for (auto& path : nativeLibraries)
+            {
+                if (!path.is_absolute() ||
+                    path.native().find(std::filesystem::path::value_type{}) != std::filesystem::path::string_type::npos)
+                    throw std::invalid_argument("VM module native dependencies require absolute paths without NUL");
+                path = path.lexically_normal();
+            }
+            // Qualify the complete immutable module before exposing the factory.
+            ModuleAdapter checked{module, options};
+            api = {WIO_SDK_MODULE_SESSION_VERSION,
+                   sizeof(WioSdkModuleSessionApi),
+                   this,
+                   [](void* factory, WioSdkModuleSession* result) noexcept -> std::int32_t
+                   {
+                       if (!factory || !result || result->context || result->contract)
+                           return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                       try
+                       {
+                           const auto& source = *static_cast<State*>(factory);
+                           auto instance = std::make_unique<ModuleAdapter>(source.module, source.options);
+                           for (const auto& path : source.nativeLibraries)
+                           {
+                               std::string error;
+                               if (!instance->loadNativeLibrary(path, &error))
+                                   throw std::runtime_error("VM module native dependency registration failed: " +
+                                                            error);
+                           }
+                           result->contract = &instance->contract();
+                           result->context = instance.release();
+                           return WIO_NATIVE_ABI_OK;
+                       }
+                       catch (...)
+                       {
+                           return WIO_NATIVE_ABI_EXCEPTION;
+                       }
+                   },
+                   [](WioSdkModuleSession* session) noexcept -> std::int32_t
+                   {
+                       if (!session)
+                           return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                       if (!session->context && !session->contract)
+                           return WIO_NATIVE_ABI_OK;
+                       auto* instance = adapter(session);
+                       if (!instance)
+                           return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                       const auto status = instance->close();
+                       if (status == WIO_NATIVE_ABI_WRONG_THREAD || status == WIO_NATIVE_ABI_INVALID_ARGUMENT)
+                           return status;
+                       delete instance;
+                       *session = {};
+                       return status;
+                   },
+                   [](const WioSdkModuleSession* session) noexcept -> std::int32_t
+                   {
+                       auto* value = adapter(session);
+                       return value ? value->start() : WIO_NATIVE_ABI_STALE_HANDLE;
+                   },
+                   [](const WioSdkModuleSession* session, double delta) noexcept -> std::int32_t
+                   {
+                       auto* value = adapter(session);
+                       return value ? value->update(delta) : WIO_NATIVE_ABI_STALE_HANDLE;
+                   },
+                   [](const WioSdkModuleSession* session, std::uint32_t* result) noexcept -> std::int32_t
+                   {
+                       auto* value = adapter(session);
+                       if (!result)
+                           return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                       return value ? value->apiVersion(*result) : WIO_NATIVE_ABI_STALE_HANDLE;
+                   },
+                   [](const WioSdkModuleSession* session, WioNativeAbiValue* result) noexcept -> std::int32_t
+                   {
+                       auto* value = adapter(session);
+                       if (!result)
+                           return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                       return value ? value->saveState(*result) : WIO_NATIVE_ABI_STALE_HANDLE;
+                   },
+                   [](const WioSdkModuleSession* session, const WioNativeAbiValue* input) noexcept -> std::int32_t
+                   {
+                       auto* value = adapter(session);
+                       if (!input)
+                           return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                       return value ? value->restoreState(*input) : WIO_NATIVE_ABI_STALE_HANDLE;
+                   }};
+            tasks = {WIO_SDK_MODULE_TASK_VERSION,
+                     sizeof(WioSdkModuleTaskApi),
+                     &api,
+                     [](const WioSdkModuleSession* session, const WioNativeAbiValue* task,
+                        bool* result) noexcept -> std::int32_t
+                     {
+                         auto* instance = adapter(session);
+                         if (!task || !result)
+                             return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                         return instance ? instance->taskReady(*task, *result) : WIO_NATIVE_ABI_STALE_HANDLE;
+                     },
+                     [](const WioSdkModuleSession* session, const WioNativeAbiValue* task) noexcept -> std::int32_t
+                     {
+                         auto* instance = adapter(session);
+                         if (!task)
+                             return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                         return instance ? instance->cancelTask(*task) : WIO_NATIVE_ABI_STALE_HANDLE;
+                     },
+                     [](const WioSdkModuleSession* session, const WioNativeAbiValue* task, WioNativeAbiValue* result,
+                        WioNativeAbiFailure* failure) noexcept -> std::int32_t
+                     {
+                         auto* instance = adapter(session);
+                         if (!task || !result)
+                             return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                         return instance ? instance->readTask(*task, *result, failure) : WIO_NATIVE_ABI_STALE_HANDLE;
+                     },
+                     [](const WioSdkModuleSession* session, const WioNativeAbiValue* task,
+                        WioNativeTaskCompletionFn callback, void* userdata) noexcept -> std::int32_t
+                     {
+                         auto* instance = adapter(session);
+                         if (!task || !callback)
+                             return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                         return instance ? instance->onTaskComplete(*task, callback, userdata)
+                                         : WIO_NATIVE_ABI_STALE_HANDLE;
+                     },
+                     [](const WioSdkModuleSession* session, std::uint64_t* drained) noexcept -> std::int32_t
+                     {
+                         auto* instance = adapter(session);
+                         if (!drained)
+                             return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                         return instance ? instance->pumpMain(*drained) : WIO_NATIVE_ABI_STALE_HANDLE;
+                     }};
+        }
+    };
+
+    ModuleSessionFactory::ModuleSessionFactory(bytecode::Module module, MachineOptions options)
+        : ModuleSessionFactory(std::move(module), options, {})
+    {
+    }
+
+    ModuleSessionFactory::ModuleSessionFactory(bytecode::Module module, MachineOptions options,
+                                               std::vector<std::filesystem::path> nativeLibraries)
+        : state_(std::make_unique<State>(std::move(module), options, std::move(nativeLibraries)))
+    {
+    }
+
+    ModuleSessionFactory::~ModuleSessionFactory() = default;
+
+    const WioSdkModuleSessionApi& ModuleSessionFactory::api() const noexcept
+    {
+        return state_->api;
+    }
+
+    const WioSdkModuleTaskApi& ModuleSessionFactory::taskApi() const noexcept
+    {
+        return state_->tasks;
+    }
+
+    const WioSdkModuleContract& ModuleSessionFactory::defaultContract()
+    {
+        std::scoped_lock lock{state_->defaultMutex};
+        if (!state_->nativeLibraries.empty())
+            throw std::invalid_argument("VM native-dependent modules require explicit SDK sessions");
+        const auto& lifecycle = state_->module.contract.lifecycle;
+        if (lifecycle.apiVersion != bytecode::InvalidIndex || lifecycle.load != bytecode::InvalidIndex ||
+            lifecycle.update != bytecode::InvalidIndex || lifecycle.unload != bytecode::InvalidIndex ||
+            lifecycle.saveState != bytecode::InvalidIndex || lifecycle.restoreState != bytecode::InvalidIndex)
+            throw std::invalid_argument("VM lifecycle modules require explicit SDK sessions");
+        for (const auto& function : state_->module.functions)
+        {
+            if (function.hasCoroutine || (function.flags & 1u) ||
+                (function.returnType < state_->module.types.size() &&
+                 state_->module.types[function.returnType].kind == 34))
+                throw std::invalid_argument("VM async modules require explicit SDK sessions");
+            for (const auto& block : function.blocks)
+                for (const auto& instruction : block.instructions)
+                    if (instruction.asyncOperation || instruction.intrinsicFamily == 14)
+                        throw std::invalid_argument("VM async modules require explicit SDK sessions");
+        }
+        if (!state_->legacy)
+            state_->legacy = std::make_unique<ModuleAdapter>(state_->module, state_->options);
+        return state_->legacy->contract();
+    }
+} // namespace wio::vm

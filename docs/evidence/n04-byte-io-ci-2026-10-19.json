@@ -1,0 +1,21 @@
+{
+  "status": "completed",
+  "conclusion": "success",
+  "headSha": "3c9e2688e81beedfd980a3a0b3c949c836587cd9",
+  "url": "https://github.com/tynes0/wio/actions/runs/39169819998",
+  "scope": "Scoped backend-closure workflow including new wio_n04_byte_io; not full historical corpus",
+  "jobs": [
+    {
+      "name": "macos-15 / Release", "status": "completed", "conclusion": "success",
+      "startedAt": "2026-10-18T21:53:39Z", "completedAt": "2026-10-18T21:59:56Z"
+    },
+    {
+      "name": "ubuntu-latest / Release", "status": "completed", "conclusion": "success",
+      "startedAt": "2026-10-18T21:53:35Z", "completedAt": "2026-10-18T22:03:43Z"
+    },
+    {
+      "name": "windows-latest / Debug", "status": "completed", "conclusion": "success",
+      "startedAt": "2026-10-18T21:53:35Z", "completedAt": "2026-10-18T22:09:50Z"
+    }
+  ]
+}

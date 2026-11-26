@@ -1,0 +1,277 @@
+using cpp::header("vm_callback_container_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_callback_container::Point)]
+component Point
+{
+    public x: i32;
+}
+
+interface IRead
+{
+    fn Read() -> i32;
+}
+
+[From(IRead)]
+object Item
+{
+    value: i32;
+    public OnConstruct(value: i32)
+    {
+        self.value = value;
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+    public fn Set(value: i32)
+    {
+        self.value = value;
+    }
+}
+
+[Native, CppName(vm_callback_container::Constructed)]
+fn Constructed();
+[Native, CppName(vm_callback_container::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_callback_container::Balanced)]
+fn Balanced() -> bool;
+[Native, CppName(vm_callback_container::Live)]
+fn Live() -> i32;
+[Native, CppName(vm_callback_container::Fail)]
+fn Fail();
+[Native, CppName(vm_callback_container::Print)]
+fn Print();
+
+[Native, CppName(vm_callback_container::Call),
+ Instantiate(i32[]), Instantiate(string[]), Instantiate(text[]), Instantiate(bool[]),
+ Instantiate(Point[]), Instantiate(i32[][]), Instantiate(Item[]), Instantiate(Item?[]),
+ Instantiate(IRead[]), Instantiate(Dict<string, i32[]>), Instantiate(Tree<string, Item>),
+ Instantiate(any), Instantiate(any[])]
+fn Call<T>(callback: fn(T) -> T, value: T) -> T;
+[Native, CppName(vm_callback_container::Pair)]
+fn Pair(callback: fn(i32[], i32[]) -> i32[], first: i32[], second: i32[]) -> i32[];
+[Native, CppName(vm_callback_container::Factory)]
+fn Factory(callback: fn() -> Dict<string, text>) -> i32;
+[Native, CppName(vm_callback_container::Store)]
+fn Store([attribute::NativeCallback("retained", "any")] callback: fn(Item[]) -> i32, input: Item[]);
+[Native, CppName(vm_callback_container::Run)]
+fn Run() -> i32;
+[Native, CppName(vm_callback_container::Worker)]
+fn Worker() -> i32;
+[Native, CppName(vm_callback_container::Clear)]
+fn Clear();
+[Native, CppName(vm_callback_container::Nest)]
+fn Nest(value: any) -> any;
+[Native, CppName(vm_callback_container::Capture)]
+fn CaptureArray([attribute::NativeCallback("retained", "any")] callback: fn(i32[]) -> i32[], input: i32[]);
+[Native, CppName(vm_callback_container::Capture)]
+fn CaptureMap(
+    [attribute::NativeCallback("retained", "any")] callback: fn(Dict<string, i32[]>) -> Dict<string, i32[]>,
+    input: Dict<string, i32[]>);
+[Native, CppName(vm_callback_container::Capture)]
+fn CaptureAny([attribute::NativeCallback("retained", "any")] callback: fn(any) -> any, input: any);
+[Native, CppName(vm_callback_container::Capture)]
+fn CaptureObjects([attribute::NativeCallback("retained", "any")] callback: fn(Item[]) -> Item[], input: Item[]);
+[Native, CppName(vm_callback_container::Capture)]
+fn CaptureNullableObjects(
+    [attribute::NativeCallback("retained", "any")] callback: fn(Item?[]) -> Item?[], input: Item?[]);
+
+fn StoreCaptured()
+{
+    let captured: Item[] = [Item(43)];
+    Store((values) => captured[0].Read() + values[0].Read(), [Item(7)]);
+}
+
+fn HostArray()
+{
+    CaptureArray((values) => [values[0] + 2, values[1] + 2], [7, 19]);
+}
+
+fn HostMap()
+{
+    let input: Dict<string, i32[]> = {"key": [7, 19]};
+    CaptureMap((values) => values, input);
+}
+
+fn HostAny()
+{
+    let input: any = "a\0🌍";
+    CaptureAny((value) => value, Nest(input));
+}
+
+fn HostMissingAny()
+{
+    let input: any = "a\0🌍";
+    CaptureAny((value) => value, input);
+}
+
+fn HostObjects()
+{
+    CaptureObjects((values) => values, [Item(7)]);
+}
+
+fn HostNullableObjects()
+{
+    let input: Item?[] = [Item(7), null];
+    CaptureNullableObjects((values) => values, input);
+}
+
+fn HostPanic()
+{
+    CaptureArray((values) =>
+    {
+        Fail();
+        return values;
+    }, [7, 19]);
+}
+
+fn LifecycleBalanced() -> bool
+{
+    return Balanced();
+}
+
+fn LifecycleLive() -> i32
+{
+    return Live();
+}
+
+fn SafePoint() -> i32
+{
+    return 19;
+}
+
+fn Entry() -> i32
+{
+    for (mut round = 0; round < 30; round += 1)
+    {
+        {
+            let input: i32[] = [7, 19];
+            mut empty: i32[];
+            if (Call<i32[]>((values) => values, empty).Count() != 0usize)
+            {
+                return 20;
+            }
+            mut emptyMap: Dict<string, i32[]>;
+            if (Call<Dict<string, i32[]>>((values) => values, emptyMap).Count() != 0usize)
+            {
+                return 21;
+            }
+            let output = Call<i32[]>((values) => [values[0] + 2, values[1] + 2], input);
+            if (input[0] != 7 or output[0] != 9 or output[1] != 21)
+            {
+                return 1;
+            }
+            if (Pair((left, right) => [left[0] + right[0]], [7], [19])[0] != 26)
+            {
+                return 2;
+            }
+            let words: string[] = ["a\0🌍", "second"];
+            if (Call<string[]>((values) => values, words)[0] != "a\0🌍")
+            {
+                return 3;
+            }
+            let unicode: text[] = [u"👩‍💻\0🌍"];
+            if (Call<text[]>((values) => values, unicode)[0] != u"👩‍💻\0🌍")
+            {
+                return 4;
+            }
+            let bits: bool[] = [true, false];
+            let bitEcho = Call<bool[]>((values) => values, bits);
+            if (not bitEcho[0] or bitEcho[1])
+            {
+                return 5;
+            }
+            let points: Point[] = [Point(7), Point(19)];
+            if (Call<Point[]>((values) => values, points)[1].x != 19)
+            {
+                return 6;
+            }
+            let nested: i32[][] = [[7], [19]];
+            if (Call<i32[][]>((values) => values, nested)[1][0] != 19)
+            {
+                return 7;
+            }
+            let mapped: Dict<string, i32[]> = {"key": [7, 19]};
+            if (Call<Dict<string, i32[]>>((values) => values, mapped)["key"][1] != 19)
+            {
+                return 8;
+            }
+            if (Factory(() =>
+            {
+                let created: Dict<string, text> = {"key": u"🌍"};
+                return created;
+            }) != 1)
+            {
+                return 9;
+            }
+            let first = Item(7);
+            let values: Item[] = [first];
+            let changed = Call<Item[]>((items) =>
+            {
+                items[0].Set(23);
+                return items;
+            }, values);
+            if (changed[0] != first or first.Read() != 23)
+            {
+                return 10;
+            }
+            let nullable: Item?[] = [first, null];
+            let echoed = Call<Item?[]>((items) => items, nullable);
+            if (echoed[0] != first or echoed[1] != null)
+            {
+                return 11;
+            }
+            let readers: IRead[] = [first fit IRead];
+            if (Call<IRead[]>((items) => items, readers)[0].Read() != 23)
+            {
+                return 12;
+            }
+            let ordered: Tree<string, Item> = {< "key": first >};
+            if (Call<Tree<string, Item>>((items) => items, ordered)["key"] != first)
+            {
+                return 13;
+            }
+            let boxed: any = first;
+            let returned = Call<any>((value) => value, boxed);
+            if ((returned fit Item) != first)
+            {
+                return 14;
+            }
+            let scalar: any = 7;
+            let nestedAny = Nest(scalar);
+            if (((Call<any>((value) => value, nestedAny) fit any) fit i32) != 7)
+            {
+                return 15;
+            }
+            let anyValues: any[] = [boxed, scalar];
+            let anyEcho = Call<any[]>((items) => items, anyValues);
+            if ((anyEcho[0] fit Item) != first or (anyEcho[1] fit i32) != 7)
+            {
+                return 16;
+            }
+            mut blank: any;
+            if (Call<any>((value) => value, blank) != null)
+            {
+                return 17;
+            }
+        }
+        StoreCaptured();
+        if (Run() != 50 or Worker() != 50)
+        {
+            return 18;
+        }
+        Clear();
+        if (not Balanced())
+        {
+            return 19;
+        }
+    }
+    Print();
+    return 0;
+}

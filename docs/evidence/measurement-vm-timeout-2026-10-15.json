@@ -1,0 +1,278 @@
+{
+  "Schema": 2,
+  "Utc": "2026-10-15T15:27:00.6182519Z",
+  "Revision": "4718f82983be26385c0ed4b12fd311e96147d23f",
+  "Worktree": " M playground/wio/main.wio\nAM playground/wio/mandelbrot.wio\n M std/algorithms.wio\n M std/assert.wio\n M std/async.wio\n M std/buffer.wio\n M std/config.wio\n?? playground/mandelbrot.ppm\n?? tests/performance/mandelbrot_compute/csharp/obj/",
+  "ArtifactDirectory": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15",
+  "Rebuilt": false,
+  "Repetitions": 3,
+  "VmRepetitions": 3,
+  "NativeOnly": false,
+  "TimeoutSeconds": 1,
+  "VmHost": "F:\\Projects\\wio\\build\\vm\\Release\\wio_mandelbrot_vm_benchmark.exe",
+  "BuildConfiguration": "See frozen input provenance; standalone qualification does not infer optimization flags from binary names.",
+  "Policy": "All raw samples retained; one excluded warm-up per case; rotating/reversing order; no trimming/retry-until-pass.",
+  "Limits": {
+    "ControlMedianDifference": 0.1,
+    "RelativeDrift": 0.1,
+    "RelativeRange": 0.15
+  },
+  "LogicalProcessor": 2,
+  "AffinityMask": 4,
+  "AffinityPolicy": "Controller pinned before launch; Windows child inherits; original controller mask restored in finally.",
+  "EnvironmentBefore": {
+    "Utc": "2026-10-15T15:26:57.6281851Z",
+    "OS": "Microsoft Windows NT 10.0.26100.0",
+    "Processor": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "ProcessorName": "13th Gen Intel(R) Core(TM) i7-13620H",
+    "Processors": null,
+    "ProcessorQueryError": "Access denied ",
+    "PowerScheme": "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (Yüksek performans)",
+    "PowerQueryExit": 0,
+    "ClockCaveat": "CIM nominal/snapshot clocks, when available, are NOT measured effective workload frequency."
+  },
+  "EnvironmentAfter": {
+    "Utc": "2026-10-15T15:27:00.4365218Z",
+    "OS": "Microsoft Windows NT 10.0.26100.0",
+    "Processor": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "ProcessorName": "13th Gen Intel(R) Core(TM) i7-13620H",
+    "Processors": null,
+    "ProcessorQueryError": "Access denied ",
+    "PowerScheme": "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (Yüksek performans)",
+    "PowerQueryExit": 0,
+    "ClockCaveat": "CIM nominal/snapshot clocks, when available, are NOT measured effective workload frequency."
+  },
+  "ArtifactsBefore": [
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\compute\\bridge.dll",
+      "Bytes": 926693,
+      "Hash": "F03F7F65575494A88ECD04D274350DCF345576867C184137824F63FDAAE037F8"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\compute\\main.wio",
+      "Bytes": 1613,
+      "Hash": "B526C768105B20624B2B14EEFBEA05DE30BB7096C1275894865EDEE01BD71C9E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\compute\\main.wio.cpp",
+      "Bytes": 41544,
+      "Hash": "B07B294B1B6EFED2AA4D6E261B63F6EF570257004CD2CAD61115496337CD95A2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\compute\\main.wiob",
+      "Bytes": 30866,
+      "Hash": "81FCD6B05FD93DF6CB418213178C88663FFA55884ABC85154F96F8FF90F5143B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\compute\\native.exe",
+      "Bytes": 3618372,
+      "Hash": "DF99EADBFBED51BA236893D59EB0D35FBAFA8A0C029536F2E548D2C85F1D7108"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\bridge.dll",
+      "Bytes": 6366765,
+      "Hash": "290837EB608BFCC69206DCB714DB76F0541A90B0F17F0271DA2667867A7B3466"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\main.wio",
+      "Bytes": 117,
+      "Hash": "BF0EF3870ACB568551D00704958880BB1A803F1C5433FA980C4457B2AFD73D9E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\main.wio.cpp",
+      "Bytes": 2659519,
+      "Hash": "5904F2012D1C417230490CD13D1D27DD9F336FE464B26F04D62CEE2AE0420770"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\main.wiob",
+      "Bytes": 2104032,
+      "Hash": "D9EC851742B3CF722978562EEBF19DD0CF4BA273C8EE1485F07056B447CE3A80"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\mandelbrot.wio",
+      "Bytes": 2568,
+      "Hash": "4E701B4C781B1EC77BF749F9472BE6711AE8D254F3AAB86028F8EE6B60CE8AF9"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\native.exe",
+      "Bytes": 9050655,
+      "Hash": "1CB587A7155F283A5E3D9AAFA95C978EC64275F382BE176067866F6571522BD3"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\previous.exe",
+      "Bytes": 9050655,
+      "Hash": "B8D34E0CE8FC4850CE9EF0E485E8234EB7BE54B815DB3648065518A9B047335D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\previous.wio.cpp",
+      "Bytes": 2659501,
+      "Hash": "D3578DBAAB0CBACCE99DC967E8B7732177790D3BDF9CC0B9C45B593C682C02E2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\results.json",
+      "Bytes": 15176,
+      "Hash": "7F87E5D0B74B1E883FF25AD6FB1E43DA3F0CBBF1D2AD55D24D6335E821BF00E1"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\vm\\Release\\wio_mandelbrot_vm_benchmark.exe",
+      "Bytes": 1152512,
+      "Hash": "715F44B50E6FFA84E8018566D6D776A9637861568A3AA5A4D482C8C4AB41618D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\mandelbrot_compute\\qualify.ps1",
+      "Bytes": 12791,
+      "Hash": "ECEECDAF0A030C34A2AF3DEC78A319BCACDE5D8F47945EFC6701FE801CA58DC6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\Measurement.psm1",
+      "Bytes": 6997,
+      "Hash": "BC8E0C3BAF734F938EBBEA807E88180813CFB6B2E47428AA25A853406783E25D"
+    }
+  ],
+  "ArtifactsAfter": [
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\compute\\bridge.dll",
+      "Bytes": 926693,
+      "Hash": "F03F7F65575494A88ECD04D274350DCF345576867C184137824F63FDAAE037F8"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\compute\\main.wio",
+      "Bytes": 1613,
+      "Hash": "B526C768105B20624B2B14EEFBEA05DE30BB7096C1275894865EDEE01BD71C9E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\compute\\main.wio.cpp",
+      "Bytes": 41544,
+      "Hash": "B07B294B1B6EFED2AA4D6E261B63F6EF570257004CD2CAD61115496337CD95A2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\compute\\main.wiob",
+      "Bytes": 30866,
+      "Hash": "81FCD6B05FD93DF6CB418213178C88663FFA55884ABC85154F96F8FF90F5143B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\compute\\native.exe",
+      "Bytes": 3618372,
+      "Hash": "DF99EADBFBED51BA236893D59EB0D35FBAFA8A0C029536F2E548D2C85F1D7108"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\bridge.dll",
+      "Bytes": 6366765,
+      "Hash": "290837EB608BFCC69206DCB714DB76F0541A90B0F17F0271DA2667867A7B3466"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\main.wio",
+      "Bytes": 117,
+      "Hash": "BF0EF3870ACB568551D00704958880BB1A803F1C5433FA980C4457B2AFD73D9E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\main.wio.cpp",
+      "Bytes": 2659519,
+      "Hash": "5904F2012D1C417230490CD13D1D27DD9F336FE464B26F04D62CEE2AE0420770"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\main.wiob",
+      "Bytes": 2104032,
+      "Hash": "D9EC851742B3CF722978562EEBF19DD0CF4BA273C8EE1485F07056B447CE3A80"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\mandelbrot.wio",
+      "Bytes": 2568,
+      "Hash": "4E701B4C781B1EC77BF749F9472BE6711AE8D254F3AAB86028F8EE6B60CE8AF9"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\native.exe",
+      "Bytes": 9050655,
+      "Hash": "1CB587A7155F283A5E3D9AAFA95C978EC64275F382BE176067866F6571522BD3"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\previous.exe",
+      "Bytes": 9050655,
+      "Hash": "B8D34E0CE8FC4850CE9EF0E485E8234EB7BE54B815DB3648065518A9B047335D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\full\\previous.wio.cpp",
+      "Bytes": 2659501,
+      "Hash": "D3578DBAAB0CBACCE99DC967E8B7732177790D3BDF9CC0B9C45B593C682C02E2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15\\results.json",
+      "Bytes": 15176,
+      "Hash": "7F87E5D0B74B1E883FF25AD6FB1E43DA3F0CBBF1D2AD55D24D6335E821BF00E1"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\vm\\Release\\wio_mandelbrot_vm_benchmark.exe",
+      "Bytes": 1152512,
+      "Hash": "715F44B50E6FFA84E8018566D6D776A9637861568A3AA5A4D482C8C4AB41618D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\mandelbrot_compute\\qualify.ps1",
+      "Bytes": 12791,
+      "Hash": "ECEECDAF0A030C34A2AF3DEC78A319BCACDE5D8F47945EFC6701FE801CA58DC6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\Measurement.psm1",
+      "Bytes": 6997,
+      "Hash": "BC8E0C3BAF734F938EBBEA807E88180813CFB6B2E47428AA25A853406783E25D"
+    }
+  ],
+  "ArtifactsUnchanged": true,
+  "Samples": [
+    {
+      "Name": "compute-native",
+      "Round": 0,
+      "Warmup": true,
+      "Utc": "2026-10-15T15:26:58.8042275Z",
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.1655455,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.18876985481332925,
+      "SystemBusyFraction": 0.7272727272727273,
+      "KernelSeconds": 0.0797027,
+      "Output": "seconds=0.079702700 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Bytes": null,
+      "Hash": null
+    },
+    {
+      "Name": "compute-native-control",
+      "Round": 0,
+      "Warmup": true,
+      "Utc": "2026-10-15T15:26:59.0404181Z",
+      "Status": "passed",
+      "ExitCode": 0,
+      "WallSeconds": 0.1428613,
+      "CpuSeconds": 0.03125,
+      "CpuToWall": 0.2187436345602343,
+      "SystemBusyFraction": 0.75625,
+      "KernelSeconds": 0.0644372,
+      "Output": "seconds=0.064437200 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": "",
+      "Bytes": null,
+      "Hash": null
+    },
+    {
+      "Name": "compute-vm",
+      "Round": 0,
+      "Warmup": true,
+      "Utc": "2026-10-15T15:27:00.3515015Z",
+      "Status": "timeout",
+      "ExitCode": -1,
+      "WallSeconds": 1.2931027,
+      "CpuSeconds": 0.71875,
+      "CpuToWall": 0.5558336549757417,
+      "SystemBusyFraction": 0.7070783132530121,
+      "KernelSeconds": null,
+      "Output": "",
+      "Error": "",
+      "Bytes": null,
+      "Hash": null
+    }
+  ],
+  "Summary": [],
+  "SameBinaryControl": null,
+  "PowerSchemeUnchanged": true,
+  "Accepted": false,
+  "Failure": "Sample rejected: compute-vm: timeout"
+}

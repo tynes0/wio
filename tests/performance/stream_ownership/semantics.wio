@@ -1,0 +1,17 @@
+using cpp::header("probe.h");
+
+[native, cpp::name(stream_ownership::Row)]
+fn Row(payload: view string, index: i64) -> string;
+
+fn Entry() -> i32
+{
+    let payload = "a\0b🌍日本";
+    let first = Row(ref payload, 7);
+    let second = Row(ref payload, 8);
+    if (first != "payload=a\0b🌍日本;index=7;ok=false") return 1;
+    if (second != "payload=a\0b🌍日本;index=8;ok=true") return 2;
+    if (first != "payload=a\0b🌍日本;index=7;ok=false") return 3;
+    let empty = "";
+    if (Row(ref empty, -9223372036854775807i64) != "payload=;index=-9223372036854775807;ok=false") return 4;
+    return 0;
+}

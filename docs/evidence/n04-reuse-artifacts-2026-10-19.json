@@ -1,0 +1,65 @@
+{
+  "sourceRevision": "a1fb58184aef02ecb85ac3d4971721e5bce3a142",
+  "sourceCi": {
+    "runId": 39177619566,
+    "url": "https://github.com/tynes0/wio/actions/runs/39177619566",
+    "conclusion": "success",
+    "passedJobs": ["windows-latest / Debug", "ubuntu-latest / Release", "macos-15 / Release"],
+    "scope": "Expanded N04 gates and workflow-scoped N03 regressions; not the full historical corpus"
+  },
+  "comparison": "Owned versus reusable exact/some within the same expanded session",
+  "selectedSession": {
+    "complete": true,
+    "correctSamples": 168,
+    "totalSamples": 168,
+    "timingQualified": false,
+    "affinityQualified": true,
+    "artifactsUnchanged": true,
+    "powerProfileUnchanged": true
+  },
+  "count": 257,
+  "bytesPerRead": 65536,
+  "checksum": "3956996201986607141",
+  "frozenSourcesSha256": {
+    "main.wio": "8ba9fab84fb0c956463e2182f7cce747b44e99959e76b936e3c19c91bc0e6598",
+    "main.cpp": "73356abca9748affed76839317197f0b791cc30c9eac10c6db3ed04254fa6601",
+    "probe.h": "23cc1ccccc06e0f0e08a1995a523bc3377728b09df61b2c8d142526bc34923fe",
+    "Program.cs": "376cebff45fa1f9033d5baf4133f98437c3c900968b26eaddd31ddf3b2c700b6",
+    "ByteIo.csproj": "ed79971229072fc23993b4a8387a5f926190c278ffa45ea28794108e2e71de98"
+  },
+  "unchangedToolsSha256": {
+    "compiler": "7688dd04cb64a36f1078b81cf5abf7be1e1e8ff06e361763baab56d8f064f3e0",
+    "releaseVm": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa",
+    "wioBench": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+  },
+  "runtimeArchive": {
+    "bytes": 1722580,
+    "sha256": "cf0950d248dd987ccfc5b4b83838bc627a6cd9b7377fd29b39549bd46b6b224a",
+    "profile": "profile=Release\ncompiler=g++\nflags=-O2;-ffp-contract=off\n"
+  },
+  "artifacts": {
+    "native.exe": {"bytes": 5758419, "sha256": "ee674e546dc026132669e0d7091088d32a98f5bbd1f58e4904deeaeda3e0bd63"},
+    "bridge.dll": {"bytes": 2459505, "sha256": "c0982787995670a0af848448cde3c9d8dfadb326d20e31e446611c7bacf2a1ea"},
+    "memory.exe": {"bytes": 8949602, "sha256": "e8c056f32a57eeb61d1626bb240e9743f72cc92e469b2fa6a58db488bc0c6fe1"},
+    "frozen.cpp": {"bytes": 3599292, "sha256": "f5f9db792a3efd28b063aa1e1eecbd569f8855b3014532e92c63f863b720d489"},
+    "main.wiob": {"bytes": 2724504, "sha256": "713ab0d565f208e1d94e897ef9730411770b89707952c84a6aaa8e24ccd75797"}
+  },
+  "controls": {
+    "nativeAndReferenceFlags": ["-std=c++20", "-O2", "-ffp-contract=off"],
+    "nativeBridgeFlags": ["-O2", "-ffp-contract=off"],
+    "localScopedTestsPassed": 1,
+    "localContractProcesses": 29,
+    "oldLocalCorpusRun": false,
+    "machinePowerSecurityPriorityChanged": false,
+    "localBuildOrTestOverlapsTiming": false,
+    "reusableSetupOutsideKernelAndAllocationWindowInAllLanguages": true
+  },
+  "limits": [
+    "Expanded workload sources differ from historical two-case images; no unchanged-input claim.",
+    "Reusable storage changes ownership strategy; old owning snapshots still remain independent.",
+    "Zero allocations refers to the native measured window; the existing 64 KiB caller payload remains live outside tracking.",
+    "VM generic array marshalling is not zero-copy or proven allocation-free.",
+    "Different language syscall/error implementations; hot OS-cache composite, not cold disk throughput.",
+    "KI-010 computed VM globals remain open; all cases use the same explicit local mode flags."
+  ]
+}

@@ -44,6 +44,7 @@ namespace wio::sema
         std::unordered_map<std::string, common::Location> exportedCppSymbolLocations_;
         Ref<Scope> currentScope_ = nullptr;
         Ref<Type> currentExpectedExpressionType_ = nullptr;
+        const Expression* discardedExpression_ = nullptr;
         bool allowContextualNumericLiteralTyping_ = false;
         bool allowInferredStaticArrayExtent_ = false;
         Ref<Type> currentFunctionReturnType_ = nullptr;

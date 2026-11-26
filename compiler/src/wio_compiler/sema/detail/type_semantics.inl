@@ -198,6 +198,8 @@
             case TypeKind::Array:
             case TypeKind::Dictionary:
                 return true;
+            case TypeKind::Nullable:
+                return Type::isNullableAnyHandle(resolvedType.Get());
             case TypeKind::Struct:
             {
                 auto structType = resolvedType.AsFast<StructType>();
@@ -218,7 +220,10 @@
                 return false;
 
             if (isAnyType(resolvedType))
-                return false;
+                // Explicit native/SDK boxing can store another Any cell.
+                // `fit any` unwraps one layer; ordinary Any assignment remains
+                // a shared-cell copy, not implicit recursive boxing.
+                return true;
 
             if (resolvedType->kind() == TypeKind::Struct)
             {
@@ -283,6 +288,7 @@
                 if (name == "f64") return {64, true, true, false};
                 if (name == "isize") return {64, true, false, true};
                 if (name == "usize") return {64, false, false, true};
+                if (name == "char") return {8, false, false, false};
                 const bool isSigned = name.starts_with('i');
                 if (name.ends_with("8")) return {8, isSigned, false, false};
                 if (name.ends_with("16")) return {16, isSigned, false, false};
@@ -347,6 +353,7 @@
             if (name == "u64") return IntegerType::u64;
             if (name == "isize") return IntegerType::isize;
             if (name == "usize") return IntegerType::usize;
+            if (name == "char") return IntegerType::u8;
             return std::nullopt;
         }
 
@@ -381,6 +388,7 @@
             if (name == "isize") return NumericConversionInfo{64, true, false};
             if (name == "usize") return NumericConversionInfo{64, false, false};
             if (name == "byte") return NumericConversionInfo{8, false, false};
+            if (name == "char") return NumericConversionInfo{8, false, false};
             const bool isSigned = name.starts_with('i');
             if (name.ends_with("8")) return NumericConversionInfo{8, isSigned, false};
             if (name.ends_with("16")) return NumericConversionInfo{16, isSigned, false};

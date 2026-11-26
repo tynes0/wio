@@ -1,0 +1,46 @@
+using cpp::header("vm_any_array_identity_fixture.h");
+
+[Native, CppName(vm_any_array_identity::Identity)]
+fn Identity(value: any) -> any;
+[Native, CppName(vm_any_array_identity::Echo), Instantiate(i32[])]
+fn Echo<T>(value: T) -> T;
+[Native, CppName(vm_any_array_identity::Print)]
+fn Print(message: string);
+
+fn Box<T>(value: T[]) -> any { return value; }
+
+fn Entry() -> i32 {
+    let inferred = [3, 5, 7];
+    let boxed: any = inferred;
+    let restored = Identity(boxed) fit i32[];
+    if (restored[2] != 7 or not (boxed is i32[])) { return 1; }
+
+    let direct: any = [11, 13];
+    if ((Identity(direct) fit i32[])[1] != 13) { return 2; }
+    let generic = Identity(Box<i32>(restored)) fit i32[];
+    if (generic[0] != 3) { return 3; }
+    let echoed: any = Echo<i32[]>(restored);
+    if ((Identity(echoed) fit i32[])[1] != 5) { return 4; }
+
+    let nested = [[17, 19], [23, 29]];
+    let nestedBox: any = nested;
+    let matrix = Identity(nestedBox) fit i32[][];
+    if (matrix[1][0] != 23) { return 5; }
+    let genericNested = Identity(Box<i32[]>(matrix)) fit i32[][];
+    if (genericNested[0][1] != 19) { return 6; }
+
+    let fixed: [i32; 3] = [31, 37, 41];
+    let fixedBox: any = fixed;
+    if (fixedBox is i32[]) { return 7; }
+    if (not (fixedBox is [i32; 3])) { return 8; }
+    let fixedResult = Identity(fixedBox) fit [i32; 3];
+    if (fixedResult[2] != 41) { return 9; }
+
+    // Ordinary container copies remain independent of the original SSA value.
+    mut changed = restored;
+    changed[0] = 101;
+    if (inferred[0] != 3) { return 10; }
+    if ((Identity(boxed) fit i32[])[0] != 3) { return 11; }
+    Print("native-any-array-identity-ok");
+    return 0;
+}

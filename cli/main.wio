@@ -53,6 +53,8 @@ fn AddProjectBase(parser: ref Argonaut::Parser, rebuild: bool) -> std::UnitResul
 
     AddOption?(parser, "PROJECT", ["--project"], "Project directory or makewio manifest path.");
     AddOption?(parser, "CONFIG", ["--config"], "Optional project build configuration override.");
+    AddMultiOption?(parser, "BACKEND-ARG", ["--backend-arg"], "Append one native C++ compiler argument (repeatable).");
+    AddOption?(parser, "VM-RUNNER", ["--vm-runner"], "Override the VM runner used for executable packaging.");
     AddOption?(parser, "BUILD-DIR", ["--build-dir"], "Optional project build directory override.");
     AddOption?(parser, "CPP-BACKEND", ["--cpp-backend"], "Select C++ generation input: legacy or wir (experimental).");
     if (rebuild) {
@@ -65,12 +67,17 @@ fn AddProjectBase(parser: ref Argonaut::Parser, rebuild: bool) -> std::UnitResul
 fn ProjectParser(command: string) -> std::Result<Argonaut::Parser> {
     mut parser = Argonaut::Parser();
     AddProjectBase?(ref parser, command != "describe");
+    if (command == "build" or command == "run" or command == "package") {
+        AddOption?(ref parser, "BACKEND", ["--backend"], "Select project execution backend: native or vm.");
+    }
 
     if (command == "build") {
         AddFlag?(ref parser, "EMIT-CPP", ["--emit-cpp"], "Keep generated C++ and stop before backend compilation.");
         AddFlag?(ref parser, "EMIT-TYPED-WIR", ["--emit-typed-wir"], "Emit analyzed Typed WIR and stop before lowering.");
         AddFlag?(ref parser, "EMIT-LOWERED-WIR", ["--emit-lowered-wir"], "Emit canonical Lowered WIR and stop before backend code generation.");
+        AddFlag?(ref parser, "EMIT-BYTECODE", ["--emit-bytecode"], "Emit a verified portable .wiob module.");
         AddOption?(ref parser, "IR-OUTPUT", ["--ir-output"], "Override the emitted WIR output path.");
+        AddOption?(ref parser, "BYTECODE-OUTPUT", ["--bytecode-output"], "Override the emitted .wiob output path.");
         AddFlag?(ref parser, "NO-BUILTIN", ["--no-builtin", "-B"], "Do not merge built-in Wio modules into the inspected program.");
     }
     else if (command == "describe") {
@@ -101,16 +108,7 @@ fn ProjectParser(command: string) -> std::Result<Argonaut::Parser> {
     return std::Ok<Argonaut::Parser>(parser);
 }
 
-fn Contains(args: string[], value: string) -> bool {
-    for argument in args {
-        if (argument == value) {
-            return true;
-        }
-    }
-    return false;
-}
-
-fn ValidateProjectCommand(args: string[]) -> std::UnitResult {
+fn ValidateProjectCommand(args: string[]) -> std::Result<bool> {
     let command = args[2usize];
     mut parser = ProjectParser?(command);
     mut commandArgs: string[] = [$"wio project ${command}"];
@@ -125,12 +123,13 @@ fn ValidateProjectCommand(args: string[]) -> std::UnitResult {
 
     let parsed = parser.Parse(commandArgs);
     if (parsed.IsError()) {
-        return std::ErrUnit(parsed.ErrorValue());
+        return std::Err<bool>(parsed.ErrorValue());
     }
-    if (Contains(commandArgs, "--help") or Contains(commandArgs, "-h")) {
+    if (parser.GetFlag("HELP")) {
         console::Print(parser.Help());
+        return std::Ok<bool>(true);
     }
-    return std::OkUnit();
+    return std::Ok<bool>(false);
 }
 
 fn ExitResult(value: std::Result<i32>) -> i32 {
@@ -252,7 +251,7 @@ fn Entry(args: string[]) -> i32 {
         console::PrintLine!(validation.ErrorValue().message);
         return 2;
     }
-    if (Contains(cliArgs, "--help") or Contains(cliArgs, "-h")) {
+    if (validation.Value()) {
         return 0;
     }
 

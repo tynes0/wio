@@ -2,6 +2,15 @@ name: release validation
 
 on:
   workflow_dispatch:
+    inputs:
+      layout_only:
+        description: "Run only build-layout/launcher follow-up; retain the full base-commit CI evidence separately"
+        type: boolean
+        default: false
+      native_install_probe:
+        description: "Isolate the Linux native-install incremental build gate"
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -13,7 +22,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  native-install-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_install_probe }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build CLI and runtime for the installed consumer
+        run: cmake --build build --target wio_playground wio_vm_runner --parallel 2
+      - name: Validate incremental native installation
+        run: ctest --test-dir build -C Release --output-on-failure --no-tests=error -R "^wio_vm_sdk_native_install$"
+      - name: Preserve native install evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-install-probe
+          path: build/Testing/Temporary/
+
+  layout-follow-up:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.layout_only }}
+    uses: ./.github/workflows/release-layout-validation.yml
+
   validate:
+    if: ${{ !inputs.layout_only && !inputs.native_install_probe }}
     strategy:
       fail-fast: false
       matrix:
@@ -73,7 +106,23 @@ jobs:
           ctest --test-dir build --verbose
           -R "^wio_wir_cpp_(backend|backend_cli|generics|objects|async|native|sdk|application|reflection|packs_differential|behavioral_differential|project_differential)$"
 
+      - name: Validate VM native discovery and project execution
+        run: >
+          ctest --test-dir build --output-on-failure
+          -R "^wio_vm_native_(library_discovery|project_cli)$"
+
+      - name: Validate C++ and VM native behavioral parity
+        run: >
+          ctest --test-dir build --output-on-failure
+          -L "^native-differential$"
+
+      - name: Validate standalone VM executable artifacts
+        run: >
+          ctest --test-dir build --output-on-failure
+          -R "^(wio_vm_(artifact_codec|artifact_generation|artifact_cohort|executable_cohort|executable_artifact|project_artifact|sdk_module_adapter|sdk_module_artifacts|sdk_session_lifecycle|sdk_session_artifacts|task_source_shutdown|task_source_import|sdk_async_artifacts|sdk_task_inputs_artifacts|module_native_paths|sdk_native_dependencies|native_bundle_policy|sdk_native_install|project_library_cli|project_record_policy)|wio_process_utf8_project)$"
+
   sanitizers:
+    if: ${{ !inputs.layout_only && !inputs.native_install_probe }}
     runs-on: ubuntu-latest
 
     steps:
@@ -90,7 +139,12 @@ jobs:
           -DWIO_BUILD_APP=OFF
 
       - name: Build sanitizer targets
-        run: cmake --build build-sanitize --target wio_async_runtime_stress wio_process_runtime_stress wio_function_type_cpp_string_test wio_filesystem_policy_test
+        run: cmake --build build-sanitize --target wio_async_runtime_stress wio_process_runtime_stress wio_function_type_cpp_string_test wio_filesystem_policy_test wio_vm_native_bridge_test wio_vm_global_initialization_test
+
+      - name: Run interim-release VM ownership and initialization sanitizer tests
+        run: >
+          ctest --test-dir build-sanitize --output-on-failure --no-tests=error
+          -R "^(wio_vm_native_bridge|wio_vm_global_initialization)$"
 
       - name: Run async runtime sanitizer tests
         if: always()

@@ -1,0 +1,210 @@
+using cpp::header("vm_nested_any_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_nested_any::Sample)]
+component Sample {
+    public value: i32;
+}
+
+object Item {
+    value: i32;
+    public OnConstruct(value: i32) {
+        self.value = value;
+        Constructed();
+    }
+    OnDestruct() {
+        Destroyed();
+    }
+    public fn Read() -> i32 {
+        return self.value;
+    }
+}
+
+object FailingItem {
+    public OnConstruct() {
+        Constructed();
+    }
+    OnDestruct() {
+        Destroyed();
+        Fail();
+    }
+}
+
+[Native, CppName(vm_nested_any::Constructed)]
+fn Constructed();
+[Native, CppName(vm_nested_any::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_nested_any::Constructions)]
+fn Constructions() -> i32;
+[Native, CppName(vm_nested_any::Destructions)]
+fn Destructions() -> i32;
+[Native, CppName(vm_nested_any::Fail)]
+fn Fail();
+
+[Native, CppName(vm_nested_any::Nest)]
+fn Nest(value: any) -> any;
+[Native, CppName(vm_nested_any::Echo)]
+fn Echo(value: any) -> any;
+[Native, CppName(vm_nested_any::Mutate)]
+fn Mutate(value: any, next: i32);
+[Native, CppName(vm_nested_any::ReplaceInner)]
+fn ReplaceInner(value: any, next: any);
+[Native, CppName(vm_nested_any::SharesInner)]
+fn SharesInner(value: view any, inner: view any) -> bool;
+[Native, CppName(vm_nested_any::Hold)]
+fn Hold(value: any);
+[Native, CppName(vm_nested_any::Held)]
+fn Held() -> any;
+[Native, CppName(vm_nested_any::Clear)]
+fn Clear();
+[Native, CppName(vm_nested_any::MakeSample)]
+fn MakeSample() -> any;
+[Native, CppName(vm_nested_any::ReadSample)]
+fn ReadSample(value: view any) -> bool;
+[Native, CppName(vm_nested_any::Deep)]
+fn Deep(count: i32) -> any;
+[Native, CppName(vm_nested_any::Print)]
+fn Print();
+
+fn Escape() -> any {
+    return MakeSample();
+}
+
+fn Overflow() -> any {
+    return Deep(70);
+}
+
+fn WrapHost(value: any) -> any {
+    return Nest(value);
+}
+
+fn WrongLayer() -> any {
+    let ordinary: any = 7;
+    return ordinary fit any;
+}
+
+fn NullLayer() -> any {
+    mut blank: any;
+    return blank fit any;
+}
+
+fn ObjectRound() -> i32 {
+    let constructed = Constructions();
+    let destroyed = Destructions();
+    {
+        let item = Item(19);
+        let erased: any = item;
+        let nested = Nest(Nest(erased));
+        Hold(nested);
+    }
+    if (Constructions() != constructed + 1 or Destructions() != destroyed) {
+        return 14;
+    }
+    {
+        let held = Held();
+        Clear();
+        let item = ((held fit any) fit any) fit Item;
+        if (item.Read() != 19 or Destructions() != destroyed) {
+            return 15;
+        }
+    }
+    if (Destructions() != destroyed + 1) {
+        return 16;
+    }
+    return 0;
+}
+
+fn FailingRound() -> i32 {
+    {
+        let item = FailingItem();
+        let erased: any = item;
+        let nested = Nest(Nest(erased));
+    }
+    return 0;
+}
+
+fn LifecycleBalanced() -> bool {
+    return Constructions() == Destructions();
+}
+
+fn Entry() -> i32 {
+    mut round = 0;
+    while (round < 30) {
+        let objectResult = ObjectRound();
+        if (objectResult != 0) {
+            return objectResult;
+        }
+        let leaf: any = 7;
+        let nested = Nest(leaf);
+        let alias = Echo(nested);
+        if (!(nested is any) or nested is i32 or
+            !SharesInner(ref nested, ref leaf) or ((nested fit any) fit i32) != 7) {
+            return 1;
+        }
+        if (nested is any fit matched) {
+            if ((matched fit i32) != 7) {
+                return 12;
+            }
+        } else {
+            return 13;
+        }
+        Mutate(alias, 41);
+        if ((leaf fit i32) != 41 or ((nested fit any) fit i32) != 41) {
+            return 2;
+        }
+        let replacement: any = "new\0inner";
+        ReplaceInner(alias, replacement);
+        if (((nested fit any) fit string) != "new\0inner" or (leaf fit i32) != 41 or
+            !SharesInner(ref nested, ref replacement)) {
+            return 3;
+        }
+        let unicode: any = u"İstanbul 🚀";
+        let deepText = Nest(Nest(unicode));
+        if ((((deepText fit any) fit any) fit text) != u"İstanbul 🚀") {
+            return 4;
+        }
+        let numbers: i32[] = [3, 7];
+        let erasedNumbers: any = numbers;
+        let nestedNumbers = Nest(erasedNumbers);
+        let recoveredNumbers = (nestedNumbers fit any) fit i32[];
+        if (recoveredNumbers.Count() != 2usize or recoveredNumbers[1usize] != 7) {
+            return 5;
+        }
+        let values: Dict<string, any> = { "nested": nested, "text": deepText };
+        let erasedMap: any = values;
+        let map = (Nest(erasedMap) fit any) fit Dict<string, any>;
+        if (((map["nested"] fit any) fit string) != "new\0inner" or
+            (((map["text"] fit any) fit any) fit text) != u"İstanbul 🚀") {
+            return 6;
+        }
+        let elements: any[] = [nested, deepText];
+        let erasedElements: any = elements;
+        let array = (Nest(erasedElements) fit any) fit any[];
+        if (((array[0usize] fit any) fit string) != "new\0inner") {
+            return 7;
+        }
+        let sample = Escape();
+        let innerSample = (sample fit any) fit any;
+        if (!ReadSample(ref innerSample) or (innerSample fit Sample).value != 37) {
+            return 8;
+        }
+        mut blank: any;
+        let nestedNull = Nest(blank);
+        if (nestedNull == null or !(nestedNull is any) or (nestedNull fit any) != null) {
+            return 9;
+        }
+        Hold(nested);
+        let held = Held();
+        Clear();
+        if (((held fit any) fit string) != "new\0inner") {
+            return 10;
+        }
+        let ordinaryCopy: any = leaf;
+        if (ordinaryCopy is any or (ordinaryCopy fit i32) != 41) {
+            return 11;
+        }
+        round += 1;
+    }
+    Print();
+    return 0;
+}

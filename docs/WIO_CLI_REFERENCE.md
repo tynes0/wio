@@ -49,10 +49,17 @@ This is still useful when you want to compile or run a single file directly:
 wio .\tests\test1.wio
 wio .\tests\test1.wio --run
 wio .\tests\native\exported_library.wio --target shared --output build\interop\exported_library.dll
+wio .\app.wio --emit-lowered-wir --profile-compiler .\artifacts\compiler-trace.json
 ```
 
 Think of it as a lower-level compiler entry path, while `wio file ...` is the
 more structured single-file UX.
+
+`--profile-compiler <trace.json>` records an opt-in Coco trace in the Chrome/
+Perfetto event format. It separates source loading, lexing, parsing, import
+merging, semantic passes, Typed WIR construction and verification, lowering,
+C++ generation, output writing, and native compilation. Profiling is disabled
+by default and does not create trace files during ordinary builds.
 
 ### 1.3 Common CLI Behavior
 
@@ -230,6 +237,7 @@ wio project build --emit-cpp
 wio project build --cpp-backend wir --emit-cpp
 wio project build --emit-typed-wir
 wio project build --emit-lowered-wir --ir-output .\.wio-build\main.lowered.wir
+wio project build --backend vm
 ```
 
 Wio uses up-to-date checks so repeated builds can become very cheap when the
@@ -254,6 +262,13 @@ default, consumes only verified optimized Lowered WIR, and fails with
 compatibility oracle for the first default-WIR release line. See
 [the Lowered WIR C++ backend contract](./WIO_CPP_BACKEND.md).
 
+`--backend native|vm` selects project execution artifacts; `native` remains
+the default. `vm` emits `.wiob` bytecode and a native registry bridge from the
+same Lowered WIR. It currently requires an executable Wio target without a
+C++ host, rejects `--cpp-backend legacy` and explicit emission modes, and checks
+both artifacts for incremental reuse. See
+[the VM native bridge contract](./WIO_VM_NATIVE_BRIDGE.md).
+
 ### 5.4 `project run`
 
 ```powershell
@@ -261,6 +276,7 @@ wio project run --project C:\Projects\MyGame
 cd C:\Projects\MyGame
 wio project run
 wio project run -- "two words" --verbose
+wio project run --backend vm -- "two words" --verbose
 ```
 
 Use this when you want the project-aware run path rather than single-file
@@ -279,6 +295,9 @@ Useful run options:
 - `--no-manifest-args` omits `[run].args`
 - `--cwd DIR` overrides the manifest working directory
 - `--print-command` prints the resolved working directory and launch command
+- `--backend vm` executes the standalone VM image with manifest-resolved,
+  content-versioned native registries; `--no-build` requires the image and its
+  deployed libraries, not the build-only bytecode/bridge intermediates
 
 The child program's exit code is returned unchanged by Wio.
 
@@ -307,14 +326,21 @@ regular expression matched against project-relative test paths.
 wio project package
 wio project package --output-dir .\artifacts --clean
 wio project package --no-build --output-dir .\artifacts --clean
+wio project package --backend vm --output-dir .\artifacts
 ```
 
 This creates a distributable directory named after the project. Executables
 are placed under `bin/`, libraries under `lib/`, default project assets under
 `assets/`, a platform launcher is emitted for runnable targets, and
-`wio-package.json` records the entrypoint, required arguments, and packaged
-artifacts. Existing package directories are preserved unless `--clean` is
+`wio-package.json` records project/configuration, target, backend and entrypoint.
+Existing package directories are preserved unless `--clean` is
 supplied.
+
+VM packages put the embedded executable and only its active content-versioned
+native registry libraries together under `bin/`; they do not ship `.wiob`, the
+compiler or obsolete build generations. Package metadata records the selected
+backend. `--no-build` can deploy without source/build intermediates, but requires
+the verified executable and its libraries. See [VM artifacts](WIO_VM_ARTIFACTS.md).
 
 Use `[package].assets` to choose asset files/directories and `[package].files`
 for additional files that should retain their project-relative layout.

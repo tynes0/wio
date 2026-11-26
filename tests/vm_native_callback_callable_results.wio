@@ -1,0 +1,261 @@
+using cpp::header("vm_callback_callable_results_fixture.h");
+use std::attribute as attribute;
+use std::async as futures;
+
+type Unary = fn(i32) -> i32;
+type Pair = [i32; 2];
+[Native, CppName(vm_callback_callable_results::Point)]
+component Point
+{
+    public x: i32;
+}
+object Item
+{
+    value: i32;
+    public OnConstruct(value: i32) { self.value = value; Constructed(); }
+    OnDestruct() { Destroyed(); }
+    public fn Read() -> i32 { return self.value; }
+}
+
+object Processor
+{
+    public fn Make(seed: i32) -> Unary
+    {
+        return (value: i32) => seed + value;
+    }
+    public fn Factory() -> fn(i32) -> Unary
+    {
+        return (seed: i32) => (value: i32) => seed + value;
+    }
+    public fn Maybe(present: bool) -> Unary?
+    {
+        if (present) { return (value: i32) => value + 7; }
+        return null;
+    }
+    public fn Optional(callback: Unary?) -> i32
+    {
+        if (callback != null) { return callback(11); }
+        return 0;
+    }
+    public fn Borrowed() -> Unary { return BorrowFactory(); }
+}
+[Native, CppName(vm_callback_callable_results::Higher)]
+fn Higher(callback: fn(Unary) -> i32) -> i32;
+[Native, CppName(vm_callback_callable_results::Factory)]
+fn Factory(callback: fn(i32) -> Unary) -> i32;
+[Native, CppName(vm_callback_callable_results::RejectBorrowFactory)]
+fn RejectBorrowFactory(callback: fn() -> Unary) -> i32;
+[Native, CppName(vm_callback_callable_results::RejectMutatedFactory)]
+fn RejectMutatedFactory(callback: fn() -> Unary) -> i32;
+[Native, CppName(vm_callback_callable_results::Counter)]
+fn Counter(callback: fn() -> Unary) -> i32;
+[Native, CppName(vm_callback_callable_results::Make)]
+fn Make(seed: i32) -> Unary;
+[Native, CppName(vm_callback_callable_results::Relay)]
+fn Relay([attribute::NativeCallback("retained", "caller")] callback: Unary) -> Unary;
+[Native, CppName(vm_callback_callable_results::RelayGeneric)]
+fn RelayBorrow([attribute::NativeCallback("retained", "caller")]
+               callback: fn(ref i32) -> ref i32) -> fn(ref i32) -> ref i32;
+[Native, CppName(vm_callback_callable_results::Maybe)]
+fn Maybe(present: bool) -> Unary?;
+[Native, CppName(vm_callback_callable_results::Borrow),
+ Instantiate(i32), Instantiate(string), Instantiate(text), Instantiate(Pair),
+ Instantiate(i32[]), Instantiate(Dict<string, i32>), Instantiate(any),
+ Instantiate(Point), Instantiate(Item), Instantiate(Item?)]
+fn Borrow<T>(callback: fn(ref T) -> ref T, value: T) -> T;
+[Native, CppName(vm_callback_callable_results::Borrow)]
+fn BorrowCallable(callback: fn(ref Unary) -> ref Unary,
+                  [attribute::NativeCallback("retained", "caller")] value: Unary) -> Unary;
+[Native, CppName(vm_callback_callable_results::View), Instantiate(i32), Instantiate(string)]
+fn View<T>(callback: fn(view T) -> view T, value: T) -> T;
+[Native, CppName(vm_callback_callable_results::MakeBorrow), Instantiate(i32)]
+fn MakeBorrow<T>(callback: fn(ref T) -> ref T, value: T) -> T;
+[Native, CppName(vm_callback_callable_results::RejectCapture)]
+fn RejectCapture(callback: fn(ref i32) -> ref i32) -> i32;
+[Native, CppName(vm_callback_callable_results::LifetimeProbes), Instantiate(i32)]
+fn LifetimeProbes<T>() -> i32;
+[Native, CppName(vm_callback_callable_results::Hosted)]
+fn Hosted(processor: Processor) -> i32;
+[Native, CppName(vm_callback_callable_results::Remember)]
+fn Remember([attribute::NativeCallback("retained", "caller")] callback: Unary);
+[Native, CppName(vm_callback_callable_results::Run)]
+fn Run() -> i32;
+[Native, CppName(vm_callback_callable_results::Async)]
+fn Async([attribute::NativeCallback("retained", "any")] callback: Unary) -> i32;
+[Native, CppName(vm_callback_callable_results::Clear)]
+fn Clear();
+[Native, CppName(vm_callback_callable_results::Capture)]
+fn Capture([attribute::NativeCallback("retained", "caller")] callback: fn(ref i32) -> ref i32);
+[Native, CppName(vm_callback_callable_results::Capture)]
+fn CaptureAny([attribute::NativeCallback("retained", "any")] callback: fn(ref i32) -> ref i32);
+[Native, CppName(vm_callback_callable_results::Capture)]
+fn CaptureCall(callback: fn(ref i32) -> ref i32);
+[Native, CppName(vm_callback_callable_results::Print)]
+fn Print();
+[Native, CppName(vm_callback_callable_results::Constructed)]
+fn Constructed();
+[Native, CppName(vm_callback_callable_results::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_callback_callable_results::Balanced)]
+fn Balanced() -> bool;
+
+fn Identity<T>(value: ref T) -> ref T
+{
+    return value;
+}
+fn Observe<T>(value: view T) -> view T
+{
+    return value;
+}
+fn Add(value: ref i32) -> ref i32
+{
+    value += 2;
+    return value;
+}
+fn HostCapture()
+{
+    Capture(Add);
+}
+fn HostCaptureAny() { CaptureAny(Add); }
+fn HostCaptureCall() { CaptureCall(Add); }
+fn Escape(value: ref i32) -> ref i32
+{
+    let escaped: fn() -> i32 = () => deref value;
+    return value;
+}
+fn HostMake() -> Unary
+{
+    return Relay((value: i32) => value + 7);
+}
+fn HostClear()
+{
+    Clear();
+}
+async fn Delayed(callback: Unary, milliseconds: u64) -> i32
+{
+    await futures::Sleep(milliseconds);
+    return callback(11);
+}
+fn HostPending() -> coroutine<i32>
+{
+    let resource = Item(7);
+    return Delayed(Relay((value: i32) => value + resource.Read()), 1000);
+}
+fn HostReady() -> coroutine<i32>
+{
+    let resource = Item(7);
+    return Delayed(Relay((value: i32) => value + resource.Read()), 1);
+}
+fn HostBalanced() -> bool { return Balanced(); }
+fn ObserveInt(value: view i32) -> view i32 { return value; }
+fn ObserveString(value: view string) -> view string { return value; }
+fn StringCell(value: ref string) -> ref string { return value; }
+fn TextCell(value: ref text) -> ref text { return value; }
+fn PairCell(value: ref Pair) -> ref Pair { return value; }
+fn ArrayCell(value: ref i32[]) -> ref i32[] { return value; }
+fn MapCell(value: ref Dict<string, i32>) -> ref Dict<string, i32> { return value; }
+fn AnyCell(value: ref any) -> ref any { return value; }
+fn PointCell(value: ref Point) -> ref Point { return value; }
+fn ItemCell(value: ref Item) -> ref Item { return value; }
+fn NullableCell(value: ref Item?) -> ref Item? { return value; }
+fn UnaryCell(value: ref Unary) -> ref Unary { return value; }
+fn BorrowFactory() -> Unary
+{
+    mut value = 7;
+    let borrowed = ref value;
+    return (argument: i32) => deref borrowed + argument;
+}
+fn NestedBorrowFactory() -> Unary
+{
+    let inner = BorrowFactory();
+    return (argument: i32) => inner(argument);
+}
+fn LocalBorrow() -> i32
+{
+    mut value = 7;
+    let borrowed = ref value;
+    let callback: Unary = (argument: i32) => deref borrowed + argument;
+    return callback(11);
+}
+fn MutatingFactory() -> Unary
+{
+    mut inner: Unary = (value: i32) => value + 7;
+    return (argument: i32) => {
+        if (argument == 0)
+        {
+            mut value = 7;
+            let borrowed = ref value;
+            inner = (value: i32) => deref borrowed + value;
+            return 0;
+        }
+        return inner(argument);
+    };
+}
+fn CounterFactory() -> Unary
+{
+    mut count = 7;
+    return (argument: i32) => { count += argument; return count; };
+}
+fn Entry() -> i32
+{
+    for (mut round: i32 = 0; round < 30; round += 1)
+    {
+        if (Higher((callback: Unary) => callback(7)) != 9) { return 1; }
+        if (Factory((seed: i32) => (value: i32) => seed + value) != 18) { return 2; }
+        let created = Make(7);
+        if (created(11) != 18) { return 3; }
+        let forwarded = Relay((value: i32) => value + 7);
+        if (forwarded(11) != 18) { return 4; }
+        if (Maybe(false) != null) { return 5; }
+        let present = Maybe(true);
+        if (present != null)
+        {
+            if (present(11) != 18) { return 6; }
+        }
+        else { return 7; }
+        if (Hosted(Processor()) != 36) { return 8; }
+        if (Borrow<i32>(Add, 7) != 9) { return 9; }
+        if (MakeBorrow<i32>(Add, 7) != 9) { return 10; }
+        if (View<i32>(ObserveInt, 7) != 7) { return 11; }
+        if (Borrow<string>(StringCell, "a\0🌍") != "a\0🌍") { return 12; }
+        if (View<string>(ObserveString, "a\0🌍") != "a\0🌍") { return 13; }
+        if (Borrow<text>(TextCell, u"İ🌍") != u"İ🌍") { return 14; }
+        let pair = Borrow<Pair>(PairCell, [7, 11]);
+        if (pair[0] != 7 || pair[1] != 11) { return 15; }
+        let array = Borrow<i32[]>(ArrayCell, [7, 11]);
+        if (array[0] != 7 || array[1] != 11) { return 16; }
+        let map = Borrow<Dict<string, i32>>(MapCell, {"key": 7});
+        if (map["key"] != 7) { return 17; }
+        let box: any = 19;
+        if ((Borrow<any>(AnyCell, box) fit i32) != 19) { return 18; }
+        Remember((value: i32) => value + 7);
+        if (Run() != 18) { return 19; }
+        Clear();
+        if (Borrow<Point>(PointCell, Point(7)).x != 7) { return 20; }
+        if (Borrow<Item>(ItemCell, Item(7)).Read() != 7) { return 21; }
+        let nothing: Item? = null;
+        if (Borrow<Item?>(NullableCell, nothing) != null) { return 22; }
+        let some: Item? = Item(7);
+        let returned = Borrow<Item?>(NullableCell, some);
+        if (returned != null) { if (returned.Read() != 7) { return 23; } }
+        else { return 24; }
+        let borrowed = RelayBorrow(Add);
+        mut original = 7;
+        mut caller: ref i32 = borrowed(ref original);
+        caller = 13;
+        if (original != 13) { return 25; }
+        if (RejectCapture(Escape) != 0) { return 26; }
+        if (LifetimeProbes<i32>() != 0) { return 27; }
+        if (Async((value: i32) => value + 7) != 18) { return 28; }
+        let callable = BorrowCallable(UnaryCell, Make(7));
+        if (callable(11) != 18) { return 30; }
+        if (RejectBorrowFactory(BorrowFactory) != 0) { return 32; }
+        if (RejectBorrowFactory(NestedBorrowFactory) != 0) { return 33; }
+        if (LocalBorrow() != 18) { return 34; }
+        if (RejectMutatedFactory(MutatingFactory) != 0) { return 35; }
+        if (Counter(CounterFactory) != 18) { return 36; }
+    }
+    if (not Balanced()) { return 31; }
+    Print();
+    return 0;
+}

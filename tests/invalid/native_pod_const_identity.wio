@@ -1,0 +1,18 @@
+using cpp::header("vm_pod_template_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_pod_template::Buffer)]
+component Buffer<T, const N: usize> {
+    public values: [T; N];
+}
+
+[Native, CppName(vm_pod_template::Echo), instantiate(i32, 3)]
+fn Echo<T, const N: usize>(value: Buffer<T, N>) -> Buffer<T, N>;
+
+const OtherExtent: usize = 4;
+
+fn Entry() -> i32 {
+    // Integer-width normalization must not merge different evaluated values.
+    let invalid = Echo<i32, OtherExtent>(Buffer<i32, OtherExtent>([1, 2, 3, 4]));
+    return 0;
+}

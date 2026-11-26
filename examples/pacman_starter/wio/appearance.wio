@@ -1,0 +1,144 @@
+use raylib;
+
+realm pac {
+    // Design decisions live here; screen positions do not. Layout code consumes
+    // these sizes through local panels/flows instead of adding viewport offsets.
+    realm metrics {
+        const PagePadding: f32 = 28.0f32;
+        const HeaderHeight: f32 = 72.0f32;
+        const HeaderTitleHeight: f32 = 48.0f32;
+        const FooterHeight: f32 = 20.0f32;
+        const SectionGap: f32 = 16.0f32;
+        const ColumnGap: f32 = 32.0f32;
+        const ItemGap: f32 = 8.0f32;
+        const SmallGap: f32 = 4.0f32;
+        const PanelPadding: f32 = 18.0f32;
+        const RailMinimumWidth: f32 = 244.0f32;
+        const BoardFooterHeight: f32 = 28.0f32;
+        const BoardFramePadding: f32 = 9.0f32;
+        const ScorePanelHeight: f32 = 145.0f32;
+        const LegendPanelHeight: f32 = 168.0f32;
+        const InputPanelHeight: f32 = 144.0f32;
+        const ValueRowHeight: f32 = 26.0f32;
+        const LegendRowHeight: f32 = 23.0f32;
+        const LegendIconWidth: f32 = 22.0f32;
+        const LegendGhostRadius: f32 = 7.0f32;
+        const KeyWidth: f32 = 34.0f32;
+        const KeyHeight: f32 = 30.0f32;
+        const KeyGap: f32 = 4.0f32;
+        const LifeWidth: f32 = 20.0f32;
+        const LifeRadius: f32 = 9.0f32;
+        const MaximumLives: i32 = 8;
+        const FruitWidth: f32 = 24.0f32;
+        const FruitRadius: f32 = 9.0f32;
+        const ReadyWidth: f32 = 180.0f32;
+        const OverlayWidth: f32 = 320.0f32;
+        const OverlayHeight: f32 = 112.0f32;
+        const OverlayAnchorY: f32 = 0.565f32;
+        const PelletRadius: f32 = 0.095f32;
+        const PowerRadius: f32 = 0.23f32;
+        const PowerGlowRadius: f32 = 0.38f32;
+        const FruitTileRadius: f32 = 0.38f32;
+        const PlayerTileRadius: f32 = 0.43f32;
+        const GhostTileRadius: f32 = 0.41f32;
+        const GhostBobHeight: f32 = 0.045f32;
+        const GhostBobSpeed: f32 = 5.0f32;
+        const GhostBobPhase: f32 = 1.6f32;
+        const PowerPulseBase: f32 = 0.84f32;
+        const PowerPulseAmplitude: f32 = 0.16f32;
+        const PowerPulseSpeed: f32 = 5.0f32;
+        const WallGlowWidth: f32 = 5.0f32;
+        const WallLineWidth: f32 = 1.8f32;
+        const DoorLineWidth: f32 = 3.0f32;
+    }
+
+    realm fonts {
+        const Caption: i32 = 14;
+        const Body: i32 = 16;
+        const Value: i32 = 18;
+        const Ready: i32 = 24;
+        const Overlay: i32 = 28;
+        const Score: i32 = 34;
+        const Logo: i32 = 38;
+    }
+
+    realm colors {
+        fn Ink() -> rl::Color {
+            return rl::Rgb(235u8, 241u8, 255u8);
+        }
+
+        fn Muted() -> rl::Color {
+            return rl::Rgb(120u8, 139u8, 170u8);
+        }
+
+        fn Yellow() -> rl::Color {
+            return rl::Rgb(255u8, 218u8, 76u8);
+        }
+
+        fn Background() -> rl::Color {
+            return rl::Rgb(8u8, 12u8, 23u8);
+        }
+
+        fn Surface() -> rl::Color {
+            return rl::Rgb(14u8, 21u8, 37u8);
+        }
+
+        fn Border() -> rl::Color {
+            return rl::Rgb(36u8, 49u8, 74u8);
+        }
+
+        fn WallFill() -> rl::Color {
+            return rl::Rgb(13u8, 25u8, 54u8);
+        }
+
+        fn WallLine() -> rl::Color {
+            return rl::Rgb(68u8, 124u8, 255u8);
+        }
+
+        fn WallGlow() -> rl::Color {
+            return rl::Color(36u8, 96u8, 244u8, 32u8);
+        }
+
+        fn Pellet() -> rl::Color {
+            return rl::Rgb(244u8, 211u8, 169u8);
+        }
+
+        fn Power() -> rl::Color {
+            return rl::Rgb(255u8, 224u8, 177u8);
+        }
+
+        fn PowerGlow() -> rl::Color {
+            return rl::Color(255u8, 221u8, 158u8, 20u8);
+        }
+
+        fn Door() -> rl::Color {
+            return rl::Rgb(246u8, 162u8, 221u8);
+        }
+
+        fn Grid() -> rl::Color {
+            return rl::Color(134u8, 170u8, 222u8, 40u8);
+        }
+
+        fn Shade() -> rl::Color {
+            return rl::Color(8u8, 12u8, 23u8, 175u8);
+        }
+
+        fn Success() -> rl::Color {
+            return rl::Rgb(112u8, 228u8, 174u8);
+        }
+
+        fn Failure() -> rl::Color {
+            return rl::Rgb(255u8, 110u8, 128u8);
+        }
+
+        fn KeyFill() -> rl::Color {
+            return rl::Rgb(23u8, 34u8, 55u8);
+        }
+
+        fn KeyBorder() -> rl::Color {
+            return rl::Rgb(49u8, 66u8, 94u8);
+        }
+
+    }
+
+}

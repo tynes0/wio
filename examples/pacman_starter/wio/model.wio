@@ -1,0 +1,145 @@
+use raylib;
+
+realm pac {
+    enum Tile { wall, floor, pellet, power, door, outside };
+
+    enum Direction { right, down, left, up, none };
+
+    enum GhostMode { normal, frightened, eyes };
+
+    enum Phase { ready, playing, paused, won, gameOver };
+
+    component Point {
+        x: f32;
+        y: f32;
+    }
+
+    component Actor {
+        position: Point;
+        direction: Direction;
+        visible: bool;
+    }
+
+    component Ghost {
+        actor: Actor;
+        color: rl::Color;
+        mode: GhostMode;
+    }
+
+    component InputFrame {
+        up: bool;
+        down: bool;
+        left: bool;
+        right: bool;
+        actionPressed: bool;
+        pausePressed: bool;
+        resetPressed: bool;
+    }
+
+    // Positions use tile coordinates: (0, 0) is the CENTER of the top-left tile.
+    // Fractional coordinates are supported; interpolation belongs to your logic.
+    object GameState {
+        public columns: i32;
+        public rows: i32;
+        public tiles: Tile[];
+        public player: Actor;
+        public ghosts: Ghost[];
+        public score: i32;
+        public bestScore: i32;
+        public lives: i32;
+        public level: i32;
+        public phase: Phase;
+        public fruitVisible: bool;
+        public fruitPosition: Point;
+        public frightenedFlash: bool;
+
+        public fn OnConstruct() {
+            self.Reset();
+        }
+
+        public fn TileAt(x: i32, y: i32) -> Tile {
+            if (x < 0 or y < 0 or x >= self.columns or y >= self.rows) return Tile::outside;
+            return self.tiles[(y * self.columns + x) fit usize];
+        }
+
+        public fn SetTile(x: i32, y: i32, value: Tile) -> bool {
+            if (x < 0 or y < 0 or x >= self.columns or y >= self.rows) return false;
+            self.tiles[(y * self.columns + x) fit usize] = value;
+            return true;
+        }
+
+        // This is a scene reset, not a game simulation. No movement/AI/collision
+        // or scoring is implemented anywhere in this starter.
+        public fn Reset() {
+            let layout: string[] = [
+                "############################",
+                "#............##............#",
+                "#.####.#####.##.#####.####.#",
+                "#o####.#####.##.#####.####o#",
+                "#.####.#####.##.#####.####.#",
+                "#..........................#",
+                "#.####.##.########.##.####.#",
+                "#.####.##.########.##.####.#",
+                "#......##....##....##......#",
+                "######.#####_##_#####.######",
+                "     #.#####_##_#####.#     ",
+                "     #.##__________##.#     ",
+                "     #.##_###--###_##.#     ",
+                "######.##_#______#_##.######",
+                "______.___#______#___.______",
+                "######.##_#______#_##.######",
+                "     #.##_########_##.#     ",
+                "     #.##__________##.#     ",
+                "     #.##_########_##.#     ",
+                "######.##_########_##.######",
+                "#............##............#",
+                "#.####.#####.##.#####.####.#",
+                "#.####.#####.##.#####.####.#",
+                "#o..##.......__.......##..o#",
+                "###.##.##.########.##.##.###",
+                "###.##.##.########.##.##.###",
+                "#......##....##....##......#",
+                "#.##########.##.##########.#",
+                "#.##########.##.##########.#",
+                "#..........................#",
+                "############################"
+            ];
+            self.columns = 28;
+            self.rows = layout.Count() fit i32;
+            self.tiles = [];
+            self.tiles.Reserve((self.columns * self.rows) fit usize);
+            for (row in layout) {
+                if (row.Count() != (self.columns fit usize)) std::Panic("Maze row must contain 28 cells.");
+                for (x in 0usize..<row.Count()) {
+                    let symbol = row[x];
+                    mut tile = Tile::floor;
+                    if (symbol == '#') tile = Tile::wall;
+                    if (symbol == '.') tile = Tile::pellet;
+                    if (symbol == 'o') tile = Tile::power;
+                    if (symbol == '-') tile = Tile::door;
+                    if (symbol == ' ') tile = Tile::outside;
+                    self.tiles.Push(tile);
+                }
+
+            }
+
+            self.player = Actor(Point(13.5f32, 23.0f32), Direction::right, true);
+            self.ghosts = [
+                Ghost(Actor(Point(13.5f32, 11.0f32), Direction::left, true), rl::Rgb(255u8, 89u8, 107u8), GhostMode::normal),
+                Ghost(Actor(Point(11.5f32, 14.0f32), Direction::up, true), rl::Rgb(255u8, 171u8, 218u8), GhostMode::normal),
+                Ghost(Actor(Point(13.5f32, 14.0f32), Direction::right, true), rl::Rgb(100u8, 226u8, 237u8), GhostMode::normal),
+                Ghost(Actor(Point(15.5f32, 14.0f32), Direction::down, true), rl::Rgb(255u8, 180u8, 92u8), GhostMode::normal)
+            ];
+            self.score = 0;
+            self.bestScore = 10000;
+            self.lives = 3;
+            self.level = 1;
+            self.phase = Phase::ready;
+            self.fruitVisible = true;
+            self.fruitPosition = Point(13.5f32, 17.0f32);
+            self.frightenedFlash = false;
+        }
+
+    }
+
+}

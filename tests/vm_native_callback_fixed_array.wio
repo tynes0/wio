@@ -1,0 +1,328 @@
+using cpp::header("vm_callback_fixed_array_fixture.h");
+use std::attribute as attribute;
+
+type Matrix = [[i32; 2]; 2];
+type DynamicPair = [i32[]; 2];
+type Triple = [i32; 3];
+type Empty = [i32; 0];
+type Flags = [bool; 2];
+type Strings = [string; 2];
+type Texts = [text; 2];
+type EmptyTexts = [text; 0];
+
+[Native, CppName(vm_callback_fixed_array::Point)]
+component Point
+{
+    public x: i32;
+}
+[Native, CppName(vm_callback_fixed_array::Bundle)]
+component Bundle
+{
+    public values: Triple;
+    public matrix: Matrix;
+    public flags: Flags;
+    public empty: Empty;
+}
+interface IRead
+{
+    fn Read() -> i32;
+}
+[From(IRead)]
+object Item
+{
+    value: i32;
+    public OnConstruct(value: i32)
+    {
+        self.value = value;
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+}
+object Processor
+{
+    public fn Apply(callback: fn(view Triple, ref Triple) -> Triple) -> i32
+    {
+        mut values: Triple = [7, 11, 13];
+        let result = callback(ref values, ref values);
+        if (result[0] != values[0])
+        {
+            return -1;
+        }
+        return values[0];
+    }
+}
+type Points = [Point; 2];
+type NullableItems = [Item?; 2];
+type Items = [Item; 2];
+type Interfaces = [IRead; 2];
+
+[Native, CppName(vm_callback_fixed_array::Constructed)]
+fn Constructed();
+[Native, CppName(vm_callback_fixed_array::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_callback_fixed_array::Balanced)]
+fn Balanced() -> bool;
+[Native, CppName(vm_callback_fixed_array::Defaults)]
+fn Defaults() -> i32;
+[Native, CppName(vm_callback_fixed_array::Print)]
+fn Print();
+[Native, CppName(vm_callback_fixed_array::Echo),
+ Instantiate(Triple), Instantiate(Matrix), Instantiate(Empty)]
+fn Echo<T>(value: T) -> T;
+[Native, CppName(vm_callback_fixed_array::Call),
+ Instantiate(Triple), Instantiate(Flags), Instantiate(Strings),
+ Instantiate(Texts), Instantiate(EmptyTexts), Instantiate(Points),
+ Instantiate(Matrix), Instantiate(Items), Instantiate(NullableItems),
+ Instantiate(Interfaces), Instantiate(Dict<string, Triple>),
+ Instantiate(Triple[]), Instantiate(DynamicPair), Instantiate(any)]
+fn Call<T>(callback: fn(T) -> T, initial: T) -> T;
+[Native, CppName(vm_callback_fixed_array::Borrow),
+ Instantiate(Triple), Instantiate(Flags), Instantiate(Strings),
+ Instantiate(Texts), Instantiate(EmptyTexts), Instantiate(Points),
+ Instantiate(Matrix), Instantiate(Items), Instantiate(NullableItems),
+ Instantiate(Interfaces), Instantiate(Dict<string, Triple>), Instantiate(any)]
+fn Borrow<T>(callback: fn(view T, ref T) -> T, initial: T) -> T;
+[Native, CppName(vm_callback_fixed_array::Modify), Instantiate(Triple)]
+fn Modify<T>(value: ref T);
+[Native, CppName(vm_callback_fixed_array::SetBool)]
+fn SetBool(value: ref bool);
+[Native, CppName(vm_callback_fixed_array::Alias)]
+fn Alias(first: ref i32, values: ref Triple) -> bool;
+[Native, CppName(vm_callback_fixed_array::PodEcho)]
+fn PodEcho(value: Bundle) -> Bundle;
+[Native, CppName(vm_callback_fixed_array::Hidden)]
+fn Hidden(value: Bundle) -> i32;
+[Native, CppName(vm_callback_fixed_array::Hosted)]
+fn Hosted(value: Processor) -> i32;
+[Native, CppName(vm_callback_fixed_array::Probe), Instantiate(Triple), Instantiate(Empty)]
+fn Probe<T>(value: T) -> i32;
+[Native, CppName(vm_callback_fixed_array::Capture)]
+fn Capture([attribute::NativeCallback("retained", "caller")]
+           callback: fn(view Triple, ref Triple) -> Triple, initial: Triple);
+
+fn Change(readonly: view Triple, writable: ref Triple) -> Triple
+{
+    writable = [readonly[0] + 2, 23, 29];
+    return readonly;
+}
+fn HostCapture()
+{
+    Capture(Change, [7, 11, 13]);
+}
+fn HostProcessor() -> Processor
+{
+    return Processor();
+}
+fn HostEcho(value: Triple) -> Triple
+{
+    return Echo<Triple>(value);
+}
+fn Round() -> i32
+{
+    let scalar = Call<Triple>((values) => [values[0] + 2, values[1], 29], [7, 11, 13]);
+    if (scalar[0] != 9 or scalar[2] != 29)
+    {
+        return 1;
+    }
+    let borrowed = Borrow<Triple>(Change, [7, 11, 13]);
+    if (borrowed[0] != 9 or borrowed[1] != 23 or borrowed[2] != 29)
+    {
+        return 2;
+    }
+    let flags = Borrow<Flags>((readonly, writable) =>
+    {
+        writable = [!readonly[0], readonly[1]];
+        return readonly;
+    }, [false, true]);
+    if (!flags[0] or !flags[1])
+    {
+        return 3;
+    }
+    mut addressable: Flags = [false, true];
+    SetBool(ref addressable[0]);
+    if (!addressable[0])
+    {
+        return 4;
+    }
+    let strings = Borrow<Strings>((readonly, writable) =>
+    {
+        writable = [readonly[0] + "!", "changed\0🌍"];
+        return readonly;
+    }, ["start", "old"]);
+    if (strings[0] != "start!" or strings[1] != "changed\0🌍")
+    {
+        return 5;
+    }
+    let texts = Borrow<Texts>((readonly, writable) =>
+    {
+        writable = [u"new🌍", readonly[1]];
+        return readonly;
+    }, [u"old", u"你好"]);
+    if (texts[0] != u"new🌍" or texts[1] != u"你好")
+    {
+        return 6;
+    }
+    let empty = Borrow<EmptyTexts>((readonly, writable) =>
+    {
+        writable = [];
+        return readonly;
+    }, []);
+    if (empty.Count() != 0usize or Echo<Empty>([]).Count() != 0usize)
+    {
+        return 7;
+    }
+    let initialPoints: Points = [Point(7), Point(11)];
+    let defaultsBefore = Defaults();
+    let unchangedPoints = Call<Points>((values) => values, initialPoints);
+    if (Defaults() != defaultsBefore or unchangedPoints[0].x != 7)
+    {
+        return 22;
+    }
+    let points = Borrow<Points>((readonly, writable) =>
+    {
+        writable = [Point(readonly[0].x + 2), Point(29)];
+        return readonly;
+    }, initialPoints);
+    if (points[0].x != 9 or points[1].x != 29)
+    {
+        return 8;
+    }
+    let matrix = Borrow<Matrix>((readonly, writable) =>
+    {
+        writable = [[readonly[0][0] + 2, 23], [29, 31]];
+        return readonly;
+    }, [[7, 11], [13, 17]]);
+    if (matrix[0][0] != 9 or matrix[1][1] != 31)
+    {
+        return 9;
+    }
+    let objects = Borrow<Items>((readonly, writable) =>
+    {
+        writable = [Item(readonly[0].Read() + 2), Item(29)];
+        return readonly;
+    }, [Item(7), Item(11)]);
+    if (objects[0].Read() != 9 or objects[1].Read() != 29)
+    {
+        return 10;
+    }
+    let nullable: NullableItems = [Item(7), null];
+    let optionals = Borrow<NullableItems>((readonly: view NullableItems, writable: ref NullableItems) =>
+    {
+        let current: Item? = readonly[0];
+        if (current == null)
+        {
+            return readonly;
+        }
+        let present: NullableItems = [null, Item(current.Read() + 2)];
+        writable = present;
+        return readonly;
+    }, nullable);
+    let optional = optionals[1];
+    if (optionals[0] != null)
+    {
+        return 11;
+    }
+    if (optional != null)
+    {
+        if (optional.Read() != 9)
+        {
+            return 11;
+        }
+    }
+    else
+    {
+        return 11;
+    }
+    let interfaces: Interfaces = [Item(7) fit IRead, Item(11) fit IRead];
+    let polymorphic = Call<Interfaces>((values) => [values[1], values[0]], interfaces);
+    if (polymorphic[0].Read() != 11 or polymorphic[1].Read() != 7)
+    {
+        return 12;
+    }
+    let maps: Dict<string, Triple> = {"key": [7, 11, 13]};
+    let mapped = Borrow<Dict<string, Triple>>((readonly, writable) =>
+    {
+        writable = {"key": [9, 23, 29]};
+        return readonly;
+    }, maps);
+    if (mapped["key"][0] != 9)
+    {
+        return 13;
+    }
+    let outer: Triple[] = [[7, 11, 13], [17, 19, 23]];
+    let vectors = Call<Triple[]>((values) => [values[1], values[0]], outer);
+    if (vectors[0][0] != 17)
+    {
+        return 14;
+    }
+    let dynamic: DynamicPair = [[7], [11, 13]];
+    let swapped = Call<DynamicPair>((values) => [values[1], values[0]], dynamic);
+    if (swapped[0].Count() != 2usize or swapped[1][0] != 7)
+    {
+        return 15;
+    }
+    let boxed: any = scalar;
+    let box = Borrow<any>((readonly, writable) =>
+    {
+        let values = (deref readonly) fit Triple;
+        let replacement: Triple = [values[0] + 2, 23, 29];
+        writable = replacement;
+        return readonly;
+    }, boxed);
+    if ((box fit Triple)[0] != 11)
+    {
+        return 16;
+    }
+    let preserved = PodEcho(Bundle([7, 11, 13], [[1, 2], [3, 4]], [false, true], []));
+    if (preserved.values[0] != 7 or preserved.matrix[1][1] != 4 or
+        !preserved.flags[1] or preserved.empty.Count() != 0usize or Hidden(preserved) != 83)
+    {
+        return 17;
+    }
+    mut standalone = Echo<Triple>(preserved.values);
+    Modify<Triple>(ref standalone);
+    if (standalone[0] != 9 or preserved.values[0] != 7)
+    {
+        return 18;
+    }
+    let stable: view i32 = ref standalone[0];
+    if (!Alias(ref standalone[0], ref standalone) or deref stable != 11)
+    {
+        return 21;
+    }
+    if (Hosted(Processor()) != 0)
+    {
+        return 19;
+    }
+    if (Probe<Triple>(standalone) != 0 or Probe<Empty>([]) != 0)
+    {
+        return 20;
+    }
+    return 0;
+}
+fn Entry() -> i32
+{
+    mut round = 0;
+    while (round < 30)
+    {
+        let result = Round();
+        if (result != 0)
+        {
+            return result;
+        }
+        if (!Balanced())
+        {
+            return 90;
+        }
+        round += 1;
+    }
+    Print();
+    return 0;
+}

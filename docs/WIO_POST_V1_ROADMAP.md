@@ -91,6 +91,28 @@ The existing `wio-web` repository remains the documentation frontend. Work in
 this track is site version selection, search, package metadata, API docs,
 migration views, and release compatibility tables—not recreating the site.
 
+### Wio.NET: ordinary .NET hosting (idea recorded 2026-10-18)
+
+Build a maintained C# library, potentially distributed as a NuGet package, for
+loading Wio modules and calling their exports from ordinary .NET applications.
+This is future ecosystem work, not a new v1 blocker or current backend/N03/N04
+sprint requirement. No implementation or release date is scheduled.
+
+- Use `LibraryImport`/P/Invoke or `NativeLibrary` over a small C ABI adapter to
+  the existing Wio SDK/module contract; do not require Mono `InternalCall` or a
+  modified CLR. Reuse the version/capability negotiation, not a competing ABI.
+- Start with native Wio modules. Consider a VM-host adapter behind the same
+  managed API later, advertising only qualified backend capabilities.
+- Provide explicit UTF-8 string/buffer marshaling, opaque object handles and
+  `SafeHandle`/`IDisposable` ownership with balanced Wio retain/release. Never
+  assume that .NET GC objects and Wio objects share a layout or lifetime.
+- Contain native exceptions at the adapter boundary and define managed error,
+  callback/thread-entry and module-unload rules. Extend to async/cancellation
+  only with explicit cross-runtime lifetime contracts.
+- Before scheduling, define supported .NET versions/platforms, package/native
+  asset deployment, compatibility policy, examples and native/VM conformance
+  tests. This is a proposed library, not an already available C# binding.
+
 ---
 
 ## 5. v2 Language Research

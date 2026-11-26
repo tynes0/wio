@@ -1,0 +1,7 @@
+use std::attribute as attribute;
+component Data { public value: i32; }
+extension DataBorrow for Data {
+    [Native]
+    public view fn Borrow(value: ref i32) -> ref i32;
+}
+fn Entry() -> i32 { return 0; }

@@ -1,0 +1,36 @@
+use std::async as futures;
+using cpp::header("vm_native_task_inputs_fixture.h");
+[Native, CppName(vm_task_inputs::Print)] fn Print(message: string);
+
+async fn Number(value: i32, milliseconds: u64) -> i32 {
+    await futures::Sleep(milliseconds);
+    return value;
+}
+async fn Broken() -> i32 {
+    let empty: i32[] = [];
+    return empty[0];
+}
+
+async fn Entry() -> i32 {
+    let pending = Number(7, 60000);
+    if (not futures::Poll<i32>(pending).IsPending()) { return 1; }
+    futures::Cancel<i32>(pending);
+    if (not futures::Poll<i32>(pending).IsCancelled()) { return 2; }
+    let complete = Number(11, 0);
+    if (not futures::Poll<i32>(complete).IsReady()) { return 3; }
+    let broken = Broken();
+    if (not futures::Poll<i32>(broken).IsFailed()) { return 4; }
+    let selected = await futures::Select<i32>([Number(17, 0), Number(19, 50)]);
+    if (selected.Index() != 0usize or selected.Value() != 17) { return 5; }
+    let present = await futures::TimeoutOption<i32>(Number(23, 0), 500);
+    if (not present.IsSome()) { return 6; }
+    let absent = await futures::TimeoutOption<i32>(Number(29, 60000), 1);
+    if (not absent.IsNone()) { return 7; }
+    if (not await futures::TimeoutCompleted(futures::Sleep(1), 500)) { return 8; }
+    if (await futures::TimeoutCompleted(futures::Sleep(60000), 1)) { return 9; }
+    if (not futures::Poll(futures::Sleep(0)).IsReady()) { return 10; }
+    if (await futures::Run<i32>(() => 31) != 31) { return 11; }
+    if (await futures::RunBlocking<i32>(() => 37) != 37) { return 12; }
+    Print("std-async-task-inputs-ok");
+    return 0;
+}

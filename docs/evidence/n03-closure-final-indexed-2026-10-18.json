@@ -1,0 +1,57 @@
+{
+  "passed": true,
+  "processes": [
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "F:\\Projects\\wio\\tests\\performance\\indexed_format\\contract.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n03-indexed-format-contract\\a20a41d504884b7c9c40c71ae0aa014e\\contract.exe"
+      ],
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-indexed-format-contract\\a20a41d504884b7c9c40c71ae0aa014e\\contract.exe"
+      ],
+      "exitCode": 0,
+      "stdout": "indexed-format-contract-ok\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "F:\\Projects\\wio\\tests\\performance\\indexed_format\\contract.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n03-indexed-format-contract\\a20a41d504884b7c9c40c71ae0aa014e\\contract.exe"
+      ],
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-indexed-format-contract\\a20a41d504884b7c9c40c71ae0aa014e\\contract.exe"
+      ],
+      "exitCode": 0,
+      "stdout": "indexed-format-contract-ok\n",
+      "stderr": ""
+    }
+  ]
+}

@@ -16,6 +16,7 @@
 #include "wio/common/exception.h"
 #include "wio/common/logger.h"
 #include "wio/common/operator_overload.h"
+#include "wio/common/profiling.h"
 #include "wio/common/utility.h"
 #include "wio/sema/intrinsic_member_resolver.h"
 #include "wio/sema/constant_evaluator.h"

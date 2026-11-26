@@ -1,6 +1,17 @@
 set(WIO_RUNTIME_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(WIO_RUNTIME_HEADERS
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_benchmark.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/benchmark_memory.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/wio_benchmark_allocations.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/float_parse.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/wir_task_abi.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/wir_inline_place.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/integer_format.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/stream_format.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/formatted_size.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/floating_format.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/value_format.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/constant_value.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/entry_args.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -10,6 +21,7 @@ set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/ref.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/io_errors.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_assert.h"
+    "${WIO_RUNTIME_INCLUDE_DIR}/std_builders.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_async.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_async_fs.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/std_async_net.h"
@@ -73,10 +85,20 @@ set(WIO_BACKEND_RUNTIME_OBJ_UTF8PROC "${WIO_BACKEND_RUNTIME_DIR}/utf8proc.o")
 
 file(MAKE_DIRECTORY "${WIO_BACKEND_RUNTIME_DIR}")
 
-set(WIO_BACKEND_RUNTIME_COMPILE_ARGS -std=c++20)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/WioBackendRuntimeProfile.cmake")
+# The backend archive is shared by all host configurations in this build tree.
+# Select its own profile explicitly rather than letting the last host config win.
+set(WIO_BACKEND_RUNTIME_PROFILE "Release" CACHE STRING "Build profile of the generated-program runtime archive, independent of the host configuration")
+set_property(CACHE WIO_BACKEND_RUNTIME_PROFILE PROPERTY STRINGS Release Debug RelWithDebInfo MinSizeRel)
+wio_backend_runtime_profile_flags("${WIO_BACKEND_RUNTIME_PROFILE}" WIO_BACKEND_RUNTIME_PROFILE_ARGS)
 if(NOT WIN32)
-    list(APPEND WIO_BACKEND_RUNTIME_COMPILE_ARGS -fPIC)
+    list(APPEND WIO_BACKEND_RUNTIME_PROFILE_ARGS -fPIC)
 endif()
+set(WIO_BACKEND_RUNTIME_PROFILE_FILE "${WIO_BACKEND_RUNTIME_DIR}/build-profile.txt")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/backend-runtime-profile.txt.in"
+    "${WIO_BACKEND_RUNTIME_PROFILE_FILE}" @ONLY)
+set(WIO_BACKEND_RUNTIME_COMPILE_ARGS -std=c++20 ${WIO_BACKEND_RUNTIME_PROFILE_ARGS})
+message(STATUS "Backend runtime profile: ${WIO_BACKEND_RUNTIME_PROFILE} (${WIO_BACKEND_RUNTIME_PROFILE_ARGS})")
 
 add_library(wio_runtime_headers INTERFACE)
 target_include_directories(wio_runtime_headers INTERFACE "${WIO_RUNTIME_INCLUDE_DIR}")
@@ -104,6 +126,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/entry_args.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_ENTRY_ARGS}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/entry_args.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/entry_args.h"
     VERBATIM
@@ -119,6 +142,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_hash.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_HASH}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_hash.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_hash.h"
     VERBATIM
@@ -135,6 +159,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_assert.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_ASSERT}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_assert.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_assert.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -152,6 +177,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_console.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_CONSOLE}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_console.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/detail/io_detail/io_helpers.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_console.h"
@@ -168,8 +194,10 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_convert.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_CONVERT}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_convert.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_convert.h"
+        "${WIO_RUNTIME_INCLUDE_DIR}/float_parse.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
     VERBATIM
 )
@@ -185,6 +213,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_fs.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_FS}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_fs.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_fs.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -202,6 +231,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_math.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_MATH}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_math.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_math.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -218,6 +248,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_net.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_NET}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_net.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_net.h"
     VERBATIM
@@ -234,6 +265,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_io.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_IO}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_io.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_io.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -252,6 +284,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_process.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_PROCESS}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_process.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_process.h"
         "${WIO_RUNTIME_INCLUDE_DIR}/exception.h"
@@ -268,6 +301,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_random.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_RANDOM}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_random.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_random.h"
     VERBATIM
@@ -283,6 +317,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_regex.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_REGEX}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_regex.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_regex.h"
     VERBATIM
@@ -298,6 +333,7 @@ add_custom_command(
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/std_time.cpp"
         -o "${WIO_BACKEND_RUNTIME_OBJ_STD_TIME}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/std_time.cpp"
         "${WIO_RUNTIME_INCLUDE_DIR}/std_time.h"
     VERBATIM
@@ -310,12 +346,14 @@ add_custom_command(
         ${WIO_BACKEND_CXX_COMPILER}
         -x c
         -std=c99
+        ${WIO_BACKEND_RUNTIME_PROFILE_ARGS}
         -DUTF8PROC_STATIC
         -I "${WIO_RUNTIME_INCLUDE_DIR}"
         -I "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc"
         -c "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc/utf8proc.c"
         -o "${WIO_BACKEND_RUNTIME_OBJ_UTF8PROC}"
     DEPENDS
+        "${WIO_BACKEND_RUNTIME_PROFILE_FILE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc/utf8proc.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/utf8proc/utf8proc_data.c"
         "${WIO_RUNTIME_INCLUDE_DIR}/utf8proc.h"
@@ -379,8 +417,17 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/utf8proc/LICENSE.md"
 install(FILES "${WIO_BACKEND_RUNTIME_LIB}"
     DESTINATION runtime/lib
 )
+install(FILES "${WIO_BACKEND_RUNTIME_PROFILE_FILE}" DESTINATION runtime/lib)
 
 if(BUILD_TESTING)
+    add_executable(wio_runtime_unicode_grapheme_test
+        "${CMAKE_SOURCE_DIR}/tests/runtime_unicode_grapheme_test.cpp"
+    )
+    target_include_directories(wio_runtime_unicode_grapheme_test PRIVATE
+        "${WIO_RUNTIME_INCLUDE_DIR}"
+    )
+    add_test(NAME wio_runtime_unicode_grapheme COMMAND wio_runtime_unicode_grapheme_test)
+
     add_executable(wio_async_runtime_stress
         "${CMAKE_SOURCE_DIR}/tests/async_runtime_stress.cpp"
     )
@@ -391,6 +438,7 @@ if(BUILD_TESTING)
         target_link_libraries(wio_async_runtime_stress PRIVATE pthread)
     endif()
     add_test(NAME wio_async_runtime_stress COMMAND wio_async_runtime_stress)
+    set_property(TEST wio_async_runtime_stress APPEND PROPERTY LABELS freeze)
     set_tests_properties(wio_async_runtime_stress PROPERTIES
         TIMEOUT 30
         LABELS "async;runtime;freeze"
@@ -406,6 +454,7 @@ if(BUILD_TESTING)
         target_link_libraries(wio_async_main_runtime_stress PRIVATE pthread)
     endif()
     add_test(NAME wio_async_main_runtime_stress COMMAND wio_async_main_runtime_stress)
+    set_property(TEST wio_async_main_runtime_stress APPEND PROPERTY LABELS freeze)
     set_tests_properties(wio_async_main_runtime_stress PROPERTIES
         TIMEOUT 30
         LABELS "async;runtime;main;freeze"
@@ -424,7 +473,7 @@ if(BUILD_TESTING)
     add_test(NAME wio_async_scheduler_config COMMAND wio_async_scheduler_config_test)
     set_tests_properties(wio_async_scheduler_config PROPERTIES
         TIMEOUT 15
-        LABELS "async;runtime;configuration"
+        LABELS "async;runtime;configuration;freeze"
     )
 
     add_executable(wio_async_scope_runtime_stress
@@ -439,7 +488,7 @@ if(BUILD_TESTING)
     add_test(NAME wio_async_scope_runtime_stress COMMAND wio_async_scope_runtime_stress)
     set_tests_properties(wio_async_scope_runtime_stress PROPERTIES
         TIMEOUT 30
-        LABELS "async;runtime;structure"
+        LABELS "async;runtime;structure;freeze"
     )
 
     add_executable(wio_process_runtime_stress
@@ -454,4 +503,10 @@ if(BUILD_TESTING)
         TIMEOUT 30
         LABELS "async;process;runtime;ownership"
     )
+    add_executable(wio_process_utf8_project_test "${CMAKE_SOURCE_DIR}/tests/process_utf8_project_test.cpp")
+    target_link_libraries(wio_process_utf8_project_test PRIVATE wio_runtime_host)
+    add_test(NAME wio_process_utf8_project COMMAND wio_process_utf8_project_test "${CMAKE_BINARY_DIR}/process-utf8-project")
+    set_tests_properties(wio_process_utf8_project PROPERTIES
+        TIMEOUT 30 LABELS "process;runtime;unicode;project;release-gate"
+        ENVIRONMENT "WIO_UTF8_ARG=must-not-expand")
 endif()

@@ -1,0 +1,10 @@
+use std::io as io;
+
+fn Entry() -> i32
+{
+    // The named constant is initialized from other globals and flagset ORs.
+    // A valid native OpenRaw call uses this same expected mode value.
+    let expected = io::OpenMode::read | io::OpenMode::share_read |
+        io::OpenMode::sequential | io::OpenMode::binary;
+    return io::OpenReadBinary == expected ? 0 : 17;
+}

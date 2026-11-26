@@ -1,0 +1,14 @@
+use std::console as console;
+
+realm native {
+    using cpp::header("playground_native.h");
+
+    fn InitialValue() -> i32
+        with native, cpp::name(wio_playground::InitialValue);
+}
+
+fn Entry() -> i32 {
+    console::PrintLine("Wio native playground is ready.");
+    console::PrintLine!(native::InitialValue());
+    return 0;
+}

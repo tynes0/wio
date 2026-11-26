@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-18",
+  "sourceRevisionAfter": "29fabf16e3fdf0252b12d843caff4577d186b365",
+  "qualification": {
+    "indexedAfterSamples": 84,
+    "podAfterSamples": 84,
+    "outputsCorrect": true,
+    "timingQualified": false,
+    "affinityQualified": true,
+    "artifactsUnchanged": true,
+    "powerProfileUnchanged": true,
+    "acceptedSpeedup": false,
+    "notes": [
+      "Serial preparation, correctness and timing; no retries, trimmed samples or system power/priority changes.",
+      "Before POD VM has WVM1062, not a valid timing denominator.",
+      "Indexed before is an interim dirty compiler recorded at c70c58c, before numeric scratch/final codegen changes; not a pristine c70 compiler rebuild.",
+      "Frozen workload source hashes agree between each before/after pair; current repository reference whitespace may differ.",
+      "Build command and controller reports carry remaining before identities and complete environment snapshots."
+    ]
+  },
+  "afterTools": [
+    {
+      "path": "build/app/Debug/wio.exe",
+      "sha256": "7688dd04cb64a36f1078b81cf5abf7be1e1e8ff06e361763baab56d8f064f3e0"
+    },
+    {
+      "path": "build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "path": "build/runtime/backend/libwio_runtime.a",
+      "sha256": "180943c29108278cec17ffbb8648e3e2c237a3829a2fa4d17c86bbc7f0fb7660"
+    },
+    {
+      "path": "build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    }
+  ],
+  "indexed": {
+    "beforeDirectory": "build/n03-indexed-before-2026-10-18",
+    "afterDirectory": "build/n03-closure-indexed-after-2026-10-18",
+    "sharedSources": [
+      { "name": "main.wio", "bytes": 1755, "sha256": "f22795f94b8bf3640e2306977662d7c285be433952c181c411956a48166712b6" },
+      { "name": "main.cpp", "bytes": 1955, "sha256": "f1ed92d2a6785bb8d619408940f2c3d6bfe39c17ce2b04126eede1a0065cccf8" },
+      { "name": "probe.h", "bytes": 411, "sha256": "81504592d9fa54f814165bf3239122d725a1eba6a4def7aa59aebb5a1af17bbf" },
+      { "name": "Program.cs", "bytes": 1891, "sha256": "7d0f1d9ebb2e03a89e537155c82258777368311758dd4f3c613461126ee316ff" },
+      { "name": "IndexedFormat.csproj", "bytes": 287, "sha256": "fdd98649b595a297c837571846d0134a6bacb655a6ade261b8153b091a72ee81" }
+    ],
+    "artifacts": [
+      {
+        "name": "native.exe",
+        "beforeBytes": 6383973,
+        "afterBytes": 6386609,
+        "beforeSha256": "479332ae9af4242aa29d964cfed7998dc0e73c3b9b0ae4c3693d499b4a5f9b35",
+        "afterSha256": "cf368a8b7b4a93c2e36b625fa300051cae8622f2a0f5edabdfeeb94661a8a8be"
+      },
+      {
+        "name": "memory.exe",
+        "beforeBytes": 9545646,
+        "afterBytes": 9546710,
+        "beforeSha256": "e74eb6603ebd9bd0f49b30c51abfcafff8d95692ab05d9450cfa268d44a5b361",
+        "afterSha256": "2abb553072481982cd3e32d08859fe27cc789d8578fbb42ff043d350317797fa"
+      },
+      {
+        "name": "frozen.cpp",
+        "beforeBytes": 3258789,
+        "afterBytes": 3259018,
+        "beforeSha256": "ba020a989bca4d9acfc060b060e7a4cb0a00699e9ca3c24119ffd39a46620e91",
+        "afterSha256": "ff935123934c7120b09ad6e18f3771e67cc96706d81db817e2f87e1afa567f48"
+      },
+      {
+        "name": "main.wiob",
+        "beforeBytes": 2515227,
+        "afterBytes": 2515234,
+        "beforeSha256": "0bad1f7005c8f9fe63c5d156ad2b7e6f5bffd7abc20ab4449d41cfa141e374ea",
+        "afterSha256": "daaaea952e9fea39f21ee0d8f12954a2e7638aecaa9d65a660202233cb05f6d6"
+      },
+      {
+        "name": "bridge.dll",
+        "beforeBytes": 5424244,
+        "afterBytes": 5425300,
+        "beforeSha256": "fd386d2dc187ce35380449b9792f1297515c7c6d0cced16d97734e7762f67cf3",
+        "afterSha256": "b65dcd5e0631d447cebdb230fdccf44467c454a8263445807031422680434601"
+      }
+    ]
+  },
+  "nativePod": {
+    "beforeDirectory": "build/n03-generated-stream-bounded-2026-10-18",
+    "afterDirectory": "build/n03-closure-pod-after-2026-10-18",
+    "sharedSources": [
+      { "name": "main.wio", "bytes": 1868, "sha256": "1b4632514920dc2eb2f4ce70d575f80a0dc29593b3b45ddb3ac8c535bc2aa12e" },
+      { "name": "main.cpp", "bytes": 1389, "sha256": "0652acb00ba4251b8cc90d7013c674362ac79b6d7818137f93394fdb1791abf7" },
+      { "name": "probe.h", "bytes": 1995, "sha256": "8e9577933059aed24395c3c5b5c415017f1d288de878d74be26383d9cadf7f81" },
+      { "name": "Program.cs", "bytes": 2735, "sha256": "c2b1ded70dc63a4180aa9a5c55e0f8bf4c98483b80f11985a6ce7776a0838e3a" },
+      { "name": "GeneratedStream.csproj", "bytes": 321, "sha256": "f65efcb0f9104fcbfe4f39bef63bca6ef067accbb2861ec0fc71dd76486330fc" }
+    ],
+    "artifacts": [
+      {
+        "name": "native.exe",
+        "beforeBytes": 6397400,
+        "afterBytes": 6403203,
+        "beforeSha256": "26501181d46f5dbd6c8b2e6a5558478fd4369c8081e50cfed0d50f160427e1be",
+        "afterSha256": "c833c60cd8fd55f38cf4f2ecf7d40e120eafe25750f8732d6618200f144fd405"
+      },
+      {
+        "name": "memory.exe",
+        "beforeBytes": 9531152,
+        "afterBytes": 9535383,
+        "beforeSha256": "c628ca612c5da203da824b4e56cc473b7cc975a2daca0a7db63b8336b0c82ae4",
+        "afterSha256": "b9d4151289cb5347fb09ac187e2bbec5901366733f8570ee5688282279c7c7ef"
+      },
+      {
+        "name": "frozen.cpp",
+        "beforeBytes": 3263276,
+        "afterBytes": 3266468,
+        "beforeSha256": "389bdc880212ae8a9bb2fdb45723af429dd5f8c892280358e7f363f1d9ab4196",
+        "afterSha256": "b0653dad1ff016c8f33e4abd8bfb7491403d18118bbe1b41207b5d910140bd13"
+      },
+      {
+        "name": "main.wiob",
+        "beforeBytes": 2515049,
+        "afterBytes": 2516027,
+        "beforeSha256": "a9195dcd0bf029ef549bfb4c8785dcc74ffe76cd685ec5dea5e354862c87878b",
+        "afterSha256": "a8dd3fd6076332448f70abd56138d81d2bd7c9e20e69361a2a5868bab7e6f5ed"
+      },
+      {
+        "name": "bridge.dll",
+        "beforeBytes": 5366307,
+        "afterBytes": 5377379,
+        "beforeSha256": "066ab4ee9e99533753eef7dbcca7225e6b9d90ed2c0cf649bace9bf0d8a43b1b",
+        "afterSha256": "0efb6c159d7485c650c5633933c0d623fedf6b3f8c34526ec12e54a2db2ed4d7"
+      }
+    ]
+  }
+}

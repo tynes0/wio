@@ -1,0 +1,306 @@
+use raylib;
+use model;
+use ui;
+use appearance;
+use sprites;
+
+realm pac {
+    component Presentation {
+        grid: bool;
+        ghostPreview: i32;
+        overlayPreview: i32;
+    }
+
+    component Layout {
+        header: ui::Area;
+        board: ui::Area;
+        boardFooter: ui::Area;
+        sidebar: ui::Area;
+        footer: ui::Area;
+        cell: f32;
+    }
+
+    realm draw {
+        // The only viewport-level layout calculation. Everything drawn below
+        // receives a local area, never a window x/y plus a hand-maintained offset.
+        fn Arrange(viewport: ui::Area, columns: i32, rows: i32) -> Layout {
+            if (columns <= 0 or rows <= 0) std::Panic("Maze dimensions must be positive.");
+            let pageArea = viewport.Inset(metrics::PagePadding);
+            mut page = pageArea.Column(metrics::SectionGap);
+            let header = page.Take(metrics::HeaderHeight);
+            let footer = page.TakeEnd(metrics::FooterHeight);
+            let body = page.Rest();
+            let availableWidth = ui::Positive(body.Width() - metrics::RailMinimumWidth - metrics::ColumnGap);
+            let availableHeight = ui::Positive(body.Height() - metrics::BoardFooterHeight - metrics::ItemGap);
+            let horizontal = availableWidth / (columns fit f32);
+            let vertical = availableHeight / (rows fit f32);
+            let cell = horizontal < vertical ? horizontal : vertical;
+            mut columnsFlow = body.Row(metrics::ColumnGap);
+            let stageArea = columnsFlow.Take(cell * (columns fit f32));
+            let sidebar = columnsFlow.Rest();
+            mut stage = stageArea.Column(metrics::ItemGap);
+            let board = stage.Take(cell * (rows fit f32));
+            let boardFooter = stage.Take(metrics::BoardFooterHeight);
+            return Layout(header, board, boardFooter, sidebar, footer, cell);
+        }
+
+        fn Measure(state: GameState) -> Layout {
+            let screen = ui::At(0.0f32, 0.0f32, rl::Width() fit f32, rl::Height() fit f32);
+            return Arrange(screen, state.columns, state.rows);
+        }
+
+        fn Pixel(layout: Layout, position: Point) -> rl::Vec2 {
+            return layout.board.Local((position.x + 0.5f32) * layout.cell, (position.y + 0.5f32) * layout.cell);
+        }
+
+        fn Card(area: ui::Area) -> ui::Flow {
+            let inside = area.Panel(metrics::PanelPadding, colors::Surface(), colors::Border());
+            return inside.Column(metrics::ItemGap);
+        }
+
+        fn WallEdge(tile: ui::Area, edge: ui::Edge) {
+            tile.StrokeEdge(edge, metrics::WallGlowWidth, colors::WallGlow());
+            tile.StrokeEdge(edge, metrics::WallLineWidth, colors::WallLine());
+        }
+
+        fn Maze(state: GameState, layout: Layout, clock: f32) {
+            let frame = layout.board.Expand(metrics::BoardFramePadding);
+            frame.Outline(1.0f32, colors::Border());
+            for (y in 0i32..<state.rows) {
+                for (x in 0i32..<state.columns) {
+                    let value = state.TileAt(x, y);
+                    let tile = layout.board.Child((x fit f32) * layout.cell, (y fit f32) * layout.cell,
+                        layout.cell, layout.cell);
+                    if (value == Tile::wall) {
+                        tile.Fill(colors::WallFill());
+                        if (state.TileAt(x, y - 1) != Tile::wall) WallEdge(tile, ui::Edge::top);
+                        if (state.TileAt(x, y + 1) != Tile::wall) WallEdge(tile, ui::Edge::bottom);
+                        if (state.TileAt(x - 1, y) != Tile::wall) WallEdge(tile, ui::Edge::left);
+                        if (state.TileAt(x + 1, y) != Tile::wall) WallEdge(tile, ui::Edge::right);
+                    }
+
+                    if (value == Tile::pellet) {
+                        rl::Circle(tile.Center(), layout.cell * metrics::PelletRadius, colors::Pellet());
+                    }
+
+                    if (value == Tile::power) {
+                        let pulse = metrics::PowerPulseBase + metrics::PowerPulseAmplitude *
+                            rl::Sin(clock * metrics::PowerPulseSpeed);
+                        rl::Circle(tile.Center(), layout.cell * metrics::PowerGlowRadius, colors::PowerGlow());
+                        rl::Circle(tile.Center(), layout.cell * metrics::PowerRadius * pulse, colors::Power());
+                    }
+
+                    if (value == Tile::door) {
+                        tile.Line(0.0f32, 0.5f32, 1.0f32, 0.5f32, metrics::DoorLineWidth, colors::Door());
+                    }
+
+                }
+
+            }
+
+        }
+
+        fn Grid(state: GameState, layout: Layout) {
+            for (x in 0i32..<(state.columns + 1)) {
+                let u = (x fit f32) / (state.columns fit f32);
+                layout.board.Line(u, 0.0f32, u, 1.0f32, 1.0f32, colors::Grid());
+            }
+
+            for (y in 0i32..<(state.rows + 1)) {
+                let v = (y fit f32) / (state.rows fit f32);
+                layout.board.Line(0.0f32, v, 1.0f32, v, 1.0f32, colors::Grid());
+            }
+
+        }
+
+        fn DisplayPhase(actual: Phase, preview: i32) -> Phase {
+            return match (preview) {
+                1: Phase::ready;
+                2: Phase::playing;
+                3: Phase::paused;
+                4: Phase::won;
+                5: Phase::gameOver;
+                assumed: actual;
+            };
+        }
+
+        fn Overlay(state: GameState, layout: Layout, preview: i32) {
+            let phase = DisplayPhase(state.phase, preview);
+            if (phase == Phase::playing) return;
+            let anchor = layout.board.Anchor(0.5f32, metrics::OverlayAnchorY);
+            if (phase == Phase::ready) {
+                let height = (rl::TextHeight("READY!", fonts::Ready) fit f32) + metrics::SmallGap * 2.0f32;
+                let ready = ui::Centered(anchor, metrics::ReadyWidth, height);
+                ready.Fill(colors::Background());
+                ready.Label("READY!", fonts::Ready, colors::Yellow(), ui::Align::center, ui::Align::center);
+                return;
+            }
+
+            layout.board.Fill(colors::Shade());
+            let width = ui::Limit(metrics::OverlayWidth, layout.board.Width() - metrics::PanelPadding * 2.0f32);
+            let bounds = ui::Centered(anchor, width, metrics::OverlayHeight);
+            let card = bounds.Panel(metrics::PanelPadding, colors::Surface(), colors::Border());
+            mut title = "PAUSED";
+            mut color = colors::Ink();
+            if (phase == Phase::won) {
+                title = "MAZE CLEAR";
+                color = colors::Success();
+            }
+
+            if (phase == Phase::gameOver) {
+                title = "GAME OVER";
+                color = colors::Failure();
+            }
+
+            let caption = "Your logic controls this state";
+            let height = (rl::TextHeight(title, fonts::Overlay) fit f32) +
+                metrics::ItemGap + (rl::TextHeight(caption, fonts::Caption) fit f32);
+            let centered = card.Sized(card.Width(), height, ui::Align::center, ui::Align::center);
+            mut content = centered.Column(metrics::ItemGap);
+            content.Label(title, fonts::Overlay, color, ui::Align::center);
+            content.Label(caption, fonts::Caption, colors::Muted(), ui::Align::center);
+        }
+
+        fn Header(area: ui::Area) {
+            mut content = area.Column(metrics::SmallGap);
+            let titleArea = content.Take(metrics::HeaderTitleHeight);
+            mut title = titleArea.Row(metrics::SectionGap);
+            let badge = title.TakeEnd(rl::TextWidth("RENDER STARTER", fonts::Caption) fit f32);
+            badge.Label("RENDER STARTER", fonts::Caption, colors::Muted(), ui::Align::end, ui::Align::center);
+            let logo = title.Take(rl::TextWidth("PAC", fonts::Logo) fit f32);
+            logo.Label("PAC", fonts::Logo, colors::Yellow(), ui::Align::start, ui::Align::center);
+            let name = title.Rest();
+            name.Label("/ MAZE", fonts::Logo, colors::Ink(), ui::Align::start, ui::Align::center);
+            content.Label("WIO + RAYLIB    /    YOUR LOGIC, READY-MADE PIXELS", fonts::Caption, colors::Muted());
+            area.StrokeEdge(ui::Edge::bottom, 1.0f32, colors::Border());
+        }
+
+        fn ScoreCard(area: ui::Area, state: GameState) {
+            mut content = Card(area);
+            content.Label("SCORE", fonts::Caption, colors::Muted());
+            content.Label($"${state.score}", fonts::Score, colors::Yellow());
+            content.Space(metrics::SmallGap);
+            let best = content.Take(metrics::ValueRowHeight);
+            best.Label("BEST", fonts::Caption, colors::Muted(), ui::Align::start, ui::Align::center);
+            best.Label($"${state.bestScore}", fonts::Value, colors::Ink(), ui::Align::end, ui::Align::center);
+        }
+
+        fn LegendCard(area: ui::Area, state: GameState, clock: f32) {
+            mut content = Card(area);
+            content.Label("THE USUAL SUSPECTS", fonts::Caption, colors::Muted());
+            let entriesArea = content.Rest();
+            mut entries = entriesArea.Column(metrics::SmallGap);
+            let names: string[] = ["BLINKY", "PINKY", "INKY", "CLYDE"];
+            for (index in 0usize..<state.ghosts.Count()) {
+                if (index >= names.Count()) break;
+                let entryArea = entries.Take(metrics::LegendRowHeight);
+                mut entry = entryArea.Row(metrics::ItemGap);
+                let icon = entry.Take(metrics::LegendIconWidth);
+                let ghost = state.ghosts[index];
+                sprites::GhostSprite(ghost, icon.Center(), metrics::LegendGhostRadius, clock, false);
+                let label = entry.Rest();
+                label.Label(names[index], fonts::Caption, ghost.color, ui::Align::start, ui::Align::center);
+            }
+
+        }
+
+        fn InputKey(area: ui::Area, label: string, active: bool) {
+            area.Fill(active ? colors::Yellow() : colors::KeyFill());
+            area.Outline(1.0f32, active ? colors::Yellow() : colors::KeyBorder());
+            area.Label(label, fonts::Caption, active ? colors::Background() : colors::Muted(),
+                ui::Align::center, ui::Align::center);
+        }
+
+        fn InputCard(area: ui::Area, input: InputFrame) {
+            mut content = Card(area);
+            content.Label("LIVE INPUT", fonts::Caption, colors::Muted());
+            let keypadWidth = metrics::KeyWidth * 3.0f32 + metrics::KeyGap * 2.0f32;
+            let keypadHeight = metrics::KeyHeight * 2.0f32 + metrics::KeyGap;
+            let keysArea = content.Take(keypadHeight);
+            mut keys = keysArea.Row(metrics::SectionGap);
+            let grid = keys.Take(keypadWidth);
+            InputKey(grid.Cell(1, 0, 3, 2, metrics::KeyGap), "W", input.up);
+            InputKey(grid.Cell(0, 1, 3, 2, metrics::KeyGap), "A", input.left);
+            InputKey(grid.Cell(1, 1, 3, 2, metrics::KeyGap), "S", input.down);
+            InputKey(grid.Cell(2, 1, 3, 2, metrics::KeyGap), "D", input.right);
+            let hint = keys.Rest();
+            hint.Label("+ arrows", fonts::Caption, colors::Muted(), ui::Align::start, ui::Align::center);
+        }
+
+        fn BoardFooter(area: ui::Area, state: GameState) {
+            mut row = area.Row(metrics::ItemGap);
+            let fruit = row.TakeEnd(metrics::FruitWidth);
+            sprites::Cherry(fruit.Center(), metrics::FruitRadius);
+            let level = row.TakeEnd(rl::TextWidth($"${state.level}", fonts::Body) fit f32);
+            level.Label($"${state.level}", fonts::Body, colors::Muted(), ui::Align::end, ui::Align::center);
+            let levelCaption = row.TakeEnd(rl::TextWidth("LEVEL", fonts::Body) fit f32);
+            levelCaption.Label("LEVEL", fonts::Body, colors::Muted(), ui::Align::end, ui::Align::center);
+            mut shownLives = state.lives;
+            if (shownLives < 0) shownLives = 0;
+            if (shownLives > metrics::MaximumLives) shownLives = metrics::MaximumLives;
+            for (life in 0i32..<shownLives) {
+                let icon = row.Take(metrics::LifeWidth);
+                sprites::Pacman(icon.Center(), metrics::LifeRadius, Direction::right, 0.0f32);
+            }
+
+        }
+
+        fn Footer(area: ui::Area) {
+            area.Label("F1 GRID    F2 GHOSTS    F3 OVERLAYS", fonts::Caption, colors::Muted(),
+                ui::Align::start, ui::Align::center);
+            area.Label("SPACE / P / R: YOUR HOOKS    ESC CLOSE", fonts::Caption, colors::Muted(),
+                ui::Align::end, ui::Align::center);
+        }
+
+        fn Hud(state: GameState, input: InputFrame, layout: Layout, clock: f32, presentation: Presentation) {
+            Header(layout.header);
+            mut sidebar = layout.sidebar.Column(metrics::SectionGap);
+            ScoreCard(sidebar.Take(metrics::ScorePanelHeight), state);
+            LegendCard(sidebar.Take(metrics::LegendPanelHeight), state, clock);
+            InputCard(sidebar.Take(metrics::InputPanelHeight), input);
+            if (presentation.ghostPreview != 0 or presentation.overlayPreview != 0) {
+                sidebar.Label("VISUAL PREVIEW", fonts::Caption, colors::Yellow());
+            }
+
+            BoardFooter(layout.boardFooter, state);
+            Footer(layout.footer);
+        }
+
+        // Scene reads only; gameplay and the caller's frame loop stay untouched.
+        fn Frame(state: GameState, input: InputFrame, presentation: Presentation, clock: f32) {
+            let layout = Measure(state);
+            rl::Begin();
+            rl::Clear(colors::Background());
+            Maze(state, layout, clock);
+            if (state.fruitVisible) {
+                sprites::Cherry(Pixel(layout, state.fruitPosition), layout.cell * metrics::FruitTileRadius);
+            }
+
+            if (state.player.visible) {
+                sprites::Pacman(Pixel(layout, state.player.position), layout.cell * metrics::PlayerTileRadius,
+                    state.player.direction, clock);
+            }
+
+            for (index in 0usize..<state.ghosts.Count()) {
+                mut ghost = state.ghosts[index];
+                if (ghost.actor.visible) {
+                    if (presentation.ghostPreview == 1) ghost.mode = GhostMode::frightened;
+                    if (presentation.ghostPreview == 2) ghost.mode = GhostMode::eyes;
+                    let position = Pixel(layout, ghost.actor.position);
+                    let bob = rl::Sin(clock * metrics::GhostBobSpeed + (index fit f32) * metrics::GhostBobPhase) *
+                        layout.cell * metrics::GhostBobHeight;
+                    sprites::GhostSprite(ghost, rl::Vec2(position.x, position.y + bob), layout.cell * metrics::GhostTileRadius,
+                        clock, state.frightenedFlash);
+                }
+
+            }
+
+            if (presentation.grid) Grid(state, layout);
+            Overlay(state, layout, presentation.overlayPreview);
+            Hud(state, input, layout, clock, presentation);
+            rl::End();
+        }
+
+    }
+
+}

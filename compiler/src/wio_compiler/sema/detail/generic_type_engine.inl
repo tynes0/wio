@@ -704,6 +704,26 @@
             if (!structType)
                 return nullptr;
 
+            // A symbolic/concrete instance does not own the primary's
+            // specialization registry. Re-select from the declaration when
+            // substituting a generic function's parameter or result type.
+            Ref<StructType> primary = structType;
+            std::unordered_set<const StructType*> visited;
+            while (primary && visited.insert(primary.Get()).second)
+            {
+                const auto next = primary->genericPrimaryType.Lock();
+                if (!next)
+                    break;
+                primary = next;
+            }
+            if (primary && primary->genericPrimaryType.Lock())
+            {
+                WIO_LOG_ADD_ERROR(errorLocation, "Cyclic generic primary identity for '{}'.", structType->name);
+                return Compiler::get().getTypeContext().getUnknown();
+            }
+            if (primary && primary.Get() != structType.Get())
+                return instantiateGenericStructType(primary, explicitTypeArguments, errorLocation);
+
             if (structType->genericParameterNames.empty())
                 return structType;
 
@@ -825,6 +845,7 @@
                     instantiatedType->fieldTypes.push_back(instantiateGenericType(fieldType, selectedBindings));
                 for (const auto& baseType : selectedPartialSpecialization->baseTypes)
                     instantiatedType->baseTypes.push_back(instantiateGenericType(baseType, selectedBindings));
+                validateInstantiatedNativePodComponent(instantiatedType, errorLocation);
                 return instantiatedType;
             }
 

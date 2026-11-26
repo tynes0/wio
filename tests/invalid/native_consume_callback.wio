@@ -1,0 +1,4 @@
+use std::attribute as attribute;
+[Native, CppName(rejected)]
+fn Consume([attribute::NativeConsume] value: fn());
+fn Entry() -> i32 { return 0; }

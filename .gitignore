@@ -83,5 +83,13 @@ Thumbs.db
 # Wio generated artifacts
 # =========================
 *.wio.cpp
+/playground/.wio-build/
 
 .wio-qualification/
+
+# Python diagnostic/test bytecode caches
+__pycache__/
+
+# C# benchmark reference caches (including IDE-triggered restore).
+/tests/performance/**/obj/
+/tests/performance/**/bin/

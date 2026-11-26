@@ -1,0 +1,295 @@
+using cpp::header("vm_dictionary_intrinsic_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_projected_borrow::Cell)]
+component Cell<T>
+{
+    public value: T;
+}
+
+[Native, CppName(vm_projected_borrow::Packet)]
+component Packet
+{
+    public cell: Cell<i32>;
+    public tag: u8;
+    public row: [i32; 2];
+}
+
+object Item
+{
+    value: i32;
+
+    public OnConstruct(value: i32)
+    {
+        self.value = value;
+        Constructed();
+    }
+
+    OnDestruct()
+    {
+        Destroyed();
+    }
+
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+}
+
+object FailingItem
+{
+    public OnConstruct()
+    {
+        Constructed();
+    }
+
+    OnDestruct()
+    {
+        Destroyed();
+        CleanupFailure();
+    }
+}
+
+[Native, CppName(vm_dictionary_intrinsic::Constructed)]
+fn Constructed();
+[Native, CppName(vm_dictionary_intrinsic::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_dictionary_intrinsic::Balanced)]
+fn Balanced() -> bool;
+[Native, CppName(vm_dictionary_intrinsic::Live)]
+fn Live() -> i32;
+[Native, CppName(vm_dictionary_intrinsic::CleanupFailure)]
+fn CleanupFailure();
+[Native, CppName(vm_dictionary_intrinsic::Borrow), Instantiate(i32), Instantiate(string), Instantiate(Packet),
+ Instantiate(i32[]), Instantiate(Item), Instantiate(Item?), Instantiate(FailingItem)]
+fn Borrow<T>(values: ref Dict<string, T>, value: ref T) -> ref T;
+[Native, CppName(vm_dictionary_intrinsic::TreeBorrow), Instantiate(i32)]
+fn TreeBorrow<T>(values: ref Tree<i32, T>, value: ref T) -> ref T;
+[Native, CppName(vm_dictionary_intrinsic::Print)]
+fn Print();
+
+fn LifecycleBalanced() -> bool
+{
+    return Balanced();
+}
+
+fn SafePoint() -> i32
+{
+    return 0;
+}
+
+fn RemovedProbe() -> i32
+{
+    mut values: Dict<string, i32> = {"kept": 7, "other": 9};
+    let old: view i32 = Borrow<i32>(ref values, ref values["kept"]);
+    values.Remove("kept");
+    values.Set("kept", 11);
+    return deref old;
+}
+
+fn ClearedProbe() -> i32
+{
+    mut values: Dict<string, i32> = {"kept": 7};
+    let old: view i32 = Borrow<i32>(ref values, ref values["kept"]);
+    values.Clear();
+    return deref old;
+}
+
+fn ReplacedChildProbe() -> i32
+{
+    mut values: Dict<string, i32[]> = {"kept": [7, 9]};
+    let row: ref i32[] = Borrow<i32[]>(ref values, ref values["kept"]);
+    let old: view i32 = ref row[0usize];
+    values.Set("kept", [11, 13]);
+    return deref old;
+}
+
+fn CleanupProbe(action: i32) -> i32
+{
+    mut values: Dict<string, FailingItem> = {"kept": FailingItem()};
+    let old: ref FailingItem = Borrow<FailingItem>(ref values, ref values["kept"]);
+    if (action == 0)
+    {
+        values.Remove("kept");
+    }
+    if (action == 1)
+    {
+        values.Clear();
+    }
+    if (action == 2)
+    {
+        values.Set("kept", FailingItem());
+    }
+    return 0;
+}
+
+fn Entry() -> i32
+{
+    mut round = 0;
+    while (round < 30)
+    {
+        {
+            mut values: Dict<string, i32> = {"before": 3, "kept": 7, "after": 9};
+            let kept: ref i32 = Borrow<i32>(ref values, ref values["kept"]);
+            let other: view i32 = ref values["after"];
+            mut i = 0;
+            while (i < 80)
+            {
+                values.Set($"new${i}", i);
+                i += 1;
+            }
+            values.Remove("before");
+            values.Remove("missing");
+            values.Set("kept", 17);
+            if (deref kept != 17 or deref other != 9)
+            {
+                return 1;
+            }
+            deref kept = 19;
+            if (values["kept"] != 19)
+            {
+                return 2;
+            }
+            if (values.GetOrAdd("kept", 999) != 19 or values.GetOrAdd("added", deref other) != 9)
+            {
+                return 3;
+            }
+            let extra: Dict<string, i32> = {"kept": 23, "extension": 29};
+            values.Extend(extra);
+            values.Extend(values);
+            if (deref kept != 23 or deref other != 9 or values["extension"] != 29)
+            {
+                return 4;
+            }
+            values.TryGet("kept", kept);
+            if (deref kept != 23)
+            {
+                return 5;
+            }
+        }
+        {
+            mut values: Tree<i32, i32> = {< 20: 7, 40: 9 >};
+            let kept: ref i32 = TreeBorrow<i32>(ref values, ref values[20]);
+            values.Set(10, 3);
+            values.Set(30, 5);
+            values.Remove(10);
+            values.Remove(30);
+            values.Set(20, 31);
+            if (deref kept != 31 or values.FirstKey() != 20)
+            {
+                return 6;
+            }
+        }
+        {
+            mut strings: Dict<string, string> = {"kept": "first", "other": "other"};
+            let kept: ref string = Borrow<string>(ref strings, ref strings["kept"]);
+            strings.Set("new", deref kept);
+            strings.Set("kept", strings["new"]);
+            strings.Remove("other");
+            deref kept = "updated";
+            if (strings["kept"] != "updated" or strings["new"] != "first")
+            {
+                return 7;
+            }
+        }
+        {
+            mut values: Dict<string, i32[]> = {"kept": [7, 9]};
+            let row: ref i32[] = Borrow<i32[]>(ref values, ref values["kept"]);
+            values.Extend(values);
+            // Extend has an owning value argument: its arrays are copied.
+            // Borrow the current child after replacement, not the old graph.
+            let cell: view i32 = ref row[0usize];
+            values.TryGet("kept", row);
+            values.Set("new", [11]);
+            if (deref cell != 7)
+            {
+                return 8;
+            }
+            values.Set("kept", [13, 17]);
+            if (row[0usize] != 13)
+            {
+                return 9;
+            }
+        }
+        {
+            mut values: Dict<string, Packet> = {"kept": Packet()};
+            let packet: ref Packet = Borrow<Packet>(ref values, ref values["kept"]);
+            let field: view i32 = ref packet.cell.value;
+            values.Set("new", Packet());
+            values.Remove("new");
+            if (deref field != 7 or packet.row[1usize] != 13)
+            {
+                return 10;
+            }
+        }
+        {
+            mut values: Dict<string, Item> = {"kept": Item(37)};
+            let kept: ref Item = Borrow<Item>(ref values, ref values["kept"]);
+            // Argument copies must release at call completion, then lexical
+            // owners release here so only the dictionary claims remain.
+            {
+                let other = Item(41);
+                values.Set("other", other);
+            }
+            {
+                let replacement = Item(43);
+                values.Set("kept", replacement);
+            }
+            // Even an unused fallback owns a temporary until GetOrAdd
+            // completes; it must not survive the following statement.
+            values.GetOrAdd("kept", Item(51));
+            {
+                mut output = Item(53);
+                values.TryGet("kept", ref output);
+                if (output.Read() != 43 or Live() != 2)
+                {
+                    return 17;
+                }
+            }
+            {
+                let extra: Dict<string, Item> = {"kept": Item(57)};
+                values.Extend(extra);
+                if (Live() != 2 or kept.Read() != 57)
+                {
+                    return 18;
+                }
+            }
+            if (Live() != 2 or kept.Read() != 57)
+            {
+                return 11;
+            }
+            values.Remove("other");
+            if (Live() != 1 or kept.Read() != 57)
+            {
+                return 12;
+            }
+            values.Clear();
+            if (Live() != 0)
+            {
+                return 13;
+            }
+        }
+        {
+            mut values: Dict<string, Item?> = {"kept": null};
+            let kept: ref Item? = Borrow<Item?>(ref values, ref values["kept"]);
+            values.Set("kept", Item(47));
+            let present = deref kept;
+            if (present == null or present.Read() != 47)
+            {
+                return 14;
+            }
+            values.Set("kept", null);
+            if (deref kept != null)
+            {
+                return 15;
+            }
+        }
+        if (!Balanced())
+        {
+            return 16;
+        }
+        round += 1;
+    }
+    Print();
+    return 0;
+}

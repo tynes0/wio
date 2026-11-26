@@ -1,12 +1,23 @@
 #include "wio/codegen/wir_cpp_backend.h"
+#include "wio/codegen/wir_cpp_receiver_plan.h"
+#include "wio/codegen/wir_cpp_storage_plan.h"
+#include "wio/codegen/wir_cpp_scalar_format_plan.h"
+#include "wio/codegen/wir_cpp_string_transfer_plan.h"
+#include "wio/codegen/wir_cpp_string_init_plan.h"
 #include "wio/codegen/wir_intrinsics.h"
 #include "wio/codegen/wir_module_emitter.h"
+#include "wio/codegen/wir_native_bridge_plan.h"
+#include "wio/codegen/wir_native_object_emitter.h"
 #include "wio/codegen/wir_reflection_emitter.h"
 
+#include "wio/common/profiling.h"
 #include "wio/wir/lowered_ir_verifier.h"
 
 #include <algorithm>
+#include <charconv>
+#include <cmath>
 #include <cctype>
+#include <concepts>
 #include <iomanip>
 #include <functional>
 #include <limits>
@@ -15,6 +26,7 @@
 #include <set>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace wio::codegen
@@ -39,38 +51,46 @@ namespace wio::codegen
 
         std::string cppString(const std::string_view value)
         {
-            std::ostringstream output;
-            output << '"';
+            constexpr char hex[] = "0123456789abcdef";
+            std::string output;
+            output.reserve(value.size() + 2);
+            output.push_back('"');
             for (const unsigned char character : value)
             {
                 switch (character)
                 {
                 case '\\':
-                    output << "\\\\";
+                    output += "\\\\";
+                    break;
+                case '\0':
+                    output += "\\000";
                     break;
                 case '"':
-                    output << "\\\"";
+                    output += "\\\"";
                     break;
                 case '\n':
-                    output << "\\n";
+                    output += "\\n";
                     break;
                 case '\r':
-                    output << "\\r";
+                    output += "\\r";
                     break;
                 case '\t':
-                    output << "\\t";
+                    output += "\\t";
                     break;
                 default:
                     if (character < 0x20)
-                        output << "\\x" << std::hex << std::setw(2) << std::setfill('0')
-                               << static_cast<unsigned>(character) << std::dec;
+                    {
+                        output += "\\x";
+                        output.push_back(hex[character >> 4]);
+                        output.push_back(hex[character & 0x0f]);
+                    }
                     else
-                        output << static_cast<char>(character);
+                        output.push_back(static_cast<char>(character));
                     break;
                 }
             }
-            output << '"';
-            return output.str();
+            output.push_back('"');
+            return output;
         }
 
         std::string safeIdentifier(const std::string_view value)
@@ -109,80 +129,251 @@ namespace wio::codegen
             return "_v" + std::to_string(id.value());
         }
 
+        class CppOutputBuffer final
+        {
+        public:
+            void reserve(const std::size_t capacity)
+            {
+                value_.reserve(capacity);
+            }
+
+            CppOutputBuffer& operator<<(const std::string_view value)
+            {
+                value_.append(value);
+                return *this;
+            }
+
+            CppOutputBuffer& operator<<(const std::string& value)
+            {
+                value_.append(value);
+                return *this;
+            }
+
+            CppOutputBuffer& operator<<(const char* value)
+            {
+                value_.append(value);
+                return *this;
+            }
+
+            CppOutputBuffer& operator<<(const char value)
+            {
+                value_.push_back(value);
+                return *this;
+            }
+
+            CppOutputBuffer& operator<<(const bool value)
+            {
+                value_.push_back(value ? '1' : '0');
+                return *this;
+            }
+
+            template <std::integral Integer>
+                requires(!std::same_as<Integer, char> && !std::same_as<Integer, bool>)
+            CppOutputBuffer& operator<<(const Integer value)
+            {
+                char buffer[32];
+                const auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), value);
+                if (error == std::errc{})
+                    value_.append(buffer, end);
+                return *this;
+            }
+
+            [[nodiscard]] std::string take()
+            {
+                return std::move(value_);
+            }
+
+        private:
+            std::string value_;
+        };
+
         class Emitter final
         {
         public:
-            Emitter(const lowered::Module& module, WirCppGenerationResult& result, const WirCppBackendOptions& options)
-                : module_(module), result_(result), options_(options)
+            Emitter(const lowered::Module& module, WirCppGenerationResult& result, const WirCppBackendOptions& options,
+                    const std::span<const TypeId> dynamicPayloadTypes = {})
+                : module_(module), result_(result), options_(options), dynamicPayloadTypes_(dynamicPayloadTypes)
             {
+                functions_.reserve(module.functions.size());
                 for (const lowered::Function& function : module.functions)
                     functions_.emplace(function.id.value(), &function);
+                globals_.reserve(module.globals.size());
                 for (const lowered::Global& global : module.globals)
                     globals_.emplace(global.id.value(), &global);
+
+                std::size_t estimatedOutputSize =
+                    16 * 1024 + module.types.size() * 256 + module.functions.size() * 512 + module.globals.size() * 64;
+                for (const lowered::Function& function : module.functions)
+                    for (const lowered::BasicBlock& block : function.blocks)
+                        estimatedOutputSize += block.parameters.size() * 64 + block.instructions.size() * 256;
+                output_.reserve(estimatedOutputSize);
+
+                openTypeCache_.assign(module.types.size(), 0);
+                cppTypeCache_.resize(module.types.size());
+                cppTypeCacheReady_.assign(module.types.size(), false);
+
+                std::unordered_map<std::uint32_t, std::vector<const AttributeApplicationDescriptor*>> attributes;
+                attributes.reserve(module.contract.attributes.size());
+                for (const auto& attribute : module.contract.attributes)
+                    if (attribute.targetFunction)
+                        attributes[attribute.targetFunction.value()].push_back(&attribute);
+                behavioralPipelines_.reserve(attributes.size());
+                for (auto& [function, applications] : attributes)
+                {
+                    std::ranges::stable_sort(applications, {}, &AttributeApplicationDescriptor::sourceOrder);
+                    auto& pipeline = behavioralPipelines_[function];
+                    for (const auto* application : applications)
+                        for (const auto& processor : application->processors)
+                            if (processor.phase == AttributeProcessorPhase::Pre ||
+                                processor.phase == AttributeProcessorPhase::Post ||
+                                processor.phase == AttributeProcessorPhase::Finally ||
+                                processor.phase == AttributeProcessorPhase::Around)
+                                pipeline.push_back(&processor);
+                }
             }
 
             void run()
             {
-                const lowered::VerificationResult verification = lowered::Verifier{}.verify(module_);
-                for (const lowered::VerificationDiagnostic& diagnostic : verification.diagnostics())
+                if (options_.verifyInput)
                 {
-                    diagnose("WCPP1000", "invalid Lowered WIR: " + diagnostic.code + ": " + diagnostic.message,
-                             diagnostic.source, diagnostic.function, diagnostic.block);
+                    common::profiling::Scope verifyScope("Backend.Cpp.VerifyInput");
+                    const lowered::VerificationResult verification = lowered::Verifier{}.verify(module_);
+                    verifyScope.stop();
+                    for (const lowered::VerificationDiagnostic& diagnostic : verification.diagnostics())
+                    {
+                        diagnose("WCPP1000", "invalid Lowered WIR: " + diagnostic.code + ": " + diagnostic.message,
+                                 diagnostic.source, diagnostic.function, diagnostic.block);
+                    }
+                    if (!verification.succeeded())
+                        return;
                 }
-                if (!verification.succeeded())
-                    return;
 
-                validateTypes();
-                validateInstructions();
-                validateWireBoundaries();
+                {
+                    common::profiling::Scope scope("Backend.Cpp.ValidateTypes");
+                    validateTypes();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.ValidateInstructions");
+                    validateInstructions();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.ValidateWireBoundaries");
+                    validateWireBoundaries();
+                }
                 if (!result_.succeeded())
                     return;
 
-                emitPreamble();
-                emitNominalDeclarations();
-                emitStructuralAliases();
-                output_ << WirReflectionEmitter::traits(module_, [this](TypeId id) { return cppType(id); });
-                emitFunctionDeclarations();
-                emitHierarchyBodies();
-                emitGlobals();
-                emitFunctions();
-                output_ << WirModuleEmitter::emit(module_, [this](TypeId id) { return cppType(id); });
-                emitMain();
-                WirCppResultSink::setCode(result_, output_.str());
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitPreamble");
+                    emitPreamble();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitNominals");
+                    nativeProxyTypes_ = WirNativeObjectEmitter::eligibleTypes(module_, dynamicPayloadTypes_);
+                    nativeProxyHierarchyTypes_ =
+                        WirNativeObjectEmitter::hostedHierarchyTypes(module_, nativeProxyTypes_);
+                    emitNominalDeclarations();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitStructuralAliases");
+                    emitStructuralAliases();
+                }
+                cppTypeCacheEnabled_ = true;
+                {
+                    common::profiling::Scope scope("Backend.Cpp.PlanReceivers");
+                    for (const auto& function : module_.functions)
+                    {
+                        if (functionIsOpen(function) || !behavioralPipeline(function.id).empty() ||
+                            nativeProxyHierarchyTypes_.contains(function.ownerType))
+                            continue;
+                        auto plan = WirCppReceiverPlan::build(module_, function);
+                        if (plan.eligible())
+                            receiverPlans_.emplace(function.id.value(), std::move(plan));
+                    }
+                }
+                output_ << WirNativeObjectEmitter::emitCodecs(module_, nativeProxyTypes_,
+                                                              [this](TypeId id) { return cppType(id); });
+                output_ << WirModuleEmitter::emitCallableCodecs(
+                    module_, [this](TypeId id) { return cppType(id); }, dynamicPayloadTypes_);
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitReflection");
+                    output_ << WirReflectionEmitter::traits(module_, [this](TypeId id) { return cppType(id); });
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitFunctionDeclarations");
+                    emitFunctionDeclarations();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitHierarchy");
+                    emitHierarchyBodies();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitGlobals");
+                    emitGlobals();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitFunctions");
+                    emitFunctions();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitModule");
+                    output_ << WirModuleEmitter::emit(
+                        module_, [this](TypeId id) { return cppType(id); }, options_.emitNativeTaskSidecars,
+                        dynamicPayloadTypes_);
+                    output_ << WirNativeObjectEmitter::emit(
+                        module_, nativeProxyTypes_, [this](TypeId id) { return cppType(id); },
+                        [this](const MethodLayout& method, const lowered::Function& implementation)
+                        { return legacyMethodName(method, implementation); });
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.EmitMain");
+                    emitMain();
+                }
+                {
+                    common::profiling::Scope scope("Backend.Cpp.FinalizeOutput");
+                    WirCppResultSink::setCode(result_, output_.take());
+                }
             }
 
         private:
             const lowered::Module& module_;
             WirCppGenerationResult& result_;
             const WirCppBackendOptions& options_;
-            std::ostringstream output_;
+            std::span<const TypeId> dynamicPayloadTypes_;
+            CppOutputBuffer output_;
             std::unordered_map<std::uint32_t, const lowered::Function*> functions_;
             std::unordered_map<std::uint32_t, const lowered::Global*> globals_;
+            std::unordered_map<std::uint32_t, std::vector<const AttributeProcessorDescriptor*>> behavioralPipelines_;
             const lowered::Function* currentFunction_ = nullptr;
             const lowered::BasicBlock* currentBlock_ = nullptr;
             std::unordered_map<std::uint32_t, TypeId> valueTypes_;
-            std::set<std::uint32_t> borrowedLoads_;
-            std::set<std::uint32_t> objectBorrowedLoads_;
-            std::set<std::uint32_t> ownedValues_;
-            std::set<std::uint32_t> structuralAliases_;
+            std::unordered_set<std::uint32_t> borrowedLoads_;
+            std::unordered_set<std::uint32_t> objectBorrowedLoads_;
+            std::unordered_set<std::uint32_t> ownedValues_;
+            std::unordered_map<std::uint32_t, ValueId> valueAliases_;
+            std::unordered_set<const lowered::Instruction*> suppressedInstructions_;
+            std::unordered_set<std::uint32_t> directValues_;
+            WirCppStoragePlan storagePlan_;
+            WirCppStringTransferPlan stringTransferPlan_;
+            WirCppStringInitPlan stringInitPlan_;
+            WirCppScalarFormatPlan scalarFormatPlan_;
+            std::unordered_map<std::uint32_t, WirCppReceiverPlan> receiverPlans_;
+            const WirCppReceiverPlan* currentReceiverPlan_ = nullptr;
+            std::unordered_set<std::uint32_t> structuralAliases_;
+            std::set<TypeId> nativeProxyTypes_;
+            std::set<TypeId> nativeProxyHierarchyTypes_;
+            mutable std::vector<std::uint8_t> openTypeCache_;
+            mutable std::vector<std::string> cppTypeCache_;
+            mutable std::vector<std::uint8_t> cppTypeCacheReady_;
+            std::string lastSourceFile_;
+            bool cppTypeCacheEnabled_ = false;
+            bool currentFunctionIsLinear_ = false;
 
-            std::vector<const AttributeProcessorDescriptor*> behavioralPipeline(const FunctionId function) const
+            const std::vector<const AttributeProcessorDescriptor*>& behavioralPipeline(const FunctionId function) const
             {
-                std::vector<const AttributeApplicationDescriptor*> attributes;
-                for (const auto& attribute : module_.contract.attributes)
-                    if (attribute.targetFunction == function)
-                        attributes.push_back(&attribute);
-                std::ranges::stable_sort(attributes, {}, &AttributeApplicationDescriptor::sourceOrder);
-
-                std::vector<const AttributeProcessorDescriptor*> processors;
-                for (const auto* attribute : attributes)
-                    for (const auto& processor : attribute->processors)
-                        if (processor.phase == AttributeProcessorPhase::Pre ||
-                            processor.phase == AttributeProcessorPhase::Post ||
-                            processor.phase == AttributeProcessorPhase::Finally ||
-                            processor.phase == AttributeProcessorPhase::Around)
-                            processors.push_back(&processor);
-                return processors;
+                static const std::vector<const AttributeProcessorDescriptor*> empty;
+                const auto found = behavioralPipelines_.find(function.value());
+                return found == behavioralPipelines_.end() ? empty : found->second;
             }
 
             void diagnose(std::string code, std::string message, const SourceSpan& source = {},
@@ -195,30 +386,53 @@ namespace wio::codegen
                                                                           .block = block});
             }
 
-            bool typeIsOpenImpl(const TypeId id, std::set<TypeId::ValueType>& visiting) const
+            struct OpenTypeResult
+            {
+                bool open = false;
+                bool encounteredCycle = false;
+            };
+
+            OpenTypeResult typeIsOpenCached(const TypeId id) const
             {
                 const Type* type = module_.types.tryGet(id);
                 if (!type)
-                    return true;
+                    return {.open = true};
+                std::uint8_t& state = openTypeCache_[id.value()];
+                if (state == 3)
+                    return {.open = true};
+                if (state == 2)
+                    return {};
+                if (state == 1)
+                    return {.encounteredCycle = true};
+                state = 1;
                 if (type->kind == TypeKind::GenericParameter || type->kind == TypeKind::ConstGenericParameter ||
                     type->kind == TypeKind::GenericParameterPack || type->kind == TypeKind::ValuePack ||
                     type->kind == TypeKind::TypePack)
-                    return true;
-                if (!visiting.insert(id.value()).second)
-                    return false;
-                const auto open = [&](const TypeId nested) { return nested && typeIsOpenImpl(nested, visiting); };
-                const bool result =
-                    open(type->extentParameter) || std::ranges::any_of(type->arguments, open) ||
-                    std::ranges::any_of(type->baseTypes, open) ||
-                    std::ranges::any_of(type->fields, [&](const FieldLayout& field) { return open(field.type); });
-                visiting.erase(id.value());
-                return result;
+                {
+                    state = 3;
+                    return {.open = true};
+                }
+
+                bool encounteredCycle = false;
+                const auto observe = [&](const TypeId nested)
+                {
+                    if (!nested)
+                        return false;
+                    const OpenTypeResult result = typeIsOpenCached(nested);
+                    encounteredCycle |= result.encounteredCycle;
+                    return result.open;
+                };
+                const bool open =
+                    observe(type->extentParameter) || std::ranges::any_of(type->arguments, observe) ||
+                    std::ranges::any_of(type->baseTypes, observe) ||
+                    std::ranges::any_of(type->fields, [&](const FieldLayout& field) { return observe(field.type); });
+                state = open ? 3 : encounteredCycle ? 0 : 2;
+                return {.open = open, .encounteredCycle = encounteredCycle};
             }
 
             bool typeIsOpen(const TypeId id) const
             {
-                std::set<TypeId::ValueType> visiting;
-                return typeIsOpenImpl(id, visiting);
+                return typeIsOpenCached(id).open;
             }
 
             bool functionIsOpen(const lowered::Function& function) const
@@ -398,7 +612,19 @@ namespace wio::codegen
                         continue;
                     const auto& result = module_.types.get(function.returnType);
                     const bool async = result.kind == TypeKind::AsyncTask;
-                    bool unsafe = result.kind == TypeKind::Reference ||
+                    const bool callerBoundNativeResult =
+                        function.nativeBinding && !exported && !function.isMethod && !function.isExtension &&
+                        function.nativeBinding->receiver == NativeReceiverKind::None &&
+                        result.kind == TypeKind::Reference &&
+                        std::ranges::any_of(function.parameters,
+                                            [&](const auto& parameter)
+                                            {
+                                                const auto& input = module_.types.get(parameter.type);
+                                                return input.kind == TypeKind::Reference &&
+                                                       input.arguments == result.arguments &&
+                                                       (!result.isMutable || input.isMutable);
+                                            });
+                    bool unsafe = (result.kind == TypeKind::Reference && !callerBoundNativeResult) ||
                                   (async && module_.types.get(result.arguments.front()).kind == TypeKind::Reference);
                     for (const auto& parameter : function.parameters)
                         unsafe |= async && module_.types.get(parameter.type).kind == TypeKind::Reference;
@@ -729,9 +955,14 @@ namespace wio::codegen
 
             std::string cppType(const TypeId id) const
             {
-                if (structuralAliases_.contains(id.value()))
-                    return structuralAlias(id);
-                return cppTypeRaw(id);
+                if (!cppTypeCacheEnabled_ || !id || id.value() >= cppTypeCache_.size())
+                    return structuralAliases_.contains(id.value()) ? structuralAlias(id) : cppTypeRaw(id);
+                if (cppTypeCacheReady_[id.value()])
+                    return cppTypeCache_[id.value()];
+                std::string result = structuralAliases_.contains(id.value()) ? structuralAlias(id) : cppTypeRaw(id);
+                cppTypeCache_[id.value()] = result;
+                cppTypeCacheReady_[id.value()] = true;
+                return result;
             }
 
             std::string cppTypeRaw(const TypeId id) const
@@ -1017,8 +1248,11 @@ namespace wio::codegen
                        "#include <stdexcept>\n#include <string>\n#include <tuple>\n#include <type_traits>\n"
                        "#include <unordered_map>\n#include <utility>\n#include <vector>\n"
                        "#include <any.h>\n#include <entry_args.h>\n#include <intrinsics.h>\n#include <ref.h>\n#include "
-                       "<std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n";
-                output_ << "#include <wir_abi.h>\n#include <wir_native.h>\n#include <module_api.h>\n#include "
+                       "<std_async.h>\n#include <text.h>\n#include <wir_iterator.h>\n#include <wir_async.h>\n"
+                       "#include <wir_inline_place.h>\n#include <integer_format.h>\n#include <value_format.h>\n"
+                       "#include <formatted_size.h>\n#include <rendered_integer.h>\n";
+                output_ << "#include <wir_abi.h>\n#include <wir_task_abi.h>\n#include <wir_native.h>\n#include "
+                           "<module_api.h>\n#include "
                            "<wio_values.h>\n#include "
                            "<wio_module_contract.h>\n";
                 std::set<std::string> headers;
@@ -1037,6 +1271,7 @@ namespace wio::codegen
                 output_ << R"CPP(
 namespace wio::wir_backend {
 struct SkipConstructor {};
+struct SkipHostedConstructor {};
 template<class To, class From> To numeric_fit(const From value) {
     if constexpr (std::is_same_v<To, bool>) {
         return value != From{};
@@ -1071,6 +1306,43 @@ template<class To, class From> To numeric_fit(const From value) {
         return static_cast<To>(value);
     }
 }
+template<class T> class ScalarPlace
+{
+    static_assert(std::is_arithmetic_v<T>);
+
+public:
+    static ScalarPlace local()
+    {
+        return {};
+    }
+
+    T& read()
+    {
+        if (!initialized_)
+            throw std::runtime_error("read from uninitialized Wio place");
+        return value_;
+    }
+
+    const T& read() const
+    {
+        return const_cast<ScalarPlace*>(this)->read();
+    }
+
+    void write(T value)
+    {
+        value_ = value;
+        initialized_ = true;
+    }
+
+    void clear()
+    {
+        initialized_ = false;
+    }
+
+private:
+    T value_{};
+    bool initialized_ = false;
+};
 template<class T> class Place {
 public:
     static Place local() {
@@ -1078,21 +1350,33 @@ public:
         place.owner_ = std::make_shared<std::optional<T>>();
         return place;
     }
-    static Place borrow(T& value) { Place place; place.pointer_ = &value; return place; }
+    static Place borrow(T& value) { Place place; place.pointer_ = &value; place.lifetime_ = activeCallbackBorrow; return place; }
     template<class U> static Place borrowProxy(U value) {
         Place place;
         place.reader_ = [value]() mutable { return static_cast<T>(value); };
         place.writer_ = [value](T replacement) mutable { value = std::move(replacement); };
         return place;
     }
-    static Place borrowView(const T& value) { Place place; place.pointer_ = const_cast<T*>(&value); place.readOnly_ = true; return place; }
+    static Place borrowView(const T& value) { auto place = borrow(const_cast<T&>(value)); place.readOnly_ = true; return place; }
     T& read() {
+        validateBorrow();
         if (pointer_) return *pointer_;
         if (reader_) { cached_ = reader_(); return *cached_; }
         if (!owner_ || !owner_->has_value()) throw std::runtime_error("read from uninitialized Wio place");
         return owner_->value();
     }
     const T& read() const { return const_cast<Place*>(this)->read(); }
+    // Only real handle/local cells have stable borrow identity. Proxy
+    // projections do not participate in the native object reference bridge.
+    bool canRebind() const { return !readOnly_ && (pointer_ || owner_); }
+    bool hasStorageCell() const { return pointer_ || owner_; }
+    const void* borrowIdentity() const {
+        validateBorrow();
+        if (pointer_) return pointer_;
+        return owner_.get();
+    }
+    Place asView() const { auto place = *this; place.readOnly_ = true; return place; }
+    Place withCallbackLifetime() const { auto place = *this; place.lifetime_ = activeCallbackBorrow; return place; }
     T take() {
         if (readOnly_) throw std::runtime_error("move through a Wio view");
         T value = std::move(read());
@@ -1100,13 +1384,17 @@ public:
         return value;
     }
     void write(T value) {
+        validateBorrow();
         if (readOnly_) throw std::runtime_error("write through a Wio view");
         if (pointer_) *pointer_ = std::move(value);
         else if (writer_) { writer_(value); cached_ = std::move(value); }
         else { if (!owner_) owner_ = std::make_shared<std::optional<T>>(); *owner_ = std::move(value); }
     }
-    void clear() { if (readOnly_) throw std::runtime_error("clear through a Wio view"); if (pointer_) *pointer_ = T{}; else if (writer_) { writer_(T{}); cached_.reset(); } else if (owner_) owner_->reset(); }
+    void clear() { validateBorrow(); if (readOnly_) throw std::runtime_error("clear through a Wio view"); if (pointer_) *pointer_ = T{}; else if (writer_) { writer_(T{}); cached_.reset(); } else if (owner_) owner_->reset(); }
+    void rejectCallbackCapture() const { if (lifetime_) throw std::runtime_error("Invocation-scoped native callback borrows cannot be captured"); }
 private:
+    std::shared_ptr<CallbackBorrowLifetime> lifetime_;
+    void validateBorrow() const { if (lifetime_ && !lifetime_->active.load(std::memory_order_acquire)) throw std::runtime_error("expired native callback borrow"); }
     std::shared_ptr<std::optional<T>> owner_;
     T* pointer_ = nullptr;
     std::function<T()> reader_;
@@ -1129,31 +1417,47 @@ template<class T> class Place<wio::runtime::Ref<T>> {
     Handle* handle_ = nullptr;
     T* raw_ = nullptr;
     mutable std::optional<Handle> rawHandle_;
+    std::shared_ptr<CallbackBorrowLifetime> lifetime_;
+    void validateBorrow() const { if (lifetime_ && !lifetime_->active.load(std::memory_order_acquire)) throw std::runtime_error("expired native callback borrow"); }
     bool readOnly_ = false;
 public:
     static Place local() { Place p; p.owner_ = std::make_shared<std::optional<Handle>>(); return p; }
-    static Place borrow(Handle& h) { Place p; p.handle_ = &h; return p; }
+    static Place borrow(Handle& h) { Place p; p.handle_ = &h; p.lifetime_ = activeCallbackBorrow; return p; }
     static Place borrowView(const Handle& h) { auto p = borrow(const_cast<Handle&>(h)); p.readOnly_ = true; return p; }
-    static Place raw(T* value) { Place p; p.raw_ = value; return p; }
+    static Place raw(T* value) { Place p; p.raw_ = value; p.lifetime_ = activeCallbackBorrow; return p; }
     T* Get() const {
+        validateBorrow();
         if (handle_) return handle_->Get();
         if (owner_) { if (!*owner_) throw std::runtime_error("read from uninitialized Wio object place"); return owner_->value().Get(); }
         return raw_;
     }
     Handle& read() {
+        validateBorrow();
         if (handle_) return *handle_;
         if (owner_) { if (!*owner_) throw std::runtime_error("read from uninitialized Wio object place"); return owner_->value(); }
         if (!rawHandle_) rawHandle_ = Handle(raw_);
         return *rawHandle_;
     }
     const Handle& read() const { return const_cast<Place*>(this)->read(); }
+    bool canRebind() const { return !readOnly_ && (handle_ || owner_); }
+    bool hasStorageCell() const { return handle_ || owner_; }
+    const void* borrowIdentity() const {
+        validateBorrow();
+        if (handle_) return handle_;
+        if (owner_) return owner_.get();
+        return raw_;
+    }
+    Place asView() const { auto place = *this; place.readOnly_ = true; return place; }
+    Place withCallbackLifetime() const { auto place = *this; place.lifetime_ = activeCallbackBorrow; return place; }
     void write(Handle value) {
+        validateBorrow();
         if (readOnly_) throw std::runtime_error("write through a Wio view");
         if (handle_) *handle_ = std::move(value);
         else if (owner_) *owner_ = std::move(value);
         else throw std::runtime_error("rebind of raw Wio self");
     }
-    void clear() { if (readOnly_) throw std::runtime_error("clear through a Wio view"); if (handle_) handle_->Reset(); else if (owner_) owner_->reset(); }
+    void clear() { validateBorrow(); if (readOnly_) throw std::runtime_error("clear through a Wio view"); if (handle_) handle_->Reset(); else if (owner_) owner_->reset(); }
+    void rejectCallbackCapture() const { if (lifetime_) throw std::runtime_error("Invocation-scoped native callback borrows cannot be captured"); }
     Handle take() { auto value = read(); clear(); return value; }
 };
 template<class T> T& value_base(Place<wio::runtime::Ref<T>>& value) {
@@ -1166,8 +1470,14 @@ template<class T> struct ObjectBorrow {
     T* pointer;
     T* Get() const { return pointer; }
     T* operator->() const { return pointer; }
+    ObjectBorrow asView() const { return *this; }
     operator wio::runtime::Ref<T>() const { return wio::runtime::Ref<T>(pointer); }
 };
+template<class T> ObjectBorrow<T> checkedObjectReceiver(T* value) {
+    if (activeCallbackBorrow && !activeCallbackBorrow->active.load(std::memory_order_acquire))
+        throw std::runtime_error("expired native callback borrow");
+    return {value};
+}
 template<class T> T* object_ptr(const ObjectBorrow<T>& value) { return value.Get(); }
 template<class T> T& value_base(ObjectBorrow<T>& value) { if (!value.Get()) throw std::runtime_error("null Wio object access"); return *value.Get(); }
 template<class T> auto object_ptr(const std::optional<T>& value) { return value ? object_ptr(*value) : nullptr; }
@@ -1194,10 +1504,14 @@ inline std::string stringify(const wio::runtime::Text& value) { return value.Utf
 template<class T> std::string stringify(const T& value) {
     if constexpr (std::is_enum_v<T>) {
         return stringify(static_cast<std::underlying_type_t<T>>(value));
+    } else if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, char>) {
+        return wio::runtime::StringifyInteger(value);
+    } else if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+        return wio::runtime::StringifyFloating(value);
     } else if constexpr (requires(std::ostringstream& stream) { stream << value; }) {
         std::ostringstream stream;
         stream << value;
-        return stream.str();
+        return std::move(stream).str();
     } else {
         static_assert(!sizeof(T), "Wio value has no string conversion");
     }
@@ -1241,6 +1555,51 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
         result += stringify(key) + ": " + stringify(value);
     }
     return result + "}";
+}
+template<class T> void append_formatted(std::string& target, const T& value) {
+    if constexpr (wio::runtime::IsBasicFormattable<T>) {
+        if constexpr (wio::runtime::IsBasicFormatContainer<T>) {
+            // Native numeric facets can be stateful. Keep the established
+            // container evaluation order/facet callbacks outside classic locale.
+            if (std::locale() != std::locale::classic()) {
+                target.append(stringify(value));
+                return;
+            }
+        }
+        wio::runtime::AppendBasicFormatted(target, value);
+    } else {
+        target.append(stringify(value));
+    }
+}
+template<class T> std::string format_single(const T& value) {
+    if constexpr (wio::runtime::IsBasicFormattable<T>) {
+        // Preserve direct builtin append and live container locale policy.
+        std::string result;
+        append_formatted(result, value);
+        return result;
+    } else {
+        // No affixes: avoid another assembly buffer. Native formatters may
+        // reserve far more than they write; do not retain that excess in an
+        // escaping result. Subtraction avoids overflow in the 2x comparison.
+        auto result = stringify(value);
+        if (result.capacity() - result.size() > result.size()) return std::string(result);
+        return result;
+    }
+}
+template<class T> void append_formatted_literal_tail(std::string& target, const T& value, std::string_view tail) {
+    if constexpr (wio::runtime::IsBasicFormattable<T>) {
+        append_formatted(target, value);
+        target.append(tail);
+    } else {
+        // Finish native/user formatting once before reading lengths. The tail
+        // is an independent literal emitted by the backend, never a target view.
+        const auto rendered = stringify(value);
+        const auto required = wio::runtime::detail::CheckedFormattedSize(
+            target.max_size(), target.size(), rendered.size(), tail.size());
+        if (required > target.capacity()) target.reserve(required);
+        target.append(rendered);
+        target.append(tail);
+    }
 }
 }
 
@@ -1355,8 +1714,7 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                             continue;
                         const auto& function = *functions_.at(entry.implementation.value());
                         output_ << dispatchSignature(entry, objectName(id) + "::") << " { return "
-                                << functionName(function.id) << "(" << cppType(function.parameters.front().type)
-                                << "::raw(static_cast<" << objectName(function.ownerType) << "*>(this))";
+                                << receiverEntryName(function) << "(" << receiverThisArgument(function);
                         for (std::size_t i = 1; i < function.parameters.size(); ++i)
                             output_ << ", std::move(_a" << (i - 1) << ")";
                         output_ << "); }\n";
@@ -1378,24 +1736,33 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                             output_ << cppType(function->parameters[index].type) << " _a" << (index - 1);
                         }
                         output_ << ") { ";
+                        const auto& resultType = module_.types.get(function->returnType);
+                        const bool callableResult =
+                            resultType.kind == TypeKind::Function ||
+                            (resultType.kind == TypeKind::Nullable && !resultType.arguments.empty() &&
+                             module_.types.get(resultType.arguments.front()).kind == TypeKind::Function);
                         if (module_.types.get(function->returnType).kind != TypeKind::Void)
                             output_ << "return ";
-                        output_ << functionName(function->id) << '(' << cppType(function->parameters.front().type)
-                                << "::raw(static_cast<" << objectName(function->ownerType) << "*>(this))";
+                        if (callableResult)
+                            output_ << "wio::wir_backend::bindOwningNativeResult(";
+                        output_ << receiverEntryName(*function) << '(' << receiverThisArgument(*function);
                         for (std::size_t index = 1; index < function->parameters.size(); ++index)
                             output_ << ", std::move(_a" << (index - 1) << ')';
-                        output_ << "); }\n";
+                        output_ << (callableResult ? ")); }\n" : "); }\n");
                     }
                     if (type.destructor)
                     {
                         const auto& function = *functions_.at(type.destructor.value());
-                        output_ << objectName(id) << "::~" << objectName(id) << "() { " << functionName(function.id)
-                                << "(" << cppType(function.parameters.front().type) << "::raw(this)); }\n";
+                        output_ << objectName(id) << "::~" << objectName(id) << "() { "
+                                << (nativeProxyHierarchyTypes_.contains(id) ? "if (!_wio_hosted_proxy) " : "")
+                                << functionName(function.id) << "(" << cppType(function.parameters.front().type)
+                                << "::raw(this)); }\n";
                     }
                     if ((type.nominalKind == NominalKind::Object || type.nominalKind == NominalKind::Interface) &&
-                        type.defaultConstructor)
+                        (type.defaultConstructor || type.fieldInitializer))
                     {
-                        const auto& function = *functions_.at(type.defaultConstructor.value());
+                        const auto& function = *functions_.at(
+                            (type.fieldInitializer ? type.fieldInitializer : type.defaultConstructor).value());
                         output_ << objectName(id) << "::" << objectName(id) << "() { " << functionName(function.id)
                                 << "(" << cppType(function.parameters.front().type) << "::raw(this)); }\n";
                     }
@@ -1404,24 +1771,6 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
 
             void emitNominalDeclarations()
             {
-                for (std::size_t index = 0; index < module_.types.size(); ++index)
-                {
-                    const TypeId id{static_cast<TypeId::ValueType>(index)};
-                    const Type& type = module_.types.types()[index];
-                    if (typeIsOpen(id) || type.kind != TypeKind::Named ||
-                        type.nominalRepresentation != NominalRepresentation::NativePod ||
-                        type.nominalKind != NominalKind::Component)
-                        continue;
-                    const auto name = cppType(id);
-                    output_ << "using " << typeName(id) << " = " << name << ";\n";
-                    output_ << "static_assert(std::is_standard_layout_v<" << name
-                            << "> && std::is_trivially_copyable_v<" << name
-                            << ">, \"Wio native component requires a standard-layout trivially-copyable C++ type\");\n";
-                    for (const auto& field : type.fields)
-                        output_ << "static_assert(std::is_same_v<decltype(std::declval<" << name << ">()." << field.name
-                                << "), " << cppType(field.type)
-                                << ">, \"Wio native component field type mismatch\");\n";
-                }
                 for (std::size_t index = 0; index < module_.types.size(); ++index)
                 {
                     const TypeId id{static_cast<TypeId::ValueType>(index)};
@@ -1456,6 +1805,26 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                 << " value) noexcept { return static_cast<" << name << ">(~static_cast<" << underlying
                                 << ">(value)); }\n";
                     }
+                }
+                // Concrete native templates may contain Wio enum/flagset
+                // fields, so their layout assertions need those types first.
+                for (std::size_t index = 0; index < module_.types.size(); ++index)
+                {
+                    const TypeId id{static_cast<TypeId::ValueType>(index)};
+                    const Type& type = module_.types.types()[index];
+                    if (typeIsOpen(id) || type.kind != TypeKind::Named ||
+                        type.nominalRepresentation != NominalRepresentation::NativePod ||
+                        type.nominalKind != NominalKind::Component)
+                        continue;
+                    const auto name = cppType(id);
+                    output_ << "using " << typeName(id) << " = " << name << ";\n";
+                    output_ << "static_assert(std::is_standard_layout_v<" << name
+                            << "> && std::is_trivially_copyable_v<" << name
+                            << ">, \"Wio native component requires a standard-layout trivially-copyable C++ type\");\n";
+                    for (const auto& field : type.fields)
+                        output_ << "static_assert(std::is_same_v<decltype(std::declval<" << name << ">()." << field.name
+                                << "), " << cppType(field.type)
+                                << ">, \"Wio native component field type mismatch\");\n";
                 }
                 output_ << '\n';
 
@@ -1537,9 +1906,19 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                     << objectName(base);
                     }
                     output_ << " {\n";
+                    if (nativeProxyHierarchyTypes_.contains(id))
+                        output_ << "    bool _wio_hosted_proxy = false;\n";
                     for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
                         output_ << "    " << cppType(type.fields[fieldIndex].type) << " _f" << fieldIndex << "{}; // "
                                 << safeIdentifier(type.fields[fieldIndex].name) << "\n";
+                    if (!object)
+                    {
+                        output_ << "    bool nativeCaptureHasBorrow() const { return false";
+                        for (std::size_t fieldIndex = 0; fieldIndex < type.fields.size(); ++fieldIndex)
+                            output_ << " || wio::wir_backend::NativeCaptureBorrow<"
+                                    << cppType(type.fields[fieldIndex].type) << ">::contains(_f" << fieldIndex << ")";
+                        output_ << "; }\n";
+                    }
                     if (!object && type.destructor)
                         output_ << "    bool _wio_lifetime_active = true;\n"
                                 << "    " << typeName(id) << "() = default;\n"
@@ -1585,12 +1964,21 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                         for (const MethodLayout& method : type.methods)
                         {
                             const lowered::Function* function = concreteMethod(method);
-                            if (!function || method.visibility != FieldVisibility::Public)
+                            if (!function && nativeProxyHierarchyTypes_.contains(id))
+                            {
+                                const auto declaration = functions_.find(method.function.value());
+                                if (declaration != functions_.end() && declaration->second->isAbstract &&
+                                    !functionIsOpen(*declaration->second) && !declaration->second->parameters.empty())
+                                    function = declaration->second;
+                            }
+                            if (!function || (method.visibility != FieldVisibility::Public &&
+                                              type.nominalKind != NominalKind::Interface))
                                 continue;
                             const std::string name = legacyMethodName(method, *function);
                             if (!emittedLegacyMethods.insert(name).second)
                                 continue;
-                            output_ << "    " << cppType(function->returnType) << ' ' << name << '(';
+                            output_ << "    " << (nativeProxyHierarchyTypes_.contains(id) ? "virtual " : "")
+                                    << cppType(function->returnType) << ' ' << name << '(';
                             for (std::size_t parameterIndex = 1; parameterIndex < function->parameters.size();
                                  ++parameterIndex)
                             {
@@ -1599,12 +1987,30 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                 output_ << cppType(function->parameters[parameterIndex].type) << " _a"
                                         << (parameterIndex - 1);
                             }
-                            output_ << ");\n";
+                            output_ << (function->isAbstract ? ") = 0;\n" : ");\n");
                         }
                         if (type.destructor)
                             output_ << "    ~" << objectName(id) << "() override;\n";
-                        output_ << "    " << objectName(id) << (type.defaultConstructor ? "();\n" : "() = default;\n");
+                        output_ << "    " << objectName(id)
+                                << (type.defaultConstructor || type.fieldInitializer ? "();\n" : "() = default;\n");
                         output_ << "    explicit " << objectName(id) << "(wio::wir_backend::SkipConstructor) {}\n";
+                        if (nativeProxyHierarchyTypes_.contains(id))
+                        {
+                            output_ << "    explicit " << objectName(id) << "(wio::wir_backend::SkipHostedConstructor)";
+                            std::set<TypeId> bases(type.baseTypes.begin(), type.baseTypes.end());
+                            const auto hierarchy = WirNativeObjectEmitter::hostedHierarchyTypes(module_, {id});
+                            for (auto ancestor : hierarchy)
+                                if (ancestor != id && module_.types.get(ancestor).nominalKind == NominalKind::Interface)
+                                    bases.insert(ancestor); // Most-derived constructor owns virtual bases.
+                            bool first = true;
+                            for (auto base : bases)
+                            {
+                                output_ << (first ? " : " : ", ") << objectName(base)
+                                        << "(wio::wir_backend::SkipHostedConstructor{})";
+                                first = false;
+                            }
+                            output_ << " { _wio_hosted_proxy = true; }\n";
+                        }
                         if (type.nominalValueModel == NominalValueModel::Option && type.fields.size() >= 2 &&
                             !type.arguments.empty())
                         {
@@ -1643,23 +2049,50 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 output_ << '\n';
             }
 
-            std::string functionSignature(const lowered::Function& function, const bool declaration,
-                                          const std::string_view emittedName = {}) const
+            std::string receiverEntryName(const lowered::Function& function) const
             {
-                std::ostringstream signature;
-                signature << (function.isExternal && !function.nativeBinding ? "extern " : "")
-                          << cppType(function.returnType) << ' '
-                          << (emittedName.empty() ? functionName(function.id) : std::string{emittedName}) << '(';
+                return functionName(function.id) + (receiverPlans_.contains(function.id.value()) ? "_receiver" : "");
+            }
+
+            std::string receiverThisArgument(const lowered::Function& function) const
+            {
+                const std::string pointer = "static_cast<" + objectName(function.ownerType) + "*>(this)";
+                return receiverPlans_.contains(function.id.value())
+                           ? "wio::wir_backend::checkedObjectReceiver(" + pointer + ")"
+                           : cppType(function.parameters.front().type) + "::raw(" + pointer + ")";
+            }
+
+            std::string functionSignature(const lowered::Function& function, const bool declaration,
+                                          const std::string_view emittedName = {},
+                                          const bool directNativeBorrow = false,
+                                          const bool directReceiver = false) const
+            {
+                std::string signature;
+                signature.reserve(48 + function.parameters.size() * 32);
+                if (function.isExternal && !function.nativeBinding)
+                    signature += "extern ";
+                signature += cppType(function.returnType);
+                signature.push_back(' ');
+                signature += emittedName.empty() ? functionName(function.id) : std::string{emittedName};
+                signature.push_back('(');
                 for (std::size_t index = 0; index < function.parameters.size(); ++index)
                 {
                     if (index)
-                        signature << ", ";
-                    signature << cppType(function.parameters[index].type) << " _p" << index;
+                        signature += ", ";
+                    const auto parameter = function.parameters[index].type;
+                    const auto& type = module_.types.get(parameter);
+                    signature += directReceiver && index == 0
+                                     ? "wio::wir_backend::ObjectBorrow<" + objectName(function.ownerType) + ">"
+                                 : directNativeBorrow && type.kind == TypeKind::Reference
+                                     ? (type.isMutable ? "" : "const ") + cppType(type.arguments.front()) + "&"
+                                     : cppType(parameter);
+                    signature += " _p";
+                    signature += std::to_string(index);
                 }
-                signature << ')';
+                signature.push_back(')');
                 if (declaration)
-                    signature << ';';
-                return signature.str();
+                    signature.push_back(';');
+                return signature;
             }
 
             void emitGlobals()
@@ -1683,18 +2116,49 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     if (!functionIsOpen(function))
                     {
                         output_ << functionSignature(function, true) << '\n';
+                        if (receiverPlans_.contains(function.id.value()))
+                            output_ << functionSignature(function, true, receiverEntryName(function), false, true)
+                                    << '\n';
+                        if (WirCppStoragePlan::supportsCallScopedBorrowAbi(module_, function))
+                            output_ << functionSignature(function, true, functionName(function.id) + "_borrow", true)
+                                    << '\n';
                         if (!function.isExternal && !behavioralPipeline(function.id).empty())
                             output_ << functionSignature(function, true, coreFunctionName(function.id)) << '\n';
                     }
                 output_ << '\n';
             }
 
+            static bool isLinearFunction(const lowered::Function& function)
+            {
+                if (function.blocks.size() != 1 || !function.blocks.front().parameters.empty() ||
+                    function.blocks.front().instructions.empty())
+                    return false;
+                const lowered::Opcode terminator = function.blocks.front().instructions.back().opcode;
+                return terminator == lowered::Opcode::Return || terminator == lowered::Opcode::CoroutineComplete ||
+                       terminator == lowered::Opcode::Unreachable;
+            }
+
             void collectValueTypes(const lowered::Function& function)
             {
+                std::size_t valueCapacity = function.parameters.size();
+                for (const lowered::BasicBlock& block : function.blocks)
+                    valueCapacity += block.parameters.size() + block.instructions.size();
                 valueTypes_.clear();
+                valueTypes_.reserve(valueCapacity);
                 borrowedLoads_.clear();
+                borrowedLoads_.reserve(valueCapacity);
                 objectBorrowedLoads_.clear();
+                objectBorrowedLoads_.reserve(valueCapacity);
                 ownedValues_.clear();
+                ownedValues_.reserve(valueCapacity);
+                valueAliases_.clear();
+                valueAliases_.reserve(valueCapacity / 4u + 1u);
+                suppressedInstructions_.clear();
+                suppressedInstructions_.reserve(valueCapacity / 4u + 1u);
+                directValues_.clear();
+                directValues_.reserve(valueCapacity);
+                currentFunctionIsLinear_ = isLinearFunction(function);
+                storagePlan_ = WirCppStoragePlan::build(module_, function);
                 for (const lowered::Parameter& parameter : function.parameters)
                 {
                     valueTypes_[parameter.id.value()] = parameter.type;
@@ -1727,10 +2191,200 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                             borrowedLoads_.insert(instruction.result.value());
                     }
                 }
+
+                collectLinearPlaceAliases(function);
+                for (const auto& [copy, source] : storagePlan_.borrowedStringCopies)
+                {
+                    valueAliases_.emplace(copy, source);
+                    valueTypes_.erase(copy);
+                }
+                for (const auto& block : function.blocks)
+                    for (const auto& instruction : block.instructions)
+                        if (instruction.result &&
+                            storagePlan_.borrowedStringCopies.contains(instruction.result.value()))
+                            suppressedInstructions_.insert(&instruction);
+
+                for (const auto sum : storagePlan_.elidedConcatValues)
+                {
+                    valueTypes_.erase(sum);
+                    ownedValues_.erase(sum);
+                }
+                for (const auto& block : function.blocks)
+                    for (const auto& instruction : block.instructions)
+                        if ((instruction.result &&
+                             storagePlan_.elidedConcatValues.contains(instruction.result.value())) ||
+                            ((instruction.opcode == lowered::Opcode::DropValue ||
+                              instruction.opcode == lowered::Opcode::Release) &&
+                             instruction.operands.size() == 1 &&
+                             storagePlan_.elidedConcatValues.contains(instruction.operands[0].value())))
+                            suppressedInstructions_.insert(&instruction);
+
+                stringTransferPlan_ = WirCppStringTransferPlan::build(module_, function);
+                for (const auto& [source, destination] : stringTransferPlan_.edgeDestinations)
+                {
+                    valueAliases_.emplace(source, destination);
+                    valueTypes_.erase(source);
+                    ownedValues_.erase(source);
+                }
+
+                if (currentFunctionIsLinear_)
+                {
+                    for (const auto& [id, type] : valueTypes_)
+                    {
+                        (void)type;
+                        directValues_.insert(id);
+                    }
+                    for (const lowered::Instruction& instruction : function.blocks.front().instructions)
+                        if ((instruction.opcode == lowered::Opcode::Release ||
+                             instruction.opcode == lowered::Opcode::DropValue) &&
+                            !instruction.operands.empty())
+                            directValues_.erase(resolveValueAlias(instruction.operands.front()).value());
+                }
+
+                stringInitPlan_ = WirCppStringInitPlan::build(module_, function, storagePlan_);
+                for (const auto& [source, cell] : stringInitPlan_.producerCells)
+                {
+                    valueTypes_.erase(source);
+                    ownedValues_.erase(source);
+                    // The original LocalPlace declaration is suppressed, even
+                    // in linear functions. Predeclare an empty closed cell.
+                    directValues_.erase(cell.value());
+                }
+                suppressedInstructions_.insert(stringInitPlan_.suppressedInstructions.begin(),
+                                               stringInitPlan_.suppressedInstructions.end());
+
+                scalarFormatPlan_ = WirCppScalarFormatPlan::build(module_, function);
+                for (const auto& [value, storage] : scalarFormatPlan_.fragments)
+                {
+                    (void)storage;
+                    storagePlan_.plainValues.insert(value);
+                    ownedValues_.erase(value);
+                    // Integer fragments are noncopyable and formatted in place.
+                    // Keep both fragment kinds predeclared across CFG blocks.
+                    directValues_.erase(value);
+                }
             }
 
-            std::string operand(const ValueId id) const
+            void collectLinearPlaceAliases(const lowered::Function& function)
             {
+                if (function.blocks.size() != 1)
+                    return;
+
+                const lowered::BasicBlock& block = function.blocks.front();
+                std::unordered_map<std::uint32_t, std::vector<const lowered::Instruction*>> uses;
+                std::unordered_map<const lowered::Instruction*, std::size_t> positions;
+                uses.reserve(valueTypes_.size());
+                positions.reserve(block.instructions.size());
+                for (std::size_t index = 0; index < block.instructions.size(); ++index)
+                {
+                    const lowered::Instruction& instruction = block.instructions[index];
+                    positions.emplace(&instruction, index);
+                    for (const ValueId operandId : instruction.operands)
+                        uses[operandId.value()].push_back(&instruction);
+                    for (const lowered::BranchTarget& target : instruction.targets)
+                        for (const ValueId argument : target.arguments)
+                            uses[argument.value()].push_back(&instruction);
+                    if (instruction.borrowOrigin)
+                        uses[instruction.borrowOrigin.value()].push_back(&instruction);
+                }
+
+                for (const lowered::Instruction& place : block.instructions)
+                {
+                    if (place.opcode != lowered::Opcode::LocalPlace || !place.result)
+                        continue;
+
+                    const lowered::Instruction* initializer = nullptr;
+                    const lowered::Instruction* load = nullptr;
+                    std::vector<const lowered::Instruction*> cleanup;
+                    bool promotable = true;
+                    for (const lowered::Instruction* use : uses[place.result.value()])
+                    {
+                        if (use->operands.empty() || use->operands.front() != place.result)
+                        {
+                            promotable = false;
+                            break;
+                        }
+                        if (use->opcode == lowered::Opcode::PlaceInit && !initializer)
+                            initializer = use;
+                        else if (use->opcode == lowered::Opcode::Load && !load && use->result &&
+                                 use->resultOwnership != typed::ValueOwnership::Borrowed)
+                            load = use;
+                        else if (use->opcode == lowered::Opcode::DropPlace ||
+                                 use->opcode == lowered::Opcode::ReleasePlace)
+                            cleanup.push_back(use);
+                        else
+                        {
+                            promotable = false;
+                            break;
+                        }
+                    }
+
+                    if (!promotable || !initializer || initializer->operands.size() != 2 || !load)
+                        continue;
+
+                    const ValueId initialValue = initializer->operands[1];
+                    const auto initialUses = uses.find(initialValue.value());
+                    if (initialUses == uses.end() || initialUses->second.size() != 1 ||
+                        initialUses->second.front() != initializer)
+                        continue;
+                    const auto initialTypeId = valueTypes_.find(initialValue.value());
+                    const Type* initialType =
+                        initialTypeId == valueTypes_.end() ? nullptr : module_.types.tryGet(initialTypeId->second);
+                    if (!initialType || requiresCleanup(*initialType) ||
+                        positions.at(initializer) >= positions.at(load) ||
+                        std::ranges::any_of(cleanup, [&](const lowered::Instruction* instruction)
+                                            { return positions.at(instruction) <= positions.at(load); }))
+                        continue;
+
+                    valueAliases_.emplace(load->result.value(), initialValue);
+                    suppressedInstructions_.insert(&place);
+                    suppressedInstructions_.insert(initializer);
+                    suppressedInstructions_.insert(load);
+                    suppressedInstructions_.insert(cleanup.begin(), cleanup.end());
+                    valueTypes_.erase(place.result.value());
+                    valueTypes_.erase(load->result.value());
+                }
+            }
+
+            ValueId resolveValueAlias(ValueId id) const
+            {
+                for (std::size_t depth = 0; depth <= valueAliases_.size(); ++depth)
+                {
+                    const auto alias = valueAliases_.find(id.value());
+                    if (alias == valueAliases_.end())
+                        break;
+                    id = alias->second;
+                }
+                return id;
+            }
+
+            std::string valueStorageType(const std::uint32_t id, const TypeId type) const
+            {
+                if (const auto fragment = scalarFormatPlan_.fragments.find(id);
+                    fragment != scalarFormatPlan_.fragments.end())
+                    return fragment->second == WirCppScalarFormatPlan::Storage::BooleanView
+                               ? "std::string_view"
+                               : "wio::runtime::detail::RenderedInteger";
+                if (currentReceiverPlan_ && currentReceiverPlan_->receiverValues.contains(id))
+                    return "wio::wir_backend::ObjectBorrow<" + objectName(currentFunction_->ownerType) + ">";
+                if (storagePlan_.scalarFieldPlaces.contains(id))
+                    return placeValueType(type) + "*";
+                if (storagePlan_.scalarPlaces.contains(id))
+                    return "wio::wir_backend::ScalarPlace<" + placeValueType(type) + ">";
+                if (storagePlan_.stringPlaces.contains(id) || storagePlan_.byteArrayPlaces.contains(id))
+                    return "wio::wir_backend::InlinePlace<" + placeValueType(type) + ">";
+                if (objectBorrowedLoads_.contains(id))
+                    return "wio::wir_backend::ObjectBorrow<" + objectName(type) + ">";
+                if (borrowedLoads_.contains(id))
+                    return "std::reference_wrapper<" + cppType(type) + ">";
+                return cppType(type);
+            }
+
+            std::string operand(ValueId id) const
+            {
+                id = resolveValueAlias(id);
+                if (directValues_.contains(id.value()) || storagePlan_.plainValues.contains(id.value()))
+                    return borrowedLoads_.contains(id.value()) ? "(" + valueName(id) + ".get())" : valueName(id);
                 return borrowedLoads_.contains(id.value()) ? "(" + valueName(id) + "->get())"
                                                            : "(*" + valueName(id) + ")";
             }
@@ -1742,7 +2396,15 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
             void emitSource(const SourceSpan& source)
             {
                 if (options_.emitLineDirectives && source.hasSourceContext())
-                    output_ << "#line " << source.begin.line << ' ' << cppString(source.begin.file) << "\n";
+                {
+                    output_ << "#line " << source.begin.line;
+                    if (source.begin.file != lastSourceFile_)
+                    {
+                        lastSourceFile_ = source.begin.file;
+                        output_ << ' ' << cppString(lastSourceFile_);
+                    }
+                    output_ << '\n';
+                }
             }
 
             std::string literal(const lowered::Instruction& instruction) const
@@ -1766,6 +2428,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     return std::to_string(*value) + "ULL";
                 if (const auto* value = std::get_if<double>(&instruction.literal))
                 {
+                    if (*value == 0.0 && std::signbit(*value))
+                        return "-0.0";
                     std::ostringstream text;
                     text << std::setprecision(17) << *value;
                     return text.str();
@@ -1773,6 +2437,13 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 if (const auto* value = std::get_if<std::string>(&instruction.literal))
                 {
                     const Type* resultType = module_.types.tryGet(instruction.resultType);
+                    if (value->find('\0') != std::string::npos)
+                    {
+                        const std::string bytes = cppString(*value) + ", " + std::to_string(value->size());
+                        return resultType && resultType->kind == TypeKind::Text
+                                   ? "wio::runtime::Text::FromUtf8(std::string_view{" + bytes + "})"
+                                   : "std::string{" + bytes + "}";
+                    }
                     return resultType && resultType->kind == TypeKind::Text
                                ? "wio::runtime::Text::FromUtf8(" + cppString(*value) + ")"
                                : cppString(*value);
@@ -1832,7 +2503,34 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
 
             std::string nativeCall(const lowered::Function& callee, const lowered::Instruction& instruction) const
             {
-                return functionName(callee.id) + "(" + callArguments(instruction) + ")";
+                bool directBorrow = WirCppStoragePlan::supportsCallScopedBorrowAbi(module_, callee);
+                for (std::size_t index = 0; directBorrow && index < instruction.operands.size(); ++index)
+                    if (module_.types.get(callee.parameters[index].type).kind == TypeKind::Reference &&
+                        !storagePlan_.stringPlaces.contains(instruction.operands[index].value()) &&
+                        !storagePlan_.byteArrayPlaces.contains(instruction.operands[index].value()))
+                        directBorrow = false;
+                std::string arguments;
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    if (index)
+                        arguments += ", ";
+                    const ValueId value = instruction.operands[index];
+                    if (storagePlan_.stringPlaces.contains(value.value()) ||
+                        storagePlan_.byteArrayPlaces.contains(value.value()))
+                    {
+                        // Closed UTF-8/byte cells can use only call-scoped
+                        // leaf borrows with scalar/void results and no callbacks.
+                        const TypeId parameter = callee.parameters[index].type;
+                        const bool mutableBorrow = module_.types.get(parameter).isMutable;
+                        arguments += directBorrow
+                                         ? operand(value) + ".read()"
+                                         : cppType(parameter) + (mutableBorrow ? "::borrow(" : "::borrowView(") +
+                                               operand(value) + ".read())";
+                    }
+                    else
+                        arguments += operand(value);
+                }
+                return functionName(callee.id) + (directBorrow ? "_borrow(" : "(") + arguments + ")";
             }
 
             std::string callArguments(const lowered::Instruction& instruction, const std::size_t begin = 0,
@@ -1843,9 +2541,10 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 {
                     if (index != begin)
                         arguments += ", ";
-                    arguments += consume && ownedValues_.contains(instruction.operands[index].value())
-                                     ? movedOperand(instruction.operands[index])
-                                     : operand(instruction.operands[index]);
+                    arguments +=
+                        consume && ownedValues_.contains(resolveValueAlias(instruction.operands[index]).value())
+                            ? movedOperand(instruction.operands[index])
+                            : operand(instruction.operands[index]);
                 }
                 return arguments;
             }
@@ -1856,8 +2555,13 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 std::string receiver;
                 if (owner.nominalKind == NominalKind::Object || owner.nominalKind == NominalKind::Interface)
                 {
-                    receiver = cppType(instruction.signatureTypes.front()) + "::raw(wio::wir_backend::object_ptr(" +
-                               operand(instruction.operands.front()) + "))";
+                    if (receiverPlans_.contains(instruction.callee.value()))
+                        receiver = "wio::wir_backend::checkedObjectReceiver(static_cast<" +
+                                   objectName(functions_.at(instruction.callee.value())->ownerType) +
+                                   "*>(wio::wir_backend::object_ptr(" + operand(instruction.operands.front()) + ")))";
+                    else
+                        receiver = cppType(instruction.signatureTypes.front()) + "::raw(wio::wir_backend::object_ptr(" +
+                                   operand(instruction.operands.front()) + "))";
                 }
                 else
                 {
@@ -1873,7 +2577,7 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
 
             TypeId valueType(const ValueId value) const
             {
-                const auto found = valueTypes_.find(value.value());
+                const auto found = valueTypes_.find(resolveValueAlias(value).value());
                 return found == valueTypes_.end() ? TypeId{} : found->second;
             }
 
@@ -2042,7 +2746,23 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
             void assignResult(const lowered::Instruction& instruction, const std::string& expression)
             {
                 if (instruction.result)
-                    output_ << "                " << valueName(instruction.result) << " = " << expression << ";\n";
+                {
+                    if (const auto cell = stringInitPlan_.producerCells.find(instruction.result.value());
+                        cell != stringInitPlan_.producerCells.end())
+                    {
+                        output_ << "                " << operand(cell->second)
+                                << ".initializeFrom([&]() -> std::string { return " << expression << "; });\n";
+                        return;
+                    }
+                    const auto forwarded = stringTransferPlan_.edgeDestinations.find(instruction.result.value());
+                    const ValueId destination = forwarded == stringTransferPlan_.edgeDestinations.end()
+                                                    ? instruction.result
+                                                    : forwarded->second;
+                    output_ << "                ";
+                    if (directValues_.contains(destination.value()))
+                        output_ << valueStorageType(destination.value(), instruction.resultType) << ' ';
+                    output_ << valueName(destination) << " = " << expression << ";\n";
+                }
                 else
                     output_ << "                " << expression << ";\n";
             }
@@ -2053,17 +2773,37 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 for (const lowered::BasicBlock& block : currentFunction_->blocks)
                     if (block.id == target.block)
                         destination = &block;
-                for (std::size_t index = 0; destination && index < target.arguments.size(); ++index)
-                    output_ << "                " << valueName(destination->parameters[index].id) << " = "
+                // Phi assignment is simultaneous, including self-loop swaps.
+                output_ << "                {\n";
+                const auto forwarded = target.arguments.size() == 1
+                                           ? stringTransferPlan_.edgeDestinations.find(target.arguments[0].value())
+                                           : stringTransferPlan_.edgeDestinations.end();
+                const bool alreadyStored = destination && destination->parameters.size() == 1 &&
+                                           forwarded != stringTransferPlan_.edgeDestinations.end() &&
+                                           forwarded->second == destination->parameters[0].id;
+                for (std::size_t index = 0; !alreadyStored && destination && index < target.arguments.size(); ++index)
+                    output_ << "                "
+                            << valueStorageType(destination->parameters[index].id.value(),
+                                                destination->parameters[index].type)
+                            << " _edge" << index << " = "
                             << (destination->parameters[index].ownership == typed::ValueOwnership::Owned
                                     ? movedOperand(target.arguments[index])
                                     : operand(target.arguments[index]))
                             << ";\n";
-                output_ << "                _block = " << target.block.value() << "; continue;\n";
+                for (std::size_t index = 0; !alreadyStored && destination && index < target.arguments.size(); ++index)
+                    output_ << "                " << valueName(destination->parameters[index].id)
+                            << " = std::move(_edge" << index << ");\n";
+                if (storagePlan_.directControlFlow)
+                    output_ << "                goto _b" << target.block.value() << ";\n";
+                else
+                    output_ << "                _block = " << target.block.value() << "; continue;\n";
+                output_ << "                }\n";
             }
 
             void emitInstruction(const lowered::Instruction& instruction)
             {
+                if (suppressedInstructions_.contains(&instruction))
+                    return;
                 emitSource(instruction.source);
                 if (options_.emitComments)
                     output_ << "                // " << lowered::opcodeName(instruction.opcode) << "\n";
@@ -2085,12 +2825,39 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                          operand(instruction.operands[0]));
                     break;
                 case lowered::Opcode::Binary:
-                    if (!instruction.operands.empty() &&
-                        module_.types.get(valueType(instruction.operands.front())).kind == TypeKind::Nullable &&
-                        module_.types.get(module_.types.get(valueType(instruction.operands.front())).arguments.front())
-                                .kind != TypeKind::Opaque &&
-                        (instruction.binaryOperator == typed::BinaryOperator::Equal ||
-                         instruction.binaryOperator == typed::BinaryOperator::NotEqual))
+                    if (storagePlan_.flattenedConcatOperands.contains(instruction.result.value()))
+                    {
+                        std::string expression = "wio::runtime::Concat(";
+                        const auto& parts = storagePlan_.flattenedConcatOperands.at(instruction.result.value());
+                        for (std::size_t index = 0; index < parts.size(); ++index)
+                        {
+                            if (index)
+                                expression += ", ";
+                            expression += operand(parts[index]);
+                        }
+
+                        assignResult(instruction, expression + ")");
+                    }
+                    else if (instruction.binaryOperator == typed::BinaryOperator::Add &&
+                             instruction.operands.size() == 2 &&
+                             (module_.types.get(instruction.resultType).kind == TypeKind::String ||
+                              module_.types.get(instruction.resultType).kind == TypeKind::Text))
+                    {
+                        const auto concatOperand = [&](const ValueId value)
+                        {
+                            return storagePlan_.consumedConcatOperands.contains(value.value()) ? movedOperand(value)
+                                                                                               : operand(value);
+                        };
+                        assignResult(instruction, "(" + concatOperand(instruction.operands[0]) + " + " +
+                                                      concatOperand(instruction.operands[1]) + ")");
+                    }
+                    else if (!instruction.operands.empty() &&
+                             module_.types.get(valueType(instruction.operands.front())).kind == TypeKind::Nullable &&
+                             module_.types
+                                     .get(module_.types.get(valueType(instruction.operands.front())).arguments.front())
+                                     .kind != TypeKind::Opaque &&
+                             (instruction.binaryOperator == typed::BinaryOperator::Equal ||
+                              instruction.binaryOperator == typed::BinaryOperator::NotEqual))
                     {
                         const std::string equality = "wio::wir_backend::nullable_equal(" +
                                                      operand(instruction.operands[0]) + ", " +
@@ -2142,8 +2909,8 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                  functionName(instruction.callee) + "(" + callArguments(instruction, 0, true) + ")");
                     break;
                 case lowered::Opcode::MethodCall:
-                    assignResult(instruction,
-                                 functionName(instruction.callee) + "(" + directMethodArguments(instruction) + ")");
+                    assignResult(instruction, receiverEntryName(*functions_.at(instruction.callee.value())) + "(" +
+                                                  directMethodArguments(instruction) + ")");
                     break;
                 case lowered::Opcode::NativeInvoke:
                 {
@@ -2157,15 +2924,24 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 case lowered::Opcode::ClosureCreate:
                 {
                     std::string captures = "[";
+                    std::string environmentArguments;
+                    std::string capturedValidation;
                     for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                     {
                         if (index)
                             captures += ", ";
                         std::string capturedValue = operand(instruction.operands[index]);
                         if (index < instruction.captureKinds.size() &&
+                            instruction.captureKinds[index] == CaptureKind::Reference)
+                            output_ << "    wio::wir_backend::rejectCallbackCapture(" << capturedValue << ");\n";
+                        if (index < instruction.captureKinds.size() &&
                             instruction.captureKinds[index] == CaptureKind::RetainedSelf)
                             capturedValue += ".read()";
                         captures += "_c" + std::to_string(index) + " = " + capturedValue;
+                        environmentArguments += ", " + capturedValue;
+                        if (index)
+                            capturedValidation += ", ";
+                        capturedValidation += "_c" + std::to_string(index);
                     }
                     captures += "]";
                     const Type& callable = module_.types.get(instruction.resultType);
@@ -2195,14 +2971,17 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     }
                     if (!capturedArguments.empty() && !arguments.empty())
                         capturedArguments += ", ";
-                    assignResult(instruction, captures + "(" + parameters + ") mutable { return " +
-                                                  functionName(instruction.callee) + "(" + capturedArguments +
-                                                  arguments + "); }");
+                    assignResult(instruction, "wio::wir_backend::nativeCallableEnvironment(" +
+                                                  cppType(instruction.resultType) + "(" + captures + "(" + parameters +
+                                                  ") mutable { " + "wio::wir_backend::validateNativeCallableCaptures(" +
+                                                  capturedValidation + "); return " + functionName(instruction.callee) +
+                                                  "(" + capturedArguments + arguments + "); })" + environmentArguments +
+                                                  ")");
                     break;
                 }
                 case lowered::Opcode::IndirectCall:
                     assignResult(instruction,
-                                 operand(instruction.operands[0]) + "(" + callArguments(instruction, 1) + ")");
+                                 operand(instruction.operands[0]) + "(" + callArguments(instruction, 1, true) + ")");
                     break;
                 case lowered::Opcode::VirtualCall:
                 case lowered::Opcode::InterfaceCall:
@@ -2291,14 +3070,86 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     break;
                 case lowered::Opcode::Interpolate:
                 {
-                    std::string expression =
-                        cppString(instruction.stringSegments.empty() ? "" : instruction.stringSegments.front());
+                    if (const auto fragment = scalarFormatPlan_.fragments.find(instruction.result.value());
+                        fragment != scalarFormatPlan_.fragments.end())
+                    {
+                        if (fragment->second == WirCppScalarFormatPlan::Storage::BooleanView)
+                            assignResult(instruction, "std::string_view{" + operand(instruction.operands[0]) +
+                                                          " ? \"true\" : \"false\"}");
+                        else
+                            output_ << "                " << valueName(instruction.result) << ".format("
+                                    << operand(instruction.operands[0]) << ");\n";
+                        break;
+                    }
+                    const std::string_view prefix =
+                        instruction.stringSegments.empty() ? std::string_view{} : instruction.stringSegments.front();
+                    if (instruction.resultType == module_.types.stringType() && instruction.operands.size() == 1 &&
+                        instruction.stringSegments.size() == 2 && prefix.empty() &&
+                        instruction.stringSegments[1].empty() &&
+                        !scalarFormatPlan_.fragments.contains(instruction.operands[0].value()))
+                    {
+                        // Rendered integer/bool fragments are private non-string
+                        // storage: their existing view append path must remain.
+                        assignResult(instruction,
+                                     "wio::wir_backend::format_single(" + operand(instruction.operands[0]) + ")");
+                        break;
+                    }
+                    const bool renderedStrings =
+                        (instruction.operands.size() > 1 ||
+                         (instruction.operands.size() == 1 &&
+                          !scalarFormatPlan_.fragments.contains(instruction.operands[0].value()))) &&
+                        std::ranges::all_of(instruction.operands, [&](const ValueId value)
+                                            { return module_.types.get(valueType(value)).kind == TypeKind::String; });
+                    const bool singleLiteralTail =
+                        !renderedStrings && instruction.resultType == module_.types.stringType() &&
+                        instruction.operands.size() == 1 && instruction.stringSegments.size() == 2 &&
+                        !instruction.stringSegments[1].empty() &&
+                        !scalarFormatPlan_.fragments.contains(instruction.operands[0].value());
+                    std::string expression = renderedStrings ? "([&]() { std::string _formatted; "
+                                                             : "([&]() { std::string _formatted(" + cppString(prefix) +
+                                                                   ", " + std::to_string(prefix.size()) + "); ";
+                    if (renderedStrings)
+                    {
+                        // All user hooks have already run as ordinary WIR calls.
+                        // Strings have no formatting side effects; preflight only
+                        // their byte lengths, never arbitrary ToString/containers.
+                        expression +=
+                            "const auto _required = wio::runtime::detail::CheckedFormattedSize(_formatted.max_size()";
+                        for (const auto& segment : instruction.stringSegments)
+                            if (!segment.empty())
+                                expression += ", std::size_t{" + std::to_string(segment.size()) + "}";
+                        for (const ValueId value : instruction.operands)
+                            expression += ", " + operand(value) + ".size()";
+                        expression += "); if (_required > _formatted.capacity()) _formatted.reserve(_required); ";
+                        if (!prefix.empty())
+                            expression +=
+                                "_formatted.append(" + cppString(prefix) + ", " + std::to_string(prefix.size()) + "); ";
+                    }
                     for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                     {
-                        expression += " + wio::wir_backend::stringify(" + operand(instruction.operands[index]) + ")";
-                        if (index + 1 < instruction.stringSegments.size())
-                            expression += " + " + cppString(instruction.stringSegments[index + 1]);
+                        const ValueId value = instruction.operands[index];
+                        if (const auto fragment = scalarFormatPlan_.fragments.find(value.value());
+                            fragment != scalarFormatPlan_.fragments.end())
+                            expression +=
+                                "_formatted.append(" + operand(value) +
+                                (fragment->second == WirCppScalarFormatPlan::Storage::IntegerBytes ? ".view()" : "") +
+                                "); ";
+                        else if (singleLiteralTail)
+                            expression += "wio::wir_backend::append_formatted_literal_tail(_formatted, " +
+                                          operand(value) + ", std::string_view{" +
+                                          cppString(instruction.stringSegments[1]) + ", " +
+                                          std::to_string(instruction.stringSegments[1].size()) + "}); ";
+                        else
+                            expression += "wio::wir_backend::append_formatted(_formatted, " + operand(value) + "); ";
+                        if (!singleLiteralTail && index + 1 < instruction.stringSegments.size())
+                        {
+                            const auto& segment = instruction.stringSegments[index + 1];
+                            if (!segment.empty())
+                                expression += "_formatted.append(" + cppString(segment) + ", " +
+                                              std::to_string(segment.size()) + "); ";
+                        }
                     }
+                    expression += "return _formatted; }())";
                     const Type* resultType = module_.types.tryGet(instruction.resultType);
                     assignResult(instruction, resultType && resultType->kind == TypeKind::Text
                                                   ? "wio::runtime::Text::FromUtf8(" + expression + ")"
@@ -2415,6 +3266,13 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     break;
                 }
                 case lowered::Opcode::NullableWrap:
+                    if (module_.types.get(module_.types.get(instruction.resultType).arguments.front()).kind ==
+                        TypeKind::Opaque)
+                    {
+                        assignResult(instruction,
+                                     instruction.operands.empty() ? "nullptr" : operand(instruction.operands[0]));
+                        break;
+                    }
                     assignResult(instruction,
                                  instruction.operands.empty()
                                      ? cppType(instruction.resultType) + "{}"
@@ -2447,14 +3305,48 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     break;
                 }
                 case lowered::Opcode::LocalPlace:
-                    assignResult(instruction, cppType(instruction.resultType) + "::local()");
+                    assignResult(instruction,
+                                 valueStorageType(instruction.result.value(), instruction.resultType) + "::local()");
                     break;
                 case lowered::Opcode::PlaceInit:
                 case lowered::Opcode::Store:
+                case lowered::Opcode::Replace:
+                    if (storagePlan_.scalarFieldPlaces.contains(instruction.operands[0].value()))
+                    {
+                        output_ << "                *" << operand(instruction.operands[0]) << " = "
+                                << operand(instruction.operands[1]) << ";\n";
+                        break;
+                    }
+                    if (instruction.opcode != lowered::Opcode::PlaceInit &&
+                        storagePlan_.localAppendSuffixes.contains(instruction.operands[1].value()))
+                    {
+                        // The plan proves an initialized mutable direct cell,
+                        // never a view/proxy. String/Text += has no effect on
+                        // allocation failure; the old post-add store was a
+                        // nonthrowing move into this same initialized cell.
+                        const auto& suffixes = storagePlan_.localAppendSuffixes.at(instruction.operands[1].value());
+                        if (suffixes.size() == 1)
+                            output_ << "                " << operand(instruction.operands[0])
+                                    << ".read() += " << operand(suffixes.front()) << "; // Wio local append reuse\n";
+                        else
+                        {
+                            output_ << "                wio::runtime::AppendConcat(" << operand(instruction.operands[0])
+                                    << ".read()";
+                            for (const auto suffix : suffixes)
+                                output_ << ", " << operand(suffix);
+                            output_ << "); // Wio transactional concat reuse\n";
+                        }
+                        break;
+                    }
                     output_ << "                " << operand(instruction.operands[0]) << ".write("
                             << movedOperand(instruction.operands[1]) << ");\n";
                     break;
                 case lowered::Opcode::Load:
+                    if (storagePlan_.scalarFieldPlaces.contains(instruction.operands[0].value()))
+                    {
+                        assignResult(instruction, "(*" + operand(instruction.operands[0]) + ")");
+                        break;
+                    }
                     assignResult(instruction, objectBorrowedLoads_.contains(instruction.result.value())
                                                   ? "wio::wir_backend::ObjectBorrow<" +
                                                         objectName(instruction.resultType) + ">{" +
@@ -2464,7 +3356,14 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                                   : operand(instruction.operands[0]) + ".read()");
                     break;
                 case lowered::Opcode::Borrow:
-                    assignResult(instruction, operand(instruction.operands[0]));
+                    assignResult(
+                        instruction,
+                        operand(instruction.operands[0]) +
+                            (module_.types.get(instruction.resultType).kind == TypeKind::Reference &&
+                                     !module_.types.get(instruction.resultType).isMutable &&
+                                     module_.types.get(valueType(instruction.operands[0])).kind == TypeKind::Reference
+                                 ? ".asView()"
+                                 : ""));
                     break;
                 case lowered::Opcode::FieldPlace:
                 {
@@ -2477,10 +3376,13 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     const std::string field = layout.nominalRepresentation == NominalRepresentation::NativePod
                                                   ? instruction.selector
                                                   : "_f" + std::to_string(instruction.projectionIndex);
-                    assignResult(instruction,
-                                 "wio::wir_backend::Place<" + placeValueType(instruction.resultType) + ">::borrow(" +
-                                     (object ? "static_cast<" + objectName(owner) + "&>(" + base + ")" : base) + "." +
-                                     field + ")");
+                    const auto access =
+                        (object ? "static_cast<" + objectName(owner) + "&>(" + base + ")" : base) + "." + field;
+                    assignResult(instruction, storagePlan_.scalarFieldPlaces.contains(instruction.result.value())
+                                                  ? "std::addressof(" + access + ")"
+                                                  : "wio::wir_backend::Place<" +
+                                                        placeValueType(instruction.resultType) + ">::borrow(" + access +
+                                                        ")");
                     break;
                 }
                 case lowered::Opcode::ArrayPlace:
@@ -2489,13 +3391,14 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     const std::string index = operand(instruction.operands[1]);
                     const Type& elementType =
                         module_.types.get(module_.types.get(instruction.resultType).arguments.front());
-                    assignResult(instruction,
-                                 "wio::wir_backend::Place<" + placeValueType(instruction.resultType) +
-                                     (elementType.kind == TypeKind::Bool ? ">::borrowProxy(" : ">::borrow(") +
-                                     (instruction.boundsCheck == lowered::BoundsCheckMode::Required
-                                          ? "wio::intrinsics::Index(" + base + ", " + index + ")"
-                                          : base + "[" + index + "]") +
-                                     ")");
+                    const Type& arrayType = module_.types.get(nominalType(valueType(instruction.operands[0])));
+                    const bool bitProxy = elementType.kind == TypeKind::Bool && !arrayType.staticExtent;
+                    assignResult(instruction, "wio::wir_backend::Place<" + placeValueType(instruction.resultType) +
+                                                  (bitProxy ? ">::borrowProxy(" : ">::borrow(") +
+                                                  (instruction.boundsCheck == lowered::BoundsCheckMode::Required
+                                                       ? "wio::intrinsics::Index(" + base + ", " + index + ")"
+                                                       : base + "[" + index + "]") +
+                                                  ")");
                     break;
                 }
                 case lowered::Opcode::ConstructComponent:
@@ -2522,6 +3425,22 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                     expression += ", " + callArguments(instruction, 0, true);
                                 expression += "); ";
                             }
+                        }
+                        assignResult(instruction, expression + "return instance; }())");
+                    }
+                    else if (constructedType.nominalRepresentation == NominalRepresentation::NativePod &&
+                             !instruction.operands.empty())
+                    {
+                        // Native field names are the binding contract. Wio's
+                        // declaration order need not match C++ padding/order.
+                        std::string expression = "([&]() { " + cppType(instruction.resultType) + " instance{}; ";
+                        for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                        {
+                            const auto value = instruction.operands[index];
+                            expression += "instance." + constructedType.fields.at(index).name + " = " +
+                                          (ownedValues_.contains(resolveValueAlias(value).value()) ? movedOperand(value)
+                                                                                                   : operand(value)) +
+                                          "; ";
                         }
                         assignResult(instruction, expression + "return instance; }())");
                     }
@@ -2567,13 +3486,18 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                      ? operand(instruction.operands[0]) + ".take()"
                                      : movedOperand(instruction.operands[0]));
                     break;
-                case lowered::Opcode::Replace:
-                    output_ << "                " << operand(instruction.operands[0]) << ".write("
-                            << movedOperand(instruction.operands[1]) << ");\n";
-                    break;
                 case lowered::Opcode::Release:
                 case lowered::Opcode::DropValue:
-                    output_ << "                " << valueName(instruction.operands[0]) << ".reset();\n";
+                    if (const auto fragment = scalarFormatPlan_.fragments.find(instruction.operands[0].value());
+                        fragment != scalarFormatPlan_.fragments.end())
+                    {
+                        output_ << "                " << valueName(instruction.operands[0])
+                                << (fragment->second == WirCppScalarFormatPlan::Storage::IntegerBytes ? ".clear();\n"
+                                                                                                      : " = {};\n");
+                        break;
+                    }
+                    output_ << "                " << valueName(resolveValueAlias(instruction.operands[0]))
+                            << ".reset();\n";
                     break;
                 case lowered::Opcode::ReleasePlace:
                 case lowered::Opcode::DropPlace:
@@ -2739,11 +3663,13 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 }
             }
 
-            void emitRawFunction(const lowered::Function& function, const std::string_view emittedName)
+            void emitRawFunction(const lowered::Function& function, const std::string_view emittedName,
+                                 const bool directReceiver = false)
             {
                 currentFunction_ = &function;
+                currentReceiverPlan_ = directReceiver ? &receiverPlans_.at(function.id.value()) : nullptr;
                 collectValueTypes(function);
-                output_ << functionSignature(function, false, emittedName) << " {\n";
+                output_ << functionSignature(function, false, emittedName, false, directReceiver) << " {\n";
                 if (function.coroutine && function.coroutine->retainedReceiver)
                 {
                     output_ << "    auto _selfGuard = " << cppType(function.ownerType) << "(_p0.Get());\n";
@@ -2758,29 +3684,57 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                 std::vector<std::pair<std::uint32_t, TypeId>> values(valueTypes_.begin(), valueTypes_.end());
                 std::ranges::sort(values, {}, &std::pair<std::uint32_t, TypeId>::first);
                 for (const auto& [id, type] : values)
-                    output_ << "    std::optional<"
-                            << (objectBorrowedLoads_.contains(id)
-                                    ? "wio::wir_backend::ObjectBorrow<" + objectName(type) + ">"
-                                    : (borrowedLoads_.contains(id) ? "std::reference_wrapper<" : "") + cppType(type) +
-                                          (borrowedLoads_.contains(id) ? ">" : ""))
-                            << "> _v" << id << ";\n";
+                {
+                    if (directValues_.contains(id))
+                        continue;
+                    if (storagePlan_.plainValues.contains(id))
+                        output_ << "    " << valueStorageType(id, type) << " _v" << id << "{};\n";
+                    else
+                        output_ << "    std::optional<" << valueStorageType(id, type) << "> _v" << id << ";\n";
+                }
                 for (std::size_t index = 0; index < function.parameters.size(); ++index)
-                    output_ << "    " << valueName(function.parameters[index].id) << " = std::move(_p" << index
-                            << ");\n";
-                output_ << "    std::uint32_t _block = " << function.blocks.front().id.value()
-                        << ";\n"
-                           "    for (;;) {\n        switch (_block) {\n";
+                {
+                    output_ << "    ";
+                    if (directValues_.contains(function.parameters[index].id.value()))
+                        output_ << (directReceiver ? valueStorageType(function.parameters[index].id.value(),
+                                                                      function.parameters[index].type)
+                                                   : cppType(function.parameters[index].type))
+                                << ' ';
+                    output_ << valueName(function.parameters[index].id) << " = std::move(_p" << index << ");\n";
+                }
+
+                if (currentFunctionIsLinear_)
+                {
+                    currentBlock_ = &function.blocks.front();
+                    for (const lowered::Instruction& instruction : currentBlock_->instructions)
+                        emitInstruction(instruction);
+                    output_ << "}\n\n";
+                    return;
+                }
+
+                if (storagePlan_.directControlFlow)
+                    output_ << "    goto _b" << function.blocks.front().id.value() << ";\n";
+                else
+                    output_ << "    std::uint32_t _block = " << function.blocks.front().id.value()
+                            << ";\n"
+                               "    for (;;) {\n        switch (_block) {\n";
                 for (const lowered::BasicBlock& block : function.blocks)
                 {
                     currentBlock_ = &block;
-                    output_ << "        case " << block.id.value() << ": {\n";
+                    if (storagePlan_.directControlFlow)
+                        output_ << "    _b" << block.id.value() << ": {\n";
+                    else
+                        output_ << "        case " << block.id.value() << ": {\n";
                     for (const lowered::Instruction& instruction : block.instructions)
                         emitInstruction(instruction);
                     output_ << "                throw std::logic_error(\"Wio block has no terminator\");\n"
                                "        }\n";
                 }
-                output_ << "        default: throw std::logic_error(\"invalid Wio block id\");\n"
-                           "        }\n    }\n}\n\n";
+                if (storagePlan_.directControlFlow)
+                    output_ << "}\n\n";
+                else
+                    output_ << "        default: throw std::logic_error(\"invalid Wio block id\");\n"
+                               "        }\n    }\n}\n\n";
             }
 
             void emitAsyncBehavioralFunction(const lowered::Function& function,
@@ -2892,6 +3846,19 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                     emitSyncBehavioralFunction(function, processors);
             }
 
+            void emitNativeExceptionCatch(const NativeBinding& binding)
+            {
+                if (binding.exceptionBoundary == NativeExceptionBoundary::None)
+                    return;
+                output_ << " } catch (const wio::wir_backend::abi::Error&) { throw; } "
+                           "catch (const wio::runtime::RuntimeException&) { throw; } catch (const "
+                           "std::exception& _error) { throw wio::runtime::RuntimeException("
+                        << cppString("Native call '" + binding.symbol + "' failed: ")
+                        << " + std::string(_error.what())); } catch (...) { throw "
+                           "wio::runtime::RuntimeException("
+                        << cppString("Native call '" + binding.symbol + "' failed with an unknown exception") << "); }";
+            }
+
             void emitFunctions()
             {
                 for (const lowered::Function& function : module_.functions)
@@ -2906,7 +3873,13 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                             if (nativeSource.begin.line > 1)
                                 --nativeSource.begin.line;
                             emitSource(nativeSource);
-                            output_ << functionSignature(function, false) << " {\n  ";
+                            const bool directNativeBorrow =
+                                WirCppStoragePlan::supportsCallScopedBorrowAbi(module_, function);
+                            output_ << functionSignature(function, false,
+                                                         directNativeBorrow ? functionName(function.id) + "_borrow"
+                                                                            : std::string{},
+                                                         directNativeBorrow)
+                                    << " {\n  ";
                             if (!runtimeAsyncBinding(function) &&
                                 std::ranges::any_of(function.parameters, [&](const auto& p)
                                                     { return module_.types.get(p.type).kind == TypeKind::Function; }))
@@ -2935,7 +3908,7 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                 std::string argument =
                                     (passing == NativePassingMode::Borrow || passing == NativePassingMode::BorrowMut)
                                         ? std::string(passing == NativePassingMode::Borrow ? "std::as_const(" : "") +
-                                              "_p" + std::to_string(index) + ".read()" +
+                                              "_p" + std::to_string(index) + (directNativeBorrow ? "" : ".read()") +
                                               (passing == NativePassingMode::Borrow ? ")" : "")
                                     : passing == NativePassingMode::Consume
                                         ? "std::move(_p" + std::to_string(index) + ")"
@@ -2943,6 +3916,11 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                 if (index == 0 && function.nativeBinding->receiver != NativeReceiverKind::None)
                                 {
                                     const Type* owner = module_.types.tryGet(function.ownerType);
+                                    if (!owner && function.name.starts_with("$format.native-method.") &&
+                                        !function.parameters.empty())
+                                    {
+                                        owner = module_.types.tryGet(function.parameters[0].type);
+                                    }
                                     if (owner && (owner->nominalKind == NominalKind::Object ||
                                                   owner->nominalKind == NominalKind::Interface))
                                         argument = "wio::wir_backend::object_ptr(_p0)";
@@ -3018,27 +3996,67 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                             }
                             const auto& returnType = module_.types.get(function.returnType);
                             if (returnType.kind == TypeKind::Reference)
-                                call = cppType(function.returnType) +
-                                       (returnType.isMutable ? "::borrow(" : "::borrowView(") + call + ")";
+                            {
+                                std::string checks;
+                                for (std::size_t index = 0; index < function.parameters.size(); ++index)
+                                {
+                                    const auto& parameter = module_.types.get(function.parameters[index].type);
+                                    if (parameter.kind == TypeKind::Reference &&
+                                        parameter.arguments == returnType.arguments &&
+                                        (!returnType.isMutable || parameter.isMutable))
+                                        checks +=
+                                            "if (_p" + std::to_string(index) + ".hasStorageCell()" +
+                                            (returnType.isMutable ? " && _p" + std::to_string(index) + ".canRebind()"
+                                                                  : "") +
+                                            " && std::addressof(_borrowed) == std::addressof(_p" +
+                                            std::to_string(index) + ".read())) return _p" + std::to_string(index) +
+                                            (returnType.isMutable ? "; " : ".asView(); ");
+                                }
+                                call = "([&]() -> " + cppType(function.returnType) + " { auto&& _borrowed = " + call +
+                                       "; " + checks +
+                                       "throw wio::runtime::RuntimeException(\"Native borrowed result must alias a "
+                                       "compatible caller reference\"); }())";
+                            }
                             if (function.nativeBinding->exceptionBoundary != NativeExceptionBoundary::None)
                                 output_ << "try { ";
                             output_ << "return " << call << ';';
-                            if (function.nativeBinding->exceptionBoundary != NativeExceptionBoundary::None)
-                            {
-                                output_ << " } catch (const wio::runtime::RuntimeException&) { throw; } catch (const "
-                                           "std::exception& _error) { throw wio::runtime::RuntimeException("
-                                        << cppString("Native call '" + function.nativeBinding->symbol + "' failed: ")
-                                        << " + std::string(_error.what())); } catch (...) { throw "
-                                           "wio::runtime::RuntimeException("
-                                        << cppString("Native call '" + function.nativeBinding->symbol +
-                                                     "' failed with an unknown exception")
-                                        << "); }";
-                            }
+                            emitNativeExceptionCatch(*function.nativeBinding);
                             output_ << "\n}\n\n";
+                            if (directNativeBorrow)
+                            {
+                                // Keep the ordinary Place ABI for function values,
+                                // exports and unproven callers. Only the private
+                                // leaf entry avoids constructing a general Place.
+                                output_ << functionSignature(function, false) << " { ";
+                                if (function.nativeBinding->exceptionBoundary != NativeExceptionBoundary::None)
+                                    output_ << "try { ";
+                                output_ << "return " << functionName(function.id) << "_borrow(";
+                                for (std::size_t index = 0; index < function.parameters.size(); ++index)
+                                {
+                                    if (index)
+                                        output_ << ", ";
+                                    output_ << "_p" << index;
+                                    if (module_.types.get(function.parameters[index].type).kind == TypeKind::Reference)
+                                        output_ << ".read()";
+                                }
+                                output_ << ");";
+                                emitNativeExceptionCatch(*function.nativeBinding);
+                                output_ << " }\n\n";
+                            }
                         }
                         continue;
                     }
-                    if (behavioralPipeline(function.id).empty())
+                    if (receiverPlans_.contains(function.id.value()))
+                    {
+                        emitRawFunction(function, receiverEntryName(function), true);
+                        currentReceiverPlan_ = nullptr;
+                        // Keep the general Place entry for callbacks, exports and other ABI consumers.
+                        // Its owner/lifetime token remains live throughout the private entry call.
+                        output_ << functionSignature(function, false) << " { return " << receiverEntryName(function)
+                                << "(wio::wir_backend::ObjectBorrow<" << objectName(function.ownerType)
+                                << ">{_p0.Get()}); }\n\n";
+                    }
+                    else if (behavioralPipeline(function.id).empty())
                         emitRawFunction(function, functionName(function.id));
                     else
                         emitBehavioralFunction(function);
@@ -3133,6 +4151,38 @@ std::string stringify(const std::unordered_map<K, V, Hash, Equal, Allocator>& va
                                                    const WirCppBackendOptions& options) const
     {
         WirCppGenerationResult result;
+        if (options.nativeBridgeOnly)
+        {
+            if (options.emitMain || !options.emitNativeTaskSidecars)
+            {
+                WirCppResultSink::addDiagnostic(
+                    result,
+                    {.code = "WCPP1220", .message = "native-only bridge requires no main and native task sidecars"});
+                return result;
+            }
+            if (options.verifyInput)
+            {
+                const auto verification = wir::lowered::Verifier{}.verify(module);
+                for (const auto& diagnostic : verification.diagnostics())
+                    WirCppResultSink::addDiagnostic(
+                        result, {.code = "WCPP1000",
+                                 .message = "invalid Lowered WIR: " + diagnostic.code + ": " + diagnostic.message,
+                                 .source = diagnostic.source,
+                                 .function = diagnostic.function,
+                                 .block = diagnostic.block});
+                if (!verification.succeeded())
+                    return result;
+            }
+            common::profiling::Scope scope("Backend.Cpp.NativeBridgePlan");
+            const auto plan = WirNativeBridgePlan::build(module);
+            scope.stop();
+            auto bridgeOptions = options;
+            // Verify the dependency closure even when the caller has already
+            // verified the original full program. Missing edges are errors.
+            bridgeOptions.verifyInput = true;
+            Emitter{plan.module, result, bridgeOptions, plan.dynamicPayloadTypes}.run();
+            return result;
+        }
         Emitter{module, result, options}.run();
         return result;
     }

@@ -1,0 +1,80 @@
+use std::console as console;
+
+using cpp::header("probe.h");
+
+[native, cpp::name(byte_borrow::Make)]
+fn Make() -> u8[];
+
+[native, cpp::name(byte_borrow::Hash)]
+fn Hash(value: view u8[]) -> u64;
+
+[native, cpp::name(byte_borrow::Same)]
+fn Same(left: view u8[], right: view u8[]) -> bool;
+
+[native, cpp::name(byte_borrow::Throw)]
+fn Throw(value: view u8[]) -> u64;
+
+[native, cpp::name(byte_borrow::Start)]
+fn Start();
+
+[native, cpp::name(byte_borrow::Finish)]
+fn Finish(allocations: u64, requested: u64) -> bool;
+
+fn Work(count: usize) -> u64
+{
+    mut sum = 0u64;
+    for (index in 0usize..<count)
+    {
+        let value = Make();
+        sum += Hash(ref value);
+    }
+
+    return sum;
+}
+
+fn Observe(value: view u8[]) -> u64
+{
+    return Hash(value);
+}
+
+fn Pair() -> bool
+{
+    let value = Make();
+    return Same(ref value, ref value);
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() > 1usize)
+    {
+        if (args[1usize] == "indirect")
+        {
+            let value = Make();
+            let function = Hash;
+            if (function(ref value) != 9242810439727143936u64) return 6;
+            console::PrintLine("byte-borrow-indirect-ok");
+            return 0;
+        }
+
+        if (args[1usize] == "memory")
+        {
+            Start();
+            Work(17usize);
+            if (not Finish(17u64, 136u64)) return 1;
+            console::PrintLine("byte-borrow-memory-ok");
+            return 0;
+        }
+
+        let value = Make();
+        Throw(ref value);
+        return 2;
+    }
+
+    let expected = 9242810439727143936u64;
+    if (Work(1usize) != expected) return 3;
+    if (not Pair()) return 4;
+    let value = Make();
+    if (Observe(ref value) != expected) return 5;
+    console::PrintLine("byte-borrow-ok");
+    return 0;
+}

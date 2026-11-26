@@ -1,0 +1,280 @@
+using cpp::header("vm_handle_containers_fixture.h");
+use std::attribute as attribute;
+
+interface IRead {
+    fn Read() -> i32;
+}
+
+[From(IRead)]
+object Base {
+    value: i32 = 7;
+    public OnConstruct() {
+        Constructed(0);
+    }
+    OnDestruct() {
+        Destroyed(0);
+    }
+    public fn Read() -> i32 {
+        return self.value;
+    }
+    public fn Set(value: i32) {
+        self.value = value;
+    }
+}
+
+[From(Base)]
+object Leaf {
+    value: i32 = 37;
+    public OnConstruct() {
+        Constructed(1);
+    }
+    OnDestruct() {
+        Destroyed(1);
+    }
+    public fn Read() -> i32 {
+        return self.value + 100;
+    }
+    public fn Set(value: i32) {
+        self.value = value;
+    }
+}
+
+object Holder<T, const Tag: usize = 7> {
+    value: T;
+    public OnConstruct(value: T) {
+        self.value = value;
+        Constructed(2);
+    }
+    OnDestruct() {
+        Destroyed(2);
+    }
+    public fn Read() -> T {
+        return self.value;
+    }
+    public fn Set(value: T) {
+        self.value = value;
+    }
+}
+
+[Native, CppName(vm_object_any::Constructed)]
+fn Constructed(kind: i32);
+[Native, CppName(vm_object_any::Destroyed)]
+fn Destroyed(kind: i32);
+[Native, CppName(vm_object_any::Constructions)]
+fn Constructions(kind: i32) -> i32;
+[Native, CppName(vm_object_any::Destructions)]
+fn Destructions(kind: i32) -> i32;
+[Native, CppName(vm_object_any::DumpCounts)]
+fn DumpCounts();
+[Native, CppName(vm_handle_containers::Make)]
+fn Make() -> any[];
+[Native, CppName(vm_handle_containers::Copy)]
+fn Copy(value: any[]) -> any[];
+[Native, CppName(vm_handle_containers::Update)]
+fn Update(value: ref any[]);
+[Native, CppName(vm_handle_containers::Same)]
+fn Same(first: view any[], second: ref any[]) -> bool;
+[Native, CppName(vm_handle_containers::Nested)]
+fn Nested(value: any[][]) -> any[][];
+[Native, CppName(vm_handle_containers::CopyMap)]
+fn CopyMap(value: Dict<string, any>) -> Dict<string, any>;
+[Native, CppName(vm_handle_containers::UpdateMap)]
+fn UpdateMap(value: ref Dict<string, any>);
+[Native, CppName(vm_handle_containers::SameMap)]
+fn SameMap(first: view Dict<string, any>, second: ref Dict<string, any>) -> bool;
+[Native, CppName(vm_handle_containers::EchoOrdered)]
+fn EchoOrdered(value: Tree<string, any>) -> Tree<string, any>;
+[Native, CppName(vm_handle_containers::Grow)]
+fn Grow(value: any);
+[Native, CppName(vm_handle_containers::GrowMap)]
+fn GrowMap(value: any);
+[Native, CppName(vm_handle_containers::Hold)]
+fn Hold(value: any[]);
+[Native, CppName(vm_handle_containers::Held)]
+fn Held() -> any[];
+[Native, CppName(vm_handle_containers::Clear)]
+fn Clear();
+[Native, CppName(vm_handle_containers::Touch), Instantiate(Base), Instantiate(Holder<i32, 7>)]
+fn Touch<T>(value: T[]) -> T[];
+[Native, CppName(vm_handle_containers::Rebind), Instantiate(Base)]
+fn Rebind<T>(value: ref T[]);
+[Native, CppName(vm_handle_containers::EchoObjects), Instantiate(IRead)]
+fn EchoObjects<T>(value: T[]) -> T[];
+[Native, CppName(vm_handle_containers::Nullable)]
+fn Nullable(value: Base?[]) -> Base?[];
+[Native, CppName(vm_handle_containers::Objects), Instantiate(Base)]
+fn Objects<T>(value: Dict<string, T>) -> Dict<string, T>;
+[Native, CppName(vm_handle_containers::TouchBoxed), Instantiate(Base)]
+fn TouchBoxed<T>(value: any);
+[Native, CppName(vm_handle_containers::TouchAny), Instantiate(Leaf)]
+fn TouchAny<T>(value: any[]);
+[Native, CppName(vm_handle_containers::Print)]
+fn Print();
+
+fn EscapeNative() -> any[] {
+    return Make();
+}
+fn Escape() -> any[] {
+    let leaf = Leaf();
+    let boxed: any = leaf;
+    let values: any[] = [boxed];
+    Hold(values);
+    return Held();
+}
+fn EscapeObjects() -> Base[] {
+    let leaf = Leaf();
+    let base = leaf fit Base;
+    let other = Base();
+    let values: Base[] = [base, other];
+    return Touch<Base>(values);
+}
+fn SafePoint() -> i32 {
+    return 0;
+}
+fn BorrowProbe() -> i32 {
+    let values = Make();
+    let borrowed: view any = ref values[0usize];
+    return ((deref borrowed) fit i32);
+}
+fn ReleaseHeld() -> i32 {
+    Clear();
+    return 0;
+}
+fn Balanced() -> i32 {
+    if (Constructions(0) != Destructions(0) or Constructions(1) != Destructions(1) or
+        Constructions(2) != Destructions(2)) {
+        DumpCounts();
+        return 1;
+    }
+    return 0;
+}
+
+fn Entry() -> i32 {
+    mut round = 0;
+    while (round < 30) {
+        {
+            let scalar: any = 20;
+            let word: any = "local";
+            mut values: any[] = [scalar, word, null];
+            let returned = Copy(values);
+            if ((scalar fit i32) != 30 or (values[0usize] fit i32) != 30 or
+                (values[1usize] fit string) != "local" or (returned[1usize] fit i32) != 99 or
+                returned[2usize] != null or !Same(ref values, ref values)) {
+                return 1;
+            }
+            let borrowed: view any = ref values[1usize];
+            Update(ref values);
+            if (((deref borrowed) fit i32) != 56 or (values[1usize] fit i32) != 56 or (word fit string) != "local") {
+                return 2;
+            }
+            let nested: any[][] = [values];
+            let changed = Nested(nested);
+            if ((scalar fit i32) != 35 or changed[0usize][1usize] != null or
+                (nested[0usize][1usize] fit i32) != 56) {
+                return 3;
+            }
+            mut mapped: Dict<string, any> = { "shared": scalar, "replace": word };
+            let mapCopy = CopyMap(mapped);
+            let mapBorrow: view any = ref mapped["replace"];
+            if ((scalar fit i32) != 37 or (mapCopy["replace"] fit i32) != 67 or
+                (mapped["replace"] fit string) != "local" or !SameMap(ref mapped, ref mapped)) {
+                return 4;
+            }
+            UpdateMap(ref mapped);
+            if (((deref mapBorrow) fit i32) != 68) {
+                return 5;
+            }
+            let ordered: Tree<string, any> = {< "shared": scalar, "replace": word >};
+            let orderedCopy = EchoOrdered(ordered);
+            if (orderedCopy["replace"] != null or (ordered["replace"] fit string) != "local") {
+                return 6;
+            }
+            let listBox: any = values;
+            Grow(listBox);
+            let grown = listBox fit any[];
+            if (grown.Count() != 4usize or (grown[3usize] fit i32) != 77 or values.Count() != 3usize) {
+                return 7;
+            }
+            let mapBox: any = mapped;
+            GrowMap(mapBox);
+            let grownMap = mapBox fit Dict<string, any>;
+            if ((grownMap["native"] fit i32) != 78 or mapped.ContainsKey("native")) {
+                return 8;
+            }
+
+            let leaf = Leaf();
+            let base = leaf fit Base;
+            let other = Base();
+            mut objects: Base[] = [base, other];
+            let objectCopy = Touch<Base>(objects);
+            if (leaf.Read() != 123 or objectCopy[0usize] != other or (objectCopy[1usize] fit Leaf) != leaf or
+                objects[0usize] != base) {
+                return 9;
+            }
+            let reader = leaf fit IRead;
+            let readers: IRead[] = [reader];
+            let readerCopy = EchoObjects<IRead>(readers);
+            if ((readerCopy[0usize] fit Leaf) != leaf or readerCopy[0usize].Read() != 123) {
+                return 19;
+            }
+            let objectBorrow: view Base = ref objects[0usize];
+            Rebind<Base>(ref objects);
+            if (deref objectBorrow != other or objects[0usize] != other) {
+                return 10;
+            }
+            let nullable: Base?[] = [null, base];
+            let nullableCopy = Nullable(nullable);
+            if (nullableCopy[0usize] != nullable[1usize] or nullableCopy[1usize] != null or nullable[0usize] != null) {
+                return 11;
+            }
+            let objectMap: Dict<string, Base> = { "first": base, "second": other };
+            let changedMap = Objects<Base>(objectMap);
+            if (leaf.Read() != 124 or changedMap["first"] != other or objectMap["first"] != base) {
+                return 12;
+            }
+            let original: Base[] = [base];
+            let objectBox: any = original;
+            TouchBoxed<Base>(objectBox);
+            let grownObjects = objectBox fit Base[];
+            if (leaf.Read() != 125 or grownObjects.Count() != 2usize or grownObjects[1usize] != base or
+                original.Count() != 1usize) {
+                return 13;
+            }
+            let objectAny: any = leaf;
+            let baseAny: any = base;
+            let readerAny: any = reader;
+            let payloads: any[] = [objectAny, null, scalar, baseAny, readerAny];
+            TouchAny<Leaf>(payloads);
+            Hold(payloads);
+            let held = Held();
+            if (leaf.Read() != 126 or (held[0usize] fit Leaf) != leaf or held[1usize] != null or
+                (held[3usize] fit Base).Read() != 126 or (held[4usize] fit IRead).Read() != 126) {
+                return 14;
+            }
+            let generic = Holder<i32>(31);
+            let generics: Holder<i32>[] = [generic, generic];
+            let genericCopy = Touch<Holder<i32>>(generics);
+            if (generic.Read() != 23 or genericCopy[0usize] != generic) {
+                return 15;
+            }
+            let native = EscapeNative();
+            if ((native[0usize] fit i32) != 31 or (native[1usize] fit string) != "native" or native[2usize] != null) {
+                return 16;
+            }
+        }
+        if (Destructions(1) != round or Destructions(0) != round * 2 + 1 or Destructions(2) != round + 1) {
+            DumpCounts();
+            return 17;
+        }
+        Clear();
+        round += 1;
+        if (Constructions(0) != round * 2 or Destructions(0) != round * 2 or
+            Constructions(1) != round or Destructions(1) != round or
+            Constructions(2) != round or Destructions(2) != round) {
+            DumpCounts();
+            return 18;
+        }
+    }
+    Print();
+    return 0;
+}

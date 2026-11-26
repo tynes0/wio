@@ -1,0 +1,22 @@
+name = "VM Artifact CLI"
+template = "native-console"
+
+[wio]
+entry = "wio/main.wio"
+target = "exe"
+sourceRoots = ["wio"]
+includeDirs = ["native"]
+
+[host]
+enabled = false
+
+[outputs]
+baseName = "vm_artifact_cli"
+
+[vm]
+executableOutput = "deployment/VM app@WIO_EXECUTABLE_SUFFIX@"
+nativeLibraries = ["registries/extra registry@WIO_SHARED_SUFFIX@"]
+
+[run]
+args = ["manifest-arg"]
+workingDirectory = "run cwd"

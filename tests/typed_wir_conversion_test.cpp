@@ -50,6 +50,15 @@ int main()
         "  let local: i64 = value; "
         "  return AcceptWide(value); "
         "} "
+        "fn CharCode(value: char) -> u16 { return value; } "
+        "fn CharFits() -> char { "
+        "  let nul: char = '\\0'; "
+        "  let code: u32 = nul; "
+        "  let narrowed: char = 65 fit char; "
+        "  let contextual: char = 66; "
+        "  let contextualCode: u16 = contextual; "
+        "  return code fit char; "
+        "} "
         "fn Entry() -> i32 { return 3.9 fit i32; }",
         "typed_wir_conversion_test.wio");
     Parser parser(lexer.lex());
@@ -91,8 +100,8 @@ int main()
             }
         }
     }
-    ok &= expect(conversionCount == 5, "Explicit fit and implicit widening sites must produce conversion instructions");
-    ok &= expect(wideningCount == 2, "Safe initializer and argument widening must remain explicit in WIR");
+    ok &= expect(conversionCount == 10, "Explicit fit and implicit widening sites must produce conversion instructions");
+    ok &= expect(wideningCount == 5, "Safe initializer, argument, and char widening must remain explicit in WIR");
 
     const std::string typedText = typed::Printer{}.print(build.module());
     ok &= expect(

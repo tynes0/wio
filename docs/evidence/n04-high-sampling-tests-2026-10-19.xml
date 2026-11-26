@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-MSBuild"
+	tests="2"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="DESKTOP-0G3MR0G"
+	time="118"
+	timestamp="2026-10-19T21:41:51"
+	>
+	<testcase name="wio_benchmark_sampling" classname="wio_benchmark_sampling" time="5.67712" status="run">
+		<properties>
+			<property name="cmake_labels" value="benchmark;diagnostic;native;vm"/>
+		</properties>
+		<system-out>F:\Projects\wio\build\benchmark-sampling\f4f1c7fd36e641d882be52572bdfda18\profile-1000.json
+F:\Projects\wio\build\benchmark-sampling\f4f1c7fd36e641d882be52572bdfda18\profile-10000.json
+F:\Projects\wio\build\benchmark-sampling\f4f1c7fd36e641d882be52572bdfda18\results.json
+</system-out>
+	</testcase>
+	<testcase name="wio_n04_byte_array_borrow_semantics" classname="wio_n04_byte_array_borrow_semantics" time="113.129" status="run">
+		<properties>
+			<property name="cmake_labels" value="io;memory;native;optimization;ownership;vm"/>
+		</properties>
+		<system-out>F:\Projects\wio\build\n04-byte-array-borrow-contract\53bc33bc81c8457d884fdb484dcb9aff\results.json
+</system-out>
+	</testcase>
+</testsuite>

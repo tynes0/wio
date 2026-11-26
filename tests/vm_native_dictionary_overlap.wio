@@ -1,0 +1,11 @@
+using cpp::header("vm_dictionary_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_dictionary::Overlap)]
+fn Overlap(values: ref Dict<string, i32>, item: ref i32);
+
+fn Entry() -> i32 {
+    mut values: Dict<string, i32> = { "first": 1 };
+    Overlap(ref values, ref values["first"]);
+    return 0;
+}

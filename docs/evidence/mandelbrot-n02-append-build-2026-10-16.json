@@ -1,0 +1,134 @@
+{
+  "NativeRebuilt": true,
+  "VmRebuilt": false,
+  "VmSource": "F:\\Projects\\wio\\build\\mandelbrot-progress-n01-extended-2026-10-15",
+  "Records": [
+    {
+      "Kind": "compute",
+      "Compiler": [
+        {
+          "Path": "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+          "Bytes": 19948032,
+          "Hash": "8C631D2C7FD9ADE0D20D23B544CCA3B0675FEDDA433B81612189F2D019065913"
+        }
+      ],
+      "Flags": [
+        "-std=c++20",
+        "-O2",
+        "-ffp-contract=off",
+        "-static",
+        "-Wa,-mbig-obj"
+      ],
+      "Build": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 3.7258898997679353,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.004193629017586696,
+        "SystemBusyFraction": 0.290440218806981,
+        "Output": "",
+        "Error": "",
+        "Pid": 29556,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Artifacts": [
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\benchmark_clock.h",
+          "Bytes": 987,
+          "Hash": "CBCEBFC64EE2D3BE46A76415A3AC549F0FE13C30614E9DC5DEF622EDE6AF6F77"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\bridge.dll",
+          "Bytes": 926693,
+          "Hash": "F03F7F65575494A88ECD04D274350DCF345576867C184137824F63FDAAE037F8"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\main.wio",
+          "Bytes": 1613,
+          "Hash": "B526C768105B20624B2B14EEFBEA05DE30BB7096C1275894865EDEE01BD71C9E"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\main.wio.cpp",
+          "Bytes": 109667,
+          "Hash": "A589EF40F29647984CE3119629AC23C24B2D6D4CD21DC5F0EEBBD0FDC1E1D3D2"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\main.wiob",
+          "Bytes": 30866,
+          "Hash": "81FCD6B05FD93DF6CB418213178C88663FFA55884ABC85154F96F8FF90F5143B"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\compute\\native.exe",
+          "Bytes": 3790765,
+          "Hash": "37CD8FEA190951B2C27F57DD6951D9DD6629085179076F5E952AA740831A6F30"
+        }
+      ]
+    },
+    {
+      "Kind": "full",
+      "Compiler": [
+        {
+          "Path": "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+          "Bytes": 19948032,
+          "Hash": "8C631D2C7FD9ADE0D20D23B544CCA3B0675FEDDA433B81612189F2D019065913"
+        }
+      ],
+      "Flags": [
+        "-std=c++20",
+        "-O2",
+        "-ffp-contract=off",
+        "-static",
+        "-Wa,-mbig-obj"
+      ],
+      "Build": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 49.881531700026244,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.0003132421853836493,
+        "SystemBusyFraction": 0.2331028809808261,
+        "Output": "",
+        "Error": "",
+        "Pid": 70324,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Artifacts": [
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\bridge.dll",
+          "Bytes": 6366765,
+          "Hash": "290837EB608BFCC69206DCB714DB76F0541A90B0F17F0271DA2667867A7B3466"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\main.wio",
+          "Bytes": 117,
+          "Hash": "BF0EF3870ACB568551D00704958880BB1A803F1C5433FA980C4457B2AFD73D9E"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\main.wio.cpp",
+          "Bytes": 2659497,
+          "Hash": "F58248A3927536554986EE6991FF4F31E279DB0813BCCD163AE15121F557AC7B"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\main.wiob",
+          "Bytes": 2104032,
+          "Hash": "D9EC851742B3CF722978562EEBF19DD0CF4BA273C8EE1485F07056B447CE3A80"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\mandelbrot.wio",
+          "Bytes": 2568,
+          "Hash": "4E701B4C781B1EC77BF749F9472BE6711AE8D254F3AAB86028F8EE6B60CE8AF9"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\native.exe",
+          "Bytes": 9050655,
+          "Hash": "E5D9AFD45D5B494CEDBD4C48F88DF061292167468D22259AA8A7CBA297AD22A7"
+        },
+        {
+          "Path": "F:\\Projects\\wio\\build\\mandelbrot-n02-append-2026-10-16\\full\\previous.exe",
+          "Bytes": 9050655,
+          "Hash": "1CB587A7155F283A5E3D9AAFA95C978EC64275F382BE176067866F6571522BD3"
+        }
+      ]
+    }
+  ]
+}

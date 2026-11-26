@@ -1,0 +1,87 @@
+using cpp::header("vm_pod_alias_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_pod_alias::Inner)]
+component Inner {
+    public value: i32;
+}
+
+// Deliberately different from producer order and with hidden producer fields.
+[Native, CppName(vm_pod_alias::Packet)]
+component Packet {
+    public count: i32;
+    public enabled: bool;
+    public pointer: opaque?;
+    public items: [Inner; 2];
+    public inner: Inner;
+    public weight: f64;
+    public matrix: [[i32; 2]; 2];
+}
+
+[Native, CppName(vm_pod_alias::Whole)]
+fn Whole(packet: ref Packet, count: ref i32) -> bool;
+[Native, CppName(vm_pod_alias::Reversed)]
+fn Reversed(count: ref i32, packet: ref Packet) -> bool;
+[Native, CppName(vm_pod_alias::ReadOnly)]
+fn ReadOnly(packet: view Packet, count: ref i32) -> bool;
+[Native, CppName(vm_pod_alias::ReadField)]
+fn ReadField(count: view i32, packet: ref Packet) -> bool;
+[Native, CppName(vm_pod_alias::Nested)]
+fn Nested(value: ref i32, inner: ref Inner, packet: ref Packet) -> bool;
+[Native, CppName(vm_pod_alias::Array)]
+fn Array(value: ref i32, packet: ref Packet, item: ref Inner) -> bool;
+[Native, CppName(vm_pod_alias::Matrix)]
+fn Matrix(packet: ref Packet, value: ref i32) -> bool;
+[Native, CppName(vm_pod_alias::Same)]
+fn Same(first: ref i32, second: ref i32) -> bool;
+[Native, CppName(vm_pod_alias::Scalars)]
+fn Scalars(enabled: ref bool, pointer: ref opaque?, packet: ref Packet, weight: ref f64) -> bool;
+[Native, CppName(vm_pod_alias::Independent)]
+fn Independent(packet: ref Packet, other: ref i32) -> bool;
+[Native, CppName(vm_pod_alias::Hidden)]
+fn Hidden(packet: view Packet) -> i32;
+[Native, CppName(vm_pod_alias::Print)]
+fn Print(value: string);
+
+fn Entry() -> i32 {
+    mut packet = Packet();
+    let countBorrow: view i32 = ref packet.count;
+    let itemBorrow: view i32 = ref packet.items[1usize].value;
+    if (!Whole(ref packet, ref packet.count) or packet.count != 15 or deref countBorrow != 15) {
+        return 1;
+    }
+    if (!Reversed(ref packet.count, ref packet) or packet.count != 15) {
+        return 2;
+    }
+    if (!ReadOnly(ref packet, ref packet.count) or packet.count != 23) {
+        return 3;
+    }
+    if (!ReadField(ref packet.count, ref packet) or deref countBorrow != 31) {
+        return 4;
+    }
+    if (!Nested(ref packet.inner.value, ref packet.inner, ref packet) or packet.inner.value != 42) {
+        return 5;
+    }
+    if (!Array(ref packet.items[1usize].value, ref packet, ref packet.items[1usize]) or
+        deref itemBorrow != 52 or packet.items[0usize].value != 3) {
+        return 6;
+    }
+    if (!Matrix(ref packet, ref packet.matrix[1usize][0usize]) or packet.matrix[1usize][0usize] != 61) {
+        return 7;
+    }
+    // Two distinct place instructions must still resolve to one storage cell.
+    if (!Same(ref packet.count, ref packet.count) or deref countBorrow != 73) {
+        return 8;
+    }
+    if (!Scalars(ref packet.enabled, ref packet.pointer, ref packet, ref packet.weight) or
+        packet.enabled or packet.pointer == null or packet.weight != 9.5f64) {
+        return 10;
+    }
+    mut copy = packet;
+    if (!Independent(ref packet, ref copy.count) or packet.count != 81 or copy.count != 82 or
+        copy.inner.value != 42 or Hidden(ref packet) != 245) {
+        return 9;
+    }
+    Print($"native-pod-alias-ok: ${packet.count}:${copy.count}:${deref itemBorrow}:${Hidden(ref packet)}");
+    return 0;
+}

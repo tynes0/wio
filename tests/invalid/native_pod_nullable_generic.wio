@@ -1,0 +1,13 @@
+use std::attribute as attribute;
+
+object Resource {}
+
+[Native, CppName(InvalidNullableGeneric)]
+component InvalidNullableGeneric<T> {
+    public value: T;
+}
+
+fn Entry() -> i32 {
+    let invalid = InvalidNullableGeneric<Resource?>(null);
+    return 0;
+}

@@ -1,0 +1,84 @@
+using cpp::header("vm_object_generic_fixture.h");
+use std::attribute as attribute;
+
+object Box<T, const Tag: usize = 5> {
+    value: T;
+    public OnConstruct(seed: T) {
+        self.value = seed;
+        Constructed();
+    }
+    OnDestruct() {
+        Destroyed();
+    }
+    public fn Read() -> T {
+        return self.value;
+    }
+    public fn TagValue() -> usize {
+        return Tag;
+    }
+    public fn Same() -> Box<T, Tag> {
+        return deref self;
+    }
+    public fn AsRef() -> ref Box<T, Tag> {
+        return self;
+    }
+    public fn AsView() -> view Box<T, Tag> {
+        return self;
+    }
+    public fn Clone() -> Box<T, Tag> {
+        return Box<T, Tag>(self.value);
+    }
+}
+
+[Native, CppName(vm_object_generic::Constructed)]
+fn Constructed();
+[Native, CppName(vm_object_generic::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_object_generic::Constructions)]
+fn Constructions() -> i32;
+[Native, CppName(vm_object_generic::Destructions)]
+fn Destructions() -> i32;
+[Native, CppName(vm_object_generic::Exercise)]
+fn ExerciseInt(value: Box<i32, 7>) -> i32;
+[Native, CppName(vm_object_generic::Exercise)]
+fn ExerciseOther(value: Box<i32, 9>) -> i32;
+[Native, CppName(vm_object_generic::Exercise)]
+fn ExerciseString(value: Box<string>) -> i32;
+[Native, CppName(vm_object_generic::Capture)]
+fn CaptureInt(value: Box<i32, 7>) -> u64;
+[Native, CppName(vm_object_generic::Capture)]
+fn CaptureOther(value: Box<i32, 9>) -> u64;
+[Native, CppName(vm_object_generic::Capture)]
+fn CaptureString(value: Box<string>) -> u64;
+[Native, CppName(vm_object_generic::ClearCapture)]
+fn ClearCapture();
+
+fn CaptureIntEntry() -> u64 {
+    return CaptureInt(Box<i32, 7>(37));
+}
+fn CaptureOtherEntry() -> u64 {
+    return CaptureOther(Box<i32, 9>(41));
+}
+fn CaptureStringEntry() -> u64 {
+    return CaptureString(Box<string>("wio-generic"));
+}
+fn SafePoint() -> i32 {
+    return 0;
+}
+fn Entry() -> i32 {
+    {
+        let integer = Box<i32, 7>(37);
+        let other = Box<i32, 9>(41);
+        let textValue = Box<string>("wio-generic");
+        if (ExerciseInt(integer) != 0 or ExerciseOther(other) != 0 or ExerciseString(textValue) != 0) {
+            return 1;
+        }
+        if (integer.TagValue() != 7 or other.TagValue() != 9 or textValue.TagValue() != 5) {
+            return 2;
+        }
+    }
+    if (Constructions() != 93 or Destructions() != 93) {
+        return 3;
+    }
+    return 0;
+}

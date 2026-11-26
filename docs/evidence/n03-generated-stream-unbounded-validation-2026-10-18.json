@@ -1,0 +1,197 @@
+{
+  "passed": true,
+  "processes": [
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\main.wio",
+        "--emit-cpp",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n03-generated-stream-semantics/53320ec1ffff4d1c9066fa651f8f2958/main.wio.cpp\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\native.exe",
+        "builtin"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\native.exe",
+        "throw"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: Unhandled native exception: generated stream hook failure\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\native.exe",
+        "builtin"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\native.exe",
+        "throw"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: Unhandled native exception: generated stream hook failure\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\helpers.cpp",
+        "-IF:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\helpers.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\helpers.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "{\"copyAllocations\":384,\"currentAllocations\":128,\"copyRequestedBytes\":121636,\"currentRequestedBytes\":65664,\"copyPeakBytes\":733,\"currentPeakBytes\":513,\"copyCapacity\":217,\"currentCapacity\":512,\"affixCopyAllocations\":512,\"affixCurrentAllocations\":256,\"affixCopyRequestedBytes\":179016,\"affixCurrentRequestedBytes\":94674,\"affixCopyCapacity\":442,\"affixCurrentCapacity\":225,\"affixCopyPeakBytes\":733,\"affixCurrentPeakBytes\":741}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\main.wio",
+        "--target",
+        "shared",
+        "--native-bridge-only",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958",
+        "--output",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\bridge.dll",
+        "--bytecode-sidecar",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\main.wiob"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n03-generated-stream-semantics/53320ec1ffff4d1c9066fa651f8f2958/bridge.wio.cpp\nGenerated backend output: F:/Projects/wio/build/n03-generated-stream-semantics/53320ec1ffff4d1c9066fa651f8f2958/bridge.dll\nGenerated bytecode output: F:/Projects/wio/build/n03-generated-stream-semantics/53320ec1ffff4d1c9066fa651f8f2958/main.wiob\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "--vm-run-bytecode",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\bridge.dll",
+        "--",
+        "builtin"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "--vm-run-bytecode",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n03-generated-stream-semantics\\53320ec1ffff4d1c9066fa651f8f2958\\bridge.dll"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1062: Interpolation value has no VM string representation (function 67)\n"
+    }
+  ]
+}

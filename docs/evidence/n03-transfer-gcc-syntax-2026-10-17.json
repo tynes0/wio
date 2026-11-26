@@ -1,0 +1,7 @@
+{
+  "command": "g++ -std=c++20 -Werror=return-type -fsyntax-only -Icompiler/include compiler/src/wio_compiler/codegen/wir_cpp_string_transfer_plan.cpp tests/string_transfer_plan_test.cpp",
+  "exitCode": 0,
+  "stdout": "",
+  "stderr": "",
+  "scope": "GCC 15.2 C++20 syntax check in addition to the MSVC unit build and native GCC O0/O2 Wio gate; not complete cross-platform qualification"
+}

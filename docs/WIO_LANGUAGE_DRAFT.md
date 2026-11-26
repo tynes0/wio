@@ -472,6 +472,7 @@ Supported escape sequences currently include:
 - `\\`
 - `\"`
 - `\'`
+- `\0`
 - `\n`
 - `\r`
 - `\a`
@@ -623,9 +624,22 @@ Character literals use single quotes:
 let a = 'x';
 let b = '\n';
 let c = '\\';
+let nul = '\0';
 ```
 
 A character literal must contain exactly one character after escape processing.
+`char` is the byte-oriented character primitive and participates in integral
+conversions. It widens implicitly when the destination can represent it; use
+`fit` for an explicit conversion in either direction. An unsuffixed integer
+literal may initialize `char` directly when its value fits.
+
+```wio
+let letter: char = 'A';
+let code: i32 = letter;
+let byteCode: u8 = letter fit u8;
+let restored: char = 65 fit char;
+let contextual: char = 66;
+```
 
 ### 4.9 Byte Literals
 
@@ -724,6 +738,20 @@ slice is now available for:
 - direct generic boxed target checks such as `payload is std::Box<string>` and
   `payload fit std::Box<i32>`,
 - std-backed event/context helpers through `std::event`.
+
+Explicit native/SDK boxing may store another `any` as the payload. `value is any`
+tests for that nested layer (it is **not** true for every value whose variable
+type is `any`), and `value fit any` unwraps exactly one layer. Casting an ordinary
+scalar box or null to `any` fails the checked cast. Ordinary `any` assignment
+shares the existing cell; it does not introduce another boxing layer.
+
+```wio
+// Nest is a native function returning C++ Any::Box(value).
+let leaf: any = 7;
+let nested = Nest(leaf);
+let inner = nested fit any;
+// nested is any == true; leaf is any == false; inner fit i32 == 7.
+```
 
 For the wider runtime model and the current std-backed `std::heap::box<T>`
 wrapper, see
@@ -2521,6 +2549,11 @@ match (x) {
 - `assumed` must be the last match arm.
 - `assumed` cannot have a guard because there would be no later arm to receive
   the value when that guard is false.
+- `assumed` is optional when the `match` result is discarded. If no arm matches,
+  execution continues after the statement match.
+- `pattern:;` declares an intentionally empty statement arm.
+- A value-producing `match` must remain exhaustive, either through `assumed` or
+  through one of the statically exhaustive enum/variant forms.
 
 ### 14.6 Guards and Destructuring
 

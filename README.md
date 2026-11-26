@@ -40,6 +40,14 @@ cmake -S . -B build
 cmake --build build
 ```
 
+The generated-program runtime archive has its own CMake profile:
+`-DWIO_BACKEND_RUNTIME_PROFILE=Release` (default), `Debug`, `RelWithDebInfo` or
+`MinSizeRel`. It is independent of the compiler/VM host configuration because
+one backend archive is shared in a build tree. Release uses O2 without disabling
+runtime assertions or enabling fast-math. Use Debug for an O0, symbol-bearing
+runtime; profile changes rebuild its objects. Installation includes the selected
+`runtime/lib/build-profile.txt` beside the archive.
+
 Once the compiler has been built at least once, the preferred repo-local flow
 is now the Wio CLI itself:
 
@@ -191,15 +199,13 @@ If you use the CMake project inside Rider or Visual Studio, these IDE-friendly
 targets are also generated automatically:
 
 - `wio_tests`
-- `wio_playground_check`
-- `wio_playground_run`
-- `wio_playground_tokens`
-- `wio_playground_ast`
+- `wio_playground`
 
-Every file under `playground/*.wio` also gets its own parameterless targets:
-
-- `wio_file_<name>_check`
-- `wio_file_<name>_run`
+`wio_playground` is a runnable CMake executable. Selecting it and pressing
+Play launches the native project at `playground/wio.makewio` through the Wio
+CLI. The solution also exposes dedicated source-only projects for Wio tests,
+examples, the standard library, CLI sources, CMake files, and every C/C++
+source or header in the repository.
 
 ### Rider
 
@@ -267,8 +273,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Run-HybridArenaDemo.ps1 -Buil
 ```
 
 If the CMake tool window is available, you can also run the generated targets
-such as `wio_playground_run`, `wio_tests`, `wio_tests_list`, or
-`wio_file_<name>_run` directly from there.
+such as `wio_playground`, `wio_tests`, or `wio_tests_list` directly from
+there.
 
 ### Native Interop
 

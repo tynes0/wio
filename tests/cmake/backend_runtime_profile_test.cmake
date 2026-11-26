@@ -1,0 +1,30 @@
+include("${WIO_SOURCE_DIR}/runtime/cmake/WioBackendRuntimeProfile.cmake")
+
+if(WIO_TEST_INVALID_PROFILE)
+    wio_backend_runtime_profile_flags("TurboFast" flags)
+    message(FATAL_ERROR "Invalid runtime profile was accepted")
+endif()
+
+foreach(profile IN ITEMS Release Debug RelWithDebInfo MinSizeRel)
+    wio_backend_runtime_profile_flags("${profile}" flags)
+    if(profile STREQUAL "Release")
+        set(expected -O2 -ffp-contract=off)
+    elseif(profile STREQUAL "Debug")
+        set(expected -O0 -g -ffp-contract=off)
+    elseif(profile STREQUAL "RelWithDebInfo")
+        set(expected -O2 -g -ffp-contract=off)
+    else()
+        set(expected -Os -ffp-contract=off)
+    endif()
+    if(NOT "${flags}" STREQUAL "${expected}")
+        message(FATAL_ERROR "Unexpected ${profile} flags: ${flags}")
+    endif()
+endforeach()
+
+execute_process(COMMAND "${CMAKE_COMMAND}" "-DWIO_SOURCE_DIR=${WIO_SOURCE_DIR}"
+    -DWIO_TEST_INVALID_PROFILE=ON -P "${CMAKE_CURRENT_LIST_FILE}"
+    RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
+if(status EQUAL 0 OR NOT error MATCHES "Unsupported WIO_BACKEND_RUNTIME_PROFILE")
+    message(FATAL_ERROR "Invalid-profile diagnostic missing: ${output}${error}")
+endif()
+message(STATUS "Backend runtime profiles preserve checks/FP policy; invalid profiles reject")

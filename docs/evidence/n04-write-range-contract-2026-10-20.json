@@ -1,0 +1,350 @@
+{
+  "passed": true,
+  "processes": [
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wio",
+        "--emit-cpp",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-write-range-contract-2026-10-20/3c48558034f44f63859f90ebd657c4dd/main.wio.cpp\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-write-range-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\native.exe",
+        "range"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: Native call 'wio::runtime::std_io::WriteByteValuesRange' failed: WriteBytesRange range is outside the input\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\native.exe",
+        "overflow"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: Native call 'wio::runtime::std_io::WriteByteValuesRange' failed: WriteBytesRange range is outside the input\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\native.exe",
+        "closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: std_io write error: null_file | requested: 1 | written: 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\contract.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\allocation-probe.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\allocation-probe.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-write-range-contract-ok: 257 writes; zero allocation/free; range and file errors\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-write-range-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\native.exe",
+        "range"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: Native call 'wio::runtime::std_io::WriteByteValuesRange' failed: WriteBytesRange range is outside the input\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\native.exe",
+        "overflow"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: Native call 'wio::runtime::std_io::WriteByteValuesRange' failed: WriteBytesRange range is outside the input\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\native.exe",
+        "closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: std_io write error: null_file | requested: 1 | written: 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\contract.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\allocation-probe.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\allocation-probe.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-write-range-contract-ok: 257 writes; zero allocation/free; range and file errors\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wio",
+        "--target",
+        "shared",
+        "--native-bridge-only",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd",
+        "--output",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\bridge.dll",
+        "--bytecode-sidecar",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wiob",
+        "--backend-arg=-O0",
+        "--backend-arg=-ffp-contract=off"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-write-range-contract-2026-10-20/3c48558034f44f63859f90ebd657c4dd/bridge.wio.cpp\nGenerated backend output: F:/Projects/wio/build/n04-write-range-contract-2026-10-20/3c48558034f44f63859f90ebd657c4dd/bridge.dll\nGenerated bytecode output: F:/Projects/wio/build/n04-write-range-contract-2026-10-20/3c48558034f44f63859f90ebd657c4dd/main.wiob\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\bridge.dll"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-write-range-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\bridge.dll",
+        "--",
+        "range"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::WriteBytesRange' failed: wio.native: Native call 'wio::runtime::std_io::WriteByteValuesRange' failed: WriteBytesRange range is outside the input (function 299)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\bridge.dll",
+        "--",
+        "overflow"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::WriteBytesRange' failed: wio.native: Native call 'wio::runtime::std_io::WriteByteValuesRange' failed: WriteBytesRange range is outside the input (function 299)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\bridge.dll",
+        "--",
+        "closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::WriteBytesRange' failed: wio.native: std_io write error: null_file | requested: 1 | written: 0 (function 299)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wio",
+        "--target",
+        "shared",
+        "--native-bridge-only",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd",
+        "--output",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\bridge.dll",
+        "--bytecode-sidecar",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wiob",
+        "--backend-arg=-O2",
+        "--backend-arg=-ffp-contract=off"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-write-range-contract-2026-10-20/3c48558034f44f63859f90ebd657c4dd/bridge.wio.cpp\nGenerated backend output: F:/Projects/wio/build/n04-write-range-contract-2026-10-20/3c48558034f44f63859f90ebd657c4dd/bridge.dll\nGenerated bytecode output: F:/Projects/wio/build/n04-write-range-contract-2026-10-20/3c48558034f44f63859f90ebd657c4dd/main.wiob\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\bridge.dll"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-write-range-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\bridge.dll",
+        "--",
+        "range"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::WriteBytesRange' failed: wio.native: Native call 'wio::runtime::std_io::WriteByteValuesRange' failed: WriteBytesRange range is outside the input (function 299)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\bridge.dll",
+        "--",
+        "overflow"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::WriteBytesRange' failed: wio.native: Native call 'wio::runtime::std_io::WriteByteValuesRange' failed: WriteBytesRange range is outside the input (function 299)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-write-range-contract-2026-10-20\\3c48558034f44f63859f90ebd657c4dd\\bridge.dll",
+        "--",
+        "closed"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'std_io::WriteBytesRange' failed: wio.native: std_io write error: null_file | requested: 1 | written: 0 (function 299)\n"
+    }
+  ]
+}

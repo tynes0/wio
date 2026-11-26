@@ -1,0 +1,35 @@
+[native, CppName(deploy_native::Add)]
+fn NativeAdd(left: i32, right: i32) -> i32;
+
+[native, CppName(deploy_native::Decorate)]
+fn NativeDecorate(value: string) -> string;
+
+[native, CppName(deploy_native::Initialize)]
+fn NativeInitialize() -> i32;
+
+[native, CppName(deploy_native::Finalize)]
+fn NativeFinalize();
+
+[module::load]
+fn Load() -> i32
+{
+    return NativeInitialize();
+}
+
+[module::unload]
+fn Unload()
+{
+    NativeFinalize();
+}
+
+[export]
+fn Add(left: i32, right: i32) -> i32
+{
+    return NativeAdd(left, right);
+}
+
+[export]
+fn Message(value: string) -> string
+{
+    return NativeDecorate(value);
+}

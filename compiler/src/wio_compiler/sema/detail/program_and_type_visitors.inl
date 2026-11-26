@@ -3,6 +3,7 @@
 
     void SemanticAnalyzer::visit(Program& node)
     {
+        common::profiling::Scope programScope("Semantic.Program");
         enterScope(ScopeKind::Global);
 
         struct ExecutableEntrySurface
@@ -59,8 +60,10 @@
                     entrySurface.ordinaryEntryLocation = function->location();
             }
         };
+        common::profiling::Scope entrySurfaceScope("Semantic.EntrySurface");
         for (const auto& statement : node.statements)
             collectEntrySurface(collectEntrySurface, statement, false);
+        entrySurfaceScope.stop();
 
         if (entrySurface.applicationCount > 1)
         {
@@ -86,12 +89,15 @@
 
         isDeclarationPass_ = true;
         activeScopedAttributes_.clear();
+        common::profiling::Scope declarationScope("Semantic.Declarations");
         for (auto& stmt : node.statements)
             stmt->accept(*this);
+        declarationScope.stop();
 
         isDeclarationPass_ = false;
         isStructResolutionPass_ = true;
         activeScopedAttributes_.clear();
+        common::profiling::Scope typeResolutionScope("Semantic.TypeResolution");
         for (auto& stmt : node.statements)
         {
             if (stmt->is<ComponentDeclaration>() ||
@@ -107,6 +113,7 @@
                 stmt->accept(*this);
             }
         }
+        typeResolutionScope.stop();
 
         isStructResolutionPass_ = false;
 
@@ -114,6 +121,7 @@
         // then register checked derive members before ordinary bodies resolve
         // member access. Both passes are declaration-order independent.
         isAttributeContractPass_ = true;
+        common::profiling::Scope attributeContractScope("Semantic.AttributeContracts");
         for (auto& stmt : node.statements)
         {
             if (stmt->is<AttributeDeclaration>() ||
@@ -123,9 +131,11 @@
                 stmt->accept(*this);
             }
         }
+        attributeContractScope.stop();
         isAttributeContractPass_ = false;
 
         isDeriveExpansionPass_ = true;
+        common::profiling::Scope deriveScope("Semantic.DeriveExpansion");
         for (auto& stmt : node.statements)
         {
             if (stmt->is<ComponentDeclaration>() ||
@@ -136,11 +146,14 @@
                 stmt->accept(*this);
             }
         }
+        deriveScope.stop();
         isDeriveExpansionPass_ = false;
 
         activeScopedAttributes_.clear();
+        common::profiling::Scope bodyScope("Semantic.Bodies");
         for (auto& stmt : node.statements)
             stmt->accept(*this);
+        bodyScope.stop();
 
         auto entrySym = currentScope_->resolveLocally("Entry");
         if (Compiler::get().getBuildTarget() == BuildTarget::Executable &&

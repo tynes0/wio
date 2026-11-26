@@ -1,0 +1,7 @@
+[native, CppName(deploy_native::Add)]
+fn NativeAdd(left: i32, right: i32) -> i32;
+
+fn Entry() -> i32
+{
+    return NativeAdd(20, 22) == 142 ? 0 : 1;
+}

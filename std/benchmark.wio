@@ -1,0 +1,449 @@
+use std::math as math;
+use std::result;
+use std::json as json;
+
+realm std
+{
+    realm benchmark
+    {
+        using cpp::header("std_benchmark.h");
+
+        [native, cpp::name(wio::runtime::benchmark::MemorySnapshot)]
+        component MemorySnapshot
+        {
+            public residentBytes: u64;
+            public peakResidentBytes: u64;
+            public privateBytes: u64;
+            public residentAvailable: bool;
+            public peakAvailable: bool;
+            public privateAvailable: bool;
+        }
+
+        [native, cpp::name(wio::runtime::benchmark::AllocationSnapshot)]
+        component AllocationSnapshot
+        {
+            public allocations: u64;
+            public frees: u64;
+            public requestedBytes: u64;
+            public freedBytes: u64;
+            public liveBytes: u64;
+            public peakBytes: u64;
+            public liveBlocks: u64;
+            public peakBlocks: u64;
+            public failures: u64;
+            public available: bool;
+        }
+
+        [native, cpp::name(wio::runtime::benchmark::Now)]
+        fn Now() -> i64;
+
+        [native, cpp::name(wio::runtime::benchmark::Consume)]
+        fn Consume(value: u64);
+
+        [native, cpp::name(wio::runtime::benchmark::InputU64)]
+        fn Input(value: u64) -> u64;
+
+        [native, cpp::name(wio::runtime::benchmark::InputI64)]
+        fn Input(value: i64) -> i64;
+
+        [native, cpp::name(wio::runtime::benchmark::InputF64)]
+        fn Input(value: f64) -> f64;
+
+        [native, cpp::name(wio::runtime::benchmark::Memory)]
+        fn Memory() -> MemorySnapshot;
+
+        [native, cpp::name(wio::runtime::benchmark::AllocationAvailable)]
+        fn AllocationAvailable() -> bool;
+
+        [native, cpp::name(wio::runtime::benchmark::BeginAllocations)]
+        fn BeginAllocationsNative() -> bool;
+
+        [native, cpp::name(wio::runtime::benchmark::Allocations)]
+        fn Allocations() -> AllocationSnapshot;
+
+        [native, cpp::name(wio::runtime::benchmark::EndAllocations)]
+        fn EndAllocations() -> AllocationSnapshot;
+
+        [native, cpp::name(wio::runtime::benchmark::Execute)]
+        fn ExecuteNative(program: string, args: string[], cwd: string, timeoutMs: i64,
+            outputLimit: usize, cpu: i32) -> string;
+
+        [native, cpp::name(wio::runtime::benchmark::Fingerprint)]
+        fn FingerprintNative(path: string) -> string;
+
+        [native, cpp::name(wio::runtime::benchmark::SelfFingerprint)]
+        fn SelfFingerprintNative() -> string;
+
+        [native, cpp::name(wio::runtime::benchmark::Environment)]
+        fn EnvironmentNative() -> string;
+
+        component Statistics
+        {
+            public count: usize;
+            public minimum: f64;
+            public maximum: f64;
+            public mean: f64;
+            public median: f64;
+            public p90: f64;
+            public p95: f64;
+            public p99: f64;
+            public standardDeviation: f64;
+            public medianAbsoluteDeviation: f64;
+            public standardError: f64;
+            public mean95Low: f64;
+            public mean95High: f64;
+            public relativeRange: f64;
+            public relativeDrift: f64;
+            public stable: bool;
+        }
+
+        object Report
+        {
+            private label: string;
+            private samples: f64[];
+            private statistics: Statistics;
+            private iterations: usize;
+            private checksum: u64;
+
+            public fn OnConstruct(label: string, samples: f64[], statistics: Statistics,
+                iterations: usize, checksum: u64)
+            {
+                self.label = label;
+                self.samples = samples;
+                self.statistics = statistics;
+                self.iterations = iterations;
+                self.checksum = checksum;
+            }
+
+            public fn Name() -> string
+            {
+                return self.label;
+            }
+
+            public fn Samples() -> f64[]
+            {
+                return self.samples;
+            }
+
+            public fn Summary() -> Statistics
+            {
+                return self.statistics;
+            }
+
+            public fn NanosecondsPerOperation() -> f64
+            {
+                return self.statistics.median / (self.iterations fit f64);
+            }
+
+            public fn Checksum() -> u64
+            {
+                return self.checksum;
+            }
+
+            public fn Operations() -> usize
+            {
+                return self.iterations;
+            }
+        }
+
+        fn Failure<T>(message: string) -> std::Result<T>
+        {
+            return std::Err<T>(std::MakeResultError(std::ResultDomain::runtime, 1, message));
+        }
+
+        fn BeginAllocations() -> std::UnitResult
+        {
+            // Prepare success transport BEFORE opening the diagnostic window.
+            // Returning this handle must not count the Result allocation itself.
+            let success = std::OkUnit();
+            if (not AllocationAvailable())
+            {
+                return Failure<std::ResultUnit>("Allocation diagnostics are not enabled in this executable.");
+            }
+
+            if (not BeginAllocationsNative())
+            {
+                return Failure<std::ResultUnit>("Allocation window is active or still owns live allocations.");
+            }
+
+            return success;
+        }
+
+        fn Execute(program: string, args: string[], cwd: string, timeoutMs: i64,
+            outputLimit: usize, cpu: i32) -> std::Result<json::Value>
+        {
+            return json::Parse(ExecuteNative(program, args, cwd, timeoutMs, outputLimit, cpu));
+        }
+
+        fn Fingerprint(path: string) -> std::Result<json::Value>
+        {
+            let parsed = json::Parse(FingerprintNative(path));
+            if (parsed.IsError()) return parsed;
+            let value = parsed.Value();
+            if (not value.objectValue.GetOr("ok", json::BoolValue(false)).BoolOr(false))
+            {
+                return Failure<json::Value>("Cannot hash artifact: " + path);
+            }
+
+            return parsed;
+        }
+
+        fn Environment() -> std::Result<json::Value>
+        {
+            return json::Parse(EnvironmentNative());
+        }
+
+        // Owned copy: sorting must never mutate the caller's sample sequence.
+        fn Sorted(values: f64[]) -> f64[]
+        {
+            mut result: f64[] = [];
+            for (value in values)
+            {
+                result.Push(value);
+            }
+
+            result.Sort();
+            return result;
+        }
+
+        fn Percentile(values: f64[], fraction: f64) -> std::Result<f64>
+        {
+            if (values.Count() == 0usize or values.Count() > 10000usize
+                or not math::IsFinite(fraction) or fraction < 0.0 or fraction > 1.0)
+            {
+                return Failure<f64>("Require 1..10000 samples and a finite quantile in [0,1].");
+            }
+
+            for (value in values)
+            {
+                if (not math::IsFinite(value) or value <= 0.0) return Failure<f64>("Invalid sample.");
+            }
+
+            return std::Ok(QuantileSorted(Sorted(values), fraction));
+        }
+
+        fn QuantileSorted(values: f64[], fraction: f64) -> f64
+        {
+            let position = ((values.Count() - 1usize) fit f64) * fraction;
+            let left = position fit usize;
+            let right = left + 1usize;
+            if (right >= values.Count()) return values[left];
+            return values[left] + (values[right] - values[left]) * (position - (left fit f64));
+        }
+
+        fn AnalyzeWithLimits(values: f64[], maximumRange: f64, maximumDrift: f64) -> std::Result<Statistics>
+        {
+            if (values.Count() < 3usize or values.Count() > 10000usize)
+            {
+                return Failure<Statistics>("Require 3..10000 samples.");
+            }
+
+            if (not math::IsFinite(maximumRange) or not math::IsFinite(maximumDrift)
+                or maximumRange <= 0.0 or maximumDrift <= 0.0)
+            {
+                return Failure<Statistics>("Stability limits must be finite and positive.");
+            }
+
+            mut summary = Statistics();
+            summary.count = values.Count();
+            mut mean = 0.0;
+            mut m2 = 0.0;
+            mut count = 0.0;
+            for (value in values)
+            {
+                if (not math::IsFinite(value) or value <= 0.0)
+                {
+                    return Failure<Statistics>("Samples must be finite positive nanosecond durations.");
+                }
+
+                count += 1.0;
+                let delta = value - mean;
+                mean += delta / count;
+                m2 += delta * (value - mean);
+            }
+
+            let sorted = Sorted(values);
+            summary.minimum = sorted[0usize];
+            summary.maximum = sorted[sorted.Count() - 1usize];
+            summary.mean = mean;
+            summary.median = QuantileSorted(sorted, 0.5);
+            summary.p90 = QuantileSorted(sorted, 0.90);
+            summary.p95 = QuantileSorted(sorted, 0.95);
+            summary.p99 = QuantileSorted(sorted, 0.99);
+            summary.standardDeviation = math::Sqrt(m2 / (count - 1.0));
+            summary.standardError = summary.standardDeviation / math::Sqrt(count);
+            summary.mean95Low = mean - 1.96 * summary.standardError;
+            summary.mean95High = mean + 1.96 * summary.standardError;
+            summary.relativeRange = (summary.maximum - summary.minimum) / summary.median;
+            mut deviations: f64[] = [];
+            mut early: f64[] = [];
+            mut late: f64[] = [];
+            let half = values.Count() / 2usize;
+            for (index in 0usize..<values.Count())
+            {
+                deviations.Push(math::Abs(values[index] - summary.median));
+                if (index < half)
+                {
+                    early.Push(values[index]);
+                }
+
+                if (index >= values.Count() - half)
+                {
+                    late.Push(values[index]);
+                }
+            }
+
+            summary.medianAbsoluteDeviation = QuantileSorted(Sorted(deviations), 0.5);
+            summary.relativeDrift = math::Abs(QuantileSorted(Sorted(early), 0.5)
+                - QuantileSorted(Sorted(late), 0.5)) / summary.median;
+            summary.stable = summary.relativeRange <= maximumRange and summary.relativeDrift <= maximumDrift;
+            if (not math::IsFinite(summary.standardDeviation) or not math::IsFinite(summary.mean95High))
+            {
+                return Failure<Statistics>("Sample magnitude overflows statistics.");
+            }
+
+            return std::Ok(summary);
+        }
+
+        fn Analyze(values: f64[]) -> std::Result<Statistics>
+        {
+            return AnalyzeWithLimits(values, 0.15, 0.10);
+        }
+
+        fn Run(name: string, iterations: usize, warmups: usize, repetitions: usize,
+            action: fn(usize) -> u64, expected: u64) -> std::Result<Report>
+        {
+            if (iterations == 0usize or warmups > 10000usize or repetitions < 3usize or repetitions > 10000usize)
+            {
+                return Failure<Report>("Invalid benchmark iterations/warmups/repetitions.");
+            }
+
+            mut samples: f64[] = [];
+            for (round in 0usize..<warmups + repetitions)
+            {
+                let start = Now();
+                let actual = action(Input(iterations fit u64) fit usize);
+                Consume(actual);
+                let elapsed = Now() - start;
+                if (actual != expected) return Failure<Report>("Benchmark checksum mismatch: " + name);
+                if (elapsed <= 0) return Failure<Report>("Workload is below clock resolution; increase iterations.");
+                if (round >= warmups)
+                {
+                    samples.Push(elapsed fit f64);
+                }
+            }
+
+            let summary = Analyze(samples);
+            if (summary.IsError()) return std::Err<Report>(summary.ErrorValue());
+            return std::Ok(Report(name, samples, summary.Value(), iterations, expected));
+        }
+
+        fn Calibrate(action: fn(usize) -> u64, targetNanoseconds: i64,
+            maximumIterations: usize) -> std::Result<usize>
+        {
+            if (targetNanoseconds < 1 or maximumIterations < 1usize)
+            {
+                return Failure<usize>("Calibration target and maximum iterations must be positive.");
+            }
+
+            mut iterations = 1usize;
+            while (true)
+            {
+                let start = Now();
+                let checksum = action(Input(iterations fit u64) fit usize);
+                Consume(checksum);
+                let elapsed = Now() - start;
+                if (elapsed >= targetNanoseconds) return std::Ok(iterations);
+                if (iterations >= maximumIterations)
+                {
+                    return Failure<usize>("Calibration hit maximum iterations before target duration.");
+                }
+
+                iterations = iterations > maximumIterations / 2usize ? maximumIterations : iterations * 2usize;
+            }
+
+            return Failure<usize>("Calibration did not complete.");
+        }
+
+        fn SummaryJson(summary: Statistics) -> json::Value
+        {
+            mut values: Dict<string, json::Value> = {};
+            values.Set("count", json::IntegerValue(summary.count fit u64));
+            values.Set("minimum", json::NumberValue(summary.minimum));
+            values.Set("maximum", json::NumberValue(summary.maximum));
+            values.Set("mean", json::NumberValue(summary.mean));
+            values.Set("median", json::NumberValue(summary.median));
+            values.Set("p90", json::NumberValue(summary.p90));
+            values.Set("p95", json::NumberValue(summary.p95));
+            values.Set("p99", json::NumberValue(summary.p99));
+            values.Set("standardDeviation", json::NumberValue(summary.standardDeviation));
+            values.Set("standardError", json::NumberValue(summary.standardError));
+            values.Set("medianAbsoluteDeviation", json::NumberValue(summary.medianAbsoluteDeviation));
+            values.Set("mean95LowApproximate", json::NumberValue(summary.mean95Low));
+            values.Set("mean95HighApproximate", json::NumberValue(summary.mean95High));
+            values.Set("relativeRange", json::NumberValue(summary.relativeRange));
+            values.Set("relativeDrift", json::NumberValue(summary.relativeDrift));
+            values.Set("stable", json::BoolValue(summary.stable));
+            return json::ObjectValue(values);
+        }
+
+        fn Protocol(elapsedNanoseconds: i64, operations: u64, checksum: u64) -> string
+        {
+            mut values: Dict<string, json::Value> = {};
+            values.Set("schemaVersion", json::IntegerValue(1));
+            values.Set("elapsedNanoseconds", json::IntegerValue(elapsedNanoseconds));
+            values.Set("operations", json::IntegerValue(operations));
+            values.Set("checksum", json::StringValue(std::ToString<u64>(checksum)));
+            return json::Write(json::ObjectValue(values));
+        }
+
+        fn ReportJson(report: Report) -> json::Value
+        {
+            mut samples: json::Value[] = [];
+            for (sample in report.Samples())
+            {
+                samples.Push(json::NumberValue(sample));
+            }
+
+            mut values: Dict<string, json::Value> = {};
+            values.Set("name", json::StringValue(report.Name()));
+            values.Set("unit", json::StringValue("nanoseconds"));
+            values.Set("samples", json::ArrayValue(samples));
+            values.Set("statistics", SummaryJson(report.Summary()));
+            values.Set("operations", json::IntegerValue(report.Operations() fit u64));
+            values.Set("checksum", json::StringValue(std::ToString<u64>(report.Checksum())));
+            return json::ObjectValue(values);
+        }
+
+        fn MemoryJson(snapshot: MemorySnapshot) -> json::Value
+        {
+            mut values: Dict<string, json::Value> = {};
+            values.Set("scope", json::StringValue("self-process; lifetime peak; OS accounting"));
+            values.Set("residentBytes", snapshot.residentAvailable ? json::IntegerValue(snapshot.residentBytes) : json::NullValue());
+            values.Set("peakResidentBytes", snapshot.peakAvailable ? json::IntegerValue(snapshot.peakResidentBytes) : json::NullValue());
+            values.Set("privateBytes", snapshot.privateAvailable ? json::IntegerValue(snapshot.privateBytes) : json::NullValue());
+            return json::ObjectValue(values);
+        }
+
+        fn AllocationJson(snapshot: AllocationSnapshot) -> json::Value
+        {
+            mut values: Dict<string, json::Value> = {};
+            values.Set("available", json::BoolValue(snapshot.available));
+            values.Set("scope", json::StringValue("diagnostic C++ global new/delete window; not RSS or malloc traffic"));
+            if (snapshot.available)
+            {
+                values.Set("allocations", json::IntegerValue(snapshot.allocations));
+                values.Set("frees", json::IntegerValue(snapshot.frees));
+                values.Set("requestedBytes", json::IntegerValue(snapshot.requestedBytes));
+                values.Set("freedBytes", json::IntegerValue(snapshot.freedBytes));
+                values.Set("liveBytes", json::IntegerValue(snapshot.liveBytes));
+                values.Set("peakBytes", json::IntegerValue(snapshot.peakBytes));
+                values.Set("liveBlocks", json::IntegerValue(snapshot.liveBlocks));
+                values.Set("peakBlocks", json::IntegerValue(snapshot.peakBlocks));
+                values.Set("failures", json::IntegerValue(snapshot.failures));
+            }
+
+            return json::ObjectValue(values);
+        }
+    }
+}

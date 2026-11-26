@@ -1,0 +1,59 @@
+{
+  "scope": "Exact Windows x64 GCC 15.2 O2 function prologues, not whole-program peak stack",
+  "parentRevision": "9435fb82f4d72b07e64563f0c814b104412d6c60",
+  "symbol": "_ZN3wio7runtime14AppendFloatingIdEEvRNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEET_",
+  "command": "objdump -d --disassemble=<symbol> <native.exe>",
+  "normalizedGeneratedCppIdentical": true,
+  "normalization": "Replace each frozen output folder name with <CASE>; no other normalization",
+  "before": {
+    "executableSha256": "fa8f23ccb13bea8c4788e2f54994b756833b5c87fc33911c679443406a7dbd8f",
+    "generatedSha256": "87e272c1da32ef83263bb0c6b5995066f0691c4c25694d9984729ec4b99f0fb9",
+    "executableBytes": 6623765,
+    "diagnosticExecutableBytes": 6706063,
+    "generatedBytes": 3446440,
+    "floatingReservationBytes": 504,
+    "floatingSavedGprCount": 8,
+    "workReservationBytes": 856,
+    "workStackInstruction": "14014b17c: 48 81 ec 58 03 00 00 sub $0x358,%rsp",
+    "prologue": [
+      "00000001402ad9a0 <AppendFloating<double>>:",
+      "1402ad9a0: 41 57 push %r15",
+      "1402ad9a2: 41 56 push %r14",
+      "1402ad9a4: 41 55 push %r13",
+      "1402ad9a6: 41 54 push %r12",
+      "1402ad9a8: 55 push %rbp",
+      "1402ad9a9: 57 push %rdi",
+      "1402ad9aa: 56 push %rsi",
+      "1402ad9ab: 53 push %rbx",
+      "1402ad9ac: 48 81 ec f8 01 00 00 sub $0x1f8,%rsp"
+    ],
+    "workCalls": [
+      "14014b7bd: e8 de 21 16 00 call 1402ad9a0 <AppendFloating<double>>",
+      "14014bccb: e8 d0 1c 16 00 call 1402ad9a0 <AppendFloating<double>>"
+    ]
+  },
+  "after": {
+    "executableSha256": "5b6c6b2361a402ab3f295a53036cc2cffbddf59f07d15c23461fd2dd7a1ae07e",
+    "generatedSha256": "5342abe69ab2cca419a4f4d2270e56e713c32898bccec7066cff1879675d57be",
+    "executableBytes": 6622171,
+    "diagnosticExecutableBytes": 6704365,
+    "generatedBytes": 3446439,
+    "floatingReservationBytes": 112,
+    "floatingSavedGprCount": 3,
+    "workReservationBytes": 856,
+    "workStackInstruction": "14014b26c: 48 81 ec 58 03 00 00 sub $0x358,%rsp",
+    "prologue": [
+      "00000001402adae0 <AppendFloating<double>>:",
+      "1402adae0: 57 push %rdi",
+      "1402adae1: 56 push %rsi",
+      "1402adae2: 53 push %rbx",
+      "1402adae3: 48 83 ec 70 sub $0x70,%rsp"
+    ],
+    "workCalls": [
+      "14014b89d: e8 3e 22 16 00 call 1402adae0 <AppendFloating<double>>",
+      "14014bdab: e8 30 1d 16 00 call 1402adae0 <AppendFloating<double>>"
+    ],
+    "nonfiniteTailBranch": "1402adb0e: e9 9d 21 00 00 jmp 1402afcb0 <AppendFloatingStream<double>>",
+    "coldHelperHasSeparateFrame": true
+  }
+}

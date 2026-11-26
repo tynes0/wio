@@ -1,0 +1,90 @@
+use ui;
+use renderer;
+use appearance;
+use std::console as console;
+
+fn Expect(value: bool, message: string) {
+    if (not value) std::Panic(message);
+}
+
+fn Near(a: f32, b: f32) -> bool {
+    return a > b - 0.01f32 and a < b + 0.01f32;
+}
+
+fn Contains(parent: pac::ui::Area, child: pac::ui::Area) -> bool {
+    return child.bounds.x >= parent.bounds.x - 0.01f32 and child.bounds.y >= parent.bounds.y - 0.01f32 and
+        child.bounds.x + child.Width() <= parent.bounds.x + parent.Width() + 0.01f32 and
+        child.bounds.y + child.Height() <= parent.bounds.y + parent.Height() + 0.01f32 and
+        child.Width() >= 0.0f32 and child.Height() >= 0.0f32;
+}
+
+fn Entry() -> i32 {
+    let root = pac::ui::At(100.0f32, 200.0f32, 400.0f32, 300.0f32);
+    let padded = root.Inset(20.0f32);
+    Expect(Near(padded.bounds.x, 120.0f32) and Near(padded.bounds.y, 220.0f32), "Panel inset origin.");
+    Expect(Near(padded.Width(), 360.0f32) and Near(padded.Height(), 260.0f32), "Panel inset size.");
+    let child = padded.Child(10.0f32, 15.0f32, 100.0f32, 60.0f32);
+    let nested = child.Child(5.0f32, 7.0f32, 20.0f32, 20.0f32);
+    Expect(Near(nested.bounds.x, 135.0f32) and Near(nested.bounds.y, 242.0f32), "Nested local coordinates.");
+    let center = root.Center();
+    Expect(Near(center.x, 300.0f32) and Near(center.y, 350.0f32), "Parent center.");
+    let aligned = root.Sized(100.0f32, 80.0f32, pac::ui::Align::center, pac::ui::Align::center);
+    Expect(Near(aligned.bounds.x, 250.0f32) and Near(aligned.bounds.y, 310.0f32), "Centered child.");
+    let empty = root.Inset(10000.0f32);
+    Expect(Contains(root, empty) and empty.Width() == 0.0f32 and empty.Height() == 0.0f32, "Oversized inset.");
+
+    mut column = root.Column(8.0f32);
+    let first = column.Take(50.0f32);
+    let last = column.TakeEnd(30.0f32);
+    let rest = column.Rest();
+    Expect(Near(first.bounds.y, 200.0f32) and Near(last.bounds.y, 470.0f32), "Column opposite-end placement.");
+    Expect(Near(rest.bounds.y, 258.0f32) and Near(rest.Height(), 204.0f32), "Column remaining space.");
+    mut independent = column;
+    independent.Take(20.0f32);
+    Expect(Near(column.Rest().Height(), 204.0f32), "Flow copies have independent cursors.");
+    let filled = column.Take(10000.0f32);
+    Expect(Near(filled.Height(), 204.0f32) and column.Rest().Height() == 0.0f32, "Take clamps to available space.");
+
+    mut row = root.Row(8.0f32);
+    row.Take(40.0f32);
+    let right = row.TakeEnd(60.0f32);
+    Expect(Near(right.bounds.x, 440.0f32) and Near(row.Rest().Width(), 284.0f32), "Row flow.");
+    let keypad = pac::ui::At(10.0f32, 20.0f32, 110.0f32, 70.0f32);
+    let bottomRight = keypad.Cell(2, 1, 3, 2, 5.0f32);
+    Expect(Near(bottomRight.bounds.x + bottomRight.Width(), 120.0f32) and
+        Near(bottomRight.bounds.y + bottomRight.Height(), 90.0f32), "Grid reaches parent edges.");
+
+    let viewports: pac::ui::Area[] = [
+        pac::ui::At(0.0f32, 0.0f32, 800.0f32, 780.0f32),
+        pac::ui::At(0.0f32, 0.0f32, 1120.0f32, 960.0f32),
+        pac::ui::At(0.0f32, 0.0f32, 1440.0f32, 900.0f32),
+        pac::ui::At(0.0f32, 0.0f32, 1200.0f32, 1200.0f32)
+    ];
+    for (viewport in viewports) {
+        let layout = pac::draw::Arrange(viewport, 28, 31);
+        Expect(Contains(viewport, layout.header) and Contains(viewport, layout.board) and
+            Contains(viewport, layout.boardFooter) and Contains(viewport, layout.sidebar) and
+            Contains(viewport, layout.footer), "Viewport contains all layout areas.");
+        Expect(Near(layout.board.Width() / 28.0f32, layout.board.Height() / 31.0f32), "Square map cells.");
+        Expect(layout.sidebar.Width() >= pac::metrics::RailMinimumWidth - 0.01f32, "Minimum sidebar width.");
+        Expect(layout.board.bounds.x + layout.board.Width() < layout.sidebar.bounds.x, "No map/sidebar overlap.");
+        mut rail = layout.sidebar.Column(pac::metrics::SectionGap);
+        let score = rail.Take(pac::metrics::ScorePanelHeight);
+        let legend = rail.Take(pac::metrics::LegendPanelHeight);
+        let input = rail.Take(pac::metrics::InputPanelHeight);
+        Expect(Contains(layout.sidebar, input) and
+            Near(input.bounds.y, legend.bounds.y + legend.Height() + pac::metrics::SectionGap), "Panel flow placement.");
+        mut withoutLegend = layout.sidebar.Column(pac::metrics::SectionGap);
+        withoutLegend.Take(pac::metrics::ScorePanelHeight);
+        let movedInput = withoutLegend.Take(pac::metrics::InputPanelHeight);
+        Expect(Near(input.bounds.y - movedInput.bounds.y,
+            pac::metrics::LegendPanelHeight + pac::metrics::SectionGap), "Removing a panel reflows the next panel.");
+        let shiftedViewport = pac::ui::At(50.0f32, 70.0f32, viewport.Width(), viewport.Height());
+        let shifted = pac::draw::Arrange(shiftedViewport, 28, 31);
+        Expect(Near(shifted.board.bounds.x - layout.board.bounds.x, 50.0f32) and
+            Near(shifted.sidebar.bounds.y - layout.sidebar.bounds.y, 70.0f32), "Layout follows parent translation.");
+    }
+
+    console::PrintLine("relative-layout-ok: nested areas, alignment, flow, reflow, resize, translation");
+    return 0;
+}

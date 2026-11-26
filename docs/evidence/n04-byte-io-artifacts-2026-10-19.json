@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "sourceRevisionAfter": "3c9e2688e81beedfd980a3a0b3c949c836587cd9",
+  "qualification": {
+    "beforeSamples": 84,
+    "afterSamples": 84,
+    "outputsCorrect": true,
+    "timingQualified": false,
+    "affinityQualified": true,
+    "artifactsUnchanged": true,
+    "powerProfileUnchanged": true,
+    "acceptedSpeedup": false,
+    "platformCi": "https://github.com/tynes0/wio/actions/runs/39169819998"
+  },
+  "beforeDirectory": "build/n04-byte-io-before-explicit-mode-2026-10-18",
+  "afterDirectory": "build/n04-byte-io-after-2026-10-19",
+  "provenance": {
+    "before": "Parent source 5db6595 with new uncommitted fixture; no production runtime edits yet. Same frozen five workload files copied to after.",
+    "after": "Committed runtime/header 3c9e268, rebuilt backend archive, unchanged compiler and Release VM images.",
+    "nativeProgramFlags": ["-std=c++20", "-O2", "-ffp-contract=off"],
+    "backendArchiveOptimization": "Local std_io.cpp custom compile command supplies no explicit -O flag; same policy before/after, not fully Release-optimized runtime.",
+    "vmBridgeOptimization": "Release VM host but driver-default bridge command without explicit -O backend argument in both builds; not an O2-native-boundary VM benchmark.",
+    "scope": "257 seek/owned 64KiB read/full-byte FNV iterations; hot cache; no setup/open/close in kernel. Independent C++ ifstream and C# FileStream, not identical syscall implementations.",
+    "sampling": "Serial Wio controller; 5 comparison and 3 final Wio repetitions, warmups and native A/A. No retries/trimming or power/priority changes."
+  },
+  "tools": {
+    "compilerSha256": "7688dd04cb64a36f1078b81cf5abf7be1e1e8ff06e361763baab56d8f064f3e0",
+    "releaseVmSha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa",
+    "controllerSha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362",
+    "runtimeBeforeSha256": "180943c29108278cec17ffbb8648e3e2c237a3829a2fa4d17c86bbc7f0fb7660",
+    "runtimeAfterSha256": "edc34510c8068cf32a2b30d3438e28459c2cd633268c2e78148d55e60b99b36b"
+  },
+  "sharedSources": [
+    { "name": "main.wio", "bytes": 2143, "sha256": "255f693e19177c48bb3dc7a8db8272e44be07e5ffa9d1539c9065bbf0aec2b29" },
+    { "name": "main.cpp", "bytes": 1633, "sha256": "2390fe80656098ec9eda1fa6297a2ecaa08d9cde866694703519c2c21eed639a" },
+    { "name": "probe.h", "bytes": 881, "sha256": "23cc1ccccc06e0f0e08a1995a523bc3377728b09df61b2c8d142526bc34923fe" },
+    { "name": "Program.cs", "bytes": 2441, "sha256": "2bf1500084ace57c50b389861b94937fa74166a504e7189e0c99baa738663179" },
+    { "name": "ByteIo.csproj", "bytes": 280, "sha256": "ed79971229072fc23993b4a8387a5f926190c278ffa45ea28794108e2e71de98" }
+  ],
+  "artifacts": [
+    {
+      "name": "native.exe", "beforeBytes": 6853925, "afterBytes": 6873283,
+      "beforeSha256": "c3531d445e04bef83c42632ff799a04e1f2c026011b32e959cda767593b9610c",
+      "afterSha256": "ec29975da6ef16952a8c07a594b36953d712cb72bc9b25fd49b5b973cfb9cd67"
+    },
+    {
+      "name": "memory.exe", "beforeBytes": 10034167, "afterBytes": 10052501,
+      "beforeSha256": "4680815a32390cf4d75f94c790e1591e1c1f8942d975c0ab94d3cb72e8287048",
+      "afterSha256": "c30e2744678c634c31c0897e3a745ac80100e2f1af9620a51490568b0a8724e9"
+    },
+    {
+      "name": "bridge.dll", "beforeBytes": 6035607, "afterBytes": 6050285,
+      "beforeSha256": "2b1881b5021586030de26054c4a0ad8762869a4ec101b3d7195ac9b2fab60f89",
+      "afterSha256": "04c755e7a141f95666a469da00d236c6e322cb454a12f4244ebe089d070eba3b"
+    },
+    {
+      "name": "main.wiob", "beforeBytes": 2707485, "afterBytes": 2707470,
+      "beforeSha256": "d904282eb68f85e12a5962472f5d5bbcdf9a35c38bb22d9684666d841b3991cd",
+      "afterSha256": "1854b917e03fb1c30b7dd1e861ab5b45b7302506cc86219d983f00c981316857"
+    },
+    {
+      "name": "frozen.cpp", "beforeBytes": 3579912, "afterBytes": 3579897,
+      "beforeSha256": "3e7de0be05669c5785d584139e847eae369fe41c2c6b74954324d1ecf91c86e8",
+      "afterSha256": "8814284c15a4b32c1cfb7256c00931db9a7d535a774bce3c75acacbb4afc34a3"
+    }
+  ]
+}

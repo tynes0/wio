@@ -4,6 +4,7 @@
 #include "enum_reflection.h"
 #include "std_convert.h"
 #include "text.h"
+#include "value_format.h"
 
 #include <algorithm>
 #include <array>
@@ -137,11 +138,6 @@ namespace wio::intrinsics
         }
 
         operator const std::string&() const noexcept
-        {
-            return Value;
-        }
-
-        operator std::string() const
         {
             return Value;
         }
@@ -1482,6 +1478,14 @@ namespace wio::intrinsics
     inline void StringAppend(std::string& value, const std::string& suffix)
     {
         value += suffix;
+    }
+
+    template <class T>
+        requires((std::is_integral_v<T> && !std::is_same_v<T, char>) || std::is_same_v<T, float> ||
+                 std::is_same_v<T, double>)
+    inline void StringAppend(std::string& value, const T suffix)
+    {
+        runtime::AppendBasicFormatted(value, suffix);
     }
 
     inline void StringPush(std::string& value, const char ch)

@@ -1,0 +1,3 @@
+{"kind":"integer","iterations":128,"copyAllocations":256,"currentAllocations":128,"copyRequestedBytes":99200,"currentRequestedBytes":65664,"copyPeakBytes":775,"currentPeakBytes":513,"currentLiveBytes":0}
+{"kind":"floating","iterations":128,"copyAllocations":256,"currentAllocations":128,"copyRequestedBytes":99200,"currentRequestedBytes":65664,"copyPeakBytes":775,"currentPeakBytes":513,"currentLiveBytes":0}
+{"kind":"growing-floating","iterations":128,"copyAllocations":384,"currentAllocations":384,"copyRequestedBytes":132736,"currentRequestedBytes":132736,"copyPeakBytes":1037,"currentPeakBytes":1037,"currentLiveBytes":0}

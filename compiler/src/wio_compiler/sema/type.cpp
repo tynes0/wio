@@ -90,13 +90,35 @@ namespace wio::sema
         return p->name == "i8" || p->name == "i16" || p->name == "i32" || p->name == "i64" ||
                p->name == "u8" || p->name == "u16" || p->name == "u32" || p->name == "u64" ||
                p->name == "isize" || p->name == "usize" ||
+               p->name == "char" ||
                p->name == "f32" || p->name == "f64";
+    }
+
+    bool Type::isNullableAnyHandle(const Type* type)
+    {
+        while (type && type->kind() == TypeKind::Alias)
+            type = static_cast<const AliasType*>(type)->aliasedType.Get();
+        if (!type || type->kind() != TypeKind::Nullable)
+            return false;
+        type = static_cast<const NullableType*>(type)->valueType.Get();
+        while (type && type->kind() == TypeKind::Alias)
+            type = static_cast<const AliasType*>(type)->aliasedType.Get();
+        if (!type)
+            return false;
+        if (type->kind() == TypeKind::Primitive)
+            return static_cast<const PrimitiveType*>(type)->name == "opaque";
+        if (type->kind() != TypeKind::Struct)
+            return false;
+        const auto* object = static_cast<const StructType*>(type);
+        return object->isObject || object->isInterface;
     }
 
     bool Type::isCompatibleWith(const Ref<Type>& other) const
     {
-        if (!other) return false;
-        if (this == other.Get()) return true;
+        if (!other)
+            return false;
+        if (this == other.Get())
+            return true;
 
         const Type* t1 = this;
         const Type* t2 = other.Get();
@@ -132,9 +154,6 @@ namespace wio::sema
             return nullable->valueType->isCompatibleWith(Ref<Type>(const_cast<Type*>(t2)));
         }
 
-        if (kind2 == TypeKind::Nullable)
-            return false;
-
         auto isAnyPrimitive = [](const Type* type) -> bool
         {
             return type &&
@@ -158,8 +177,9 @@ namespace wio::sema
             case TypeKind::Array:
             case TypeKind::Dictionary:
             case TypeKind::Struct:
-            case TypeKind::Nullable:
                 return true;
+            case TypeKind::Nullable:
+                return Type::isNullableAnyHandle(type);
             default:
                 return false;
             }
@@ -176,6 +196,9 @@ namespace wio::sema
 
             return isAnyStorableType(t2);
         }
+
+        if (kind2 == TypeKind::Nullable)
+            return false;
 
         if (kind1 != kind2)
         {
@@ -260,6 +283,7 @@ namespace wio::sema
                     if (!destIsFloat && !srcIsFloat)
                     {
                         auto getSize = [](const std::string& s) -> int {
+                            if (s == "char") return 1;
                             if (s.ends_with("8")) return 1;
                             if (s.ends_with("16")) return 2;
                             if (s.ends_with("32")) return 4;
@@ -294,6 +318,21 @@ namespace wio::sema
         {
             auto* v1 = static_cast<const ConstValueType*>(t1);
             auto* v2 = static_cast<const ConstValueType*>(t2);
+            const auto integer = [](Ref<Type> type)
+            {
+                while (type && type->kind() == TypeKind::Alias)
+                    type = type.AsFast<AliasType>()->aliasedType;
+                if (!type || type->kind() != TypeKind::Primitive)
+                    return false;
+                const auto& name = type.AsFast<PrimitiveType>()->name;
+                return name == "i8" || name == "i16" || name == "i32" || name == "i64" || name == "isize" ||
+                       name == "u8" || name == "u16" || name == "u32" || name == "u64" || name == "usize";
+            };
+            // Const-generic declarations pin the target integer representation.
+            // Equal evaluated values do not acquire different specialization
+            // identities from a literal suffix or a const symbol's integer width.
+            if (integer(v1->valueType) && integer(v2->valueType))
+                return v1->value == v2->value;
             return v1->value == v2->value && v1->valueType->isCompatibleWith(v2->valueType);
         }
         case TypeKind::GenericParameterPack:
@@ -471,12 +510,23 @@ namespace wio::sema
             if (s1->name != s2->name || s1->scopePath != s2->scopePath)
                 return false;
 
-            if (s1->genericArguments.size() != s2->genericArguments.size())
+            // The primary declaration's self type is symbolic Box<T, ...>,
+            // not an argument-free Box. Compare its declared parameters to
+            // explicit symbolic arguments without treating them as wildcards.
+            const auto& arguments1 =
+                s1->genericArguments.empty() && !s1->genericPrimaryType.Lock() && !s1->hasGenericParameterPack
+                    ? s1->genericParameterTypes
+                    : s1->genericArguments;
+            const auto& arguments2 =
+                s2->genericArguments.empty() && !s2->genericPrimaryType.Lock() && !s2->hasGenericParameterPack
+                    ? s2->genericParameterTypes
+                    : s2->genericArguments;
+            if (arguments1.size() != arguments2.size())
                 return false;
 
-            for (size_t i = 0; i < s1->genericArguments.size(); ++i)
+            for (size_t i = 0; i < arguments1.size(); ++i)
             {
-                if (!s1->genericArguments[i]->isCompatibleWith(s2->genericArguments[i]))
+                if (!arguments1[i] || !arguments2[i] || !arguments1[i]->isCompatibleWith(arguments2[i]))
                     return false;
             }
 

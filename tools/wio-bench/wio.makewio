@@ -1,0 +1,26 @@
+schemaVersion = 1
+name = "wio-bench"
+template = "wio-app"
+
+[wio]
+entry = "main.wio"
+target = "exe"
+sourceRoots = ["."]
+includeDirs = []
+linkLibraries = []
+backendArgs = ["-O2"]
+
+[host]
+enabled = false
+
+[build]
+buildDir = ".wio-build"
+config = "Release"
+
+[outputs]
+directory = ".wio-build/interop"
+baseName = "wio-bench"
+
+[run]
+workingDirectory = "."
+args = []

@@ -1,0 +1,37 @@
+using cpp::header("native_hook.h");
+
+[native, cpp::name(native_hook::Calls)]
+fn Calls() -> i32;
+
+object NativeLabel
+{
+    [native, cpp::name(native_hook::Render)]
+    public fn ToString() -> string;
+
+    public fn Value() -> i32
+    {
+        return 37;
+    }
+}
+
+object GenericNativeLabel<T>
+{
+    [native, cpp::name(native_hook::Render)]
+    public fn ToString() -> string;
+
+    public fn Value() -> i32
+    {
+        return 37;
+    }
+}
+
+fn Entry() -> i32
+{
+    let label = NativeLabel();
+    if ($"${label}" != "native-hook:37") return 1;
+    let generic = GenericNativeLabel<i32>();
+    if ($"${generic}" != "native-hook:37") return 2;
+    let values: NativeLabel[] = [label];
+    if ($"${values}" != "[native-hook:37]" or Calls() != 3) return 3;
+    return 0;
+}

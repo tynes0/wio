@@ -1,0 +1,202 @@
+using cpp::header("probe.h");
+
+[native, cpp::name(copy_costs::Begin)]
+fn Begin();
+
+[native, cpp::name(copy_costs::Report)]
+fn Report(checksum: u64) -> i32;
+
+[native, cpp::name(copy_costs::ParseCount)]
+fn ParseCount(value: view string) -> i32;
+
+[native, cpp::name(copy_costs::Hash)]
+fn Hash(value: view string) -> u64;
+
+[native, cpp::name(copy_costs::HashText)]
+fn HashText(value: view text) -> u64;
+
+[native, cpp::name(copy_costs::Control)]
+fn Control(count: i32) -> u64;
+
+component Packet
+{
+    public name: string;
+
+    public number: u64;
+}
+
+component Pair
+{
+    public first: u64;
+
+    public second: u64;
+}
+
+fn ReadString(value: string) -> u64
+{
+    return Hash(ref value);
+}
+
+fn ReadStringView(value: view string) -> u64
+{
+    return Hash(value);
+}
+
+fn ReturnString(value: string) -> string
+{
+    return value;
+}
+
+fn ReadText(value: text) -> u64
+{
+    return HashText(ref value);
+}
+
+fn ReadTextView(value: view text) -> u64
+{
+    return HashText(value);
+}
+
+fn ReturnText(value: text) -> text
+{
+    return value;
+}
+
+fn ReadPacket(value: Packet) -> u64
+{
+    return Hash(ref value.name) + value.number;
+}
+
+fn ReadPacketView(value: view Packet) -> u64
+{
+    return Hash(ref value.name) + value.number;
+}
+
+fn ReturnPacket(value: Packet) -> Packet
+{
+    return value;
+}
+
+fn MakePair(value: u64) -> Pair
+{
+    mut pair = Pair();
+    pair.first = value;
+    pair.second = value + 1u64;
+    return pair;
+}
+
+fn Mode(kind: view string) -> i32
+{
+    if (kind == "control") return 0;
+    if (kind == "string_owned") return 1;
+    if (kind == "string_view") return 2;
+    if (kind == "string_return") return 3;
+    if (kind == "text_owned") return 4;
+    if (kind == "text_view") return 5;
+    if (kind == "text_return") return 6;
+    if (kind == "component_owned") return 7;
+    if (kind == "component_view") return 8;
+    if (kind == "component_return") return 9;
+    if (kind == "concat") return 10;
+    if (kind == "text_concat") return 11;
+    if (kind == "scalar_component") return 12;
+    return -1;
+}
+
+fn Run(mode: i32, count: i32, source: view string, unicode: view text, packet: view Packet) -> u64
+{
+    if (mode == 0) return Control(count);
+    if (mode == 10)
+    {
+        mut output = "";
+        for (index in 0..<count)
+        {
+            output += source;
+        }
+
+        return Hash(ref output);
+    }
+
+    if (mode == 11)
+    {
+        mut output = u"";
+        for (index in 0..<count)
+        {
+            output += unicode;
+        }
+
+        return HashText(ref output);
+    }
+
+    mut sum = 0u64;
+    for (index in 0..<count)
+    {
+        if (mode == 1)
+        {
+            sum = sum * 33u64 + ReadString(source);
+        }
+        else if (mode == 2)
+        {
+            sum = sum * 33u64 + ReadStringView(source);
+        }
+        else if (mode == 3)
+        {
+            let value = ReturnString(source);
+            sum = sum * 33u64 + Hash(ref value);
+        }
+        else if (mode == 4)
+        {
+            sum = sum * 33u64 + ReadText(unicode);
+        }
+        else if (mode == 5)
+        {
+            sum = sum * 33u64 + ReadTextView(unicode);
+        }
+        else if (mode == 6)
+        {
+            let value = ReturnText(unicode);
+            sum = sum * 33u64 + HashText(ref value);
+        }
+        else if (mode == 7)
+        {
+            sum = sum * 33u64 + ReadPacket(packet);
+        }
+        else if (mode == 8)
+        {
+            sum = sum * 33u64 + ReadPacketView(packet);
+        }
+        else if (mode == 9)
+        {
+            let value = ReturnPacket(packet);
+            sum = sum * 33u64 + Hash(ref value.name) + value.number;
+        }
+        else
+        {
+            let value = MakePair(index fit u64);
+            sum = sum * 33u64 + value.first + value.second;
+        }
+
+    }
+
+    return sum;
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() != 3usize) return 2;
+    let mode = Mode(ref args[1usize]);
+    if (mode < 0) return 3;
+    let count = ParseCount(ref args[2usize]);
+    let source = "copy\0payload:0123456789abcdef0123456789abcdef";
+    let unicode = u"A🌍é日本語:payload:0123456789abcdef";
+    mut packet = Packet();
+    packet.name = source;
+    packet.number = 7u64;
+    let sourceHash = Hash(ref source);
+    let unicodeHash = HashText(ref unicode);
+    Begin();
+    let checksum = Run(mode, count, ref source, ref unicode, ref packet);
+    if (Hash(ref source) != sourceHash or HashText(ref unicode) != unicodeHash or
+        Hash(ref packet.name) != sourceHash or packet.number != 7u64) return 4;
+    return Report(checksum);
+}

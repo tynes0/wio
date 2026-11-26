@@ -1,0 +1,46 @@
+using cpp::header("scalar_codegen_probe.h");
+
+[native, CppName(scalar_codegen_probe::Begin)]
+fn Begin();
+
+[native, CppName(scalar_codegen_probe::End)]
+fn End() -> u64;
+
+[native, CppName(scalar_codegen_probe::Bump)]
+fn Bump(value: ref i32);
+
+fn Kernel(limit: i32) -> i64
+{
+    mut sum = 0i64;
+    mut index = 0;
+    while (index < limit)
+    {
+        index += 1;
+        let value = (index fit i64) * 3i64;
+        if (index % 7 == 0) continue;
+        sum += value;
+        if (index == 10000) break;
+    }
+
+    return sum;
+}
+
+fn Captured() -> i32
+{
+    mut value = 5;
+    let read: fn() -> i32 = () => value;
+    Bump(ref value);
+    return value + read();
+}
+
+fn Entry() -> i32
+{
+    Begin();
+    let sum = Kernel(20000);
+    let allocations = End();
+    if (allocations != 0u64) return 1;
+    if (sum != 128588574i64) return 2;
+    if (Captured() != 17) return 3;
+
+    return 0;
+}

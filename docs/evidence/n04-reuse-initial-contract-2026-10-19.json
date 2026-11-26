@@ -1,0 +1,18 @@
+{
+  "passed": false,
+  "processes": [
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\f081ad9837a945ceac2b38182b61277b\\main.wio",
+        "--emit-cpp",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-byte-io-contract\\f081ad9837a945ceac2b38182b61277b"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 1,
+      "stdout": "Error [F:\\Projects\\wio\\build\\n04-byte-io-contract\\f081ad9837a945ceac2b38182b61277b\\main.wio:26:25]: Member not found: 'Resize' in 'u8[]'\nError [F:\\Projects\\wio\\build\\n04-byte-io-contract\\f081ad9837a945ceac2b38182b61277b\\main.wio:61:17]: Member not found: 'Resize' in 'u8[]'\n",
+      "stderr": ""
+    }
+  ]
+}

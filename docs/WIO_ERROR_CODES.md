@@ -1,0 +1,4890 @@
+# Wio Error and Status Code Reference
+
+Generated from maintained implementation sources by `tools/Update-DiagnosticReference.ps1`.
+This is the current development-source inventory, not a promise that every code exists in every installed release.
+
+## Scope and interpretation
+
+- Includes every literal WIR/LIR/WIRN/WCPP/WBC/WVM code found in compiler, app, runtime, VM, SDK, CLI, scripts and tools C++/Wio sources. Test expectations and historical documents are not definitions.
+- Each entry gives source message templates and linked definition sites. `{dynamic context}` denotes runtime details; it is not literal output. One ID may have several context-dependent definitions.
+- Dynamic-only messages are explicitly marked and given a reviewed category explanation. Follow the source expression and surrounding validation for their exact details. Reviewed overrides also distinguish conditional code/message branches.
+- Verifier errors mean an IR/bytecode invariant was violated; valid source reaching them can indicate a compiler defect. Other codes describe ordinary runtime failures such as bounds, lifetime, cancellation or foreign-boundary errors.
+- Native/module status enums, SDK exception categories and std error/domain enums are listed separately below. Pending/ready/success states are not errors.
+- Legacy lexer/parser/analyzer/CLI messages without assigned stable IDs cannot have code definitions here. User/custom Result codes and native OS error numbers are open domains, not a finite Wio registry.
+- This is a source inventory, not the future normative structured diagnostic registry, severity/fix-it catalog or `wio explain` implementation.
+
+Regenerate: `pwsh -File tools/Update-DiagnosticReference.ps1`.
+Check freshness: `pwsh -File tools/Update-DiagnosticReference.ps1 -Check`.
+
+Distinct diagnostic IDs: **694**.
+
+## Diagnostic families
+
+| Family | IDs | Meaning |
+| --- | ---: | --- |
+| [WIR](#wir) | 221 | Typed WIR building/verification, specialization and canonical lowering. |
+| [LIR](#lir) | 129 | Lowered WIR verification and canonical ownership/control-flow invariants. |
+| [WIRN](#wirn) | 6 | Native ABI/thunk planning invariants. |
+| [WCPP](#wcpp) | 25 | Lowered WIR C++ backend validation and emission. |
+| [WBC](#wbc) | 94 | Bytecode compilation, format decoding and verification. |
+| [WVM](#wvm) | 219 | VM loading/execution, intrinsics, native transport and lifetime failures. |
+
+## WIR
+
+### WIR1000
+
+- Typed WIR module name cannot be empty.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:331](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L331).
+
+### WIR1001
+
+- Typed WIR type table contains an invalid type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:338](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L338).
+
+### WIR1002
+
+- Typed WIR type references an unknown type id.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:349](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L349).
+
+### WIR1003
+
+- Named Typed WIR types require a stable logical name.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:352](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L352).
+
+### WIR1004
+
+- Unary constructed Typed WIR type requires exactly one type argument.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:361](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L361).
+
+### WIR1005
+
+- Dictionary Typed WIR type requires key and value arguments.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:364](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L364).
+
+### WIR1006
+
+- Only array Typed WIR types may carry a static extent.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:366](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L366).
+
+### WIR1007
+
+- Only named Typed WIR types may carry a nominal kind.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:368](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L368).
+
+### WIR1008
+
+- Native POD representation requires a named component, enum, or flagset type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:376](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L376).
+
+### WIR1009
+
+- Only named Typed WIR types may carry layout or lifecycle metadata.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:387](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L387).
+
+### WIR1010
+
+- Typed WIR field layouts require unique names and valid field types.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:411](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L411).
+
+### WIR1011
+
+- Typed WIR nominal base layouts must reference named types.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:417](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L417).
+
+### WIR1012
+
+- Typed WIR method layouts require names, functions, valid signatures, and unique slots.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:428](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L428).
+
+### WIR1013
+
+- Typed WIR method layout references an unknown or non-method function.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:776](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L776).
+
+### WIR1014
+
+- Generic parameter Typed WIR types require a stable source name.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:356](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L356).
+
+### WIR1015
+
+- Only named Typed WIR types may carry a nominal value model.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:370](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L370).
+
+### WIR1016
+
+- Typed WIR ownership and cleanup metadata are inconsistent.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:405](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L405).
+
+### WIR1017
+
+- Native POD types require canonical C++ type binding metadata.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:380](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L380).
+
+### WIR1018
+
+- Only Native POD types may carry native type binding metadata.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:382](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L382).
+
+### WIR1019
+
+- Typed WIR enum/flagset layout requires an integer underlying type.
+- Only enum/flagset Typed WIR types may carry case layout metadata.
+- Typed WIR enum/flagset cases require unique non-empty names.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:393](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L393), [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:395](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L395), [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:399](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L399).
+
+### WIR1020
+
+- Typed WIR global id must be valid and unique.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:438](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L438).
+
+### WIR1021
+
+- Typed WIR global requires a name, type, and consistent mutability.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:440](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L440).
+
+### WIR1022
+
+- Typed WIR global initializer must be a known zero-argument function returning the global type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:784](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L784).
+
+### WIR1023
+
+- Symbolic array extent must identify a const generic parameter.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:344](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L344).
+
+### WIR1100
+
+- Typed WIR function has an invalid id.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:448](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L448).
+
+### WIR1101
+
+- Typed WIR function id is duplicated.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:452](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L452).
+
+### WIR1102
+
+- Typed WIR function name cannot be empty.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:454](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L454).
+
+### WIR1103
+
+- Typed WIR function return type is invalid.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:456](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L456).
+
+### WIR1104
+
+- External Typed WIR functions cannot contain blocks.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:794](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L794).
+
+### WIR1105
+
+- Defined Typed WIR functions require at least one block.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:800](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L800).
+
+### WIR1106
+
+- Typed WIR methods require a named owner and leading self reference parameter.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:535](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L535).
+
+### WIR1107
+
+- Non-method Typed WIR functions cannot carry an owner type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:541](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L541).
+
+### WIR1108
+
+- Typed WIR function requires a callable type ending in its return type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:474](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L474).
+
+### WIR1109
+
+- Typed WIR generic parameter metadata must reference generic parameter types.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:504](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L504).
+
+### WIR1110
+
+- Typed WIR closure capture layout and hidden parameter count are inconsistent.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:511](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L511).
+
+### WIR1111
+
+- Typed WIR closure capture layout does not match its hidden parameter.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:524](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L524).
+
+### WIR1112
+
+- Typed WIR visible parameters must match the callable type after hidden receiver/capture parameters.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:490](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L490).
+
+### WIR1113
+
+- Native Typed WIR function binding has an invalid identity, ABI signature, or thunk contract.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:569](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L569).
+
+### WIR1114
+
+- Async Typed WIR function requires coroutine&lt;T&gt; return and matching coroutine layout.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:463](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L463).
+
+### WIR1115
+
+- Non-async Typed WIR function cannot carry coroutine layout.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:468](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L468).
+
+### WIR1200
+
+- Typed WIR value has an invalid id.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:818](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L818).
+
+### WIR1201
+
+- Typed WIR value has an invalid type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:822](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L822).
+
+### WIR1202
+
+- Typed WIR value id is defined more than once.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:833](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L833).
+
+### WIR1204
+
+- Typed WIR parameter ownership does not match its type contract.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:824](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L824).
+
+### WIR1205
+
+- Borrowed Typed WIR values require lifetime metadata, and owned values cannot carry it.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:828](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L828).
+
+### WIR1300
+
+- Typed WIR block has an invalid id.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:845](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L845).
+
+### WIR1301
+
+- Typed WIR block id is duplicated.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:847](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L847).
+
+### WIR1302
+
+- Typed WIR block requires a terminator.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:960](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L960).
+
+### WIR1303
+
+Definition: Typed WIR terminator must be the final instruction in its block.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:970](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L970).
+
+### WIR1304
+
+Definition: Typed WIR block must end with a terminator.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:970](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L970).
+
+### WIR1400
+
+- Typed WIR instruction references an unknown value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:980](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L980).
+
+### WIR1401
+
+- Value-producing Typed WIR instruction requires a typed result.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1064](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1064).
+
+### WIR1402
+
+- Typed WIR terminator cannot produce a value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1067](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1067).
+
+### WIR1403
+
+- Typed WIR constant literal does not match its result type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1104](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1104).
+
+### WIR1404
+
+- Typed WIR unary instruction requires one operand matching its result type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1111](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1111).
+
+### WIR1405
+
+- Typed WIR binary operands must have the same type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1120](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1120).
+
+### WIR1406
+
+- Typed WIR comparison result must be bool.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1126](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1126).
+
+### WIR1407
+
+- Typed WIR binary result must match its operand type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1131](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1131).
+
+### WIR1408
+
+- Typed WIR select requires bool condition and matching result arms.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1794](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1794).
+
+### WIR1409
+
+- Typed WIR call references an unknown function.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2048](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2048).
+
+### WIR1410
+
+- Typed WIR call argument count does not match its callee.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2067](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2067).
+
+### WIR1411
+
+- Typed WIR call argument type does not match its parameter (operand={dynamic context}, signature={dynamic context}, parameter={dynamic context}).
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2089](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2089).
+
+### WIR1412
+
+- Typed WIR call result does not match its callee return type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2106](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2106).
+
+### WIR1413
+
+- Typed WIR return value does not match its function return type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2155](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2155).
+
+### WIR1414
+
+- Typed WIR branch requires exactly one target.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2162](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2162).
+
+### WIR1415
+
+- Typed WIR conditional branch requires a bool condition and two targets.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2190](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2190).
+
+### WIR1416
+
+- Typed WIR instruction references an unknown block.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2211](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2211).
+
+### WIR1417
+
+- Typed WIR branch argument count does not match its target block.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2169](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2169).
+
+### WIR1418
+
+- Typed WIR branch argument type does not match its target block parameter.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2178](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2178).
+
+### WIR1419
+
+- Typed WIR conditional branch targets cannot require block arguments.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2200](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2200).
+
+### WIR1420
+
+- Typed WIR value is used before its definition in the same block.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:993](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L993).
+
+### WIR1421
+
+- Typed WIR value definition does not dominate its use.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1002](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1002).
+
+### WIR1422
+
+- Typed WIR numeric conversion requires one numeric operand and a numeric result.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1157](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1157).
+
+### WIR1423
+
+- Typed WIR variant test requires one named value, a variant selector, and a bool result.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1170](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1170).
+
+### WIR1424
+
+- Typed WIR variant payload requires one named value and a variant selector.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1191](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1191).
+
+### WIR1425
+
+- Typed WIR array length requires one array value and a usize result.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1205](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1205).
+
+### WIR1426
+
+- Typed WIR array element projection must return its array element type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1217](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1217).
+
+### WIR1427
+
+- Typed WIR array creation requires element operands matching its array type and extent.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1235](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1235).
+
+### WIR1428
+
+- Typed WIR array get requires an array, an integer index, and its element result type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1253](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1253).
+
+### WIR1429
+
+- Typed WIR local place requires a named reference result and no operands.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1497](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1497).
+
+### WIR1430
+
+Definition: Typed WIR place initialization requires a reference place and a matching value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1541](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1541).
+
+### WIR1431
+
+Definition: Typed WIR store requires a mutable reference place and a matching value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1541](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1541).
+
+### WIR1432
+
+- Typed WIR load requires a reference place and its referred result type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1573](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1573).
+
+### WIR1433
+
+- Typed WIR field place requires a named base, field selector, and non-strengthening reference result.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1606](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1606).
+
+### WIR1434
+
+- Typed WIR array place requires an array reference, integer index, and non-strengthening element reference.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1654](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1654).
+
+### WIR1435
+
+- Typed WIR borrow cannot change the referred type or strengthen mutability.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1707](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1707).
+
+### WIR1436
+
+- Typed WIR place initialization must target an uninitialized local place exactly once.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1558](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1558).
+
+### WIR1437
+
+- Typed WIR field place must match the nominal field layout and field mutability (owner={dynamic context}, selector='{dynamic context}', expected={dynamic context}, actual={dynamic context}, field-mutable={dynamic context}true{dynamic context}false{dynamic context}, place-mutable={dynamic context}true{dynamic context}false{dynamic context}, constructor={dynamic context}true{dynamic context}false{dynamic context}).
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1621](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1621).
+
+### WIR1438
+
+- Typed WIR construction requires a matching constructible component/object result and typed constructor signature.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1729](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1729).
+
+### WIR1439
+
+- Typed WIR drop requires a place containing a cleanup-bearing value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1783](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1783).
+
+### WIR1440
+
+- Typed WIR method dispatch must match its owner slot, receiver, signature, and callee (selector='{dynamic context}', slot={dynamic context}, owner={dynamic context}, receiver={dynamic context}, callee=#{dynamic context}, operands={dynamic context}, signatures={dynamic context}, dispatch-valid={dynamic context}true{dynamic context}false{dynamic context}, callee-found={dynamic context}true{dynamic context}false{dynamic context}, method-found={dynamic context}true{dynamic context}false{dynamic context}, result={dynamic context}, method-result={dynamic context}, callee-result={dynamic context}, callee-generic={dynamic context}true{dynamic context}false{dynamic context}).
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1970](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1970).
+
+### WIR1441
+
+- Typed WIR object cast requires compatible object/interface source and target types.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2011](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2011).
+
+### WIR1442
+
+- Typed WIR type test requires an object/interface value, target type, and bool result.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2023](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2023).
+
+### WIR1443
+
+- Typed WIR identity equality requires two object/interface values and a bool result.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2038](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2038).
+
+### WIR1444
+
+- Typed WIR callable generic arguments must reference valid types.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1072](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1072).
+
+### WIR1445
+
+- Typed WIR function reference must pin a known callable declaration and callable type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1809](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1809).
+
+### WIR1446
+
+- Typed WIR closure creation must match its closure body capture layout exactly.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1838](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1838).
+
+### WIR1447
+
+- Typed WIR indirect call must match its function value signature.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1869](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1869).
+
+### WIR1448
+
+- Typed WIR extension call must pin its implementation, receiver, signature, and specialization.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1901](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1901).
+
+### WIR1455
+
+- Typed WIR Option/Result variant test has an invalid variant selector.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1180](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1180).
+
+### WIR1456
+
+- Typed WIR dictionary creation requires alternating key/value operands matching its concrete dictionary type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1273](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1273).
+
+### WIR1457
+
+- Typed WIR dictionary get requires matching dictionary, key, and mapped result types.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1289](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1289).
+
+### WIR1458
+
+- Typed WIR interpolation requires string/text identity, one more segment than values, and concrete value signatures.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1312](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1312).
+
+### WIR1459
+
+- Typed WIR enum constant requires a named enum/flagset result and stable member selector.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1327](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1327).
+
+### WIR1460
+
+Definition: Intrinsic call metadata is incomplete or inconsistent: family, selector, receiver, target type and concrete operand signature must agree. The diagnostic includes the actual types/counts.
+
+Detailed message: dynamically supplied by the reporting path.
+Message expression: `std::move(detail)`.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1366](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1366).
+
+### WIR1461
+
+- Typed WIR any box requires one operand and its materialized payload type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1377](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1377).
+
+### WIR1462
+
+- Typed WIR any test/cast requires one any operand and a valid concrete target type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1393](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1393).
+
+### WIR1463
+
+- Typed WIR nullable wrap requires one value matching the nullable payload type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1406](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1406).
+
+### WIR1464
+
+- Typed WIR dictionary place requires a dictionary reference, matching key, and mapped-value reference.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1677](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1677).
+
+### WIR1465
+
+- Typed WIR load ownership must be borrowed for cleanup-bearing values in function '{dynamic context}' (expected={dynamic context}, actual={dynamic context}).
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1582](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1582).
+
+### WIR1466
+
+- Typed WIR copy must create one owned claim for a copyable owned value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1744](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1744).
+
+### WIR1467
+
+- Typed WIR move must transfer a cleanup-bearing place into one owned value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1758](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1758).
+
+### WIR1468
+
+- Typed WIR release requires one cleanup-bearing owned value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1769](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1769).
+
+### WIR1469
+
+- Cleanup-bearing place is initialized while already live.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2259](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2259).
+
+### WIR1470
+
+- Typed WIR native calls and ordinary calls must match the callee ABI binding.
+- Cleanup-bearing place is moved or dropped more than once.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2057](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2057), [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2267](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2267).
+
+### WIR1471
+
+- Replace requires an initialized cleanup-bearing place.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2274](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2274).
+
+### WIR1472
+
+- Function exit leaves cleanup-bearing local places live.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2278](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2278).
+
+### WIR1473
+
+- Typed WIR async metadata is attached to an unsupported instruction.
+- Control-flow merge disagrees on live cleanup-bearing places.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1080](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1080), [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2292](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2292).
+
+### WIR1474
+
+- Typed WIR await requires an async function, one coroutine&lt;T&gt;, and its exact payload result.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2128](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2128).
+
+### WIR1475
+
+- Typed WIR executor switch requires an async function and an explicit destination executor.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:2140](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L2140).
+
+### WIR1477
+
+- Typed WIR iterator creation requires a canonical range/array/dictionary source.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1440](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1440).
+
+### WIR1478
+
+- Typed WIR iterator operation requires one iterator and a canonical result shape.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1458](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1458).
+
+### WIR1479
+
+- Typed WIR Result operation requires canonical Result&lt;T&gt; source and payload/propagation types.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1486](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1486).
+
+### WIR1480
+
+- Typed WIR global-place must match a declared global and its mutability.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1509](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1509).
+
+### WIR1481
+
+- Typed WIR pack expansion metadata must align with symbolic pack operands.
+- Typed WIR nullable unwrap requires one nullable value and its payload result.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1021](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1021), [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1421](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1421).
+
+### WIR1482
+
+- Typed WIR range containment requires three equal numeric operands and a bool result.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1143](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1143).
+
+### WIR1490
+
+- Generic constant must identify a typed const parameter.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1098](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1098).
+
+### WIR1491
+
+- Default value requires a value type and no operands.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:1089](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L1089).
+
+### WIR1500
+
+- Typed WIR module contract requires a canonical stable identity.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:587](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L587).
+
+### WIR1501
+
+- Typed WIR SDK call table version, identity, and export cardinality must be canonical.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:593](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L593).
+
+### WIR1502
+
+- Typed WIR module imports require unique stable identities and logical names.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:598](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L598).
+
+### WIR1503
+
+- Typed WIR export descriptor has an invalid stable identity, slot, signature, or target.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:636](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L636).
+
+### WIR1504
+
+- Typed WIR reflection descriptors require unique identities and matching nominal types.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:647](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L647).
+
+### WIR1505
+
+- Typed WIR module lifecycle must reference known functions and pair save/restore state hooks.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:767](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L767).
+
+### WIR1506
+
+- Typed WIR reflected fields require unique identities, names, and valid types.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:653](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L653).
+
+### WIR1507
+
+- Typed WIR reflected methods require unique identities and valid callable signatures.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:657](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L657).
+
+### WIR1508
+
+- Typed WIR attribute applications require unique identities and valid targets.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:674](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L674).
+
+### WIR1509
+
+- Typed WIR attribute processors require a stable phase, identity, executable hook, and value type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:688](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L688).
+
+### WIR1510
+
+- Typed WIR reflected type references an unknown attribute application.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:698](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L698).
+
+### WIR1511
+
+- Typed WIR reflected field references an unknown attribute application.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:701](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L701).
+
+### WIR1512
+
+- Typed WIR reflected method references an unknown attribute application.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:704](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L704).
+
+### WIR1513
+
+- Typed WIR systems require unique component types and valid lifecycle functions.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:719](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L719).
+
+### WIR1514
+
+- Typed WIR application requires a component type, entry/lifecycle functions, and declared systems.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:733](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L733).
+
+### WIR1515
+
+- Typed WIR application stages require canonical order, dependencies, and frequency.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:744](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L744).
+
+### WIR1516
+
+- Typed WIR application runs require resolved targets, functions, and resources.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:755](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L755).
+
+### WIR1517
+
+- Typed WIR reflected enum/flagset cases require unique identities and names.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:661](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L661).
+
+### WIR1518
+
+- Typed WIR reflected enum/flagset case references an unknown attribute application.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_verifier.cpp:707](../compiler/src/wio_compiler/wir/typed_ir_verifier.cpp#L707).
+
+### WIR2000
+
+- Cannot build Typed WIR from a null program.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:40](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L40).
+
+### WIR2001
+
+- Semantic type is missing while building Typed WIR.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2203](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2203).
+
+### WIR2002
+
+- Unsupported semantic primitive type '{dynamic context}' while mapping {dynamic context}an unknown source{dynamic context}.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2233](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2233).
+
+### WIR2003
+
+- Semantic type '{dynamic context}' has no backend-neutral WIR representation.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2608](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2608).
+
+### WIR2100
+
+- Function declaration is missing its resolved semantic function type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3066](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3066).
+
+### WIR2101
+
+- Function parameter is missing its resolved semantic symbol or type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3140](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3140).
+
+### WIR2102
+
+- Non-void function does not end with a return.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3255](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3255).
+
+### WIR2103
+
+- Async function must have a resolved coroutine&lt;T&gt; return type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3089](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3089).
+
+### WIR2201
+
+- Statement kind '{dynamic context}' has no Typed WIR lowering.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3461](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3461).
+
+### WIR2202
+
+- Local variable declaration is missing its semantic symbol.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3341](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3341).
+
+### WIR2203
+
+- Default initialization for type '{dynamic context}' is not supported by Typed WIR.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5940](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5940).
+
+### WIR2204
+
+- Loop-carried local value is unavailable on a control-flow edge.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6825](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6825).
+
+### WIR2205
+
+Definition: Break statement has no active Typed WIR loop target.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6838](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6838).
+
+### WIR2206
+
+Definition: Continue statement has no active Typed WIR loop target.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6838](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6838).
+
+### WIR2210
+
+- For-in requires a range, array, or dictionary iterator source.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:7027](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L7027).
+
+### WIR2211
+
+- For-in binding is missing its semantic symbol.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:7117](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L7117).
+
+### WIR2300
+
+- Integer literal has no representable WIR integer type.
+- Integer literal cannot be represented by the initial Typed WIR literal model.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3803](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3803), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3810](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3810).
+
+### WIR2301
+
+- Identifier is not a value available in the current Typed WIR function.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4198](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4198).
+
+### WIR2302
+
+- Unary expression could not be lowered to Typed WIR.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4527](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4527).
+
+### WIR2303
+
+- Binary expression could not be lowered to Typed WIR.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4670](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4670).
+
+### WIR2304
+
+- Call target has no indexed WIR function identity.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5154](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5154).
+
+### WIR2305
+
+- Expression kind '{dynamic context}' has no Typed WIR lowering.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5259](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5259).
+
+### WIR2306
+
+- Await requires a resolved coroutine&lt;T&gt; operand.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4439](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4439).
+
+### WIR2308
+
+- Compound assignment operator is not supported by Typed WIR.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4397](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4397).
+
+### WIR2309
+
+- Float literal has no representable WIR floating-point type.
+- Float literal cannot be represented by the Typed WIR literal model.
+- Assignment target did not lower to a reference place.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3824](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3824), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3830](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3830), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4384](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4384).
+
+### WIR2310
+
+- Char literal must contain exactly one byte-sized character.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3887](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3887).
+
+### WIR2311
+
+- Byte literal is outside the u8 range.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3900](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3900).
+
+### WIR2313
+
+- Typed WIR fit lowering requires numeric or object/interface operands.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4117](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4117).
+
+### WIR2314
+
+- Duration literal cannot be represented by Typed WIR.
+- Expression requires a conversion that is not allowed by Wio numeric promotion.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3936](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3936), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5871](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5871).
+
+### WIR2315
+
+- Match expression requires at least one case.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6108](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6108).
+
+### WIR2316
+
+- Typed WIR does not recognize destructuring variant '{dynamic context}'.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5996](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5996).
+
+### WIR2317
+
+- Value-producing Typed WIR match cases require expression bodies.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6122](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6122).
+
+### WIR2319
+
+- Match binding is missing its semantic symbol.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:6020](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L6020).
+
+### WIR2320
+
+- Array literal requires a resolved WIR array element type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3946](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3946).
+
+### WIR2322
+
+- Typed WIR index access requires an array, dictionary, string, or text value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4346](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4346).
+
+### WIR2323
+
+- Addressable expression did not produce a reference place.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:932](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L932).
+
+### WIR2324
+
+- A mutable place was requested from a read-only view.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:937](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L937).
+
+### WIR2325
+
+- Initial Typed WIR member reads currently require a resolved data field.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4296](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4296).
+
+### WIR2326
+
+- Addressable identifier is missing its semantic symbol.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5291](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5291).
+
+### WIR2327
+
+- Addressable identifier is not available in the current Typed WIR function.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5326](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5326).
+
+### WIR2328
+
+- Only array and dictionary index expressions are addressable WIR places.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5385](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5385).
+
+### WIR2329
+
+- Addressable member must resolve to a data field.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5409](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5409).
+
+### WIR2330
+
+- Expression kind '{dynamic context}' is not an addressable Typed WIR place.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5547](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5547).
+
+### WIR2331
+
+- 'self' is unavailable outside a receiver-aware WIR function.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4084](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4084), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5273](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5273).
+
+### WIR2332
+
+- 'super' is unavailable outside a receiver-aware WIR function.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4091](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4091).
+
+### WIR2333
+
+- Object/interface type test is missing a representable target type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4562](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4562).
+
+### WIR2340
+
+- Lambda parameter is missing its resolved callable type.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2869](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2869).
+
+### WIR2341
+
+- Non-void lambda does not end with a return.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:2953](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L2953).
+
+### WIR2342
+
+- Lambda capture '{dynamic context}' is unavailable in the enclosing callable.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4030](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4030).
+
+### WIR2343
+
+- Lambda requested a self capture outside a receiver-aware callable.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4056](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4056).
+
+### WIR2344
+
+- Indirect call requires a resolved function value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5120](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5120).
+
+### WIR2345
+
+- Dictionary literal requires resolved key and value types.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3976](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3976).
+
+### WIR2350
+
+- Result unwrap/propagation requires a canonical std::Result&lt;T&gt; value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3645](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3645).
+
+### WIR2351
+
+- The backend-neutral 'in' operation currently requires a range.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4579](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4579).
+
+### WIR2352
+
+- Overloaded operator is missing its resolved callable identity.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3573](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3573).
+
+### WIR2353
+
+- Member operator is missing its nominal owner slot.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3589](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3589).
+
+### WIR2357
+
+- Increment/decrement operand did not lower to a mutable place.
+- Derived extension is missing its processor method layout.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4474](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4474), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4884](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4884).
+
+### WIR2358
+
+- Increment/decrement requires a representable numeric WIR type.
+- Extension call is missing a materializable default argument.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4485](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4485), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4981](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4981).
+
+### WIR2359
+
+- Constructor call is missing a materializable default argument.
+- Derived extension call is missing a materializable default argument.
+- Method call is missing a materializable default argument.
+- Implicit self method call is missing a materializable default argument.
+- Function call is missing a materializable default argument.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4781](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4781), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4928](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4928), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5074](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5074), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5199](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5199), [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5236](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5236).
+
+### WIR2360
+
+- Implicit field '{dynamic context}' is not mutable.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:871](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L871).
+
+### WIR2361
+
+- Pack array materialization requires a runtime value pack.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:4252](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L4252).
+
+### WIR2362
+
+- Implicit self method call is missing its canonical owner slot.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:5172](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L5172).
+
+### WIR2370
+
+- Enum/flagset member requires a canonical integer constant value.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:1369](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L1369).
+
+### WIR2401
+
+- NativeCallback lifetime must be 'call' or 'retained'.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:676](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L676).
+
+### WIR2402
+
+- NativeCallback thread must be 'caller' or 'any'.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:680](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L680).
+
+### WIR2403
+
+- NativeConsume requires an owning value, not ref/view, opaque, callback or task storage.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:659](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L659).
+
+### WIR2404
+
+- NativeConsume is only supported on native function parameters.
+
+Definitions: [compiler/src/wio_compiler/wir/typed_ir_builder.cpp:3198](../compiler/src/wio_compiler/wir/typed_ir_builder.cpp#L3198).
+
+### WIR3001
+
+- Typed select instruction has an invalid shape.
+
+Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:533](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L533).
+
+### WIR3002
+
+- Typed branch requires exactly one target before lowering.
+
+Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:576](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L576).
+
+### WIR3003
+
+- Typed conditional branch has an invalid shape before lowering.
+
+Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:592](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L592).
+
+### WIR3004
+
+- Suspension instruction appears outside an async function.
+
+Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:469](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L469).
+
+### WIR3100
+
+Definition: Generic function/type materialization failed. The detailed message identifies the concrete substitution, pack/constant/layout/capture or specialization invariant that failed; there is no single fixed payload.
+
+Detailed message: dynamically supplied by the reporting path.
+Message expression: `std::move(message)`.
+
+Definitions: [compiler/src/wio_compiler/wir/generic_specializer.cpp:571](../compiler/src/wio_compiler/wir/generic_specializer.cpp#L571).
+
+### WIR3101
+
+- Generic materialization of '{dynamic context}' exceeded its body limit ({dynamic context}); possible expanding polymorphic recursion.
+
+Definitions: [compiler/src/wio_compiler/wir/generic_specializer.cpp:1581](../compiler/src/wio_compiler/wir/generic_specializer.cpp#L1581).
+
+### WIR3200
+
+- lower-object-hierarchy
+
+Definitions: [compiler/src/wio_compiler/wir/lowering_pipeline.cpp:680](../compiler/src/wio_compiler/wir/lowering_pipeline.cpp#L680).
+
+## LIR
+
+### LIR1000
+
+- Lowered WIR module name cannot be empty.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:223](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L223).
+
+### LIR1001
+
+- Lowered WIR type table contains an invalid type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:234](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L234).
+
+### LIR1002
+
+- Lowered WIR type references an unknown type id.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:238](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L238).
+
+### LIR1003
+
+- Only named Lowered WIR types may carry a nominal kind.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:241](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L241).
+
+### LIR1004
+
+- Native POD representation requires a named component, enum, or flagset type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:249](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L249).
+
+### LIR1005
+
+- Only named Lowered WIR types may carry layout or lifecycle metadata.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:260](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L260).
+
+### LIR1006
+
+- Lowered WIR field layouts require unique names and valid field types.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:277](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L277).
+
+### LIR1007
+
+- Lowered WIR nominal base layouts must reference named types.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:283](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L283).
+
+### LIR1008
+
+- Lowered WIR method layouts require valid signatures and unique slots.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:293](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L293).
+
+### LIR1009
+
+- Only named Lowered WIR types may carry a nominal value model.
+- Lowered WIR method layout references an unknown or non-method function.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:243](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L243), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:610](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L610).
+
+### LIR1010
+
+- Native POD types require canonical C++ type binding metadata.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:253](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L253).
+
+### LIR1011
+
+- Only Native POD types may carry native type binding metadata.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:255](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L255).
+
+### LIR1012
+
+- Lowered WIR enum/flagset layout requires an integer underlying type.
+- Only enum/flagset Lowered WIR types may carry case layout metadata.
+- Lowered WIR enum/flagset cases require unique non-empty names.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:266](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L266), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:268](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L268), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:272](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L272).
+
+### LIR1018
+
+- Symbolic array extent must identify a const generic parameter.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:231](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L231).
+
+### LIR1020
+
+- Lowered WIR global id must be valid and unique.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:301](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L301).
+
+### LIR1021
+
+- Lowered WIR global requires a name, type, and consistent mutability.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:303](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L303).
+
+### LIR1022
+
+- Lowered WIR global initializer must be a known zero-argument function returning the global type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:619](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L619).
+
+### LIR1100
+
+- Lowered WIR function has an invalid id.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:311](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L311).
+
+### LIR1101
+
+- Lowered WIR function id is duplicated.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:313](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L313).
+
+### LIR1102
+
+- Lowered WIR function name cannot be empty.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:315](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L315).
+
+### LIR1103
+
+- Lowered WIR function return type is invalid.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:317](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L317).
+
+### LIR1104
+
+- External Lowered WIR functions cannot contain blocks.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:651](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L651).
+
+### LIR1105
+
+- Defined Lowered WIR functions require at least one block.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:657](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L657).
+
+### LIR1106
+
+- Lowered WIR methods require a named owner and leading self parameter.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:364](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L364).
+
+### LIR1110
+
+- Lowered WIR function requires a callable type ending in its return type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:332](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L332).
+
+### LIR1111
+
+- Lowered WIR closure capture metadata is inconsistent.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:355](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L355).
+
+### LIR1112
+
+- Lowered WIR visible parameters must match the callable type after hidden receiver/capture parameters.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:347](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L347).
+
+### LIR1113
+
+- Native Lowered WIR function binding has an invalid identity, ABI signature, or thunk contract.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:385](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L385).
+
+### LIR1114
+
+- Async Lowered WIR function requires coroutine&lt;T&gt; return and matching coroutine layout.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:323](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L323).
+
+### LIR1115
+
+- Non-async Lowered WIR function cannot carry coroutine layout.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:327](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L327).
+
+### LIR1200
+
+- Lowered WIR value has an invalid id.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:636](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L636).
+
+### LIR1201
+
+- Lowered WIR value has an invalid type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:640](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L640).
+
+### LIR1202
+
+- Lowered WIR value id is defined more than once.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:642](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L642).
+
+### LIR1300
+
+- Lowered WIR block has an invalid id.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:666](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L666).
+
+### LIR1301
+
+- Lowered WIR block id is duplicated.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:668](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L668).
+
+### LIR1302
+
+- Lowered WIR block requires a terminator.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:744](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L744).
+
+### LIR1303
+
+Definition: Lowered WIR terminator must be the final instruction in its block.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:754](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L754).
+
+### LIR1304
+
+Definition: Lowered WIR block must end with a terminator.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:754](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L754).
+
+### LIR1400
+
+- Lowered WIR instruction references an unknown value.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:763](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L763).
+
+### LIR1401
+
+- Value-producing Lowered WIR instruction requires a typed result.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:814](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L814).
+
+### LIR1402
+
+- Lowered WIR terminator cannot produce a value.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:817](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L817).
+
+### LIR1403
+
+- Lowered WIR unary operand must match its result type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:937](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L937).
+
+### LIR1404
+
+- Lowered WIR binary operands must have the same type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:944](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L944).
+
+### LIR1405
+
+- Lowered WIR comparison result must be bool.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:948](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L948).
+
+### LIR1406
+
+- Lowered WIR binary result must match its operand type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:952](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L952).
+
+### LIR1407
+
+- Lowered WIR call references an unknown function.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1776](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1776).
+
+### LIR1408
+
+- Lowered WIR call argument count does not match its callee.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1792](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1792).
+
+### LIR1409
+
+- Lowered WIR call argument type does not match its parameter.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1816](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1816).
+
+### LIR1410
+
+- Lowered WIR call result does not match its callee.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1828](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1828).
+
+### LIR1411
+
+- Lowered WIR return value does not match its function.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1924](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1924).
+
+### LIR1412
+
+- Lowered WIR jump shape is invalid.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1935](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1935).
+
+### LIR1413
+
+- Lowered WIR conditional jump condition must be bool.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1941](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1941).
+
+### LIR1414
+
+- Lowered WIR jump references an unknown block.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1952](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1952).
+
+### LIR1415
+
+- Lowered WIR jump argument count does not match target block parameters.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1959](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1959).
+
+### LIR1416
+
+- Lowered WIR jump argument type does not match target block parameter.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1967](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1967).
+
+### LIR1417
+
+- Lowered WIR numeric conversion requires one numeric operand and a numeric result.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:977](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L977).
+
+### LIR1418
+
+- Lowered WIR variant test requires one named value, a variant selector, and a bool result.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:990](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L990).
+
+### LIR1419
+
+- Lowered WIR variant payload requires one named value and a variant selector.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1003](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1003).
+
+### LIR1420
+
+- Lowered WIR array length requires one array value and a usize result.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1017](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1017).
+
+### LIR1421
+
+- Lowered WIR array element projection must return its array element type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1029](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1029).
+
+### LIR1422
+
+- Lowered WIR array creation requires element operands matching its array type and extent.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1048](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1048).
+
+### LIR1423
+
+- Lowered WIR array get requires an array, an integer index, and its element result type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1065](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1065).
+
+### LIR1424
+
+- Lowered WIR local place requires a named reference result and no operands.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1297](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1297).
+
+### LIR1425
+
+Definition: Lowered WIR place initialization requires a reference place and a matching value.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1324](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1324).
+
+### LIR1426
+
+Definition: Lowered WIR store requires a mutable reference place and a matching value.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1324](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1324).
+
+### LIR1427
+
+- Lowered WIR load requires a reference place and its referred result type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1353](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1353).
+
+### LIR1428
+
+- Lowered WIR field place requires a named base, field selector, and non-strengthening reference result.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1373](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1373).
+
+### LIR1429
+
+- Lowered WIR array place requires an array reference, integer index, and non-strengthening element reference.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1423](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1423).
+
+### LIR1430
+
+- Lowered WIR borrow cannot change the referred type or strengthen mutability.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1476](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1476).
+
+### LIR1431
+
+- Lowered WIR place initialization must target an uninitialized local place exactly once.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1338](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1338).
+
+### LIR1432
+
+- Lowered WIR field place must match the nominal field layout and field mutability.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1398](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1398).
+
+### LIR1433
+
+- Lowered WIR construction requires a matching constructible component/object result and typed constructor signature.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1498](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1498).
+
+### LIR1434
+
+- Lowered WIR release/drop-place must match the stored value cleanup protocol.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1561](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1561).
+
+### LIR1435
+
+- Lowered WIR method dispatch must match its owner slot, receiver, signature, and callee.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1722](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1722).
+
+### LIR1436
+
+- Lowered WIR object cast requires compatible object/interface source and target types.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1744](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1744).
+
+### LIR1437
+
+- Lowered WIR dictionary creation requires alternating key/value operands matching its concrete type.
+- Lowered WIR type test requires an object/interface value, target type, and bool result.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1086](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1086), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1754](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1754).
+
+### LIR1438
+
+- Lowered WIR dictionary get requires matching dictionary, key, and mapped result types.
+- Lowered WIR identity equality requires object/interface operands and bool result.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1101](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1101), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1767](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1767).
+
+### LIR1439
+
+- Lowered WIR interpolation requires string/text identity, segments, and concrete signatures.
+- Lowered WIR function reference must pin a known callable declaration.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1125](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1125), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1573](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1573).
+
+### LIR1440
+
+- Lowered WIR enum constant requires a named enum/flagset result and stable selector.
+- Lowered WIR closure creation must match its capture layout.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1141](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1141), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1599](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1599).
+
+### LIR1441
+
+- Lowered WIR intrinsic call requires a family, selector, receiver, target, and concrete signature.
+- Lowered WIR indirect call must match its function value signature.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1163](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1163), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1627](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1627).
+
+### LIR1442
+
+- Lowered WIR any box requires one operand and its materialized payload type.
+- Lowered WIR extension call must pin its implementation and concrete signature.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1177](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1177), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1659](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1659).
+
+### LIR1443
+
+- Lowered WIR any test/cast requires one any operand and a concrete target.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1193](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1193).
+
+### LIR1444
+
+- Lowered WIR nullable wrap requires one matching payload value.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1206](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1206).
+
+### LIR1445
+
+- Lowered WIR iterator creation requires canonical source metadata.
+- Lowered WIR dictionary place requires a dictionary reference, matching key, and mapped reference.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1241](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1241), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1446](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1446).
+
+### LIR1446
+
+- Lowered WIR iterator operation requires one iterator and a canonical result.
+- Lowered WIR retain/copy-value must match the type cleanup protocol.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1258](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1258), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1517](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1517).
+
+### LIR1447
+
+- Lowered WIR move-value must transfer one cleanup-bearing place.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1531](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1531).
+
+### LIR1448
+
+- Lowered WIR release/drop-value must match the value cleanup protocol.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1544](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1544).
+
+### LIR1450
+
+- Lowered native-invoke and ordinary call must match the callee ABI binding.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1783](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1783).
+
+### LIR1451
+
+- Coroutine frame slots require unique dense ids, values, and matching ownership metadata.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:710](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L710).
+
+### LIR1452
+
+- Coroutine states require dense ids and valid suspend/resume/value references.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:724](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L724).
+
+### LIR1453
+
+- Lowered WIR async metadata is attached to an unsupported instruction.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:826](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L826).
+
+### LIR1454
+
+- Cancellation check must immediately precede its coroutine suspension point.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1840](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1840).
+
+### LIR1455
+
+- Coroutine suspension must match one canonical state and resume target.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1879](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1879).
+
+### LIR1456
+
+- Coroutine resume must materialize the payload declared by its canonical state.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1893](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1893).
+
+### LIR1457
+
+- Coroutine completion value must match the async payload type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1908](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1908).
+
+### LIR1458
+
+- Async Lowered WIR must use coroutine-complete instead of return.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1915](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1915).
+
+### LIR1466
+
+- Lowered WIR nullable unwrap requires one nullable value and its payload result.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1220](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1220).
+
+### LIR1479
+
+- Lowered WIR Result operation requires canonical Result&lt;T&gt; source and payload/propagation types.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1286](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1286).
+
+### LIR1480
+
+- Lowered WIR global-place must match a declared global and its mutability.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1309](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1309).
+
+### LIR1481
+
+- Lowered WIR pack expansion metadata must align with symbolic pack operands.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:781](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L781).
+
+### LIR1482
+
+- Lowered WIR range containment requires three equal numeric operands and a bool result.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:962](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L962).
+
+### LIR1483
+
+- Lowered WIR storage and escape metadata is incompatible with {dynamic context} (storage={dynamic context}, escape={dynamic context}).
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:853](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L853).
+
+### LIR1484
+
+- Lowered WIR bounds-check metadata must appear on every array access and nowhere else.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:866](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L866).
+
+### LIR1485
+
+- Lowered WIR eliminated bounds check requires a reproducible static or construction proof.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:910](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L910).
+
+### LIR1490
+
+- Generic constant must identify a typed const parameter.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:922](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L922).
+
+### LIR1491
+
+- Default value requires a value type and no operands.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:930](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L930).
+
+### LIR1500
+
+- Lowered WIR module contract requires a canonical stable identity.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:440](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L440).
+
+### LIR1501
+
+- Lowered WIR SDK call table version, identity, and export cardinality must be canonical.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:446](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L446).
+
+### LIR1502
+
+- Lowered WIR export descriptor has an invalid stable identity, slot, or target.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:474](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L474).
+
+### LIR1503
+
+- Lowered WIR module lifecycle must reference known functions and pair save/restore state hooks.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:482](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L482).
+
+### LIR1504
+
+- Lowered WIR module imports require unique stable identities and logical names.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:451](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L451).
+
+### LIR1505
+
+- Lowered WIR reflection descriptors require unique identities and matching nominal types.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:491](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L491).
+
+### LIR1506
+
+- Lowered WIR reflected fields require unique identities, names, and valid types.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:497](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L497).
+
+### LIR1507
+
+- Lowered WIR reflected methods require unique identities and valid callable signatures.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:502](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L502).
+
+### LIR1508
+
+- Lowered WIR attribute applications require unique identities and valid targets.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:518](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L518).
+
+### LIR1509
+
+- Lowered WIR attribute processors require a stable phase, identity, executable hook, and value type.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:532](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L532).
+
+### LIR1510
+
+- Lowered WIR reflected type references an unknown attribute application.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:542](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L542).
+
+### LIR1511
+
+- Lowered WIR reflected field references an unknown attribute application.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:545](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L545).
+
+### LIR1512
+
+- Lowered WIR reflected method references an unknown attribute application.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:548](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L548).
+
+### LIR1513
+
+- Lowered WIR systems require unique component types and valid lifecycle functions.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:562](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L562).
+
+### LIR1514
+
+- Lowered WIR application requires a component type, entry/lifecycle functions, and declared systems.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:576](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L576).
+
+### LIR1515
+
+- Lowered WIR application stages require canonical order, dependencies, and frequency.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:587](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L587).
+
+### LIR1516
+
+- Lowered WIR application runs require resolved targets, functions, and resources.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:598](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L598).
+
+### LIR1517
+
+- Lowered WIR reflected enum/flagset cases require unique identities and names.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:506](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L506).
+
+### LIR1518
+
+- Lowered WIR reflected enum/flagset case references an unknown attribute application.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:551](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L551).
+
+### LIR1530
+
+- Object hierarchy cast/dispatch/lifecycle table does not match canonical contracts.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:407](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L407), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:416](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L416).
+
+### LIR1531
+
+- Object dispatch references an unknown implementation.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:420](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L420).
+
+### LIR1532
+
+- Field projection must identify its canonical declaring subobject and storage index.
+- Field storage index does not identify the resolved declaring field.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:1388](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L1388), [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:432](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L432).
+
+### LIR1533
+
+- Coroutine object receiver must be retained by its canonical frame.
+
+Definitions: [compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp:696](../compiler/src/wio_compiler/wir/lowered_ir_verifier.cpp#L696).
+
+## WIRN
+
+### WIRN1001
+
+- Native thunk plan references a function without native binding metadata.
+
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:72](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L72).
+
+### WIRN1002
+
+- NativeInvoke does not resolve to a native declaration.
+
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:125](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L125).
+
+### WIRN1003
+
+- Generic native invocation requires a concrete specialization key.
+
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:133](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L133).
+
+### WIRN1004
+
+- Concrete native thunk has an invalid identity or ABI signature.
+
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:164](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L164).
+
+### WIRN1005
+
+- Concrete native thunk symbol is not unique.
+
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:170](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L170).
+
+### WIRN1006
+
+- NativeInvoke specialization identity does not match its concrete native callee.
+
+Definitions: [compiler/src/wio_compiler/wir/native_abi_plan.cpp:140](../compiler/src/wio_compiler/wir/native_abi_plan.cpp#L140).
+
+## WCPP
+
+### WCPP1000
+
+- invalid Lowered WIR: {dynamic context}: {dynamic context}
+- {dynamic context}invalid Lowered WIR: {dynamic context}: {dynamic context}
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:244](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L244), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:4168](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L4168).
+
+### WCPP1100
+
+- unresolved type reached the C++ backend: {dynamic context}
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:474](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L474).
+
+### WCPP1101
+
+- const-value type has no canonical value
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:481](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L481).
+
+### WCPP1102
+
+- type {dynamic context} requires one argument
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:489](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L489).
+
+### WCPP1103
+
+- dictionary type requires key and value arguments
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:493](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L493).
+
+### WCPP1104
+
+- function type requires a return type
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:497](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L497).
+
+### WCPP1105
+
+- native POD type requires a C++ type binding
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:544](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L544).
+
+### WCPP1106
+
+- object/interface requires canonical hierarchy lowering
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:503](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L503).
+
+### WCPP1107
+
+- enum/flagset requires canonical underlying-type and case layout metadata
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:549](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L549).
+
+### WCPP1108
+
+- global value requires a concrete specialized type
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:559](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L559).
+
+### WCPP1201
+
+- opcode is not implemented by the WIR C++ backend: {dynamic context}
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:691](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L691).
+
+### WCPP1202
+
+- native invocation requires an adapter thunk not implemented by this backend
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:804](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L804).
+
+### WCPP1203
+
+- constructor identity does not match its canonical argument signature
+- constructor '{dynamic context}' requires a callable constructor adapter; only canonical field-wise construction is enabled (operands={dynamic context}, fields={dynamic context})
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:828](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L828), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:850](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L850).
+
+### WCPP1205
+
+- intrinsic family is not implemented by this C++ backend slice: {dynamic context}
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:761](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L761).
+
+### WCPP1206
+
+- enum/flagset intrinsic is not recognized: {dynamic context}
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:769](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L769).
+
+### WCPP1207
+
+- enum/flagset constant does not exist in canonical layout: {dynamic context}
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:776](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L776).
+
+### WCPP1208
+
+- payload variants currently require canonical Option/Result layout
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:792](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L792).
+
+### WCPP1209
+
+- generic call requires a concrete specialized function body
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:750](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L750).
+
+### WCPP1210
+
+- iterator source or operand count is not supported
+- iterator projection is not supported: {dynamic context}
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:712](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L712), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:740](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L740).
+
+### WCPP1211
+
+- cannot construct an object with abstract method contracts
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:816](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L816).
+
+### WCPP1212
+
+- object lifecycle requires a concrete receiver-only body
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:530](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L530), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:539](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L539).
+
+### WCPP1213
+
+- wire ABI requires owned results and forbids ref/view parameters on asynchronous calls
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:633](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L633).
+
+### WCPP1214
+
+- application requires canonical exit-state fields
+- worker application stages require a thread-transfer lowering contract
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:570](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L570), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:573](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L573).
+
+### WCPP1215
+
+- behavioral attribute requires a concrete processor object and pinned hook function
+- around processors are not valid on asynchronous functions
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:594](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L594), [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:601](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L601).
+
+### WCPP1220
+
+- {dynamic context}native-only bridge requires no main and native task sidecars
+
+Definitions: [compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp:4160](../compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp#L4160).
+
+## WBC
+
+### WBC1001
+
+- Module manifest references an invalid string id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:101](../compiler/src/wio_compiler/bytecode/verifier.cpp#L101).
+
+### WBC1002
+
+- String constant references an invalid string id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:106](../compiler/src/wio_compiler/bytecode/verifier.cpp#L106).
+
+### WBC1003
+
+- Constant has an unknown kind
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:108](../compiler/src/wio_compiler/bytecode/verifier.cpp#L108).
+
+### WBC1004
+
+- Type references an invalid name string
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:114](../compiler/src/wio_compiler/bytecode/verifier.cpp#L114).
+
+### WBC1005
+
+- Type argument references an invalid type id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:118](../compiler/src/wio_compiler/bytecode/verifier.cpp#L118).
+
+### WBC1006
+
+- Type extent parameter references an invalid type id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:121](../compiler/src/wio_compiler/bytecode/verifier.cpp#L121).
+
+### WBC1007
+
+- Global ids must be valid and unique
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:181](../compiler/src/wio_compiler/bytecode/verifier.cpp#L181).
+
+### WBC1008
+
+- Global references invalid string or type metadata
+- Global initializer references an invalid function
+- Global initializer must be synchronous, closed, zero-argument and return the global type
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:183](../compiler/src/wio_compiler/bytecode/verifier.cpp#L183), [compiler/src/wio_compiler/bytecode/verifier.cpp:187](../compiler/src/wio_compiler/bytecode/verifier.cpp#L187), [compiler/src/wio_compiler/bytecode/verifier.cpp:194](../compiler/src/wio_compiler/bytecode/verifier.cpp#L194).
+
+### WBC1009
+
+- Function ids must be valid and unique
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:204](../compiler/src/wio_compiler/bytecode/verifier.cpp#L204).
+
+### WBC1010
+
+- Function references invalid string or type metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:207](../compiler/src/wio_compiler/bytecode/verifier.cpp#L207).
+
+### WBC1011
+
+- Block ids must be valid and unique within a function
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:287](../compiler/src/wio_compiler/bytecode/verifier.cpp#L287).
+
+### WBC1012
+
+- Instruction contains an unknown opcode
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:376](../compiler/src/wio_compiler/bytecode/verifier.cpp#L376).
+
+### WBC1013
+
+- Instruction references an invalid type id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:379](../compiler/src/wio_compiler/bytecode/verifier.cpp#L379).
+
+### WBC1014
+
+- Instruction references an invalid constant id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:382](../compiler/src/wio_compiler/bytecode/verifier.cpp#L382).
+
+### WBC1015
+
+- Instruction references an invalid string id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:385](../compiler/src/wio_compiler/bytecode/verifier.cpp#L385).
+
+### WBC1016
+
+- Interpolation segment references an invalid string id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:425](../compiler/src/wio_compiler/bytecode/verifier.cpp#L425).
+
+### WBC1017
+
+- Branch target references a block outside the function
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:431](../compiler/src/wio_compiler/bytecode/verifier.cpp#L431).
+
+### WBC1018
+
+- Nominal base references an invalid type id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:125](../compiler/src/wio_compiler/bytecode/verifier.cpp#L125).
+
+### WBC1019
+
+- Field layout references invalid string or type metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:130](../compiler/src/wio_compiler/bytecode/verifier.cpp#L130).
+
+### WBC1020
+
+- Method layout references invalid string, type, or function metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:135](../compiler/src/wio_compiler/bytecode/verifier.cpp#L135).
+
+### WBC1021
+
+- Method parameter references an invalid type id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:139](../compiler/src/wio_compiler/bytecode/verifier.cpp#L139).
+
+### WBC1022
+
+- Dispatch entry on type #{dynamic context} references invalid contract #{dynamic context} or implementation #{dynamic context}
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:146](../compiler/src/wio_compiler/bytecode/verifier.cpp#L146).
+
+### WBC1023
+
+- Type lifecycle or enum metadata contains an invalid id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:165](../compiler/src/wio_compiler/bytecode/verifier.cpp#L165).
+
+### WBC1024
+
+- Enum case references an invalid string id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:169](../compiler/src/wio_compiler/bytecode/verifier.cpp#L169).
+
+### WBC1025
+
+- Native type binding references an invalid string id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:173](../compiler/src/wio_compiler/bytecode/verifier.cpp#L173).
+
+### WBC1026
+
+- Function capture count does not match its capture table
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:209](../compiler/src/wio_compiler/bytecode/verifier.cpp#L209).
+
+### WBC1027
+
+- Closure capture references invalid string or type metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:213](../compiler/src/wio_compiler/bytecode/verifier.cpp#L213).
+
+### WBC1028
+
+- Native binding references invalid string or type metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:220](../compiler/src/wio_compiler/bytecode/verifier.cpp#L220).
+
+### WBC1029
+
+- Native parameter references an invalid type id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:224](../compiler/src/wio_compiler/bytecode/verifier.cpp#L224).
+
+### WBC1030
+
+- Native template argument references an invalid type id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:278](../compiler/src/wio_compiler/bytecode/verifier.cpp#L278).
+
+### WBC1031
+
+- Coroutine layout does not match its async task return type
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:341](../compiler/src/wio_compiler/bytecode/verifier.cpp#L341).
+
+### WBC1032
+
+- Coroutine frame slot is not dense or does not match a live typed value
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:349](../compiler/src/wio_compiler/bytecode/verifier.cpp#L349).
+
+### WBC1033
+
+- Coroutine state references invalid block or type metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:359](../compiler/src/wio_compiler/bytecode/verifier.cpp#L359).
+
+### WBC1034
+
+- External/template declarations must have no code and defined functions must have code
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:295](../compiler/src/wio_compiler/bytecode/verifier.cpp#L295).
+
+### WBC1035
+
+- Function value ids must be valid, typed, and unique
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:313](../compiler/src/wio_compiler/bytecode/verifier.cpp#L313).
+
+### WBC1036
+
+- Function parameter references an invalid name
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:315](../compiler/src/wio_compiler/bytecode/verifier.cpp#L315).
+
+### WBC1037
+
+- Value-producing instruction requires a unique typed result
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:329](../compiler/src/wio_compiler/bytecode/verifier.cpp#L329).
+
+### WBC1038
+
+- Defined bytecode block cannot be empty
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:368](../compiler/src/wio_compiler/bytecode/verifier.cpp#L368).
+
+### WBC1039
+
+- Every block must end in exactly one final terminator
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:388](../compiler/src/wio_compiler/bytecode/verifier.cpp#L388).
+
+### WBC1040
+
+- Instruction result shape does not match its opcode
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:398](../compiler/src/wio_compiler/bytecode/verifier.cpp#L398).
+
+### WBC1041
+
+- Non-value instruction cannot carry a result type
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:402](../compiler/src/wio_compiler/bytecode/verifier.cpp#L402).
+
+### WBC1042
+
+- Pack expansion metadata must align with instruction operands
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:406](../compiler/src/wio_compiler/bytecode/verifier.cpp#L406).
+
+### WBC1043
+
+- Instruction references an invalid callee
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:409](../compiler/src/wio_compiler/bytecode/verifier.cpp#L409).
+
+### WBC1044
+
+- Instruction references an invalid global
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:414](../compiler/src/wio_compiler/bytecode/verifier.cpp#L414).
+
+### WBC1045
+
+- Instruction references an undefined function value
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:419](../compiler/src/wio_compiler/bytecode/verifier.cpp#L419).
+
+### WBC1046
+
+- Branch argument count does not match target parameters
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:437](../compiler/src/wio_compiler/bytecode/verifier.cpp#L437).
+
+### WBC1047
+
+- Branch argument type does not match target parameter
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:446](../compiler/src/wio_compiler/bytecode/verifier.cpp#L446).
+
+### WBC1048
+
+- Control-flow instruction has an invalid operand or target shape
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:459](../compiler/src/wio_compiler/bytecode/verifier.cpp#L459).
+
+### WBC1049
+
+- Function reference does not match a known callable declaration
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:724](../compiler/src/wio_compiler/bytecode/verifier.cpp#L724).
+
+### WBC1050
+
+- Closure creation does not match its callable capture layout
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:753](../compiler/src/wio_compiler/bytecode/verifier.cpp#L753).
+
+### WBC1051
+
+- Indirect call does not match its function value signature
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:786](../compiler/src/wio_compiler/bytecode/verifier.cpp#L786).
+
+### WBC1052
+
+- Dispatch entry does not match an object/interface contract method slot
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:156](../compiler/src/wio_compiler/bytecode/verifier.cpp#L156).
+
+### WBC1054
+
+- Object cast table references a non-nominal or invalid type
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:161](../compiler/src/wio_compiler/bytecode/verifier.cpp#L161).
+
+### WBC1055
+
+- Dynamic call does not match its receiver, contract, slot, or declaration
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:824](../compiler/src/wio_compiler/bytecode/verifier.cpp#L824).
+
+### WBC1056
+
+- Object cast or type-test has invalid source or target metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:843](../compiler/src/wio_compiler/bytecode/verifier.cpp#L843).
+
+### WBC1057
+
+- Object identity comparison has invalid operand or operator metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:853](../compiler/src/wio_compiler/bytecode/verifier.cpp#L853).
+
+### WBC1058
+
+- Async bytecode function is missing its coroutine layout
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:363](../compiler/src/wio_compiler/bytecode/verifier.cpp#L363).
+
+### WBC1059
+
+- Cancellation check must precede its matching coroutine suspension
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:863](../compiler/src/wio_compiler/bytecode/verifier.cpp#L863).
+
+### WBC1060
+
+- Coroutine suspension does not match its canonical state and resume edge
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:895](../compiler/src/wio_compiler/bytecode/verifier.cpp#L895).
+
+### WBC1061
+
+- Coroutine resume does not materialize its canonical state payload
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:906](../compiler/src/wio_compiler/bytecode/verifier.cpp#L906).
+
+### WBC1062
+
+- Coroutine completion does not match its async payload type
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:919](../compiler/src/wio_compiler/bytecode/verifier.cpp#L919).
+
+### WBC1063
+
+- Executable bytecode cannot contain an unresolved generic constant
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:509](../compiler/src/wio_compiler/bytecode/verifier.cpp#L509).
+
+### WBC1064
+
+- Enum constant does not match a declared enum/flagset case
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:525](../compiler/src/wio_compiler/bytecode/verifier.cpp#L525).
+
+### WBC1065
+
+- Any box does not preserve its materialized payload type
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:559](../compiler/src/wio_compiler/bytecode/verifier.cpp#L559).
+
+### WBC1066
+
+- Any test/cast has invalid source, target, or result metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:572](../compiler/src/wio_compiler/bytecode/verifier.cpp#L572).
+
+### WBC1067
+
+- Nullable wrap does not match its payload type
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:585](../compiler/src/wio_compiler/bytecode/verifier.cpp#L585).
+
+### WBC1068
+
+- Nullable unwrap does not match its payload result type
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:596](../compiler/src/wio_compiler/bytecode/verifier.cpp#L596).
+
+### WBC1069
+
+- Variant operation does not match its option/result layout
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:620](../compiler/src/wio_compiler/bytecode/verifier.cpp#L620).
+
+### WBC1070
+
+- Iterator creation has invalid source or signature metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:661](../compiler/src/wio_compiler/bytecode/verifier.cpp#L661).
+
+### WBC1071
+
+- Iterator operation has invalid cursor or result metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:682](../compiler/src/wio_compiler/bytecode/verifier.cpp#L682).
+
+### WBC1072
+
+- Result operation does not match its canonical result layout
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:711](../compiler/src/wio_compiler/bytecode/verifier.cpp#L711).
+
+### WBC1073
+
+- Native invocation does not match its external ABI declaration
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:504](../compiler/src/wio_compiler/bytecode/verifier.cpp#L504).
+
+### WBC1074
+
+- Native parameter has an invalid ABI mode or no stable type identity ({dynamic context}, type #{dynamic context}, marshalling {dynamic context})
+- Native result has an invalid ABI mode or no stable type identity
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:255](../compiler/src/wio_compiler/bytecode/verifier.cpp#L255), [compiler/src/wio_compiler/bytecode/verifier.cpp:274](../compiler/src/wio_compiler/bytecode/verifier.cpp#L274).
+
+### WBC1080
+
+- Template declaration must have an open signature and no runtime binding or coroutine
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:304](../compiler/src/wio_compiler/bytecode/verifier.cpp#L304).
+
+### WBC1100
+
+- Module import contains invalid identity or string metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:930](../compiler/src/wio_compiler/bytecode/verifier.cpp#L930).
+
+### WBC1101
+
+- Module import symbol references an invalid string id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:934](../compiler/src/wio_compiler/bytecode/verifier.cpp#L934).
+
+### WBC1102
+
+- Module export contains invalid identity, symbol, or target metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:943](../compiler/src/wio_compiler/bytecode/verifier.cpp#L943).
+
+### WBC1103
+
+- Module export parameter references an invalid type id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:947](../compiler/src/wio_compiler/bytecode/verifier.cpp#L947).
+
+### WBC1104
+
+- Attribute application contains invalid identity or target metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:955](../compiler/src/wio_compiler/bytecode/verifier.cpp#L955).
+
+### WBC1105
+
+- Attribute argument contains invalid string or type metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:959](../compiler/src/wio_compiler/bytecode/verifier.cpp#L959).
+
+### WBC1106
+
+- Attribute processor contains invalid identity or hook metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:967](../compiler/src/wio_compiler/bytecode/verifier.cpp#L967).
+
+### WBC1107
+
+- Reflection descriptor contains invalid identity or type metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:973](../compiler/src/wio_compiler/bytecode/verifier.cpp#L973).
+
+### WBC1108
+
+- Reflection generic parameter references an invalid string id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:977](../compiler/src/wio_compiler/bytecode/verifier.cpp#L977).
+
+### WBC1109
+
+- Reflected field contains invalid identity or type metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:982](../compiler/src/wio_compiler/bytecode/verifier.cpp#L982).
+
+### WBC1110
+
+- Reflected method contains invalid identity or callable metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:988](../compiler/src/wio_compiler/bytecode/verifier.cpp#L988).
+
+### WBC1111
+
+- Reflected case contains invalid identity or string metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:993](../compiler/src/wio_compiler/bytecode/verifier.cpp#L993).
+
+### WBC1112
+
+- System descriptor contains invalid lifecycle metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1000](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1000).
+
+### WBC1113
+
+- Application descriptor contains invalid lifecycle metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1009](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1009).
+
+### WBC1114
+
+- Application stage contains invalid identity or string metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1013](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1013).
+
+### WBC1115
+
+- Application stage run contains invalid target metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1018](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1018).
+
+### WBC1116
+
+- Application resource contains invalid string or type metadata
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1022](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1022).
+
+### WBC1117
+
+- Module lifecycle references an invalid function id
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1031](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1031).
+
+### WBC1118
+
+- SDK call table identity or export cardinality is invalid
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:1034](../compiler/src/wio_compiler/bytecode/verifier.cpp#L1034).
+
+### WBC1119
+
+- Retain/copy-value must preserve the owned type cleanup protocol
+
+Definitions: [compiler/src/wio_compiler/bytecode/verifier.cpp:547](../compiler/src/wio_compiler/bytecode/verifier.cpp#L547).
+
+## WVM
+
+### WVM1000
+
+- The virtual machine has no loaded module
+- Timer scheduling requires a loaded VM program
+
+Definitions: [vm/src/machine.cpp:1839](../vm/src/machine.cpp#L1839), [vm/src/machine.cpp:3346](../vm/src/machine.cpp#L3346), [vm/src/machine.cpp:3727](../vm/src/machine.cpp#L3727).
+
+### WVM1001
+
+- Bytecode verification failed ({dynamic context}): {dynamic context}
+
+Definitions: [vm/src/machine.cpp:1711](../vm/src/machine.cpp#L1711).
+
+### WVM1002
+
+- Entry function id is outside the module
+
+Definitions: [vm/src/machine.cpp:1843](../vm/src/machine.cpp#L1843), [vm/src/machine.cpp:3733](../vm/src/machine.cpp#L3733).
+
+### WVM1003
+
+- External function has no callable native binding
+
+Definitions: [vm/src/machine.cpp:3760](../vm/src/machine.cpp#L3760).
+
+### WVM1004
+
+- Call argument count does not match the function signature
+
+Definitions: [vm/src/machine.cpp:3800](../vm/src/machine.cpp#L3800).
+
+### WVM1005
+
+- VM call depth limit exceeded
+
+Definitions: [vm/src/machine.cpp:3802](../vm/src/machine.cpp#L3802).
+
+### WVM1006
+
+- Function register limit exceeded
+
+Definitions: [vm/src/machine.cpp:3805](../vm/src/machine.cpp#L3805).
+
+### WVM1007
+
+- Instruction cursor escaped its basic block
+
+Definitions: [vm/src/machine.cpp:3942](../vm/src/machine.cpp#L3942).
+
+### WVM1008
+
+- VM instruction limit exceeded
+
+Definitions: [vm/src/machine.cpp:3944](../vm/src/machine.cpp#L3944).
+
+### WVM1009
+
+- Constant result register is invalid
+- Default-value result register is invalid
+- Array result register is invalid
+- Dictionary result register is invalid
+- Enum constant result register is invalid
+- Enum intrinsic result register is invalid
+- Intrinsic result register is invalid
+- Any box result register is invalid
+- Any type-test result register is invalid
+- Any checked-cast result register is invalid
+- Nullable wrap result register is invalid
+- Nullable unwrap result register is invalid
+- Variant-test result register is invalid
+- Result error-test register is invalid
+- Variant payload result register is invalid
+- Range iterator result register is invalid
+- Container iterator result register is invalid
+- Iterator has-next result register is invalid
+- Iterator index result register is invalid
+- Iterator reference result register is invalid
+- Iterator value result register is invalid
+- Aggregate result register is invalid
+
+Definitions: [vm/src/machine.cpp:4058](../vm/src/machine.cpp#L4058), [vm/src/machine.cpp:4084](../vm/src/machine.cpp#L4084), [vm/src/machine.cpp:4284](../vm/src/machine.cpp#L4284), [vm/src/machine.cpp:4325](../vm/src/machine.cpp#L4325), [vm/src/machine.cpp:4416](../vm/src/machine.cpp#L4416), [vm/src/machine.cpp:4502](../vm/src/machine.cpp#L4502), [vm/src/machine.cpp:4602](../vm/src/machine.cpp#L4602), [vm/src/machine.cpp:4620](../vm/src/machine.cpp#L4620), [vm/src/machine.cpp:5047](../vm/src/machine.cpp#L5047), [vm/src/machine.cpp:5064](../vm/src/machine.cpp#L5064), [vm/src/machine.cpp:5078](../vm/src/machine.cpp#L5078), [vm/src/machine.cpp:5131](../vm/src/machine.cpp#L5131), [vm/src/machine.cpp:5148](../vm/src/machine.cpp#L5148), [vm/src/machine.cpp:5159](../vm/src/machine.cpp#L5159), [vm/src/machine.cpp:5172](../vm/src/machine.cpp#L5172), [vm/src/machine.cpp:5193](../vm/src/machine.cpp#L5193), [vm/src/machine.cpp:5198](../vm/src/machine.cpp#L5198), [vm/src/machine.cpp:5210](../vm/src/machine.cpp#L5210), [vm/src/machine.cpp:5235](../vm/src/machine.cpp#L5235), [vm/src/machine.cpp:5256](../vm/src/machine.cpp#L5256), [vm/src/machine.cpp:5328](../vm/src/machine.cpp#L5328), [vm/src/machine.cpp:5355](../vm/src/machine.cpp#L5355), [vm/src/machine.cpp:5421](../vm/src/machine.cpp#L5421), [vm/src/machine.cpp:5424](../vm/src/machine.cpp#L5424), [vm/src/machine.cpp:5846](../vm/src/machine.cpp#L5846).
+
+### WVM1010
+
+- Default value is not implemented for this bytecode type
+
+Definitions: [vm/src/machine.cpp:4082](../vm/src/machine.cpp#L4082).
+
+### WVM1011
+
+- Unary instruction reads an unavailable value
+
+Definitions: [vm/src/machine.cpp:4092](../vm/src/machine.cpp#L4092).
+
+### WVM1012
+
+- Unary operator is invalid for the runtime value kind
+
+Definitions: [vm/src/machine.cpp:4107](../vm/src/machine.cpp#L4107).
+
+### WVM1013
+
+- Binary instruction requires two available values of the same kind
+
+Definitions: [vm/src/machine.cpp:4127](../vm/src/machine.cpp#L4127).
+
+### WVM1014
+
+- Integer division by zero
+
+Definitions: [vm/src/machine.cpp:4147](../vm/src/machine.cpp#L4147), [vm/src/machine.cpp:4200](../vm/src/machine.cpp#L4200).
+
+### WVM1015
+
+- Signed integer division overflow
+
+Definitions: [vm/src/machine.cpp:4149](../vm/src/machine.cpp#L4149).
+
+### WVM1016
+
+- Integer shift count is outside [0, 63]
+
+Definitions: [vm/src/machine.cpp:4161](../vm/src/machine.cpp#L4161), [vm/src/machine.cpp:4212](../vm/src/machine.cpp#L4212).
+
+### WVM1017
+
+- Signed integer binary operator is not implemented
+
+Definitions: [vm/src/machine.cpp:4173](../vm/src/machine.cpp#L4173).
+
+### WVM1018
+
+- Unsigned integer binary operator is not implemented
+
+Definitions: [vm/src/machine.cpp:4216](../vm/src/machine.cpp#L4216).
+
+### WVM1019
+
+- Floating-point binary operator is not implemented
+
+Definitions: [vm/src/machine.cpp:4235](../vm/src/machine.cpp#L4235).
+
+### WVM1020
+
+- String binary operator is not implemented
+
+Definitions: [vm/src/machine.cpp:4248](../vm/src/machine.cpp#L4248).
+
+### WVM1021
+
+- Binary operator is invalid for the runtime value kind
+
+Definitions: [vm/src/machine.cpp:4265](../vm/src/machine.cpp#L4265).
+
+### WVM1022
+
+- Range instruction has an invalid operand shape
+
+Definitions: [vm/src/machine.cpp:5490](../vm/src/machine.cpp#L5490).
+
+### WVM1023
+
+- Range instruction reads incompatible values
+
+Definitions: [vm/src/machine.cpp:5495](../vm/src/machine.cpp#L5495).
+
+### WVM1024
+
+- Range containment requires numeric runtime values
+
+Definitions: [vm/src/machine.cpp:5511](../vm/src/machine.cpp#L5511).
+
+### WVM1025
+
+- Conversion reads an unavailable value
+
+Definitions: [vm/src/machine.cpp:5520](../vm/src/machine.cpp#L5520).
+
+### WVM1026
+
+- Numeric conversion is out of range or invalid
+
+Definitions: [vm/src/machine.cpp:5535](../vm/src/machine.cpp#L5535), [vm/src/machine.cpp:5549](../vm/src/machine.cpp#L5549), [vm/src/machine.cpp:5562](../vm/src/machine.cpp#L5562).
+
+### WVM1027
+
+- Conversion target is not a numeric bytecode type
+
+Definitions: [vm/src/machine.cpp:5567](../vm/src/machine.cpp#L5567).
+
+### WVM1028
+
+- Call target is outside the module
+
+Definitions: [vm/src/machine.cpp:7068](../vm/src/machine.cpp#L7068).
+
+### WVM1029
+
+- Call reads an unavailable argument value
+- Dynamic call reads an unavailable argument value
+
+Definitions: [vm/src/machine.cpp:7075](../vm/src/machine.cpp#L7075), [vm/src/machine.cpp:7123](../vm/src/machine.cpp#L7123).
+
+### WVM1030
+
+- Conditional jump requires an available bool value
+
+Definitions: [vm/src/machine.cpp:7314](../vm/src/machine.cpp#L7314).
+
+### WVM1031
+
+- Branch target block does not exist
+
+Definitions: [vm/src/machine.cpp:7321](../vm/src/machine.cpp#L7321).
+
+### WVM1032
+
+- Branch reads an unavailable argument value
+
+Definitions: [vm/src/machine.cpp:7329](../vm/src/machine.cpp#L7329).
+
+### WVM1033
+
+- Return reads an unavailable value
+
+Definitions: [vm/src/machine.cpp:7346](../vm/src/machine.cpp#L7346).
+
+### WVM1034
+
+- Call result register is invalid
+
+Definitions: [vm/src/machine.cpp:3895](../vm/src/machine.cpp#L3895).
+
+### WVM1035
+
+- Execution reached an unreachable instruction
+
+Definitions: [vm/src/machine.cpp:7354](../vm/src/machine.cpp#L7354).
+
+### WVM1036
+
+- Opcode is not implemented by this VM runtime slice: {dynamic context}
+
+Definitions: [vm/src/machine.cpp:7356](../vm/src/machine.cpp#L7356).
+
+### WVM1037
+
+- VM exited without producing a result
+
+Definitions: [vm/src/machine.cpp:7359](../vm/src/machine.cpp#L7359).
+
+### WVM1038
+
+- Local place result register is invalid
+
+Definitions: [vm/src/machine.cpp:5579](../vm/src/machine.cpp#L5579).
+
+### WVM1039
+
+- Global place id or result register is invalid
+
+Definitions: [vm/src/machine.cpp:5587](../vm/src/machine.cpp#L5587).
+
+### WVM1040
+
+- Place write requires an available place and source value
+
+Definitions: [vm/src/machine.cpp:5598](../vm/src/machine.cpp#L5598).
+
+### WVM1041
+
+- Place can only be initialized once
+
+Definitions: [vm/src/machine.cpp:5600](../vm/src/machine.cpp#L5600).
+
+### WVM1042
+
+- Store requires an initialized mutable place
+
+Definitions: [vm/src/machine.cpp:5602](../vm/src/machine.cpp#L5602).
+
+### WVM1043
+
+- VM host cannot export a frame-local borrowed projection
+- Load requires an initialized place
+- Dynamic dispatch requires an initialized receiver place
+
+Definitions: [vm/src/machine.cpp:3875](../vm/src/machine.cpp#L3875), [vm/src/machine.cpp:5676](../vm/src/machine.cpp#L5676), [vm/src/machine.cpp:7105](../vm/src/machine.cpp#L7105).
+
+### WVM1044
+
+- Borrow requires an available place or object value
+
+Definitions: [vm/src/machine.cpp:5772](../vm/src/machine.cpp#L5772), [vm/src/machine.cpp:5778](../vm/src/machine.cpp#L5778).
+
+### WVM1045
+
+- Copy/retain reads an unavailable value
+
+Definitions: [vm/src/machine.cpp:5966](../vm/src/machine.cpp#L5966).
+
+### WVM1046
+
+- Move requires an initialized place
+
+Definitions: [vm/src/machine.cpp:5978](../vm/src/machine.cpp#L5978).
+
+### WVM1047
+
+- Value cleanup reads an unavailable value
+
+Definitions: [vm/src/machine.cpp:6030](../vm/src/machine.cpp#L6030).
+
+### WVM1048
+
+- Place cleanup requires an initialized place
+
+Definitions: [vm/src/machine.cpp:6048](../vm/src/machine.cpp#L6048).
+
+### WVM1049
+
+- Unicode text constant is not valid UTF-8
+
+Definitions: [vm/src/machine.cpp:4056](../vm/src/machine.cpp#L4056).
+
+### WVM1050
+
+- Unicode text binary operator is not implemented
+
+Definitions: [vm/src/machine.cpp:4262](../vm/src/machine.cpp#L4262).
+
+### WVM1051
+
+- Array creation result type is not an array
+
+Definitions: [vm/src/machine.cpp:4273](../vm/src/machine.cpp#L4273).
+
+### WVM1052
+
+- Array creation reads an unavailable element
+
+Definitions: [vm/src/machine.cpp:4280](../vm/src/machine.cpp#L4280).
+
+### WVM1053
+
+- Array length requires an available array
+
+Definitions: [vm/src/machine.cpp:4292](../vm/src/machine.cpp#L4292).
+
+### WVM1054
+
+- Array index is invalid or outside the array bounds
+
+Definitions: [vm/src/machine.cpp:4305](../vm/src/machine.cpp#L4305).
+
+### WVM1055
+
+- Interpolation segment shape is invalid
+
+Definitions: [vm/src/machine.cpp:4374](../vm/src/machine.cpp#L4374).
+
+### WVM1056
+
+- Interpolation reads an unavailable value
+
+Definitions: [vm/src/machine.cpp:4383](../vm/src/machine.cpp#L4383).
+
+### WVM1057
+
+- Unicode interpolation produced invalid UTF-8
+
+Definitions: [vm/src/machine.cpp:4393](../vm/src/machine.cpp#L4393).
+
+### WVM1058
+
+- Intrinsic call has no available receiver
+
+Definitions: [vm/src/machine.cpp:4513](../vm/src/machine.cpp#L4513).
+
+### WVM1059
+
+- Unicode text index is outside the scalar bounds
+
+Definitions: [vm/src/text_intrinsics.cpp:178](../vm/src/text_intrinsics.cpp#L178).
+
+### WVM1060
+
+- Unicode text slice requires a non-negative start
+- Unicode text slice requires a non-negative count
+
+Definitions: [vm/src/text_intrinsics.cpp:166](../vm/src/text_intrinsics.cpp#L166), [vm/src/text_intrinsics.cpp:170](../vm/src/text_intrinsics.cpp#L170).
+
+### WVM1061
+
+- String intrinsic is not implemented: {dynamic context}
+- Text intrinsic is not implemented: {dynamic context}
+- Container or text intrinsic is not implemented: {dynamic context}
+
+Definitions: [vm/src/machine.cpp:4597](../vm/src/machine.cpp#L4597), [vm/src/machine.cpp:4615](../vm/src/machine.cpp#L4615), [vm/src/machine.cpp:5039](../vm/src/machine.cpp#L5039).
+
+### WVM1062
+
+- Interpolation value has no VM string representation
+
+Definitions: [vm/src/machine.cpp:4385](../vm/src/machine.cpp#L4385).
+
+### WVM1063
+
+- Field place reads an unavailable base
+
+Definitions: [vm/src/machine.cpp:5700](../vm/src/machine.cpp#L5700).
+
+### WVM1064
+
+- Field place base is not initialized
+
+Definitions: [vm/src/machine.cpp:5708](../vm/src/machine.cpp#L5708).
+
+### WVM1065
+
+- Object has no field layout
+- Field owner is outside the concrete object hierarchy
+- Field projection is outside the aggregate layout
+
+Definitions: [vm/src/machine.cpp:5719](../vm/src/machine.cpp#L5719), [vm/src/machine.cpp:5723](../vm/src/machine.cpp#L5723), [vm/src/machine.cpp:5730](../vm/src/machine.cpp#L5730).
+
+### WVM1066
+
+- Array place requires an available base and non-negative index
+
+Definitions: [vm/src/machine.cpp:5743](../vm/src/machine.cpp#L5743).
+
+### WVM1067
+
+- Array place base is not an initialized array
+
+Definitions: [vm/src/machine.cpp:5751](../vm/src/machine.cpp#L5751).
+
+### WVM1068
+
+- Array place index is outside the array bounds
+
+Definitions: [vm/src/machine.cpp:5761](../vm/src/machine.cpp#L5761).
+
+### WVM1069
+
+- Aggregate construction references an invalid type
+
+Definitions: [vm/src/machine.cpp:5786](../vm/src/machine.cpp#L5786).
+
+### WVM1070
+
+- Aggregate construction kind does not match its result type
+
+Definitions: [vm/src/machine.cpp:5791](../vm/src/machine.cpp#L5791).
+
+### WVM1071
+
+- Component aggregate has more arguments than declared fields
+- Component aggregate reads an unavailable field argument
+- Aggregate constructor reads an unavailable argument
+
+Definitions: [vm/src/machine.cpp:5854](../vm/src/machine.cpp#L5854), [vm/src/machine.cpp:5859](../vm/src/machine.cpp#L5859), [vm/src/machine.cpp:5886](../vm/src/machine.cpp#L5886).
+
+### WVM1072
+
+- Reference release reads an unavailable value
+
+Definitions: [vm/src/machine.cpp:6003](../vm/src/machine.cpp#L6003).
+
+### WVM1073
+
+- Reference release requires an owned object or callable handle
+
+Definitions: [vm/src/machine.cpp:6008](../vm/src/machine.cpp#L6008).
+
+### WVM1074
+
+- Construction chain references an invalid function
+- Construction continuation references an invalid function
+- Component construction references an invalid lifecycle function
+
+Definitions: [vm/src/machine.cpp:3911](../vm/src/machine.cpp#L3911), [vm/src/machine.cpp:3925](../vm/src/machine.cpp#L3925), [vm/src/machine.cpp:5894](../vm/src/machine.cpp#L5894).
+
+### WVM1078
+
+- Dictionary creation has an invalid result type or entry shape
+
+Definitions: [vm/src/machine.cpp:4313](../vm/src/machine.cpp#L4313).
+
+### WVM1079
+
+- Dictionary creation reads an unavailable key or value
+
+Definitions: [vm/src/machine.cpp:4320](../vm/src/machine.cpp#L4320).
+
+### WVM1080
+
+- Dictionary key was not found
+
+Definitions: [vm/src/machine.cpp:4335](../vm/src/machine.cpp#L4335), [vm/src/machine.cpp:4363](../vm/src/machine.cpp#L4363), [vm/src/machine.cpp:4878](../vm/src/machine.cpp#L4878).
+
+### WVM1081
+
+- Dictionary place requires an available base and key
+
+Definitions: [vm/src/machine.cpp:4345](../vm/src/machine.cpp#L4345).
+
+### WVM1082
+
+- Dictionary place base is not an initialized dictionary
+
+Definitions: [vm/src/machine.cpp:4353](../vm/src/machine.cpp#L4353).
+
+### WVM1083
+
+- Array Contains reads an unavailable value
+
+Definitions: [vm/src/machine.cpp:4637](../vm/src/machine.cpp#L4637).
+
+### WVM1084
+
+- Dictionary GetOr reads unavailable operands
+
+Definitions: [vm/src/machine.cpp:4888](../vm/src/machine.cpp#L4888).
+
+### WVM1085
+
+- Dictionary TryGet requires a mutable initialized output place
+
+Definitions: [vm/src/machine.cpp:4900](../vm/src/machine.cpp#L4900).
+
+### WVM1086
+
+- Dictionary Set requires a mutable receiver and available operands
+
+Definitions: [vm/src/machine.cpp:4913](../vm/src/machine.cpp#L4913).
+
+### WVM1087
+
+- Dictionary GetOrAdd requires a mutable receiver and operands
+
+Definitions: [vm/src/machine.cpp:4923](../vm/src/machine.cpp#L4923).
+
+### WVM1088
+
+- Dictionary Merge requires another dictionary
+
+Definitions: [vm/src/machine.cpp:4951](../vm/src/machine.cpp#L4951).
+
+### WVM1089
+
+- Dictionary Extend requires a mutable receiver and dictionary
+
+Definitions: [vm/src/machine.cpp:4963](../vm/src/machine.cpp#L4963).
+
+### WVM1090
+
+- Dictionary Clear requires a mutable receiver
+
+Definitions: [vm/src/machine.cpp:4980](../vm/src/machine.cpp#L4980).
+
+### WVM1091
+
+- Dictionary Remove requires a mutable receiver and key
+
+Definitions: [vm/src/machine.cpp:5000](../vm/src/machine.cpp#L5000).
+
+### WVM1092
+
+- Ordered dictionary endpoint requires a non-empty ordered dictionary
+
+Definitions: [vm/src/machine.cpp:5021](../vm/src/machine.cpp#L5021).
+
+### WVM1093
+
+- Ordered dictionary bound lookup has invalid operands
+
+Definitions: [vm/src/machine.cpp:5033](../vm/src/machine.cpp#L5033).
+
+### WVM1094
+
+- Array index search reads an unavailable value
+
+Definitions: [vm/src/machine.cpp:4651](../vm/src/machine.cpp#L4651).
+
+### WVM1095
+
+- Array endpoint intrinsic requires a non-empty array
+
+Definitions: [vm/src/machine.cpp:4681](../vm/src/machine.cpp#L4681).
+
+### WVM1096
+
+- Array intrinsic index is outside the array bounds
+
+Definitions: [vm/src/machine.cpp:4690](../vm/src/machine.cpp#L4690).
+
+### WVM1097
+
+- Array GetOr reads an unavailable fallback
+
+Definitions: [vm/src/machine.cpp:4699](../vm/src/machine.cpp#L4699).
+
+### WVM1098
+
+- Array Slice requires non-negative start and count operands
+
+Definitions: [vm/src/machine.cpp:4714](../vm/src/machine.cpp#L4714).
+
+### WVM1099
+
+- Array Take/Skip requires a non-negative count
+
+Definitions: [vm/src/machine.cpp:4722](../vm/src/machine.cpp#L4722).
+
+### WVM1100
+
+- Array Concat requires another array
+
+Definitions: [vm/src/machine.cpp:4731](../vm/src/machine.cpp#L4731).
+
+### WVM1101
+
+- Array Join requires a string separator
+
+Definitions: [vm/src/machine.cpp:4745](../vm/src/machine.cpp#L4745).
+
+### WVM1102
+
+- Array Join requires string elements
+
+Definitions: [vm/src/machine.cpp:4751](../vm/src/machine.cpp#L4751).
+
+### WVM1103
+
+- Array Push requires a mutable receiver and available value
+
+Definitions: [vm/src/machine.cpp:4763](../vm/src/machine.cpp#L4763).
+
+### WVM1104
+
+- Array Pop requires a mutable non-empty array
+
+Definitions: [vm/src/machine.cpp:4770](../vm/src/machine.cpp#L4770).
+
+### WVM1105
+
+- Array Insert index is invalid or receiver is not mutable
+
+Definitions: [vm/src/machine.cpp:4778](../vm/src/machine.cpp#L4778).
+
+### WVM1106
+
+- Array RemoveAt index is invalid or receiver is not mutable
+
+Definitions: [vm/src/machine.cpp:4785](../vm/src/machine.cpp#L4785).
+
+### WVM1107
+
+- Array Remove requires a mutable receiver and available value
+
+Definitions: [vm/src/machine.cpp:4792](../vm/src/machine.cpp#L4792).
+
+### WVM1108
+
+- Array Clear requires a mutable receiver
+
+Definitions: [vm/src/machine.cpp:4799](../vm/src/machine.cpp#L4799).
+
+### WVM1109
+
+- Array Extend requires a mutable receiver and another array
+
+Definitions: [vm/src/machine.cpp:4807](../vm/src/machine.cpp#L4807).
+
+### WVM1110
+
+- Array Reserve requires a mutable receiver and valid capacity
+
+Definitions: [vm/src/machine.cpp:4814](../vm/src/machine.cpp#L4814).
+
+### WVM1111
+
+- Array ShrinkToFit requires a mutable receiver
+
+Definitions: [vm/src/machine.cpp:4820](../vm/src/machine.cpp#L4820).
+
+### WVM1112
+
+- Array Fill requires a mutable receiver and available value
+
+Definitions: [vm/src/machine.cpp:4828](../vm/src/machine.cpp#L4828).
+
+### WVM1113
+
+- Array Reverse requires a mutable receiver
+
+Definitions: [vm/src/machine.cpp:4835](../vm/src/machine.cpp#L4835).
+
+### WVM1114
+
+- Array Sort requires a mutable array of orderable values
+
+Definitions: [vm/src/machine.cpp:4842](../vm/src/machine.cpp#L4842).
+
+### WVM1115
+
+- Array Sorted requires orderable values
+
+Definitions: [vm/src/machine.cpp:4849](../vm/src/machine.cpp#L4849).
+
+### WVM1116
+
+- String intrinsic receiver is not a string
+
+Definitions: [vm/src/string_intrinsics.cpp:294](../vm/src/string_intrinsics.cpp#L294).
+
+### WVM1117
+
+- String Contains requires a string or byte-sized char
+
+Definitions: [vm/src/string_intrinsics.cpp:308](../vm/src/string_intrinsics.cpp#L308).
+
+### WVM1118
+
+- String prefix/suffix query requires a string
+
+Definitions: [vm/src/string_intrinsics.cpp:314](../vm/src/string_intrinsics.cpp#L314).
+
+### WVM1119
+
+- String index query requires a string or byte-sized char
+
+Definitions: [vm/src/string_intrinsics.cpp:330](../vm/src/string_intrinsics.cpp#L330).
+
+### WVM1120
+
+- String endpoint intrinsic requires a non-empty string
+
+Definitions: [vm/src/string_intrinsics.cpp:337](../vm/src/string_intrinsics.cpp#L337).
+
+### WVM1121
+
+- String indexing requires a non-negative index
+
+Definitions: [vm/src/string_intrinsics.cpp:346](../vm/src/string_intrinsics.cpp#L346).
+
+### WVM1122
+
+- String index is outside the byte bounds
+
+Definitions: [vm/src/string_intrinsics.cpp:352](../vm/src/string_intrinsics.cpp#L352).
+
+### WVM1123
+
+- String slicing requires a non-negative index or count
+- String Slice requires a non-negative count
+
+Definitions: [vm/src/string_intrinsics.cpp:361](../vm/src/string_intrinsics.cpp#L361), [vm/src/string_intrinsics.cpp:374](../vm/src/string_intrinsics.cpp#L374).
+
+### WVM1124
+
+- String replacement requires old and new string values
+
+Definitions: [vm/src/string_intrinsics.cpp:396](../vm/src/string_intrinsics.cpp#L396), [vm/src/string_intrinsics.cpp:586](../vm/src/string_intrinsics.cpp#L586).
+
+### WVM1125
+
+- String Repeat count exceeds runtime limits
+
+Definitions: [vm/src/string_intrinsics.cpp:405](../vm/src/string_intrinsics.cpp#L405).
+
+### WVM1126
+
+- String Split requires a separator
+
+Definitions: [vm/src/string_intrinsics.cpp:419](../vm/src/string_intrinsics.cpp#L419).
+
+### WVM1127
+
+- String padding requires a width and optional byte-sized char
+
+Definitions: [vm/src/string_intrinsics.cpp:464](../vm/src/string_intrinsics.cpp#L464).
+
+### WVM1128
+
+- String integer conversion has invalid input or base
+- String integer conversion failed
+- String unsigned conversion is out of range
+- String signed conversion is out of range
+- String integer conversion base is invalid
+
+Definitions: [vm/src/string_intrinsics.cpp:248](../vm/src/string_intrinsics.cpp#L248), [vm/src/string_intrinsics.cpp:253](../vm/src/string_intrinsics.cpp#L253), [vm/src/string_intrinsics.cpp:264](../vm/src/string_intrinsics.cpp#L264), [vm/src/string_intrinsics.cpp:272](../vm/src/string_intrinsics.cpp#L272), [vm/src/string_intrinsics.cpp:482](../vm/src/string_intrinsics.cpp#L482).
+
+### WVM1129
+
+- String f32 conversion failed
+- String floating-point conversion failed
+
+Definitions: [vm/src/string_intrinsics.cpp:498](../vm/src/string_intrinsics.cpp#L498), [vm/src/string_intrinsics.cpp:505](../vm/src/string_intrinsics.cpp#L505).
+
+### WVM1130
+
+- String boolean conversion failed
+
+Definitions: [vm/src/string_intrinsics.cpp:517](../vm/src/string_intrinsics.cpp#L517).
+
+### WVM1131
+
+- String Append requires a string, numeric or bool suffix
+
+Definitions: [vm/src/string_intrinsics.cpp:530](../vm/src/string_intrinsics.cpp#L530), [vm/src/string_intrinsics.cpp:551](../vm/src/string_intrinsics.cpp#L551).
+
+### WVM1132
+
+- String Push requires a byte-sized char
+
+Definitions: [vm/src/string_intrinsics.cpp:537](../vm/src/string_intrinsics.cpp#L537), [vm/src/string_intrinsics.cpp:557](../vm/src/string_intrinsics.cpp#L557).
+
+### WVM1133
+
+- String Insert requires an index and fragment
+
+Definitions: [vm/src/string_intrinsics.cpp:565](../vm/src/string_intrinsics.cpp#L565).
+
+### WVM1134
+
+- String Erase requires index and count operands
+
+Definitions: [vm/src/string_intrinsics.cpp:573](../vm/src/string_intrinsics.cpp#L573).
+
+### WVM1135
+
+- String mutation requires a mutable receiver
+
+Definitions: [vm/src/string_intrinsics.cpp:283](../vm/src/string_intrinsics.cpp#L283).
+
+### WVM1136
+
+- Text intrinsic receiver is not Unicode text
+
+Definitions: [vm/src/text_intrinsics.cpp:152](../vm/src/text_intrinsics.cpp#L152).
+
+### WVM1137
+
+- Unicode text query requires another text value
+
+Definitions: [vm/src/text_intrinsics.cpp:185](../vm/src/text_intrinsics.cpp#L185).
+
+### WVM1138
+
+- Grapheme slicing requires non-negative start and count values
+
+Definitions: [vm/src/text_intrinsics.cpp:204](../vm/src/text_intrinsics.cpp#L204).
+
+### WVM1139
+
+- Function reference requires a known function and callable type
+
+Definitions: [vm/src/machine.cpp:6068](../vm/src/machine.cpp#L6068).
+
+### WVM1140
+
+- Function reference result register is invalid
+
+Definitions: [vm/src/machine.cpp:6070](../vm/src/machine.cpp#L6070).
+
+### WVM1141
+
+- Closure creation does not match a known callable capture layout
+
+Definitions: [vm/src/machine.cpp:6079](../vm/src/machine.cpp#L6079).
+
+### WVM1142
+
+- Closure creation reads an unavailable capture value
+
+Definitions: [vm/src/machine.cpp:6087](../vm/src/machine.cpp#L6087).
+
+### WVM1143
+
+- Reference capture requires a live borrowed place
+
+Definitions: [vm/src/machine.cpp:6096](../vm/src/machine.cpp#L6096).
+
+### WVM1144
+
+- Retained-self capture requires a live component or object
+
+Definitions: [vm/src/machine.cpp:6114](../vm/src/machine.cpp#L6114).
+
+### WVM1145
+
+- Closure creation contains an unknown capture kind
+
+Definitions: [vm/src/machine.cpp:6119](../vm/src/machine.cpp#L6119).
+
+### WVM1146
+
+- Closure result register is invalid
+- Native callable result register is invalid
+
+Definitions: [vm/src/machine.cpp:6123](../vm/src/machine.cpp#L6123), [vm/src/machine.cpp:6150](../vm/src/machine.cpp#L6150).
+
+### WVM1147
+
+- Indirect call requires an available function value
+
+Definitions: [vm/src/machine.cpp:6131](../vm/src/machine.cpp#L6131).
+
+### WVM1148
+
+- Indirect call target is outside the module
+
+Definitions: [vm/src/machine.cpp:6156](../vm/src/machine.cpp#L6156).
+
+### WVM1149
+
+- Indirect call lost a closure capture
+
+Definitions: [vm/src/machine.cpp:6164](../vm/src/machine.cpp#L6164).
+
+### WVM1150
+
+- Native indirect call reads an unavailable argument
+- Indirect call reads an unavailable argument value
+
+Definitions: [vm/src/machine.cpp:6142](../vm/src/machine.cpp#L6142), [vm/src/machine.cpp:6171](../vm/src/machine.cpp#L6171).
+
+### WVM1151
+
+- Object cast requires a live object value
+
+Definitions: [vm/src/machine.cpp:6200](../vm/src/machine.cpp#L6200).
+
+### WVM1152
+
+Definition: Upcast target is incompatible with the concrete object type.
+
+Definitions: [vm/src/machine.cpp:6202](../vm/src/machine.cpp#L6202).
+
+### WVM1153
+
+Definition: Checked object cast failed for the concrete object type.
+
+Definitions: [vm/src/machine.cpp:6202](../vm/src/machine.cpp#L6202).
+
+### WVM1154
+
+- Object cast result register is invalid
+
+Definitions: [vm/src/machine.cpp:6214](../vm/src/machine.cpp#L6214).
+
+### WVM1155
+
+- Object type-test result register is invalid
+
+Definitions: [vm/src/machine.cpp:6224](../vm/src/machine.cpp#L6224).
+
+### WVM1156
+
+- Object identity comparison requires two operands
+
+Definitions: [vm/src/machine.cpp:6231](../vm/src/machine.cpp#L6231).
+
+### WVM1157
+
+- Object identity comparison reads an unavailable value
+
+Definitions: [vm/src/machine.cpp:6235](../vm/src/machine.cpp#L6235).
+
+### WVM1158
+
+- Object identity comparison requires object or null operands
+
+Definitions: [vm/src/machine.cpp:6242](../vm/src/machine.cpp#L6242).
+
+### WVM1159
+
+- Object identity comparison has an invalid comparison operator
+
+Definitions: [vm/src/machine.cpp:6249](../vm/src/machine.cpp#L6249).
+
+### WVM1160
+
+- Object identity comparison result register is invalid
+
+Definitions: [vm/src/machine.cpp:6251](../vm/src/machine.cpp#L6251).
+
+### WVM1161
+
+- Dynamic dispatch requires a live object receiver
+
+Definitions: [vm/src/machine.cpp:7109](../vm/src/machine.cpp#L7109).
+
+### WVM1162
+
+- Concrete object type has no implementation for the requested method slot
+
+Definitions: [vm/src/machine.cpp:7113](../vm/src/machine.cpp#L7113).
+
+### WVM1163
+
+- Dynamic dispatch resolved outside the module function table
+
+Definitions: [vm/src/machine.cpp:7115](../vm/src/machine.cpp#L7115).
+
+### WVM1164
+
+- Wait requires an async task value
+
+Definitions: [vm/src/machine.cpp:3444](../vm/src/machine.cpp#L3444).
+
+### WVM1165
+
+- Async task was cancelled during machine shutdown
+- Async task was cancelled
+- Awaited async task was cancelled
+- Async task was cancelled before its continuation resumed
+- Async task was cancelled at a cooperative suspension point
+
+Definitions: [vm/src/machine.cpp:1607](../vm/src/machine.cpp#L1607), [vm/src/machine.cpp:2977](../vm/src/machine.cpp#L2977), [vm/src/machine.cpp:3008](../vm/src/machine.cpp#L3008), [vm/src/machine.cpp:3458](../vm/src/machine.cpp#L3458), [vm/src/machine.cpp:3473](../vm/src/machine.cpp#L3473), [vm/src/machine.cpp:3502](../vm/src/machine.cpp#L3502), [vm/src/machine.cpp:3514](../vm/src/machine.cpp#L3514), [vm/src/machine.cpp:3534](../vm/src/machine.cpp#L3534), [vm/src/machine.cpp:3603](../vm/src/machine.cpp#L3603), [vm/src/machine.cpp:3665](../vm/src/machine.cpp#L3665), [vm/src/machine.cpp:7147](../vm/src/machine.cpp#L7147), [vm/src/machine.cpp:7183](../vm/src/machine.cpp#L7183).
+
+### WVM1166
+
+- Async task is already running or has an invalid state
+
+Definitions: [vm/src/machine.cpp:3477](../vm/src/machine.cpp#L3477).
+
+### WVM1167
+
+- Async task lost a captured argument
+
+Definitions: [vm/src/machine.cpp:3486](../vm/src/machine.cpp#L3486), [vm/src/machine.cpp:3488](../vm/src/machine.cpp#L3488).
+
+### WVM1168
+
+- Async indirect-call result register is invalid
+
+Definitions: [vm/src/machine.cpp:6182](../vm/src/machine.cpp#L6182).
+
+### WVM1169
+
+- Async call result register is invalid
+
+Definitions: [vm/src/machine.cpp:7082](../vm/src/machine.cpp#L7082).
+
+### WVM1170
+
+- Async dynamic-call result register is invalid
+
+Definitions: [vm/src/machine.cpp:7130](../vm/src/machine.cpp#L7130).
+
+### WVM1171
+
+- Coroutine suspension does not match its function state table
+
+Definitions: [vm/src/machine.cpp:7156](../vm/src/machine.cpp#L7156).
+
+### WVM1172
+
+- Coroutine suspension state does not match its resume edge
+
+Definitions: [vm/src/machine.cpp:7161](../vm/src/machine.cpp#L7161).
+
+### WVM1173
+
+- Coroutine await requires an async task operand
+
+Definitions: [vm/src/machine.cpp:7170](../vm/src/machine.cpp#L7170).
+
+### WVM1174
+
+- Coroutine suspension carries an unsupported async operation
+
+Definitions: [vm/src/machine.cpp:7246](../vm/src/machine.cpp#L7246).
+
+### WVM1175
+
+- Coroutine resume block does not exist
+
+Definitions: [vm/src/machine.cpp:3630](../vm/src/machine.cpp#L3630), [vm/src/machine.cpp:7250](../vm/src/machine.cpp#L7250).
+
+### WVM1176
+
+- Coroutine resume has no matching suspended payload
+
+Definitions: [vm/src/machine.cpp:7274](../vm/src/machine.cpp#L7274).
+
+### WVM1177
+
+- Coroutine resume result register is invalid
+
+Definitions: [vm/src/machine.cpp:7276](../vm/src/machine.cpp#L7276).
+
+### WVM1178
+
+- Enum constant does not match its canonical type metadata
+
+Definitions: [vm/src/machine.cpp:4410](../vm/src/machine.cpp#L4410).
+
+### WVM1179
+
+- Enum intrinsic has no available receiver or target type
+- Enum intrinsic target metadata is invalid
+- Enum intrinsic receiver is not an integer value
+
+Definitions: [vm/src/machine.cpp:4426](../vm/src/machine.cpp#L4426), [vm/src/machine.cpp:4431](../vm/src/machine.cpp#L4431), [vm/src/machine.cpp:4443](../vm/src/machine.cpp#L4443).
+
+### WVM1180
+
+- Flagset intrinsic requires an integer mask operand
+
+Definitions: [vm/src/machine.cpp:4478](../vm/src/machine.cpp#L4478).
+
+### WVM1181
+
+- Enum or flagset intrinsic is not implemented: {dynamic context}
+
+Definitions: [vm/src/machine.cpp:4494](../vm/src/machine.cpp#L4494).
+
+### WVM1182
+
+- Any boxing requires an available payload
+
+Definitions: [vm/src/machine.cpp:5056](../vm/src/machine.cpp#L5056).
+
+### WVM1183
+
+- Any test or cast requires a live boxed value
+
+Definitions: [vm/src/machine.cpp:5119](../vm/src/machine.cpp#L5119).
+
+### WVM1184
+
+- Checked any cast cannot recover a payload from null
+- Checked any cast failed for the requested target type
+- Checked any cast cannot borrow a non-object payload
+
+Definitions: [vm/src/machine.cpp:5076](../vm/src/machine.cpp#L5076), [vm/src/machine.cpp:5136](../vm/src/machine.cpp#L5136), [vm/src/machine.cpp:5144](../vm/src/machine.cpp#L5144).
+
+### WVM1185
+
+- Nullable wrapping requires an available payload
+
+Definitions: [vm/src/machine.cpp:5157](../vm/src/machine.cpp#L5157).
+
+### WVM1186
+
+- Nullable unwrap requires an available value
+
+Definitions: [vm/src/machine.cpp:5168](../vm/src/machine.cpp#L5168).
+
+### WVM1187
+
+- Nullable value does not contain a payload
+
+Definitions: [vm/src/machine.cpp:5170](../vm/src/machine.cpp#L5170).
+
+### WVM1188
+
+- Variant operation requires canonical option/result storage
+
+Definitions: [vm/src/machine.cpp:5186](../vm/src/machine.cpp#L5186).
+
+### WVM1189
+
+- Result does not contain a success value
+
+Definitions: [vm/src/machine.cpp:5205](../vm/src/machine.cpp#L5205).
+
+### WVM1190
+
+- Variant payload is outside its canonical field layout
+
+Definitions: [vm/src/machine.cpp:5208](../vm/src/machine.cpp#L5208).
+
+### WVM1191
+
+- Iterator creation result type is not an iterator
+
+Definitions: [vm/src/machine.cpp:5220](../vm/src/machine.cpp#L5220).
+
+### WVM1192
+
+- Range iterator requires three compatible integer values
+
+Definitions: [vm/src/machine.cpp:5228](../vm/src/machine.cpp#L5228).
+
+### WVM1193
+
+- Range iterator step cannot be zero
+
+Definitions: [vm/src/machine.cpp:5232](../vm/src/machine.cpp#L5232).
+
+### WVM1194
+
+- Container iterator source does not match its selector
+- Container iterator has an invalid operand shape
+
+Definitions: [vm/src/machine.cpp:5243](../vm/src/machine.cpp#L5243), [vm/src/machine.cpp:5254](../vm/src/machine.cpp#L5254).
+
+### WVM1195
+
+- Container iterator step must be a positive integer
+
+Definitions: [vm/src/machine.cpp:5250](../vm/src/machine.cpp#L5250).
+
+### WVM1196
+
+- Iterator selector is not implemented: {dynamic context}
+
+Definitions: [vm/src/machine.cpp:5259](../vm/src/machine.cpp#L5259).
+
+### WVM1197
+
+- Iterator operation requires a live iterator value
+
+Definitions: [vm/src/machine.cpp:5271](../vm/src/machine.cpp#L5271).
+
+### WVM1198
+
+- Iterator state is incompatible with its source
+- Range iterator state is incomplete
+- Range iterator state is not integer-compatible
+- Container iterator source is unavailable
+
+Definitions: [vm/src/machine.cpp:5326](../vm/src/machine.cpp#L5326), [vm/src/machine.cpp:5440](../vm/src/machine.cpp#L5440), [vm/src/machine.cpp:5467](../vm/src/machine.cpp#L5467), [vm/src/machine.cpp:5473](../vm/src/machine.cpp#L5473).
+
+### WVM1199
+
+- Range iterator has no current value
+- Container iterator has no current value
+- Iterator current value is unavailable
+
+Definitions: [vm/src/machine.cpp:5341](../vm/src/machine.cpp#L5341), [vm/src/machine.cpp:5350](../vm/src/machine.cpp#L5350), [vm/src/machine.cpp:5405](../vm/src/machine.cpp#L5405).
+
+### WVM1200
+
+- Array iterator field projection is invalid
+
+Definitions: [vm/src/machine.cpp:5377](../vm/src/machine.cpp#L5377), [vm/src/machine.cpp:5382](../vm/src/machine.cpp#L5382).
+
+### WVM1201
+
+- Dictionary iterator projection is invalid
+
+Definitions: [vm/src/machine.cpp:5401](../vm/src/machine.cpp#L5401).
+
+### WVM1202
+
+- Result propagation requires a canonical error payload and target type
+- Result propagation target has no canonical result layout
+- Result propagation target fields are unavailable
+
+Definitions: [vm/src/machine.cpp:7290](../vm/src/machine.cpp#L7290), [vm/src/machine.cpp:7295](../vm/src/machine.cpp#L7295), [vm/src/machine.cpp:7300](../vm/src/machine.cpp#L7300).
+
+### WVM1204
+
+- Async task failure lost its terminal-state race
+- Async task completion lost its terminal-state race
+
+Definitions: [vm/src/machine.cpp:3517](../vm/src/machine.cpp#L3517), [vm/src/machine.cpp:3537](../vm/src/machine.cpp#L3537).
+
+### WVM1205
+
+- VM execution was aborted by the debug observer
+
+Definitions: [vm/src/machine.cpp:3968](../vm/src/machine.cpp#L3968).
+
+### WVM1206
+
+- VM debug observer threw across the runtime boundary
+
+Definitions: [vm/src/machine.cpp:3961](../vm/src/machine.cpp#L3961).
+
+### WVM1207
+
+- VM worker callable threw across the runtime boundary
+- VM executor owner dispatch failed
+- VM executor continuation threw across the runtime boundary
+
+Definitions: [vm/src/machine.cpp:3413](../vm/src/machine.cpp#L3413), [vm/src/machine.cpp:3578](../vm/src/machine.cpp#L3578), [vm/src/machine.cpp:3710](../vm/src/machine.cpp#L3710), [vm/src/machine.cpp:3715](../vm/src/machine.cpp#L3715).
+
+### WVM1208
+
+- Await continuation executor rejected the resumed VM frame
+- Coroutine executor switch has no runnable target
+- Coroutine executor queue rejected its continuation
+
+Definitions: [vm/src/machine.cpp:3650](../vm/src/machine.cpp#L3650), [vm/src/machine.cpp:7259](../vm/src/machine.cpp#L7259), [vm/src/machine.cpp:7263](../vm/src/machine.cpp#L7263).
+
+### WVM1209
+
+- Await continuation lost its VM frame
+- Coroutine await has no owning async task
+
+Definitions: [vm/src/machine.cpp:3620](../vm/src/machine.cpp#L3620), [vm/src/machine.cpp:7198](../vm/src/machine.cpp#L7198).
+
+### WVM1210
+
+- {dynamic context}VM destructor threw while unwinding: {dynamic context}
+- VM destructor threw a non-standard exception while unwinding
+- VM await continuation dispatch failed
+
+Definitions: [vm/src/machine.cpp:1516](../vm/src/machine.cpp#L1516), [vm/src/machine.cpp:1521](../vm/src/machine.cpp#L1521), [vm/src/machine.cpp:7228](../vm/src/machine.cpp#L7228).
+
+### WVM1211
+
+- Dictionary mutation cleanup failed while running a destructor
+- Reference cleanup failed while running a destructor
+- Value cleanup failed while running a destructor
+- Place cleanup failed while running a destructor
+- Native callback cleanup failed while running a destructor
+- Native copy-back cleanup failed while running a destructor
+
+Definitions: [vm/src/machine.cpp:5042](../vm/src/machine.cpp#L5042), [vm/src/machine.cpp:5633](../vm/src/machine.cpp#L5633), [vm/src/machine.cpp:6014](../vm/src/machine.cpp#L6014), [vm/src/machine.cpp:6035](../vm/src/machine.cpp#L6035), [vm/src/machine.cpp:6057](../vm/src/machine.cpp#L6057), [vm/src/machine.cpp:6837](../vm/src/machine.cpp#L6837), [vm/src/machine.cpp:6929](../vm/src/machine.cpp#L6929).
+
+### WVM1212
+
+- Async argument cleanup failed while running a destructor
+
+Definitions: [vm/src/machine.cpp:3523](../vm/src/machine.cpp#L3523), [vm/src/machine.cpp:3699](../vm/src/machine.cpp#L3699).
+
+### WVM1220
+
+- Native invocation references an invalid function declaration
+- Native invocation target has no native binding metadata
+- Native function is not registered: {dynamic context}
+
+Definitions: [vm/src/machine.cpp:6258](../vm/src/machine.cpp#L6258), [vm/src/machine.cpp:6261](../vm/src/machine.cpp#L6261), [vm/src/machine.cpp:6345](../vm/src/machine.cpp#L6345).
+
+### WVM1221
+
+- Native invocation argument count does not match its ABI plan
+
+Definitions: [vm/src/machine.cpp:6263](../vm/src/machine.cpp#L6263).
+
+### WVM1222
+
+- Native callable has caller-thread affinity
+- Native callable failed with ABI status {dynamic context}
+- Native invocation '{dynamic context}' failed: {dynamic context}
+
+Definitions: [vm/src/machine.cpp:2218](../vm/src/machine.cpp#L2218), [vm/src/machine.cpp:2256](../vm/src/machine.cpp#L2256), [vm/src/machine.cpp:6938](../vm/src/machine.cpp#L6938).
+
+### WVM1223
+
+- Native invocation reads an unavailable argument value
+- Native ref/view argument does not reference a VM place
+- Native ref/view argument references unavailable or immutable storage
+- Native argument conversion failed: {dynamic context}
+- Aliased native references disagree on their ABI value type
+- Native value argument references unavailable storage
+- Native callback argument has an invalid callable ABI shape
+- Native container projection has an incompatible value type
+- Native container object projection has no contract identity
+- Native projection key conversion failed: {dynamic context}
+- Native projection key has no contract identity
+- Native sequence projection has an incompatible element type
+- Native sequence object projection has no contract identity
+- Overlapping native field reference has an incompatible producer layout: {dynamic context} (field type {dynamic context}, argument type {dynamic context}, identity {dynamic context})
+- Native fixed-array reference requires a containing POD projection
+- Native thunk does not advertise task-source input support; rebuild its producer
+- Native callable result requires a task-source-aware producer
+
+Definitions: [vm/src/machine.cpp:2211](../vm/src/machine.cpp#L2211), [vm/src/machine.cpp:4077](../vm/src/machine.cpp#L4077), [vm/src/machine.cpp:5816](../vm/src/machine.cpp#L5816), [vm/src/machine.cpp:5824](../vm/src/machine.cpp#L5824), [vm/src/machine.cpp:5838](../vm/src/machine.cpp#L5838), [vm/src/machine.cpp:6450](../vm/src/machine.cpp#L6450), [vm/src/machine.cpp:6457](../vm/src/machine.cpp#L6457), [vm/src/machine.cpp:6460](../vm/src/machine.cpp#L6460), [vm/src/machine.cpp:6480](../vm/src/machine.cpp#L6480), [vm/src/machine.cpp:6495](../vm/src/machine.cpp#L6495), [vm/src/machine.cpp:6511](../vm/src/machine.cpp#L6511), [vm/src/machine.cpp:6517](../vm/src/machine.cpp#L6517), [vm/src/machine.cpp:6556](../vm/src/machine.cpp#L6556), [vm/src/machine.cpp:6615](../vm/src/machine.cpp#L6615), [vm/src/machine.cpp:6624](../vm/src/machine.cpp#L6624), [vm/src/machine.cpp:6645](../vm/src/machine.cpp#L6645), [vm/src/machine.cpp:6650](../vm/src/machine.cpp#L6650), [vm/src/machine.cpp:6674](../vm/src/machine.cpp#L6674), [vm/src/machine.cpp:6683](../vm/src/machine.cpp#L6683), [vm/src/machine.cpp:6764](../vm/src/machine.cpp#L6764), [vm/src/machine.cpp:6792](../vm/src/machine.cpp#L6792), [vm/src/machine.cpp:6817](../vm/src/machine.cpp#L6817), [vm/src/machine.cpp:6949](../vm/src/machine.cpp#L6949).
+
+### WVM1224
+
+- Native any payload refresh failed: {dynamic context}
+- Native any payload is unsupported or absent from its descriptor closure
+- Native any shared cell changed its payload identity
+- VM async service result register is invalid
+- Native mutable-reference copy-back failed: {dynamic context} (native declaration '{dynamic context}')
+- Native borrowed result has an invalid reference contract
+- Native producer did not advertise projected borrowed results
+- Native borrowed result does not name a compatible caller reference
+- Native borrowed result register is invalid
+- Native task identity recovery failed: {dynamic context}
+- Native task result register is invalid
+- Native async result register is invalid
+- Native result conversion failed: {dynamic context}
+- Native result register is invalid
+
+Definitions: [vm/src/machine.cpp:5104](../vm/src/machine.cpp#L5104), [vm/src/machine.cpp:5106](../vm/src/machine.cpp#L5106), [vm/src/machine.cpp:5110](../vm/src/machine.cpp#L5110), [vm/src/machine.cpp:6347](../vm/src/machine.cpp#L6347), [vm/src/machine.cpp:6942](../vm/src/machine.cpp#L6942), [vm/src/machine.cpp:6970](../vm/src/machine.cpp#L6970), [vm/src/machine.cpp:6975](../vm/src/machine.cpp#L6975), [vm/src/machine.cpp:7011](../vm/src/machine.cpp#L7011), [vm/src/machine.cpp:7014](../vm/src/machine.cpp#L7014), [vm/src/machine.cpp:7024](../vm/src/machine.cpp#L7024), [vm/src/machine.cpp:7027](../vm/src/machine.cpp#L7027), [vm/src/machine.cpp:7045](../vm/src/machine.cpp#L7045), [vm/src/machine.cpp:7057](../vm/src/machine.cpp#L7057), [vm/src/machine.cpp:7060](../vm/src/machine.cpp#L7060).
+
+### WVM1225
+
+- Native async result has no registered task bridge
+- Invocation-scoped native callback borrows cannot be captured
+- Native callback environment contains a borrowed capture
+- Native producer does not advertise consumed argument ownership
+- Native callbacks require scalar, string, text, qualified native POD, hosted object/interface, registered container or qualified value ref/view arguments; unsupported callback type #{dynamic context}
+- Overlapping native container references require qualified projections (map keys, bool proxies or unsupported field path)
+- Native producer does not support dictionary/container projections
+- Native producer does not support sequence reference projections
+- Native producer does not support sequence/POD field projections
+- Native object/field aliasing requires synchronized projections
+- Native producer does not support overlapping POD reference projections
+- Native async result requires a registered task bridge and one payload
+- Native async payload cannot be represented by the VM ABI bridge
+
+Definitions: [vm/src/machine.cpp:1227](../vm/src/machine.cpp#L1227), [vm/src/machine.cpp:6099](../vm/src/machine.cpp#L6099), [vm/src/machine.cpp:6133](../vm/src/machine.cpp#L6133), [vm/src/machine.cpp:6452](../vm/src/machine.cpp#L6452), [vm/src/machine.cpp:6530](../vm/src/machine.cpp#L6530), [vm/src/machine.cpp:6541](../vm/src/machine.cpp#L6541), [vm/src/machine.cpp:6589](../vm/src/machine.cpp#L6589), [vm/src/machine.cpp:6613](../vm/src/machine.cpp#L6613), [vm/src/machine.cpp:6669](../vm/src/machine.cpp#L6669), [vm/src/machine.cpp:6671](../vm/src/machine.cpp#L6671), [vm/src/machine.cpp:6727](../vm/src/machine.cpp#L6727), [vm/src/machine.cpp:6758](../vm/src/machine.cpp#L6758), [vm/src/machine.cpp:7034](../vm/src/machine.cpp#L7034), [vm/src/machine.cpp:7038](../vm/src/machine.cpp#L7038).
+
+### WVM1226
+
+- Native task completion subscription failed with ABI status {dynamic context}
+- Native task completion raised an internal bridge failure
+- Native task completion failed with ABI status {dynamic context}
+- Native task result failed: {dynamic context}
+- Native task result conversion failed: {dynamic context}
+- Native task cancellation failed with ABI status {dynamic context}
+
+Definitions: [vm/src/machine.cpp:1255](../vm/src/machine.cpp#L1255), [vm/src/machine.cpp:1278](../vm/src/machine.cpp#L1278), [vm/src/machine.cpp:1313](../vm/src/machine.cpp#L1313), [vm/src/machine.cpp:1332](../vm/src/machine.cpp#L1332), [vm/src/machine.cpp:1347](../vm/src/machine.cpp#L1347), [vm/src/machine.cpp:1383](../vm/src/machine.cpp#L1383).
+
+### WVM1240
+
+- Generic declaration requires a concrete function specialization
+
+Definitions: [vm/src/machine.cpp:1846](../vm/src/machine.cpp#L1846), [vm/src/machine.cpp:3753](../vm/src/machine.cpp#L3753).
+
+### WVM1241
+
+Definition: VM object-layout indexing failed while loading the verified bytecode module. The detailed layout message is supplied by ObjectLayouts::build.
+
+Detailed message: dynamically supplied by the reporting path.
+Message expression: `std::move(layoutError)`.
+
+Definitions: [vm/src/machine.cpp:1720](../vm/src/machine.cpp#L1720).
+
+### WVM1242
+
+- {dynamic context}Global initialization failed: {dynamic context}
+- Global initialization failed with an unknown host exception
+
+Definitions: [vm/src/machine.cpp:1660](../vm/src/machine.cpp#L1660), [vm/src/machine.cpp:1664](../vm/src/machine.cpp#L1664).
+
+## Native, SDK and std status/error enums
+
+Values below are current implementation values. Only explicitly ABI-versioned enums are wire contracts; do not rely on incidental SDK exception ordinals as a stable ABI. OS native codes retain their platform meaning and user Result codes retain their author-defined domain.
+
+`WioResultError` carries domain, portable code, native OS code and message separately. The same integer in two domains is not the same error. `none`/`Ok` denotes success/no error; `Pending`/`NotReady`/`TimedOut` is task state or an observation outcome and must not be conflated with a faulted payload. ConsoleErrorDomain and WioResultDomain classify provenance, not failure reasons.
+
+### ErrorCode — sdk/include/wio_sdk.h
+
+Source: [sdk/include/wio_sdk.h](../sdk/include/wio_sdk.h#L87).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `InvalidArgument` | 0 | The caller supplied an invalid argument to an SDK operation. |
+| `LibraryOpenFailed` | 1 | The platform loader could not open the requested module library. |
+| `SymbolLookupFailed` | 2 | A required exported symbol could not be resolved in the library. |
+| `ApiUnavailable` | 3 | The requested module API or optional sidecar capability is unavailable. |
+| `InvalidApiDescriptor` | 4 | Module/sidecar descriptor version, size or required pointers are invalid. |
+| `ExportNotFound` | 5 | The requested exported entry is absent. |
+| `TypeNotFound` | 6 | The requested exported/reflected type is absent. |
+| `CommandNotFound` | 7 | The requested exported command is absent. |
+| `EventNotFound` | 8 | The requested exported event is absent. |
+| `EventHookNotFound` | 9 | The requested event hook is absent. |
+| `FieldNotFound` | 10 | The requested field descriptor is absent. |
+| `MethodNotFound` | 11 | The requested callable method descriptor is absent. |
+| `FieldNotWritable` | 12 | The requested field is readonly or has no writable bridge. |
+| `SignatureMismatch` | 13 | Requested type/signature/shape differs from the advertised bridge contract. |
+| `InvokeFailed` | 14 | The exported/native invocation failed or returned an invalid result. |
+| `LifecycleFailed` | 15 | A module/application lifecycle operation failed. |
+| `StaleBinding` | 16 | A binding belongs to a retired/unloaded generation and cannot be used. |
+| `ReloadFailed` | 17 | Staging or replacing the module during reload failed. |
+| `IoFailure` | 18 | An SDK file/I/O operation failed. |
+
+### WioNativeAbiStatus — sdk/include/wio_native_abi.h
+
+Source: [sdk/include/wio_native_abi.h](../sdk/include/wio_native_abi.h#L12).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `WIO_NATIVE_ABI_OK` | 0 | ok |
+| `WIO_NATIVE_ABI_INVALID_ARGUMENT` | 1 | invalid argument |
+| `WIO_NATIVE_ABI_TYPE_MISMATCH` | 2 | type mismatch |
+| `WIO_NATIVE_ABI_EXCEPTION` | 3 | exception |
+| `WIO_NATIVE_ABI_PANIC` | 4 | panic |
+| `WIO_NATIVE_ABI_WRONG_THREAD` | 5 | wrong thread |
+| `WIO_NATIVE_ABI_STALE_HANDLE` | 6 | stale handle |
+| `WIO_NATIVE_ABI_NOT_READY` | 7 | not ready |
+| `WIO_NATIVE_ABI_CANCELLED` | 8 | cancelled |
+
+### WioInvokeStatus — sdk/include/module_api.h
+
+Source: [sdk/include/module_api.h](../sdk/include/module_api.h#L179).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `WIO_INVOKE_OK` | 0 | ok |
+| `WIO_INVOKE_EXPORT_NOT_FOUND` | 1 | export not found |
+| `WIO_INVOKE_BAD_ARGUMENTS` | 2 | bad arguments |
+| `WIO_INVOKE_TYPE_MISMATCH` | 3 | type mismatch |
+| `WIO_INVOKE_RESULT_REQUIRED` | 4 | result required |
+| `WIO_INVOKE_NOT_CALLABLE` | 5 | not callable |
+
+### WioCallbackStatus — sdk/include/module_api.h
+
+Source: [sdk/include/module_api.h](../sdk/include/module_api.h#L473).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `WIO_CALLBACK_OK` | 0 | ok |
+| `WIO_CALLBACK_BAD_ARGUMENTS` | 1 | bad arguments |
+| `WIO_CALLBACK_TYPE_MISMATCH` | 2 | type mismatch |
+| `WIO_CALLBACK_RESULT_REQUIRED` | 3 | result required |
+| `WIO_CALLBACK_FAULTED` | 4 | faulted |
+
+### WioApplicationStatus — sdk/include/module_api.h
+
+Source: [sdk/include/module_api.h](../sdk/include/module_api.h#L536).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `WIO_APPLICATION_OK` | 0 | ok |
+| `WIO_APPLICATION_EXIT_REQUESTED` | 1 | exit requested |
+| `WIO_APPLICATION_ALREADY_CLOSED` | 2 | already closed |
+| `WIO_APPLICATION_INVALID_STATE` | 3 | invalid state |
+| `WIO_APPLICATION_FAULTED` | 4 | faulted |
+| `WIO_APPLICATION_WRONG_THREAD` | 5 | wrong thread |
+
+### WioAsyncTaskStatus — sdk/include/module_api.h
+
+Source: [sdk/include/module_api.h](../sdk/include/module_api.h#L608).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `WIO_ASYNC_TASK_PENDING` | 0 | pending |
+| `WIO_ASYNC_TASK_READY` | 1 | ready |
+| `WIO_ASYNC_TASK_CANCELLED` | 2 | cancelled |
+| `WIO_ASYNC_TASK_FAULTED` | 3 | faulted |
+
+### WioAsyncOperationStatus — sdk/include/module_api.h
+
+Source: [sdk/include/module_api.h](../sdk/include/module_api.h#L616).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `WIO_ASYNC_OK` | 0 | ok |
+| `WIO_ASYNC_TIMED_OUT` | 1 | timed out |
+| `WIO_ASYNC_NOT_READY` | 2 | not ready |
+| `WIO_ASYNC_CANCELLED` | 3 | cancelled |
+| `WIO_ASYNC_FAULTED` | 4 | faulted |
+| `WIO_ASYNC_BAD_ARGUMENTS` | 5 | bad arguments |
+| `WIO_ASYNC_TYPE_MISMATCH` | 6 | type mismatch |
+
+### WioResultDomain — sdk/include/wio_values.h
+
+Source: [sdk/include/wio_values.h](../sdk/include/wio_values.h#L301).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `None` | 0 | none |
+| `Console` | 1 | console |
+| `Io` | 2 | io |
+| `FileSystem` | 3 | file system |
+| `Runtime` | 4 | runtime |
+| `Custom` | 5 | custom |
+
+### WriteError — runtime/include/io_errors.h
+
+Source: [runtime/include/io_errors.h](../runtime/include/io_errors.h#L6).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `null_file` | 1 | null file |
+| `null_data` | 2 | null data |
+| `size_overflow` | 3 | size overflow |
+| `io_error` | 4 | io error |
+| `partial_write` | 5 | partial write |
+
+### ReadError — runtime/include/io_errors.h
+
+Source: [runtime/include/io_errors.h](../runtime/include/io_errors.h#L16).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `null_file` | 1 | null file |
+| `invalid_argument` | 2 | invalid argument |
+| `eof` | 3 | eof |
+| `io_error` | 4 | io error |
+| `partial_read` | 5 | partial read |
+| `platform_error` | 6 | platform error |
+
+### ParseError — runtime/include/std_convert.h
+
+Source: [runtime/include/std_convert.h](../runtime/include/std_convert.h#L10).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `empty` | 1 | empty |
+| `invalid_format` | 2 | invalid format |
+| `trailing_characters` | 3 | trailing characters |
+| `out_of_range` | 4 | out of range |
+| `invalid_base` | 5 | invalid base |
+
+### ErrorCode — runtime/include/std_fs.h
+
+Source: [runtime/include/std_fs.h](../runtime/include/std_fs.h#L12).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `None` | 0 | none |
+| `InvalidPath` | 1 | invalid path |
+| `NotFound` | 2 | not found |
+| `AlreadyExists` | 3 | already exists |
+| `NotDirectory` | 4 | not directory |
+| `IsDirectory` | 5 | is directory |
+| `PermissionDenied` | 6 | permission denied |
+| `Io` | 7 | io |
+| `Unsupported` | 8 | unsupported |
+| `Unknown` | 9 | unknown |
+
+### FileError — runtime/include/std_io.h
+
+Source: [runtime/include/std_io.h](../runtime/include/std_io.h#L129).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `null_path` | 1 | null path |
+| `empty_path` | 2 | empty path |
+| `invalid_path` | 3 | invalid path |
+| `invalid_utf8` | 4 | invalid utf8 |
+| `allocation_failed` | 5 | allocation failed |
+| `invalid_argument` | 6 | invalid argument |
+| `invalid_mode` | 7 | invalid mode |
+| `unsupported_mode` | 8 | unsupported mode |
+| `already_open` | 9 | already open |
+| `not_open` | 10 | not open |
+| `open_failed` | 11 | open failed |
+| `close_failed` | 12 | close failed |
+| `sync_failed` | 13 | sync failed |
+| `seek_failed` | 14 | seek failed |
+| `tell_failed` | 15 | tell failed |
+| `size_failed` | 16 | size failed |
+
+### ProcessError — runtime/include/std_process.h
+
+Source: [runtime/include/std_process.h](../runtime/include/std_process.h#L10).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `empty_program` | 1 | empty program |
+| `invalid_working_directory` | 2 | invalid working directory |
+| `launch_failed` | 3 | launch failed |
+| `pipe_failed` | 4 | pipe failed |
+| `process_closed` | 5 | process closed |
+| `wait_failed` | 6 | wait failed |
+| `terminate_failed` | 7 | terminate failed |
+| `cancelled` | 8 | cancelled |
+
+### RegexError — runtime/include/std_regex.h
+
+Source: [runtime/include/std_regex.h](../runtime/include/std_regex.h#L10).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `invalid_pattern` | 1 | invalid pattern |
+| `runtime_error` | 2 | runtime error |
+| `limit_exceeded` | 3 | limit exceeded |
+
+### ConsoleStatus — runtime/include/std_console.h
+
+Source: [runtime/include/std_console.h](../runtime/include/std_console.h#L28).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `Ok` | 0 | ok |
+| `Unsupported` | 1 | unsupported |
+| `Unavailable` | 2 | unavailable |
+| `InvalidArgument` | 3 | invalid argument |
+| `InvalidRange` | 4 | invalid range |
+| `NullArgument` | 5 | null argument |
+| `InputRedirected` | 6 | input redirected |
+| `OutputRedirected` | 7 | output redirected |
+| `ErrorRedirected` | 8 | error redirected |
+| `IoError` | 9 | io error |
+| `PartialIo` | 10 | partial io |
+| `EndOfFile` | 11 | end of file |
+| `EncodingError` | 12 | encoding error |
+| `FormatError` | 13 | format error |
+| `PermissionDenied` | 14 | permission denied |
+| `PlatformError` | 15 | platform error |
+| `UnknownError` | 16 | unknown error |
+
+### ConsoleErrorDomain — runtime/include/std_console.h
+
+Source: [runtime/include/std_console.h](../runtime/include/std_console.h#L49).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `None` | 0 | none |
+| `Generic` | 1 | generic |
+| `Stdio` | 2 | stdio |
+| `Win32` | 3 | win32 |
+| `Posix` | 4 | posix |
+| `Terminal` | 5 | terminal |
+| `Formatting` | 6 | formatting |
+
+### TaskStatus — std/async.wio
+
+Source: [std/async.wio](../std/async.wio#L17).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `pending` | 0 | pending |
+| `ready` | 1 | ready |
+| `failed` | 2 | failed |
+| `cancelled` | 3 | cancelled |
+
+### ChannelSendStatus — std/async.wio
+
+Source: [std/async.wio](../std/async.wio#L330).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `accepted` | 0 | accepted |
+| `backpressured` | 1 | backpressured |
+| `closed` | 2 | closed |
+
+### ChannelReceiveStatus — std/async.wio
+
+Source: [std/async.wio](../std/async.wio#L336).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `available` | 0 | available |
+| `empty` | 1 | empty |
+| `closed` | 2 | closed |
+
+### Status — std/console.wio
+
+Source: [std/console.wio](../std/console.wio#L12).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `Ok` | 0 | ok |
+| `Unsupported` | 1 | unsupported |
+| `Unavailable` | 2 | unavailable |
+| `InvalidArgument` | 3 | invalid argument |
+| `InvalidRange` | 4 | invalid range |
+| `NullArgument` | 5 | null argument |
+| `InputRedirected` | 6 | input redirected |
+| `OutputRedirected` | 7 | output redirected |
+| `ErrorRedirected` | 8 | error redirected |
+| `IoError` | 9 | io error |
+| `PartialIo` | 10 | partial io |
+| `EndOfFile` | 11 | end of file |
+| `EncodingError` | 12 | encoding error |
+| `FormatError` | 13 | format error |
+| `PermissionDenied` | 14 | permission denied |
+| `PlatformError` | 15 | platform error |
+| `UnknownError` | 16 | unknown error |
+
+### ErrorDomain — std/console.wio
+
+Source: [std/console.wio](../std/console.wio#L35).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `None` | 0 | none |
+| `Generic` | 1 | generic |
+| `Stdio` | 2 | stdio |
+| `Win32` | 3 | win32 |
+| `Posix` | 4 | posix |
+| `Terminal` | 5 | terminal |
+| `Formatting` | 6 | formatting |
+
+### Error — std/fs.wio
+
+Source: [std/fs.wio](../std/fs.wio#L11).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `fs_none` | 0 | fs none |
+| `fs_invalid_path` | 1 | fs invalid path |
+| `fs_not_found` | 2 | fs not found |
+| `fs_already_exists` | 3 | fs already exists |
+| `fs_not_directory` | 4 | fs not directory |
+| `fs_is_directory` | 5 | fs is directory |
+| `fs_permission_denied` | 6 | fs permission denied |
+| `fs_io` | 7 | fs io |
+| `fs_unsupported` | 8 | fs unsupported |
+| `fs_unknown` | 9 | fs unknown |
+| `fs_cancelled` | 10 | fs cancelled |
+
+### FileError — std/io.wio
+
+Source: [std/io.wio](../std/io.wio#L40).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `null_path` | 1 | null path |
+| `empty_path` | 2 | empty path |
+| `invalid_path` | 3 | invalid path |
+| `invalid_utf8` | 4 | invalid utf8 |
+| `allocation_failed` | 5 | allocation failed |
+| `invalid_argument` | 6 | invalid argument |
+| `invalid_mode` | 7 | invalid mode |
+| `unsupported_mode` | 8 | unsupported mode |
+| `already_open` | 9 | already open |
+| `not_open` | 10 | not open |
+| `open_failed` | 11 | open failed |
+| `close_failed` | 12 | close failed |
+| `sync_failed` | 13 | sync failed |
+| `seek_failed` | 14 | seek failed |
+| `tell_failed` | 15 | tell failed |
+| `size_failed` | 16 | size failed |
+
+### ReadError — std/io.wio
+
+Source: [std/io.wio](../std/io.wio#L72).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `null_file` | 1 | null file |
+| `invalid_argument` | 2 | invalid argument |
+| `eof` | 3 | eof |
+| `io_error` | 4 | io error |
+| `partial_read` | 5 | partial read |
+| `platform_error` | 6 | platform error |
+
+### WriteError — std/io.wio
+
+Source: [std/io.wio](../std/io.wio#L85).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `null_file` | 1 | null file |
+| `null_data` | 2 | null data |
+| `size_overflow` | 3 | size overflow |
+| `io_error` | 4 | io error |
+| `partial_write` | 5 | partial write |
+
+### ParseError — std/convert.wio
+
+Source: [std/convert.wio](../std/convert.wio#L14).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `empty` | 1 | empty |
+| `invalid_format` | 2 | invalid format |
+| `trailing_characters` | 3 | trailing characters |
+| `out_of_range` | 4 | out of range |
+| `invalid_base` | 5 | invalid base |
+
+### Error — std/process.wio
+
+Source: [std/process.wio](../std/process.wio#L12).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `empty_program` | 1 | empty program |
+| `invalid_working_directory` | 2 | invalid working directory |
+| `launch_failed` | 3 | launch failed |
+| `pipe_failed` | 4 | pipe failed |
+| `process_closed` | 5 | process closed |
+| `wait_failed` | 6 | wait failed |
+| `terminate_failed` | 7 | terminate failed |
+| `cancelled` | 8 | cancelled |
+
+### ResultDomain — std/result.wio
+
+Source: [std/result.wio](../std/result.wio#L9).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `console` | 1 | console |
+| `io` | 2 | io |
+| `fs` | 3 | fs |
+| `runtime` | 4 | runtime |
+| `custom` | 5 | custom |
+
+### Error — std/regex.wio
+
+Source: [std/regex.wio](../std/regex.wio#L10).
+
+| Name | Value | Meaning / category |
+| --- | ---: | --- |
+| `none` | 0 | none |
+| `invalid_pattern` | 1 | invalid pattern |
+| `runtime_error` | 2 | runtime error |
+| `limit_exceeded` | 3 | limit exceeded |
+
+## Standard Result error construction sites
+
+This section inventories MakeResultError calls in committed std sources. The std sections deliberately read Git HEAD, not unrelated uncommitted user edits; commit std changes before regenerating their reference. Custom numeric codes are module-local conventions, not globally unique diagnostic IDs. Variable codes/messages forward an upstream error; platform nativeCode values remain platform-defined. Function declarations are not error sites.
+
+| Source | Domain | Code expression | Message / definition template |
+| --- | --- | --- | --- |
+| [std/benchmark.wio:151](../std/benchmark.wio#L151) | `std::ResultDomain::runtime` | `1` | Forwarded/dynamic message: message |
+| [std/binary.wio:52](../std/binary.wio#L52) | `std::ResultDomain::custom` | `1` | Binary frame header is truncated. |
+| [std/binary.wio:58](../std/binary.wio#L58) | `std::ResultDomain::custom` | `2` | Binary frame magic is invalid. |
+| [std/binary.wio:65](../std/binary.wio#L65) | `std::ResultDomain::custom` | `3` | Binary frame payload length is invalid. |
+| [std/binary.wio:72](../std/binary.wio#L72) | `std::ResultDomain::custom` | `4` | Binary frame contains malformed trailing data. |
+| [std/builders.wio:29](../std/builders.wio#L29) | `std::ResultDomain::io` | `code.Value()` | Forwarded/dynamic message: message |
+| [std/compression.wio:25](../std/compression.wio#L25) | `std::ResultDomain::custom` | `1` | Malformed RLE payload. |
+| [std/compression.wio:33](../std/compression.wio#L33) | `std::ResultDomain::custom` | `2` | RLE output limit exceeded. |
+| [std/config.wio:32](../std/config.wio#L32) | `std::ResultDomain::custom` | `1` | Invalid INI assignment at line ${lineNumber}. |
+| [std/config.wio:39](../std/config.wio#L39) | `std::ResultDomain::custom` | `1` | Empty INI key at line ${lineNumber}. |
+| [std/console.wio:423](../std/console.wio#L423) | `ResultDomain::console` | `StatusCodeValue(error.status)` | Forwarded/dynamic message: message |
+| [std/convert.wio:145](../std/convert.wio#L145) | `std::ResultDomain::custom` | `ErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/csv.wio:41](../std/csv.wio#L41) | `std::ResultDomain::custom` | `1` | CSV contains an unterminated quoted field. |
+| [std/fs.wio:129](../std/fs.wio#L129) | `std::ResultDomain::fs` | `code` | Forwarded/dynamic message: message |
+| [std/fs.wio:238](../std/fs.wio#L238) | `std::ResultDomain::fs` | `code` | Forwarded/dynamic message: message |
+| [std/io.wio:367](../std/io.wio#L367) | `ResultDomain::io` | `FileErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/io.wio:371](../std/io.wio#L371) | `ResultDomain::io` | `ReadErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/io.wio:375](../std/io.wio#L375) | `ResultDomain::io` | `WriteErrorCode(error)` | Forwarded/dynamic message: message |
+| [std/json.wio:76](../std/json.wio#L76) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:83](../std/json.wio#L83) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:90](../std/json.wio#L90) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:97](../std/json.wio#L97) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:104](../std/json.wio#L104) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:111](../std/json.wio#L111) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:118](../std/json.wio#L118) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:125](../std/json.wio#L125) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:132](../std/json.wio#L132) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:139](../std/json.wio#L139) | `std::ResultDomain::custom` | `3` | JSON value is not an integer. |
+| [std/json.wio:427](../std/json.wio#L427) | `std::ResultDomain::custom` | `2` | JSON input exceeds the configured byte limit. |
+| [std/json.wio:431](../std/json.wio#L431) | `std::ResultDomain::custom` | `2` | JSON input is not valid UTF-8. |
+| [std/json.wio:440](../std/json.wio#L440) | `std::ResultDomain::custom` | `1` | Forwarded/dynamic message: self.failure |
+| [std/net.wio:26](../std/net.wio#L26) | `std::ResultDomain::runtime` | `1` | URI requires a scheme and authority. |
+| [std/net.wio:40](../std/net.wio#L40) | `std::ResultDomain::runtime` | `1` | URI host cannot be empty. |
+| [std/net.wio:47](../std/net.wio#L47) | `std::ResultDomain::runtime` | `1` | Invalid bracketed IPv6 authority. |
+| [std/net.wio:144](../std/net.wio#L144) | `std::ResultDomain::runtime` | `1` | Forwarded/dynamic message: message |
+| [std/os.wio:102](../std/os.wio#L102) | `std::ResultDomain::runtime` | `1` | File watcher stopped unexpectedly. |
+| [std/path.wio:70](../std/path.wio#L70) | `std::ResultDomain::fs` | `code` | Forwarded/dynamic message: message |
+| [std/process.wio:159](../std/process.wio#L159) | `std::ResultDomain::runtime` | `ErrorCode(error)` | Forwarded/dynamic message: finalMessage |
+| [std/regex.wio:139](../std/regex.wio#L139) | `std::ResultDomain::runtime` | `3` | Regular-expression input limit exceeded. |
+| [std/regex.wio:143](../std/regex.wio#L143) | `std::ResultDomain::runtime` | `4` | Potentially unsafe regular-expression pattern rejected. |
+| [std/regex.wio:160](../std/regex.wio#L160) | `std::ResultDomain::runtime` | `ErrorCode(error)` | Forwarded/dynamic message: finalMessage |
+| [std/result.wio:229](../std/result.wio#L229) | `domain` | `code` | Forwarded/dynamic message: message |
+| [std/result.wio:233](../std/result.wio#L233) | `domain` | `code` | Forwarded/dynamic message: message |
+| [std/unicode.wio:75](../std/unicode.wio#L75) | `std::ResultDomain::runtime` | `5` | Unicode normalization failed: invalid UTF-8 or form. |
+| [std/unicode.wio:109](../std/unicode.wio#L109) | `std::ResultDomain::runtime` | `1` | Invalid UTF-8 text. |
+| [std/unicode.wio:120](../std/unicode.wio#L120) | `std::ResultDomain::runtime` | `3` | Invalid UTF-16 at code-unit index ${errorIndex}. |
+| [std/unicode.wio:137](../std/unicode.wio#L137) | `std::ResultDomain::runtime` | `4` | Invalid UTF-32 scalar at index ${errorIndex}. |
+| [std/unicode.wio:154](../std/unicode.wio#L154) | `std::ResultDomain::runtime` | `1` | Invalid UTF-8 at byte ${errorOffset}. |
+| [std/unicode.wio:167](../std/unicode.wio#L167) | `std::ResultDomain::runtime` | `2` | Invalid Unicode scalar at index ${errorIndex}. |
+| [std/unicode.wio:178](../std/unicode.wio#L178) | `std::ResultDomain::runtime` | `2` | Invalid Unicode scalar value. |

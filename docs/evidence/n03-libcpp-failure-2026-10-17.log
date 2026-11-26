@@ -1,0 +1,79 @@
+Start testing: Oct 16 22:20 UTC
+----------------------------------------------------------
+18/990 Testing: wio_n03_value_format
+18/990 Test: wio_n03_value_format
+Command: "/Users/runner/work/wio/wio/build/compiler/wio_floating_value_format_test"
+Directory: /Users/runner/work/wio/wio/build/compiler
+"wio_n03_value_format" start time: Oct 16 22:20 UTC
+Output:
+----------------------------------------------------------
+format mismatch: -0x1.a349dp+20 expected=-1.71740e+06 actual=-1.7174e+06
+floating output differs from default stream
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Failed.
+"wio_n03_value_format" end time: Oct 16 22:20 UTC
+"wio_n03_value_format" time elapsed: 00:00:00
+----------------------------------------------------------
+
+69/990 Testing: wio_n03_vm_format
+69/990 Test: wio_n03_vm_format
+Command: "/Users/runner/work/wio/wio/build/vm/wio_vm_value_format_test"
+Directory: /Users/runner/work/wio/wio/build/vm
+"wio_n03_vm_format" start time: Oct 16 22:20 UTC
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"wio_n03_vm_format" end time: Oct 16 22:20 UTC
+"wio_n03_vm_format" time elapsed: 00:00:00
+----------------------------------------------------------
+
+950/990 Testing: wio_n03_format_semantics
+950/990 Test: wio_n03_format_semantics
+Command: "/opt/homebrew/Frameworks/Python.framework/Versions/3.14/bin/python3.14" "/Users/runner/work/wio/wio/tests/performance/formatting/verify.py" "--wio" "/Users/runner/work/wio/wio/build/app/wio" "--runtime" "/Users/runner/work/wio/wio/build/runtime/backend/libwio_runtime.a" "--cxx" "g++" "--output" "/Users/runner/work/wio/wio/build/n03-format-semantics"
+Directory: /Users/runner/work/wio/wio/build/app
+"wio_n03_format_semantics" start time: Oct 16 22:20 UTC
+Output:
+----------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/runner/work/wio/wio/tests/performance/formatting/verify.py", line 79, in <module>
+    verify(p.parse_args())
+    ~~~~~~^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/wio/wio/tests/performance/formatting/verify.py", line 36, in verify
+    run([native_probe])
+    ~~~^^^^^^^^^^^^^^^^
+  File "/Users/runner/work/wio/wio/tests/performance/formatting/verify.py", line 29, in run
+    raise RuntimeError(str(row))
+RuntimeError: {'command': ['/Users/runner/work/wio/wio/build/n03-format-semantics/5d3fa64716e84c83a47b6a0ff9339627/format-probe'], 'expectedExitCode': 0, 'exitCode': 1, 'stdout': '', 'stderr': 'format mismatch: -0x1.a349dp+20 expected=-1.71740e+06 actual=-1.7174e+06\nfloating output differs from default stream\n'}
+<end of output>
+Test time =   1.96 sec
+----------------------------------------------------------
+Test Failed.
+"wio_n03_format_semantics" end time: Oct 16 22:20 UTC
+"wio_n03_format_semantics" time elapsed: 00:00:01
+----------------------------------------------------------
+
+End testing: Oct 16 22:20 UTC
+
+float =   1.97 sec*proc
+
+formatting =   1.97 sec*proc
+
+locale =   0.01 sec*proc
+
+native =   1.97 sec*proc
+
+optimization =   1.97 sec*proc
+
+ownership =   1.96 sec*proc
+
+parity =   0.01 sec*proc
+
+unicode =   0.01 sec*proc
+
+vm =   1.96 sec*proc
+

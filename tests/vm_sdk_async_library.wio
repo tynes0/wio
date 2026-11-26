@@ -1,0 +1,99 @@
+realm std
+{
+    realm async {}
+
+    realm attribute
+    {
+        attribute NativeCallback(lifetime: string, thread: string) for parameter;
+    }
+}
+
+[native, CppName(wio::runtime::AsyncSleep)]
+fn Sleep(milliseconds: u64) -> coroutine<void>;
+
+[native, CppName(wio::runtime::RunAsync), instantiate(i32), instantiate(string), instantiate(text)]
+fn Spawn<T>([std::attribute::NativeCallback("retained", "any")] action: fn() -> T) -> coroutine<T>;
+
+[native, CppName(wio::runtime::RunAsync)]
+fn InvalidSpawn(action: fn() -> i32) -> coroutine<i32>;
+
+[export]
+fn Timer(milliseconds: u64) -> coroutine<void>
+{
+    return Sleep(milliseconds);
+}
+
+[native, CppName(user::Sleep)]
+fn ForeignSleep(milliseconds: u64) -> coroutine<void>;
+
+[native, CppName(wio::runtime::AsyncSleep)]
+fn InvalidSleep(milliseconds: i32) -> coroutine<void>;
+
+[export]
+async fn Work(value: i32) -> i32
+{
+    let answer = await Spawn(() => value + 1);
+    await main;
+    return answer;
+}
+
+[export, instantiate(i32)]
+async fn Identity<T>(value: T) -> T
+{
+    await main;
+    return value;
+}
+
+[export]
+async fn Message(value: string) -> string
+{
+    await Sleep(1);
+    await main;
+    return "async:" + value;
+}
+
+[export]
+async fn Unicode(value: text) -> text
+{
+    return await Spawn(() => u"⟦" + value + u"⟧");
+}
+
+[export]
+async fn Fail() -> i32
+{
+    await Sleep(1);
+    let values: i32[] = [1];
+    return values[3];
+}
+
+[export]
+async fn Unit()
+{
+    await Sleep(1);
+    await main;
+}
+
+[export]
+async fn Pending(value: i32) -> i32
+{
+    await Sleep(86400000);
+    return value;
+}
+
+[export]
+async fn ForeignService()
+{
+    await ForeignSleep(1);
+}
+
+[export]
+async fn InvalidService()
+{
+    await InvalidSleep(1);
+}
+
+[export]
+async fn InvalidCallback() -> i32
+{
+    return await InvalidSpawn(() => 1);
+}

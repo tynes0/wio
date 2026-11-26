@@ -1,0 +1,16 @@
+using cpp::header("vm_native_bridge_pruning_fixture.h");
+
+[Native, CppName(vm_bridge_pruning::Callback)]
+fn Callback(callback: fn(i32) -> i32) -> i32;
+[Native, CppName(vm_bridge_pruning::Delayed)]
+async fn Delayed() -> i32;
+[Native, CppName(vm_bridge_pruning::Print)]
+fn Print(message: string);
+
+fn UnusedBody() -> string { return "PROJECT_DEAD_BODY"; }
+async fn Entry() -> i32 {
+    if (Callback((value: i32) => value + 7) != 18) { return 1; }
+    if (await Delayed() != 23) { return 2; }
+    Print("native-bridge-project-ok");
+    return 0;
+}

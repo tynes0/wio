@@ -1,0 +1,4 @@
+use std::attribute as attribute;
+[Native]
+fn NoCaller() -> view i32;
+fn Entry() -> i32 { return 0; }

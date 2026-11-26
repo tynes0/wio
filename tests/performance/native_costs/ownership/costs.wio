@@ -1,0 +1,95 @@
+using cpp::header("ownership.h");
+
+[native, cpp::name(ownership_costs::Begin)]
+fn Begin();
+
+[native, cpp::name(ownership_costs::Report)]
+fn Report(checksum: u64) -> i32;
+
+[native, cpp::name(ownership_costs::ParseCount)]
+fn ParseCount(value: view string) -> i32;
+
+[native, cpp::name(ownership_costs::WeakRoundtrip)]
+fn WeakRoundtrip(value: u64) -> u64;
+
+[native, cpp::name(ownership_costs::Calibrate)]
+fn Calibrate(value: u64) -> u64;
+
+object Counter
+{
+    private value: u64;
+
+    public fn OnConstruct(value: u64)
+    {
+        self.value = value;
+    }
+
+    public fn Read() -> u64
+    {
+        return self.value;
+    }
+
+}
+
+fn ReadOwned(value: Counter) -> u64
+{
+    return value.Read();
+}
+
+fn ReadView(value: view Counter) -> u64
+{
+    return value.Read();
+}
+
+fn Identity(value: Counter) -> Counter
+{
+    return value;
+}
+
+fn Run(kind: view string, count: i32) -> u64
+{
+    mut sum = 0u64;
+    for (index in 0..<count)
+    {
+        if (kind == "control")
+        {
+            sum = sum * 33u64 + Calibrate(index fit u64);
+        }
+        else if (kind == "weak")
+        {
+            sum = sum * 33u64 + WeakRoundtrip(index fit u64);
+        }
+        else
+        {
+            let value = Counter(index fit u64);
+            if (kind == "owned")
+            {
+                sum = sum * 33u64 + ReadOwned(value);
+            }
+            else if (kind == "view")
+            {
+                sum = sum * 33u64 + ReadView(ref value);
+            }
+            else
+            {
+                let returned = Identity(value);
+                sum = sum * 33u64 + returned.Read();
+            }
+
+        }
+
+    }
+
+    return sum;
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() != 3usize) return 2;
+    let kind = args[1usize];
+    if (kind != "owned" and kind != "view" and kind != "return" and kind != "weak" and kind != "control") return 3;
+    let count = ParseCount(ref args[2usize]);
+    Begin();
+    let checksum = Run(ref kind, count);
+    return Report(checksum);
+}

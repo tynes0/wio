@@ -1,11 +1,38 @@
 #pragma once
 
+#include <charconv>
+#include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
 namespace wio::runtime::std_serialization
 {
+    [[nodiscard]] inline std::string FormatJsonNumber(const double value)
+    {
+        if (!std::isfinite(value))
+        {
+            return "null";
+        }
+
+        char buffer[128];
+        const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value,
+                                          std::chars_format::general, std::numeric_limits<double>::max_digits10);
+        if (result.ec != std::errc{})
+        {
+            throw std::runtime_error("Cannot format JSON number.");
+        }
+
+        std::string text(buffer, result.ptr);
+        if (text.find_first_of(".eE") == std::string::npos)
+        {
+            text += ".0";
+        }
+
+        return text;
+    }
+
     [[nodiscard]] inline bool JsonNumberIsValid(const std::string_view value) noexcept
     {
         if (value.empty()) return false;

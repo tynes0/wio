@@ -1,0 +1,30 @@
+{
+  "status": "completed",
+  "conclusion": "success",
+  "headSha": "29fabf16e3fdf0252b12d843caff4577d186b365",
+  "url": "https://github.com/tynes0/wio/actions/runs/39149670456",
+  "scope": "backend closure qualification workflow, not the entire historical corpus",
+  "jobs": [
+    {
+      "name": "ubuntu-latest / Release",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-18T17:27:33Z",
+      "completedAt": "2026-10-18T17:36:37Z"
+    },
+    {
+      "name": "macos-15 / Release",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-18T17:27:41Z",
+      "completedAt": "2026-10-18T17:35:48Z"
+    },
+    {
+      "name": "windows-latest / Debug",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-18T17:27:35Z",
+      "completedAt": "2026-10-18T17:42:32Z"
+    }
+  ]
+}

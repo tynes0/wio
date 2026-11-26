@@ -92,8 +92,7 @@ wrappers may be added around it, but the wire contract consists of:
 - `WioNativeAbiFunctionDescriptor` and thunk pointer.
 
 The production Lowered-WIR C++ backend emits the Sprint 17.4 checked thunks.
-The AST generator remains a temporary compatibility oracle; the VM bridge is
-future work and consumes the same contract.
+The VM bridge consumes the same concrete binding and ownership contract.
 
 ## Experimental wire ABI v2 (Sprint 17.4)
 
@@ -114,8 +113,9 @@ Runtime containers/tasks are boxed module-owned values with owner-op checks.
 A `REFERENCE` argument points to another `WioNativeAbiValue`, with BORROWED and
 optionally MUTABLE flags. A call frame decodes repeated tokens to shared local
 storage and copies mutations back on success or caught failure. This preserves
-aliasing, but is not transactional rollback. Returned borrows and asynchronous
-borrow parameters are rejected because that frame is call-local. Raw tokens
+aliasing, but is not transactional rollback. Qualified returned borrows map
+back to explicit compatible caller cells; asynchronous borrow parameters are
+rejected because that frame is call-local. Raw tokens
 must remain valid/aligned; arbitrary host pointers cannot be validated safely.
 
 Native call-scoped callback wrappers reject use after the native call ends and
@@ -131,3 +131,61 @@ they translate C++ exceptions to statuses. Failure strings are thread-local and
 valid until the next failing boundary call on that thread. Output slots must be
 empty on entry; release previous owned contents before reusing a slot.
 The ABI trusts in-process handle pointers and is not a memory-safety sandbox.
+
+## Consumed argument claims
+
+Use the standard parameter attribute on a native declaration:
+
+```wio
+use std::attribute as attribute;
+use std::heap as heap;
+using cpp::header("resources.h");
+
+[Native, CppName(resources::Take)]
+fn Take([attribute::NativeConsume] value: heap::Box<i32[]>) -> i32;
+```
+
+`NativeConsume` transfers one owning **invocation claim**, not unique ownership
+of the caller variable. Normal Wio argument copy/value semantics remain intact:
+an object variable can still be used after the call. C++ receives a moved typed
+invocation value, which it may retain using the existing intrusive `Ref`.
+This does not introduce a new `move` expression or a new reference counter.
+
+Typed WIR freezes `Consume`; Lowered WIR, bytecode and specialization preserve
+it. The signature identity includes consumed parameter positions. The producer
+advertises `WIO_NATIVE_ABI_FUNCTION_CONSUMED_ARGUMENTS`; the VM rejects the call
+before transferring claims if that capability is absent. Wire ABI version 2
+and descriptor layouts are unchanged.
+
+For a compatible, count-validated invocation, each consumed argument has
+`CONSUMED | OWNED`, never `BORROWED`. The generated thunk adopts these claims
+before argument decoding, without allocation. Its guard releases them on
+successful return, decode failure or native exception, including validation
+failure after adoption. The caller clears transferred wire slots after the
+thunk returns and **does not release them again**. Before entering the thunk,
+encoding/admission failures leave cleanup with the caller. Invalid argument
+count, null argument array or missing result slot is rejected before adoption;
+raw ABI hosts must retain ownership of their inputs on that pre-adoption path.
+
+Strings/text, registered containers/Any, native POD values and qualified object
+handles can carry invocation claims. Scalars/null have logical ownership flags
+without an allocation to release. `ref`/`view`, raw `opaque`, callable and task
+parameters cannot be consumed (`WIR2403`); ordinary non-native declarations
+cannot use this attribute (`WIR2404`). Wrap an owning raw resource in an object
+whose destructor releases it; an `opaque` pointer alone has no ownership policy.
+
+## Borrow identity qualification
+
+Native call frames canonicalize each `(live producer address, concrete C++
+type)` to one stable ABI identity. Direct POD fields, sequence/POD projections
+and mixed dictionary/sequence/POD paths share a root materialization and cell.
+The concrete type is important: a struct and its first field can have the same
+address without being the same typed cell. All POD paths use registered declared
+field/layout accessors; hidden fields and padding are not a public projection.
+
+Callback ref/view cells support repeated exact typed-cell aliases. Their tagged
+snapshot protocol does **not** support simultaneous aggregate and descendant
+borrows, such as `ref row` together with `ref row[0].x`. Generated native callback
+wrappers and VM callback encoding reject that overlap before invocation; pass
+one aggregate borrow and access its children inside the callback. This explicit
+limit avoids silently splitting one live cell into independent snapshots.

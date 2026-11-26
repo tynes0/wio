@@ -1,0 +1,3879 @@
+{
+  "affinityQualified": true,
+  "artifactsAfter": [
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 2459069,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/bridge.dll",
+      "sha256": "706aaf54fd6a5fd02e0046a09db69b393a82c245ed993cf8577c9cb2c6b94ac6"
+    },
+    {
+      "bytes": 280,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/ByteIo.csproj",
+      "sha256": "ed79971229072fc23993b4a8387a5f926190c278ffa45ea28794108e2e71de98"
+    },
+    {
+      "bytes": 73904,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/cpp.exe",
+      "sha256": "06c293d84d3954e8bf791392242a20a41adfc9d1a6e342dacfddf79b669e5f9a"
+    },
+    {
+      "bytes": 3599866,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/frozen.cpp",
+      "sha256": "2ed546d1ce315675e4cd883ed761ec4d2c370fc26394d615aa5d4134a1c02f19"
+    },
+    {
+      "bytes": 1952,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/main.cpp",
+      "sha256": "73356abca9748affed76839317197f0b791cc30c9eac10c6db3ed04254fa6601"
+    },
+    {
+      "bytes": 3110,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/main.wio",
+      "sha256": "8ba9fab84fb0c956463e2182f7cce747b44e99959e76b936e3c19c91bc0e6598"
+    },
+    {
+      "bytes": 3599866,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/main.wio.cpp",
+      "sha256": "2ed546d1ce315675e4cd883ed761ec4d2c370fc26394d615aa5d4134a1c02f19"
+    },
+    {
+      "bytes": 2724514,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/main.wiob",
+      "sha256": "7955ed909c0b1d1588bf98604f075d5b5d9c20c308ac320fd44b7e99190f58fe"
+    },
+    {
+      "bytes": 8948398,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/memory.exe",
+      "sha256": "d40db7dbbb0a2d8593b74dd2f0354094c82e74975e6dccbc53e163c019214b3b"
+    },
+    {
+      "bytes": 5758619,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/native.exe",
+      "sha256": "f10d3374eed1a9a88bd18efd7b2deb7c90e379b998465efc0340710922e4e7b3"
+    },
+    {
+      "bytes": 65536,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/payload.bin",
+      "sha256": "f779dbe3aeaa609beb32212579f3aea441f244621d13c977cb8b52d7ec3016d9"
+    },
+    {
+      "bytes": 881,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/probe.h",
+      "sha256": "23cc1ccccc06e0f0e08a1995a523bc3377728b09df61b2c8d142526bc34923fe"
+    },
+    {
+      "bytes": 2716,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/Program.cs",
+      "sha256": "376cebff45fa1f9033d5baf4133f98437c3c900968b26eaddd31ddf3b2c700b6"
+    },
+    {
+      "bytes": 20571136,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "fd6e68e2b2535b61ee40838a3024ac91266a3931be989397c699d03edba27279"
+    },
+    {
+      "bytes": 1722580,
+      "ok": true,
+      "path": "F:/Projects/wio/build/runtime/backend/libwio_runtime.a",
+      "sha256": "cf0950d248dd987ccfc5b4b83838bc627a6cd9b7377fd29b39549bd46b6b224a"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 6144,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/csharp/ByteIo.dll",
+      "sha256": "6f21fea2ec62b0d2dbc09b517c4a619c96ed0eca3c90e1635aa6e173966c0d25"
+    },
+    {
+      "bytes": 390,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/csharp/ByteIo.runtimeconfig.json",
+      "sha256": "07f9f5efdb6012cd8f625b3134c4b4515e234157146916ad6f749b539098de32"
+    },
+    {
+      "bytes": 17841,
+      "ok": true,
+      "path": "F:/Projects/wio/std/benchmark.wio",
+      "sha256": "7c15522d769224a8f747f524e678047e4b55ea85a3c6919fc32a02d9a2e31d3d"
+    },
+    {
+      "bytes": 20395,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_benchmark.h",
+      "sha256": "01663a11e134bcc5bc56cf1825fd5a2b532823bb1693eaf6a956147521bb2bd9"
+    },
+    {
+      "bytes": 7068,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/text.h",
+      "sha256": "4fea764ce610eeb5a2a73a066fab91479ee3ef36ab573eb9a3ed671758b3dc18"
+    },
+    {
+      "bytes": 5672,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/wio_benchmark_allocations.h",
+      "sha256": "5dfee7c788a020e0abebb39a7d60fabd4e2e98a5efb84a30a794cf37d90a8254"
+    },
+    {
+      "bytes": 2205,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/benchmark_memory.h",
+      "sha256": "3b7fdfa98c419628e65e4e5945a5436263bf50f175d361c97526c67cefd1c7e9"
+    },
+    {
+      "bytes": 26902,
+      "ok": true,
+      "path": "F:/Projects/wio/std/json.wio",
+      "sha256": "63e6dfdaffdb36a85e8cdf172801f5ff5de74fea2150ee0743003a3d5291e179"
+    },
+    {
+      "bytes": 3594,
+      "ok": true,
+      "path": "F:/Projects/wio/std/serialization.wio",
+      "sha256": "5b383f0cfc3e60da933501de59c6595fab0c6e4af6ef9af7a226cc1e5229f3b8"
+    },
+    {
+      "bytes": 6551,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_serialization.h",
+      "sha256": "e6f4369c02a2433b304f03c5f70f64d3d006060df5613702dca0cd33f3e88642"
+    },
+    {
+      "bytes": 41180,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
+      "sha256": "0a2d51fddb733002af303936d97e0e837c1873e08dde4da1622b8aca54625cf1"
+    },
+    {
+      "bytes": 251176,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "sha256": "99e1e7877fead8f089c1151cd77a2d1383b21bc30f2b0109a9a9504561f7774b"
+    },
+    {
+      "bytes": 3083,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/include/wio/codegen/wir_cpp_storage_plan.h",
+      "sha256": "466d607637e9484b1d91ad234ae2b55ebe4e0da688e516b4d2131e1698af98bc"
+    },
+    {
+      "bytes": 44133813,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio-selfhost.exe",
+      "sha256": "2d1deb3c635d9a26ca576000911888bbd6b864922495667f4abe9f9e1795df9b"
+    },
+    {
+      "bytes": 2532,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/string_concat.h",
+      "sha256": "567a054e9c27f54a4a690072016bb056ab8ce50e3a4bc5ca49341e632c39d997"
+    },
+    {
+      "bytes": 60,
+      "ok": true,
+      "path": "F:/Projects/wio/build/runtime/backend/build-profile.txt",
+      "sha256": "88c0ecd3063e272991ecbbc0acd89c3aa124ef510cba8d76a36f9e22ffac3089"
+    },
+    {
+      "bytes": 14413,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_io.h",
+      "sha256": "7dd0268d8474957c8895d4ae953e54ad7c0a1c1cd2337c837e27c91da3e10402"
+    },
+    {
+      "bytes": 53614,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/src/std_io.cpp",
+      "sha256": "46c4d1065c7465ddcbdc586ff203ad10603d5766f42b1c80639c74e82f4c1f9f"
+    },
+    {
+      "bytes": 21699,
+      "ok": true,
+      "path": "F:/Projects/wio/std/io.wio",
+      "sha256": "ef977e80ada77c0ec12833b835578db0e5389f67fbeb917ca8a9af388af82f5b"
+    },
+    {
+      "bytes": 20015,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/CMakeLists.txt",
+      "sha256": "108b37847cab3af275b7f048fad8551fd302ac322eaa225910043e5f812d5386"
+    },
+    {
+      "bytes": 655,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/cmake/WioBackendRuntimeProfile.cmake",
+      "sha256": "0939bcdc78a82819e249fd33e954ca8fb1447e3900f972b70cc01d5487c43808"
+    },
+    {
+      "bytes": 1762,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/byte_io/prepare.py",
+      "sha256": "2a8b54dbde89aba19032217a75c021854664db19c4e055d5f64c9617c9eb0f41"
+    },
+    {
+      "bytes": 12058,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/concat_reuse/prepare.py",
+      "sha256": "2fe228024d7e9379e9310a9528365e4caa36b1f44d2925df5fb3bbc4bdd0e111"
+    },
+    {
+      "bytes": 2031,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/byte_io/select_workloads.py",
+      "sha256": "d6d5ea472ea140cf53e836a2d60095b3e55f661fb1ed2b8200fdb4ca81e05908"
+    },
+    {
+      "bytes": 5758619,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/native.exe",
+      "sha256": "f10d3374eed1a9a88bd18efd7b2deb7c90e379b998465efc0340710922e4e7b3"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 73904,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/cpp.exe",
+      "sha256": "06c293d84d3954e8bf791392242a20a41adfc9d1a6e342dacfddf79b669e5f9a"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 5758619,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/native.exe",
+      "sha256": "f10d3374eed1a9a88bd18efd7b2deb7c90e379b998465efc0340710922e4e7b3"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 73904,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/cpp.exe",
+      "sha256": "06c293d84d3954e8bf791392242a20a41adfc9d1a6e342dacfddf79b669e5f9a"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 20571136,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "fd6e68e2b2535b61ee40838a3024ac91266a3931be989397c699d03edba27279"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    }
+  ],
+  "artifactsBefore": [
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 2459069,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/bridge.dll",
+      "sha256": "706aaf54fd6a5fd02e0046a09db69b393a82c245ed993cf8577c9cb2c6b94ac6"
+    },
+    {
+      "bytes": 280,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/ByteIo.csproj",
+      "sha256": "ed79971229072fc23993b4a8387a5f926190c278ffa45ea28794108e2e71de98"
+    },
+    {
+      "bytes": 73904,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/cpp.exe",
+      "sha256": "06c293d84d3954e8bf791392242a20a41adfc9d1a6e342dacfddf79b669e5f9a"
+    },
+    {
+      "bytes": 3599866,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/frozen.cpp",
+      "sha256": "2ed546d1ce315675e4cd883ed761ec4d2c370fc26394d615aa5d4134a1c02f19"
+    },
+    {
+      "bytes": 1952,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/main.cpp",
+      "sha256": "73356abca9748affed76839317197f0b791cc30c9eac10c6db3ed04254fa6601"
+    },
+    {
+      "bytes": 3110,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/main.wio",
+      "sha256": "8ba9fab84fb0c956463e2182f7cce747b44e99959e76b936e3c19c91bc0e6598"
+    },
+    {
+      "bytes": 3599866,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/main.wio.cpp",
+      "sha256": "2ed546d1ce315675e4cd883ed761ec4d2c370fc26394d615aa5d4134a1c02f19"
+    },
+    {
+      "bytes": 2724514,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/main.wiob",
+      "sha256": "7955ed909c0b1d1588bf98604f075d5b5d9c20c308ac320fd44b7e99190f58fe"
+    },
+    {
+      "bytes": 8948398,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/memory.exe",
+      "sha256": "d40db7dbbb0a2d8593b74dd2f0354094c82e74975e6dccbc53e163c019214b3b"
+    },
+    {
+      "bytes": 5758619,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/native.exe",
+      "sha256": "f10d3374eed1a9a88bd18efd7b2deb7c90e379b998465efc0340710922e4e7b3"
+    },
+    {
+      "bytes": 65536,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/payload.bin",
+      "sha256": "f779dbe3aeaa609beb32212579f3aea441f244621d13c977cb8b52d7ec3016d9"
+    },
+    {
+      "bytes": 881,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/probe.h",
+      "sha256": "23cc1ccccc06e0f0e08a1995a523bc3377728b09df61b2c8d142526bc34923fe"
+    },
+    {
+      "bytes": 2716,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/Program.cs",
+      "sha256": "376cebff45fa1f9033d5baf4133f98437c3c900968b26eaddd31ddf3b2c700b6"
+    },
+    {
+      "bytes": 20571136,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "fd6e68e2b2535b61ee40838a3024ac91266a3931be989397c699d03edba27279"
+    },
+    {
+      "bytes": 1722580,
+      "ok": true,
+      "path": "F:/Projects/wio/build/runtime/backend/libwio_runtime.a",
+      "sha256": "cf0950d248dd987ccfc5b4b83838bc627a6cd9b7377fd29b39549bd46b6b224a"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 12501644,
+      "ok": true,
+      "path": "F:/Projects/wio/build/tools/wio-bench/Debug/wio-bench.exe",
+      "sha256": "d281d70686e6585d4382770c283acbc3c54580ed81c00dafacfa93726ebe6362"
+    },
+    {
+      "bytes": 6144,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/csharp/ByteIo.dll",
+      "sha256": "6f21fea2ec62b0d2dbc09b517c4a619c96ed0eca3c90e1635aa6e173966c0d25"
+    },
+    {
+      "bytes": 390,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/csharp/ByteIo.runtimeconfig.json",
+      "sha256": "07f9f5efdb6012cd8f625b3134c4b4515e234157146916ad6f749b539098de32"
+    },
+    {
+      "bytes": 17841,
+      "ok": true,
+      "path": "F:/Projects/wio/std/benchmark.wio",
+      "sha256": "7c15522d769224a8f747f524e678047e4b55ea85a3c6919fc32a02d9a2e31d3d"
+    },
+    {
+      "bytes": 20395,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_benchmark.h",
+      "sha256": "01663a11e134bcc5bc56cf1825fd5a2b532823bb1693eaf6a956147521bb2bd9"
+    },
+    {
+      "bytes": 7068,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/text.h",
+      "sha256": "4fea764ce610eeb5a2a73a066fab91479ee3ef36ab573eb9a3ed671758b3dc18"
+    },
+    {
+      "bytes": 5672,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/wio_benchmark_allocations.h",
+      "sha256": "5dfee7c788a020e0abebb39a7d60fabd4e2e98a5efb84a30a794cf37d90a8254"
+    },
+    {
+      "bytes": 2205,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/benchmark_memory.h",
+      "sha256": "3b7fdfa98c419628e65e4e5945a5436263bf50f175d361c97526c67cefd1c7e9"
+    },
+    {
+      "bytes": 26902,
+      "ok": true,
+      "path": "F:/Projects/wio/std/json.wio",
+      "sha256": "63e6dfdaffdb36a85e8cdf172801f5ff5de74fea2150ee0743003a3d5291e179"
+    },
+    {
+      "bytes": 3594,
+      "ok": true,
+      "path": "F:/Projects/wio/std/serialization.wio",
+      "sha256": "5b383f0cfc3e60da933501de59c6595fab0c6e4af6ef9af7a226cc1e5229f3b8"
+    },
+    {
+      "bytes": 6551,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_serialization.h",
+      "sha256": "e6f4369c02a2433b304f03c5f70f64d3d006060df5613702dca0cd33f3e88642"
+    },
+    {
+      "bytes": 41180,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
+      "sha256": "0a2d51fddb733002af303936d97e0e837c1873e08dde4da1622b8aca54625cf1"
+    },
+    {
+      "bytes": 251176,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "sha256": "99e1e7877fead8f089c1151cd77a2d1383b21bc30f2b0109a9a9504561f7774b"
+    },
+    {
+      "bytes": 3083,
+      "ok": true,
+      "path": "F:/Projects/wio/compiler/include/wio/codegen/wir_cpp_storage_plan.h",
+      "sha256": "466d607637e9484b1d91ad234ae2b55ebe4e0da688e516b4d2131e1698af98bc"
+    },
+    {
+      "bytes": 44133813,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio-selfhost.exe",
+      "sha256": "2d1deb3c635d9a26ca576000911888bbd6b864922495667f4abe9f9e1795df9b"
+    },
+    {
+      "bytes": 2532,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/string_concat.h",
+      "sha256": "567a054e9c27f54a4a690072016bb056ab8ce50e3a4bc5ca49341e632c39d997"
+    },
+    {
+      "bytes": 60,
+      "ok": true,
+      "path": "F:/Projects/wio/build/runtime/backend/build-profile.txt",
+      "sha256": "88c0ecd3063e272991ecbbc0acd89c3aa124ef510cba8d76a36f9e22ffac3089"
+    },
+    {
+      "bytes": 14413,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/include/std_io.h",
+      "sha256": "7dd0268d8474957c8895d4ae953e54ad7c0a1c1cd2337c837e27c91da3e10402"
+    },
+    {
+      "bytes": 53614,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/src/std_io.cpp",
+      "sha256": "46c4d1065c7465ddcbdc586ff203ad10603d5766f42b1c80639c74e82f4c1f9f"
+    },
+    {
+      "bytes": 21699,
+      "ok": true,
+      "path": "F:/Projects/wio/std/io.wio",
+      "sha256": "ef977e80ada77c0ec12833b835578db0e5389f67fbeb917ca8a9af388af82f5b"
+    },
+    {
+      "bytes": 20015,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/CMakeLists.txt",
+      "sha256": "108b37847cab3af275b7f048fad8551fd302ac322eaa225910043e5f812d5386"
+    },
+    {
+      "bytes": 655,
+      "ok": true,
+      "path": "F:/Projects/wio/runtime/cmake/WioBackendRuntimeProfile.cmake",
+      "sha256": "0939bcdc78a82819e249fd33e954ca8fb1447e3900f972b70cc01d5487c43808"
+    },
+    {
+      "bytes": 1762,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/byte_io/prepare.py",
+      "sha256": "2a8b54dbde89aba19032217a75c021854664db19c4e055d5f64c9617c9eb0f41"
+    },
+    {
+      "bytes": 12058,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/concat_reuse/prepare.py",
+      "sha256": "2fe228024d7e9379e9310a9528365e4caa36b1f44d2925df5fb3bbc4bdd0e111"
+    },
+    {
+      "bytes": 2031,
+      "ok": true,
+      "path": "F:/Projects/wio/tests/performance/byte_io/select_workloads.py",
+      "sha256": "d6d5ea472ea140cf53e836a2d60095b3e55f661fb1ed2b8200fdb4ca81e05908"
+    },
+    {
+      "bytes": 5758619,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/native.exe",
+      "sha256": "f10d3374eed1a9a88bd18efd7b2deb7c90e379b998465efc0340710922e4e7b3"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 73904,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/cpp.exe",
+      "sha256": "06c293d84d3954e8bf791392242a20a41adfc9d1a6e342dacfddf79b669e5f9a"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 5758619,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/native.exe",
+      "sha256": "f10d3374eed1a9a88bd18efd7b2deb7c90e379b998465efc0340710922e4e7b3"
+    },
+    {
+      "bytes": 1306624,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Release/wio-vm.exe",
+      "sha256": "49d424f8f60df83ee079f738e8581fab2dfa67894a2ee0618f27cac000d50daa"
+    },
+    {
+      "bytes": 73904,
+      "ok": true,
+      "path": "F:/Projects/wio/build/n04-byte-cell-after-2026-10-19/cpp.exe",
+      "sha256": "06c293d84d3954e8bf791392242a20a41adfc9d1a6e342dacfddf79b669e5f9a"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    },
+    {
+      "bytes": 20571136,
+      "ok": true,
+      "path": "F:/Projects/wio/build/app/Debug/wio.exe",
+      "sha256": "fd6e68e2b2535b61ee40838a3024ac91266a3931be989397c699d03edba27279"
+    },
+    {
+      "bytes": 3023360,
+      "ok": true,
+      "path": "C:/mingw64/bin/g++.exe",
+      "sha256": "be663d8f7f270f816971124aacf45980ac6e814568f29e5d839b208916455998"
+    },
+    {
+      "bytes": 167736,
+      "ok": true,
+      "path": "C:/Program Files/dotnet/dotnet.exe",
+      "sha256": "a9815545dfbe0a76c3de14777725f362348eb3eacaa8f380fda850e8ec6d2ea9"
+    }
+  ],
+  "artifactsUnchanged": true,
+  "complete": true,
+  "environmentAfter": {
+    "hardwareThreads": 16,
+    "os": "windows",
+    "pointerBits": 64,
+    "powerProfile": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+    "unixNanoseconds": 1792416296177900500
+  },
+  "environmentBefore": {
+    "hardwareThreads": 16,
+    "os": "windows",
+    "pointerBits": 64,
+    "powerProfile": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+    "unixNanoseconds": 1792416110686080100
+  },
+  "manifest": {
+    "artifacts": [
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\bridge.dll",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\ByteIo.csproj",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\cpp.exe",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\frozen.cpp",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\main.cpp",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\main.wio",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\main.wio.cpp",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\main.wiob",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\memory.exe",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\native.exe",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\payload.bin",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\probe.h",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\Program.cs",
+      "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+      "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+      "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+      "C:\\mingw64\\bin\\g++.exe",
+      "C:\\Program Files\\dotnet\\dotnet.exe",
+      "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\csharp\\ByteIo.dll",
+      "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\csharp\\ByteIo.runtimeconfig.json",
+      "F:\\Projects\\wio\\std\\benchmark.wio",
+      "F:\\Projects\\wio\\runtime\\include\\std_benchmark.h",
+      "F:\\Projects\\wio\\runtime\\include\\text.h",
+      "F:\\Projects\\wio\\runtime\\include\\wio_benchmark_allocations.h",
+      "F:\\Projects\\wio\\runtime\\include\\benchmark_memory.h",
+      "F:\\Projects\\wio\\std\\json.wio",
+      "F:\\Projects\\wio\\std\\serialization.wio",
+      "F:\\Projects\\wio\\runtime\\include\\std_serialization.h",
+      "F:\\Projects\\wio\\compiler\\src\\wio_compiler\\codegen\\wir_cpp_storage_plan.cpp",
+      "F:\\Projects\\wio\\compiler\\src\\wio_compiler\\codegen\\wir_cpp_backend.cpp",
+      "F:\\Projects\\wio\\compiler\\include\\wio\\codegen\\wir_cpp_storage_plan.h",
+      "F:\\Projects\\wio\\build\\app\\Debug\\wio-selfhost.exe",
+      "F:\\Projects\\wio\\runtime\\include\\string_concat.h",
+      "F:\\Projects\\wio\\build\\runtime\\backend\\build-profile.txt",
+      "F:\\Projects\\wio\\runtime\\include\\std_io.h",
+      "F:\\Projects\\wio\\runtime\\src\\std_io.cpp",
+      "F:\\Projects\\wio\\std\\io.wio",
+      "F:\\Projects\\wio\\runtime\\CMakeLists.txt",
+      "F:\\Projects\\wio\\runtime\\cmake\\WioBackendRuntimeProfile.cmake",
+      "F:\\Projects\\wio\\tests\\performance\\byte_io\\prepare.py",
+      "F:\\Projects\\wio\\tests\\performance\\concat_reuse\\prepare.py",
+      "F:\\Projects\\wio\\tests\\performance\\byte_io\\select_workloads.py"
+    ],
+    "builds": [],
+    "cases": [
+      {
+        "args": [
+          "0",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "wio-native",
+        "metric": "kernel",
+        "name": "exact-64k-wio-native",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\native.exe",
+        "workload": "n04-exact-64k-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\main.wiob",
+          "--native-library",
+          "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\bridge.dll",
+          "--",
+          "0",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "wio-vm",
+        "metric": "kernel",
+        "name": "exact-64k-wio-vm",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "workload": "n04-exact-64k-v1"
+      },
+      {
+        "args": [
+          "0",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "cpp",
+        "metric": "kernel",
+        "name": "exact-64k-cpp",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\cpp.exe",
+        "workload": "n04-exact-64k-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\csharp\\ByteIo.dll",
+          "0",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "csharp",
+        "metric": "kernel",
+        "name": "exact-64k-csharp",
+        "operations": 257,
+        "program": "C:\\Program Files\\dotnet\\dotnet.exe",
+        "workload": "n04-exact-64k-v1"
+      },
+      {
+        "args": [
+          "1",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "wio-native",
+        "metric": "kernel",
+        "name": "some-64k-wio-native",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\native.exe",
+        "workload": "n04-some-64k-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\main.wiob",
+          "--native-library",
+          "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\bridge.dll",
+          "--",
+          "1",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "wio-vm",
+        "metric": "kernel",
+        "name": "some-64k-wio-vm",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+        "workload": "n04-some-64k-v1"
+      },
+      {
+        "args": [
+          "1",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "cpp",
+        "metric": "kernel",
+        "name": "some-64k-cpp",
+        "operations": 257,
+        "program": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\cpp.exe",
+        "workload": "n04-some-64k-v1"
+      },
+      {
+        "args": [
+          "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\csharp\\ByteIo.dll",
+          "1",
+          "257"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "expectedChecksum": "3956996201986607141",
+        "implementation": "csharp",
+        "metric": "kernel",
+        "name": "some-64k-csharp",
+        "operations": 257,
+        "program": "C:\\Program Files\\dotnet\\dotnet.exe",
+        "workload": "n04-some-64k-v1"
+      }
+    ],
+    "cpu": 2,
+    "environment": {
+      "DOTNET_NOLOGO": "1",
+      "WIO_ROOT": "F:\\Projects\\wio"
+    },
+    "finalRepetitions": 3,
+    "maximumControlDifference": 0.1,
+    "maximumDrift": 0.1,
+    "maximumRange": 0.15,
+    "metadata": {
+      "bridgeFlags": [
+        "-O2",
+        "-ffp-contract=off"
+      ],
+      "contracts": "Seek/read/full-byte FNV; owned cases allocate each iteration; reused cases use a preallocated caller buffer in all languages, setup outside kernel/allocation window; OS-cache hot after two warmups; file setup/open/close excluded; Wio OS handles, C++ ifstream, C# managed buffering disabled FileStream; not cold disk throughput or identical syscall/error implementations",
+      "diagnosticFlags": [
+        "-static-libstdc++",
+        "-static-libgcc"
+      ],
+      "label": "inline-owning-cell",
+      "nativeFlags": [
+        "-std=c++20",
+        "-O2",
+        "-ffp-contract=off"
+      ],
+      "revision": "58c2bdac78e339ac27f0e6679ef4c6d578b5c563",
+      "runtimeBuild": {
+        "profile": "profile=Release\ncompiler=g++\nflags=-O2;-ffp-contract=off\n",
+        "sha256": "cf0950d248dd987ccfc5b4b83838bc627a6cd9b7377fd29b39549bd46b6b224a"
+      },
+      "selection": {
+        "contracts": "Only workload groups selected; no build inputs, flags, counts or qualification limits changed",
+        "label": "owning-place-after",
+        "sourceManifest": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19\\manifest.json",
+        "sourceManifestSha256": "8000c75aac029b1c4786a697d2f7a40da0541de961cb4ca73593133bb149ca5c",
+        "workloads": [
+          "n04-exact-64k-v1",
+          "n04-some-64k-v1"
+        ]
+      },
+      "vm": "Release host; unchanged bytecode semantics"
+    },
+    "name": "N04 owned byte I/O inline-owning-cell / owning-place-after",
+    "outputLimit": 1048576,
+    "repetitions": 5,
+    "schemaVersion": 1,
+    "timeoutMs": 60000,
+    "versions": [
+      {
+        "args": [
+          "--version"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "program": "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe"
+      },
+      {
+        "args": [
+          "--version"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "program": "C:\\mingw64\\bin\\g++.exe"
+      },
+      {
+        "args": [
+          "--info"
+        ],
+        "cwd": "F:\\Projects\\wio\\build\\n04-byte-cell-after-2026-10-19",
+        "program": "C:\\Program Files\\dotnet\\dotnet.exe"
+      }
+    ],
+    "warmups": 1
+  },
+  "name": "N04 owned byte I/O inline-owning-cell / owning-place-after",
+  "outputsCorrect": true,
+  "powerProfileUnchanged": true,
+  "samples": [
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 20128400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20128400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 10309632,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20128400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 391089300
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27207900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27207900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27207900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 128297800
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2575067300,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2575067300,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6953125000,
+        "exitCode": 0,
+        "peakResidentBytes": 25440256,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2575067300,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7765918000
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 20489800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20489800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 0,
+        "peakResidentBytes": 6070272,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20489800,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 153366000
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 21855700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 21855700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 37892096,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":21855700,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 201548800
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 26503800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26503800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26503800,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 122989400
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27370900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27370900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27370900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 127953800
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2494282100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2494282100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6812500000,
+        "exitCode": 0,
+        "peakResidentBytes": 25407488,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2494282100,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7661740000
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 35119700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 35119700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 5550080,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":35119700,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 131049200
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20726800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20726800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 156250000,
+        "exitCode": 0,
+        "peakResidentBytes": 37904384,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20726800,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 181103600
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 21338600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 21338600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 37871616,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":21338600,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 168575900
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 27073800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27073800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 5541888,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27073800,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 122685100
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2608955900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2608955900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 7281250000,
+        "exitCode": 0,
+        "peakResidentBytes": 25411584,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2608955900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7923985000
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27470400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27470400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9502720,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27470400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 129495400
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 30815400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 30815400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":30815400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 132906600
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 22229500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 22229500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 37900288,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":22229500,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 188973600
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 27518500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27518500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 5554176,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27518500,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 120763100
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2557615800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2557615800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 7109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 25415680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2557615800,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7755714000
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27210900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27210900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27210900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 128286700
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27894000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27894000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27894000,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 138588700
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 28241100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 28241100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":28241100,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 128215900
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2567838600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2567838600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6906250000,
+        "exitCode": 0,
+        "peakResidentBytes": 25419776,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2567838600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7733911600
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 20524200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20524200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 5599232,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20524200,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 106635300
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20707100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20707100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 37867520,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20707100,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 193027100
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 28263100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 28263100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":28263100,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 131514800
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 26449100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26449100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9502720,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26449100,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 123012600
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2547231000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2547231000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6953125000,
+        "exitCode": 0,
+        "peakResidentBytes": 25415680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2547231000,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7736712800
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 26482200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26482200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 5550080,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26482200,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 122020500
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20929400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20929400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 37888000,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20929400,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 171878600
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 30159800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 30159800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":30159800,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 126554800
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 26031600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26031600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26031600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 128456000
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20946400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20946400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 37892096,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20946400,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 171544100
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 26543900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26543900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 5545984,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26543900,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 127507300
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2583508200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2583508200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6718750000,
+        "exitCode": 0,
+        "peakResidentBytes": 25403392,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2583508200,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7716806100
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27030300,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27030300,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27030300,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 126553900
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27824600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27824600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27824600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 125838200
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20250500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20250500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 37908480,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20250500,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 183416300
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 26780600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26780600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 5545984,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26780600,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 120949700
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2529867700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2529867700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6937500000,
+        "exitCode": 0,
+        "peakResidentBytes": 25415680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2529867700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7714166000
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27323900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27323900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27323900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 124108100
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2575951100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2575951100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6546875000,
+        "exitCode": 0,
+        "peakResidentBytes": 25415680,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2575951100,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7824233700
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 37906500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 37906500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 5550080,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":37906500,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 129979300
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 22213500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 22213500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 171875000,
+        "exitCode": 0,
+        "peakResidentBytes": 37883904,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":22213500,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 191950600
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 25964400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 25964400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":25964400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 139804400
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 29861900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 29861900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":29861900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 124994400
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2577263800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2577263800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6718750000,
+        "exitCode": 0,
+        "peakResidentBytes": 25407488,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2577263800,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7913509000
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 34923700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 34923700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 5550080,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":34923700,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 147150700
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20855500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20855500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 37900288,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20855500,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 182997200
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 26575900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26575900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26575900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 123064700
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 26925300,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26925300,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 46875000,
+        "exitCode": 0,
+        "peakResidentBytes": 9555968,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26925300,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 121449200
+      },
+      "round": 4,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 34682700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 34682700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":34682700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 131437600
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 36591300,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 36591300,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":36591300,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 137828500
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 22261500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 22261500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 140625000,
+        "exitCode": 0,
+        "peakResidentBytes": 37916672,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":22261500,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 173424600
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 26719000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26719000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 5545984,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26719000,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 126864400
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2566952200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2566952200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6890625000,
+        "exitCode": 0,
+        "peakResidentBytes": 25403392,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2566952200,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7693389000
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 26380300,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26380300,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 62500000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26380300,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 123190400
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 36436100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 36436100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":36436100,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 137013900
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "control": false,
+      "correct": true,
+      "implementation": "csharp",
+      "nanoseconds": 20217000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 20217000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 37916672,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":20217000,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 177983200
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "control": false,
+      "correct": true,
+      "implementation": "cpp",
+      "nanoseconds": 29466900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 29466900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 5545984,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"schemaVersion\":1,\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":29466900,\"operations\":257}\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 134044900
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2606733000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2606733000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "comparison",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6781250000,
+        "exitCode": 0,
+        "peakResidentBytes": 25411584,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2606733000,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7696969900
+      },
+      "round": 5,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 37462600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 37462600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":37462600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 135509000
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27139400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27139400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27139400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 126688100
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2572819900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2572819900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 25419776,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2572819900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7741776000
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27133900,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27133900,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27133900,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 126234600
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27432200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27432200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27432200,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 131318800
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2593181000,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2593181000,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6390625000,
+        "exitCode": 0,
+        "peakResidentBytes": 25403392,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2593181000,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7840789200
+      },
+      "round": 0,
+      "warmup": true,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2627570600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2627570600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6656250000,
+        "exitCode": 0,
+        "peakResidentBytes": 25411584,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2627570600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 8012744200
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 28070500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 28070500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":28070500,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 140360500
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 28096700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 28096700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":28096700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 135754400
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2547250600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2547250600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6859375000,
+        "exitCode": 0,
+        "peakResidentBytes": 25423872,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2547250600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7692504500
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 26456100,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 26456100,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":26456100,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 127768000
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 33803500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 33803500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":33803500,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 143971600
+      },
+      "round": 1,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27371600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27371600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 78125000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27371600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 149157500
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2616330500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2616330500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 7171875000,
+        "exitCode": 0,
+        "peakResidentBytes": 25419776,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2616330500,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7803945300
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 29598200,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 29598200,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":29598200,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 152702300
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27355600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27355600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27355600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 150124600
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2515012300,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2515012300,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6937500000,
+        "exitCode": 0,
+        "peakResidentBytes": 25411584,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2515012300,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7768803200
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 31774500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 31774500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 93750000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":31774500,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 142018200
+      },
+      "round": 2,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27694800,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27694800,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27694800,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 156632000
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2780293600,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2780293600,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 7531250000,
+        "exitCode": 0,
+        "peakResidentBytes": 25411584,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2780293600,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 8463024800
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 31936500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 31936500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":31936500,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 157077900
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 27991400,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 27991400,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 109375000,
+        "exitCode": 0,
+        "peakResidentBytes": 9494528,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":27991400,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 137969700
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "control": false,
+      "correct": true,
+      "implementation": "wio-vm",
+      "nanoseconds": 2628101700,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 2628101700,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 6875000000,
+        "exitCode": 0,
+        "peakResidentBytes": 25423872,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":2628101700,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 7996582200
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": true,
+      "correct": true,
+      "implementation": "wio-native",
+      "nanoseconds": 28714500,
+      "payload": {
+        "checksum": "3956996201986607141",
+        "elapsedNanoseconds": 28714500,
+        "operations": 257,
+        "schemaVersion": 1
+      },
+      "phase": "final",
+      "process": {
+        "affinityApplied": true,
+        "cpuNanoseconds": 125000000,
+        "exitCode": 0,
+        "peakResidentBytes": 9498624,
+        "status": "passed",
+        "stderr": "",
+        "stdout": "{\"checksum\":\"3956996201986607141\",\"elapsedNanoseconds\":28714500,\"operations\":257,\"schemaVersion\":1}\r\r\n",
+        "stdoutEncoding": "byte-as-latin1",
+        "wallNanoseconds": 124014300
+      },
+      "round": 3,
+      "warmup": false,
+      "workload": "n04-exact-64k-v1"
+    }
+  ],
+  "schemaVersion": 1,
+  "summary": [
+    {
+      "case": "exact-64k-wio-native",
+      "control": {
+        "count": 5,
+        "maximum": 34682700.0,
+        "mean": 28876780.0,
+        "mean95HighApproximate": 31754299.741804987,
+        "mean95LowApproximate": 25999260.258195013,
+        "median": 27323900.0,
+        "medianAbsoluteDeviation": 398600.0,
+        "minimum": 26925300.0,
+        "p90": 32106060.0,
+        "p95": 33394380.0,
+        "p99": 34425036.0,
+        "relativeDrift": 0.11264863361379598,
+        "relativeRange": 0.28390529902393141,
+        "stable": false,
+        "standardDeviation": 3282821.3006497934,
+        "standardError": 1468122.3172474424
+      },
+      "controlRelativeDifference": 0.020649101106706341,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 108536.96498054474,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 109375000.0,
+        "median": 93750000.0,
+        "minimum": 62500000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 9498624.0,
+        "median": 9498624.0,
+        "minimum": 9494528.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 36591300.0,
+        "mean": 29450520.0,
+        "mean95HighApproximate": 33217317.375181712,
+        "mean95LowApproximate": 25683722.624818288,
+        "median": 27894000.0,
+        "medianAbsoluteDeviation": 1862400.0,
+        "minimum": 26031600.0,
+        "p90": 34018700.0,
+        "p95": 35305000.0,
+        "p99": 36334040.0,
+        "relativeDrift": 0.091657704165770418,
+        "relativeRange": 0.3785652828565283,
+        "stable": false,
+        "standardDeviation": 4297354.5859051477,
+        "standardError": 1921835.3955008739
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 9991589.883268483,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 7109375000.0,
+        "median": 6906250000.0,
+        "minimum": 6546875000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 25419776.0,
+        "median": 25415680.0,
+        "minimum": 25411584.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 2606733000.0,
+        "mean": 2567601240.0,
+        "mean95HighApproximate": 2592099672.7158847,
+        "mean95LowApproximate": 2543102807.2841153,
+        "median": 2567838600.0,
+        "medianAbsoluteDeviation": 10222800.0,
+        "minimum": 2529867700.0,
+        "p90": 2594420240.0,
+        "p95": 2600576620.0,
+        "p99": 2605501724.0,
+        "relativeDrift": 0.01114355473899333,
+        "relativeRange": 0.02993385176155542,
+        "stable": true,
+        "standardDeviation": 27949061.681083329,
+        "standardError": 12499200.365247374
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-cpp",
+      "implementation": "cpp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 107075.87548638132,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 109375000.0,
+        "median": 109375000.0,
+        "minimum": 78125000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 5599232.0,
+        "median": 5550080.0,
+        "minimum": 5545984.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 37906500.0,
+        "mean": 28439340.0,
+        "mean95HighApproximate": 33929646.084296077,
+        "mean95LowApproximate": 22949033.915703923,
+        "median": 27518500.0,
+        "medianAbsoluteDeviation": 1948400.0,
+        "minimum": 20524200.0,
+        "p90": 34530660.0,
+        "p95": 36218580.0,
+        "p99": 37568916.0,
+        "relativeDrift": 0.35123099006123154,
+        "relativeRange": 0.63165870232752508,
+        "stable": false,
+        "standardDeviation": 6263621.2355952682,
+        "standardError": 2801176.5736204488
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-csharp",
+      "implementation": "csharp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 80572.373540856031,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 171875000.0,
+        "median": 125000000.0,
+        "minimum": 125000000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 37916672.0,
+        "median": 37900288.0,
+        "minimum": 37867520.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 22229500.0,
+        "mean": 21123520.0,
+        "mean95HighApproximate": 22018340.62986536,
+        "mean95LowApproximate": 20228699.37013464,
+        "median": 20707100.0,
+        "medianAbsoluteDeviation": 490100.0,
+        "minimum": 20217000.0,
+        "p90": 22223100.0,
+        "p95": 22226300.0,
+        "p99": 22228860.0,
+        "relativeDrift": 0.012220446127173771,
+        "relativeRange": 0.09718888690352584,
+        "stable": true,
+        "standardDeviation": 1020857.0183919,
+        "standardError": 456541.13768640824
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": {
+        "count": 5,
+        "maximum": 29861900.0,
+        "mean": 27438400.0,
+        "mean95HighApproximate": 28688751.883781843,
+        "mean95LowApproximate": 26188048.116218157,
+        "median": 27030300.0,
+        "medianAbsoluteDeviation": 581200.0,
+        "minimum": 26380300.0,
+        "p90": 28905300.0,
+        "p95": 29383600.0,
+        "p99": 29766240.0,
+        "relativeDrift": 0.042964746969142036,
+        "relativeRange": 0.12880360188381187,
+        "stable": true,
+        "standardDeviation": 1426465.2081281196,
+        "standardError": 637934.63458257215
+      },
+      "controlRelativeDifference": 0.044591217034944494,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 109973.15175097276,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 93750000.0,
+        "median": 93750000.0,
+        "minimum": 78125000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 9498624.0,
+        "median": 9498624.0,
+        "minimum": 9498624.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 36436100.0,
+        "mean": 29860720.0,
+        "mean95HighApproximate": 33421952.082289588,
+        "mean95LowApproximate": 26299487.917710412,
+        "median": 28263100.0,
+        "medianAbsoluteDeviation": 2298700.0,
+        "minimum": 25964400.0,
+        "p90": 34187820.0,
+        "p95": 35311960.0,
+        "p99": 36211272.0,
+        "relativeDrift": 0.058769207907129792,
+        "relativeRange": 0.37050783530469056,
+        "stable": false,
+        "standardDeviation": 4062835.2141084927,
+        "standardError": 1816955.1440253004
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 10028263.813229572,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 7281250000.0,
+        "median": 6890625000.0,
+        "minimum": 6718750000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 25415680.0,
+        "median": 25407488.0,
+        "minimum": 25403392.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 2608955900.0,
+        "mean": 2576782220.0,
+        "mean95HighApproximate": 2596628225.6611075,
+        "mean95LowApproximate": 2556936214.3388925,
+        "median": 2577263800.0,
+        "medianAbsoluteDeviation": 10311600.0,
+        "minimum": 2547231000.0,
+        "p90": 2598776820.0,
+        "p95": 2603866360.0,
+        "p99": 2607937992.0,
+        "relativeDrift": 0.0023224048698468509,
+        "relativeRange": 0.02394977960734947,
+        "stable": true,
+        "standardDeviation": 22641335.581674509,
+        "standardError": 10125513.092401788
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-cpp",
+      "implementation": "cpp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 103964.98054474709,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 93750000.0,
+        "median": 93750000.0,
+        "minimum": 62500000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 5550080.0,
+        "median": 5545984.0,
+        "minimum": 5541888.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 34923700.0,
+        "mean": 28348520.0,
+        "mean95HighApproximate": 31576665.652097229,
+        "mean95LowApproximate": 25120374.347902771,
+        "median": 26719000.0,
+        "medianAbsoluteDeviation": 236800.0,
+        "minimum": 26482200.0,
+        "p90": 31783740.0,
+        "p95": 33353720.0,
+        "p99": 34609704.0,
+        "relativeDrift": 0.15132864253901718,
+        "relativeRange": 0.31593622515812719,
+        "stable": false,
+        "standardDeviation": 3682833.2241631574,
+        "standardError": 1647013.0878047082
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-csharp",
+      "implementation": "csharp",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 81503.501945525291,
+      "phase": "comparison",
+      "processCpuNanoseconds": {
+        "count": 5,
+        "maximum": 140625000.0,
+        "median": 140625000.0,
+        "minimum": 109375000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 5,
+        "maximum": 37916672.0,
+        "median": 37892096.0,
+        "minimum": 37871616.0
+      },
+      "statistics": {
+        "count": 5,
+        "maximum": 22261500.0,
+        "mean": 21266280.0,
+        "mean95HighApproximate": 21781175.50441137,
+        "mean95LowApproximate": 20751384.49558863,
+        "median": 20946400.0,
+        "medianAbsoluteDeviation": 90900.0,
+        "minimum": 20855500.0,
+        "p90": 21892340.0,
+        "p95": 22076920.0,
+        "p99": 22224584.0,
+        "relativeDrift": 0.02026601229805599,
+        "relativeRange": 0.067123706221594165,
+        "stable": true,
+        "standardDeviation": 587419.05570044299,
+        "standardError": 262701.78796498518
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-native",
+      "control": {
+        "count": 3,
+        "maximum": 28714500.0,
+        "mean": 27514066.666666668,
+        "mean95HighApproximate": 28799481.630160991,
+        "mean95LowApproximate": 26228651.703172345,
+        "median": 27371600.0,
+        "medianAbsoluteDeviation": 915500.0,
+        "minimum": 26456100.0,
+        "p90": 28445920.0,
+        "p95": 28580210.0,
+        "p99": 28687642.0,
+        "relativeDrift": 0.082508877814961495,
+        "relativeRange": 0.082508877814961495,
+        "stable": true,
+        "standardDeviation": 1135920.4212150306,
+        "standardError": 655823.96096649102
+      },
+      "controlRelativeDifference": 0.1488821748179508,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 123636.18677042802,
+      "phase": "final",
+      "processCpuNanoseconds": {
+        "count": 3,
+        "maximum": 109375000.0,
+        "median": 93750000.0,
+        "minimum": 93750000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 3,
+        "maximum": 9498624.0,
+        "median": 9494528.0,
+        "minimum": 9494528.0
+      },
+      "statistics": {
+        "count": 3,
+        "maximum": 33803500.0,
+        "mean": 31090933.333333332,
+        "mean95HighApproximate": 34611575.927214041,
+        "mean95LowApproximate": 27570290.739452619,
+        "median": 31774500.0,
+        "medianAbsoluteDeviation": 2029000.0,
+        "minimum": 27694800.0,
+        "p90": 33397700.0,
+        "p95": 33600600.0,
+        "p99": 33762920.0,
+        "relativeDrift": 0.19225164833435618,
+        "relativeRange": 0.19225164833435618,
+        "stable": false,
+        "standardDeviation": 3111189.7183124865,
+        "standardError": 1796246.2213677103
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "exact-64k-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 10180274.319066148,
+      "phase": "final",
+      "processCpuNanoseconds": {
+        "count": 3,
+        "maximum": 7171875000.0,
+        "median": 6875000000.0,
+        "minimum": 6859375000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 3,
+        "maximum": 25423872.0,
+        "median": 25423872.0,
+        "minimum": 25419776.0
+      },
+      "statistics": {
+        "count": 3,
+        "maximum": 2628101700.0,
+        "mean": 2597227600.0,
+        "mean95HighApproximate": 2646655827.0640202,
+        "mean95LowApproximate": 2547799372.9359798,
+        "median": 2616330500.0,
+        "medianAbsoluteDeviation": 11771200.0,
+        "minimum": 2547250600.0,
+        "p90": 2625747460.0,
+        "p95": 2626924580.0,
+        "p99": 2627866276.0,
+        "relativeDrift": 0.030902479637033624,
+        "relativeRange": 0.030902479637033624,
+        "stable": true,
+        "standardDeviation": 43679694.1851703,
+        "standardError": 25218483.195928607
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n04-exact-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-native",
+      "control": {
+        "count": 3,
+        "maximum": 31936500.0,
+        "mean": 29120866.666666668,
+        "mean95HighApproximate": 31909677.332337927,
+        "mean95LowApproximate": 26332056.000995409,
+        "median": 28070500.0,
+        "medianAbsoluteDeviation": 714900.0,
+        "minimum": 27355600.0,
+        "p90": 31163300.0,
+        "p95": 31549900.0,
+        "p99": 31859180.0,
+        "relativeDrift": 0.13772465755864699,
+        "relativeRange": 0.16319267558468856,
+        "stable": false,
+        "standardDeviation": 2464470.2885880633,
+        "standardError": 1422862.584526153
+      },
+      "controlRelativeDifference": 0.00093292882678858841,
+      "implementation": "wio-native",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 109325.68093385214,
+      "phase": "final",
+      "processCpuNanoseconds": {
+        "count": 3,
+        "maximum": 109375000.0,
+        "median": 93750000.0,
+        "minimum": 78125000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 3,
+        "maximum": 9494528.0,
+        "median": 9494528.0,
+        "minimum": 9494528.0
+      },
+      "statistics": {
+        "count": 3,
+        "maximum": 29598200.0,
+        "mean": 28562100.0,
+        "mean95HighApproximate": 29579224.451626249,
+        "mean95LowApproximate": 27544975.548373751,
+        "median": 28096700.0,
+        "medianAbsoluteDeviation": 105300.0,
+        "minimum": 27991400.0,
+        "p90": 29297900.0,
+        "p95": 29448050.0,
+        "p99": 29568170.0,
+        "relativeDrift": 0.0037477710905551185,
+        "relativeRange": 0.057188210715137362,
+        "stable": true,
+        "standardDeviation": 898832.2591006622,
+        "standardError": 518941.04674808681
+      },
+      "statisticsQualified": false,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    },
+    {
+      "case": "some-64k-wio-vm",
+      "implementation": "wio-vm",
+      "metric": "kernel",
+      "nanosecondsPerOperation": 10224010.116731517,
+      "phase": "final",
+      "processCpuNanoseconds": {
+        "count": 3,
+        "maximum": 7531250000.0,
+        "median": 6937500000.0,
+        "minimum": 6656250000.0
+      },
+      "processPeakResidentBytes": {
+        "count": 3,
+        "maximum": 25411584.0,
+        "median": 25411584.0,
+        "minimum": 25411584.0
+      },
+      "statistics": {
+        "count": 3,
+        "maximum": 2780293600.0,
+        "mean": 2640958833.3333335,
+        "mean95HighApproximate": 2791628218.8167524,
+        "mean95LowApproximate": 2490289447.8499146,
+        "median": 2627570600.0,
+        "medianAbsoluteDeviation": 112558300.0,
+        "minimum": 2515012300.0,
+        "p90": 2749749000.0,
+        "p95": 2765021300.0,
+        "p99": 2777239140.0,
+        "relativeDrift": 0.058123271740062855,
+        "relativeRange": 0.10096067447245756,
+        "stable": true,
+        "standardDeviation": 133146444.28697041,
+        "standardError": 76872135.450723872
+      },
+      "statisticsQualified": true,
+      "timingQualified": false,
+      "workload": "n04-some-64k-v1"
+    }
+  ],
+  "timingQualified": false,
+  "toolVersion": "wio-bench/1",
+  "versions": [
+    {
+      "affinityApplied": true,
+      "cpuNanoseconds": 15625000,
+      "exitCode": 0,
+      "peakResidentBytes": 10002432,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "0.18.1\r\n",
+      "stdoutEncoding": "byte-as-latin1",
+      "wallNanoseconds": 636526900
+    },
+    {
+      "affinityApplied": true,
+      "cpuNanoseconds": 31250000,
+      "exitCode": 0,
+      "peakResidentBytes": 5668864,
+      "status": "passed",
+      "stderr": "",
+      "stdout": "g++.exe (x86_64-posix-seh-rev0, Built by MinGW-Builds project) 15.2.0\r\nCopyright (C) 2025 Free Software Foundation, Inc.\r\nThis is free software; see the source for copying conditions.  There is NO\r\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\r\n\r\n",
+      "stdoutEncoding": "byte-as-latin1",
+      "wallNanoseconds": 39100500
+    },
+    {
+      "affinityApplied": true,
+      "cpuNanoseconds": 375000000,
+      "exitCode": 0,
+      "peakResidentBytes": 54521856,
+      "status": "passed",
+      "stderr": "",
+      "stdout": ".NET SDK:\r\n Version:           9.0.311\r\n Commit:            354186e528\r\n Workload version:  9.0.300-manifests.ca3d52c5\r\n MSBuild version:   17.14.41+6f6d310b4\r\n\r\nÃalÄ±Åma ZamanÄ± OrtamÄ±:\r\n OS Name:     Windows\r\n OS Version:  10.0.26100\r\n OS Platform: Windows\r\n RID:         win-x64\r\n Base Path:   C:\\Program Files\\dotnet\\sdk\\9.0.311\\\r\n\r\n.NET iÅ yÃ¼kleri yÃ¼klendi:\r\nGÃ¶rÃ¼ntÃ¼lenecek yÃ¼klÃ¼ iÅ yÃ¼kÃ¼ yok.\r\nYeni bildirimler yÃ¼klenirken loose manifests kullanÄ±lacak Åekilde yapÄ±landÄ±rÄ±ldÄ±.\r\n\r\nHost:\r\n  Version:      9.0.13\r\n  Architecture: x64\r\n  Commit:       9ecbfd4f3f\r\n\r\n.NET SDKs installed:\r\n  9.0.311 [C:\\Program Files\\dotnet\\sdk]\r\n\r\n.NET runtimes installed:\r\n  Microsoft.AspNetCore.App 6.0.36 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 8.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 9.0.9 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.AspNetCore.App 9.0.13 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]\r\n  Microsoft.NETCore.App 6.0.36 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 8.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 9.0.9 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.NETCore.App 9.0.13 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]\r\n  Microsoft.WindowsDesktop.App 6.0.36 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 8.0.20 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 9.0.9 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n  Microsoft.WindowsDesktop.App 9.0.13 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]\r\n\r\nOther architectures found:\r\n  x86   [C:\\Program Files (x86)\\dotnet]\r\n    registered at [HKLM\\SOFTWARE\\dotnet\\Setup\\InstalledVersions\\x86\\InstallLocation]\r\n\r\nEnvironment variables:\r\n  Not set\r\n\r\nglobal.json file:\r\n  Not found\r\n\r\nLearn more:\r\n  https://aka.ms/dotnet/info\r\n\r\nDownload .NET:\r\n  https://aka.ms/dotnet/download\r\n",
+      "stdoutEncoding": "byte-as-latin1",
+      "wallNanoseconds": 621127100
+    }
+  ]
+}

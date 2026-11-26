@@ -1,0 +1,4 @@
+use std::attribute as attribute;
+[Native]
+fn Upgrade(value: view i32) -> ref i32;
+fn Entry() -> i32 { return 0; }

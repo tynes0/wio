@@ -1,0 +1,10 @@
+using cpp::header("vm_any_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_any::Unsupported)]
+fn Unsupported() -> any;
+
+fn Entry() -> i32 {
+    let value = Unsupported();
+    return value fit i32;
+}

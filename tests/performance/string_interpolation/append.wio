@@ -1,0 +1,22 @@
+use std::builders as builders;
+
+using cpp::header("builder_benchmark.h");
+
+[native, CppName(builder_benchmark::Begin)]
+fn Begin();
+
+[native, CppName(builder_benchmark::Report)]
+fn Report(value: string) -> i32;
+
+fn Entry() -> i32
+{
+    let fragment = "0123456789abcdef0123456789abcdef";
+    Begin();
+    let builder = builders::StringBuilder();
+    for (index in 0..<30000)
+    {
+        builder.Append($"${fragment}");
+    }
+
+    return Report(builder.ToString());
+}

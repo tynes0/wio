@@ -4,15 +4,26 @@ set(WIO_SDK_HEADERS
     "${WIO_SDK_INCLUDE_DIR}/wio_version.h"
     "${WIO_SDK_INCLUDE_DIR}/module_api.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_module_contract.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_module_session.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_module_tasks.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_features.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_sdk.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_values.h"
     "${WIO_SDK_INCLUDE_DIR}/wio_native_abi.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_native_pod.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_native_sequence.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_native_dictionary.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_native_any.h"
+    "${WIO_SDK_INCLUDE_DIR}/wio_native_object.h"
 )
 
 add_library(wio_sdk INTERFACE)
-target_include_directories(wio_sdk INTERFACE "${WIO_SDK_INCLUDE_DIR}")
-target_sources(wio_sdk INTERFACE ${WIO_SDK_HEADERS})
+target_compile_features(wio_sdk INTERFACE cxx_std_20)
+target_include_directories(wio_sdk INTERFACE
+    "$<BUILD_INTERFACE:${WIO_SDK_INCLUDE_DIR}>"
+    "$<INSTALL_INTERFACE:sdk/include>")
+target_sources(wio_sdk INTERFACE "$<BUILD_INTERFACE:${WIO_SDK_HEADERS}>")
+install(TARGETS wio_sdk EXPORT WioVmRuntimeTargets COMPONENT WioVmRuntime)
 
 if(BUILD_TESTING)
     add_executable(wio_sdk_version_contract_test
@@ -35,6 +46,7 @@ if(BUILD_TESTING)
         NAME wio_sdk_013_value_surface
         COMMAND wio_sdk_013_value_surface_test
     )
+    set_property(TEST wio_sdk_013_value_surface APPEND PROPERTY LABELS traceability)
 
     add_executable(wio_sdk_014_abi_markers_test
         "${CMAKE_SOURCE_DIR}/tests/sdk_014_abi_markers_test.cpp"
@@ -74,5 +86,5 @@ if(BUILD_TESTING)
 endif()
 
 install(DIRECTORY "${WIO_SDK_INCLUDE_DIR}/"
-    DESTINATION sdk/include
+    DESTINATION sdk/include COMPONENT WioVmRuntime
 )

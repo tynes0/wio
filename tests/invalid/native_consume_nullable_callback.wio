@@ -1,0 +1,5 @@
+use std::attribute as attribute;
+type Callback = fn();
+[Native, CppName(rejected)]
+fn Consume([attribute::NativeConsume] value: Callback?);
+fn Entry() -> i32 { return 0; }

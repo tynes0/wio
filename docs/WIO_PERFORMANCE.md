@@ -4,6 +4,8 @@ This document gives the practical `v1` cost model for the parts of Wio that
 users are most likely to care about.
 
 It is not a benchmark report. The goal is to make the broad rules visible.
+For the controlled local Mandelbrot comparison and its limitations, see
+[`WIO_MANDELBROT_PERFORMANCE_AUDIT.md`](./WIO_MANDELBROT_PERFORMANCE_AUDIT.md).
 
 For quick local measurements, the CLI now provides:
 
@@ -157,3 +159,93 @@ This note does not freeze:
 
 It freezes the intended user-facing reading of the performance and memory
 model, not every low-level implementation detail.
+
+## 8. Final Pre-v1 Optimization Stage
+
+A dedicated heavy optimization and performance acceptance stage follows backend
+closure and IDE/tooling/v1 correctness work, before beta/RC. It complements the
+earlier backend cost work; serious slowdowns should be investigated immediately,
+not deferred until the final stage. This work is mandatory before v1, while JIT
+remains post-v1.
+
+### 8.1 Mandelbrot Qualification Workload
+
+The current user-owned `playground/wio/mandelbrot.wio` is a motivating workload,
+not yet a controlled benchmark. The inspected version renders 800 x 800 pixels
+with at most 100 iterations per pixel using `f64`. It formats 640,000 RGB lines
+through interpolation and `StringBuilder.AppendLine`, then writes an ASCII PPM
+(`P3`) file. Its manifest selects Debug and supplies no backend optimization
+arguments. Inspection of the native compiler command construction found no
+default `-O2`/`-O3`; configuration-to-backend flag forwarding must be qualified
+rather than assuming the manifest selects optimized generated code.
+
+Historical baseline: `StringBuilder.AppendLine` used `self.value += value + "\n"`. The
+builder is an object wrapping a string, without a dedicated buffer/capacity API.
+Typed WIR currently represents compound assignment as load, binary addition,
+and replace/store; the C++ backend emits string addition as `+`, rather than a
+dedicated in-place append. This is not an optimized builder contract. Audit
+full-prefix copies, temporary allocations, capacity growth, and final-output
+copies. The local Mandelbrot audit confirms full-prefix addition in generated
+`AppendLine` code, making accumulated copying quadratic for this workload;
+the exact contribution relative to other runtime overhead still needs profiling.
+
+2026-10-15 follow-up: the [std builder consolidation slice](WIO_STD_BUILDERS_CONSOLIDATION.md)
+replaces that path with in-place append/line/clear and adds reserve hints, with
+native/VM correctness checks and paired append measurements. The growing-prefix
+defect is addressed, but managed argument/temp allocation and direct numeric
+formatting still prevent the final C++ budget from being claimed.
+
+Require an amortized-linear builder with reusable capacity, reserve/clear
+behavior, direct append/append-line, and numeric formatting into its buffer.
+Avoid assembling a temporary string for each pixel merely to append it, and
+specify whether finalization returns a copy or transfers storage. Also qualify
+ordinary string `+=` so builder users are not the only ones with efficient
+appends. Preserve observable value/ownership semantics and correctness for
+self-append and aliased inputs in both native and VM paths.
+
+Keep a controlled benchmark fixture independent of user playground edits and
+output files. Measure these separately:
+
+1. compiler/front-end and native compilation, excluding program execution;
+2. compute-only Mandelbrot, with an observable iteration/pixel checksum;
+3. RGB formatting and builder growth over precomputed pixel data;
+4. file output over an already-created buffer;
+5. full compute/format/write execution, including startup.
+
+Compare Wio native with hand-written C++ using the same dimensions, iteration
+limit, arithmetic/precision, output format, compiler, flags, and I/O scope.
+Validate image/checksum equality. Do not compare an unoptimized full ASCII-output
+run with optimized compute-only C++, or enable fast-math on only one side. VM
+results are a separate series with explicit budgets, not a promise of native
+speed. The reported minutes and suggested half-second C++ time are not measured
+baseline results in this document.
+
+### 8.2 Optimization Order And Exit Criteria
+
+1. Capture reproducible baselines and profiles; record hardware, toolchain,
+   configuration, commands, inputs, cache state, repetitions, median, and spread.
+2. Optimize measured semantic-analyzer, Typed-WIR, and Lowered-WIR hotspots;
+   remove repeated traversal, lookup, construction, and allocation work.
+3. Optimize C++ emission and build scalability, then emitted runtime code:
+   unnecessary dynamic places/wrappers, copies, call indirection, retain/release,
+   helper duplication, dependency pruning, caching, and measured precompilation.
+4. Optimize std/Unicode and native/SDK paths, including formatting, builders,
+   containers, ownership transfer, and boundary marshalling.
+5. Optimize VM execution, value storage, dispatch, calls, cleanup, and scheduler
+   overhead under the same correctness and ownership contracts.
+6. Repeat integrated qualification with realistic installed-toolchain projects
+   and supported platforms; lock numeric budgets into regression/release gates.
+
+Track cold, warm, and incremental builds separately; track runtime/startup,
+generated source and binary size, peak memory, allocation counts/bytes, copied
+bytes, and retain/release counts where instrumentation permits. Qualify Debug
+and Release independently, including effective flags for generated code and
+linked runtime libraries. Optimization must not hide broken flag forwarding.
+
+Set explicit numeric budgets after establishing the controlled baselines, with
+native/C++ ratios and VM-specific targets where appropriate. Do not substitute
+an unmeasured speed estimate for an acceptance threshold. Close this stage only
+when the agreed budgets and correctness/ownership tests pass, representative
+workloads have no unexplained catastrophic scaling, and before/after results
+are published. Performance improvements must not weaken bounds, nullable,
+overflow, borrow, cleanup, or Unicode behavior.

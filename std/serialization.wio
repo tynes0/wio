@@ -4,6 +4,9 @@ realm std {
     realm serialization {
         using cpp::header("std_serialization.h");
 
+        [native, cpp::name(wio::runtime::std_serialization::FormatJsonNumber)]
+        fn FormatJsonNumber(value: f64) -> string;
+
         @Native @CppName(wio::runtime::std_serialization::JsonEscape)
         fn EscapeJson(value: string) -> string;
 

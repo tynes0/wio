@@ -1,0 +1,12 @@
+object Item
+{
+}
+
+// The underlying object identity is shared; required/nullable references differ.
+[Native, CppName(native_test::Borrow)]
+fn Borrow(value: ref Item) -> ref Item?;
+
+fn Entry() -> i32
+{
+    return 0;
+}

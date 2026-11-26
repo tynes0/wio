@@ -1,5 +1,8 @@
 #include "wio/wir/lowering_pipeline.h"
+#include "wio/wir/formatting_call_lowerer.h"
 #include "wio/wir/hierarchy_lowering.h"
+
+#include "wio/common/profiling.h"
 
 #include "wio/wir/lowered_ir_verifier.h"
 #include "wio/wir/typed_ir_verifier.h"
@@ -614,9 +617,18 @@ namespace wio::wir
 
     LoweringResult LoweringPipeline::lower(const typed::Module& module) const
     {
+        return lower(typed::Module{module});
+    }
+
+    LoweringResult LoweringPipeline::lower(typed::Module&& specialized) const
+    {
         LoweringResult result;
 
-        const typed::VerificationResult typedVerification = typed::Verifier{}.verify(module);
+        const typed::VerificationResult typedVerification = [&]
+        {
+            common::profiling::Scope scope("WIR.Lower.VerifyTyped");
+            return typed::Verifier{}.verify(specialized);
+        }();
         if (!typedVerification.succeeded())
         {
             for (const auto& diagnostic : typedVerification.diagnostics())
@@ -630,33 +642,54 @@ namespace wio::wir
         }
         result.completedPasses_.push_back("verify-typed-wir");
 
-        typed::Module specialized = module;
-        for (auto& diagnostic : GenericSpecializer{}.specialize(specialized))
-            result.diagnostics_.push_back(
-                {diagnostic.code, "materialize-generic-functions", diagnostic.message, diagnostic.source});
+        {
+            common::profiling::Scope scope("WIR.Lower.SpecializeGenerics");
+            for (auto& diagnostic : GenericSpecializer{}.specialize(specialized))
+                result.diagnostics_.push_back(
+                    {diagnostic.code, "materialize-generic-functions", diagnostic.message, diagnostic.source});
+        }
         if (!result.diagnostics_.empty())
             return result;
         result.completedPasses_.push_back("materialize-generic-functions");
-        const auto specializedVerification = typed::Verifier{}.verify(specialized);
+        {
+            common::profiling::Scope scope("WIR.Lower.FormattingCalls");
+            static_cast<void>(FormattingCallLowerer::lower(specialized));
+        }
+        result.completedPasses_.push_back("materialize-formatting-calls");
+        const auto specializedVerification = [&]
+        {
+            common::profiling::Scope scope("WIR.Lower.VerifySpecialized");
+            return typed::Verifier{}.verify(specialized);
+        }();
         for (const auto& diagnostic : specializedVerification.diagnostics())
             result.diagnostics_.push_back(
                 {diagnostic.code, "verify-specialized-wir", diagnostic.message, diagnostic.source});
         if (!result.diagnostics_.empty())
             return result;
         result.completedPasses_.push_back("verify-specialized-wir");
-        CanonicalControlFlowLowerer{specialized, result}.run();
+        {
+            common::profiling::Scope scope("WIR.Lower.ControlFlow");
+            CanonicalControlFlowLowerer{specialized, result}.run();
+        }
         if (!result.diagnostics_.empty())
             return result;
         result.completedPasses_.push_back("lower-canonical-control-flow");
-        for (auto& message : lowerHierarchy(result.module_))
-            result.diagnostics_.push_back({"WIR3200", "lower-object-hierarchy", std::move(message), {}});
+        {
+            common::profiling::Scope scope("WIR.Lower.Hierarchy");
+            for (auto& message : lowerHierarchy(result.module_))
+                result.diagnostics_.push_back({"WIR3200", "lower-object-hierarchy", std::move(message), {}});
+        }
         if (!result.diagnostics_.empty())
             return result;
         result.completedPasses_.push_back("lower-object-hierarchy");
-        if (std::ranges::any_of(module.functions, [](const typed::Function& function) { return function.isAsync; }))
+        if (std::ranges::any_of(specialized.functions,
+                                [](const typed::Function& function) { return function.isAsync; }))
             result.completedPasses_.push_back("lower-async-state-machines");
 
-        result.optimizationStatistics_ = CanonicalOptimizer{}.optimize(result.module_);
+        {
+            common::profiling::Scope scope("WIR.Lower.Optimize");
+            result.optimizationStatistics_ = CanonicalOptimizer{}.optimize(result.module_);
+        }
         result.completedPasses_.push_back("fold-canonical-constants");
         result.completedPasses_.push_back("simplify-control-flow");
         result.completedPasses_.push_back("propagate-trivial-values");
@@ -664,7 +697,11 @@ namespace wio::wir
         result.completedPasses_.push_back("classify-storage-and-escapes");
         result.completedPasses_.push_back("eliminate-proven-bounds-checks");
 
-        const lowered::VerificationResult loweredVerification = lowered::Verifier{}.verify(result.module_);
+        const lowered::VerificationResult loweredVerification = [&]
+        {
+            common::profiling::Scope scope("WIR.Lower.VerifyLowered");
+            return lowered::Verifier{}.verify(result.module_);
+        }();
         if (!loweredVerification.succeeded())
         {
             for (const auto& diagnostic : loweredVerification.diagnostics())

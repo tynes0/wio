@@ -23,6 +23,9 @@ component StatsAccess {
 fn Entry(args: string[]) -> i32 {
     let unit = DerivedAccess();
     let stats = StatsAccess();
+    if (unit.Boost() != 15) return 1;
+    if (unit.Reveal() != 2) return 2;
+    if (stats.hp != 7) return 3;
     console::Print($"Object/component access semantics: ${unit.Boost() + unit.Reveal() + stats.hp}");
     return 0;
 }

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-MSBuild"
+	tests="1"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="DESKTOP-0G3MR0G"
+	time="9"
+	timestamp="2026-10-19T16:27:51"
+	>
+	<testcase name="wio_n04_backend_diagnostics" classname="wio_n04_backend_diagnostics" time="9.18631" status="run">
+		<properties>
+			<property name="cmake_labels" value="cli;diagnostic;native"/>
+		</properties>
+		<system-out>F:\Projects\wio\build\n04-backend-diagnostics\f4c511ceea9f44bfa70592084cfb71ee\results.json
+</system-out>
+	</testcase>
+</testsuite>

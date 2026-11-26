@@ -1,0 +1,236 @@
+using cpp::header("vm_dictionary_projection_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_dictionary_projection::Sample)]
+component Sample
+{
+    public cells: [i32; 2];
+    public value: i32;
+}
+
+[Native, CppName(vm_dictionary_projection::Mode), Type(u32)]
+enum Mode { Ready = 7 };
+
+object Item
+{
+    value: i32;
+
+    public OnConstruct(value: i32)
+    {
+        self.value = value;
+        Constructed();
+    }
+
+    OnDestruct() { Destroyed(); }
+    public fn Read() -> i32 { return self.value; }
+}
+
+object FailingItem
+{
+    public OnConstruct() { Constructed(); }
+    OnDestruct()
+    {
+        Destroyed();
+        CleanupFailure();
+    }
+}
+
+[Native, CppName(vm_dictionary_projection::Constructed)]
+fn Constructed();
+[Native, CppName(vm_dictionary_projection::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_dictionary_projection::Balanced)]
+fn Balanced() -> bool;
+[Native, CppName(vm_dictionary_projection::CleanupFailure)]
+fn CleanupFailure();
+
+[Native, CppName(vm_dictionary_projection::Mutate)]
+fn Mutate(values: ref Dict<string, i32>, item: ref i32) -> bool;
+[Native, CppName(vm_dictionary_projection::Reverse)]
+fn Reverse(item: ref i32, values: view Dict<string, i32>) -> bool;
+[Native, CppName(vm_dictionary_projection::Pair)]
+fn Pair(first: ref i32, values: ref Dict<string, i32>, second: ref i32, same: ref i32) -> bool;
+[Native, CppName(vm_dictionary_projection::Structural)]
+fn Structural(values: ref Dict<string, i32>, item: ref i32) -> bool;
+[Native, CppName(vm_dictionary_projection::Ordered)]
+fn Ordered(item: ref string, values: ref Tree<i32, string>) -> bool;
+[Native, CppName(vm_dictionary_projection::Unicode)]
+fn Unicode(values: ref Tree<text, i32>, item: ref i32) -> bool;
+[Native, CppName(vm_dictionary_projection::Key), Instantiate(Mode), Instantiate(u64), Instantiate(char), Instantiate(bool)]
+fn Key<K>(values: ref Dict<K, i32>, key: K, item: ref i32) -> bool;
+[Native, CppName(vm_dictionary_projection::Nested)]
+fn Nested(item: ref i32, row: ref i32[], values: ref Dict<string, i32[]>) -> bool;
+[Native, CppName(vm_dictionary_projection::Batches)]
+fn Batches(values: ref Dict<string, i32>[], dictionary: ref Dict<string, i32>, item: ref i32) -> bool;
+[Native, CppName(vm_dictionary_projection::Trees)]
+fn Trees(values: ref Dict<string, Tree<i32, i32>>, inner: ref Tree<i32, i32>, item: ref i32) -> bool;
+[Native, CppName(vm_dictionary_projection::Samples)]
+fn Samples(field: ref i32, values: ref Dict<string, Sample>, item: ref Sample, cells: ref [i32; 2]) -> bool;
+[Native, CppName(vm_dictionary_projection::Hidden)]
+fn Hidden(item: view Sample) -> i32;
+[Native, CppName(vm_dictionary_projection::Replace), Instantiate(any), Instantiate(Item), Instantiate(Item?), Instantiate(FailingItem)]
+fn Replace<T>(values: ref Dict<string, T>, item: ref T, next: T) -> bool;
+[Native, CppName(vm_dictionary_projection::Erase)]
+fn Erase(values: ref Dict<string, i32>, item: ref i32);
+[Native, CppName(vm_dictionary_projection::Fail)]
+fn Fail(values: ref Dict<string, i32>, item: ref i32);
+[Native, CppName(vm_dictionary_projection::Borrow)]
+fn Borrow(values: ref Dict<string, i32>, item: ref i32) -> ref i32;
+[Native, CppName(vm_dictionary_projection::BorrowRoot)]
+fn BorrowRoot(values: ref Dict<string, i32>, item: ref i32) -> ref Dict<string, i32>;
+[Native, CppName(vm_dictionary_projection::Print)]
+fn Print();
+[Native, CppName(vm_dictionary_projection::Calls)]
+fn Calls() -> i32;
+
+fn Probe() -> i32
+{
+    mut values: Dict<string, i32> = { "a\0b": 7 };
+    return Mutate(ref values, ref values["a\0b"]) ? values["a\0b"] : -1;
+}
+
+fn ReadCalls() -> i32 { return Calls(); }
+fn SafePoint() -> i32 { return 0; }
+fn LifecycleBalanced() -> bool { return Balanced(); }
+
+fn MixedProbe() -> i32
+{
+    let dictionary: Dict<string, i32> = { "beta": 7 };
+    mut values: Dict<string, i32>[] = [dictionary];
+    return Batches(ref values, ref values[0usize], ref values[0usize]["beta"]) ? 0 : -1;
+}
+
+fn CleanupProbe() -> i32
+{
+    mut values: Dict<string, FailingItem> = { "item": FailingItem() };
+    Replace<FailingItem>(ref values, ref values["item"], FailingItem());
+    return 0;
+}
+
+fn ExpiredProbe() -> i32
+{
+    mut values: Dict<string, i32> = { "beta": 7 };
+    let old: view i32 = ref values["beta"];
+    Erase(ref values, ref values["beta"]);
+    return deref old;
+}
+
+fn FailureProbe() -> i32
+{
+    mut values: Dict<string, i32> = { "beta": 7 };
+    Fail(ref values, ref values["beta"]);
+    return 0;
+}
+
+fn BorrowProbe() -> i32
+{
+    mut values: Dict<string, i32> = { "beta": 7 };
+    let item: ref i32 = Borrow(ref values, ref values["beta"]);
+    return deref item;
+}
+
+fn Entry() -> i32
+{
+    mut round = 0;
+    while (round < 30)
+    {
+        mut values: Dict<string, i32> = { "a\0b": 7, "beta": 11, "": 13 };
+        let copy = values;
+        let stable: view i32 = ref values["beta"];
+        if (!Mutate(ref values, ref values["a\0b"]) or values["a\0b"] != 19 or copy["a\0b"] != 7)
+        {
+            return 1;
+        }
+        if (!Reverse(ref values["beta"], ref values) or deref stable != 23)
+        {
+            return 2;
+        }
+        if (!Pair(ref values[""], ref values, ref values["beta"], ref values["beta"]) or values[""] != 29 or deref stable != 31)
+        {
+            return 3;
+        }
+        if (!Structural(ref values, ref values["beta"]) or values.Count() != 3usize or values.ContainsKey("") or
+            deref stable != 37 or values["new"] != 41)
+        {
+            return 4;
+        }
+        let root: ref Dict<string, i32> = BorrowRoot(ref values, ref values["beta"]);
+        if (root["beta"] != 107)
+        {
+            return 5;
+        }
+        mut ordered: Tree<i32, string> = {< -3: "a", 7: "b" >};
+        if (!Ordered(ref ordered[-3], ref ordered) or ordered[-3] != "a\0native")
+        {
+            return 6;
+        }
+        mut unicode: Tree<text, i32> = {< u"İ🚀": 7 >};
+        if (!Unicode(ref unicode, ref unicode[u"İ🚀"]) or unicode[u"İ🚀"] != 47)
+        {
+            return 7;
+        }
+        mut modes: Dict<Mode, i32> = { Mode::Ready: 7 };
+        mut wide: Dict<u64, i32> = { 18446744073709551615u64: 7 };
+        mut chars: Dict<char, i32> = { '\0': 7 };
+        mut bits: Dict<bool, i32> = { true: 7 };
+        if (!Key<Mode>(ref modes, Mode::Ready, ref modes[Mode::Ready]) or modes[Mode::Ready] != 53 or
+            !Key<u64>(ref wide, 18446744073709551615u64, ref wide[18446744073709551615u64]) or
+            !Key<char>(ref chars, '\0', ref chars['\0']) or !Key<bool>(ref bits, true, ref bits[true]))
+        {
+            return 8;
+        }
+        let row: i32[] = [3, 7];
+        mut rows: Dict<string, i32[]> = { "row": row };
+        if (!Nested(ref rows["row"][1usize], ref rows["row"], ref rows) or rows["row"].Count() != 3usize or
+            rows["row"][1usize] != 59 or rows["other"][0usize] != 67)
+        {
+            return 9;
+        }
+        mut batches: Dict<string, i32>[] = [values];
+        if (!Batches(ref batches, ref batches[0usize], ref batches[0usize]["beta"]) or batches[0usize]["beta"] != 71)
+        {
+            return 10;
+        }
+        let tree: Tree<i32, i32> = {< 7: 3 >};
+        mut trees: Dict<string, Tree<i32, i32>> = { "tree": tree };
+        if (!Trees(ref trees, ref trees["tree"], ref trees["tree"][7]) or trees["tree"][7] != 79)
+        {
+            return 11;
+        }
+        mut samples: Dict<string, Sample> = { "sample": Sample() };
+        if (!Samples(ref samples["sample"].cells[1usize], ref samples, ref samples["sample"],
+                     ref samples["sample"].cells) or samples["sample"].cells[0usize] != 89 or Hidden(ref samples["sample"]) != 97)
+        {
+            return 12;
+        }
+        let leaf: any = 7;
+        mut anys: Dict<string, any> = { "item": leaf };
+        let next: any = 101;
+        if (!Replace<any>(ref anys, ref anys["item"], next) or (anys["item"] fit i32) != 101 or (leaf fit i32) != 7)
+        {
+            return 13;
+        }
+        mut objects: Dict<string, Item> = { "item": Item(7) };
+        if (!Replace<Item>(ref objects, ref objects["item"], Item(109)) or objects["item"].Read() != 109)
+        {
+            return 14;
+        }
+        mut nullable: Dict<string, Item?> = { "item": null };
+        if (!Replace<Item?>(ref nullable, ref nullable["item"], Item(113)))
+        {
+            return 15;
+        }
+        let present = nullable["item"];
+        if (present == null or present.Read() != 113)
+        {
+            return 16;
+        }
+        round += 1;
+    }
+    if (!Balanced())
+    {
+        return 17;
+    }
+    Print();
+    return 0;
+}

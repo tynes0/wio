@@ -1,0 +1,65 @@
+using cpp::header("vm_pod_pointer_fixture.h");
+use std::attribute as attribute;
+
+type Handle = opaque;
+
+// Declaration order deliberately differs from the C++ layout.
+[Native, CppName(vm_pod_pointer::Links)]
+component Links {
+    public optional: Handle?;
+    public required: Handle;
+    public pointers: [Handle?; 2];
+}
+
+[Native, CppName(vm_pod_pointer::Holder)]
+component Holder<T> { public value: T; }
+
+[Native, CppName(vm_pod_pointer::Nested)]
+component Nested {
+    public links: Links;
+    public copies: [Links; 2];
+}
+
+[Native, CppName(vm_pod_pointer::Token)] fn Token(index: i32) -> Handle;
+[Native, CppName(vm_pod_pointer::Read)] fn Read(pointer: Handle?) -> i32;
+[Native, CppName(vm_pod_pointer::Make)] fn Make() -> Links;
+[Native, CppName(vm_pod_pointer::Echo)] fn Echo(value: Links) -> Links;
+[Native, CppName(vm_pod_pointer::Replace)] fn Replace(value: ref Links);
+[Native, CppName(vm_pod_pointer::Clear)] fn Clear(value: ref Links);
+[Native, CppName(vm_pod_pointer::Hidden)] fn Hidden(value: view Links) -> i32;
+[Native, CppName(vm_pod_pointer::EchoHolder), instantiate(opaque), instantiate(opaque?)]
+fn EchoHolder<T>(value: Holder<T>) -> Holder<T>;
+[Native, CppName(vm_pod_pointer::EchoNested)] fn EchoNested(value: Nested) -> Nested;
+[Native, CppName(vm_pod_pointer::Delayed)] async fn Delayed() -> Links;
+[Native, CppName(vm_pod_pointer::Print)] fn Print(value: string);
+
+async fn Entry() -> i32 {
+    mut local = Links(null, Token(0), [null, Token(1)]);
+    let localCopy = Echo(local);
+    if (localCopy.optional != null or Read(localCopy.required) != 17) { return 1; }
+    if (Read(localCopy.pointers[0usize]) != -1 or Read(localCopy.pointers[1usize]) != 29) { return 2; }
+    if (Hidden(ref localCopy) != 41) { return 3; }
+
+    mut produced = Make();
+    let borrowed: view Handle? = ref produced.optional;
+    let element: view Handle? = ref produced.pointers[0usize];
+    Replace(ref produced);
+    if (Read(deref borrowed) != 17 or Read(deref element) != 29) { return 4; }
+    if (Read(produced.required) != 29 or produced.pointers[1usize] != null) { return 5; }
+    let copy = Echo(produced);
+    Clear(ref produced);
+    if (deref borrowed != null or Read(copy.optional) != 17 or Hidden(ref copy) != 74) { return 6; }
+    produced.pointers[0usize] = null;
+    if (Read(copy.pointers[0usize]) != 29 or deref element != null) { return 7; }
+
+    let generic = EchoHolder<opaque>(Holder<opaque>(Token(1)));
+    let nullableGeneric = EchoHolder<opaque?>(Holder<opaque?>(null));
+    if (Read(generic.value) != 29 or nullableGeneric.value != null) { return 8; }
+    let nested = EchoNested(Nested(copy, [localCopy, copy]));
+    if (Read(nested.links.optional) != 17 or Read(nested.copies[0usize].required) != 17) { return 9; }
+    if (Hidden(ref nested.copies[1usize]) != 74) { return 10; }
+    let delayed = await Delayed();
+    if (delayed.optional != null or Read(delayed.required) != 17 or Hidden(ref delayed) != 73) { return 11; }
+    Print("native-pod-pointer-ok:local/null/array/alias/generic/nested/ref/borrow/copy/hidden/async");
+    return 0;
+}

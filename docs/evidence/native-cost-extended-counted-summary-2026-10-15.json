@@ -1,0 +1,110 @@
+[
+  {
+    "Case": "unicode",
+    "Variant": "cpp",
+    "MedianMs": 0.1547,
+    "MinMs": 0.1126,
+    "MaxMs": 0.46959999999999996,
+    "Allocations": "16",
+    "RequestedBytes": "44779"
+  },
+  {
+    "Case": "unicode",
+    "Variant": "wio",
+    "MedianMs": 10.7644,
+    "MinMs": 7.3748,
+    "MaxMs": 23.2641,
+    "Allocations": "4004",
+    "RequestedBytes": "41997209"
+  },
+  {
+    "Case": "dictionary",
+    "Variant": "cpp",
+    "MedianMs": 0.3169,
+    "MinMs": 0.2256,
+    "MaxMs": 1.3021,
+    "Allocations": "2008",
+    "RequestedBytes": "83936"
+  },
+  {
+    "Case": "dictionary",
+    "Variant": "wio",
+    "MedianMs": 0.39780000000000004,
+    "MinMs": 0.2823,
+    "MaxMs": 0.9581000000000001,
+    "Allocations": "2009",
+    "RequestedBytes": "84016"
+  },
+  {
+    "Case": "result_error",
+    "Variant": "cpp",
+    "MedianMs": 0.49030000000000007,
+    "MinMs": 0.3403,
+    "MaxMs": 0.8355,
+    "Allocations": "4000",
+    "RequestedBytes": "268000"
+  },
+  {
+    "Case": "result_error",
+    "Variant": "wio",
+    "MedianMs": 4.0150999999999994,
+    "MinMs": 2.7399999999999998,
+    "MaxMs": 5.4111,
+    "Allocations": "22000",
+    "RequestedBytes": "1486000"
+  },
+  {
+    "Case": "weak",
+    "Variant": "cpp",
+    "MedianMs": 0.2808,
+    "MinMs": 0.21780000000000002,
+    "MaxMs": 0.5426,
+    "Allocations": "2000",
+    "RequestedBytes": "64000"
+  },
+  {
+    "Case": "weak",
+    "Variant": "wio",
+    "MedianMs": 0.3665,
+    "MinMs": 0.2584,
+    "MaxMs": 0.7069,
+    "Allocations": "2000",
+    "RequestedBytes": "64000"
+  },
+  {
+    "Case": "closure",
+    "Variant": "cpp",
+    "MedianMs": 0.003,
+    "MinMs": 0.0028,
+    "MaxMs": 0.0031999999999999997,
+    "Allocations": "0",
+    "RequestedBytes": "0"
+  },
+  {
+    "Case": "closure",
+    "Variant": "wio",
+    "MedianMs": 0.8257,
+    "MinMs": 0.6037,
+    "MaxMs": 1.477,
+    "Allocations": "6000",
+    "RequestedBytes": "272000"
+  },
+  {
+    "Case": "async_ready",
+    "Variant": "cpp",
+    "MedianMs": 1.3353,
+    "MinMs": 0.9196,
+    "MaxMs": 1.5994,
+    "Allocations": "4000",
+    "RequestedBytes": "528000"
+  },
+  {
+    "Case": "async_ready",
+    "Variant": "wio",
+    "MedianMs": 1.583,
+    "MinMs": 1.1697000000000002,
+    "MaxMs": 2.1984,
+    "Allocations": "6000",
+    "RequestedBytes": "640000"
+  }
+]

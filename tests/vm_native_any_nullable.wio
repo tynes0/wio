@@ -1,0 +1,206 @@
+using cpp::header("vm_nullable_any_fixture.h");
+use std::attribute as attribute;
+
+interface IRead {
+    fn Read() -> i32;
+}
+
+[From(IRead)]
+object Base {
+    public OnConstruct() {
+        Constructed(0);
+    }
+    OnDestruct() {
+        Destroyed(0);
+    }
+    public fn Read() -> i32 {
+        return 7;
+    }
+}
+
+[From(Base)]
+object Leaf {
+    value: i32 = 37;
+    public OnConstruct() {
+        Constructed(1);
+    }
+    OnDestruct() {
+        Destroyed(1);
+    }
+    public fn Read() -> i32 {
+        return self.value + 100;
+    }
+    public fn Set(value: i32) {
+        self.value = value;
+    }
+}
+
+[From(IRead)]
+object Sibling {
+    public OnConstruct() {
+        Constructed(2);
+    }
+    OnDestruct() {
+        Destroyed(2);
+    }
+    public fn Read() -> i32 {
+        return 19;
+    }
+}
+
+object Holder<T, const Tag: usize = 7> {
+    value: T;
+    public OnConstruct(value: T) {
+        self.value = value;
+        Constructed(3);
+    }
+    OnDestruct() {
+        Destroyed(3);
+    }
+    public fn Read() -> T {
+        return self.value;
+    }
+}
+
+[Native, CppName(vm_object_any::Constructed)]
+fn Constructed(kind: i32);
+[Native, CppName(vm_object_any::Destroyed)]
+fn Destroyed(kind: i32);
+[Native, CppName(vm_object_any::Constructions)]
+fn Constructions(kind: i32) -> i32;
+[Native, CppName(vm_object_any::Destructions)]
+fn Destructions(kind: i32) -> i32;
+[Native, CppName(vm_object_any::Echo)]
+fn Echo(value: any) -> any;
+[Native, CppName(vm_object_any::Same)]
+fn Same(first: view any, second: ref any) -> bool;
+[Native, CppName(vm_object_any::Rebind)]
+fn Rebind(target: ref any, source: any);
+[Native, CppName(vm_object_any::Hold)]
+fn Hold(value: any);
+[Native, CppName(vm_object_any::Held)]
+fn Held() -> any;
+[Native, CppName(vm_object_any::Clear)]
+fn Clear();
+[Native, CppName(vm_object_any::Read), Instantiate(Leaf), Instantiate(Base), Instantiate(IRead), Instantiate(Holder<i32, 7>)]
+fn Read<T>(value: view any) -> i32;
+[Native, CppName(vm_object_any::Set), Instantiate(Leaf)]
+fn Set<T>(value: any, next: i32);
+[Native, CppName(vm_nullable_any::IsNull)]
+fn IsNull(value: view any) -> bool;
+[Native, CppName(vm_nullable_any::IsOpaque)]
+fn IsOpaque(value: view any) -> bool;
+[Native, CppName(vm_nullable_any::Pointer)]
+fn Pointer(value: view any) -> opaque;
+[Native, CppName(vm_nullable_any::Token)]
+fn Token() -> opaque;
+[Native, CppName(vm_nullable_any::NullPointer)]
+fn NullPointer() -> opaque;
+[Native, CppName(vm_nullable_any::RebindNull)]
+fn RebindNull(value: ref any);
+[Native, CppName(vm_nullable_any::Print)]
+fn Print();
+
+fn Escape() -> any {
+    let value: Leaf? = Leaf();
+    return Echo(value);
+}
+fn EscapeNull() -> any {
+    let value: Leaf? = null;
+    return Echo(value);
+}
+fn NullCast() -> i32 {
+    let value = EscapeNull();
+    let invalid = value fit Leaf?;
+    return 0;
+}
+fn NullOpaqueCast() -> i32 {
+    let value: opaque? = null;
+    let erased: any = value;
+    let invalid = erased fit opaque?;
+    return 0;
+}
+fn SafePoint() -> i32 {
+    return 0;
+}
+
+fn Entry() -> i32 {
+    mut round = 0;
+    while (round < 30) {
+        {
+            mut empty: Leaf? = null;
+            mut absent: any = empty;
+            let echoedNull = Echo(absent);
+            if (absent != null or !IsNull(ref absent) or absent is Leaf or absent is Leaf? or
+                !IsNull(ref echoedNull) or EscapeNull() != null) {
+                return 1;
+            }
+            empty = Leaf();
+            mut value: any = empty;
+            let alias: any = value;
+            if (!Same(ref value, ref value) or !(value is Leaf) or !(value is Leaf?) or Read<Leaf>(ref value) != 137) {
+                return 2;
+            }
+            let nullable = Echo(value) fit Leaf?;
+            if (nullable == null) {
+                return 3;
+            }
+            if (nullable.Read() != 137 or (value fit Leaf) != nullable) {
+                return 3;
+            }
+            Set<Leaf>(value, 23);
+            let base: Base? = nullable fit Base;
+            let reader: IRead? = nullable fit IRead;
+            let baseAny: any = base;
+            let readerAny: any = reader;
+            if (Read<Base>(ref baseAny) != 123 or Read<IRead>(ref readerAny) != 123 or
+                (Echo(baseAny) fit Leaf) != nullable or !(readerAny is IRead?)) {
+                return 4;
+            }
+            Rebind(ref absent, readerAny);
+            RebindNull(ref value);
+            if (!IsNull(ref value) or value is Leaf? or !(alias is Leaf) or Read<Leaf>(ref alias) != 123) {
+                return 5;
+            }
+            let sibling: IRead? = Sibling() fit IRead;
+            let replacement: any = sibling;
+            Rebind(ref absent, replacement);
+            if (!(absent is Sibling) or Read<IRead>(ref absent) != 19) {
+                return 6;
+            }
+            let holder: Holder<i32>? = Holder<i32>(41);
+            let holderAny: any = holder;
+            if (Read<Holder<i32>>(ref holderAny) != 41 or !(Echo(holderAny) is Holder<i32>?) or
+                (holderAny fit Holder<i32>).Read() != 41) {
+                return 7;
+            }
+            let nullPointer: opaque? = null;
+            let presentPointer: opaque? = Token();
+            let nullAny: any = nullPointer;
+            let pointerAny: any = presentPointer;
+            let zeroAny: any = NullPointer();
+            if (nullAny != null or zeroAny != null or !IsNull(ref nullAny) or IsOpaque(ref nullAny) or
+                !(pointerAny is opaque) or !(pointerAny is opaque?) or Pointer(ref pointerAny) != Token() or
+                (Echo(pointerAny) fit opaque?) != Token()) {
+                return 8;
+            }
+            Hold(readerAny);
+        }
+        {
+            let held = Held();
+            if (Destructions(1) != round or Read<Leaf>(ref held) != 123) {
+                return 9;
+            }
+        }
+        Clear();
+        round += 1;
+        if (Constructions(0) != round or Destructions(0) != round or
+            Constructions(1) != round or Destructions(1) != round or
+            Constructions(2) != round or Destructions(2) != round or
+            Constructions(3) != round or Destructions(3) != round) {
+            return 10;
+        }
+    }
+    Print();
+    return 0;
+}

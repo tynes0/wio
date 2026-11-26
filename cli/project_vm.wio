@@ -1,0 +1,130 @@
+use project_manifest;
+use std::fs as fs;
+use std::path as path;
+use std::process as process;
+use std::result as result;
+use std::serialization as serialization;
+
+realm SelfHostedProject
+{
+    fn VmProjectDirectory(info: ProjectInfo) -> string
+    {
+        return path::Join(info.buildDirectory, "vm-module-project");
+    }
+
+    fn VmRuntimePackage(info: ProjectInfo) -> string
+    {
+        return path::JoinAll([info.vmRuntimePrefix, "lib", "cmake", "WioVmRuntime"]);
+    }
+
+    fn VmProjectMetadata(info: ProjectInfo) -> string
+    {
+        return path::JoinAll([VmProjectDirectory(info), "build", "artifacts-" + info.config + ".json"]);
+    }
+
+    fn VmTool(info: ProjectInfo, arguments: string[]) -> std::Result<i32>
+    {
+        return process::Run(info.vmCmake, arguments, info.projectRoot);
+    }
+
+    fn VmJsonStrings(values: string[]) -> string
+    {
+        mut encoded: string[] = [];
+        for value in values
+        {
+            encoded.Push(serialization::QuoteJson(value));
+        }
+
+        return "[" + encoded.Join(",") + "]";
+    }
+
+    fn VerifyVmLibrary(info: ProjectInfo) -> std::Result<i32>
+    {
+        return VmTool(info, [
+            "-DACTION=verify", "-DMETADATA=" + VmProjectMetadata(info),
+            "-DEXPECTED_KIND=" + info.wioTarget, "-DEXPECTED_MODULE=" + info.vmModuleOutput,
+            "-DEXPECTED_HOST=" + (info.hostEnabled ? info.vmHostOutput : ""),
+            "-P", path::Join(VmRuntimePackage(info), "ManageWioVmProject.cmake")
+        ]);
+    }
+
+    fn BuildVmLibrary(info: ProjectInfo, forceRebuild: bool) -> std::Result<i32>
+    {
+        let package = VmRuntimePackage(info);
+        if (not fs::IsFile(path::Join(package, "WioVmRuntimeConfig.cmake")))
+        {
+            return Failure<i32>("VM library builds require an installed WioVmRuntime. Set vm.runtimePrefix to its prefix; its C++ toolchain and configuration must match the wrapper/host.");
+        }
+
+        mut producers: string[] = [info.vmBridgeOutput];
+        for library in info.vmNativeLibraries
+        {
+            producers.Push(library);
+        }
+
+        mut plan = "{\n";
+        plan += "\"kind\":" + serialization::QuoteJson(info.wioTarget);
+        plan += ",\"bytecode\":" + serialization::QuoteJson(info.vmBytecodeOutput);
+        plan += ",\"module\":" + serialization::QuoteJson(info.vmModuleOutput);
+        plan += ",\"host\":" + serialization::QuoteJson(info.hostEnabled ? info.vmHostOutput : "");
+        plan += ",\"getter\":" + serialization::QuoteJson(info.vmGetter);
+        plan += ",\"producers\":" + VmJsonStrings(producers);
+        plan += ",\"runtimeLibraries\":" + VmJsonStrings(info.vmRuntimeLibraries);
+        plan += ",\"hostSources\":" + VmJsonStrings(info.hostSourceFiles);
+        plan += ",\"hostIncludes\":" + VmJsonStrings(info.hostIncludeDirs);
+        plan += ",\"hostLinkDirs\":" + VmJsonStrings(info.hostLinkDirs);
+        plan += ",\"hostArguments\":" + VmJsonStrings(info.hostCompilerArgs);
+        plan += ",\"hostLinkArguments\":" + VmJsonStrings(info.hostLinkerArgs);
+        mut libraries: string[] = [];
+        for library in info.hostLinkLibraries
+        {
+            libraries.Push((library.Contains("/") or library.Contains("\\"))
+                ? path::AbsoluteFromRaw(info.projectRoot, library) : library);
+        }
+
+        plan += ",\"hostLibraries\":" + VmJsonStrings(libraries) + "\n}\n";
+        let directory = VmProjectDirectory(info);
+        let planFile = path::Join(directory, "plan.json");
+        if (not fs::TryWriteTextEnsured(planFile, plan))
+        {
+            return Failure<i32>($"Could not write VM module build plan: ${planFile}");
+        }
+
+        mut configure: string[] = [
+            "-S", path::Join(package, "project"), "-B", path::Join(directory, "build"),
+            "-DWIO_VM_PLAN=" + planFile, "-DWioVmRuntime_DIR=" + package,
+            "-DCMAKE_BUILD_TYPE=" + info.config
+        ];
+        if (info.vmGenerator != "")
+        {
+            configure.Push("-G");
+            configure.Push(info.vmGenerator);
+        }
+
+        if (info.vmGeneratorPlatform != "")
+        {
+            configure.Push("-A");
+            configure.Push(info.vmGeneratorPlatform);
+        }
+
+        if (info.vmCxxCompiler != "")
+        {
+            configure.Push("-DCMAKE_CXX_COMPILER=" + info.vmCxxCompiler);
+        }
+
+        let configured = VmTool?(info, configure);
+        if (configured != 0) return std::Ok<i32>(configured);
+
+        mut build: string[] = ["--build", path::Join(directory, "build"), "--config", info.config,
+            "--target", "wio_vm_project_ready", "--parallel", "1"];
+        // Rebuild is already forwarded to the Wio compiler. CMake tracks its
+        // new bytecode/provider files; do not clean immutable old generations.
+        return VmTool(info, build);
+    }
+
+    fn InstallVmLibrary(info: ProjectInfo, destination: string) -> std::Result<i32>
+    {
+        return VmTool(info, ["--install", path::Join(VmProjectDirectory(info), "build"),
+            "--config", info.config, "--component", "WioVmProject", "--prefix", destination]);
+    }
+}

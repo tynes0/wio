@@ -1,0 +1,116 @@
+using cpp::header("vm_dictionary_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_dictionary::Sample)]
+component Sample {
+    public value: i32;
+}
+
+[Native, CppName(vm_dictionary::Sum)]
+fn Sum(values: view Dict<string, i32>) -> i32;
+[Native, CppName(vm_dictionary::Transform)]
+fn Transform(values: Dict<string, i32>) -> Dict<string, i32>;
+[Native, CppName(vm_dictionary::Mutate)]
+fn Mutate(values: ref Dict<string, i32>);
+[Native, CppName(vm_dictionary::Same)]
+fn Same(first: view Dict<string, i32>, second: ref Dict<string, i32>) -> bool;
+[Native, CppName(vm_dictionary::Ordered)]
+fn Ordered(values: Tree<i32, string>) -> Tree<i32, string>;
+[Native, CppName(vm_dictionary::Labels)]
+fn Labels(values: Tree<text, string>) -> Tree<text, string>;
+[Native, CppName(vm_dictionary::TransformRows)]
+fn TransformRows(values: Dict<string, i32[]>) -> Dict<string, i32[]>;
+[Native, CppName(vm_dictionary::MutateRows)]
+fn MutateRows(values: ref Dict<string, i32[]>);
+[Native, CppName(vm_dictionary::Batches)]
+fn Batches(values: Dict<string, i32>[]) -> Dict<string, i32>[];
+[Native, CppName(vm_dictionary::Nested)]
+fn Nested(values: Dict<string, Tree<i32, string>>) -> Dict<string, Tree<i32, string>>;
+[Native, CppName(vm_dictionary::Samples)]
+fn Samples(values: Dict<string, Sample>) -> Dict<string, Sample>;
+[Native, CppName(vm_dictionary::Hidden)]
+fn Hidden(values: view Dict<string, Sample>) -> i32;
+type Pointer = opaque?;
+[Native, CppName(vm_dictionary::Token)]
+fn Token() -> opaque;
+[Native, CppName(vm_dictionary::Pointers)]
+fn Pointers(values: Dict<string, Pointer>) -> Dict<string, Pointer>;
+[Native, CppName(vm_dictionary::Empty)]
+fn Empty() -> Dict<string, i32>;
+[Native, CppName(vm_dictionary::Print)]
+fn Print(value: string);
+
+fn Escape() -> Dict<string, Sample> {
+    let samples: Dict<string, Sample> = { "sample": Sample() };
+    return Samples(samples);
+}
+
+fn Entry() -> i32 {
+    mut values: Dict<string, i32> = { "a\0b": 2, "beta": 5, "": 11 };
+    let borrow: view i32 = ref values["beta"];
+    let copy = Transform(values);
+    if (Sum(ref values) != 18 or copy.Count() != 4usize or copy["a\0b"] != 19 or copy["new"] != 23) {
+        return 1;
+    }
+    Mutate(ref values);
+    if (deref borrow != 8 or Sum(ref values) != 27) {
+        return 2;
+    }
+    if (!Same(ref values, ref values) or deref borrow != 29) {
+        return 3;
+    }
+    let empty: Dict<string, i32> = {};
+    if (Sum(ref empty) != 0 or Empty().Count() != 0usize) {
+        return 4;
+    }
+    let ordered: Tree<i32, string> = {< 3: "third", 1: "a\0b" >};
+    let tree = Ordered(ordered);
+    let keys = tree.Keys();
+    if (keys[0usize] != 1 or keys[1usize] != 2 or keys[2usize] != 3 or
+        tree[1] != "a\0b\0native" or ordered[1] != "a\0b") {
+        return 5;
+    }
+    let labels: Tree<text, string> = {< u"İstanbul": "city" >};
+    let unicode = Labels(labels);
+    if (unicode[u"İstanbul"] != "city" or unicode[u"🚀"] != "rocket") {
+        return 6;
+    }
+    let row: i32[] = [3, 7];
+    mut rows: Dict<string, i32[]> = { "row": row };
+    let item: view i32 = ref rows["row"][1usize];
+    let transformed = TransformRows(rows);
+    if (transformed["row"].Count() != 3usize or transformed["row"][2usize] != 19 or rows["row"].Count() != 2usize) {
+        return 7;
+    }
+    MutateRows(ref rows);
+    if (deref item != 61) {
+        return 8;
+    }
+    let batches: Dict<string, i32>[] = [values];
+    let resultBatches = Batches(batches);
+    if (resultBatches.Count() != 2usize or resultBatches[0usize]["batch"] != 71 or resultBatches[1usize]["last"] != 73) {
+        return 9;
+    }
+    let nestedInput: Dict<string, Tree<i32, string>> = { "tree": ordered };
+    let nested = Nested(nestedInput);
+    if (nested["tree"][3] != "nested" or nestedInput["tree"][3] != "third") {
+        return 10;
+    }
+    let samples: Dict<string, Sample> = { "sample": Sample() };
+    let result = Samples(samples);
+    if (result["sample"].value != 48 or Hidden(ref result) != 83 or Hidden(ref samples) != 41) {
+        return 11;
+    }
+    let escaped = Escape();
+    if (escaped["sample"].value != 48) {
+        return 13;
+    }
+    let pointer: Pointer = Token();
+    let pointers: Dict<string, Pointer> = { "null": null, "token": pointer };
+    let pointerResult = Pointers(pointers);
+    if (pointerResult["copy"] != pointer or pointerResult["null"] != null) {
+        return 12;
+    }
+    Print($"native-dictionary-ok: ${Sum(ref values)}:${tree.Count()}:${deref item}:${result["sample"].value}");
+    return 0;
+}

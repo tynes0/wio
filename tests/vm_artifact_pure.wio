@@ -1,0 +1,4 @@
+fn Entry(args: string[]) -> i32
+{
+    return args.Count() == 2usize and args[1] == "hello" ? 0 : 7;
+}

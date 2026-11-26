@@ -1,10 +1,25 @@
 #include "wio/wir/type.h"
 
 #include <stdexcept>
+#include <string_view>
+#include <type_traits>
 #include <utility>
 
 namespace wio::wir
 {
+    namespace
+    {
+        void hashCombine(std::size_t& seed, const std::size_t value)
+        {
+            seed ^= value + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
+        }
+
+        template <typename T> void hashValue(std::size_t& seed, const T value)
+        {
+            hashCombine(seed, std::hash<T>{}(value));
+        }
+    } // namespace
+
     TypeTable::TypeTable()
     {
         voidType_ = intern(Type{.kind = TypeKind::Void});
@@ -16,14 +31,20 @@ namespace wio::wir
 
     TypeId TypeTable::intern(Type type)
     {
-        for (std::size_t index = 0; index < types_.size(); ++index)
+        refreshDirtyIndex();
+        const std::size_t typeFingerprint = fingerprint(type);
+        const auto [first, last] = typeIndex_.equal_range(typeFingerprint);
+        for (auto candidate = first; candidate != last; ++candidate)
         {
-            if (types_[index] == type)
-                return TypeId{static_cast<TypeId::ValueType>(index)};
+            const TypeId id = candidate->second;
+            if (id.value() < types_.size() && types_[id.value()] == type)
+                return id;
         }
 
         const auto id = TypeId{static_cast<TypeId::ValueType>(types_.size())};
         types_.push_back(std::move(type));
+        fingerprints_.push_back(typeFingerprint);
+        typeIndex_.emplace(typeFingerprint, id);
         return id;
     }
 
@@ -31,20 +52,86 @@ namespace wio::wir
     {
         if (type.kind != TypeKind::Named)
             return intern(std::move(type));
-        for (std::size_t index = 0; index < types_.size(); ++index)
+        refreshDirtyIndex();
+        const std::size_t typeFingerprint = fingerprint(type);
+        const auto [first, last] = typeIndex_.equal_range(typeFingerprint);
+        for (auto candidate = first; candidate != last; ++candidate)
         {
-            const Type& existing = types_[index];
+            const TypeId id = candidate->second;
+            if (id.value() >= types_.size())
+                continue;
+            const Type& existing = types_[id.value()];
             if (existing.kind == TypeKind::Named && existing.name == type.name &&
                 existing.arguments == type.arguments && existing.nominalKind == type.nominalKind &&
                 existing.nominalRepresentation == type.nominalRepresentation &&
                 existing.nominalValueModel == type.nominalValueModel)
             {
-                return TypeId{static_cast<TypeId::ValueType>(index)};
+                return id;
             }
         }
         const TypeId id{static_cast<TypeId::ValueType>(types_.size())};
         types_.push_back(std::move(type));
+        fingerprints_.push_back(typeFingerprint);
+        typeIndex_.emplace(typeFingerprint, id);
         return id;
+    }
+
+    std::size_t TypeTable::fingerprint(const Type& type)
+    {
+        std::size_t result = 0;
+        hashValue(result, static_cast<std::underlying_type_t<TypeKind>>(type.kind));
+        hashValue(result, std::string_view(type.name));
+        for (const TypeId argument : type.arguments)
+            hashValue(result, argument.value());
+        hashValue(result, static_cast<std::underlying_type_t<NominalKind>>(type.nominalKind));
+        hashValue(result, static_cast<std::underlying_type_t<NominalRepresentation>>(type.nominalRepresentation));
+        hashValue(result, static_cast<std::underlying_type_t<NominalValueModel>>(type.nominalValueModel));
+
+        // Nominal identity deliberately excludes mutable layout/reflection
+        // fields. Interning a declaration before and after its layout is
+        // materialized must continue to return the same TypeId.
+        if (type.kind == TypeKind::Named)
+            return result;
+
+        hashValue(result, type.isMutable);
+        hashValue(result, type.staticExtent.has_value());
+        if (type.staticExtent)
+            hashValue(result, *type.staticExtent);
+        hashValue(result, type.extentParameter.value());
+        hashValue(result, static_cast<std::underlying_type_t<OwnershipModel>>(type.ownership));
+        hashValue(result, static_cast<std::underlying_type_t<CleanupKind>>(type.cleanup));
+        return result;
+    }
+
+    void TypeTable::indexType(const TypeId id, const Type& type)
+    {
+        const std::size_t newFingerprint = fingerprint(type);
+        if (id.value() >= fingerprints_.size())
+            fingerprints_.resize(static_cast<std::size_t>(id.value()) + 1u);
+        fingerprints_[id.value()] = newFingerprint;
+        typeIndex_.emplace(newFingerprint, id);
+    }
+
+    void TypeTable::refreshDirtyIndex()
+    {
+        for (const TypeId::ValueType dirtyValue : dirtyTypes_)
+        {
+            if (dirtyValue >= types_.size() || dirtyValue >= fingerprints_.size())
+                continue;
+
+            const TypeId id{dirtyValue};
+            const std::size_t oldFingerprint = fingerprints_[dirtyValue];
+            const auto [first, last] = typeIndex_.equal_range(oldFingerprint);
+            for (auto candidate = first; candidate != last;)
+            {
+                if (candidate->second == id)
+                    candidate = typeIndex_.erase(candidate);
+                else
+                    ++candidate;
+            }
+            indexType(id, types_[dirtyValue]);
+        }
+        dirtyTypes_.clear();
     }
 
     const Type* TypeTable::tryGet(const TypeId id) const
@@ -66,6 +153,7 @@ namespace wio::wir
     {
         if (!id || id.value() >= types_.size())
             throw std::out_of_range("WIR type id is invalid");
+        dirtyTypes_.insert(id.value());
         return types_[id.value()];
     }
 
@@ -482,5 +570,72 @@ namespace wio::wir
     bool requiresCleanup(const Type& type)
     {
         return type.cleanup != CleanupKind::None;
+    }
+
+    bool supportsOwnedCopy(const Type& type)
+    {
+        return requiresCleanup(type) || (type.kind == TypeKind::Named && type.nominalKind == NominalKind::Component &&
+                                         type.nominalRepresentation == NominalRepresentation::NativePod &&
+                                         type.ownership == OwnershipModel::OwnedValue && type.nativeBinding &&
+                                         type.nativeBinding->standardLayout && type.nativeBinding->triviallyCopyable);
+    }
+
+    namespace
+    {
+        TypeId canonicalAnyPayload(TypeTable& types, const TypeId source, const unsigned depth)
+        {
+            const Type* original = types.tryGet(source);
+            if (!original || depth >= 64 ||
+                (original->kind != TypeKind::Array && original->kind != TypeKind::Dictionary))
+                return source;
+            Type materialized = *original;
+            if (materialized.kind == TypeKind::Array && materialized.name == "literal")
+            {
+                materialized.name.clear();
+                materialized.staticExtent.reset();
+                materialized.extentParameter = {};
+            }
+            for (TypeId& argument : materialized.arguments)
+                argument = canonicalAnyPayload(types, argument, depth + 1);
+            return types.intern(std::move(materialized));
+        }
+
+        bool compatibleAnyPayload(const TypeTable& types, const TypeId source, const TypeId payload,
+                                  const unsigned depth)
+        {
+            const Type* from = types.tryGet(source);
+            const Type* to = types.tryGet(payload);
+            if (!from || !to)
+                return false;
+            if (source == payload)
+                return true;
+            if (depth >= 64 || (from->kind != TypeKind::Array && from->kind != TypeKind::Dictionary) ||
+                from->kind != to->kind || from->arguments.size() != to->arguments.size())
+                return false;
+            Type expected = *from;
+            if (expected.kind == TypeKind::Array && expected.name == "literal")
+            {
+                expected.name.clear();
+                expected.staticExtent.reset();
+                expected.extentParameter = {};
+            }
+            expected.arguments = to->arguments;
+            if (expected != *to)
+                return false;
+            for (std::size_t index = 0; index < from->arguments.size(); ++index)
+                if (!compatibleAnyPayload(types, from->arguments[index], to->arguments[index], depth + 1))
+                    return false;
+            return true;
+        }
+    } // namespace
+
+    TypeId canonicalAnyPayloadType(TypeTable& types, const TypeId source)
+    {
+        return canonicalAnyPayload(types, source, 0);
+    }
+
+    bool isAnyPayloadTypeCompatible(const TypeTable& types, const TypeId source, const TypeId payload)
+    {
+        return compatibleAnyPayload(types, source, payload, 0);
     }
 } // namespace wio::wir

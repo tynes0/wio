@@ -35,6 +35,7 @@
         validatingGenericFunctionBodyKeys_.clear();
         currentScope_ = nullptr;
         currentExpectedExpressionType_ = nullptr;
+        discardedExpression_ = nullptr;
         currentNamespacePath_.clear();
         seenModuleApiVersion_ = false;
         seenModuleLoad_ = false;

@@ -1,0 +1,48 @@
+using cpp::header("release_probe.h");
+
+[native, cpp::name(release_probe::OpaqueToken)]
+fn Token() -> opaque?;
+
+[native, cpp::name(release_probe::OpaqueNull)]
+fn NullToken() -> opaque?;
+
+[native, cpp::name(release_probe::OpaqueReplace)]
+fn Replace(value: ref opaque?);
+
+[native, cpp::name(release_probe::OpaqueClear)]
+fn Clear(value: ref opaque?);
+
+[native, cpp::name(release_probe::OpaqueObserve)]
+fn Observe(left: ref opaque?, right: view opaque?) -> bool;
+
+[native, cpp::name(release_probe::OpaqueIsToken)]
+fn IsToken(value: opaque?) -> bool;
+
+[native, cpp::name(release_probe::OpaqueCall)]
+fn Call(callback: fn() -> opaque?) -> opaque?;
+
+fn Entry(args: string[]) -> i32
+{
+    // Opaque callback payloads are outside the current VM callback contract.
+    // Native C++ supports this branch; VM execution must reject it explicitly.
+    if (args.Count() > 1usize)
+    {
+        return IsToken(Call(() => Token())) ? 0 : 9;
+    }
+
+    mut value: opaque? = null;
+    if (!Observe(ref value, ref value) or !IsToken(value)) return 1;
+    Clear(ref value);
+    if (value != null) return 2;
+    Replace(ref value);
+    if (!IsToken(value)) return 3;
+    let replace: fn(ref opaque?) = Replace;
+    Clear(ref value);
+    replace(ref value);
+    if (!IsToken(value)) return 4;
+    if (!IsToken(Token()) or NullToken() != null) return 5;
+    let token: fn() -> opaque? = Token;
+    let empty: fn() -> opaque? = NullToken;
+    if (!IsToken(token()) or empty() != null) return 6;
+    return 0;
+}

@@ -1,0 +1,93 @@
+use raylib;
+use model;
+use appearance;
+
+// Sprite geometry is expressed as proportions of a local center/radius.
+// These shape/animation ratios are independent from page or panel positioning.
+realm pac {
+    realm sprites {
+        fn Pacman(center: rl::Vec2, radius: f32, direction: Direction, clock: f32) {
+            mut angle = 0.0f32;
+            if (direction == Direction::down) angle = 90.0f32;
+            if (direction == Direction::left) angle = 180.0f32;
+            if (direction == Direction::up) angle = 270.0f32;
+            let mouth = 8.0f32 + 18.0f32 * (0.5f32 + 0.5f32 * rl::Sin(clock * 11.0f32));
+            rl::Circle(center, radius + 3.0f32, rl::Color(255u8, 214u8, 64u8, 14u8));
+            rl::Sector(center, radius, angle + mouth, angle + 360.0f32 - mouth, 48, colors::Yellow());
+        }
+
+        fn Eyes(center: rl::Vec2, radius: f32, direction: Direction) {
+            mut dx = 0.0f32;
+            mut dy = 0.0f32;
+            if (direction == Direction::right) dx = 1.0f32;
+            if (direction == Direction::left) dx = -1.0f32;
+            if (direction == Direction::down) dy = 1.0f32;
+            if (direction == Direction::up) dy = -1.0f32;
+            for (side in 0i32..<2i32) {
+                let x = center.x + ((side fit f32) * 0.72f32 - 0.36f32) * radius;
+                let y = center.y - radius * 0.23f32;
+                rl::Circle(rl::Vec2(x, y), radius * 0.32f32, colors::Ink());
+                rl::Circle(rl::Vec2(x + dx * radius * 0.13f32, y + dy * radius * 0.13f32),
+                    radius * 0.16f32, rl::Rgb(25u8, 63u8, 146u8));
+            }
+
+        }
+
+        fn GhostBody(center: rl::Vec2, radius: f32, color: rl::Color, clock: f32) {
+            rl::Circle(rl::Vec2(center.x, center.y - radius * 0.15f32), radius, color);
+            rl::Box(rl::Rect(center.x - radius, center.y - radius * 0.15f32,
+                radius * 2.0f32, radius), color);
+            for (tooth in 0i32..<3i32) {
+                let x = center.x - radius + (tooth fit f32) * radius * 0.6667f32;
+                let wiggle = 0.08f32 * rl::Sin(clock * 9.0f32);
+                // Counter-clockwise triangles cut the skirt, using board background.
+                rl::Triangle(rl::Vec2(x, center.y + radius),
+                    rl::Vec2(x + radius * 0.6667f32, center.y + radius),
+                    rl::Vec2(x + radius * 0.3333f32, center.y + radius * (0.58f32 + wiggle)), colors::Background());
+            }
+
+        }
+
+        fn GhostSprite(ghost: Ghost, center: rl::Vec2, radius: f32, clock: f32, flash: bool) {
+            if (ghost.mode == GhostMode::eyes) {
+                Eyes(center, radius, ghost.actor.direction);
+                return;
+            }
+
+            if (ghost.mode == GhostMode::frightened) {
+                let white = flash and rl::Sin(clock * 12.0f32) > 0.0f32;
+                GhostBody(center, radius, white ? colors::Ink() : rl::Rgb(54u8, 82u8, 218u8), clock);
+                let face = white ? rl::Rgb(230u8, 67u8, 97u8) : colors::Ink();
+                rl::Circle(rl::Vec2(center.x - radius * 0.33f32, center.y - radius * 0.2f32), radius * 0.12f32, face);
+                rl::Circle(rl::Vec2(center.x + radius * 0.33f32, center.y - radius * 0.2f32), radius * 0.12f32, face);
+                for (segment in 0i32..<4i32) {
+                    let x = center.x - radius * 0.55f32 + (segment fit f32) * radius * 0.275f32;
+                    let a = segment % 2 == 0 ? 0.32f32 : 0.48f32;
+                    let b = segment % 2 == 0 ? 0.48f32 : 0.32f32;
+                    rl::Line(rl::Vec2(x, center.y + radius * a),
+                        rl::Vec2(x + radius * 0.275f32, center.y + radius * b), 1.5f32, face);
+                }
+
+                return;
+            }
+
+            GhostBody(center, radius, ghost.color, clock);
+            Eyes(center, radius, ghost.actor.direction);
+        }
+
+        fn Cherry(center: rl::Vec2, size: f32) {
+            let stem = rl::Rgb(111u8, 206u8, 137u8);
+            rl::Line(rl::Vec2(center.x - size * 0.38f32, center.y),
+                rl::Vec2(center.x + size * 0.2f32, center.y - size), 2.0f32, stem);
+            rl::Line(rl::Vec2(center.x + size * 0.4f32, center.y + size * 0.12f32),
+                rl::Vec2(center.x + size * 0.2f32, center.y - size), 2.0f32, stem);
+            rl::Circle(rl::Vec2(center.x - size * 0.38f32, center.y + size * 0.2f32), size * 0.48f32,
+                rl::Rgb(245u8, 72u8, 101u8));
+            rl::Circle(rl::Vec2(center.x + size * 0.4f32, center.y + size * 0.32f32), size * 0.48f32,
+                rl::Rgb(219u8, 50u8, 85u8));
+            rl::Circle(rl::Vec2(center.x - size * 0.52f32, center.y + size * 0.03f32), size * 0.13f32, colors::Ink());
+        }
+
+    }
+
+}

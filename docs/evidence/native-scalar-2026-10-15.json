@@ -1,0 +1,529 @@
+{
+  "Revision": "722e836f7c7a2a44c8d7db4b89bd52a8a2aa404b",
+  "Compiler": "g++.exe (x86_64-posix-seh-rev0, Built by MinGW-Builds project) 15.2.0",
+  "Flags": [
+    "-std=c++20",
+    "-O2",
+    "-ffp-contract=off",
+    "-static"
+  ],
+  "Repetitions": 15,
+  "CompilerHash": "9E491549B5C6CBE00D444E4AD2865D5AE4F95A4C0DB6C4283BA5086A8ACD8E68",
+  "RuntimeHash": "59FF4005117CB2C7CFF701629B98D7A599D4550B18FF40B3AA402923F8863941",
+  "FixtureHash": "B526C768105B20624B2B14EEFBEA05DE30BB7096C1275894865EDEE01BD71C9E",
+  "GeneratedBytes": 40484,
+  "GeneratedLines": 1052,
+  "BinaryBytes": 3618372,
+  "Sources": [
+    {
+      "Path": "compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "Hash": "CB542AFDCA5D53CB53B1BFB52AA6321540502665CA434D8B42A5AED22DC9D425"
+    },
+    {
+      "Path": "compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
+      "Hash": "0A63F7B229F5776BFCA504D1B25E0A0AB8363390EB1626AB47482ADCE19E7F13"
+    },
+    {
+      "Path": "compiler/include/wio/codegen/wir_cpp_storage_plan.h",
+      "Hash": "63DF2898DA036EB2AE68F85462BD9BC6A751ED516356B937FE83443F8FCBA988"
+    }
+  ],
+  "Artifacts": [
+    {
+      "Name": "cpp",
+      "GeneratedHash": "BB9FBF3EFB0840870FA5EB5697D11CE556403694827C756B704C86CC971BD0A0",
+      "BinaryHash": "A707F547F9585967BDE50947087175FB989A146A508082B6B6C882EBFCF6929F"
+    },
+    {
+      "Name": "wio",
+      "GeneratedHash": "6BBE9653DFBF1C485F40D17A8168F690615D3A663D9993780738F51033480E99",
+      "BinaryHash": "5BEE818CAAB94E6CFC56557B267EF0D8CC737809CFA7AF2747CB2B40B8A2C893"
+    },
+    {
+      "Name": "baseline",
+      "GeneratedHash": "2C7750CCE691BE141C345D7FF0AE89B2B02FA2FBE92114FD704276A22C4981E1",
+      "BinaryHash": "7C4F129577B670492A968C6FC6C1E6DDA975D85D255372D1337C46CF412DB26D"
+    },
+    {
+      "Name": "previous",
+      "GeneratedHash": "7F1F952F8F3814CCD9232C487C8B75FFE07F36A1D5098533840685E087633F80",
+      "BinaryHash": "1B8705EB302978A28FC464F10EEC09B28B68BB19C7BB22BC722F392E2AA21F7F"
+    }
+  ],
+  "Samples": [
+    {
+      "Name": "cpp",
+      "Round": 0,
+      "Warmup": true,
+      "Seconds": 0.0231525,
+      "WallSeconds": 0.0976344
+    },
+    {
+      "Name": "wio",
+      "Round": 0,
+      "Warmup": true,
+      "Seconds": 0.0235879,
+      "WallSeconds": 0.1705895
+    },
+    {
+      "Name": "baseline",
+      "Round": 0,
+      "Warmup": true,
+      "Seconds": 0.7847005,
+      "WallSeconds": 0.9079507
+    },
+    {
+      "Name": "previous",
+      "Round": 0,
+      "Warmup": true,
+      "Seconds": 0.6920337,
+      "WallSeconds": 0.8083038
+    },
+    {
+      "Name": "cpp",
+      "Round": 1,
+      "Warmup": false,
+      "Seconds": 0.0226935,
+      "WallSeconds": 0.0307023
+    },
+    {
+      "Name": "wio",
+      "Round": 1,
+      "Warmup": false,
+      "Seconds": 0.0233826,
+      "WallSeconds": 0.0342946
+    },
+    {
+      "Name": "baseline",
+      "Round": 1,
+      "Warmup": false,
+      "Seconds": 0.7801452,
+      "WallSeconds": 0.7896074
+    },
+    {
+      "Name": "previous",
+      "Round": 1,
+      "Warmup": false,
+      "Seconds": 0.6987938,
+      "WallSeconds": 0.7081357
+    },
+    {
+      "Name": "cpp",
+      "Round": 2,
+      "Warmup": false,
+      "Seconds": 0.0230803,
+      "WallSeconds": 0.0323672
+    },
+    {
+      "Name": "wio",
+      "Round": 2,
+      "Warmup": false,
+      "Seconds": 0.0231153,
+      "WallSeconds": 0.0336869
+    },
+    {
+      "Name": "baseline",
+      "Round": 2,
+      "Warmup": false,
+      "Seconds": 0.7691528,
+      "WallSeconds": 0.7796832
+    },
+    {
+      "Name": "previous",
+      "Round": 2,
+      "Warmup": false,
+      "Seconds": 0.6991589,
+      "WallSeconds": 0.7090571
+    },
+    {
+      "Name": "cpp",
+      "Round": 3,
+      "Warmup": false,
+      "Seconds": 0.0228988,
+      "WallSeconds": 0.0323897
+    },
+    {
+      "Name": "wio",
+      "Round": 3,
+      "Warmup": false,
+      "Seconds": 0.0235682,
+      "WallSeconds": 0.0335811
+    },
+    {
+      "Name": "baseline",
+      "Round": 3,
+      "Warmup": false,
+      "Seconds": 0.7784366,
+      "WallSeconds": 0.7879771
+    },
+    {
+      "Name": "previous",
+      "Round": 3,
+      "Warmup": false,
+      "Seconds": 0.7031395,
+      "WallSeconds": 0.7130178
+    },
+    {
+      "Name": "cpp",
+      "Round": 4,
+      "Warmup": false,
+      "Seconds": 0.0243639,
+      "WallSeconds": 0.032994
+    },
+    {
+      "Name": "wio",
+      "Round": 4,
+      "Warmup": false,
+      "Seconds": 0.0245826,
+      "WallSeconds": 0.0362795
+    },
+    {
+      "Name": "baseline",
+      "Round": 4,
+      "Warmup": false,
+      "Seconds": 0.7734929,
+      "WallSeconds": 0.7848985
+    },
+    {
+      "Name": "previous",
+      "Round": 4,
+      "Warmup": false,
+      "Seconds": 0.6998319,
+      "WallSeconds": 0.7090576
+    },
+    {
+      "Name": "cpp",
+      "Round": 5,
+      "Warmup": false,
+      "Seconds": 0.022148,
+      "WallSeconds": 0.0305468
+    },
+    {
+      "Name": "wio",
+      "Round": 5,
+      "Warmup": false,
+      "Seconds": 0.0230137,
+      "WallSeconds": 0.0324298
+    },
+    {
+      "Name": "baseline",
+      "Round": 5,
+      "Warmup": false,
+      "Seconds": 0.7729252,
+      "WallSeconds": 0.7818437
+    },
+    {
+      "Name": "previous",
+      "Round": 5,
+      "Warmup": false,
+      "Seconds": 0.690168,
+      "WallSeconds": 0.7001633
+    },
+    {
+      "Name": "cpp",
+      "Round": 6,
+      "Warmup": false,
+      "Seconds": 0.0225532,
+      "WallSeconds": 0.0303461
+    },
+    {
+      "Name": "wio",
+      "Round": 6,
+      "Warmup": false,
+      "Seconds": 0.0238094,
+      "WallSeconds": 0.0330474
+    },
+    {
+      "Name": "baseline",
+      "Round": 6,
+      "Warmup": false,
+      "Seconds": 0.7714193,
+      "WallSeconds": 0.7810283
+    },
+    {
+      "Name": "previous",
+      "Round": 6,
+      "Warmup": false,
+      "Seconds": 0.6956375,
+      "WallSeconds": 0.7047367
+    },
+    {
+      "Name": "cpp",
+      "Round": 7,
+      "Warmup": false,
+      "Seconds": 0.0222998,
+      "WallSeconds": 0.0312095
+    },
+    {
+      "Name": "wio",
+      "Round": 7,
+      "Warmup": false,
+      "Seconds": 0.0237264,
+      "WallSeconds": 0.0329594
+    },
+    {
+      "Name": "baseline",
+      "Round": 7,
+      "Warmup": false,
+      "Seconds": 0.7720512,
+      "WallSeconds": 0.7812714
+    },
+    {
+      "Name": "previous",
+      "Round": 7,
+      "Warmup": false,
+      "Seconds": 0.6924347,
+      "WallSeconds": 0.7018368
+    },
+    {
+      "Name": "cpp",
+      "Round": 8,
+      "Warmup": false,
+      "Seconds": 0.0229258,
+      "WallSeconds": 0.0306237
+    },
+    {
+      "Name": "wio",
+      "Round": 8,
+      "Warmup": false,
+      "Seconds": 0.0228356,
+      "WallSeconds": 0.0322396
+    },
+    {
+      "Name": "baseline",
+      "Round": 8,
+      "Warmup": false,
+      "Seconds": 0.7783782,
+      "WallSeconds": 0.787894
+    },
+    {
+      "Name": "previous",
+      "Round": 8,
+      "Warmup": false,
+      "Seconds": 0.7018711,
+      "WallSeconds": 0.7126695
+    },
+    {
+      "Name": "cpp",
+      "Round": 9,
+      "Warmup": false,
+      "Seconds": 0.0218192,
+      "WallSeconds": 0.0301684
+    },
+    {
+      "Name": "wio",
+      "Round": 9,
+      "Warmup": false,
+      "Seconds": 0.0235136,
+      "WallSeconds": 0.0334143
+    },
+    {
+      "Name": "baseline",
+      "Round": 9,
+      "Warmup": false,
+      "Seconds": 0.7712551,
+      "WallSeconds": 0.7809817
+    },
+    {
+      "Name": "previous",
+      "Round": 9,
+      "Warmup": false,
+      "Seconds": 0.7015441,
+      "WallSeconds": 0.7110749
+    },
+    {
+      "Name": "cpp",
+      "Round": 10,
+      "Warmup": false,
+      "Seconds": 0.0226784,
+      "WallSeconds": 0.0303894
+    },
+    {
+      "Name": "wio",
+      "Round": 10,
+      "Warmup": false,
+      "Seconds": 0.0237384,
+      "WallSeconds": 0.0330004
+    },
+    {
+      "Name": "baseline",
+      "Round": 10,
+      "Warmup": false,
+      "Seconds": 0.7761599,
+      "WallSeconds": 0.786603
+    },
+    {
+      "Name": "previous",
+      "Round": 10,
+      "Warmup": false,
+      "Seconds": 0.7002048,
+      "WallSeconds": 0.7100409
+    },
+    {
+      "Name": "cpp",
+      "Round": 11,
+      "Warmup": false,
+      "Seconds": 0.0224242,
+      "WallSeconds": 0.0300079
+    },
+    {
+      "Name": "wio",
+      "Round": 11,
+      "Warmup": false,
+      "Seconds": 0.0230678,
+      "WallSeconds": 0.0328366
+    },
+    {
+      "Name": "baseline",
+      "Round": 11,
+      "Warmup": false,
+      "Seconds": 0.7743436,
+      "WallSeconds": 0.7837321
+    },
+    {
+      "Name": "previous",
+      "Round": 11,
+      "Warmup": false,
+      "Seconds": 0.694345,
+      "WallSeconds": 0.7040785
+    },
+    {
+      "Name": "cpp",
+      "Round": 12,
+      "Warmup": false,
+      "Seconds": 0.0226579,
+      "WallSeconds": 0.0304237
+    },
+    {
+      "Name": "wio",
+      "Round": 12,
+      "Warmup": false,
+      "Seconds": 0.023163,
+      "WallSeconds": 0.0324774
+    },
+    {
+      "Name": "baseline",
+      "Round": 12,
+      "Warmup": false,
+      "Seconds": 0.7774045,
+      "WallSeconds": 0.7866672
+    },
+    {
+      "Name": "previous",
+      "Round": 12,
+      "Warmup": false,
+      "Seconds": 0.6983782,
+      "WallSeconds": 0.7076863
+    },
+    {
+      "Name": "cpp",
+      "Round": 13,
+      "Warmup": false,
+      "Seconds": 0.0218578,
+      "WallSeconds": 0.0296374
+    },
+    {
+      "Name": "wio",
+      "Round": 13,
+      "Warmup": false,
+      "Seconds": 0.0225561,
+      "WallSeconds": 0.0321208
+    },
+    {
+      "Name": "baseline",
+      "Round": 13,
+      "Warmup": false,
+      "Seconds": 0.7769002,
+      "WallSeconds": 0.786037
+    },
+    {
+      "Name": "previous",
+      "Round": 13,
+      "Warmup": false,
+      "Seconds": 0.7033745,
+      "WallSeconds": 0.7125069
+    },
+    {
+      "Name": "cpp",
+      "Round": 14,
+      "Warmup": false,
+      "Seconds": 0.0225458,
+      "WallSeconds": 0.0298219
+    },
+    {
+      "Name": "wio",
+      "Round": 14,
+      "Warmup": false,
+      "Seconds": 0.0230056,
+      "WallSeconds": 0.0319475
+    },
+    {
+      "Name": "baseline",
+      "Round": 14,
+      "Warmup": false,
+      "Seconds": 0.7795575,
+      "WallSeconds": 0.7897408
+    },
+    {
+      "Name": "previous",
+      "Round": 14,
+      "Warmup": false,
+      "Seconds": 0.6961083,
+      "WallSeconds": 0.7061861
+    },
+    {
+      "Name": "cpp",
+      "Round": 15,
+      "Warmup": false,
+      "Seconds": 0.0219725,
+      "WallSeconds": 0.0295566
+    },
+    {
+      "Name": "wio",
+      "Round": 15,
+      "Warmup": false,
+      "Seconds": 0.0225477,
+      "WallSeconds": 0.0314603
+    },
+    {
+      "Name": "baseline",
+      "Round": 15,
+      "Warmup": false,
+      "Seconds": 0.7746028,
+      "WallSeconds": 0.7839114
+    },
+    {
+      "Name": "previous",
+      "Round": 15,
+      "Warmup": false,
+      "Seconds": 0.7026382,
+      "WallSeconds": 0.71161
+    }
+  ],
+  "Summary": [
+    {
+      "Name": "cpp",
+      "Median": 0.0225532,
+      "Min": 0.0218192,
+      "Max": 0.0243639
+    },
+    {
+      "Name": "wio",
+      "Median": 0.023163,
+      "Min": 0.0225477,
+      "Max": 0.0245826
+    },
+    {
+      "Name": "baseline",
+      "Median": 0.7746028,
+      "Min": 0.7691528,
+      "Max": 0.7801452
+    },
+    {
+      "Name": "previous",
+      "Median": 0.6991589,
+      "Min": 0.690168,
+      "Max": 0.7033745
+    }
+  ]
+}

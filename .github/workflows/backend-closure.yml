@@ -1,0 +1,154 @@
+name: backend closure qualification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "releases/**", feature/backend-closure]
+    paths-ignore: ["docs/**", "*.md"]
+  pull_request:
+    paths-ignore: ["docs/**", "*.md"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-closure-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: ${{ matrix.os }} / ${{ matrix.config }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            config: Debug
+          - os: ubuntu-latest
+            config: Release
+          - os: macos-15
+            config: Release
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows'
+        with:
+          msystem: UCRT64
+          update: false
+          install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-binutils
+      - name: Select Windows generated-code toolchain
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '"C:/msys64/ucrt64/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append'
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+      - name: Build compiler, CLI and runtime artifacts
+        run: cmake --build build --target wio_playground wio_vm_runner wio_backend_workspace_test wio_float_parse_portability_test wio_wir_cpp_storage_plan_test wio_vm_string_capacity_test wio_wir_cpp_managed_storage_test wio_integer_format_test wio_wir_cpp_string_fast_paths_test wio_wir_cpp_append_reuse_plan_test wio_wir_cpp_concat_plan_test wio_concat_runtime_test wio_floating_value_format_test wio_vm_value_format_test wio_numeric_builder_test wio_numeric_append_optimizer_test --parallel 2
+      - name: Build interim-release native entry and global initialization proofs
+        run: cmake --build build --target wio_vm_native_bridge_test wio_vm_global_initialization_test wio_process_utf8_project_test --parallel 2
+      - name: Qualify interim-release correctness
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^(wio_release_019_semantics|wio_vm_native_bridge|wio_vm_global_initialization|wio_process_utf8_project)$"
+      - name: Preserve functional and scalar release gates
+        if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure -j 1
+          -R "^(wio_backend_workspace|wio_backend_unicode_outputs|wio_vm_platform_qualification|wio_float_parse_portability|wio_wir_cpp_(storage_plan|scalar_storage)|wio_std_builders_(consistency|style)|wio_vm_string_capacity|wio_wir_cpp_managed_(plan|storage)|wio_integer_format|wio_wir_integer_interpolation|wio_wir_cpp_string_fast_(plan|paths)|wio_playground_launcher_(options|profiles|signature)|wio_native_cost_(contract|extended_contract)|wio_measurement_contract|wio_native_cost_python_contract)$"
+      - name: Attribute Wio ownership events (GCC/gcov diagnostic, no speed gate)
+        if: runner.os != 'macOS' && (github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure')
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_native_ownership_attribution$"
+      - name: Attribute Wio live/peak memory (diagnostic, no speed gate)
+        if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_native_memory_attribution$"
+      - name: Attribute Wio observed bulk-copy traffic (GCC/linker diagnostic)
+        if: runner.os != 'macOS' && (github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure')
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_native_copy_attribution$"
+      - name: Qualify new N02 append optimization (native O0/O2 and VM)
+        if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_n02_append_(reuse|plan)$"
+      - name: Qualify Wio-written benchmark library and controller
+        if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_benchmark_contract$"
+      - name: Qualify new N02 concat closure (native O0/O2, memory failure and VM)
+        if: github.event_name != 'push' || github.ref != 'refs/heads/feature/backend-closure'
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_n02_concat_(plan|runtime|semantics)$"
+      - name: Build N03 stream fallback proof
+        run: cmake --build build --target wio_stream_fallback_test wio_format_stream_ownership_test --parallel 2
+      - name: Qualify new N03 formatting (float oracle, native O0/O2 and VM)
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_n03_(value_format|format_semantics|vm_format|stream_fallback|stream_ownership|stream_ownership_semantics|generated_stream|indexed_format)$"
+      - name: Qualify N03 direct numeric builder append
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_n03_numeric_builder_(plan|unit|semantics)$"
+      - name: Build new N03 formatting-call proof
+        run: cmake --build build --target wio_formatting_call_lowerer_test wio_native_string_borrow_plan_test wio_scalar_field_plan_test wio_formatted_size_test wio_receiver_plan_test wio_integer_hot_path_test wio_string_transfer_plan_test wio_string_init_plan_test wio_inline_string_init_test wio_scalar_format_plan_test wio_rendered_integer_test --parallel 2
+      - name: Qualify N03 shared scalar formatting calls
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_n03_(formatting_call_(plan|semantics)|native_string_borrow_plan|scalar_field_plan|formatted_size|receiver_plan|integer_hot_path|string_transfer_plan|string_init_plan|inline_string_init|scalar_format_plan|rendered_integer)$"
+      - name: Build N04 closed byte-array borrow proof
+        run: cmake --build build --target wio_native_byte_array_borrow_plan_test wio_vm_native_container_shape_test --parallel 2
+      - name: Qualify N04 byte reads, range writes and closed borrows (native O0/O2 and VM)
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_n04_(byte_io|byte_write_range|byte_buffer_bulk|runtime_profile|manifest_selection|backend_diagnostics|byte_array_borrow_(plan|semantics))$"
+      - name: Preserve native container shape, reserve and atomic copy-back
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_vm_native_container_shape$"
+      - name: Build updated Wio benchmark controller
+        run: cmake --build build --target wio_bench --parallel 1
+      - name: Qualify per-implementation sampling and journal
+        run: >-
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
+          -R "^wio_benchmark_sampling$"
+      - name: Preserve qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-closure-${{ matrix.os }}-${{ matrix.config }}
+          path: |
+            build/release-019-semantics/**/results.json
+            build/n04-byte-io-contract/**/results.json
+            build/n04-byte-write-range-contract/**/results.json
+            build/n04-byte-buffer-bulk-contract/**/results.json
+            build/n04-byte-array-borrow-contract/**/results.json
+            build/n04-byte-array-borrow-contract/**/*.cpp
+            build/n04-byte-array-borrow-contract/**/probe.h
+            build/n04-backend-diagnostics/**/results.json
+            build/benchmark-sampling/**/results.json
+            build/Testing/Temporary/
+            build/measurement-contract-*/evidence/results.json
+            build/native-cost-python-contract-*/**/results.json
+            build/native-ownership-attribution/**/results.json
+            build/native-memory-attribution/**/results.json
+            build/native-copy-attribution/**/results.json
+            build/n02-append-semantics/**/results.json
+            build/n02-concat-semantics/**/results.json
+            build/n03-format-semantics/**/results.json
+            build/n03-numeric-builder-semantics/**/results.json
+            build/n03-formatting-call-semantics/**/results.json
+            build/wio-benchmark-contract/**/results.json
+            build/wio-benchmark-contract/**/report.md

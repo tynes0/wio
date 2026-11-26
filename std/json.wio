@@ -175,7 +175,7 @@ realm std {
             mut result = Value();
             result.kind = Kind::number;
             result.numberValue = value;
-            result.numberText = std::ToString<f64>(value);
+            result.numberText = serialization::FormatJsonNumber(value);
             return result;
         }
 
@@ -484,7 +484,7 @@ realm std {
             if (value.IsInteger()) { return value.integerText; }
             if (value.IsNumber()) {
                 let encoded = match (value.numberText == "") {
-                    true: std::ToString<f64>(value.numberValue);
+                    true: serialization::FormatJsonNumber(value.numberValue);
                     assumed: value.numberText;
                 };
                 if (serialization::IsValidJsonNumber(encoded) and

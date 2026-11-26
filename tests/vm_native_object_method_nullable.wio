@@ -1,0 +1,115 @@
+using cpp::header("vm_object_nullable_fixture.h");
+use std::attribute as attribute;
+
+object Badge {
+    value: i32;
+    public OnConstruct(seed: i32) {
+        self.value = seed;
+        Constructed(1);
+    }
+    OnDestruct() {
+        Destroyed(1);
+    }
+    public fn Read() -> i32 {
+        return self.value;
+    }
+}
+
+object Counter {
+    value: i32;
+    public OnConstruct(seed: i32) {
+        self.value = seed;
+        Constructed(0);
+    }
+    OnDestruct() {
+        Destroyed(0);
+    }
+    public fn Read() -> i32 {
+        return self.value;
+    }
+    public fn Required(value: Counter) -> i32 {
+        return value.Read();
+    }
+    public fn MaybeSelf(enabled: bool) -> Counter? {
+        if (enabled) {
+            return deref self;
+        }
+        return null;
+    }
+    public fn Echo(value: Counter?) -> Counter? {
+        return value;
+    }
+    public fn ReadMaybe(value: Counter?) -> i32 {
+        if (value == null) {
+            return -1;
+        }
+        return value.Read();
+    }
+    public fn MakeBadge(seed: i32, enabled: bool) -> Badge? {
+        if (enabled) {
+            return Badge(seed);
+        }
+        return null;
+    }
+    public fn ReadBadge(value: Badge?) -> i32 {
+        if (value == null) {
+            return -1;
+        }
+        return value.Read();
+    }
+}
+
+[Native, CppName(vm_object_nullable::Constructed)]
+fn Constructed(kind: i32);
+[Native, CppName(vm_object_nullable::Destroyed)]
+fn Destroyed(kind: i32);
+[Native, CppName(vm_object_nullable::Constructions)]
+fn Constructions(kind: i32) -> i32;
+[Native, CppName(vm_object_nullable::Destructions)]
+fn Destructions(kind: i32) -> i32;
+[Native, CppName(vm_object_nullable::ReportCounts)]
+fn ReportCounts();
+[Native, CppName(vm_object_nullable::Exercise)]
+fn Exercise(value: Counter) -> i32;
+[Native, CppName(vm_object_nullable::Echo)]
+fn NativeEcho(value: Counter?) -> Counter?;
+[Native, CppName(vm_object_nullable::Capture)]
+fn Capture(value: Counter) -> u64;
+[Native, CppName(vm_object_nullable::ClearCapture)]
+fn ClearCapture();
+
+fn CaptureEntry() -> u64 {
+    let value = Counter(37);
+    return Capture(value);
+}
+
+fn SafePoint() -> i32 {
+    return 0;
+}
+
+fn Entry() -> i32 {
+    {
+        let owner = Counter(7);
+        let missing: Counter? = null;
+        if (NativeEcho(missing) != null) {
+            return 1;
+        }
+        let nullable: Counter? = owner;
+        let echoed = NativeEcho(nullable);
+        if (echoed == null) {
+            return 2;
+        }
+        if (echoed != owner or echoed.Read() != 7) {
+            return 3;
+        }
+        if (Exercise(owner) != 0) {
+            return 4;
+        }
+    }
+    if (Constructions(0) != 1 or Destructions(0) != 1 or
+        Constructions(1) != 40 or Destructions(1) != 40) {
+        ReportCounts();
+        return 5;
+    }
+    return 0;
+}

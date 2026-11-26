@@ -143,6 +143,12 @@ realm std {
         [Targets("parameter")]
         attribute NativeCallback(lifetime: string = "call", thread: string = "caller");
 
+        // Transfers one owning invocation claim to a native parameter.
+        // Normal Wio value/copy semantics still apply to the caller's value.
+        // Raw opaque pointers, callbacks and ref/view parameters cannot consume.
+        [Targets("parameter")]
+        attribute NativeConsume();
+
         [Targets("object", "component", "fn", "method")]
         attribute Instantiate(typeArguments: string[]);
 

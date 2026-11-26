@@ -153,6 +153,15 @@
             case TypeKind::GenericParameter:
             case TypeKind::ConstGenericParameter:
                 return allowGenericPlaceholders;
+            case TypeKind::Nullable:
+            {
+                Ref<Type> valueType = current.AsFast<NullableType>()->valueType;
+                while (valueType && valueType->kind() == TypeKind::Alias)
+                    valueType = valueType.AsFast<AliasType>()->aliasedType;
+                // Only opaque nullability has a POD representation (void*).
+                // Other nullable values use a wrapper, not a foreign POD field.
+                return valueType && valueType->kind() == TypeKind::Primitive && valueType->toString() == "opaque";
+            }
             case TypeKind::Array:
             {
                 auto arrayType = current.AsFast<ArrayType>();
@@ -164,6 +173,8 @@
             case TypeKind::Struct:
             {
                 auto structType = current.AsFast<StructType>();
+                if (structType && (structType->isEnum || structType->isFlagset))
+                    return isNativePodInteropFieldType(structType->enumUnderlyingType, allowGenericPlaceholders);
                 if (!structType || structType->isObject || structType->isInterface || !structType->isNativePodComponent)
                     return false;
 
@@ -186,26 +197,33 @@
             if (!structType || !structType->isNativePodComponent)
                 return;
 
+            const auto primary = structType->genericPrimaryType.Lock();
+            const auto& parameters = primary ? primary->genericParameterNames : structType->genericParameterNames;
+            const bool hasPack = primary ? primary->hasGenericParameterPack : structType->hasGenericParameterPack;
             const bool hasConcreteInstantiation =
-                structType->genericParameterNames.empty() ||
-                (!structType->genericArguments.empty() &&
-                 structType->genericArguments.size() == structType->genericParameterNames.size() &&
-                 std::ranges::all_of(structType->genericArguments, [](const Ref<Type>& genericArgument)
-                 {
-                     return genericArgument && !genericArgument->isUnknown() && !containsGenericParameterType(genericArgument);
-                 }));
+                parameters.empty() || ((!structType->genericArguments.empty() || (hasPack && primary)) &&
+                                       (hasPack ? structType->genericArguments.size() + 1 >= parameters.size()
+                                                : structType->genericArguments.size() == parameters.size()) &&
+                                       std::ranges::all_of(structType->genericArguments,
+                                                           [](const Ref<Type>& genericArgument)
+                                                           {
+                                                               return genericArgument &&
+                                                                      !genericArgument->isUnknown() &&
+                                                                      !containsGenericParameterType(genericArgument);
+                                                           }));
 
             if (!hasConcreteInstantiation)
                 return;
 
-            for (size_t fieldIndex = 0; fieldIndex < structType->fieldTypes.size() && fieldIndex < structType->fieldNames.size(); ++fieldIndex)
+            for (size_t fieldIndex = 0;
+                 fieldIndex < structType->fieldTypes.size() && fieldIndex < structType->fieldNames.size(); ++fieldIndex)
             {
                 if (isNativePodInteropFieldType(structType->fieldTypes[fieldIndex], false))
                     continue;
 
                 WIO_LOG_ADD_ERROR(
                     errorLocation,
-                    "Declaration-level @Native component '{}' field '{}' resolves to type '{}' which is not POD-native-compatible yet. Supported field types are primitives, POD-compatible static arrays, and other declaration-level @Native components.",
+                    "Declaration-level [Native] component '{}' field '{}' resolves to type '{}' which is not POD-native-compatible yet. Supported field types are primitives, opaque/opaque? pointers, enum/flagset scalars, POD-compatible static arrays, and other declaration-level [Native] components.",
                     structType->toString(),
                     structType->fieldNames[fieldIndex],
                     structType->fieldTypes[fieldIndex] ? structType->fieldTypes[fieldIndex]->toString() : "<unknown>"

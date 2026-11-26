@@ -1,0 +1,106 @@
+use std::result;
+use std::async as futures;
+
+using cpp::header("workloads.h");
+
+[native, cpp::name(native_costs::Begin)]
+fn Begin();
+
+[native, cpp::name(native_costs::Report)]
+fn Report(checksum: u64) -> i32;
+
+[native, cpp::name(native_costs::Hash)]
+fn Hash(value: view string) -> u64;
+
+[native, cpp::name(native_costs::ParseCount)]
+fn ParseCount(value: string) -> i32;
+
+[native, cpp::name(native_costs_extended::WeakRoundtrip)]
+fn WeakRoundtrip(value: u64) -> u64;
+
+async fn Ready(value: u64) -> u64
+{
+    return value;
+}
+
+fn Failure(code: i32) -> std::Result<u64>
+{
+    return std::Err<u64>(std::MakeResultError(std::ResultDomain::custom, code,
+        "expected diagnostic error payload longer than small string storage"));
+}
+
+fn Run(kind: string, count: i32) -> u64
+{
+    if (kind == "unicode")
+    {
+        let source = u"A🌍é日本語";
+        mut output: text = u"";
+        for (index in 0..<count)
+        {
+            output += source.Slice(1usize, 3usize);
+        }
+
+        let encoded = output.ToString();
+        return Hash(ref encoded);
+    }
+
+    if (kind == "dictionary")
+    {
+        mut values: Dict<i32, u64> = {};
+        for (index in 0..<count)
+        {
+            values.Set(index, (index fit u64) * 3u64);
+        }
+
+        mut sum = 0u64;
+        for (index in 0..<count)
+        {
+            sum = sum * 33u64 + values.GetOr(index, 99u64);
+        }
+
+        return sum * 33u64 + values.GetOr(count, 99u64);
+    }
+
+    mut sum = 0u64;
+    for (index in 0..<count)
+    {
+        if (kind == "result_error")
+        {
+            let result = Failure(index);
+            if (not result.IsError()) return 0u64;
+            let error = result.ErrorValue();
+            sum = sum * 33u64 + (error.code fit u64) + Hash(ref error.message);
+        }
+        else if (kind == "weak")
+        {
+            sum = sum * 33u64 + WeakRoundtrip(index fit u64);
+        }
+        else if (kind == "closure")
+        {
+            let offset = index fit u64;
+            let callback: fn(u64) -> u64 = (value: u64) => value + offset;
+            sum = sum * 33u64 + callback(1u64);
+        }
+        else if (kind == "async_ready")
+        {
+            let task = Ready((index fit u64) + 1u64);
+            if (not task.IsReady()) return 0u64;
+            sum = sum * 33u64 + futures::BlockOn<u64>(task);
+        }
+
+    }
+
+    return sum;
+}
+
+fn Entry(args: string[]) -> i32
+{
+    if (args.Count() != 3usize) return 2;
+    let kind = args[1usize];
+    if (kind != "unicode" and kind != "dictionary" and kind != "result_error" and
+        kind != "weak" and kind != "closure" and kind != "async_ready") return 3;
+    let count = ParseCount(args[2usize]);
+    Begin();
+    let checksum = Run(kind, count);
+    return Report(checksum);
+}

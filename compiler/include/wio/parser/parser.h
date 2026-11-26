@@ -37,9 +37,9 @@ namespace wio
         };
         std::unordered_map<std::string, ParserAttributeComposition> declaredAttributeCompositions_;
 
-        Token peek(int offset = 0) const;
-        Token previous() const;
-        Token advance();
+        [[nodiscard]] const Token& peek(int offset = 0) const;
+        [[nodiscard]] const Token& previous() const;
+        const Token& advance();
         void multiAdvance(int count);
         bool match(TokenType type, bool consume = false);
         bool match(TokenType type, std::string_view value, bool consume = false);

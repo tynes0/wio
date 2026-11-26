@@ -1,0 +1,28 @@
+// Scalar and object-array ToString calls share WIR dispatch and ordering.
+object Label
+{
+    private value: i32;
+
+    private calls: i32;
+
+    public fn OnConstruct(value: i32)
+    {
+        self.value = value;
+        self.calls = 0;
+    }
+
+    public fn ToString() -> string
+    {
+        self.calls += 1;
+        return $"Label(${self.value}:${self.calls})";
+    }
+}
+
+fn Entry() -> i32
+{
+    let label = Label(3);
+    if ($"${label}" != "Label(3:1)") return 1;
+    let labels: Label[] = [label, Label(4)];
+    if ($"${labels}" != "[Label(3:2), Label(4:1)]") return 2;
+    return 0;
+}

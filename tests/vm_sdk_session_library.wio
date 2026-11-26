@@ -1,0 +1,58 @@
+mut counter: i32 = 0;
+
+[module::api_version]
+fn ApiVersion() -> u32
+{
+    return 11;
+}
+
+[module::load]
+fn Load() -> i32
+{
+    counter = 10;
+    return 0;
+}
+
+[module::update]
+fn Update(delta: f32)
+{
+    counter += (delta * 10.0) fit i32;
+}
+
+[module::unload]
+fn Unload()
+{
+    counter = -1;
+}
+
+[module::save_state]
+fn Save() -> i32
+{
+    return counter;
+}
+
+[module::restore_state]
+fn Restore(value: i32) -> i32
+{
+    counter = value;
+    return 0;
+}
+
+[export]
+fn Read() -> i32
+{
+    return counter;
+}
+
+[export]
+fn Bump() -> i32
+{
+    counter += 1;
+    return counter;
+}
+
+[export]
+fn Message() -> string
+{
+    return "VM session closed safely 🚀";
+}

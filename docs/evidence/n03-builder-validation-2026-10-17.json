@@ -1,0 +1,157 @@
+{
+  "passed": true,
+  "processes": [
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "F:\\Projects\\wio\\tests\\numeric_builder_test.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "-o",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\numeric-unit.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\numeric-unit.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\main.wio",
+        "--emit-lowered-wir",
+        "--ir-output",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\numeric.lwir"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated Lowered WIR output: F:/Projects/wio/build/n03-numeric-builder-semantics/2f8757d763f547ebb7c09b7be01535db/numeric.lwir\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\main.wio",
+        "--emit-cpp"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n03-numeric-builder-semantics/2f8757d763f547ebb7c09b7be01535db/main.wio.cpp\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "-ffp-contract=off",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\main.wio:12:25: warning: integer constant is so large that it is unsigned\n   12 |     builder.Append(-9223372036854775807i64 - 1i64);\n      |                         ^~~~~~~~~~~~~~~~~~~\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "-ffp-contract=off",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\main.wio:12:25: warning: integer constant is so large that it is unsigned\n   12 |     builder.Append(-9223372036854775807i64 - 1i64);\n      |                         ^~~~~~~~~~~~~~~~~~~\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\main.wio",
+        "--target",
+        "shared",
+        "--native-bridge-only",
+        "--output",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\bridge.dll",
+        "--bytecode-sidecar",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\main.wiob"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n03-numeric-builder-semantics/2f8757d763f547ebb7c09b7be01535db/bridge.wio.cpp\nGenerated backend output: F:/Projects/wio/build/n03-numeric-builder-semantics/2f8757d763f547ebb7c09b7be01535db/bridge.dll\nGenerated bytecode output: F:/Projects/wio/build/n03-numeric-builder-semantics/2f8757d763f547ebb7c09b7be01535db/main.wiob\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "--vm-run-bytecode",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\bridge.dll"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "file",
+        "check",
+        "F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\reject.wio"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Error [F:\\Projects\\wio\\build\\n03-numeric-builder-semantics\\2f8757d763f547ebb7c09b7be01535db\\reject.wio:6:5]: Generic callable 'Append' rejects type arguments <string> because of @Apply constraints.\n",
+      "stderr": ""
+    }
+  ]
+}

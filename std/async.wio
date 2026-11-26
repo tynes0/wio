@@ -204,6 +204,11 @@ realm std {
                 return true;
             }
 
+            async fn CompletedWhenReady<T>(task: coroutine<T>) -> bool {
+                await task;
+                return true;
+            }
+
             async fn IncompleteAfter(milliseconds: u64) -> bool {
                 await std::async::Sleep(milliseconds);
                 return false;
@@ -211,13 +216,18 @@ realm std {
         }
 
         async fn TimeoutOption<T>(task: coroutine<T>, milliseconds: u64) -> std::Option<T> {
-            let candidates: coroutine<std::Option<T> >[] = [
-                detail::PresentWhenReady<T>(task),
-                detail::AbsentAfter<T>(milliseconds)
+            // Race readiness, not Option objects. Keep Option construction in
+            // Wio; native task combinators do not need an Option method proxy.
+            let candidates: coroutine<bool>[] = [
+                detail::CompletedWhenReady<T>(task),
+                detail::IncompleteAfter(milliseconds)
             ];
-            let result = await Race(candidates);
-            if (result.IsNone()) { Cancel<T>(task); }
-            return result;
+            let completed = await Race<bool>(candidates);
+            if (not completed) {
+                Cancel<T>(task);
+                return std::None<T>();
+            }
+            return std::Some<T>(await task);
         }
 
         async fn TimeoutCompleted(task: coroutine<void>, milliseconds: u64) -> bool {

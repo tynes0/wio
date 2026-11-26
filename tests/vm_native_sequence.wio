@@ -1,0 +1,91 @@
+using cpp::header("vm_sequence_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_sequence::Sample)]
+component Sample {
+    public value: i32;
+}
+
+[Native, CppName(vm_sequence::Sum)]
+fn Sum(values: view i32[]) -> i32;
+[Native, CppName(vm_sequence::Transform)]
+fn Transform(values: i32[]) -> i32[];
+[Native, CppName(vm_sequence::Mutate)]
+fn Mutate(values: ref i32[]);
+[Native, CppName(vm_sequence::Same)]
+fn Same(first: view i32[], second: ref i32[]) -> bool;
+[Native, CppName(vm_sequence::Words)]
+fn Words(values: string[]) -> string[];
+[Native, CppName(vm_sequence::Texts)]
+fn Texts(values: text[]) -> text[];
+[Native, CppName(vm_sequence::Bits)]
+fn Bits(values: bool[]) -> bool[];
+type Pointer = opaque?;
+[Native, CppName(vm_sequence::Token)]
+fn Token() -> opaque;
+[Native, CppName(vm_sequence::Pointers)]
+fn Pointers(values: Pointer[]) -> Pointer[];
+[Native, CppName(vm_sequence::Nested)]
+fn Nested(values: i32[][]) -> i32[][];
+[Native, CppName(vm_sequence::Samples)]
+fn Samples(values: Sample[]) -> Sample[];
+[Native, CppName(vm_sequence::Hidden)]
+fn Hidden(values: view Sample[]) -> i32;
+[Native, CppName(vm_sequence::Print)]
+fn Print(value: string);
+
+fn Entry() -> i32 {
+    mut values: i32[] = [2, 5, 11];
+    let borrow: view i32 = ref values[1usize];
+    let copy = Transform(values);
+    if (Sum(ref values) != 18 or copy.Count() != 4usize or copy[0usize] != 4 or copy[3usize] != 19) {
+        return 1;
+    }
+    Mutate(ref values);
+    if (deref borrow != 8 or Sum(ref values) != 27) {
+        return 2;
+    }
+    if (!Same(ref values, ref values) or deref borrow != 29) {
+        return 3;
+    }
+    let empty: i32[] = [];
+    if (Sum(ref empty) != 0 or Transform(empty).Count() != 1usize) {
+        return 4;
+    }
+    let words: string[] = ["a\0b", ""];
+    let strings = Words(words);
+    if (strings.Count() != 3usize or strings[0usize] != "a\0b\0native" or words[0usize] != "a\0b") {
+        return 5;
+    }
+    let texts: text[] = [u"İstanbul", u""];
+    let unicode = Texts(texts);
+    if (unicode.Count() != 3usize or unicode[0usize] != u"İstanbul" or unicode[2usize] != u"🚀") {
+        return 6;
+    }
+    let bits: bool[] = [true, false, true];
+    let inverted = Bits(bits);
+    if (inverted[0usize] or !inverted[1usize] or inverted[2usize]) {
+        return 7;
+    }
+    let pointer: Pointer = Token();
+    let pointers: Pointer[] = [null, pointer];
+    let pointerResult = Pointers(pointers);
+    if (pointerResult[0usize] != pointer or pointerResult[1usize] != null) {
+        return 10;
+    }
+    let first: i32[] = [3, 7];
+    let second: i32[] = [];
+    let matrix: i32[][] = [first, second];
+    let nested = Nested(matrix);
+    if (nested.Count() != 3usize or nested[0usize][1usize] != 24 or nested[2usize][0usize] != 23 or
+        matrix[0usize][1usize] != 7) {
+        return 8;
+    }
+    let samples: Sample[] = [Sample()];
+    let result = Samples(samples);
+    if (result[0usize].value != 48 or Hidden(ref result) != 83 or Hidden(ref samples) != 41) {
+        return 9;
+    }
+    Print($"native-sequence-ok: ${Sum(ref values)}:${strings.Count()}:${nested.Count()}:${result[0usize].value}");
+    return 0;
+}

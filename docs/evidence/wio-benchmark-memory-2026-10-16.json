@@ -1,0 +1,56 @@
+{
+  "Scope": "separate native O0 allocation diagnostic; not throughput or production RSS",
+  "Correct": true,
+  "ExitCode": 0,
+  "Checksum": "12315153952189776677",
+  "CompilerFlags": [
+    "-std=c++20",
+    "-O0",
+    "-DWIO_BENCHMARK_ALLOCATIONS",
+    "-Wa,-mbig-obj"
+  ],
+  "Allocations": {
+    "available": true,
+    "allocations": 9,
+    "frees": 9,
+    "requestedBytes": 4587,
+    "freedBytes": 4587,
+    "peakBytes": 3652,
+    "liveBytes": 0,
+    "peakBlocks": 4,
+    "liveBlocks": 0,
+    "failures": 0
+  },
+  "MemoryBefore": {
+    "residentBytes": 6877184,
+    "peakResidentBytes": 6877184,
+    "privateBytes": 1318912
+  },
+  "MemoryAfter": {
+    "residentBytes": 7409664,
+    "peakResidentBytes": 7409664,
+    "privateBytes": 1323008
+  },
+  "Artifacts": [
+    {
+      "Path": "F:\\Projects\\wio\\build\\wio-bench-memory-demo\\memory.exe",
+      "Hash": "25FCCAB7BD148C7637D45AE96A986EDB7BE4E76F1C2239DBE660E744D783DC66"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\wio-bench-memory-demo\\main.wio.cpp",
+      "Hash": "23143430F485AE7E22DA88F17A715DE3F0D8ECA97A81B4E1BA93EC1DC961430D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tools\\wio-bench\\examples\\memory.wio",
+      "Hash": "E53440931CD4F276121260AA9A2D20262D940950A270A4F36CA92A61AAAEA6BA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wio_benchmark_allocations.h",
+      "Hash": "5DFEE7C788A020E0ABEBB39A7D60FABD4E2E98A5EFB84A30A794CF37D90A8254"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\benchmark_memory.h",
+      "Hash": "3B7FDFA98C419628E65E4E5945A5436263BF50F175D361C97526C67CEFD1C7E9"
+    }
+  ]
+}

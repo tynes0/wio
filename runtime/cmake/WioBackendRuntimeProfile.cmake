@@ -1,0 +1,17 @@
+function(wio_backend_runtime_profile_flags profile output)
+    if(profile STREQUAL "Release")
+        set(flags -O2)
+    elseif(profile STREQUAL "Debug")
+        set(flags -O0 -g)
+    elseif(profile STREQUAL "RelWithDebInfo")
+        set(flags -O2 -g)
+    elseif(profile STREQUAL "MinSizeRel")
+        set(flags -Os)
+    else()
+        message(FATAL_ERROR "Unsupported WIO_BACKEND_RUNTIME_PROFILE '${profile}'. Use Release, Debug, RelWithDebInfo or MinSizeRel.")
+    endif()
+
+    # Optimization must not implicitly change assertions or floating-point policy.
+    list(APPEND flags -ffp-contract=off)
+    set(${output} ${flags} PARENT_SCOPE)
+endfunction()

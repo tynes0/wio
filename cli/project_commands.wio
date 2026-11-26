@@ -1,4 +1,5 @@
 use project_manifest;
+use project_vm;
 use std::console as console;
 use std::fs as fs;
 use std::path as path;
@@ -10,24 +11,10 @@ use std::serialization as serialization;
 realm SelfHostedProject {
     fn HasFlag(args: string[], name: string) -> bool {
         for value in args {
+            if (value == "--") { break; }
             if (value == name) { return true; }
         }
         return false;
-    }
-
-    fn OptionValues(args: string[], name: string) -> string[] {
-        mut values: string[] = [];
-        mut index = 3usize;
-        while (index < args.Count()) {
-            if (args[index] == "--") { break; }
-            if (args[index] == name and index + 1usize < args.Count()) {
-                values.Push(args[index + 1usize]);
-                index += 2usize;
-                continue;
-            }
-            index += 1usize;
-        }
-        return values;
     }
 
     fn ArgumentsAfterSeparator(args: string[]) -> string[] {
@@ -89,10 +76,11 @@ realm SelfHostedProject {
 
     fn OutputUpToDate(output: string, inputs: string[]) -> bool {
         let outputTime = fs::LastWriteTimeRaw(output);
-        if (outputTime < 0i64) { return false; }
+        // GNU file-clock timestamps can be negative. Only -1 means failure.
+        if (outputTime == -1i64) { return false; }
         for input in inputs {
             let inputTime = fs::LastWriteTimeRaw(input);
-            if (inputTime < 0i64 or inputTime > outputTime) { return false; }
+            if (inputTime == -1i64 or inputTime > outputTime) { return false; }
         }
         return true;
     }
@@ -107,7 +95,116 @@ realm SelfHostedProject {
         for value in info.wioSourceRoots { inputs.Push(value); }
         for value in info.wioIncludeDirs { inputs.Push(value); }
         for value in info.wioNativeSources { inputs.Push(value); }
+        // LastWriteTimeRaw already scans directory contents recursively.
+        for value in info.wioLinkLibraries {
+            let candidate = path::AbsoluteFromRaw(info.projectRoot, value);
+            if (fs::IsFile(candidate)) { inputs.Push(candidate); }
+        }
+        if (info.runtimeStaticLibrary != "") { inputs.Push(info.runtimeStaticLibrary); }
         return inputs;
+    }
+
+    fn SameOutputPath(left: string, right: string) -> bool
+    {
+        if (path::Equivalent(left, right)) return true;
+
+        if (process::ExecutableSuffix() == ".exe")
+        {
+            return path::AbsoluteRaw(left).ToLower() == path::AbsoluteRaw(right).ToLower();
+        }
+
+        return false;
+    }
+
+    fn ValidateVmProject(info: ProjectInfo) -> std::UnitResult
+    {
+        if (info.wioTarget != "exe" and not fs::IsFile(path::Join(VmRuntimePackage(info), "WioVmRuntimeConfig.cmake")))
+        {
+            return Failure<std::ResultUnit>("VM library builds require an installed WioVmRuntime. Set vm.runtimePrefix to its prefix; its C++ toolchain and configuration must match the wrapper/host.");
+        }
+
+        if (info.wioTarget == "exe" and not fs::IsFile(info.vmRunner))
+        {
+            return Failure<std::ResultUnit>($"The standalone VM runner is missing: ${info.vmRunner}. Install or build wio-vm beside wio.");
+        }
+
+        mut outputs: string[] = [info.vmBytecodeOutput, info.vmBridgeOutput];
+        outputs.Push(info.wioTarget == "exe" ? info.vmExecutableOutput : info.vmModuleOutput);
+        if (info.hostEnabled) { outputs.Push(info.vmHostOutput); }
+
+        let protectedInputs: string[] = [info.wioEntry, info.manifestFile, info.nativeCore, info.vmRunner,
+            info.wioOutput, info.hostOutput];
+        mut index = 0usize;
+        while (index < outputs.Count())
+        {
+            for input in protectedInputs
+            {
+                if (SameOutputPath(outputs[index], input))
+                {
+                    return Failure<std::ResultUnit>($"VM output collides with a source, toolchain or native output: ${outputs[index]}");
+                }
+
+            }
+
+            mut other = index + 1usize;
+            while (other < outputs.Count())
+            {
+                if (SameOutputPath(outputs[index], outputs[other]))
+                {
+                    return Failure<std::ResultUnit>($"VM artifact outputs must be distinct: ${outputs[index]}");
+                }
+
+                other += 1usize;
+            }
+
+            index += 1usize;
+        }
+
+        return std::OkUnit();
+    }
+
+    fn PackageVmExecutable(info: ProjectInfo, forceRebuild: bool) -> std::Result<i32>
+    {
+        mut inputs: string[] = [info.manifestFile, info.vmRunner, info.vmBytecodeOutput, info.vmBridgeOutput];
+        for library in info.vmNativeLibraries
+        {
+            inputs.Push(library);
+        }
+
+        for library in info.vmRuntimeLibraries
+        {
+            inputs.Push(library);
+        }
+
+        if (not forceRebuild and OutputUpToDate(info.vmExecutableOutput, inputs))
+        {
+            let verified = process::Capture?(info.vmRunner, ["--verify", info.vmExecutableOutput], info.projectRoot);
+            if (verified.exitCode == 0)
+            {
+                console::PrintLine!("Project VM executable: up to date, skipping package invocation.");
+                return std::Ok<i32>(0);
+            }
+
+            console::PrintLine!("Project VM executable needs repair; packaging the current build outputs.");
+        }
+
+        mut arguments: string[] = [
+            "--package", info.vmBytecodeOutput, "--output", info.vmExecutableOutput,
+            "--replace", "--version-libraries", "--native-library", info.vmBridgeOutput
+        ];
+        for library in info.vmNativeLibraries
+        {
+            arguments.Push("--native-library");
+            arguments.Push(library);
+        }
+
+        for library in info.vmRuntimeLibraries
+        {
+            arguments.Push("--runtime-library");
+            arguments.Push(library);
+        }
+
+        return RunProcess(info.vmRunner, arguments, info.projectRoot);
     }
 
     fn BuildResolved(
@@ -116,7 +213,8 @@ realm SelfHostedProject {
         emitMode: string,
         irOutput: string,
         noBuiltin: bool,
-        cppBackend: string
+        cppBackend: string,
+        backend: string
     ) -> std::Result<i32> {
         if (not fs::IsFile(info.wioEntry)) {
             return Failure<i32>($"Wio entry file was not found: ${info.wioEntry}");
@@ -124,8 +222,22 @@ realm SelfHostedProject {
         if (not fs::TryEnsureDirectory(info.outputDirectory)) {
             return Failure<i32>($"Could not create project output directory: ${info.outputDirectory}");
         }
+        if (backend != "native" and backend != "vm") {
+            return Failure<i32>($"Unknown project backend '${backend}'. Expected native or vm.");
+        }
+        if (backend == "vm" and emitMode != "") {
+            return Failure<i32>("--backend vm cannot be combined with an explicit emit mode.");
+        }
+        if (backend == "vm" and cppBackend == "legacy") {
+            return Failure<i32>("The VM backend requires canonical Lowered WIR; --cpp-backend legacy is unsupported.");
+        }
+        if (backend == "vm") {
+            ValidateVmProject?(info);
+        }
+        let compileTarget = backend == "vm" ? "shared" : info.wioTarget;
+        let compileOutput = backend == "vm" ? info.vmBridgeOutput : info.wioOutput;
         mut compileArgs: string[] = [
-            info.wioEntry, "--target", info.wioTarget, "--output", info.wioOutput
+            info.wioEntry, "--target", compileTarget, "--output", compileOutput
         ];
         AppendCompilerArguments(ref compileArgs, info, "");
         if (noBuiltin) { compileArgs.Push("--no-builtin"); }
@@ -133,26 +245,64 @@ realm SelfHostedProject {
             compileArgs.Push("--cpp-backend");
             compileArgs.Push(cppBackend);
         }
+        if (backend == "vm") {
+            compileArgs.Push("--native-bridge-only");
+            compileArgs.Push("--bytecode-sidecar");
+            compileArgs.Push(info.vmBytecodeOutput);
+            if (info.wioTarget != "exe")
+            {
+                compileArgs.Push("--bytecode-sidecar-kind");
+                compileArgs.Push("library");
+            }
+        }
         if (emitMode != "") {
             compileArgs.Push("--intermediate-dir");
             compileArgs.Push(info.outputDirectory);
             if (emitMode == "cpp") { compileArgs.Push("--emit-cpp"); }
             else if (emitMode == "typed-wir") { compileArgs.Push("--emit-typed-wir"); }
             else if (emitMode == "lowered-wir") { compileArgs.Push("--emit-lowered-wir"); }
+            else if (emitMode == "bytecode") { compileArgs.Push("--emit-bytecode"); }
             else { return Failure<i32>($"Unknown compiler emission mode: ${emitMode}"); }
             if (irOutput != "") {
-                compileArgs.Push("--ir-output");
+                compileArgs.Push(emitMode == "bytecode" ? "--bytecode-output" : "--ir-output");
                 compileArgs.Push(path::AbsoluteFromRaw(info.projectRoot, irOutput));
             }
         }
-        if (emitMode != "" or cppBackend != "" or forceRebuild or not OutputUpToDate(info.wioOutput, ProjectCompilerInputs(info, info.wioEntry))) {
+        let compilerInputs = ProjectCompilerInputs(info, info.wioEntry);
+        mut outputCurrent = OutputUpToDate(info.wioOutput, compilerInputs);
+        if (backend == "vm") {
+            outputCurrent = OutputUpToDate(info.vmBytecodeOutput, compilerInputs) and
+                OutputUpToDate(info.vmBridgeOutput, compilerInputs);
+        }
+        mut signature = serialization::QuoteJson(info.config) + "\n";
+        for argument in compileArgs
+        {
+            signature += serialization::QuoteJson(argument) + "\n";
+        }
+
+        let signatureFile = compileOutput + ".build-args";
+        outputCurrent = outputCurrent and fs::IsFile(signatureFile) and fs::ReadTextRaw(signatureFile) == signature;
+        if (emitMode != "" or cppBackend != "" or noBuiltin or forceRebuild or not outputCurrent) {
+            if (emitMode == "" and not fs::TryWriteTextEnsured(signatureFile, ""))
+            {
+                return Failure<i32>($"Could not invalidate project compiler arguments: ${signatureFile}");
+            }
+
             let compileResult = RunProcess?(info.nativeCore, compileArgs, info.projectRoot);
             if (compileResult != 0) { return std::Ok<i32>(compileResult); }
+            if (emitMode == "" and not fs::TryWriteTextEnsured(signatureFile, signature))
+            {
+                return Failure<i32>($"Could not record project compiler arguments: ${signatureFile}");
+            }
         }
         else {
             console::PrintLine!("Project Wio compile: up to date, skipping compiler invocation.");
         }
         if (emitMode != "") { return std::Ok<i32>(0); }
+        if (backend == "vm")
+        {
+            return info.wioTarget == "exe" ? PackageVmExecutable(info, forceRebuild) : BuildVmLibrary(info, forceRebuild);
+        }
         if (not info.hostEnabled) { return std::Ok<i32>(0); }
 
         mut hostArgs: string[] = ["-std=c++20", "-I", info.sdkIncludeDirectory];
@@ -188,6 +338,7 @@ realm SelfHostedProject {
         }
         if (process::ExecutableSuffix() == ".exe") { hostArgs.Push("-static"); }
         for argument in info.hostCompilerArgs { hostArgs.Push(argument); }
+        for argument in info.hostLinkerArgs { hostArgs.Push(argument); }
         hostArgs.Push("-o");
         hostArgs.Push(info.hostOutput);
         mut hostInputs: string[] = [info.manifestFile, info.wioOutput, info.sdkIncludeDirectory];
@@ -204,26 +355,33 @@ realm SelfHostedProject {
         let emitCpp = HasFlag(args, "--emit-cpp");
         let emitTypedWir = HasFlag(args, "--emit-typed-wir");
         let emitLoweredWir = HasFlag(args, "--emit-lowered-wir");
+        let emitBytecode = HasFlag(args, "--emit-bytecode");
         let emitCount = (emitCpp ? 1i32 : 0i32) +
             (emitTypedWir ? 1i32 : 0i32) +
-            (emitLoweredWir ? 1i32 : 0i32);
+            (emitLoweredWir ? 1i32 : 0i32) +
+            (emitBytecode ? 1i32 : 0i32);
         if (emitCount > 1i32) {
-            return Failure<i32>("Choose only one of --emit-cpp, --emit-typed-wir, or --emit-lowered-wir.");
+            return Failure<i32>("Choose only one of --emit-cpp, --emit-typed-wir, --emit-lowered-wir, or --emit-bytecode.");
         }
         let irOutput = OptionValue(args, "--ir-output", "");
-        if (emitCount == 0i32 and irOutput != "") {
+        let bytecodeOutput = OptionValue(args, "--bytecode-output", "");
+        if ((not emitTypedWir and not emitLoweredWir) and irOutput != "") {
             return Failure<i32>("--ir-output requires --emit-typed-wir or --emit-lowered-wir.");
+        }
+        if (not emitBytecode and bytecodeOutput != "") {
+            return Failure<i32>("--bytecode-output requires --emit-bytecode.");
         }
         let emitMode = emitCpp
             ? "cpp"
-            : (emitTypedWir ? "typed-wir" : (emitLoweredWir ? "lowered-wir" : ""));
+            : (emitTypedWir ? "typed-wir" : (emitLoweredWir ? "lowered-wir" : (emitBytecode ? "bytecode" : "")));
         return BuildResolved(
             ResolveInfo?(args),
             HasFlag(args, "--rebuild") or HasFlag(args, "--configure"),
             emitMode,
-            irOutput,
+            emitBytecode ? bytecodeOutput : irOutput,
             HasFlag(args, "--no-builtin") or HasFlag(args, "-B"),
-            OptionValue(args, "--cpp-backend", "")
+            OptionValue(args, "--cpp-backend", ""),
+            OptionValue(args, "--backend", "native")
         );
     }
 
@@ -242,6 +400,17 @@ realm SelfHostedProject {
 
     fn Run(args: string[]) -> std::Result<i32> {
         let info = ResolveInfo?(args);
+        let backend = OptionValue(args, "--backend", "native");
+        if (backend != "native" and backend != "vm") {
+            return Failure<i32>($"Unknown project backend '${backend}'. Expected native or vm.");
+        }
+        if (backend == "vm") {
+            ValidateVmProject?(info);
+            if (info.wioTarget != "exe" and not info.hostEnabled)
+            {
+                return Failure<i32>("A VM library is not executable. Enable host.enabled or use project build/package.");
+            }
+        }
         let noBuild = HasFlag(args, "--no-build");
         if (noBuild and (HasFlag(args, "--rebuild") or HasFlag(args, "--configure"))) {
             return Failure<i32>("--no-build cannot be combined with --rebuild or --configure.");
@@ -253,14 +422,26 @@ realm SelfHostedProject {
                 "",
                 "",
                 false,
-                OptionValue(args, "--cpp-backend", "")
+                OptionValue(args, "--cpp-backend", ""),
+                backend
             );
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }
         }
 
         mut executable = "";
         mut runArgs: string[] = [];
-        if (info.hostEnabled) {
+        if (backend == "vm") {
+            executable = info.wioTarget == "exe" ? info.vmExecutableOutput : info.vmHostOutput;
+            let verified = info.wioTarget == "exe"
+                ? RunProcess?(info.vmRunner, ["--verify", executable], info.projectRoot)
+                : VerifyVmLibrary?(info);
+            if (verified != 0) { return std::Ok<i32>(verified); }
+            if (info.hostEnabled and info.passLibraryPath and info.wioTarget == "shared")
+            {
+                runArgs.Push(info.vmModuleOutput);
+            }
+        }
+        else if (info.hostEnabled) {
             executable = info.hostOutput;
             if (info.passLibraryPath and info.wioTarget == "shared") { runArgs.Push(info.wioOutput); }
         }
@@ -379,6 +560,11 @@ realm SelfHostedProject {
 
     fn Package(args: string[]) -> std::Result<i32> {
         let info = ResolveInfo?(args);
+        let backend = OptionValue(args, "--backend", "native");
+        if (backend != "native" and backend != "vm") {
+            return Failure<i32>($"Unknown project backend '${backend}'. Expected native or vm.");
+        }
+        if (backend == "vm") { ValidateVmProject?(info); }
         let noBuild = HasFlag(args, "--no-build");
         if (noBuild and (HasFlag(args, "--rebuild") or HasFlag(args, "--configure"))) {
             return Failure<i32>("--no-build cannot be combined with --rebuild or --configure.");
@@ -390,7 +576,8 @@ realm SelfHostedProject {
                 "",
                 "",
                 false,
-                OptionValue(args, "--cpp-backend", "")
+                OptionValue(args, "--cpp-backend", ""),
+                backend
             );
             if (buildResult != 0) { return std::Ok<i32>(buildResult); }
         }
@@ -399,6 +586,49 @@ realm SelfHostedProject {
         let packageRoot = path::Join(packageParent, SafeName(info.name));
         if (path::Equivalent(packageRoot, info.projectRoot) or packageRoot == path::RootPath(packageRoot)) {
             return Failure<i32>($"Refusing to use unsafe package directory: ${packageRoot}");
+        }
+        if (backend == "vm")
+        {
+            let verified = info.wioTarget == "exe"
+                ? RunProcess?(info.vmRunner, ["--verify", info.vmExecutableOutput], info.projectRoot)
+                : VerifyVmLibrary?(info);
+            if (verified != 0) return std::Ok<i32>(verified);
+
+            mut protectedFiles: string[] = [
+                info.manifestFile, info.wioEntry, info.nativeCore, info.vmRunner,
+                info.vmExecutableOutput, info.vmBytecodeOutput, info.vmBridgeOutput, info.sdkIncludeDirectory
+            ];
+            protectedFiles.Push(info.vmModuleOutput);
+            protectedFiles.Push(info.vmHostOutput);
+            protectedFiles.Push(VmProjectDirectory(info));
+            protectedFiles.Push(info.vmRuntimePrefix);
+            protectedFiles.Push(VmRuntimePackage(info));
+            for value in info.packageAssets { protectedFiles.Push(value); }
+            for value in info.packageFiles { protectedFiles.Push(value); }
+            for value in info.wioSourceRoots { protectedFiles.Push(value); }
+            for value in info.wioIncludeDirs { protectedFiles.Push(value); }
+            for value in info.wioLinkDirs { protectedFiles.Push(value); }
+            for value in info.wioNativeSources { protectedFiles.Push(value); }
+            for value in info.vmNativeLibraries { protectedFiles.Push(value); }
+            for value in info.vmRuntimeLibraries { protectedFiles.Push(value); }
+            for file in protectedFiles
+            {
+                mut ancestor = fs::IsDirectory(file) ? file : path::ParentPath(file);
+                while (ancestor != "")
+                {
+                    if (SameOutputPath(packageRoot, ancestor))
+                    {
+                        return Failure<i32>($"Refusing to package over a source, toolchain or VM artifact directory: ${packageRoot}");
+                    }
+
+                    let parent = path::ParentPath(ancestor);
+                    if (parent == ancestor) break;
+
+                    ancestor = parent;
+                }
+
+            }
+
         }
         if (fs::Exists(packageRoot)) {
             if (not HasFlag(args, "--clean")) {
@@ -417,7 +647,33 @@ realm SelfHostedProject {
         mut entrypoint = "";
         mut packageArguments: string[] = [];
         mut artifacts: string[] = [];
-        if (info.hostEnabled) {
+        if (backend == "vm") {
+            if (info.wioTarget == "exe")
+            {
+                entrypoint = path::Join("bin", path::FileName(info.vmExecutableOutput));
+                let deployed = RunProcess?(
+                    info.vmRunner, ["--deploy", info.vmExecutableOutput, "--output", path::Join(packageRoot, entrypoint)], info.projectRoot);
+                if (deployed != 0) return std::Ok<i32>(deployed);
+
+                artifacts.Push(entrypoint);
+            }
+            else
+            {
+                let installed = InstallVmLibrary?(info, packageRoot);
+                if (installed != 0) return std::Ok<i32>(installed);
+
+                let library = path::Join("lib", path::FileName(info.vmModuleOutput));
+                if (info.hostEnabled)
+                {
+                    entrypoint = path::Join("bin", path::FileName(info.vmHostOutput));
+                    artifacts.Push(entrypoint);
+                    if (info.wioTarget == "shared" and info.passLibraryPath) { packageArguments.Push(library); }
+                }
+
+                if (info.wioTarget == "shared" or not info.hostEnabled) { artifacts.Push(library); }
+            }
+        }
+        else if (info.hostEnabled) {
             entrypoint = path::Join("bin", path::FileName(info.hostOutput));
             CopyRequired?(info.hostOutput, path::Join(packageRoot, entrypoint));
             artifacts.Push(entrypoint);
@@ -468,7 +724,13 @@ realm SelfHostedProject {
             else {
                 mut launcher = "#!/usr/bin/env sh\n";
                 launcher += "package_root=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n";
-                launcher += "exec \"$package_root/" + entrypoint + "\" \"$@\"\n";
+                launcher += "exec \"$package_root/" + entrypoint + "\"";
+                for argument in packageArguments
+                {
+                    launcher += " \"$package_root/" + argument + "\"";
+                }
+
+                launcher += " \"$@\"\n";
                 let launcherPath = path::Join(packageRoot, "run.sh");
                 if (not fs::TryWriteText(launcherPath, launcher) or not fs::TryMakeExecutable(launcherPath)) {
                     return Failure<i32>("Could not write the package launcher.");
@@ -481,6 +743,7 @@ realm SelfHostedProject {
         metadata += "  \"schemaVersion\": 1,\n";
         metadata += "  \"name\": " + serialization::QuoteJson(info.name) + ",\n";
         metadata += "  \"configuration\": " + serialization::QuoteJson(info.config) + ",\n";
+        metadata += "  \"backend\": " + serialization::QuoteJson(backend) + ",\n";
         metadata += "  \"target\": " + serialization::QuoteJson(info.wioTarget) + ",\n";
         metadata += "  \"hostEnabled\": " + hostEnabled + ",\n";
         metadata += "  \"entrypoint\": " + entrypointJson + "\n";

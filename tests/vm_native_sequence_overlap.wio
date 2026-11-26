@@ -1,0 +1,11 @@
+using cpp::header("vm_sequence_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_sequence::Overlap)]
+fn Overlap(values: ref i32[], item: ref i32);
+
+fn Entry() -> i32 {
+    mut values: i32[] = [1, 2];
+    Overlap(ref values, ref values[0usize]);
+    return 0;
+}

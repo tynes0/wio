@@ -1,0 +1,6 @@
+{
+  "command": "cmake --build build --config Debug --target wio_app wio_string_transfer_plan_test -- /m:1 /nodeReuse:false",
+  "exitCode": 1,
+  "diagnosticExcerpt": "tests/string_transfer_plan_test.cpp(68,93): error C2039: 'textType': is not a member of 'wio::wir::TypeTable'",
+  "scope": "Test-authoring API typo, not an observed compiler correctness regression. The fixture now interns TypeKind::Text through the existing TypeTable API. This is an excerpt, not a complete build log."
+}

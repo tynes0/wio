@@ -32,6 +32,25 @@ namespace wio::wir
     NativeAbiPlanResult NativeAbiPlanner::plan(const lowered::Module& module) const
     {
         NativeAbiPlanResult result;
+        const auto openType = [&](auto&& self, TypeId id, unsigned depth = 0) -> bool
+        {
+            if (!id)
+                return false;
+            const auto* type = module.types.tryGet(id);
+            if (!type || depth > 128)
+                return true;
+            if (type->kind == TypeKind::GenericParameter || type->kind == TypeKind::ConstGenericParameter ||
+                type->kind == TypeKind::GenericParameterPack)
+                return true;
+            return std::ranges::any_of(type->arguments, [&](TypeId child) { return self(self, child, depth + 1); });
+        };
+        const auto concrete = [&](const lowered::Function& function)
+        {
+            return function.genericParameters.empty() && !openType(openType, function.ownerType) &&
+                   !openType(openType, function.returnType) &&
+                   std::ranges::none_of(function.parameters,
+                                        [&](const auto& parameter) { return openType(openType, parameter.type); });
+        };
         std::unordered_map<FunctionId::ValueType, const lowered::Function*> functions;
         for (const lowered::Function& function : module.functions)
             functions.emplace(function.id.value(), &function);
@@ -79,7 +98,7 @@ namespace wio::wir
 
         for (const lowered::Function& function : module.functions)
         {
-            if (!function.nativeBinding || !function.genericParameters.empty() ||
+            if (!function.nativeBinding || !concrete(function) ||
                 function.nativeBinding->thunkKind == NativeThunkKind::TemplateSpecialization)
                 continue;
             std::vector<TypeId> parameters;
@@ -91,6 +110,8 @@ namespace wio::wir
 
         for (const lowered::Function& caller : module.functions)
         {
+            if (!concrete(caller))
+                continue;
             for (const lowered::BasicBlock& block : caller.blocks)
             {
                 for (const lowered::Instruction& instruction : block.instructions)

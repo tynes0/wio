@@ -1,0 +1,7 @@
+{
+  "command": "g++ -std=c++20 -Wall -Wextra -Werror -fsyntax-only -Icompiler/include -Iruntime/include compiler/src/wio_compiler/codegen/wir_cpp_string_init_plan.cpp compiler/src/wio_compiler/codegen/wir_cpp_string_transfer_plan.cpp tests/inline_string_init_test.cpp",
+  "exitCode": 0,
+  "stdout": "",
+  "stderr": "",
+  "scope": "Strict C++20 syntax/type checks only; MSVC CTest and Wio O0/O2/VM process evidence are retained separately"
+}

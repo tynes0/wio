@@ -8,6 +8,12 @@
 
 namespace wio::runtime
 {
+    // Bind intrusive friends to this namespace even when another wio::Ref
+    // template was declared before the runtime header.
+    template <typename T> class Ref;
+    template <typename T> class WeakRef;
+    template <typename T> struct RefDeleter;
+
     // ============================================================
     // RefCountedObject (Intrusive Base)
     // ============================================================

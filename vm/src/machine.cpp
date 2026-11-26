@@ -1,0 +1,7361 @@
+#include "wio/vm/machine.h"
+
+#include "wio/bytecode/format.h"
+#include "wio/bytecode/verifier.h"
+#include "wio/vm/unicode.h"
+
+#include "native_bridge_internal.h"
+#include "native_callback_references_internal.h"
+#include "native_library.h"
+#include "native_pod_internal.h"
+#include "native_sequence_internal.h"
+#include "native_sequence_projection_internal.h"
+#include "native_container_projection_internal.h"
+#include "native_container_copy_back_internal.h"
+#include "native_dictionary_internal.h"
+#include "native_any_internal.h"
+#include "native_object_internal.h"
+#include "native_callback_lifetime_internal.h"
+#include "object_layout_internal.h"
+#include "place_storage_internal.h"
+#include "string_intrinsics.h"
+#include "text_intrinsics.h"
+#include "value_format_internal.h"
+
+#include <algorithm>
+#include <atomic>
+#include <bit>
+#include <charconv>
+#include <condition_variable>
+#include <cmath>
+#include <deque>
+#include <exception>
+#include <functional>
+#include <limits>
+#include <map>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+namespace wio::vm
+{
+    namespace
+    {
+        thread_local bool nativeCallbackInvocation = false;
+        struct NativeCallbackInvocationScope
+        {
+            bool previous = nativeCallbackInvocation;
+            NativeCallbackInvocationScope()
+            {
+                nativeCallbackInvocation = true;
+            }
+            ~NativeCallbackInvocationScope()
+            {
+                nativeCallbackInvocation = previous;
+            }
+        };
+
+        bool hasBorrowedNativeCapture(const Value& capture, unsigned depth = 0)
+        {
+            if (depth > 64 || capture.kind() == Value::Kind::Place || capture.kind() == Value::Kind::ObjectBorrow)
+                return true;
+            for (std::size_t index = 0; index < capture.captureCount(); ++index)
+                if (const auto* child = capture.capture(index); child && hasBorrowedNativeCapture(*child, depth + 1))
+                    return true;
+            for (std::size_t index = 0; index < capture.elementCount(); ++index)
+                if (const auto* child = capture.element(index); child && hasBorrowedNativeCapture(*child, depth + 1))
+                    return true;
+            for (std::size_t index = 0; index < capture.dictionaryCount(); ++index)
+                if (hasBorrowedNativeCapture(*capture.dictionaryKey(index), depth + 1) ||
+                    hasBorrowedNativeCapture(*capture.dictionaryValue(index), depth + 1))
+                    return true;
+            if (const auto* child = capture.anyPayload(); child && hasBorrowedNativeCapture(*child, depth + 1))
+                return true;
+            if (capture.kind() == Value::Kind::Component)
+                for (std::size_t index = 0; index < capture.fieldCount(); ++index)
+                    if (const auto* child = capture.field(index); child && hasBorrowedNativeCapture(*child, depth + 1))
+                        return true;
+            return false;
+        }
+
+        // These values are part of the pinned bytecode semantic-enum ABI.
+        constexpr std::uint8_t TypeVoid = 1;
+        constexpr std::uint8_t TypeBool = 2;
+        constexpr std::uint8_t TypeI8 = 3;
+        constexpr std::uint8_t TypeI16 = 4;
+        constexpr std::uint8_t TypeI32 = 5;
+        constexpr std::uint8_t TypeI64 = 6;
+        constexpr std::uint8_t TypeISize = 7;
+        constexpr std::uint8_t TypeU8 = 8;
+        constexpr std::uint8_t TypeU16 = 9;
+        constexpr std::uint8_t TypeU32 = 10;
+        constexpr std::uint8_t TypeU64 = 11;
+        constexpr std::uint8_t TypeUSize = 12;
+        constexpr std::uint8_t TypeF32 = 13;
+        constexpr std::uint8_t TypeF64 = 14;
+        constexpr std::uint8_t TypeByte = 15;
+        constexpr std::uint8_t TypeChar = 16;
+        constexpr std::uint8_t TypeString = 17;
+        constexpr std::uint8_t TypeText = 18;
+        constexpr std::uint8_t TypeAny = 19;
+        constexpr std::uint8_t TypeOpaque = 20;
+        constexpr std::uint8_t TypeNamed = 28;
+        constexpr std::uint8_t TypeReference = 29;
+        constexpr std::uint8_t TypeNullable = 30;
+        constexpr std::uint8_t TypeArray = 31;
+        constexpr std::uint8_t TypeDictionary = 32;
+        constexpr std::uint8_t TypeFunction = 33;
+        constexpr std::uint8_t TypeAsyncTask = 34;
+        constexpr std::uint8_t TypeIterator = 35;
+
+        constexpr std::uint8_t NominalComponent = 1;
+        constexpr std::uint8_t RepresentationNativePod = 1;
+        constexpr std::uint8_t NominalObject = 2;
+        constexpr std::uint8_t NominalInterface = 3;
+        constexpr std::uint8_t NominalEnum = 4;
+        constexpr std::uint8_t NominalFlagset = 5;
+
+        constexpr std::uint8_t IntrinsicArray = 1;
+        constexpr std::uint8_t IntrinsicDictionary = 2;
+        constexpr std::uint8_t IntrinsicString = 3;
+        constexpr std::uint8_t IntrinsicText = 4;
+        constexpr std::uint8_t IntrinsicEnum = 5;
+        constexpr std::uint8_t IntrinsicFlagset = 6;
+
+        constexpr std::uint8_t CaptureValue = 0;
+        constexpr std::uint8_t CaptureReference = 1;
+        constexpr std::uint8_t CaptureRetainedSelf = 2;
+
+        constexpr std::uint8_t AsyncAwaitTask = 1;
+        constexpr std::uint8_t AsyncSwitchExecutor = 2;
+
+        constexpr std::uint8_t UnaryNegate = 0;
+        constexpr std::uint8_t UnaryLogicalNot = 1;
+        constexpr std::uint8_t UnaryBitwiseNot = 2;
+
+        constexpr std::uint8_t BinaryAdd = 0;
+        constexpr std::uint8_t BinarySubtract = 1;
+        constexpr std::uint8_t BinaryMultiply = 2;
+        constexpr std::uint8_t BinaryDivide = 3;
+        constexpr std::uint8_t BinaryRemainder = 4;
+        constexpr std::uint8_t BinaryEqual = 5;
+        constexpr std::uint8_t BinaryNotEqual = 6;
+        constexpr std::uint8_t BinaryLess = 7;
+        constexpr std::uint8_t BinaryLessEqual = 8;
+        constexpr std::uint8_t BinaryGreater = 9;
+        constexpr std::uint8_t BinaryGreaterEqual = 10;
+        constexpr std::uint8_t BinaryBitwiseAnd = 11;
+        constexpr std::uint8_t BinaryBitwiseOr = 12;
+        constexpr std::uint8_t BinaryBitwiseXor = 13;
+        constexpr std::uint8_t BinaryShiftLeft = 14;
+        constexpr std::uint8_t BinaryShiftRight = 15;
+
+        thread_local ExecutorKind activeExecutor = ExecutorKind::Inherit;
+
+        std::uint32_t anyHandlePayloadType(const bytecode::Module& module, std::uint32_t type)
+        {
+            if (type >= module.types.size())
+                return bytecode::InvalidIndex;
+            if (module.types[type].kind == TypeNullable && module.types[type].arguments.size() == 1)
+                type = module.types[type].arguments.front();
+            if (type >= module.types.size())
+                return bytecode::InvalidIndex;
+            const auto& target = module.types[type];
+            return target.kind == TypeOpaque || (target.kind == TypeNamed && (target.nominalKind == NominalObject ||
+                                                                              target.nominalKind == NominalInterface))
+                       ? type
+                       : bytecode::InvalidIndex;
+        }
+
+        struct NativeCallbackState final
+        {
+            std::atomic_uint32_t references{1};
+            std::atomic_bool active{true};
+            std::thread::id callerThread;
+            bool anyThread = false;
+            std::function<void()> onDestroy;
+            std::function<WioNativeAbiStatus(const WioNativeAbiValue*, std::uint64_t, WioNativeAbiValue*,
+                                             WioNativeAbiFailure*)>
+                invoke;
+
+            ~NativeCallbackState()
+            {
+                if (onDestroy)
+                    onDestroy();
+            }
+        };
+
+        void retainNativeCallback(void* const userdata) noexcept
+        {
+            if (userdata)
+                static_cast<NativeCallbackState*>(userdata)->references.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        void releaseNativeCallback(void* const userdata) noexcept
+        {
+            auto* state = static_cast<NativeCallbackState*>(userdata);
+            if (state && state->references.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                delete state;
+        }
+
+        WioNativeAbiStatus invokeNativeCallback(void* const userdata, const WioNativeAbiValue* arguments,
+                                                const std::uint64_t argumentCount, WioNativeAbiValue* result,
+                                                WioNativeAbiFailure* failure) noexcept
+        {
+            auto* state = static_cast<NativeCallbackState*>(userdata);
+            if (!state || !result || (argumentCount != 0 && !arguments))
+                return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            *result = {};
+            if (!state->active.load(std::memory_order_acquire))
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            if (!state->anyThread && state->callerThread != std::this_thread::get_id())
+                return WIO_NATIVE_ABI_WRONG_THREAD;
+            try
+            {
+                return state->invoke(arguments, argumentCount, result, failure);
+            }
+            catch (...)
+            {
+                return WIO_NATIVE_ABI_EXCEPTION;
+            }
+        }
+
+        const WioNativeAbiCallbackOps CallerThreadCallbackOps{
+            WIO_NATIVE_ABI_VERSION, WIO_NATIVE_ABI_CALLBACK_CALLER_THREAD, &retainNativeCallback,
+            &releaseNativeCallback, &invokeNativeCallback};
+        const WioNativeAbiCallbackOps AnyThreadCallbackOps{WIO_NATIVE_ABI_VERSION, WIO_NATIVE_ABI_CALLBACK_ANY_THREAD,
+                                                           &retainNativeCallback, &releaseNativeCallback,
+                                                           &invokeNativeCallback};
+
+        void setCallbackFailure(WioNativeAbiFailure* const failure, const WioNativeAbiStatus status,
+                                const std::string_view message) noexcept
+        {
+            if (!failure)
+                return;
+            thread_local std::string storedMessage;
+            static constexpr char Category[] = "wio.vm.callback";
+            storedMessage = message;
+            *failure = {status,
+                        0,
+                        {Category, sizeof(Category) - 1},
+                        {storedMessage.data(), static_cast<std::uint64_t>(storedMessage.size())}};
+        }
+
+        struct Register
+        {
+            Value value;
+            bool initialized = false;
+            bool borrowedValue = false;
+        };
+
+        enum class FrameCompletion : std::uint8_t
+        {
+            ReturnValue,
+            Ignore,
+            ContinueConstruction
+        };
+
+        struct FrameContinuation
+        {
+            FrameCompletion completion = FrameCompletion::ReturnValue;
+            std::uint32_t callerResult = bytecode::InvalidIndex;
+            std::uint32_t nextFunction = bytecode::InvalidIndex;
+            std::vector<Value> nextArguments;
+            std::vector<detail::ObjectLayouts::ConstructionStep> constructionFunctions;
+            std::size_t nextConstruction = 0;
+        };
+
+        struct Frame
+        {
+            const bytecode::Function* function = nullptr;
+            const bytecode::Block* block = nullptr;
+            std::size_t instruction = 0;
+            std::vector<Register> registers;
+            std::vector<std::unique_ptr<PlaceStorage>> localPlaces;
+            FrameContinuation continuation;
+            Value resumedValue;
+            std::uint32_t resumedState = bytecode::InvalidIndex;
+            bool hasResumedValue = false;
+        };
+
+        // WIR owned parameters consume their argument SSA claim. Clear the
+        // caller only after a synchronous callee frame has acquired it; borrowed
+        // receivers and closure captures remain owned by their original scope.
+        void consumeCallArguments(Frame& caller, const bytecode::Function& callee,
+                                  std::span<const std::uint32_t> operands, std::size_t parameterOffset = 0)
+        {
+            for (std::size_t index = 0; index < operands.size(); ++index)
+                if (callee.parameters[index + parameterOffset].ownership == 2)
+                {
+                    auto& argument = caller.registers[operands[index]];
+                    argument.value = {};
+                    argument.initialized = false;
+                }
+        }
+
+        [[nodiscard]] ExecutionError withStack(ExecutionError error, const std::vector<Frame>& frames)
+        {
+            error.stack.reserve(error.stack.size() + frames.size());
+            bool leaf = true;
+            for (auto frame = frames.rbegin(); frame != frames.rend(); ++frame)
+            {
+                std::size_t instructionIndex = frame->instruction;
+                if (!leaf && instructionIndex > 0)
+                    --instructionIndex;
+                const bytecode::SourceSpan source = instructionIndex < frame->block->instructions.size()
+                                                        ? frame->block->instructions[instructionIndex].source
+                                                        : frame->block->source;
+                error.stack.push_back(
+                    {frame->function->id, frame->block->id, static_cast<std::uint32_t>(instructionIndex), source});
+                leaf = false;
+            }
+            return error;
+        }
+
+        [[nodiscard]] bool isSignedType(const std::uint8_t kind) noexcept
+        {
+            return kind >= TypeI8 && kind <= TypeISize;
+        }
+
+        [[nodiscard]] bool isUnsignedType(const std::uint8_t kind) noexcept
+        {
+            return (kind >= TypeU8 && kind <= TypeUSize) || kind == TypeByte || kind == TypeChar;
+        }
+
+        [[nodiscard]] bool isFloatType(const std::uint8_t kind) noexcept
+        {
+            return kind == TypeF32 || kind == TypeF64;
+        }
+
+        [[nodiscard]] std::uint32_t integerWidth(const std::uint8_t kind) noexcept
+        {
+            switch (kind)
+            {
+            case TypeI8:
+            case TypeU8:
+            case TypeByte:
+            case TypeChar:
+                return 8;
+            case TypeI16:
+            case TypeU16:
+                return 16;
+            case TypeI32:
+            case TypeU32:
+                return 32;
+            default:
+                return 64;
+            }
+        }
+
+        [[nodiscard]] std::uint64_t lowBits(const std::uint64_t value, const std::uint32_t width) noexcept
+        {
+            return width == 64 ? value : value & ((std::uint64_t{1} << width) - 1);
+        }
+
+        [[nodiscard]] std::int64_t signExtend(const std::uint64_t value, const std::uint32_t width) noexcept
+        {
+            if (width == 64)
+                return std::bit_cast<std::int64_t>(value);
+            const std::uint64_t mask = (std::uint64_t{1} << width) - 1;
+            const std::uint64_t sign = std::uint64_t{1} << (width - 1);
+            const std::uint64_t narrowed = value & mask;
+            return std::bit_cast<std::int64_t>((narrowed & sign) != 0 ? narrowed | ~mask : narrowed);
+        }
+
+        [[nodiscard]] std::uint32_t registerCount(const bytecode::Function& function) noexcept
+        {
+            std::uint32_t maximum = 0;
+            bool found = false;
+            const auto observe = [&](const std::uint32_t value)
+            {
+                if (value == bytecode::InvalidIndex)
+                    return;
+                found = true;
+                maximum = (std::max)(maximum, value);
+            };
+            for (const bytecode::Parameter& parameter : function.parameters)
+                observe(parameter.value);
+            for (const bytecode::Block& block : function.blocks)
+            {
+                for (const bytecode::Parameter& parameter : block.parameters)
+                    observe(parameter.value);
+                for (const bytecode::Instruction& instruction : block.instructions)
+                    observe(instruction.result);
+            }
+            return found && maximum != (std::numeric_limits<std::uint32_t>::max)() ? maximum + 1 : 0;
+        }
+
+        [[nodiscard]] std::optional<Value> constantValue(const bytecode::Constant& constant,
+                                                         const bytecode::Module& module, const std::uint8_t resultType)
+        {
+            switch (constant.kind)
+            {
+            case bytecode::ConstantKind::Empty:
+                return {};
+            case bytecode::ConstantKind::Null:
+                return Value::null();
+            case bytecode::ConstantKind::Boolean:
+                return Value::boolean(constant.bits != 0);
+            case bytecode::ConstantKind::SignedInteger:
+                return Value::signedInteger(std::bit_cast<std::int64_t>(constant.bits));
+            case bytecode::ConstantKind::UnsignedInteger:
+                return Value::unsignedInteger(constant.bits);
+            case bytecode::ConstantKind::Float64:
+                return Value::floating(std::bit_cast<double>(constant.bits));
+            case bytecode::ConstantKind::String:
+                if (resultType == TypeText)
+                {
+                    Utf8DecodeResult decoded = decodeUtf8(module.string(constant.string));
+                    if (!decoded.succeeded())
+                        return std::nullopt;
+                    return Value::text(std::move(decoded.value));
+                }
+                return Value::string(std::string{module.string(constant.string)});
+            }
+            return std::nullopt;
+        }
+
+        [[nodiscard]] Value defaultValue(const bytecode::Module& module, const std::uint32_t typeId,
+                                         const std::uint32_t depth = 0)
+        {
+            if (typeId >= module.types.size() || depth > 128)
+                return {};
+            const bytecode::Type& type = module.types[typeId];
+            const std::uint8_t kind = type.kind;
+            if (kind == TypeBool)
+                return Value::boolean(false);
+            if (isSignedType(kind))
+                return Value::signedInteger(0);
+            if (isUnsignedType(kind))
+                return Value::unsignedInteger(0);
+            if (isFloatType(kind))
+                return Value::floating(0.0);
+            if (kind == TypeString)
+                return Value::string({});
+            if (kind == TypeText)
+                return Value::text({});
+            if (kind == TypeOpaque)
+                return Value::opaque(typeId, 0, nullptr);
+            if (kind == TypeNullable || kind == TypeAny)
+                return Value::null();
+            if (kind == TypeArray)
+            {
+                std::vector<Value> elements;
+                if (type.staticExtent != (std::numeric_limits<std::uint64_t>::max)() && !type.arguments.empty())
+                {
+                    if (type.staticExtent > (std::numeric_limits<std::size_t>::max)())
+                        return {};
+                    elements.reserve(static_cast<std::size_t>(type.staticExtent));
+                    for (std::uint64_t index = 0; index < type.staticExtent; ++index)
+                        elements.push_back(defaultValue(module, type.arguments.front(), depth + 1));
+                }
+                return Value::array(std::move(elements));
+            }
+            if (kind == TypeDictionary)
+                return Value::dictionary(typeId, {}, module.string(type.name) == "ordered");
+            if (kind == TypeNamed && (type.nominalKind == NominalEnum || type.nominalKind == NominalFlagset))
+                return defaultValue(module, type.enumUnderlyingType, depth + 1);
+            if (kind == TypeNamed && type.nominalKind == NominalComponent)
+            {
+                std::vector<Value> fields;
+                fields.reserve(type.fields.size());
+                for (const bytecode::Type::Field& field : type.fields)
+                    fields.push_back(defaultValue(module, field.type, depth + 1));
+                return Value::component(typeId, std::move(fields));
+            }
+            if (kind == TypeNamed && (type.nominalKind == NominalObject || type.nominalKind == NominalInterface))
+                return Value::null();
+            return {};
+        }
+
+        [[nodiscard]] Value constructAggregate(const bytecode::Module& module, const std::uint32_t typeId,
+                                               const bool object)
+        {
+            const bytecode::Type& type = module.types[typeId];
+            std::vector<Value> fields;
+            fields.reserve(type.fields.size());
+            for (const bytecode::Type::Field& field : type.fields)
+                fields.push_back(defaultValue(module, field.type));
+            return object ? Value::object(typeId, std::move(fields)) : Value::component(typeId, std::move(fields));
+        }
+
+        [[nodiscard]] detail::NativeValueResult runtimeDefaultValue(const bytecode::Module& module,
+                                                                    const std::uint32_t typeId,
+                                                                    const detail::NativePodLayouts& layouts,
+                                                                    const unsigned depth = 0)
+        {
+            if (typeId >= module.types.size() || depth > 128)
+                return {{}, "default construction has an invalid type or exceeds its recursion budget"};
+            const auto& type = module.types[typeId];
+            if (type.kind == TypeNamed && type.nominalKind == NominalComponent &&
+                type.nominalRepresentation == RepresentationNativePod)
+                return detail::defaultNativePod(module, typeId, layouts);
+            const bool component = type.kind == TypeNamed && type.nominalKind == NominalComponent;
+            const bool fixedArray =
+                type.kind == TypeArray && type.staticExtent != (std::numeric_limits<std::uint64_t>::max)();
+            if (component || fixedArray)
+            {
+                const auto count = component ? type.fields.size() : type.staticExtent;
+                if (count > (std::numeric_limits<std::size_t>::max)() || (fixedArray && type.arguments.size() != 1))
+                    return {{}, "default array has an invalid extent or element type"};
+                std::vector<Value> values;
+                values.reserve(static_cast<std::size_t>(count));
+                for (std::size_t index = 0; index < count; ++index)
+                {
+                    const auto elementType = component ? type.fields[index].type : type.arguments.front();
+                    auto value = runtimeDefaultValue(module, elementType, layouts, depth + 1);
+                    if (!value.succeeded())
+                        return value;
+                    values.push_back(std::move(value.value));
+                }
+                return {component ? Value::component(typeId, std::move(values)) : Value::array(std::move(values)), {}};
+            }
+            return {defaultValue(module, typeId, depth), {}};
+        }
+
+        [[nodiscard]] bool compareResult(const std::uint8_t operation, const bool less, const bool equal) noexcept
+        {
+            switch (operation)
+            {
+            case BinaryEqual:
+                return equal;
+            case BinaryNotEqual:
+                return !equal;
+            case BinaryLess:
+                return less;
+            case BinaryLessEqual:
+                return less || equal;
+            case BinaryGreater:
+                return !less && !equal;
+            case BinaryGreaterEqual:
+                return !less || equal;
+            default:
+                return false;
+            }
+        }
+
+        [[nodiscard]] bool isComparison(const std::uint8_t operation) noexcept
+        {
+            return operation >= BinaryEqual && operation <= BinaryGreaterEqual;
+        }
+
+        [[nodiscard]] std::optional<ExecutorKind> executorKind(const std::uint8_t value) noexcept
+        {
+            if (value < static_cast<std::uint8_t>(ExecutorKind::Main) ||
+                value > static_cast<std::uint8_t>(ExecutorKind::Io))
+                return std::nullopt;
+            return static_cast<ExecutorKind>(value);
+        }
+
+        [[nodiscard]] std::optional<std::size_t> valueIndex(const Value& value) noexcept
+        {
+            if (value.kind() == Value::Kind::UnsignedInteger &&
+                value.asUnsignedInteger() <= (std::numeric_limits<std::size_t>::max)())
+                return static_cast<std::size_t>(value.asUnsignedInteger());
+            if (value.kind() == Value::Kind::SignedInteger && value.asSignedInteger() >= 0 &&
+                static_cast<std::uint64_t>(value.asSignedInteger()) <=
+                    static_cast<std::uint64_t>((std::numeric_limits<std::size_t>::max)()))
+                return static_cast<std::size_t>(value.asSignedInteger());
+            return std::nullopt;
+        }
+
+        class TimerScheduler final
+        {
+        public:
+            using Callback = std::function<void()>;
+
+            TimerScheduler() : worker_([this] { run(); })
+            {
+            }
+
+            ~TimerScheduler()
+            {
+                {
+                    std::scoped_lock lock{mutex_};
+                    stopping_ = true;
+                }
+                changed_.notify_all();
+                if (worker_.joinable())
+                    worker_.join();
+            }
+
+            TimerScheduler(const TimerScheduler&) = delete;
+            TimerScheduler& operator=(const TimerScheduler&) = delete;
+
+            void schedule(Value task, const std::chrono::steady_clock::time_point deadline, Callback fire,
+                          Callback cancel)
+            {
+                {
+                    std::scoped_lock lock{mutex_};
+                    if (!stopping_)
+                    {
+                        timers_.emplace(std::make_pair(deadline, nextSequence_++),
+                                        Timer{std::move(task), std::move(fire), std::move(cancel)});
+                        changed_.notify_all();
+                        return;
+                    }
+                }
+                cancel();
+            }
+
+            bool remove(const Value& task)
+            {
+                std::scoped_lock lock{mutex_};
+                const auto timer = std::find_if(timers_.begin(), timers_.end(),
+                                                [&](const auto& entry) { return entry.second.task == task; });
+                if (timer == timers_.end())
+                    return false;
+                timers_.erase(timer);
+                changed_.notify_all();
+                return true;
+            }
+
+        private:
+            struct Timer
+            {
+                Value task;
+                Callback fire;
+                Callback cancel;
+            };
+
+            void run()
+            {
+                std::unique_lock lock{mutex_};
+                while (!stopping_)
+                {
+                    if (timers_.empty())
+                    {
+                        changed_.wait(lock, [&] { return stopping_ || !timers_.empty(); });
+                        continue;
+                    }
+
+                    const auto deadline = timers_.begin()->first.first;
+                    if (std::chrono::steady_clock::now() < deadline)
+                    {
+                        changed_.wait_until(lock, deadline);
+                        continue;
+                    }
+
+                    Callback fire = std::move(timers_.begin()->second.fire);
+                    timers_.erase(timers_.begin());
+                    lock.unlock();
+                    fire();
+                    lock.lock();
+                }
+
+                std::vector<Callback> cancellations;
+                cancellations.reserve(timers_.size());
+                for (auto& entry : timers_)
+                    cancellations.push_back(std::move(entry.second.cancel));
+                timers_.clear();
+                lock.unlock();
+                for (Callback& cancel : cancellations)
+                    cancel();
+            }
+
+            std::mutex mutex_;
+            std::condition_variable changed_;
+            std::map<std::pair<std::chrono::steady_clock::time_point, std::uint64_t>, Timer> timers_;
+            std::uint64_t nextSequence_ = 0;
+            bool stopping_ = false;
+            std::thread worker_;
+        };
+
+        class ExecutorQueue final
+        {
+        public:
+            using Callback = std::function<void()>;
+
+            struct Work
+            {
+                Callback run;
+                Callback cancel;
+            };
+
+            ExecutorQueue(const ExecutorKind kind, const std::uint32_t threadCount) : kind_(kind)
+            {
+                workers_.reserve(threadCount);
+                for (std::uint32_t index = 0; index < threadCount; ++index)
+                    workers_.emplace_back([this] { workerLoop(); });
+            }
+
+            ~ExecutorQueue()
+            {
+                std::deque<Work> cancelled;
+                {
+                    std::scoped_lock lock{mutex_};
+                    stopping_ = true;
+                    cancelled.swap(queue_);
+                }
+                changed_.notify_all();
+                for (std::thread& worker : workers_)
+                    if (worker.joinable())
+                        worker.join();
+                for (Work& work : cancelled)
+                    if (work.cancel)
+                        work.cancel();
+            }
+
+            ExecutorQueue(const ExecutorQueue&) = delete;
+            ExecutorQueue& operator=(const ExecutorQueue&) = delete;
+
+            bool schedule(Work work)
+            {
+                {
+                    std::scoped_lock lock{mutex_};
+                    if (stopping_)
+                        return false;
+                    queue_.push_back(std::move(work));
+                }
+                changed_.notify_one();
+                return true;
+            }
+
+        private:
+            void workerLoop()
+            {
+                const ExecutorKind previous = activeExecutor;
+                activeExecutor = kind_;
+                for (;;)
+                {
+                    Work work;
+                    {
+                        std::unique_lock lock{mutex_};
+                        changed_.wait(lock, [&] { return stopping_ || !queue_.empty(); });
+                        if (stopping_)
+                            break;
+                        work = std::move(queue_.front());
+                        queue_.pop_front();
+                    }
+                    try
+                    {
+                        work.run();
+                    }
+                    catch (...)
+                    {
+                        if (work.cancel)
+                            work.cancel();
+                    }
+                }
+                activeExecutor = previous;
+            }
+
+            ExecutorKind kind_;
+            std::mutex mutex_;
+            std::condition_variable changed_;
+            std::deque<Work> queue_;
+            std::vector<std::thread> workers_;
+            bool stopping_ = false;
+        };
+
+        class ExecutorScheduler final
+        {
+        public:
+            using Work = ExecutorQueue::Work;
+
+            ExecutorScheduler(std::uint32_t workerThreads, const std::uint32_t blockingThreads,
+                              const std::uint32_t ioThreads)
+                : workerThreads_(workerThreads == 0 ? defaultWorkerCount() : workerThreads),
+                  blockingThreads_((std::max)(std::uint32_t{1}, blockingThreads)),
+                  ioThreads_((std::max)(std::uint32_t{1}, ioThreads)), mainThread_(std::this_thread::get_id())
+            {
+            }
+
+            ~ExecutorScheduler()
+            {
+                shutdown();
+            }
+
+            void shutdown()
+            {
+                std::deque<Work> cancelled;
+                std::unique_ptr<ExecutorQueue> worker, blocking, io;
+                {
+                    std::scoped_lock lock{mutex_};
+                    stopping_ = true;
+                    cancelled.swap(mainQueue_);
+                    worker = std::move(worker_);
+                    blocking = std::move(blocking_);
+                    io = std::move(io_);
+                }
+                for (Work& work : cancelled)
+                    if (work.cancel)
+                        work.cancel();
+            }
+
+            ExecutorScheduler(const ExecutorScheduler&) = delete;
+            ExecutorScheduler& operator=(const ExecutorScheduler&) = delete;
+
+            void bindMain()
+            {
+                std::scoped_lock lock{mutex_};
+                mainThread_ = std::this_thread::get_id();
+            }
+
+            [[nodiscard]] bool isMainThread() const
+            {
+                std::scoped_lock lock{mutex_};
+                return mainThread_ == std::this_thread::get_id();
+            }
+
+            bool schedule(const ExecutorKind kind, Work work)
+            {
+                if (kind == ExecutorKind::Main)
+                {
+                    std::scoped_lock lock{mutex_};
+                    if (stopping_)
+                        return false;
+                    mainQueue_.push_back(std::move(work));
+                    return true;
+                }
+
+                {
+                    std::scoped_lock lock{mutex_};
+                    if (stopping_)
+                        return false;
+                    std::unique_ptr<ExecutorQueue>* target = nullptr;
+                    std::uint32_t count = 1;
+                    if (kind == ExecutorKind::Worker)
+                    {
+                        target = &worker_;
+                        count = workerThreads_;
+                    }
+                    else if (kind == ExecutorKind::Blocking)
+                    {
+                        target = &blocking_;
+                        count = blockingThreads_;
+                    }
+                    else if (kind == ExecutorKind::Io)
+                    {
+                        target = &io_;
+                        count = ioThreads_;
+                    }
+                    if (!target)
+                        return false;
+                    if (!*target)
+                        *target = std::make_unique<ExecutorQueue>(kind, count);
+                    // Keep the scheduler lock through queue publication; a
+                    // concurrent shutdown must not free this queue pointer.
+                    return (*target)->schedule(std::move(work));
+                }
+            }
+
+            std::uint64_t drainMain()
+            {
+                if (!isMainThread())
+                    return 0;
+                const ExecutorKind previous = activeExecutor;
+                activeExecutor = ExecutorKind::Main;
+                std::uint64_t count = 0;
+                for (;;)
+                {
+                    Work work;
+                    {
+                        std::scoped_lock lock{mutex_};
+                        if (mainQueue_.empty())
+                            break;
+                        work = std::move(mainQueue_.front());
+                        mainQueue_.pop_front();
+                    }
+                    try
+                    {
+                        work.run();
+                    }
+                    catch (...)
+                    {
+                        if (work.cancel)
+                            work.cancel();
+                    }
+                    ++count;
+                }
+                activeExecutor = previous;
+                return count;
+            }
+
+        private:
+            [[nodiscard]] static std::uint32_t defaultWorkerCount() noexcept
+            {
+                const std::uint32_t hardware = std::thread::hardware_concurrency();
+                return hardware > 1 ? hardware - 1 : 1;
+            }
+
+            mutable std::mutex mutex_;
+            std::deque<Work> mainQueue_;
+            std::unique_ptr<ExecutorQueue> worker_;
+            std::unique_ptr<ExecutorQueue> blocking_;
+            std::unique_ptr<ExecutorQueue> io_;
+            std::uint32_t workerThreads_;
+            std::uint32_t blockingThreads_;
+            std::uint32_t ioThreads_;
+            std::thread::id mainThread_;
+            bool stopping_ = false;
+        };
+    } // namespace
+
+    namespace
+    {
+        struct NativeTaskSourceCell final
+        {
+            std::atomic_uint32_t references{1};
+            WioNativeTaskSource source;
+            const void* programIdentity = nullptr;
+            std::shared_ptr<detail::NativeCallbackClosure> root;
+            std::function<WioNativeAbiStatus(bool*)> ready;
+            std::function<WioNativeAbiStatus()> cancel;
+            std::function<WioNativeAbiStatus(WioNativeAbiValue*, WioNativeAbiFailure*)> read;
+            std::function<WioNativeAbiStatus(WioNativeTaskCompletionFn, void*)> subscribe;
+            std::function<WioNativeAbiStatus(std::uint64_t*)> pump;
+            std::function<void()> retire;
+            ~NativeTaskSourceCell()
+            {
+                if (retire)
+                    retire();
+            }
+            static void retain(void* state) noexcept
+            {
+                ++static_cast<NativeTaskSourceCell*>(state)->references;
+            }
+            static void release(void* state) noexcept
+            {
+                auto* cell = static_cast<NativeTaskSourceCell*>(state);
+                if (--cell->references == 0)
+                    delete cell;
+            }
+            static std::uint64_t typeId(const void* state) noexcept
+            {
+                return static_cast<const NativeTaskSourceCell*>(state)->source.taskTypeId;
+            }
+            inline static const WioNativeAbiHandleOps ops{WIO_NATIVE_ABI_VERSION, 0, &retain, &release, &typeId};
+            static WioNativeAbiStatus queryReady(void* state, bool* ready) noexcept
+            {
+                try
+                {
+                    return static_cast<NativeTaskSourceCell*>(state)->ready(ready);
+                }
+                catch (...)
+                {
+                    return WIO_NATIVE_ABI_EXCEPTION;
+                }
+            }
+            static WioNativeAbiStatus cancelTask(void* state) noexcept
+            {
+                try
+                {
+                    return static_cast<NativeTaskSourceCell*>(state)->cancel();
+                }
+                catch (...)
+                {
+                    return WIO_NATIVE_ABI_EXCEPTION;
+                }
+            }
+            static WioNativeAbiStatus readTask(void* state, WioNativeAbiValue* result,
+                                               WioNativeAbiFailure* failure) noexcept
+            {
+                try
+                {
+                    return static_cast<NativeTaskSourceCell*>(state)->read(result, failure);
+                }
+                catch (...)
+                {
+                    return WIO_NATIVE_ABI_EXCEPTION;
+                }
+            }
+            static WioNativeAbiStatus subscribeTask(void* state, WioNativeTaskCompletionFn callback,
+                                                    void* userdata) noexcept
+            {
+                try
+                {
+                    return static_cast<NativeTaskSourceCell*>(state)->subscribe(callback, userdata);
+                }
+                catch (...)
+                {
+                    return WIO_NATIVE_ABI_EXCEPTION;
+                }
+            }
+            static WioNativeAbiStatus pumpMain(void* state, std::uint64_t* drained) noexcept
+            {
+                try
+                {
+                    return static_cast<NativeTaskSourceCell*>(state)->pump(drained);
+                }
+                catch (...)
+                {
+                    return WIO_NATIVE_ABI_EXCEPTION;
+                }
+            }
+        };
+    } // namespace
+
+    struct Machine::Program : std::enable_shared_from_this<Machine::Program>
+    {
+        enum class DebugCommand : std::uint8_t
+        {
+            None,
+            Resume,
+            Abort
+        };
+
+        struct FunctionPlan
+        {
+            std::uint32_t registerCount = 0;
+            std::unordered_map<std::uint32_t, const bytecode::Block*> blocks;
+            // Lazily built VM entry for function values/host callbacks naming
+            // a native declaration. It delegates to canonical NativeInvoke,
+            // never a second ABI encoder or unchecked external frame.
+            std::unique_ptr<bytecode::Function> nativeEntry;
+        };
+
+        struct NativeFunction
+        {
+            struct TaskBridge
+            {
+                WioNativeAbiStatus (*ready)(const WioNativeAbiValue*, bool*) noexcept = nullptr;
+                WioNativeAbiStatus (*cancel)(const WioNativeAbiValue*) noexcept = nullptr;
+                WioNativeAbiStatus (*read)(const WioNativeAbiValue*, WioNativeAbiValue*,
+                                           WioNativeAbiFailure*) noexcept = nullptr;
+                void (*bindMain)() noexcept = nullptr;
+                std::uint64_t (*pumpMain)() noexcept = nullptr;
+                WioNativeAbiStatus (*onComplete)(const WioNativeAbiValue*, WioNativeTaskCompletionFn,
+                                                 void*) noexcept = nullptr;
+
+                [[nodiscard]] bool operator==(const TaskBridge&) const noexcept = default;
+            };
+
+            std::uint64_t stableId = 0;
+            std::uint32_t flags = 0;
+            std::string stableKey;
+            std::string nativeSymbol;
+            std::string thunkSymbol;
+            WioNativeAbiThunk thunk = nullptr;
+            std::optional<TaskBridge> tasks;
+        };
+
+        struct NativeTaskAdapter
+        {
+            std::vector<std::shared_ptr<detail::NativeLibrary>> libraries;
+            std::weak_ptr<Program> program;
+            Value task;
+            WioNativeAbiValue nativeTask;
+            NativeFunction::TaskBridge bridge;
+            std::uint32_t payloadType = bytecode::InvalidIndex;
+            std::uint8_t payloadMarshalling = 0;
+            std::atomic_bool settled = false;
+
+            ~NativeTaskAdapter()
+            {
+                WioNativeAbiReleaseValue(&nativeTask);
+            }
+        };
+
+        [[nodiscard]] Value adaptNativeTask(const NativeFunction& function, WioNativeAbiValue nativeTask,
+                                            std::uint32_t payloadType, std::uint8_t payloadMarshalling);
+        [[nodiscard]] bool cancelNativeTask(const Value& task);
+        void cancelNativeTasks();
+        void bindNativeMainExecutors();
+        [[nodiscard]] std::uint64_t drainNativeMainExecutors();
+        void removeNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter);
+        static void completeNativeTask(void* userData, WioNativeAbiStatus status) noexcept;
+        static void finishNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter, WioNativeAbiStatus status);
+
+        void pinNativeLibraries(const Value& value)
+        {
+            if (value.kind() != Value::Kind::Opaque && value.kind() != Value::Kind::ForeignObject &&
+                value.kind() != Value::Kind::RuntimeValue && value.kind() != Value::Kind::Component &&
+                value.kind() != Value::Kind::Array && value.kind() != Value::Kind::Dictionary &&
+                value.kind() != Value::Kind::NativePod && value.kind() != Value::Kind::Any)
+                return;
+            std::scoped_lock lock{nativeMutex};
+            for (const auto& library : nativeLibraries)
+                value.pinNativeLibrary(library);
+        }
+
+        void releaseNativeLibraryMachines()
+        {
+            for (const auto& library : nativeLibraries)
+                library->releaseMachine();
+        }
+
+        [[nodiscard]] Machine* acquireOwner()
+        {
+            std::scoped_lock lock{ownerMutex};
+            if (!owner)
+                return nullptr;
+            ++activeOwnerCalls;
+            return owner;
+        }
+
+        void releaseOwner() noexcept
+        {
+            std::scoped_lock lock{ownerMutex};
+            if (--activeOwnerCalls == 0)
+                ownerChanged.notify_all();
+        }
+
+        void detachOwner(Machine* expected)
+        {
+            std::unique_lock lock{ownerMutex};
+            if (owner == expected)
+                owner = nullptr;
+            ownerChanged.wait(lock, [&] { return activeOwnerCalls == 0; });
+        }
+
+        void retainContinuation(const Value& task, std::shared_ptr<void> continuation)
+        {
+            std::scoped_lock lock{continuationMutex};
+            const auto existing = std::find_if(continuations.begin(), continuations.end(),
+                                               [&](const auto& entry) { return entry.first == task; });
+            if (existing != continuations.end())
+                existing->second = std::move(continuation);
+            else
+                continuations.emplace_back(task, std::move(continuation));
+        }
+
+        void releaseContinuation(const Value& task)
+        {
+            std::scoped_lock lock{continuationMutex};
+            std::erase_if(continuations, [&](const auto& entry) { return entry.first == task; });
+        }
+
+        [[nodiscard]] std::shared_ptr<void> takeContinuation(const Value& task)
+        {
+            std::scoped_lock lock{continuationMutex};
+            const auto found = std::find_if(continuations.begin(), continuations.end(),
+                                            [&](const auto& entry) { return entry.first == task; });
+            if (found == continuations.end())
+                return {};
+            std::shared_ptr<void> continuation = std::move(found->second);
+            continuations.erase(found);
+            return continuation;
+        }
+
+        [[nodiscard]] std::vector<std::pair<Value, std::shared_ptr<void>>> takeContinuations()
+        {
+            std::scoped_lock lock{continuationMutex};
+            std::vector<std::pair<Value, std::shared_ptr<void>>> result;
+            result.swap(continuations);
+            return result;
+        }
+
+        [[nodiscard]] DebugCommand pauseForDebugger(const DebugEvent& event)
+        {
+            std::unique_lock lock{debugMutex};
+            if (debugStopping)
+                return DebugCommand::Abort;
+            debugCommand = DebugCommand::None;
+            debugPause = event;
+            debugChanged.notify_all();
+            debugChanged.wait(lock, [&] { return debugStopping || debugCommand != DebugCommand::None; });
+            const DebugCommand result = debugStopping ? DebugCommand::Abort : debugCommand;
+            debugPause.reset();
+            debugCommand = DebugCommand::None;
+            debugChanged.notify_all();
+            return result;
+        }
+
+        void stopDebugControl()
+        {
+            {
+                std::scoped_lock lock{debugMutex};
+                debugStopping = true;
+                debugCommand = DebugCommand::Abort;
+            }
+            debugChanged.notify_all();
+        }
+
+        // Destroy last, after globals, native tasks and executor queues.
+        std::vector<std::shared_ptr<detail::NativeLibrary>> nativeLibraries;
+        std::mutex ownerMutex;
+        std::condition_variable ownerChanged;
+        Machine* owner = nullptr;
+        std::size_t activeOwnerCalls = 0;
+        const bytecode::Module* module = nullptr;
+        std::shared_ptr<const bytecode::Module> moduleOwner;
+        std::atomic_bool asyncStopping{false};
+        ExecutionError loadError;
+        std::vector<FunctionPlan> functions;
+        detail::ObjectLayouts objectLayouts;
+        PlaceProjectionDomain projections;
+        std::vector<std::unique_ptr<PlaceStorage>> globals;
+        enum class GlobalState : std::uint8_t
+        {
+            Pending,
+            Running,
+            Ready,
+            Failed
+        };
+        std::mutex globalMutex;
+        std::condition_variable globalChanged;
+        GlobalState globalState = GlobalState::Pending;
+        std::thread::id globalThread;
+        ExecutionError globalError;
+        std::vector<bool> globalConstructed;
+        std::mutex timerMutex;
+        std::unique_ptr<TimerScheduler> timers;
+        std::mutex continuationMutex;
+        std::vector<std::pair<Value, std::shared_ptr<void>>> continuations;
+        std::recursive_mutex executionMutex;
+        std::atomic_uint32_t retainedForeignCallbacks{0};
+        std::mutex nativeMutex;
+        std::unordered_map<std::string, NativeFunction> nativeFunctions;
+        std::shared_ptr<const detail::NativePodLayouts> nativePodLayouts = std::make_shared<detail::NativePodLayouts>();
+        std::shared_ptr<detail::NativeObjectBridge> nativeObjects;
+        detail::NativeCallbackLifetimeDomain nativeCallbacks;
+        detail::NativeCallbackLifetimeDomain nativeTaskInputs;
+        std::vector<NativeFunction::TaskBridge> nativeTaskApis;
+        std::mutex nativeTaskMutex;
+        std::vector<std::shared_ptr<NativeTaskAdapter>> nativeTasks;
+        mutable std::mutex debugMutex;
+        mutable std::condition_variable debugChanged;
+        std::optional<DebugEvent> debugPause;
+        DebugCommand debugCommand = DebugCommand::None;
+        bool debugStopping = false;
+        std::unique_ptr<ExecutorScheduler> executors;
+        bool valid = false;
+    };
+
+    Value Machine::Program::adaptNativeTask(const NativeFunction& function, WioNativeAbiValue nativeTask,
+                                            const std::uint32_t payloadType, const std::uint8_t payloadMarshalling)
+    {
+        Value task = Value::externalTask();
+        if (!function.tasks)
+        {
+            WioNativeAbiReleaseValue(&nativeTask);
+            (void)task.failTask({"WVM1225", "Native async result has no registered task bridge"});
+            return task;
+        }
+
+        auto adapter = std::make_shared<NativeTaskAdapter>();
+        adapter->program = shared_from_this();
+        adapter->task = task;
+        adapter->nativeTask = nativeTask;
+        adapter->bridge = *function.tasks;
+        adapter->payloadType = payloadType;
+        adapter->payloadMarshalling = payloadMarshalling;
+        {
+            std::scoped_lock lock{nativeMutex};
+            adapter->libraries = nativeLibraries;
+        }
+        {
+            std::scoped_lock lock{nativeTaskMutex};
+            nativeTasks.push_back(adapter);
+        }
+
+        auto* subscription = new std::shared_ptr<NativeTaskAdapter>{adapter};
+        const WioNativeAbiStatus status =
+            adapter->bridge.onComplete(&adapter->nativeTask, &Program::completeNativeTask, subscription);
+        if (status != WIO_NATIVE_ABI_OK)
+        {
+            delete subscription;
+            if (!adapter->settled.exchange(true, std::memory_order_acq_rel))
+            {
+                (void)task.failTask({"WVM1226", "Native task completion subscription failed with ABI status " +
+                                                    std::to_string(static_cast<std::int32_t>(status))});
+                removeNativeTask(adapter);
+            }
+        }
+        return task;
+    }
+
+    void Machine::Program::completeNativeTask(void* const userData, const WioNativeAbiStatus status) noexcept
+    {
+        std::unique_ptr<std::shared_ptr<NativeTaskAdapter>> subscription{
+            static_cast<std::shared_ptr<NativeTaskAdapter>*>(userData)};
+        if (!subscription || !*subscription)
+            return;
+        const std::shared_ptr<NativeTaskAdapter> adapter = std::move(*subscription);
+        try
+        {
+            finishNativeTask(adapter, status);
+        }
+        catch (...)
+        {
+            try
+            {
+                (void)adapter->task.failTask({"WVM1226", "Native task completion raised an internal bridge failure"});
+                if (const std::shared_ptr<Program> program = adapter->program.lock())
+                    program->removeNativeTask(adapter);
+            }
+            catch (...)
+            {
+            }
+        }
+    }
+
+    void Machine::Program::finishNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter,
+                                            const WioNativeAbiStatus status)
+    {
+        if (adapter->settled.exchange(true, std::memory_order_acq_rel))
+            return;
+        const std::shared_ptr<Program> program = adapter->program.lock();
+        if (!program)
+        {
+            (void)adapter->task.cancelTask();
+            return;
+        }
+
+        Machine* const owner = program->acquireOwner();
+        if (!owner)
+        {
+            (void)adapter->task.cancelTask();
+            program->removeNativeTask(adapter);
+            return;
+        }
+        const auto releaseOwner = [program](Machine*) { program->releaseOwner(); };
+        const std::unique_ptr<Machine, decltype(releaseOwner)> ownerGuard{owner, releaseOwner};
+
+        if (status == WIO_NATIVE_ABI_CANCELLED)
+            (void)adapter->task.cancelTask();
+        else if (status != WIO_NATIVE_ABI_OK)
+            (void)owner->fail(adapter->task, "WVM1226",
+                              "Native task completion failed with ABI status " +
+                                  std::to_string(static_cast<std::int32_t>(status)));
+        else
+        {
+            WioNativeAbiValue result{};
+            struct ResultGuard
+            {
+                WioNativeAbiValue& value;
+                ~ResultGuard()
+                {
+                    WioNativeAbiReleaseValue(&value);
+                }
+            } resultGuard{result};
+            WioNativeAbiFailure failure{};
+            const WioNativeAbiStatus readStatus = adapter->bridge.read(&adapter->nativeTask, &result, &failure);
+            if (readStatus != WIO_NATIVE_ABI_OK)
+            {
+                failure.status = readStatus;
+                (void)owner->fail(adapter->task, "WVM1226",
+                                  "Native task result failed: " + detail::nativeFailureMessage(failure));
+            }
+            else
+            {
+                std::shared_ptr<const detail::NativePodLayouts> layouts;
+                {
+                    std::scoped_lock lock{program->nativeMutex};
+                    layouts = program->nativePodLayouts;
+                }
+                const auto access = owner->nativeObjectAccess();
+                detail::NativeValueResult converted =
+                    detail::decodeNativeValue(*program->module, result, adapter->payloadType,
+                                              adapter->payloadMarshalling, layouts.get(), 0, &access);
+                if (!converted.succeeded())
+                    (void)owner->fail(adapter->task, "WVM1226",
+                                      "Native task result conversion failed: " + converted.error);
+                else
+                {
+                    program->pinNativeLibraries(converted.value);
+                    (void)owner->complete(adapter->task, std::move(converted.value));
+                }
+            }
+        }
+        program->removeNativeTask(adapter);
+    }
+
+    void Machine::Program::removeNativeTask(const std::shared_ptr<NativeTaskAdapter>& adapter)
+    {
+        std::scoped_lock lock{nativeTaskMutex};
+        std::erase(nativeTasks, adapter);
+    }
+
+    bool Machine::Program::cancelNativeTask(const Value& task)
+    {
+        std::shared_ptr<NativeTaskAdapter> adapter;
+        {
+            std::scoped_lock lock{nativeTaskMutex};
+            const auto found = std::find_if(nativeTasks.begin(), nativeTasks.end(),
+                                            [&](const auto& candidate) { return candidate->task == task; });
+            if (found == nativeTasks.end())
+                return false;
+            adapter = *found;
+            nativeTasks.erase(found);
+        }
+        if (adapter->settled.exchange(true, std::memory_order_acq_rel))
+            return false;
+        const WioNativeAbiStatus status = adapter->bridge.cancel(&adapter->nativeTask);
+        if (status == WIO_NATIVE_ABI_OK || status == WIO_NATIVE_ABI_CANCELLED)
+            (void)task.cancelTask();
+        else
+            (void)task.failTask({"WVM1226", "Native task cancellation failed with ABI status " +
+                                                std::to_string(static_cast<std::int32_t>(status))});
+        return true;
+    }
+
+    void Machine::Program::cancelNativeTasks()
+    {
+        std::vector<std::shared_ptr<NativeTaskAdapter>> pending;
+        {
+            std::scoped_lock lock{nativeTaskMutex};
+            pending.swap(nativeTasks);
+        }
+        for (const auto& adapter : pending)
+        {
+            if (adapter->settled.exchange(true, std::memory_order_acq_rel))
+                continue;
+            (void)adapter->bridge.cancel(&adapter->nativeTask);
+            (void)adapter->task.cancelTask();
+        }
+    }
+
+    void Machine::Program::bindNativeMainExecutors()
+    {
+        std::vector<NativeFunction::TaskBridge> bridges;
+        {
+            std::scoped_lock lock{nativeMutex};
+            bridges = nativeTaskApis;
+        }
+        for (const NativeFunction::TaskBridge& bridge : bridges)
+            bridge.bindMain();
+    }
+
+    std::uint64_t Machine::Program::drainNativeMainExecutors()
+    {
+        std::vector<NativeFunction::TaskBridge> bridges;
+        {
+            std::scoped_lock lock{nativeMutex};
+            bridges = nativeTaskApis;
+        }
+        std::uint64_t count = 0;
+        for (const NativeFunction::TaskBridge& bridge : bridges)
+            count += bridge.pumpMain();
+        return count;
+    }
+
+    struct Machine::ExecutionState
+    {
+        std::vector<Frame> frames;
+        Value activeTask;
+        ExecutorKind executor = ExecutorKind::Inherit;
+        std::uint64_t executed = 0;
+        std::uint32_t awaitedState = bytecode::InvalidIndex;
+        std::uint32_t awaitedResumeBlock = bytecode::InvalidIndex;
+    };
+
+    ExecutionResult ExecutionResult::success(Value value)
+    {
+        ExecutionResult result;
+        result.succeeded_ = true;
+        result.value_ = std::move(value);
+        return result;
+    }
+
+    ExecutionResult ExecutionResult::failure(ExecutionError error)
+    {
+        ExecutionResult result;
+        result.error_ = std::move(error);
+        return result;
+    }
+
+    ExecutionResult ExecutionResult::suspended()
+    {
+        ExecutionResult result;
+        result.suspended_ = true;
+        return result;
+    }
+
+    void Machine::cleanupValue(Value& value, ExecutionError& primaryError)
+    {
+        if (value.isEmpty() || value.kind() == Value::Kind::Null || value.kind() == Value::Kind::Place ||
+            value.kind() == Value::Kind::ObjectBorrow)
+        {
+            value = {};
+            return;
+        }
+
+        const bool uniqueStorage = value.strongReferenceCount() == 1;
+        if (program_ && program_->module && uniqueStorage &&
+            (value.kind() == Value::Kind::Object || value.kind() == Value::Kind::Component))
+        {
+            const bytecode::Module& module = *program_->module;
+            const std::uint32_t type = value.aggregateType();
+            const auto* layout = value.kind() == Value::Kind::Object ? program_->objectLayouts.get(type) : nullptr;
+            std::span<const std::uint32_t> owners{&type, 1};
+            if (layout)
+                owners = layout->constructionOwners;
+            const auto completedOwners = layout ? std::min(value.objectConstructionLimit(), owners.size()) : 1;
+            for (std::size_t index = owners.size(); index > 0; --index)
+            {
+                const auto owner = owners[index - 1];
+                const auto destructor =
+                    owner < module.types.size() ? module.types[owner].destructor : bytecode::InvalidIndex;
+                if (index - 1 < completedOwners && destructor != bytecode::InvalidIndex &&
+                    destructor < module.functions.size())
+                {
+                    try
+                    {
+                        Value receiver;
+                        std::unique_ptr<PlaceStorage> componentPlace;
+                        if (value.kind() == Value::Kind::Object)
+                            receiver = Value::objectBorrow(value.scalar_.aggregate);
+                        else
+                        {
+                            componentPlace = std::make_unique<PlaceStorage>();
+                            componentPlace->alias = &value;
+                            componentPlace->initialized = true;
+                            componentPlace->mutableValue = true;
+                            receiver = Value::place(componentPlace.get());
+                        }
+
+                        const ExecutionResult destroyed = execute(destructor, std::span{&receiver, 1}, nullptr);
+                        if (!destroyed.succeeded())
+                        {
+                            primaryError.cleanupFailures.push_back(
+                                {destroyed.error().code, destroyed.error().message, destroyed.error().stack});
+                            primaryError.cleanupFailures.insert(primaryError.cleanupFailures.end(),
+                                                                destroyed.error().cleanupFailures.begin(),
+                                                                destroyed.error().cleanupFailures.end());
+                        }
+                    }
+                    catch (const std::exception& error)
+                    {
+                        primaryError.cleanupFailures.push_back(
+                            {"WVM1210", std::string{"VM destructor threw while unwinding: "} + error.what(), {}});
+                    }
+                    catch (...)
+                    {
+                        primaryError.cleanupFailures.push_back(
+                            {"WVM1210", "VM destructor threw a non-standard exception while unwinding", {}});
+                    }
+                }
+                // Match native subobject teardown: derived fields are released
+                // after the derived body, before invoking the base destructor.
+                if (layout && owner < module.types.size())
+                    for (std::size_t fieldIndex = module.types[owner].fields.size(); fieldIndex > 0; --fieldIndex)
+                        if (auto* field = value.mutableField(layout->offsets.at(owner) + fieldIndex - 1))
+                        {
+                            program_->projections.retireCells(*field, true);
+                            auto child = std::move(*field);
+                            *field = {};
+                            cleanupValue(child, primaryError);
+                        }
+            }
+        }
+
+        if (uniqueStorage && value.kind() == Value::Kind::Any)
+        {
+            auto backing = value.takeNativeAnyBackingForCleanup();
+            if (!backing.isEmpty())
+            {
+                // Release producer proxies while the child graph is still
+                // live. Retired host roots then give up their object claims
+                // before recursive Wio cleanup tests for a final owner.
+                backing = {};
+                cleanupNativeObjects(false, &primaryError);
+            }
+        }
+        std::vector<Value> children = value.takeOwnedChildrenForCleanup();
+        for (auto child = children.rbegin(); child != children.rend(); ++child)
+            cleanupValue(*child, primaryError);
+        value = {};
+    }
+
+    void Machine::cleanupTaskArguments(const Value& task, ExecutionError& primaryError)
+    {
+        std::vector<Value> arguments = task.takeTaskArgumentsForCleanup();
+        for (auto argument = arguments.rbegin(); argument != arguments.rend(); ++argument)
+            cleanupValue(*argument, primaryError);
+    }
+
+    ExecutionError Machine::unwind(ExecutionState& state, ExecutionError error)
+    {
+        error = withStack(std::move(error), state.frames);
+        for (auto frame = state.frames.rbegin(); frame != state.frames.rend(); ++frame)
+        {
+            cleanupValue(frame->resumedValue, error);
+            for (auto argument = frame->continuation.nextArguments.rbegin();
+                 argument != frame->continuation.nextArguments.rend(); ++argument)
+                cleanupValue(*argument, error);
+            for (auto place = frame->localPlaces.rbegin(); place != frame->localPlaces.rend(); ++place)
+            {
+                PlaceStorage& storage = **place;
+                if (!storage.alias && storage.initialized)
+                {
+                    storage.retireProjections();
+                    cleanupValue(storage.value, error);
+                    storage.initialized = false;
+                }
+                cleanupValue(storage.owner, error);
+            }
+            for (auto registerValue = frame->registers.rbegin(); registerValue != frame->registers.rend();
+                 ++registerValue)
+            {
+                if (!registerValue->initialized)
+                    continue;
+                cleanupValue(registerValue->value, error);
+                registerValue->initialized = false;
+            }
+        }
+        state.frames.clear();
+        return error;
+    }
+
+    void Machine::cancelAndUnwindContinuations()
+    {
+        if (!program_)
+            return;
+        std::vector<std::pair<Value, std::shared_ptr<void>>> continuations = program_->takeContinuations();
+        std::scoped_lock executionLock{program_->executionMutex};
+        for (auto& [task, erased] : continuations)
+        {
+            (void)task.cancelTask();
+            auto state = std::static_pointer_cast<ExecutionState>(std::move(erased));
+            if (state)
+                (void)unwind(*state, {"WVM1165", "Async task was cancelled during machine shutdown"});
+            ExecutionError cleanupError;
+            cleanupTaskArguments(task, cleanupError);
+        }
+    }
+
+    ExecutionResult Machine::initializeGlobals()
+    {
+        {
+            std::unique_lock lock{program_->globalMutex};
+            // Initializers may call native code which synchronously calls back
+            // into this machine. Such callbacks observe the declaration-order
+            // state, rather than starting initialization again. Unrelated host
+            // entries wait until the first entry publishes success or failure.
+            while (program_->globalState == Program::GlobalState::Running)
+            {
+                if (program_->globalThread == std::this_thread::get_id() || nativeCallbackInvocation)
+                    return ExecutionResult::success();
+                program_->globalChanged.wait(lock);
+            }
+            if (program_->globalState == Program::GlobalState::Ready)
+                return ExecutionResult::success();
+            if (program_->globalState == Program::GlobalState::Failed)
+                return ExecutionResult::failure(program_->globalError);
+            program_->globalState = Program::GlobalState::Running;
+            program_->globalThread = std::this_thread::get_id();
+        }
+
+        // Do not hold executionMutex across execute(): a native initializer
+        // can temporarily release it to allow a callback from a foreign thread.
+        ExecutionError error;
+        try
+        {
+            for (const bytecode::Global& global : program_->module->globals)
+            {
+                if (global.initializer == bytecode::InvalidIndex)
+                    continue;
+                auto result = execute(global.initializer, {}, nullptr);
+                if (!result.succeeded())
+                {
+                    error = result.error();
+                    break;
+                }
+                std::scoped_lock executionLock{program_->executionMutex};
+                auto& storage = *program_->globals[global.id];
+                storage.retireProjections();
+                storage.value = result.value();
+                storage.initialized = true;
+                program_->globalConstructed[global.id] = true;
+            }
+        }
+        catch (const std::exception& exception)
+        {
+            error = {"WVM1242", std::string{"Global initialization failed: "} + exception.what()};
+        }
+        catch (...)
+        {
+            error = {"WVM1242", "Global initialization failed with an unknown host exception"};
+        }
+        if (!error.code.empty())
+        {
+            cleanupGlobals(&error);
+            cleanupNativeObjects(false, &error);
+        }
+        {
+            std::scoped_lock lock{program_->globalMutex};
+            program_->globalError = error;
+            program_->globalState = error.code.empty() ? Program::GlobalState::Ready : Program::GlobalState::Failed;
+            program_->globalThread = {};
+        }
+        program_->globalChanged.notify_all();
+        return error.code.empty() ? ExecutionResult::success() : ExecutionResult::failure(std::move(error));
+    }
+
+    void Machine::cleanupGlobals(ExecutionError* primaryError)
+    {
+        if (!program_)
+            return;
+        std::scoped_lock executionLock{program_->executionMutex};
+        ExecutionError cleanupError;
+        auto& error = primaryError ? *primaryError : cleanupError;
+        for (auto global = program_->globals.rbegin(); global != program_->globals.rend(); ++global)
+        {
+            const auto index = static_cast<std::size_t>(std::distance(global, program_->globals.rend()) - 1);
+            if (!program_->globalConstructed[index])
+                continue;
+            program_->globalConstructed[index] = false;
+            (*global)->retireProjections();
+            cleanupValue((*global)->value, error);
+            (*global)->initialized = false;
+        }
+    }
+
+    Machine::Machine(const bytecode::Module& module, const MachineOptions options)
+        : program_(std::make_shared<Program>()), options_(options)
+    {
+        program_->owner = this;
+        program_->module = &module;
+        program_->executors = std::make_unique<ExecutorScheduler>(options.workerThreadCount,
+                                                                  options.blockingThreadCount, options.ioThreadCount);
+        const bytecode::VerificationResult verification = bytecode::Verifier{}.verify(module);
+        if (!verification.succeeded())
+        {
+            const bytecode::VerificationDiagnostic& diagnostic = verification.diagnostics().front();
+            program_->loadError = {"WVM1001",
+                                   "Bytecode verification failed (" + diagnostic.code + "): " + diagnostic.message,
+                                   diagnostic.function, diagnostic.block, diagnostic.instruction};
+            return;
+        }
+
+        std::string layoutError;
+        if (!program_->objectLayouts.build(module, layoutError))
+        {
+            program_->loadError = {"WVM1241", std::move(layoutError)};
+            return;
+        }
+        program_->functions.resize(module.functions.size());
+        for (const bytecode::Function& function : module.functions)
+        {
+            Program::FunctionPlan& plan = program_->functions[function.id];
+            plan.registerCount = registerCount(function);
+            plan.blocks.reserve(function.blocks.size());
+            for (const bytecode::Block& block : function.blocks)
+                plan.blocks.emplace(block.id, &block);
+        }
+        program_->globals.reserve(module.globals.size());
+        program_->globalConstructed.reserve(module.globals.size());
+        for (const bytecode::Global& global : module.globals)
+        {
+            auto storage = std::make_unique<PlaceStorage>();
+            storage->value = defaultValue(module, global.type);
+            storage->initialized = !storage->value.isEmpty();
+            storage->mutableValue = (global.flags & 0x01u) != 0;
+            program_->globals.push_back(std::move(storage));
+            program_->globalConstructed.push_back(global.initializer == bytecode::InvalidIndex);
+        }
+        program_->valid = true;
+    }
+
+    Machine::Machine(std::shared_ptr<const bytecode::Module> module, MachineOptions options)
+        : Machine(module ? *module : throw std::invalid_argument("Owned VM module cannot be null"), options)
+    {
+        program_->moduleOwner = std::move(module);
+    }
+
+    Machine::~Machine()
+    {
+        shutdown();
+    }
+
+    void Machine::quiesceAsync()
+    {
+        if (!program_ || program_->asyncStopping.exchange(true))
+            return;
+        program_->stopDebugControl();
+        bool reattach = false;
+        {
+            std::scoped_lock lock{program_->ownerMutex};
+            reattach = program_->owner == this;
+        }
+        // In-flight native waits see stopped sources and release their owner
+        // leases before cancellation needs the VM execution lock.
+        program_->detachOwner(this);
+        program_->cancelNativeTasks();
+        cancelAndUnwindContinuations();
+        if (program_->executors)
+            program_->executors->shutdown();
+        std::unique_ptr<TimerScheduler> timers;
+        {
+            std::scoped_lock lock{program_->timerMutex};
+            timers = std::move(program_->timers);
+        }
+        timers.reset();
+        cleanupNativeTaskSources(true);
+        if (reattach)
+        {
+            std::scoped_lock lock{program_->ownerMutex};
+            program_->owner = this; // synchronous unload remains executable
+        }
+    }
+
+    void Machine::shutdown()
+    {
+        if (program_)
+        {
+            program_->stopDebugControl();
+            program_->detachOwner(this);
+            quiesceAsync();
+            cleanupGlobals();
+            cleanupNativeObjects(true);
+            program_->releaseNativeLibraryMachines();
+        }
+        program_.reset();
+    }
+
+    Machine::Machine(Machine&& other) noexcept
+        : program_(std::move(other.program_)), options_(std::move(other.options_))
+    {
+        if (program_)
+        {
+            program_->detachOwner(&other);
+            std::scoped_lock lock{program_->ownerMutex};
+            program_->owner = this;
+        }
+    }
+
+    Machine& Machine::operator=(Machine&& other) noexcept
+    {
+        if (this == &other)
+            return *this;
+        shutdown();
+        program_ = std::move(other.program_);
+        options_ = std::move(other.options_);
+        if (program_)
+        {
+            program_->detachOwner(&other);
+            std::scoped_lock lock{program_->ownerMutex};
+            program_->owner = this;
+        }
+        return *this;
+    }
+
+    ExecutionResult Machine::invoke(const std::uint32_t functionId, const std::span<const Value> arguments)
+    {
+        return invokeWithCaptures(functionId, arguments, nullptr);
+    }
+
+    ExecutionResult Machine::invokeWithCaptures(const std::uint32_t functionId, const std::span<const Value> arguments,
+                                                const Value* callable)
+    {
+        cleanupNativeObjects();
+        if (!program_ || !program_->module)
+            return ExecutionResult::failure({"WVM1000", "The virtual machine has no loaded module"});
+        if (!program_->valid)
+            return ExecutionResult::failure(program_->loadError);
+        if (functionId >= program_->module->functions.size())
+            return ExecutionResult::failure({"WVM1002", "Entry function id is outside the module"});
+        if ((program_->module->functions[functionId].flags & bytecode::FunctionTemplateDeclaration) != 0)
+            return ExecutionResult::failure(
+                {"WVM1240", "Generic declaration requires a concrete function specialization", functionId});
+        auto initialization = initializeGlobals();
+        if (!initialization.succeeded())
+            return initialization;
+        if ((program_->module->functions[functionId].flags & 0x0001u) != 0 &&
+            !program_->module->functions[functionId].hasNativeBinding)
+            return ExecutionResult::success(startTask(functionId, arguments));
+        auto result = execute(functionId, arguments, nullptr, {}, callable);
+        cleanupNativeObjects();
+        return result;
+    }
+
+    void Machine::collectNativeObjectRetirements()
+    {
+        detail::NativeObjectBridge::collectRetiredCode();
+        detail::collectNativeCallbackResultLeases();
+    }
+
+    void Machine::cleanupNativeObjects(bool shutdown, ExecutionError* primaryError) noexcept
+    {
+        if (!program_)
+            return;
+        try
+        {
+            std::scoped_lock lock{program_->executionMutex};
+            if (!shutdown)
+                detail::collectNativeCallbackResultLeases(program_);
+            ExecutionError cleanupError;
+            auto& errors = primaryError ? *primaryError : cleanupError;
+            cleanupNativeTaskSources(shutdown, &errors);
+            auto callbacks = program_->nativeCallbacks.takeRetired(shutdown);
+            for (auto& callable : callbacks)
+                cleanupValue(callable, errors);
+            if (program_->nativeObjects)
+            {
+                auto values = shutdown ? program_->nativeObjects->shutdown() : program_->nativeObjects->takeRetired();
+                while (!values.empty())
+                {
+                    for (auto& value : values)
+                        cleanupValue(value, errors);
+                    values = program_->nativeObjects->takeRetired();
+                }
+            }
+        }
+        catch (...)
+        {
+        }
+    }
+
+    void Machine::cleanupNativeTaskSources(bool shutdown, ExecutionError* primaryError)
+    {
+        if (!program_)
+            return;
+        std::scoped_lock lock{program_->executionMutex};
+        ExecutionError cleanupError;
+        auto& errors = primaryError ? *primaryError : cleanupError;
+        auto inputs = program_->nativeTaskInputs.takeRetired(shutdown);
+        for (auto& input : inputs)
+        {
+            if (shutdown)
+                (void)cancel(input);
+            cleanupValue(input, errors);
+        }
+    }
+
+    WioNativeAbiStatus Machine::dispatchNativeObjectMethod(const Value& object, std::uint64_t methodId,
+                                                           const WioNativeAbiValue* args, std::uint64_t count,
+                                                           WioNativeAbiValue* output, WioNativeAbiFailure* failure)
+    {
+        const auto program = program_;
+        Machine* const owner = this;
+        std::scoped_lock executionLock{program->executionMutex};
+        std::shared_ptr<const detail::NativePodLayouts> layouts;
+        {
+            std::scoped_lock nativeLock{program->nativeMutex};
+            layouts = program->nativePodLayouts;
+        }
+        const auto& module = *program->module;
+        const auto methodMarshalling = [&](std::uint32_t type, std::uint8_t& marshalling)
+        {
+            if (type < module.types.size() && module.types[type].kind == TypeReference &&
+                module.types[type].arguments.size() == 1)
+                type = module.types[type].arguments.front();
+            if (type < module.types.size() && module.types[type].kind == TypeNullable &&
+                module.types[type].arguments.size() == 1)
+                type = module.types[type].arguments.front();
+            if (detail::callbackValueMarshalling(module, type, marshalling, layouts.get()))
+                return true;
+            if (type < module.types.size() && module.types[type].kind == TypeNamed &&
+                (module.types[type].nominalKind == NominalObject ||
+                 module.types[type].nominalKind == NominalInterface) &&
+                layouts->objectContracts.contains(type))
+            {
+                marshalling = 6;
+                return true;
+            }
+            return false;
+        };
+        const auto reflected =
+            std::ranges::find(module.contract.reflection, object.aggregateType(), &bytecode::Reflection::type);
+        if (reflected == module.contract.reflection.end())
+            return WIO_NATIVE_ABI_TYPE_MISMATCH;
+        const auto method = std::ranges::find(reflected->methods, methodId, &bytecode::ReflectedMethod::stableId);
+        if (method == reflected->methods.end() || method->isAsync || count != method->parameterTypes.size())
+            return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+        struct Borrow
+        {
+            WioNativeAbiValue* token;
+            std::uint32_t type;
+            std::unique_ptr<PlaceStorage> place;
+            bool mutableAccess;
+        };
+        std::vector<Borrow> borrows;
+        const auto releaseBorrows = [owner, &borrows](void*) noexcept
+        {
+            for (auto& borrow : borrows)
+                try
+                {
+                    ExecutionError error;
+                    owner->cleanupValue(borrow.place->value, error);
+                }
+                catch (...)
+                {
+                }
+        };
+        const std::unique_ptr<void, decltype(releaseBorrows)> borrowGuard{owner, releaseBorrows};
+        std::vector<Value> parameters{object};
+        for (std::size_t index = 0; index < count; ++index)
+        {
+            const auto parameterType = method->parameterTypes[index];
+            if (parameterType < module.types.size() && module.types[parameterType].kind == TypeFunction)
+            {
+                const auto& wire = args[index];
+                const auto& signature = module.types[parameterType].arguments;
+                const auto callback = wire.payload.callback;
+                const auto contract =
+                    std::ranges::find(module.contract.reflection, parameterType, &bytecode::Reflection::type);
+                bool supported = !signature.empty();
+                for (std::size_t signatureIndex = 0; signatureIndex < signature.size(); ++signatureIndex)
+                {
+                    std::uint8_t codec = 0;
+                    supported &=
+                        signatureIndex + 1 == signature.size()
+                            ? detail::callbackResultMarshalling(module, signature[signatureIndex], codec, layouts.get())
+                            : detail::callbackArgumentMarshalling(module, signature[signatureIndex], codec,
+                                                                  layouts.get());
+                }
+                if (!supported || wire.kind != WIO_NATIVE_ABI_CALLBACK ||
+                    contract == module.contract.reflection.end() || wire.typeId != contract->stableTypeId ||
+                    wire.typeId == 0 || !callback.userdata || !callback.ops ||
+                    callback.ops->abiVersion != WIO_NATIVE_ABI_VERSION || !callback.ops->invoke ||
+                    !callback.ops->retain || !callback.ops->release ||
+                    (callback.ops->flags &
+                     ~(WIO_NATIVE_ABI_CALLBACK_ANY_THREAD | WIO_NATIVE_ABI_CALLBACK_CALLER_THREAD)) ||
+                    (wire.flags != WIO_NATIVE_ABI_VALUE_OWNED && wire.flags != WIO_NATIVE_ABI_VALUE_BORROWED) ||
+                    wire.owner.state || wire.owner.ops)
+                {
+                    setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                                       "hosted method callback requires a typed owning callable contract");
+                    return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                }
+                auto value = Value::nativeCallable(parameterType, wire.typeId, callback);
+                program->pinNativeLibraries(value);
+                parameters.push_back(std::move(value));
+                continue;
+            }
+            std::uint8_t marshalling = 0;
+            if (!methodMarshalling(parameterType, marshalling))
+            {
+                setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, "unsupported hosted method argument type");
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            }
+            if (module.types[parameterType].kind == TypeReference)
+            {
+                const auto& type = module.types[parameterType];
+                const bool mutableAccess = (type.flags & 0x01u) != 0;
+                const auto& wire = args[index];
+                if (marshalling != 6 || wire.kind != WIO_NATIVE_ABI_REFERENCE ||
+                    !(wire.flags & WIO_NATIVE_ABI_VALUE_BORROWED) ||
+                    (wire.flags & ~(WIO_NATIVE_ABI_VALUE_BORROWED | WIO_NATIVE_ABI_VALUE_MUTABLE)) ||
+                    (mutableAccess && !(wire.flags & WIO_NATIVE_ABI_VALUE_MUTABLE)) ||
+                    !wire.payload.mutableSlice.data || wire.payload.mutableSlice.size != sizeof(WioNativeAbiValue) ||
+                    reinterpret_cast<std::uintptr_t>(wire.payload.mutableSlice.data) % alignof(WioNativeAbiValue))
+                {
+                    setCallbackFailure(failure, WIO_NATIVE_ABI_INVALID_ARGUMENT,
+                                       "hosted object ref/view requires a compatible tagged-value cell");
+                    return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                }
+                auto* token = static_cast<WioNativeAbiValue*>(wire.payload.mutableSlice.data);
+                const auto base = type.arguments.front();
+                auto slot = std::ranges::find(borrows, token, &Borrow::token);
+                if (slot == borrows.end())
+                {
+                    auto decoded = owner->decodeNativeObject(*token, base, *layouts);
+                    const bool nullableNull =
+                        module.types[base].kind == TypeNullable && decoded.value.kind() == Value::Kind::Null;
+                    if (!decoded.succeeded() || (decoded.value.kind() != Value::Kind::Object && !nullableNull))
+                    {
+                        setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                                           "hosted object ref/view requires an original VM object");
+                        return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                    }
+                    auto place = std::make_unique<PlaceStorage>();
+                    place->value = std::move(decoded.value);
+                    place->initialized = true;
+                    place->mutableValue = mutableAccess;
+                    borrows.push_back({token, base, std::move(place), mutableAccess});
+                    slot = std::prev(borrows.end());
+                }
+                if (slot->type != base)
+                {
+                    setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                                       "aliased hosted object references disagree on their type");
+                    return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                }
+                slot->mutableAccess |= mutableAccess;
+                slot->place->mutableValue |= mutableAccess;
+                parameters.push_back(Value::place(slot->place.get()));
+                continue;
+            }
+            auto decoded = marshalling == 6
+                               ? owner->decodeNativeObject(args[index], method->parameterTypes[index], *layouts)
+                               : detail::decodeNativeValue(module, args[index], method->parameterTypes[index],
+                                                           marshalling, layouts.get());
+            if (decoded.succeeded() && marshalling == 6 && decoded.value.kind() != Value::Kind::Object &&
+                decoded.value.kind() != Value::Kind::ForeignObject &&
+                !(module.types[parameterType].kind == TypeNullable && decoded.value.kind() == Value::Kind::Null))
+                decoded.error = "hosted method argument requires a compatible owning object handle";
+            if (!decoded.succeeded())
+            {
+                setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, decoded.error);
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            }
+            program->pinNativeLibraries(decoded.value);
+            parameters.push_back(std::move(decoded.value));
+        }
+        auto execution = owner->invoke(method->function, parameters);
+        // Copy-back or result encoding can throw before the returned
+        // object's native claim is installed. Preserve Wio cleanup.
+        const auto releaseResult = [owner](Value* value) noexcept
+        {
+            try
+            {
+                ExecutionError cleanupError;
+                owner->cleanupValue(*value, cleanupError);
+            }
+            catch (...)
+            {
+            }
+        };
+        const std::unique_ptr<Value, decltype(releaseResult)> resultGuard{&execution.value_, releaseResult};
+        // Stage all mutable cells before committing any of them. Aliased
+        // ref/view parameters share one VM place and one output token.
+        std::vector<WioNativeAbiValue> replacements(borrows.size());
+        const auto releaseReplacements = [&replacements](void*) noexcept
+        {
+            for (auto& value : replacements)
+                WioNativeAbiReleaseValue(&value);
+        };
+        const std::unique_ptr<void, decltype(releaseReplacements)> replacementGuard{owner, releaseReplacements};
+        std::string copyBackError;
+        for (std::size_t index = 0; index < borrows.size(); ++index)
+            if (borrows[index].mutableAccess &&
+                !owner->encodeNativeObject(borrows[index].place->value, borrows[index].type, replacements[index],
+                                           copyBackError, *layouts))
+            {
+                if (copyBackError.empty())
+                    copyBackError = "hosted object reference copy-back failed";
+                break;
+            }
+        if (copyBackError.empty())
+            for (std::size_t index = 0; index < borrows.size(); ++index)
+                if (borrows[index].mutableAccess)
+                {
+                    WioNativeAbiReleaseValue(borrows[index].token);
+                    *borrows[index].token = replacements[index];
+                    replacements[index] = {};
+                }
+        if (!execution.succeeded())
+        {
+            setCallbackFailure(failure, WIO_NATIVE_ABI_PANIC,
+                               execution.error().code + ": " + execution.error().message);
+            return WIO_NATIVE_ABI_PANIC;
+        }
+        if (!copyBackError.empty())
+        {
+            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, copyBackError);
+            return WIO_NATIVE_ABI_TYPE_MISMATCH;
+        }
+        const auto& resultType = module.types[method->returnType];
+        if (resultType.kind == TypeReference && resultType.arguments.size() == 1)
+        {
+            const auto base = resultType.arguments.front();
+            const bool mutableResult = (resultType.flags & 0x01u) != 0;
+            if (execution.value().kind() == Value::Kind::Place)
+            {
+                // Compare identities only: an unqualified returned place may
+                // point into a popped frame and must never be dereferenced.
+                const auto slot = std::ranges::find_if(borrows,
+                                                       [&](const auto& borrow)
+                                                       {
+                                                           return borrow.place.get() == execution.value().asPlace() &&
+                                                                  borrow.type == base &&
+                                                                  (!mutableResult || borrow.mutableAccess);
+                                                       });
+                if (slot != borrows.end())
+                {
+                    auto objectType = base;
+                    if (module.types[objectType].kind == TypeNullable)
+                        objectType = module.types[objectType].arguments.front();
+                    *output = {};
+                    output->kind = WIO_NATIVE_ABI_REFERENCE;
+                    output->flags = WIO_NATIVE_ABI_VALUE_BORROWED | (mutableResult ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
+                    const auto contract =
+                        std::ranges::find(module.contract.reflection, objectType, &bytecode::Reflection::type);
+                    if (contract == module.contract.reflection.end() || !contract->stableTypeId)
+                        return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                    output->typeId = contract->stableTypeId;
+                    output->payload.mutableSlice = {slot->token, sizeof(WioNativeAbiValue)};
+                    return WIO_NATIVE_ABI_OK;
+                }
+            }
+            else if ((execution.value().kind() == Value::Kind::ObjectBorrow ||
+                      execution.value().kind() == Value::Kind::Object) &&
+                     program->objectLayouts.get(object.aggregateType()) &&
+                     program->objectLayouts.get(object.aggregateType())->offsets.contains(base) &&
+                     execution.value().objectIdentity() == object.objectIdentity())
+            {
+                // A receiver borrow has no rebindable cell. Its temporary
+                // object wire is mapped back to the producer's raw receiver,
+                // and released before the borrowed Place leaves the wrapper.
+                std::string error;
+                if (owner->encodeNativeObject(object, base, *output, error, *layouts))
+                    return WIO_NATIVE_ABI_OK;
+                setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, error);
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            }
+            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                               "borrowed method result must alias its receiver or a compatible caller handle cell");
+            return WIO_NATIVE_ABI_TYPE_MISMATCH;
+        }
+        std::uint8_t marshalling = 0;
+        std::string error;
+        const bool supported = methodMarshalling(method->returnType, marshalling);
+        const auto objects = owner->nativeObjectAccess(true);
+        const bool encoded =
+            supported &&
+            (marshalling == 6
+                 ? owner->encodeNativeObject(execution.value(), method->returnType, *output, error, *layouts)
+                 : detail::encodeOwnedNativeValue(module, execution.value(), method->returnType, marshalling, *output,
+                                                  error, layouts.get(), &objects));
+        if (!encoded)
+        {
+            setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, error);
+            return WIO_NATIVE_ABI_TYPE_MISMATCH;
+        }
+        return WIO_NATIVE_ABI_OK;
+    }
+
+    ExecutionResult Machine::invokeNativeCallable(const Value& callable, std::span<const Value> arguments)
+    {
+        const auto callback = callable.nativeCallback();
+        const auto type = callable.nativeCallableType();
+        const auto& module = *program_->module;
+        const auto fail = [](std::string message)
+        { return ExecutionResult::failure(ExecutionError{"WVM1223", std::move(message)}); };
+        if (!callback.ops || type >= module.types.size() || module.types[type].kind != TypeFunction)
+            return fail("Native callable has no concrete signature");
+        const auto& signature = module.types[type].arguments;
+        if (signature.empty() || arguments.size() != signature.size() - 1)
+            return fail("Native callable argument count does not match its signature");
+        if (!callable.nativeCallableThreadAllowed())
+            return ExecutionResult::failure(ExecutionError{"WVM1222", "Native callable has caller-thread affinity"});
+        std::shared_ptr<const detail::NativePodLayouts> layouts;
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            layouts = program_->nativePodLayouts;
+        }
+        const auto objects = nativeObjectAccess(true);
+        std::vector<WioNativeAbiValue> wires(arguments.size());
+        WioNativeAbiValue result{};
+        const auto release = [&](void*) noexcept
+        {
+            WioNativeAbiReleaseValue(&result);
+            for (auto& wire : wires)
+                WioNativeAbiReleaseValue(&wire);
+        };
+        const std::unique_ptr<void, decltype(release)> guard{this, release};
+        std::string error;
+        detail::NativeCallbackReferences references{&objects};
+        for (std::size_t index = 0; index < arguments.size(); ++index)
+        {
+            std::uint8_t marshalling = 0;
+            if (detail::callbackReferenceType(module, signature[index]) != bytecode::InvalidIndex)
+            {
+                if (!references.write(module, arguments[index], signature[index], wires[index], error, layouts.get()))
+                    return fail(error);
+                continue;
+            }
+            if (!detail::callbackArgumentMarshalling(module, signature[index], marshalling, layouts.get()) ||
+                !detail::encodeNativeValue(module, arguments[index], signature[index], marshalling, wires[index], error,
+                                           layouts.get(), 0, &objects))
+                return fail(error.empty() ? "Unsupported native callable argument" : error);
+        }
+        WioNativeAbiFailure failure{};
+        const auto status = callback.ops->invoke(callback.userdata, wires.data(), wires.size(), &result, &failure);
+        if (!references.commit(module, error, layouts.get()))
+            return fail("Native callable copy-back failed: " + error);
+        if (status != WIO_NATIVE_ABI_OK)
+            return ExecutionResult::failure(
+                ExecutionError{"WVM1222", "Native callable failed with ABI status " + std::to_string(status)});
+        std::uint8_t marshalling = 0;
+        if (!detail::callbackResultMarshalling(module, signature.back(), marshalling, layouts.get()))
+            return fail("Unsupported native callable result");
+        if (detail::callbackReferenceType(module, signature.back()) != bytecode::InvalidIndex)
+        {
+            auto decoded = references.readResult(module, result, signature.back());
+            return decoded.succeeded() ? ExecutionResult::success(std::move(decoded.value)) : fail(decoded.error);
+        }
+        auto decoded =
+            detail::decodeNativeValue(module, result, signature.back(), marshalling, layouts.get(), 0, &objects);
+        if (!decoded.succeeded())
+            return fail(decoded.error);
+        program_->pinNativeLibraries(decoded.value);
+        return ExecutionResult::success(std::move(decoded.value));
+    }
+
+    bool Machine::encodeNativeCallable(const Value& value, std::uint32_t type, bool anyThread,
+                                       WioNativeAbiValue& output, std::string& error,
+                                       const detail::NativePodLayouts& layouts)
+    {
+        const auto& module = *program_->module;
+        if (value.kind() != Value::Kind::Callable || type >= module.types.size() ||
+            module.types[type].kind != TypeFunction || module.types[type].arguments.empty())
+        {
+            error = "native callable has no concrete function signature";
+            return false;
+        }
+        std::uint8_t marshalling = 0;
+        if (!detail::callbackValueMarshalling(module, type, marshalling, &layouts))
+        {
+            error = "native callable signature is not qualified";
+            return false;
+        }
+        // Never retain a caller's raw place inside the native closure pool.
+        // Check nested captured callables/containers without reading any place:
+        // the producer may already have returned from its lexical scope.
+        if (hasBorrowedNativeCapture(value))
+        {
+            error = "Native callbacks cannot capture borrowed references; pass the caller borrow explicitly";
+            return false;
+        }
+        std::shared_ptr<const detail::NativePodLayouts> podLayouts;
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            if (program_->nativePodLayouts.get() == &layouts)
+                podLayouts = program_->nativePodLayouts;
+        }
+        if (!podLayouts)
+            podLayouts = std::make_shared<const detail::NativePodLayouts>(layouts);
+        auto callbackStateOwner = std::make_unique<NativeCallbackState>();
+        auto* callbackState = callbackStateOwner.get();
+        callbackState->callerThread = std::this_thread::get_id();
+        callbackState->anyThread = anyThread;
+        const std::shared_ptr<Program> callbackProgram = program_;
+        const bool retainedForeign = callbackState->anyThread;
+        const auto closure = callbackProgram->nativeCallbacks.retain(value);
+        callbackState->onDestroy = [callbackProgram, closure, retainedForeign]
+        {
+            callbackProgram->nativeCallbacks.retire(closure);
+            if (retainedForeign)
+                callbackProgram->retainedForeignCallbacks.fetch_sub(1, std::memory_order_release);
+        };
+        if (retainedForeign)
+        {
+            callbackProgram->retainedForeignCallbacks.fetch_add(1, std::memory_order_relaxed);
+        }
+        const std::vector<std::uint32_t> signature = module.types[type].arguments;
+        callbackState->invoke = [callbackProgram, closure, podLayouts, signature](
+                                    const WioNativeAbiValue* callbackArguments,
+                                    const std::uint64_t callbackArgumentCount, WioNativeAbiValue* callbackResult,
+                                    WioNativeAbiFailure* callbackFailure) -> WioNativeAbiStatus
+        {
+            if (callbackArgumentCount + 1 != signature.size())
+            {
+                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_INVALID_ARGUMENT,
+                                   "callback argument count does not match its Wio signature");
+                return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            }
+            Machine* const owner = callbackProgram->acquireOwner();
+            if (!owner)
+            {
+                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_STALE_HANDLE,
+                                   "callback owner machine is no longer alive");
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            }
+            const auto releaseOwner = [callbackProgram](Machine*) { callbackProgram->releaseOwner(); };
+            const std::unique_ptr<Machine, decltype(releaseOwner)> ownerGuard{owner, releaseOwner};
+            std::scoped_lock executionLock{callbackProgram->executionMutex};
+            const auto& callable = closure->callable;
+            if (hasBorrowedNativeCapture(callable))
+            {
+                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH,
+                                   "Native callback environment contains a borrowed capture");
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            }
+            const NativeCallbackInvocationScope callbackInvocation;
+            const bytecode::Module& callbackModule = *callbackProgram->module;
+            const auto callbackObjects = owner->nativeObjectAccess(true);
+
+            std::vector<Value> values;
+            const auto releaseValue = [owner](Value* value) noexcept
+            {
+                try
+                {
+                    ExecutionError error;
+                    owner->cleanupValue(*value, error);
+                }
+                catch (...)
+                {
+                }
+            };
+            const auto releaseValues = [&values, &releaseValue](void*) noexcept
+            {
+                for (auto value = values.rbegin(); value != values.rend(); ++value)
+                    releaseValue(&*value);
+            };
+            const std::unique_ptr<void, decltype(releaseValues)> valuesGuard{owner, releaseValues};
+            values.reserve(callable.captureCount() + callbackArgumentCount);
+            for (std::size_t captureIndex = 0; captureIndex < callable.captureCount(); ++captureIndex)
+            {
+                const Value* capture = callable.capture(captureIndex);
+                if (!capture)
+                {
+                    setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_STALE_HANDLE,
+                                       "callback lost one of its captured values");
+                    return WIO_NATIVE_ABI_STALE_HANDLE;
+                }
+                values.push_back(*capture);
+            }
+            detail::NativeCallbackReferences references{&callbackObjects};
+            for (std::size_t argumentIndex = 0; argumentIndex < callbackArgumentCount; ++argumentIndex)
+            {
+                if (detail::callbackReferenceType(callbackModule, signature[argumentIndex]) != bytecode::InvalidIndex)
+                {
+                    auto converted = references.read(callbackModule, callbackArguments[argumentIndex],
+                                                     signature[argumentIndex], podLayouts.get());
+                    if (!converted.succeeded())
+                    {
+                        setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, converted.error);
+                        return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                    }
+                    values.push_back(std::move(converted.value));
+                    continue;
+                }
+                std::uint8_t callbackMarshalling = 0;
+                if (!detail::callbackValueMarshalling(callbackModule, signature[argumentIndex], callbackMarshalling,
+                                                      podLayouts.get()))
+                    return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                detail::NativeValueResult converted =
+                    callbackMarshalling == 6
+                        ? callbackObjects.decode(callbackObjects.state, callbackArguments[argumentIndex],
+                                                 signature[argumentIndex], *podLayouts)
+                        : detail::decodeNativeValue(callbackModule, callbackArguments[argumentIndex],
+                                                    signature[argumentIndex], callbackMarshalling, podLayouts.get(), 0,
+                                                    &callbackObjects);
+                if (!converted.succeeded())
+                {
+                    setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, converted.error);
+                    return WIO_NATIVE_ABI_TYPE_MISMATCH;
+                }
+                callbackProgram->pinNativeLibraries(converted.value);
+                values.push_back(std::move(converted.value));
+            }
+
+            auto execution = callable.nativeCallback().ops
+                                 ? owner->invokeNativeCallable(callable, values)
+                                 : owner->invokeWithCaptures(callable.callableFunction(), values, &callable);
+            const std::unique_ptr<Value, decltype(releaseValue)> resultGuard{&execution.value_, releaseValue};
+            std::string copyBackError;
+            if (!references.commit(callbackModule, copyBackError, podLayouts.get()))
+            {
+                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, copyBackError);
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            }
+            if (!execution.succeeded())
+            {
+                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_PANIC,
+                                   execution.error().code + ": " + execution.error().message);
+                return WIO_NATIVE_ABI_PANIC;
+            }
+            std::uint8_t resultMarshalling = 0;
+            const std::uint32_t resultType = signature.back();
+            if (!detail::callbackResultMarshalling(callbackModule, resultType, resultMarshalling, podLayouts.get()))
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            std::string conversionError;
+            const bool encoded = detail::callbackReferenceType(callbackModule, resultType) != bytecode::InvalidIndex
+                                     ? references.writeResult(callbackModule, execution.value(), resultType,
+                                                              *callbackResult, conversionError)
+                                 : resultMarshalling == 6
+                                     ? owner->encodeNativeObject(execution.value(), resultType, *callbackResult,
+                                                                 conversionError, *podLayouts)
+                                     : detail::encodeOwnedNativeValue(
+                                           callbackModule, execution.value(), resultType, resultMarshalling,
+                                           *callbackResult, conversionError, podLayouts.get(), &callbackObjects);
+            if (!encoded)
+            {
+                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_TYPE_MISMATCH, conversionError);
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            }
+            if (resultMarshalling == 8)
+            {
+                std::scoped_lock lock{callbackProgram->nativeMutex};
+                if (!callbackProgram->nativeLibraries.empty())
+                    detail::pinNativeCallbackResult(
+                        *callbackResult,
+                        std::make_shared<std::vector<std::shared_ptr<detail::NativeLibrary>>>(
+                            callbackProgram->nativeLibraries),
+                        callbackProgram);
+            }
+            if (!references.finish(copyBackError))
+            {
+                WioNativeAbiReleaseValue(callbackResult);
+                *callbackResult = {};
+                setCallbackFailure(callbackFailure, WIO_NATIVE_ABI_PANIC, copyBackError);
+                return WIO_NATIVE_ABI_PANIC;
+            }
+            return WIO_NATIVE_ABI_OK;
+        };
+
+        output = {};
+        output.kind = WIO_NATIVE_ABI_CALLBACK;
+        output.flags = WIO_NATIVE_ABI_VALUE_OWNED;
+        output.payload.callback = {callbackState,
+                                   callbackState->anyThread ? &AnyThreadCallbackOps : &CallerThreadCallbackOps};
+        for (const auto& reflected : module.contract.reflection)
+            if (reflected.type == type)
+                output.typeId = reflected.stableTypeId;
+        (void)callbackStateOwner.release();
+        return true;
+    }
+
+    bool Machine::encodeNativeTask(const Value& value, std::uint32_t type, WioNativeAbiValue& output,
+                                   std::string& error, const detail::NativePodLayouts&)
+    {
+        const auto program = program_;
+        if (value.kind() != Value::Kind::AsyncTask || type >= program->module->types.size() ||
+            program->module->types[type].kind != 34 || program->module->types[type].arguments.size() != 1)
+        {
+            error = "native task input requires a concrete coroutine value";
+            return false;
+        }
+        const auto payload = program->module->types[type].arguments.front();
+        const auto identity = [&](std::uint32_t id)
+        {
+            // Nullable object payloads use the underlying handle codec identity.
+            while (id < program->module->types.size() && program->module->types[id].kind == 30 &&
+                   program->module->types[id].arguments.size() == 1)
+                id = program->module->types[id].arguments.front();
+            for (const auto& descriptor : program->module->contract.reflection)
+                if (descriptor.type == id)
+                    return descriptor.stableTypeId;
+            return std::uint64_t{0};
+        };
+        if (!identity(type) || !identity(payload))
+        {
+            error = "native task input lacks stable task/result codec identity";
+            return false;
+        }
+        // Producer/external tasks are already running. driveTask would block
+        // on them here and prevent timeout/race/status helpers from receiving
+        // a pending input at all. Only start dormant bytecode tasks.
+        if (value.taskState() == AsyncTaskState::Pending && value.taskFunction() != bytecode::InvalidIndex)
+            (void)driveTask(value);
+        const auto root = program->nativeTaskInputs.retain(value);
+        auto cell = std::make_unique<NativeTaskSourceCell>();
+        cell->programIdentity = program.get();
+        cell->root = root;
+        cell->retire = [program, root] { program->nativeTaskInputs.retire(root); };
+        cell->ready = [program, root](bool* ready)
+        {
+            if (!ready)
+                return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            if (program->asyncStopping.load())
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            Machine* owner = program->acquireOwner();
+            if (!owner)
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            const auto release = [program](Machine*) { program->releaseOwner(); };
+            const std::unique_ptr<Machine, decltype(release)> guard{owner, release};
+            const auto state = root->callable.taskState();
+            *ready = state == AsyncTaskState::Ready || state == AsyncTaskState::Faulted ||
+                     state == AsyncTaskState::Cancelled;
+            return WIO_NATIVE_ABI_OK;
+        };
+        cell->cancel = [program, root]
+        {
+            if (program->asyncStopping.load())
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            Machine* owner = program->acquireOwner();
+            if (!owner)
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            const auto release = [program](Machine*) { program->releaseOwner(); };
+            const std::unique_ptr<Machine, decltype(release)> guard{owner, release};
+            std::scoped_lock lock{program->executionMutex};
+            (void)owner->cancel(root->callable);
+            return WIO_NATIVE_ABI_OK;
+        };
+        cell->read = [program, root, payload](WioNativeAbiValue* result, WioNativeAbiFailure* failure)
+        {
+            if (!result)
+                return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            *result = {};
+            if (program->asyncStopping.load())
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            Machine* owner = program->acquireOwner();
+            if (!owner)
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            const auto release = [program](Machine*) { program->releaseOwner(); };
+            const std::unique_ptr<Machine, decltype(release)> guard{owner, release};
+            // Scalar/string/text results are immutable after the task's acquire
+            // state transition. Querying them must not wait behind unrelated
+            // worker execution. Complex codec traversal remains serialized.
+            std::unique_lock<std::recursive_mutex> lock{program->executionMutex, std::defer_lock};
+            std::uint8_t payloadCodec = 0;
+            if (!detail::nativeValueMarshalling(*program->module, payload, payloadCodec) || payloadCodec > 3)
+                lock.lock();
+            const auto state = root->callable.taskState();
+            if (state == AsyncTaskState::Cancelled)
+                return WIO_NATIVE_ABI_CANCELLED;
+            if (state == AsyncTaskState::Faulted)
+            {
+                setCallbackFailure(failure, WIO_NATIVE_ABI_EXCEPTION, root->callable.taskErrorMessage());
+                return WIO_NATIVE_ABI_EXCEPTION;
+            }
+            if (state != AsyncTaskState::Ready)
+                return WIO_NATIVE_ABI_NOT_READY;
+            std::shared_ptr<const detail::NativePodLayouts> layouts;
+            {
+                std::scoped_lock nativeLock{program->nativeMutex};
+                layouts = program->nativePodLayouts;
+            }
+            std::uint8_t marshalling = 0;
+            std::string message;
+            const auto access = owner->nativeObjectAccess();
+            if (!detail::nativeValueMarshalling(*program->module, payload, marshalling) ||
+                !detail::encodeOwnedNativeValue(*program->module, root->callable.taskResult(), payload, marshalling,
+                                                *result, message, layouts.get(), &access))
+            {
+                setCallbackFailure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, message);
+                return WIO_NATIVE_ABI_TYPE_MISMATCH;
+            }
+            access.pinWire(access.state, *result);
+            return WIO_NATIVE_ABI_OK;
+        };
+        cell->subscribe = [program, root](WioNativeTaskCompletionFn callback, void* state)
+        {
+            if (!callback)
+                return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            if (program->asyncStopping.load())
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            Machine* owner = program->acquireOwner();
+            if (!owner)
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            const auto release = [program](Machine*) { program->releaseOwner(); };
+            const std::unique_ptr<Machine, decltype(release)> guard{owner, release};
+            const bool registered = root->callable.registerTaskWaiter(
+                [callback, state](AsyncTaskState terminal, const Value&, const ExecutionError&)
+                {
+                    callback(state, terminal == AsyncTaskState::Cancelled ? WIO_NATIVE_ABI_CANCELLED
+                                    : terminal == AsyncTaskState::Faulted ? WIO_NATIVE_ABI_EXCEPTION
+                                                                          : WIO_NATIVE_ABI_OK);
+                });
+            if (!registered)
+            {
+                const auto terminal = root->callable.taskState();
+                if (terminal != AsyncTaskState::Ready && terminal != AsyncTaskState::Faulted &&
+                    terminal != AsyncTaskState::Cancelled)
+                    return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+                callback(state, terminal == AsyncTaskState::Cancelled ? WIO_NATIVE_ABI_CANCELLED
+                                : terminal == AsyncTaskState::Faulted ? WIO_NATIVE_ABI_EXCEPTION
+                                                                      : WIO_NATIVE_ABI_OK);
+            }
+            return WIO_NATIVE_ABI_OK;
+        };
+        cell->pump = [program](std::uint64_t* drained)
+        {
+            if (!drained)
+                return WIO_NATIVE_ABI_INVALID_ARGUMENT;
+            if (program->asyncStopping.load())
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            Machine* owner = program->acquireOwner();
+            if (!owner)
+                return WIO_NATIVE_ABI_STALE_HANDLE;
+            const auto release = [program](Machine*) { program->releaseOwner(); };
+            const std::unique_ptr<Machine, decltype(release)> guard{owner, release};
+            *drained = owner->drainMainExecutor();
+            return WIO_NATIVE_ABI_OK;
+        };
+        cell->source = {WIO_NATIVE_ABI_VERSION,
+                        0,
+                        identity(type),
+                        identity(payload),
+                        cell.get(),
+                        &NativeTaskSourceCell::queryReady,
+                        &NativeTaskSourceCell::cancelTask,
+                        &NativeTaskSourceCell::readTask,
+                        &NativeTaskSourceCell::subscribeTask,
+                        &NativeTaskSourceCell::pumpMain};
+        output = {};
+        output.kind = WIO_NATIVE_ABI_RUNTIME_VALUE;
+        output.flags = WIO_NATIVE_ABI_VALUE_OWNED | WIO_NATIVE_ABI_VALUE_TASK_SOURCE;
+        output.typeId = identity(type);
+        output.payload.slice = {&cell->source, sizeof(cell->source)};
+        output.owner = {cell.get(), &NativeTaskSourceCell::ops, 1};
+        (void)cell.release();
+        const auto access = nativeObjectAccess();
+        access.pinWire(access.state, output);
+        return true;
+    }
+
+    bool Machine::exportTaskSource(const Value& value, std::uint32_t type, WioNativeAbiValue& output,
+                                   std::string& error)
+    {
+        if (!program_ || program_->asyncStopping.load() || type >= program_->module->types.size() ||
+            program_->module->types[type].kind != 34 || program_->module->types[type].arguments.size() != 1 ||
+            output.kind != WIO_NATIVE_ABI_VOID || output.flags || output.owner.state || output.owner.ops)
+        {
+            error = "Task export requires a live VM, concrete task type and empty output";
+            return false;
+        }
+        const auto payloadType = program_->module->types[type].arguments.front();
+        std::uint8_t payload = 0;
+        if (payloadType >= program_->module->types.size() || program_->module->types[payloadType].kind == 29 ||
+            program_->module->types[payloadType].kind == 30 ||
+            !detail::nativeValueMarshalling(*program_->module, payloadType, payload) || payload > 3)
+        {
+            error = "Task export payload is not a qualified scalar/string/text value";
+            return false;
+        }
+        std::shared_ptr<const detail::NativePodLayouts> layouts;
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            layouts = program_->nativePodLayouts;
+        }
+        return encodeNativeTask(value, type, output, error, *layouts);
+    }
+
+    bool Machine::taskSource(const WioNativeAbiValue& wire, WioNativeTaskSource& output) const noexcept
+    {
+        if (!program_ || program_->asyncStopping.load() || wire.kind != WIO_NATIVE_ABI_RUNTIME_VALUE ||
+            wire.flags != (WIO_NATIVE_ABI_VALUE_OWNED | WIO_NATIVE_ABI_VALUE_TASK_SOURCE) || !wire.owner.state ||
+            !wire.owner.ops || !wire.payload.slice.data || wire.payload.slice.size != sizeof(WioNativeTaskSource) ||
+            reinterpret_cast<std::uintptr_t>(wire.payload.slice.data) % alignof(WioNativeTaskSource))
+            return false;
+        const auto& source = *static_cast<const WioNativeTaskSource*>(wire.payload.slice.data);
+        if (source.abiVersion != WIO_NATIVE_ABI_VERSION || source.reserved || source.taskTypeId != wire.typeId ||
+            !source.state || source.ready != &NativeTaskSourceCell::queryReady ||
+            source.cancel != &NativeTaskSourceCell::cancelTask || source.read != &NativeTaskSourceCell::readTask ||
+            source.onComplete != &NativeTaskSourceCell::subscribeTask ||
+            source.pumpMain != &NativeTaskSourceCell::pumpMain)
+            return false;
+        const auto* cell = static_cast<const NativeTaskSourceCell*>(source.state);
+        if (cell->programIdentity != program_.get() || &cell->source != wire.payload.slice.data)
+            return false;
+        output = source;
+        return true;
+    }
+
+    bool Machine::importTaskSource(const WioNativeAbiValue& wire, std::uint32_t type, Value& result, std::string& error)
+    {
+        WioNativeTaskSource source{};
+        if (!result.isEmpty() || !taskSource(wire, source))
+        {
+            error = "Task input requires an owning source from this live machine and an empty output";
+            return false;
+        }
+        auto decoded = decodeNativeTask(wire, type);
+        if (!decoded.succeeded() || decoded.value.kind() != Value::Kind::AsyncTask)
+        {
+            error = decoded.succeeded() ? "Task input no longer names a live task" : std::move(decoded.error);
+            return false;
+        }
+        result = std::move(decoded.value);
+        error.clear();
+        return true;
+    }
+
+    detail::NativeValueResult Machine::decodeNativeTask(const WioNativeAbiValue& wire, std::uint32_t type)
+    {
+        if (type >= program_->module->types.size() || program_->module->types[type].kind != 34 ||
+            program_->module->types[type].arguments.size() != 1)
+            return {{}, "native task result has no concrete payload"};
+        const auto expected =
+            std::ranges::find(program_->module->contract.reflection, type, &bytecode::Reflection::type);
+        if (expected == program_->module->contract.reflection.end() || expected->stableTypeId != wire.typeId)
+            return {{}, "native task result identity differs from its declared coroutine type"};
+        if (wire.flags & WIO_NATIVE_ABI_VALUE_TASK_SOURCE)
+        {
+            if (wire.flags != (WIO_NATIVE_ABI_VALUE_OWNED | WIO_NATIVE_ABI_VALUE_TASK_SOURCE) || !wire.owner.state ||
+                !wire.owner.ops || !wire.payload.slice.data || wire.payload.slice.size != sizeof(WioNativeTaskSource) ||
+                reinterpret_cast<std::uintptr_t>(wire.payload.slice.data) % alignof(WioNativeTaskSource))
+                return {{}, "native task source result has invalid ownership or layout"};
+            const auto& source = *static_cast<const WioNativeTaskSource*>(wire.payload.slice.data);
+            if (source.abiVersion != WIO_NATIVE_ABI_VERSION || source.reserved || source.taskTypeId != wire.typeId ||
+                !source.state || source.ready != &NativeTaskSourceCell::queryReady ||
+                source.cancel != &NativeTaskSourceCell::cancelTask || source.read != &NativeTaskSourceCell::readTask ||
+                source.onComplete != &NativeTaskSourceCell::subscribeTask ||
+                source.pumpMain != &NativeTaskSourceCell::pumpMain)
+                return {{}, "native task source result is not an original VM task"};
+            const auto* cell = static_cast<const NativeTaskSourceCell*>(source.state);
+            if (cell->programIdentity != program_.get() || &cell->source != wire.payload.slice.data ||
+                cell->source.taskTypeId != expected->stableTypeId)
+                return {{}, "native task source belongs to a different machine/generation"};
+            std::scoped_lock lock{program_->executionMutex};
+            return {cell->root->callable.cloneOwned(), {}};
+        }
+        const auto payload = program_->module->types[type].arguments.front();
+        std::uint8_t marshalling = 0;
+        if (!detail::nativeValueMarshalling(*program_->module, payload, marshalling))
+            return {{}, "native task result payload is not qualified"};
+        std::vector<Program::NativeFunction::TaskBridge> bridges;
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            bridges = program_->nativeTaskApis;
+        }
+        for (const auto& bridge : bridges)
+        {
+            bool ready = false;
+            if (bridge.ready(&wire, &ready) != WIO_NATIVE_ABI_OK)
+                continue;
+            Program::NativeFunction function;
+            function.tasks = bridge;
+            WioNativeAbiValue retained = wire;
+            WioNativeAbiRetainValue(&retained);
+            return {program_->adaptNativeTask(function, retained, payload, marshalling), {}};
+        }
+        return {{}, "native task result has no compatible producer completion API"};
+    }
+
+    detail::NativeObjectAccess Machine::nativeObjectAccess(bool hostedOnly)
+    {
+        detail::NativeObjectAccess access{
+            this,
+            [](void* state, const Value& value, std::uint32_t type, WioNativeAbiValue& output, std::string& error,
+               const detail::NativePodLayouts& layouts)
+            { return static_cast<Machine*>(state)->encodeNativeObject(value, type, output, error, layouts); },
+            [](void* state, const WioNativeAbiValue& value, std::uint32_t type, const detail::NativePodLayouts& layouts)
+            { return static_cast<Machine*>(state)->decodeNativeObject(value, type, layouts); }};
+        if (hostedOnly)
+            access.decode = [](void* state, const WioNativeAbiValue& value, std::uint32_t type,
+                               const detail::NativePodLayouts& layouts)
+            {
+                auto result = static_cast<Machine*>(state)->decodeNativeObject(value, type, layouts);
+                if (result.succeeded() && result.value.kind() != Value::Kind::Object &&
+                    result.value.kind() != Value::Kind::Null)
+                    result.error = "callback argument requires an original object from this VM";
+                return result;
+            };
+        access.encodeCallable = [](void* state, const Value& value, std::uint32_t type, WioNativeAbiValue& output,
+                                   std::string& error, const detail::NativePodLayouts& layouts)
+        { return static_cast<Machine*>(state)->encodeNativeCallable(value, type, false, output, error, layouts); };
+        access.encodeTask = [](void* state, const Value& value, std::uint32_t type, WioNativeAbiValue& output,
+                               std::string& error, const detail::NativePodLayouts& layouts)
+        { return static_cast<Machine*>(state)->encodeNativeTask(value, type, output, error, layouts); };
+        access.decodeTask =
+            [](void* state, const WioNativeAbiValue& value, std::uint32_t type, const detail::NativePodLayouts&)
+        { return static_cast<Machine*>(state)->decodeNativeTask(value, type); };
+        access.pinValue = [](void* state, const Value& value)
+        { static_cast<Machine*>(state)->program_->pinNativeLibraries(value); };
+        access.pinWire = [](void* state, WioNativeAbiValue& value)
+        {
+            if (value.kind != WIO_NATIVE_ABI_RUNTIME_VALUE)
+                return;
+            const auto& program = static_cast<Machine*>(state)->program_;
+            std::scoped_lock lock{program->nativeMutex};
+            if (!program->nativeLibraries.empty())
+                detail::pinNativeCallbackResult(
+                    value,
+                    std::make_shared<std::vector<std::shared_ptr<detail::NativeLibrary>>>(program->nativeLibraries),
+                    program);
+        };
+        access.cleanup = [](void* state, Value& value, std::string& message) noexcept
+        {
+            try
+            {
+                ExecutionError error;
+                static_cast<Machine*>(state)->cleanupValue(value, error);
+                if (error.cleanupFailures.empty())
+                    return true;
+                message = "callback borrow cleanup failed: " + error.cleanupFailures.front().message;
+            }
+            catch (...)
+            {
+                message = "callback borrow cleanup threw";
+            }
+            return false;
+        };
+        return access;
+    }
+
+    bool Machine::encodeNativeObject(const Value& object, std::uint32_t type, WioNativeAbiValue& output,
+                                     std::string& error, const detail::NativePodLayouts& layouts)
+    {
+        while (type < program_->module->types.size() && program_->module->types[type].kind == TypeReference)
+            type = program_->module->types[type].arguments.front();
+        const bool nullable =
+            type < program_->module->types.size() && program_->module->types[type].kind == TypeNullable;
+        if (nullable)
+            type = program_->module->types[type].arguments.front();
+        if (object.kind() == Value::Kind::Null)
+        {
+            if (!nullable)
+            {
+                error = "null object does not match a non-nullable declaration";
+                return false;
+            }
+            output = {};
+            output.flags = WIO_NATIVE_ABI_VALUE_NULLABLE;
+            for (const auto& reflected : program_->module->contract.reflection)
+                if (reflected.type == type)
+                    output.typeId = reflected.stableTypeId;
+            return true;
+        }
+        if (object.kind() == Value::Kind::ForeignObject)
+            return detail::encodeOwnedNativeValue(*program_->module, object, type, 6, output, error, &layouts);
+        const auto concrete = object.aggregateType();
+        const auto* layout = program_->objectLayouts.get(concrete);
+        if (!object.objectIdentity() || !layout || !layout->offsets.contains(type))
+        {
+            error = "VM object is not assignable to the declared native object/interface type";
+            return false;
+        }
+        const auto adapter = layouts.objects.find(concrete);
+        if (adapter == layouts.objects.end())
+        {
+            error = "VM-created concrete object type #" + std::to_string(concrete) +
+                    " has no qualified producer proxy adapter (declared type #" + std::to_string(type) + ")";
+            return false;
+        }
+        if (!program_->nativeObjects)
+        {
+            const std::weak_ptr<Program> weak = program_;
+            program_->nativeObjects = std::make_shared<detail::NativeObjectBridge>(
+                [weak](const Value& object, std::uint64_t methodId, const WioNativeAbiValue* args, std::uint64_t count,
+                       WioNativeAbiValue* output, WioNativeAbiFailure* failure)
+                {
+                    const auto program = weak.lock();
+                    auto* owner = program ? program->acquireOwner() : nullptr;
+                    if (!owner)
+                    {
+                        setCallbackFailure(failure, WIO_NATIVE_ABI_STALE_HANDLE,
+                                           "object owner machine is no longer alive");
+                        return WIO_NATIVE_ABI_STALE_HANDLE;
+                    }
+                    const auto releaseOwner = [program](Machine*) { program->releaseOwner(); };
+                    const std::unique_ptr<Machine, decltype(releaseOwner)> guard{owner, releaseOwner};
+                    return owner->dispatchNativeObjectMethod(object, methodId, args, count, output, failure);
+                },
+                [weak]() -> std::shared_ptr<void>
+                {
+                    const auto program = weak.lock();
+                    if (!program)
+                        return {};
+                    std::scoped_lock lock{program->nativeMutex};
+                    return std::make_shared<std::vector<std::shared_ptr<detail::NativeLibrary>>>(
+                        program->nativeLibraries);
+                });
+        }
+        const bool encoded = program_->nativeObjects->encode(object, concrete, adapter->second, output, error);
+        if (encoded && nullable)
+            output.flags |= WIO_NATIVE_ABI_VALUE_NULLABLE;
+        return encoded;
+    }
+
+    detail::NativeValueResult Machine::decodeNativeObject(const WioNativeAbiValue& value, std::uint32_t type,
+                                                          const detail::NativePodLayouts& layouts)
+    {
+        const auto& module = *program_->module;
+        while (type < module.types.size() && module.types[type].kind == TypeReference)
+            type = module.types[type].arguments.front();
+        const auto declaredType = type;
+        const bool nullable = type < module.types.size() && module.types[type].kind == TypeNullable;
+        if (nullable)
+            type = module.types[type].arguments.front();
+        if (value.kind == WIO_NATIVE_ABI_VOID)
+        {
+            std::uint64_t declaredIdentity = 0;
+            for (const auto& reflected : module.contract.reflection)
+                if (reflected.type == type)
+                    declaredIdentity = reflected.stableTypeId;
+            if (!nullable || value.flags != WIO_NATIVE_ABI_VALUE_NULLABLE || value.owner.state || value.owner.ops ||
+                (value.typeId && value.typeId != declaredIdentity))
+                return {{}, "native object null does not match its nullable declaration or wire contract"};
+            return {Value::null(), {}};
+        }
+        const auto concrete = layouts.objectTypes.find(value.typeId);
+        if (concrete != layouts.objectTypes.end())
+        {
+            const auto* layout = program_->objectLayouts.get(concrete->second);
+            if (!layout || !layout->offsets.contains(type))
+                return {{}, "native concrete object is not assignable to the declared object/interface result"};
+            if (program_->nativeObjects)
+            {
+                bool matched = false;
+                auto result = program_->nativeObjects->recover(value, concrete->second,
+                                                               layouts.objects.at(concrete->second), matched);
+                if (matched)
+                    return result;
+            }
+            if (concrete->second != type)
+                return {{}, "polymorphic native result has no recoverable VM host identity"};
+        }
+        return detail::decodeNativeValue(module, value, declaredType, 6, &layouts);
+    }
+
+    ExecutionResult Machine::wait(const Value& task)
+    {
+        ExecutionResult result = driveTask(task);
+        if (!result.isSuspended())
+            return result;
+
+        while (task.taskState() == AsyncTaskState::Pending || task.taskState() == AsyncTaskState::Running)
+        {
+            const std::uint64_t drained = drainMainExecutor();
+            if (drained == 0)
+                (void)task.waitTaskFor(std::chrono::milliseconds{1});
+        }
+        if (task.taskState() == AsyncTaskState::Ready)
+            return ExecutionResult::success(task.taskResult());
+        if (task.taskState() == AsyncTaskState::Cancelled)
+            return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+        return ExecutionResult::failure(task.taskError());
+    }
+
+    void Machine::bindMainExecutor()
+    {
+        if (program_ && program_->executors)
+            program_->executors->bindMain();
+        if (program_)
+            program_->bindNativeMainExecutors();
+    }
+
+    std::uint64_t Machine::drainMainExecutor()
+    {
+        if (!program_)
+            return 0;
+        const std::uint64_t native = program_->drainNativeMainExecutors();
+        return native + (program_->executors ? program_->executors->drainMain() : 0);
+    }
+
+    bool Machine::cancel(const Value& task)
+    {
+        const bool native = program_ && program_->cancelNativeTask(task);
+        if (!native && !task.cancelTask())
+            return false;
+        if (program_)
+        {
+            auto state = std::static_pointer_cast<ExecutionState>(program_->takeContinuation(task));
+            if (state)
+            {
+                std::scoped_lock executionLock{program_->executionMutex};
+                (void)unwind(*state, {"WVM1165", "Async task was cancelled"});
+            }
+            ExecutionError cleanupError;
+            cleanupTaskArguments(task, cleanupError);
+            std::scoped_lock lock{program_->timerMutex};
+            if (program_->timers)
+                (void)program_->timers->remove(task);
+        }
+        return true;
+    }
+
+    bool Machine::isDebugPaused() const
+    {
+        if (!program_)
+            return false;
+        std::scoped_lock lock{program_->debugMutex};
+        return program_->debugPause.has_value();
+    }
+
+    bool Machine::waitForDebugPause(const std::chrono::milliseconds timeout) const
+    {
+        if (!program_)
+            return false;
+        std::unique_lock lock{program_->debugMutex};
+        return program_->debugChanged.wait_for(
+                   lock, timeout, [&] { return program_->debugStopping || program_->debugPause.has_value(); }) &&
+               program_->debugPause.has_value();
+    }
+
+    std::optional<DebugEvent> Machine::pausedDebugEvent() const
+    {
+        if (!program_)
+            return std::nullopt;
+        std::scoped_lock lock{program_->debugMutex};
+        return program_->debugPause;
+    }
+
+    bool Machine::resumeDebugExecution()
+    {
+        if (!program_)
+            return false;
+        {
+            std::scoped_lock lock{program_->debugMutex};
+            if (!program_->debugPause || program_->debugStopping)
+                return false;
+            program_->debugCommand = Program::DebugCommand::Resume;
+        }
+        program_->debugChanged.notify_all();
+        return true;
+    }
+
+    bool Machine::abortDebugExecution()
+    {
+        if (!program_)
+            return false;
+        {
+            std::scoped_lock lock{program_->debugMutex};
+            if (!program_->debugPause || program_->debugStopping)
+                return false;
+            program_->debugCommand = Program::DebugCommand::Abort;
+        }
+        program_->debugChanged.notify_all();
+        return true;
+    }
+
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, std::string* error)
+    {
+        return registerNativeRegistryImpl(registry, nullptr, nullptr, error);
+    }
+
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativeTaskApi& tasks,
+                                         const WioNativeTaskCompletionApi& completions, std::string* error)
+    {
+        return registerNativeRegistryImpl(registry, &tasks, &completions, error);
+    }
+
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativePodLayoutApi& pods,
+                                         const WioNativeTaskApi* tasks, const WioNativeTaskCompletionApi* completions,
+                                         std::string* error)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, &pods);
+    }
+
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativePodLayoutApi& pods,
+                                         const WioNativeTaskApi* tasks, const WioNativeTaskCompletionApi* completions,
+                                         std::string* error, const WioNativePodDefaultApi* defaults)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, &pods, defaults);
+    }
+
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativeSequenceApi& sequences,
+                                         std::string* error, const WioNativePodLayoutApi* pods,
+                                         const WioNativePodDefaultApi* defaults, const WioNativeTaskApi* tasks,
+                                         const WioNativeTaskCompletionApi* completions)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, pods, defaults, &sequences);
+    }
+
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry,
+                                         const WioNativeDictionaryApi& dictionaries, std::string* error,
+                                         const WioNativeSequenceApi* sequences, const WioNativePodLayoutApi* pods,
+                                         const WioNativePodDefaultApi* defaults, const WioNativeTaskApi* tasks,
+                                         const WioNativeTaskCompletionApi* completions)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, pods, defaults, sequences,
+                                          &dictionaries);
+    }
+
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativeAnyApi& any,
+                                         std::string* error, const WioNativeDictionaryApi* dictionaries,
+                                         const WioNativeSequenceApi* sequences, const WioNativePodLayoutApi* pods,
+                                         const WioNativePodDefaultApi* defaults, const WioNativeTaskApi* tasks,
+                                         const WioNativeTaskCompletionApi* completions)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, pods, defaults, sequences, dictionaries,
+                                          &any);
+    }
+
+    bool Machine::registerNativeRegistry(const WioNativeAbiRegistry& registry, const WioNativeObjectApi& objects,
+                                         std::string* error, const WioNativeAnyApi* any,
+                                         const WioNativeDictionaryApi* dictionaries,
+                                         const WioNativeSequenceApi* sequences, const WioNativePodLayoutApi* pods,
+                                         const WioNativePodDefaultApi* defaults, const WioNativeTaskApi* tasks,
+                                         const WioNativeTaskCompletionApi* completions)
+    {
+        return registerNativeRegistryImpl(registry, tasks, completions, error, pods, defaults, sequences, dictionaries,
+                                          any, &objects);
+    }
+
+    bool Machine::loadNativeLibrary(const std::filesystem::path& path, std::string* error)
+    {
+        const auto reject = [&](std::string message)
+        {
+            if (error)
+                *error = std::move(message);
+            return false;
+        };
+        if (!program_)
+            return reject("native library loading requires a live VM machine");
+        std::scoped_lock executionLock{program_->executionMutex};
+
+        std::error_code pathError;
+        std::filesystem::path canonical = std::filesystem::weakly_canonical(std::filesystem::absolute(path), pathError);
+        if (pathError)
+            canonical = std::filesystem::absolute(path).make_preferred();
+        else
+            canonical.make_preferred();
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            const auto loaded = std::ranges::find_if(program_->nativeLibraries, [&](const auto& candidate)
+                                                     { return candidate->path() == canonical; });
+            if (loaded != program_->nativeLibraries.end())
+            {
+                if (error)
+                    error->clear();
+                return true;
+            }
+            program_->nativeLibraries.reserve(program_->nativeLibraries.size() + 1);
+        }
+
+        std::string libraryError;
+        std::shared_ptr<detail::NativeLibrary> library = detail::NativeLibrary::open(canonical, libraryError);
+        if (!library)
+            return reject(std::move(libraryError));
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            const auto loaded = std::ranges::find_if(program_->nativeLibraries, [&](const auto& candidate)
+                                                     { return candidate->path() == library->path(); });
+            if (loaded != program_->nativeLibraries.end())
+            {
+                if (error)
+                    error->clear();
+                return true;
+            }
+        }
+        if (!library->registerWith(*this, libraryError))
+        {
+            const auto encoded = library->path().u8string();
+            return reject("could not register native VM module '" + std::string(encoded.begin(), encoded.end()) +
+                          "': " + libraryError);
+        }
+
+        {
+            std::scoped_lock lock{program_->nativeMutex};
+            const auto loaded = std::ranges::find_if(program_->nativeLibraries, [&](const auto& candidate)
+                                                     { return candidate->path() == library->path(); });
+            if (loaded == program_->nativeLibraries.end())
+                program_->nativeLibraries.push_back(std::move(library));
+        }
+        if (error)
+            error->clear();
+        return true;
+    }
+
+    bool Machine::registerNativeRegistryImpl(const WioNativeAbiRegistry& registry, const WioNativeTaskApi* tasks,
+                                             const WioNativeTaskCompletionApi* completions, std::string* error,
+                                             const WioNativePodLayoutApi* pods, const WioNativePodDefaultApi* defaults,
+                                             const WioNativeSequenceApi* sequences,
+                                             const WioNativeDictionaryApi* dictionaries, const WioNativeAnyApi* any,
+                                             const WioNativeObjectApi* objects)
+    {
+        const auto reject = [&](std::string message)
+        {
+            if (error)
+                *error = std::move(message);
+            return false;
+        };
+        if (!program_)
+            return reject("native registry requires a live VM machine");
+        if (registry.abiVersion != WIO_NATIVE_ABI_VERSION)
+            return reject("native registry ABI version does not match the VM wire ABI");
+        if (registry.functionCount != 0 && !registry.functions)
+            return reject("native registry has a non-zero function count and no descriptor array");
+        if ((tasks == nullptr) != (completions == nullptr))
+            return reject("native task and completion APIs must be registered together");
+        if (defaults && !pods)
+            return reject("native POD defaults require a POD layout sidecar");
+
+        std::optional<Program::NativeFunction::TaskBridge> taskBridge;
+        if (tasks)
+        {
+            if (tasks->abiVersion != WIO_NATIVE_ABI_VERSION || !tasks->ready || !tasks->cancel || !tasks->read ||
+                !tasks->bindMain || !tasks->pumpMain)
+                return reject("native task API is incompatible or incomplete");
+            if (completions->abiVersion != WIO_NATIVE_ABI_VERSION || !completions->onComplete)
+                return reject("native task completion API is incompatible or incomplete");
+            taskBridge = Program::NativeFunction::TaskBridge{tasks->ready,    tasks->cancel,   tasks->read,
+                                                             tasks->bindMain, tasks->pumpMain, completions->onComplete};
+        }
+
+        std::vector<Program::NativeFunction> additions;
+        additions.reserve(registry.functionCount);
+        std::unordered_map<std::string, WioNativeAbiThunk> incoming;
+        for (std::uint32_t index = 0; index < registry.functionCount; ++index)
+        {
+            const WioNativeAbiFunctionDescriptor& descriptor = registry.functions[index];
+            if (descriptor.abiVersion != WIO_NATIVE_ABI_VERSION)
+                return reject("native function descriptor ABI version does not match the VM wire ABI");
+            if (!descriptor.stableKey || descriptor.stableKey[0] == '\0' || !descriptor.thunk)
+                return reject("native function descriptor requires a stable key and thunk");
+            const auto [found, inserted] = incoming.emplace(descriptor.stableKey, descriptor.thunk);
+            if (!inserted && found->second != descriptor.thunk)
+                return reject("native registry contains conflicting descriptors for one stable key");
+            additions.push_back(Program::NativeFunction{descriptor.stableId, descriptor.flags, descriptor.stableKey,
+                                                        descriptor.nativeSymbol ? descriptor.nativeSymbol : "",
+                                                        descriptor.thunkSymbol ? descriptor.thunkSymbol : "",
+                                                        descriptor.thunk, taskBridge});
+        }
+
+        std::scoped_lock lock{program_->nativeMutex};
+        std::shared_ptr<detail::NativePodLayouts> layouts;
+        if (pods || sequences || dictionaries || any || objects)
+        {
+            layouts = std::make_shared<detail::NativePodLayouts>(*program_->nativePodLayouts);
+            std::string layoutError;
+            if (pods && !detail::mergeNativePodLayouts(*program_->module, *pods, *layouts, layoutError))
+                return reject(std::move(layoutError));
+            if (defaults && !detail::mergeNativePodDefaults(*program_->module, *defaults, *layouts, layoutError))
+                return reject(std::move(layoutError));
+            if (sequences && !detail::mergeNativeSequences(*program_->module, *sequences, *layouts, layoutError, false))
+                return reject(std::move(layoutError));
+            if (dictionaries &&
+                !detail::mergeNativeDictionaries(*program_->module, *dictionaries, *layouts, layoutError, false))
+                return reject(std::move(layoutError));
+            if (objects && !detail::mergeNativeObjects(*program_->module, *objects, *layouts, layoutError))
+                return reject(std::move(layoutError));
+            if (any && !detail::mergeNativeAny(*program_->module, *any, *layouts, layoutError))
+                return reject(std::move(layoutError));
+            // Any payloads can be containers, whose values can themselves be
+            // Any. Validate the complete candidate graph before publishing it.
+            if (!detail::validateNativeContainers(*program_->module, *layouts, layoutError))
+                return reject(std::move(layoutError));
+        }
+        for (Program::NativeFunction& addition : additions)
+        {
+            const auto existing = program_->nativeFunctions.find(addition.stableKey);
+            if (existing != program_->nativeFunctions.end() && existing->second.thunk != addition.thunk)
+                return reject("native function stable key is already registered with a different thunk");
+            if (existing != program_->nativeFunctions.end() && existing->second.tasks && addition.tasks &&
+                existing->second.tasks != addition.tasks)
+                return reject("native function stable key is already registered with a different task bridge");
+            if (existing != program_->nativeFunctions.end() && existing->second.tasks && !addition.tasks)
+                addition.tasks = existing->second.tasks;
+        }
+        for (Program::NativeFunction& addition : additions)
+            program_->nativeFunctions.insert_or_assign(addition.stableKey, std::move(addition));
+        if (layouts)
+            program_->nativePodLayouts = std::move(layouts);
+        if (taskBridge && std::find(program_->nativeTaskApis.begin(), program_->nativeTaskApis.end(), *taskBridge) ==
+                              program_->nativeTaskApis.end())
+            program_->nativeTaskApis.push_back(*taskBridge);
+        if (error)
+            error->clear();
+        return true;
+    }
+
+    Value Machine::makeExternalTask()
+    {
+        return Value::externalTask();
+    }
+
+    bool Machine::complete(const Value& task, Value result)
+    {
+        if (!task.completeTask(std::move(result)))
+            return false;
+        if (program_)
+        {
+            ExecutionError cleanupError;
+            cleanupTaskArguments(task, cleanupError);
+            program_->releaseContinuation(task);
+            std::scoped_lock lock{program_->timerMutex};
+            if (program_->timers)
+                (void)program_->timers->remove(task);
+        }
+        return true;
+    }
+
+    bool Machine::fail(const Value& task, std::string code, std::string message)
+    {
+        if (!task.failTask({std::move(code), std::move(message)}))
+            return false;
+        if (program_)
+        {
+            ExecutionError cleanupError;
+            cleanupTaskArguments(task, cleanupError);
+            program_->releaseContinuation(task);
+            std::scoped_lock lock{program_->timerMutex};
+            if (program_->timers)
+                (void)program_->timers->remove(task);
+        }
+        return true;
+    }
+
+    Value Machine::sleepFor(const std::chrono::nanoseconds duration)
+    {
+        Value task = Value::externalTask();
+        if (!program_ || !program_->valid || program_->asyncStopping.load())
+        {
+            (void)task.failTask({"WVM1000", "Timer scheduling requires a loaded VM program"});
+            return task;
+        }
+        if (duration <= std::chrono::nanoseconds::zero())
+        {
+            task.completeTask({});
+            return task;
+        }
+
+        {
+            std::scoped_lock lock{program_->timerMutex};
+            if (program_->asyncStopping.load())
+            {
+                (void)task.cancelTask();
+                return task;
+            }
+            if (!program_->timers)
+                program_->timers = std::make_unique<TimerScheduler>();
+            const auto now = std::chrono::steady_clock::now();
+            const auto bounded = (std::min)(duration, std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                          std::chrono::steady_clock::time_point::max() - now));
+            // Keep publication under the same lock as shutdown's queue detach.
+            program_->timers->schedule(
+                task, now + bounded, [task] { task.completeTask({}); }, [task] { task.cancelTask(); });
+        }
+        return task;
+    }
+
+    Value Machine::runTaskCallable(const Value& callable)
+    {
+        Value task = Value::externalTask();
+        const std::weak_ptr<Program> weak = program_;
+        const bool scheduled =
+            !program_->asyncStopping.load() &&
+            program_->executors->schedule(
+                ExecutorKind::Worker,
+                ExecutorQueue::Work{
+                    .run =
+                        [weak, task, callable]
+                    {
+                        const auto program = weak.lock();
+                        if (!program || program->asyncStopping.load() || !task.beginTask())
+                        {
+                            (void)task.cancelTask();
+                            return;
+                        }
+                        Machine* owner = program->acquireOwner();
+                        if (!owner)
+                        {
+                            (void)task.cancelTask();
+                            return;
+                        }
+                        const auto release = [program](Machine*) { program->releaseOwner(); };
+                        const std::unique_ptr<Machine, decltype(release)> lease{owner, release};
+                        try
+                        {
+                            std::vector<Value> captures;
+                            for (std::size_t index = 0; index < callable.captureCount(); ++index)
+                                captures.push_back(*callable.capture(index));
+                            auto result = owner->execute(callable.callableFunction(), captures, &task, {}, &callable);
+                            if (result.succeeded())
+                                (void)task.completeTask(result.value());
+                            else
+                                (void)task.failTask(result.error());
+                        }
+                        catch (...)
+                        {
+                            (void)task.failTask({"WVM1207", "VM worker callable threw across the runtime boundary"});
+                        }
+                    },
+                    .cancel = [task] { (void)task.cancelTask(); }});
+        if (!scheduled)
+            (void)task.cancelTask();
+        return task;
+    }
+
+    Value Machine::startTask(const std::uint32_t functionId, const std::span<const Value> arguments)
+    {
+        std::vector<Value> captured;
+        captured.reserve(arguments.size());
+        const bytecode::Function& function = program_->module->functions[functionId];
+        for (std::size_t index = 0; index < arguments.size(); ++index)
+        {
+            const bool retainedReceiver = function.hasCoroutine && index < function.parameters.size() &&
+                                          function.coroutine.retainedReceiver == function.parameters[index].value;
+            if (retainedReceiver && arguments[index].kind() == Value::Kind::ObjectBorrow)
+                captured.push_back(arguments[index].retainObject());
+            else
+                captured.push_back(arguments[index]);
+        }
+        Value task = Value::asyncTask(functionId, std::move(captured));
+        (void)driveTask(task);
+        return task;
+    }
+
+    ExecutionResult Machine::driveTask(const Value& task)
+    {
+        if (task.kind() != Value::Kind::AsyncTask)
+            return ExecutionResult::failure({"WVM1164", "Wait requires an async task value"});
+        const auto releaseContinuation = [&]
+        {
+            if (program_)
+                program_->releaseContinuation(task);
+        };
+        if (task.taskState() == AsyncTaskState::Ready)
+        {
+            releaseContinuation();
+            return ExecutionResult::success(task.taskResult());
+        }
+        if (task.taskState() == AsyncTaskState::Cancelled)
+        {
+            releaseContinuation();
+            return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+        }
+        if (task.taskState() == AsyncTaskState::Faulted)
+        {
+            releaseContinuation();
+            return ExecutionResult::failure(task.taskError());
+        }
+        if (task.taskState() == AsyncTaskState::Running)
+            return ExecutionResult::suspended();
+        if (task.taskFunction() == bytecode::InvalidIndex)
+        {
+            task.waitTask();
+            if (task.taskState() == AsyncTaskState::Ready)
+                return ExecutionResult::success(task.taskResult());
+            if (task.taskState() == AsyncTaskState::Cancelled)
+                return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            return ExecutionResult::failure(task.taskError());
+        }
+        if (!task.beginTask())
+            return ExecutionResult::failure({"WVM1166", "Async task is already running or has an invalid state"});
+
+        std::vector<Value> arguments;
+        arguments.reserve(task.taskArgumentCount());
+        for (std::size_t index = 0; index < task.taskArgumentCount(); ++index)
+        {
+            const Value* argument = task.taskArgument(index);
+            if (!argument)
+            {
+                (void)task.failTask({"WVM1167", "Async task lost a captured argument"});
+                releaseContinuation();
+                return ExecutionResult::failure({"WVM1167", "Async task lost a captured argument"});
+            }
+            arguments.push_back(*argument);
+        }
+
+        ExecutionResult result = execute(task.taskFunction(), arguments, &task);
+        if (result.isSuspended())
+            return result;
+        arguments.clear();
+        if (!result.succeeded())
+        {
+            if (task.taskState() == AsyncTaskState::Cancelled)
+            {
+                releaseContinuation();
+                return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            }
+            ExecutionError failure = result.error();
+            cleanupTaskArguments(task, failure);
+            if (task.failTask(failure))
+            {
+                releaseContinuation();
+                return ExecutionResult::failure(std::move(failure));
+            }
+            if (task.taskState() == AsyncTaskState::Cancelled)
+            {
+                releaseContinuation();
+                return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            }
+            releaseContinuation();
+            return ExecutionResult::failure({"WVM1204", "Async task failure lost its terminal-state race"});
+        }
+        ExecutionError cleanupError;
+        cleanupTaskArguments(task, cleanupError);
+        if (!cleanupError.cleanupFailures.empty())
+        {
+            ExecutionError failure{"WVM1212", "Async argument cleanup failed while running a destructor"};
+            failure.cleanupFailures = std::move(cleanupError.cleanupFailures);
+            (void)task.failTask(failure);
+            releaseContinuation();
+            return ExecutionResult::failure(std::move(failure));
+        }
+        if (!task.completeTask(result.value()))
+        {
+            if (task.taskState() == AsyncTaskState::Cancelled)
+            {
+                releaseContinuation();
+                return ExecutionResult::failure({"WVM1165", "Async task was cancelled"});
+            }
+            releaseContinuation();
+            return ExecutionResult::failure({"WVM1204", "Async task completion lost its terminal-state race"});
+        }
+        releaseContinuation();
+        return ExecutionResult::success(task.taskResult());
+    }
+
+    bool Machine::scheduleTask(const std::shared_ptr<ExecutionState>& state, ExecutorKind executor)
+    {
+        if (!program_ || !program_->executors)
+            return false;
+        if (program_->asyncStopping.load())
+        {
+            (void)state->activeTask.cancelTask();
+            return false;
+        }
+        if (executor == ExecutorKind::Inherit)
+            executor = activeExecutor != ExecutorKind::Inherit
+                           ? activeExecutor
+                           : (program_->executors->isMainThread() ? ExecutorKind::Main : ExecutorKind::Worker);
+        state->executor = executor;
+        program_->retainContinuation(state->activeTask, state);
+        const std::weak_ptr<Program> weakProgram = program_;
+        const Value task = state->activeTask;
+        const bool scheduled = program_->executors->schedule(
+            executor, ExecutorQueue::Work{.run =
+                                              [weakProgram, state]
+                                          {
+                                              if (const std::shared_ptr<Program> program = weakProgram.lock())
+                                              {
+                                                  Machine* const owner = program->acquireOwner();
+                                                  if (!owner)
+                                                      return;
+                                                  try
+                                                  {
+                                                      owner->resumeTask(state);
+                                                  }
+                                                  catch (...)
+                                                  {
+                                                      try
+                                                      {
+                                                          (void)state->activeTask.failTask(
+                                                              {"WVM1207", "VM executor owner dispatch failed"});
+                                                      }
+                                                      catch (...)
+                                                      {
+                                                      }
+                                                  }
+                                                  program->releaseOwner();
+                                              }
+                                          },
+                                          .cancel = [task] { (void)task.cancelTask(); }});
+        if (!scheduled)
+            program_->releaseContinuation(state->activeTask);
+        return scheduled;
+    }
+
+    void Machine::wakeTask(const std::weak_ptr<ExecutionState> weakState, const AsyncTaskState terminalState,
+                           const Value& result, const ExecutionError& error)
+    {
+        const std::shared_ptr<ExecutionState> state = weakState.lock();
+        if (!state || state->activeTask.taskState() == AsyncTaskState::Cancelled || !program_)
+            return;
+
+        if (terminalState != AsyncTaskState::Ready)
+        {
+            ExecutionError propagated = terminalState == AsyncTaskState::Cancelled
+                                            ? ExecutionError{"WVM1165", "Awaited async task was cancelled"}
+                                            : error;
+            {
+                std::scoped_lock lock{program_->executionMutex};
+                propagated = unwind(*state, std::move(propagated));
+            }
+            program_->releaseContinuation(state->activeTask);
+            cleanupTaskArguments(state->activeTask, propagated);
+            (void)state->activeTask.failTask(std::move(propagated));
+            return;
+        }
+
+        ExecutorKind executor = ExecutorKind::Inherit;
+        {
+            std::scoped_lock lock{program_->executionMutex};
+            if (state->frames.empty())
+            {
+                ExecutionError failure{"WVM1209", "Await continuation lost its VM frame"};
+                program_->releaseContinuation(state->activeTask);
+                cleanupTaskArguments(state->activeTask, failure);
+                (void)state->activeTask.failTask(std::move(failure));
+                return;
+            }
+            Frame& frame = state->frames.back();
+            const auto resume = program_->functions[frame.function->id].blocks.find(state->awaitedResumeBlock);
+            if (resume == program_->functions[frame.function->id].blocks.end())
+            {
+                ExecutionError failure = unwind(*state, {"WVM1175", "Coroutine resume block does not exist"});
+                program_->releaseContinuation(state->activeTask);
+                cleanupTaskArguments(state->activeTask, failure);
+                (void)state->activeTask.failTask(std::move(failure));
+                return;
+            }
+            frame.resumedValue = result;
+            frame.hasResumedValue = true;
+            frame.resumedState = state->awaitedState;
+            frame.block = resume->second;
+            frame.instruction = 0;
+            state->awaitedState = bytecode::InvalidIndex;
+            state->awaitedResumeBlock = bytecode::InvalidIndex;
+            executor = state->executor;
+        }
+        if (!scheduleTask(state, executor))
+        {
+            ExecutionError failure;
+            {
+                std::scoped_lock lock{program_->executionMutex};
+                failure = unwind(*state, {"WVM1208", "Await continuation executor rejected the resumed VM frame"});
+            }
+            program_->releaseContinuation(state->activeTask);
+            cleanupTaskArguments(state->activeTask, failure);
+            (void)state->activeTask.failTask(std::move(failure));
+        }
+    }
+
+    void Machine::resumeTask(std::shared_ptr<ExecutionState> state)
+    {
+        if (state->activeTask.taskState() == AsyncTaskState::Cancelled)
+        {
+            if (program_)
+            {
+                std::scoped_lock lock{program_->executionMutex};
+                (void)unwind(*state, {"WVM1165", "Async task was cancelled before its continuation resumed"});
+                program_->releaseContinuation(state->activeTask);
+                ExecutionError cleanupError;
+                cleanupTaskArguments(state->activeTask, cleanupError);
+            }
+            return;
+        }
+        try
+        {
+            ExecutionResult result = execute(bytecode::InvalidIndex, {}, nullptr, state);
+            if (result.isSuspended())
+                return;
+
+            const Value& task = state->activeTask;
+            if (!result.succeeded())
+            {
+                program_->releaseContinuation(task);
+                if (task.taskState() != AsyncTaskState::Cancelled)
+                {
+                    ExecutionError failure = result.error();
+                    cleanupTaskArguments(task, failure);
+                    (void)task.failTask(std::move(failure));
+                }
+                return;
+            }
+            program_->releaseContinuation(task);
+            if (task.taskState() != AsyncTaskState::Cancelled)
+            {
+                ExecutionError cleanupError;
+                cleanupTaskArguments(task, cleanupError);
+                if (cleanupError.cleanupFailures.empty())
+                    (void)task.completeTask(result.value());
+                else
+                {
+                    ExecutionError failure{"WVM1212", "Async argument cleanup failed while running a destructor"};
+                    failure.cleanupFailures = std::move(cleanupError.cleanupFailures);
+                    (void)task.failTask(std::move(failure));
+                }
+            }
+        }
+        catch (...)
+        {
+            if (program_)
+            {
+                std::scoped_lock lock{program_->executionMutex};
+                (void)unwind(*state, {"WVM1207", "VM executor continuation threw across the runtime boundary"});
+                program_->releaseContinuation(state->activeTask);
+            }
+            if (state->activeTask.taskState() != AsyncTaskState::Cancelled)
+            {
+                ExecutionError failure{"WVM1207", "VM executor continuation threw across the runtime boundary"};
+                cleanupTaskArguments(state->activeTask, failure);
+                (void)state->activeTask.failTask(std::move(failure));
+            }
+        }
+    }
+
+    ExecutionResult Machine::execute(const std::uint32_t functionId, const std::span<const Value> arguments,
+                                     const Value* activeTask, std::shared_ptr<ExecutionState> resumedState,
+                                     const Value* callableEnvironment)
+    {
+        if (!program_ || !program_->module)
+            return ExecutionResult::failure({"WVM1000", "The virtual machine has no loaded module"});
+        if (!program_->valid)
+            return ExecutionResult::failure(program_->loadError);
+        std::unique_lock executionLock{program_->executionMutex};
+        const bytecode::Module& module = *program_->module;
+        if (!resumedState && functionId >= module.functions.size())
+            return ExecutionResult::failure({"WVM1002", "Entry function id is outside the module"});
+
+        const bool resuming = static_cast<bool>(resumedState);
+        std::shared_ptr<ExecutionState> state = resuming ? std::move(resumedState) : std::make_shared<ExecutionState>();
+        if (!resuming)
+        {
+            state->frames.reserve(16);
+            if (activeTask)
+                state->activeTask = *activeTask;
+            state->executor = activeExecutor;
+        }
+        std::vector<Frame>& frames = state->frames;
+        const Value* stateTask = state->activeTask.kind() == Value::Kind::AsyncTask ? &state->activeTask : nullptr;
+        const auto failWithStack = [&](ExecutionError error)
+        { return ExecutionResult::failure(unwind(*state, std::move(error))); };
+        auto pushFrame = [&](const bytecode::Function& declaration, const std::span<const Value> values,
+                             FrameContinuation continuation, const Value* callable = nullptr) -> ExecutionResult
+        {
+            if ((declaration.flags & bytecode::FunctionTemplateDeclaration) != 0)
+                return failWithStack(
+                    {"WVM1240", "Generic declaration requires a concrete function specialization", declaration.id});
+            auto& plan = program_->functions[declaration.id];
+            const bytecode::Function* executable = &declaration;
+            if ((declaration.flags & 0x0002u) != 0)
+            {
+                if (!declaration.hasNativeBinding || declaration.captureParameterCount != 0)
+                    return failWithStack(
+                        {"WVM1003", "External function has no callable native binding", declaration.id});
+                if (!plan.nativeEntry)
+                {
+                    // Execution is serialized by executionMutex, including
+                    // callback reentry. Once published these blocks stay stable.
+                    auto entry = std::make_unique<bytecode::Function>(declaration);
+                    entry->flags &= ~std::uint16_t{0x0003u};
+                    entry->hasNativeBinding = false;
+                    entry->hasCoroutine = false;
+                    entry->blocks.clear();
+                    bytecode::Instruction call;
+                    call.opcode = bytecode::Opcode::NativeInvoke;
+                    call.callee = declaration.id;
+                    call.resultType = declaration.returnType;
+                    call.source = declaration.source;
+                    for (const auto& parameter : declaration.parameters)
+                        call.operands.push_back(parameter.value);
+                    if (module.types[declaration.returnType].kind != TypeVoid)
+                        call.result = registerCount(declaration);
+                    bytecode::Instruction returned;
+                    returned.opcode = bytecode::Opcode::Return;
+                    returned.source = declaration.source;
+                    if (call.result != bytecode::InvalidIndex)
+                        returned.operands.push_back(call.result);
+                    bytecode::Block block;
+                    block.id = 0;
+                    block.source = declaration.source;
+                    block.instructions.push_back(std::move(call));
+                    block.instructions.push_back(std::move(returned));
+                    entry->blocks.push_back(std::move(block));
+                    plan.registerCount = registerCount(*entry);
+                    plan.blocks.clear();
+                    plan.blocks.emplace(0, &entry->blocks.front());
+                    plan.nativeEntry = std::move(entry);
+                }
+                executable = plan.nativeEntry.get();
+            }
+            const auto& function = *executable;
+            if (values.size() != function.parameters.size())
+                return failWithStack(
+                    {"WVM1004", "Call argument count does not match the function signature", function.id});
+            if (frames.size() >= options_.callDepthLimit)
+                return failWithStack({"WVM1005", "VM call depth limit exceeded", function.id});
+            const std::uint32_t count = program_->functions[function.id].registerCount;
+            if (count > options_.registerLimitPerFrame)
+                return failWithStack({"WVM1006", "Function register limit exceeded", function.id});
+
+            Frame frame;
+            frame.function = &function;
+            frame.block = &function.blocks.front();
+            frame.registers.resize(count);
+            frame.continuation = std::move(continuation);
+            for (std::size_t index = 0; index < values.size(); ++index)
+            {
+                const std::uint32_t id = function.parameters[index].value;
+                if (index < function.captureParameterCount && index < function.captures.size() &&
+                    (function.captures[index].kind == CaptureValue ||
+                     function.captures[index].kind == CaptureReference))
+                {
+                    auto capture = std::make_unique<PlaceStorage>();
+                    // Hidden captures are environment cells. A reference capture
+                    // stores the borrowed Place inside that cell; it is not the
+                    // borrowed caller cell itself. Keep mutable value captures
+                    // rooted in the same closure environment across invocations.
+                    if (callable && callable->capture(index))
+                    {
+                        capture->alias = const_cast<Value*>(callable->capture(index));
+                        capture->owner = *callable;
+                    }
+                    else
+                        capture->value = function.captures[index].kind == CaptureReference ? values[index]
+                                                                                           : values[index].cloneOwned();
+                    capture->initialized = true;
+                    capture->mutableValue = true;
+                    PlaceStorage* const pointer = capture.get();
+                    frame.localPlaces.push_back(std::move(capture));
+                    frame.registers[id] = Register{Value::place(pointer), true};
+                }
+                else
+                {
+                    const auto& parameter = function.parameters[index];
+                    const auto& type = module.types[parameter.type];
+                    const bool borrowedObject = parameter.ownership == 1 && type.kind == TypeReference &&
+                                                type.arguments.size() == 1 &&
+                                                module.types[type.arguments.front()].kind == TypeNamed &&
+                                                values[index].kind() == Value::Kind::Object;
+                    frame.registers[id] = Register{
+                        borrowedObject ? Value::objectBorrow(values[index].scalar_.aggregate) : values[index], true};
+                }
+            }
+            frames.push_back(std::move(frame));
+            return ExecutionResult::success();
+        };
+
+        if (!resuming)
+        {
+            ExecutionResult initial = pushFrame(module.functions[functionId], arguments, {}, callableEnvironment);
+            if (!initial.succeeded())
+                return initial;
+        }
+
+        const auto completeFrame = [&](Value returned) -> std::optional<ExecutionResult>
+        {
+            // A callee can create a projection into a caller-owned ref argument.
+            // The value stays borrowed, but its PlaceStorage metadata must not
+            // disappear with the callee frame. Move only that metadata, keeping
+            // its original root/expiry links and without retaining the value.
+            if (returned.kind() == Value::Kind::Place)
+            {
+                auto& current = frames.back();
+                const auto local = std::ranges::find_if(current.localPlaces, [&](const auto& place)
+                                                        { return place.get() == returned.asPlace(); });
+                if (local != current.localPlaces.end())
+                {
+                    if (frames.size() == 1)
+                        return failWithStack({"WVM1043", "VM host cannot export a frame-local borrowed projection"});
+                    if (current.continuation.completion == FrameCompletion::ReturnValue &&
+                        current.continuation.callerResult != bytecode::InvalidIndex)
+                    {
+                        frames[frames.size() - 2].localPlaces.push_back(std::move(*local));
+                        current.localPlaces.erase(local);
+                    }
+                }
+            }
+            FrameContinuation continuation = std::move(frames.back().continuation);
+            frames.pop_back();
+            if (frames.empty())
+                return ExecutionResult::success(std::move(returned));
+
+            Frame& caller = frames.back();
+            if (continuation.completion == FrameCompletion::ReturnValue &&
+                continuation.callerResult != bytecode::InvalidIndex)
+            {
+                if (continuation.callerResult >= caller.registers.size())
+                    return failWithStack(
+                        {"WVM1034", "Call result register is invalid", caller.function->id, caller.block->id});
+                caller.registers[continuation.callerResult] = Register{std::move(returned), true};
+            }
+            else if (continuation.completion == FrameCompletion::ContinueConstruction)
+            {
+                if (!continuation.constructionFunctions.empty())
+                {
+                    const auto& self = continuation.nextArguments.front();
+                    if (continuation.nextConstruction == continuation.constructionFunctions.size())
+                    {
+                        self.setObjectConstructionLimit(std::numeric_limits<std::size_t>::max());
+                        return std::nullopt;
+                    }
+                    const auto step = continuation.constructionFunctions[continuation.nextConstruction++];
+                    const auto target = step.function;
+                    if (target >= module.functions.size())
+                        return failWithStack({"WVM1074", "Construction chain references an invalid function"});
+                    const auto* layout = program_->objectLayouts.get(self.aggregateType());
+                    self.setObjectConstructionLimit(step.ownerIndex + 1 == layout->constructionOwners.size()
+                                                        ? std::numeric_limits<std::size_t>::max()
+                                                        : step.ownerIndex);
+                    const std::vector<Value> values = module.functions[target].parameters.size() == 1
+                                                          ? std::vector<Value>{continuation.nextArguments.front()}
+                                                          : continuation.nextArguments;
+                    auto pushed = pushFrame(module.functions[target], values, std::move(continuation));
+                    if (!pushed.succeeded())
+                        return pushed;
+                    return std::nullopt;
+                }
+                if (continuation.nextFunction >= module.functions.size())
+                    return failWithStack({"WVM1074", "Construction continuation references an invalid function",
+                                          caller.function->id, caller.block->id});
+                ExecutionResult pushed =
+                    pushFrame(module.functions[continuation.nextFunction], continuation.nextArguments,
+                              FrameContinuation{.completion = FrameCompletion::Ignore});
+                if (!pushed.succeeded())
+                    return pushed;
+            }
+            return std::nullopt;
+        };
+
+        std::uint64_t& executed = state->executed;
+        while (!frames.empty())
+        {
+            Frame& frame = frames.back();
+            if (frame.instruction >= frame.block->instructions.size())
+                return failWithStack(
+                    {"WVM1007", "Instruction cursor escaped its basic block", frame.function->id, frame.block->id});
+            if (executed++ >= options_.instructionLimit)
+                return failWithStack({"WVM1008", "VM instruction limit exceeded", frame.function->id, frame.block->id,
+                                      static_cast<std::uint32_t>(frame.instruction)});
+
+            const bytecode::Instruction& instruction = frame.block->instructions[frame.instruction];
+            if (options_.debugObserver)
+            {
+                DebugAction action = DebugAction::Abort;
+                const DebugEvent event{
+                    frame.function->id, frame.block->id,    static_cast<std::uint32_t>(frame.instruction),
+                    instruction.opcode, instruction.source, static_cast<std::uint32_t>(frames.size()),
+                    state->executor};
+                try
+                {
+                    action = options_.debugObserver->onInstruction(event);
+                }
+                catch (...)
+                {
+                    return failWithStack({"WVM1206", "VM debug observer threw across the runtime boundary",
+                                          frame.function->id, frame.block->id,
+                                          static_cast<std::uint32_t>(frame.instruction), instruction.source});
+                }
+                if (action == DebugAction::Pause && program_->pauseForDebugger(event) == Program::DebugCommand::Abort)
+                    action = DebugAction::Abort;
+                if (action == DebugAction::Abort)
+                    return failWithStack({"WVM1205", "VM execution was aborted by the debug observer",
+                                          frame.function->id, frame.block->id,
+                                          static_cast<std::uint32_t>(frame.instruction), instruction.source});
+            }
+            const auto fail = [&](std::string code, std::string message)
+            {
+                return failWithStack({std::move(code), std::move(message), frame.function->id, frame.block->id,
+                                      static_cast<std::uint32_t>(frame.instruction), instruction.source});
+            };
+            const auto read = [&](const std::uint32_t id) -> const Value*
+            {
+                if (id >= frame.registers.size() || !frame.registers[id].initialized)
+                    return nullptr;
+                const auto& slot = frame.registers[id];
+                if (!slot.borrowedValue)
+                    return &slot.value;
+                const auto* place = slot.value.asPlace();
+                return place && place->initialized ? &place->storedValue() : nullptr;
+            };
+            const auto readRegister = [&](const std::uint32_t id) -> Register*
+            { return id < frame.registers.size() && frame.registers[id].initialized ? &frame.registers[id] : nullptr; };
+            const auto write = [&](const std::uint32_t id, Value value, bool borrowedValue = false) -> bool
+            {
+                if (id >= frame.registers.size())
+                    return false;
+                frame.registers[id] = Register{std::move(value), true, borrowedValue};
+                return true;
+            };
+            const auto storedValue = [](const Value* value) -> const Value*
+            {
+                if (!value || value->kind() != Value::Kind::Place)
+                    return value;
+                PlaceStorage* const place = value->asPlace();
+                return place && place->initialized ? &place->storedValue() : nullptr;
+            };
+            const auto projectionRoot = [&](std::uint32_t id) -> PlaceStorage*
+            {
+                const auto* source = readRegister(id);
+                auto* place = source ? source->value.asPlace() : nullptr;
+                return place ? (place->borrowedRoot ? place->borrowedRoot : place) : nullptr;
+            };
+            const auto objectValue = [&](const Value* value) -> const Value*
+            {
+                value = storedValue(value);
+                return value && (value->kind() == Value::Kind::Object || value->kind() == Value::Kind::ObjectBorrow)
+                           ? value
+                           : nullptr;
+            };
+            const auto nominalType = [&](std::uint32_t typeId)
+            {
+                for (std::uint32_t depth = 0; typeId < module.types.size() && depth < 32; ++depth)
+                {
+                    const bytecode::Type& type = module.types[typeId];
+                    if (type.kind == TypeNamed)
+                        return typeId;
+                    if ((type.kind != TypeReference && type.kind != TypeNullable) || type.arguments.empty())
+                        break;
+                    typeId = type.arguments.front();
+                }
+                return bytecode::InvalidIndex;
+            };
+            const auto isObjectType = [&](const std::uint32_t concreteType, const std::uint32_t targetType)
+            {
+                const std::uint32_t target = nominalType(targetType);
+                if (concreteType >= module.types.size() || target == bytecode::InvalidIndex)
+                    return false;
+                const bytecode::Type& concrete = module.types[concreteType];
+                return concreteType == target || std::find(concrete.castTypes.begin(), concrete.castTypes.end(),
+                                                           target) != concrete.castTypes.end();
+            };
+            const auto dispatchTarget =
+                [&](const Value& receiver, const std::uint32_t contractType, const std::uint32_t slot)
+            {
+                const std::uint32_t concreteType = receiver.aggregateType();
+                const std::uint32_t contract = nominalType(contractType);
+                if (!isObjectType(concreteType, contract))
+                    return bytecode::InvalidIndex;
+                const auto& entries = module.types[concreteType].dispatchEntries;
+                const auto found = std::find_if(entries.begin(), entries.end(), [&](const auto& entry)
+                                                { return entry.contractType == contract && entry.slot == slot; });
+                return found == entries.end() ? bytecode::InvalidIndex : found->implementation;
+            };
+
+            if (instruction.opcode == bytecode::Opcode::Constant)
+            {
+                std::optional<Value> value = constantValue(module.constants[instruction.constant], module,
+                                                           module.types[instruction.resultType].kind);
+                if (!value)
+                    return fail("WVM1049", "Unicode text constant is not valid UTF-8");
+                if (!write(instruction.result, std::move(*value)))
+                    return fail("WVM1009", "Constant result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::DefaultValue)
+            {
+                const std::uint8_t type = module.types[instruction.resultType].kind;
+                Value value;
+                if (type != TypeNamed && type != TypeArray)
+                    value = defaultValue(module, instruction.resultType);
+                else
+                {
+                    std::shared_ptr<const detail::NativePodLayouts> layouts;
+                    {
+                        std::scoped_lock lock{program_->nativeMutex};
+                        layouts = program_->nativePodLayouts;
+                    }
+                    auto initialized = runtimeDefaultValue(module, instruction.resultType, *layouts);
+                    if (!initialized.succeeded())
+                        return fail("WVM1223", initialized.error);
+                    value = std::move(initialized.value);
+                }
+                program_->pinNativeLibraries(value);
+                if (value.isEmpty() && type != TypeVoid)
+                    return fail("WVM1010", "Default value is not implemented for this bytecode type");
+                if (!write(instruction.result, std::move(value)))
+                    return fail("WVM1009", "Default-value result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Unary)
+            {
+                const Value* operand = instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                if (!operand)
+                    return fail("WVM1011", "Unary instruction reads an unavailable value");
+                Value result;
+                if (instruction.unaryOperator == UnaryLogicalNot && operand->kind() == Value::Kind::Boolean)
+                    result = Value::boolean(!operand->asBoolean());
+                else if (instruction.unaryOperator == UnaryNegate && operand->kind() == Value::Kind::SignedInteger)
+                    result = Value::signedInteger(std::bit_cast<std::int64_t>(
+                        std::uint64_t{0} - std::bit_cast<std::uint64_t>(operand->asSignedInteger())));
+                else if (instruction.unaryOperator == UnaryNegate && operand->kind() == Value::Kind::Float64)
+                    result = Value::floating(-operand->asFloat64());
+                else if (instruction.unaryOperator == UnaryBitwiseNot && operand->kind() == Value::Kind::SignedInteger)
+                    result = Value::signedInteger(~operand->asSignedInteger());
+                else if (instruction.unaryOperator == UnaryBitwiseNot &&
+                         operand->kind() == Value::Kind::UnsignedInteger)
+                    result = Value::unsignedInteger(~operand->asUnsignedInteger());
+                else
+                    return fail("WVM1012", "Unary operator is invalid for the runtime value kind");
+                write(instruction.result, std::move(result));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Binary)
+            {
+                const Value* left = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* right = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                const std::uint8_t operation = instruction.binaryOperator;
+                if (left && right && (operation == BinaryEqual || operation == BinaryNotEqual) &&
+                    (left->kind() == Value::Kind::Null || right->kind() == Value::Kind::Null ||
+                     (left->kind() == Value::Kind::Opaque && right->kind() == Value::Kind::Opaque)))
+                {
+                    const bool equal = *left == *right;
+                    write(instruction.result, Value::boolean(operation == BinaryEqual ? equal : !equal));
+                    ++frame.instruction;
+                    continue;
+                }
+                if (!left || !right || left->kind() != right->kind())
+                    return fail("WVM1013", "Binary instruction requires two available values of the same kind");
+
+                Value result;
+                if (left->kind() == Value::Kind::SignedInteger)
+                {
+                    const std::int64_t a = left->asSignedInteger();
+                    const std::int64_t b = right->asSignedInteger();
+                    const std::uint64_t ua = std::bit_cast<std::uint64_t>(a);
+                    const std::uint64_t ub = std::bit_cast<std::uint64_t>(b);
+                    if (isComparison(operation))
+                        result = Value::boolean(compareResult(operation, a < b, a == b));
+                    else if (operation == BinaryAdd)
+                        result = Value::signedInteger(std::bit_cast<std::int64_t>(ua + ub));
+                    else if (operation == BinarySubtract)
+                        result = Value::signedInteger(std::bit_cast<std::int64_t>(ua - ub));
+                    else if (operation == BinaryMultiply)
+                        result = Value::signedInteger(std::bit_cast<std::int64_t>(ua * ub));
+                    else if (operation == BinaryDivide || operation == BinaryRemainder)
+                    {
+                        if (b == 0)
+                            return fail("WVM1014", "Integer division by zero");
+                        if (a == (std::numeric_limits<std::int64_t>::min)() && b == -1)
+                            return fail("WVM1015", "Signed integer division overflow");
+                        result = Value::signedInteger(operation == BinaryDivide ? a / b : a % b);
+                    }
+                    else if (operation == BinaryBitwiseAnd)
+                        result = Value::signedInteger(a & b);
+                    else if (operation == BinaryBitwiseOr)
+                        result = Value::signedInteger(a | b);
+                    else if (operation == BinaryBitwiseXor)
+                        result = Value::signedInteger(a ^ b);
+                    else if (operation == BinaryShiftLeft || operation == BinaryShiftRight)
+                    {
+                        if (b < 0 || b >= 64)
+                            return fail("WVM1016", "Integer shift count is outside [0, 63]");
+                        if (operation == BinaryShiftLeft)
+                            result = Value::signedInteger(std::bit_cast<std::int64_t>(ua << b));
+                        else
+                        {
+                            std::uint64_t shifted = ua >> b;
+                            if (a < 0 && b != 0)
+                                shifted |= (~std::uint64_t{0}) << (64 - b);
+                            result = Value::signedInteger(std::bit_cast<std::int64_t>(shifted));
+                        }
+                    }
+                    else
+                        return fail("WVM1017", "Signed integer binary operator is not implemented");
+                }
+                else if (left->kind() == Value::Kind::UnsignedInteger)
+                {
+                    const std::uint64_t a = left->asUnsignedInteger();
+                    const std::uint64_t b = right->asUnsignedInteger();
+                    if (operation == BinaryEqual)
+                        result = Value::boolean(a == b);
+                    else if (operation == BinaryNotEqual)
+                        result = Value::boolean(a != b);
+                    else if (operation == BinaryLess)
+                        result = Value::boolean(a < b);
+                    else if (operation == BinaryLessEqual)
+                        result = Value::boolean(a <= b);
+                    else if (operation == BinaryGreater)
+                        result = Value::boolean(a > b);
+                    else if (operation == BinaryGreaterEqual)
+                        result = Value::boolean(a >= b);
+                    else if (operation == BinaryAdd)
+                        result = Value::unsignedInteger(a + b);
+                    else if (operation == BinarySubtract)
+                        result = Value::unsignedInteger(a - b);
+                    else if (operation == BinaryMultiply)
+                        result = Value::unsignedInteger(a * b);
+                    else if (operation == BinaryDivide || operation == BinaryRemainder)
+                    {
+                        if (b == 0)
+                            return fail("WVM1014", "Integer division by zero");
+                        result = Value::unsignedInteger(operation == BinaryDivide ? a / b : a % b);
+                    }
+                    else if (operation == BinaryBitwiseAnd)
+                        result = Value::unsignedInteger(a & b);
+                    else if (operation == BinaryBitwiseOr)
+                        result = Value::unsignedInteger(a | b);
+                    else if (operation == BinaryBitwiseXor)
+                        result = Value::unsignedInteger(a ^ b);
+                    else if (operation == BinaryShiftLeft || operation == BinaryShiftRight)
+                    {
+                        if (b >= 64)
+                            return fail("WVM1016", "Integer shift count is outside [0, 63]");
+                        result = Value::unsignedInteger(operation == BinaryShiftLeft ? a << b : a >> b);
+                    }
+                    else
+                        return fail("WVM1018", "Unsigned integer binary operator is not implemented");
+                }
+                else if (left->kind() == Value::Kind::Float64)
+                {
+                    const double a = left->asFloat64();
+                    const double b = right->asFloat64();
+                    if (isComparison(operation))
+                        result = Value::boolean(compareResult(operation, a < b, a == b));
+                    else if (operation == BinaryAdd)
+                        result = Value::floating(a + b);
+                    else if (operation == BinarySubtract)
+                        result = Value::floating(a - b);
+                    else if (operation == BinaryMultiply)
+                        result = Value::floating(a * b);
+                    else if (operation == BinaryDivide)
+                        result = Value::floating(a / b);
+                    else if (operation == BinaryRemainder)
+                        result = Value::floating(std::fmod(a, b));
+                    else
+                        return fail("WVM1019", "Floating-point binary operator is not implemented");
+                }
+                else if (left->kind() == Value::Kind::Boolean &&
+                         (operation == BinaryEqual || operation == BinaryNotEqual))
+                    result = Value::boolean(operation == BinaryEqual ? *left == *right : !(*left == *right));
+                else if (left->kind() == Value::Kind::String)
+                {
+                    if (operation == BinaryAdd)
+                        result = Value::string(std::string{left->asString()} + std::string{right->asString()});
+                    else if (isComparison(operation))
+                        result = Value::boolean(compareResult(operation, left->asString() < right->asString(),
+                                                              left->asString() == right->asString()));
+                    else
+                        return fail("WVM1020", "String binary operator is not implemented");
+                }
+                else if (left->kind() == Value::Kind::Text)
+                {
+                    if (operation == BinaryAdd)
+                    {
+                        std::u32string combined{left->asText()};
+                        combined.append(right->asText());
+                        result = Value::text(std::move(combined));
+                    }
+                    else if (isComparison(operation))
+                        result = Value::boolean(compareResult(operation, left->asText() < right->asText(),
+                                                              left->asText() == right->asText()));
+                    else
+                        return fail("WVM1050", "Unicode text binary operator is not implemented");
+                }
+                else
+                    return fail("WVM1021", "Binary operator is invalid for the runtime value kind");
+                write(instruction.result, std::move(result));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ArrayCreate)
+            {
+                if (module.types[instruction.resultType].kind != TypeArray)
+                    return fail("WVM1051", "Array creation result type is not an array");
+                std::vector<Value> values;
+                values.reserve(instruction.operands.size());
+                for (const std::uint32_t operandId : instruction.operands)
+                {
+                    const Value* operand = read(operandId);
+                    if (!operand)
+                        return fail("WVM1052", "Array creation reads an unavailable element");
+                    values.push_back(*operand);
+                }
+                if (!write(instruction.result, Value::array(std::move(values))))
+                    return fail("WVM1009", "Array result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ArrayLength)
+            {
+                const Value* array = instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                if (!array || array->kind() != Value::Kind::Array)
+                    return fail("WVM1053", "Array length requires an available array");
+                write(instruction.result, Value::unsignedInteger(array->elementCount()));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ArrayGet ||
+                instruction.opcode == bytecode::Opcode::ArrayElement)
+            {
+                const Value* array = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* rawIndex = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                const std::optional<std::size_t> index = rawIndex ? valueIndex(*rawIndex) : std::nullopt;
+                const Value* element = array && index ? array->element(*index) : nullptr;
+                if (!element)
+                    return fail("WVM1054", "Array index is invalid or outside the array bounds");
+                write(instruction.result, *element);
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::DictionaryCreate)
+            {
+                if (module.types[instruction.resultType].kind != TypeDictionary || instruction.operands.size() % 2 != 0)
+                    return fail("WVM1078", "Dictionary creation has an invalid result type or entry shape");
+                std::vector<Value> entries;
+                entries.reserve(instruction.operands.size());
+                for (const std::uint32_t operandId : instruction.operands)
+                {
+                    const Value* operand = read(operandId);
+                    if (!operand)
+                        return fail("WVM1079", "Dictionary creation reads an unavailable key or value");
+                    entries.push_back(*operand);
+                }
+                const bool ordered = module.string(instruction.selector) == "ordered";
+                if (!write(instruction.result, Value::dictionary(instruction.resultType, std::move(entries), ordered)))
+                    return fail("WVM1009", "Dictionary result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::DictionaryGet)
+            {
+                const Value* dictionary = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* key = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                const Value* value = dictionary && key ? dictionary->dictionaryValue(*key) : nullptr;
+                if (!value)
+                    return fail("WVM1080", "Dictionary key was not found");
+                write(instruction.result, *value);
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::DictionaryPlace)
+            {
+                const Value* base = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* key = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                if (!base || !key)
+                    return fail("WVM1081", "Dictionary place requires an available base and key");
+                const Value* dictionary = base;
+                if (base->kind() == Value::Kind::Place)
+                {
+                    PlaceStorage* const basePlace = base->asPlace();
+                    dictionary = basePlace && basePlace->initialized ? &basePlace->storedValue() : nullptr;
+                }
+                if (!dictionary || dictionary->kind() != Value::Kind::Dictionary)
+                    return fail("WVM1082", "Dictionary place base is not an initialized dictionary");
+
+                auto storage = std::make_unique<PlaceStorage>();
+                storage->bindProjection(projectionRoot(instruction.operands[0]), &program_->projections);
+                if (!storage->borrowedRoot)
+                    storage->owner = *dictionary;
+                storage->alias = const_cast<Value*>(dictionary)->mutableDictionaryValue(*key);
+                storage->initialized = storage->alias != nullptr;
+                storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
+                if (!storage->alias)
+                    return fail("WVM1080", "Dictionary key was not found");
+                PlaceStorage* const pointer = storage.get();
+                frame.localPlaces.push_back(std::move(storage));
+                write(instruction.result, Value::place(pointer));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Interpolate)
+            {
+                if (instruction.stringSegments.size() != instruction.operands.size() + 1 ||
+                    instruction.signatureTypes.size() != instruction.operands.size())
+                    return fail("WVM1055", "Interpolation segment shape is invalid");
+                std::string utf8;
+                for (std::size_t index = 0; index < instruction.stringSegments.size(); ++index)
+                {
+                    utf8.append(module.string(instruction.stringSegments[index]));
+                    if (index < instruction.operands.size())
+                    {
+                        const Value* operand = read(instruction.operands[index]);
+                        if (!operand)
+                            return fail("WVM1056", "Interpolation reads an unavailable value");
+                        if (!detail::ValueFormatter::append(module, instruction.signatureTypes[index], *operand, utf8))
+                            return fail("WVM1062", "Interpolation value has no VM string representation");
+                    }
+                }
+                Value result;
+                if (module.types[instruction.resultType].kind == TypeText)
+                {
+                    Utf8DecodeResult decoded = decodeUtf8(utf8);
+                    if (!decoded.succeeded())
+                        return fail("WVM1057", "Unicode interpolation produced invalid UTF-8");
+                    result = Value::text(std::move(decoded.value));
+                }
+                else
+                    result = Value::string(std::move(utf8));
+                write(instruction.result, std::move(result));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::EnumConstant)
+            {
+                const bytecode::Type& enumType = module.types[instruction.targetType];
+                const std::string_view selector = module.string(instruction.selector);
+                const auto enumCase = std::find_if(enumType.enumCases.begin(), enumType.enumCases.end(),
+                                                   [&](const bytecode::Type::EnumCase& candidate)
+                                                   { return module.string(candidate.name) == selector; });
+                if (enumCase == enumType.enumCases.end() || enumType.enumUnderlyingType >= module.types.size())
+                    return fail("WVM1178", "Enum constant does not match its canonical type metadata");
+                const std::uint8_t underlying = module.types[enumType.enumUnderlyingType].kind;
+                Value result = isSignedType(underlying)
+                                   ? Value::signedInteger(signExtend(enumCase->rawValue, integerWidth(underlying)))
+                                   : Value::unsignedInteger(lowBits(enumCase->rawValue, integerWidth(underlying)));
+                if (!write(instruction.result, std::move(result)))
+                    return fail("WVM1009", "Enum constant result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IntrinsicCall &&
+                (instruction.intrinsicFamily == IntrinsicEnum || instruction.intrinsicFamily == IntrinsicFlagset))
+            {
+                const Value* receiver =
+                    instruction.operands.empty() ? nullptr : storedValue(read(instruction.operands[0]));
+                if (!receiver || instruction.targetType >= module.types.size())
+                    return fail("WVM1179", "Enum intrinsic has no available receiver or target type");
+                const bytecode::Type& enumType = module.types[instruction.targetType];
+                if (enumType.kind != TypeNamed ||
+                    (enumType.nominalKind != NominalEnum && enumType.nominalKind != NominalFlagset) ||
+                    enumType.enumUnderlyingType >= module.types.size())
+                    return fail("WVM1179", "Enum intrinsic target metadata is invalid");
+
+                const auto rawValue = [&](const Value& value) -> std::optional<std::uint64_t>
+                {
+                    if (value.kind() == Value::Kind::SignedInteger)
+                        return std::bit_cast<std::uint64_t>(value.asSignedInteger());
+                    if (value.kind() == Value::Kind::UnsignedInteger)
+                        return value.asUnsignedInteger();
+                    return std::nullopt;
+                };
+                const std::optional<std::uint64_t> receiverBits = rawValue(*receiver);
+                if (!receiverBits)
+                    return fail("WVM1179", "Enum intrinsic receiver is not an integer value");
+                const std::uint8_t underlying = module.types[enumType.enumUnderlyingType].kind;
+                const std::uint32_t width = integerWidth(underlying);
+                const std::uint64_t rawReceiver = lowBits(*receiverBits, width);
+                const std::string_view selector = module.string(instruction.selector);
+                Value result;
+                if (selector == "Name")
+                {
+                    const auto enumCase = std::find_if(enumType.enumCases.begin(), enumType.enumCases.end(),
+                                                       [&](const bytecode::Type::EnumCase& candidate)
+                                                       { return lowBits(candidate.rawValue, width) == rawReceiver; });
+                    result = Value::string(enumCase == enumType.enumCases.end()
+                                               ? std::string{}
+                                               : std::string{module.string(enumCase->name)});
+                }
+                else if (selector == "Value")
+                {
+                    result = isSignedType(underlying) ? Value::signedInteger(signExtend(rawReceiver, width))
+                                                      : Value::unsignedInteger(rawReceiver);
+                }
+                else if (selector == "IsValid")
+                {
+                    const bool valid =
+                        std::ranges::any_of(enumType.enumCases, [&](const auto& candidate)
+                                            { return lowBits(candidate.rawValue, width) == rawReceiver; });
+                    result = Value::boolean(valid);
+                }
+                else if (selector == "Clear")
+                    result = isSignedType(underlying) ? Value::signedInteger(0) : Value::unsignedInteger(0);
+                else
+                {
+                    const Value* mask =
+                        instruction.operands.size() == 2 ? storedValue(read(instruction.operands[1])) : nullptr;
+                    const std::optional<std::uint64_t> maskBits = mask ? rawValue(*mask) : std::nullopt;
+                    if (!maskBits)
+                        return fail("WVM1180", "Flagset intrinsic requires an integer mask operand");
+                    const std::uint64_t rawMask = lowBits(*maskBits, width);
+                    if (selector == "Has")
+                        result = Value::boolean((rawReceiver & rawMask) == rawMask);
+                    else if (selector == "HasAny")
+                        result = Value::boolean((rawReceiver & rawMask) != 0);
+                    else
+                    {
+                        std::uint64_t bits = 0;
+                        if (selector == "With")
+                            bits = rawReceiver | rawMask;
+                        else if (selector == "Without")
+                            bits = rawReceiver & ~rawMask;
+                        else if (selector == "Toggle")
+                            bits = rawReceiver ^ rawMask;
+                        else
+                            return fail("WVM1181",
+                                        "Enum or flagset intrinsic is not implemented: " + std::string{selector});
+                        bits = lowBits(bits, width);
+                        result = isSignedType(underlying) ? Value::signedInteger(signExtend(bits, width))
+                                                          : Value::unsignedInteger(bits);
+                    }
+                }
+                if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(result)))
+                    return fail("WVM1009", "Enum intrinsic result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IntrinsicCall &&
+                (instruction.intrinsicFamily == IntrinsicArray || instruction.intrinsicFamily == IntrinsicDictionary ||
+                 instruction.intrinsicFamily == IntrinsicString || instruction.intrinsicFamily == IntrinsicText))
+            {
+                const Value* rawReceiver = instruction.operands.empty() ? nullptr : read(instruction.operands.front());
+                const std::string_view selector = module.string(instruction.selector);
+                if (!rawReceiver)
+                    return fail("WVM1058", "Intrinsic call has no available receiver");
+                PlaceStorage* const receiverPlace =
+                    rawReceiver->kind() == Value::Kind::Place ? rawReceiver->asPlace() : nullptr;
+                const Value* receiver =
+                    receiverPlace && receiverPlace->initialized ? &receiverPlace->storedValue() : rawReceiver;
+                Value* const mutableReceiver =
+                    receiverPlace && receiverPlace->initialized && receiverPlace->mutableValue
+                        ? &receiverPlace->storedValue()
+                        : nullptr;
+                const auto argument = [&](const std::size_t index) -> const Value*
+                { return index < instruction.operands.size() ? read(instruction.operands[index]) : nullptr; };
+                const auto indexArgument = [&](const std::size_t index) -> std::optional<std::size_t>
+                {
+                    const Value* value = argument(index);
+                    return value ? valueIndex(*value) : std::nullopt;
+                };
+
+                ExecutionError dictionaryCleanup;
+                const auto replaceIntrinsicValue = [&](Value& target, Value replacement)
+                {
+                    const auto kind = target.kind();
+                    if (kind == replacement.kind() &&
+                        (kind == Value::Kind::Array || kind == Value::Kind::Dictionary ||
+                         kind == Value::Kind::Component || kind == Value::Kind::Any) &&
+                        target.scalar_.aggregate == replacement.scalar_.aggregate)
+                        return; // Actual self-assignment does not invalidate its descendants.
+                    program_->projections.retireCells(target);
+                    auto retired = std::move(target);
+                    target = std::move(replacement);
+                    cleanupValue(retired, dictionaryCleanup);
+                };
+                const auto setDictionary = [&](Value key, Value value)
+                {
+                    Value& target = receiverPlace->storedValue();
+                    if (auto* existing = target.mutableDictionaryValue(key))
+                    {
+                        // The entry cell survives assignment, but references
+                        // into its old value graph do not acquire the new graph.
+                        replaceIntrinsicValue(*existing, std::move(value));
+                    }
+                    else
+                    {
+                        DictionaryPlaceMutation mutation{program_->projections, target};
+                        target.dictionarySet(std::move(key), std::move(value));
+                        mutation.remap();
+                    }
+                };
+
+                // VM structural array operations must obey the same conservative
+                // descendant-expiry contract as native structural copy-back.
+                // Retire while the old cells are still addressable, before a
+                // vector relocation/erase can leave dangling Place aliases.
+                if (program_->projections.first && instruction.intrinsicFamily == IntrinsicArray && mutableReceiver &&
+                    receiver->kind() == Value::Kind::Array)
+                {
+                    const auto reserve = selector == "Reserve" ? indexArgument(1) : std::nullopt;
+                    const auto* appended = selector == "Extend" ? argument(1) : nullptr;
+                    const auto* removed = selector == "Remove" ? argument(1) : nullptr;
+                    bool removesCell = false;
+                    for (std::size_t i = 0; removed && i < receiver->elementCount(); ++i)
+                        removesCell = removesCell || *receiver->element(i) == *removed;
+                    if (selector == "Push" || selector == "PushFront" || selector == "Pop" || selector == "PopFront" ||
+                        selector == "Insert" || selector == "RemoveAt" ||
+                        (selector == "Clear" && receiver->elementCount()) || removesCell ||
+                        (appended && appended->elementCount()) || (reserve && *reserve > receiver->elementCapacity()) ||
+                        (selector == "ShrinkToFit" && receiver->elementCapacity() > receiver->elementCount()))
+                        program_->projections.retireCells(*mutableReceiver);
+                }
+
+                if (instruction.intrinsicFamily == IntrinsicString)
+                {
+                    std::vector<const Value*> intrinsicArguments;
+                    intrinsicArguments.reserve(instruction.operands.size() - 1);
+                    for (std::size_t index = 1; index < instruction.operands.size(); ++index)
+                        intrinsicArguments.push_back(read(instruction.operands[index]));
+                    const std::uint8_t resultType = instruction.resultType < module.types.size()
+                                                        ? module.types[instruction.resultType].kind
+                                                        : TypeVoid;
+                    detail::StringIntrinsicResult intrinsicResult = detail::executeStringIntrinsic(
+                        selector, *receiver, mutableReceiver, intrinsicArguments, resultType,
+                        instruction.signatureTypes.size() > 1 && instruction.signatureTypes[1] < module.types.size()
+                            ? module.types[instruction.signatureTypes[1]].kind
+                            : TypeVoid);
+                    if (!intrinsicResult.recognized)
+                        return fail("WVM1061", "String intrinsic is not implemented: " + std::string{selector});
+                    if (!intrinsicResult.succeeded)
+                        return fail(std::move(intrinsicResult.code), std::move(intrinsicResult.message));
+                    if (instruction.result != bytecode::InvalidIndex &&
+                        !write(instruction.result, std::move(intrinsicResult.value)))
+                        return fail("WVM1009", "Intrinsic result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+                if (instruction.intrinsicFamily == IntrinsicText)
+                {
+                    std::vector<const Value*> intrinsicArguments;
+                    intrinsicArguments.reserve(instruction.operands.size() - 1);
+                    for (std::size_t index = 1; index < instruction.operands.size(); ++index)
+                        intrinsicArguments.push_back(read(instruction.operands[index]));
+                    detail::TextIntrinsicResult intrinsicResult =
+                        detail::executeTextIntrinsic(selector, *receiver, intrinsicArguments);
+                    if (!intrinsicResult.recognized)
+                        return fail("WVM1061", "Text intrinsic is not implemented: " + std::string{selector});
+                    if (!intrinsicResult.succeeded)
+                        return fail(std::move(intrinsicResult.code), std::move(intrinsicResult.message));
+                    if (instruction.result != bytecode::InvalidIndex &&
+                        !write(instruction.result, std::move(intrinsicResult.value)))
+                        return fail("WVM1009", "Intrinsic result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+
+                Value result;
+                if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                    selector == "Count")
+                    result = Value::unsignedInteger(receiver->elementCount());
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Empty")
+                    result = Value::boolean(receiver->elementCount() == 0);
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Contains" && instruction.operands.size() == 2)
+                {
+                    const Value* needle = read(instruction.operands[1]);
+                    if (!needle)
+                        return fail("WVM1083", "Array Contains reads an unavailable value");
+                    bool contains = false;
+                    for (std::size_t index = 0; index < receiver->elementCount(); ++index)
+                        contains = contains || *receiver->element(index) == *needle;
+                    result = Value::boolean(contains);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Capacity")
+                    result = Value::unsignedInteger(receiver->elementCapacity());
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "IndexOf" || selector == "LastIndexOf") && instruction.operands.size() == 2)
+                {
+                    const Value* needle = argument(1);
+                    if (!needle)
+                        return fail("WVM1094", "Array index search reads an unavailable value");
+                    std::int64_t found = -1;
+                    if (selector == "IndexOf")
+                    {
+                        for (std::size_t index = 0; index < receiver->elementCount(); ++index)
+                        {
+                            if (*receiver->element(index) == *needle)
+                            {
+                                found = static_cast<std::int64_t>(index);
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        for (std::size_t index = receiver->elementCount(); index > 0; --index)
+                        {
+                            if (*receiver->element(index - 1) == *needle)
+                            {
+                                found = static_cast<std::int64_t>(index - 1);
+                                break;
+                            }
+                        }
+                    }
+                    result = Value::signedInteger(found);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "First" || selector == "Last"))
+                {
+                    if (receiver->elementCount() == 0)
+                        return fail("WVM1095", "Array endpoint intrinsic requires a non-empty array");
+                    result = *receiver->element(selector == "First" ? 0 : receiver->elementCount() - 1);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "Get" || selector == "At") && instruction.operands.size() == 2)
+                {
+                    const std::optional<std::size_t> index = indexArgument(1);
+                    const Value* value = index ? receiver->element(*index) : nullptr;
+                    if (!value)
+                        return fail("WVM1096", "Array intrinsic index is outside the array bounds");
+                    result = *value;
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "GetOr" && instruction.operands.size() == 3)
+                {
+                    const std::optional<std::size_t> index = indexArgument(1);
+                    const Value* fallback = argument(2);
+                    if (!fallback)
+                        return fail("WVM1097", "Array GetOr reads an unavailable fallback");
+                    const Value* value = index ? receiver->element(*index) : nullptr;
+                    result = value ? *value : *fallback;
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Clone")
+                    result = receiver->cloneOwned();
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Slice" && (instruction.operands.size() == 2 || instruction.operands.size() == 3))
+                {
+                    const std::optional<std::size_t> start = indexArgument(1);
+                    const std::optional<std::size_t> count = instruction.operands.size() == 3
+                                                                 ? indexArgument(2)
+                                                                 : std::optional<std::size_t>{receiver->elementCount()};
+                    if (!start || !count)
+                        return fail("WVM1098", "Array Slice requires non-negative start and count operands");
+                    result = receiver->arraySlice(*start, *count);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "Take" || selector == "Skip") && instruction.operands.size() == 2)
+                {
+                    const std::optional<std::size_t> count = indexArgument(1);
+                    if (!count)
+                        return fail("WVM1099", "Array Take/Skip requires a non-negative count");
+                    result = selector == "Take" ? receiver->arraySlice(0, *count)
+                                                : receiver->arraySlice(*count, receiver->elementCount());
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Concat" && instruction.operands.size() == 2)
+                {
+                    const Value* other = argument(1);
+                    if (!other || other->kind() != Value::Kind::Array)
+                        return fail("WVM1100", "Array Concat requires another array");
+                    result = receiver->arrayConcat(*other);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Reversed")
+                {
+                    result = receiver->cloneOwned();
+                    result.arrayReverse();
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Join" && instruction.operands.size() == 2)
+                {
+                    const Value* separator = argument(1);
+                    if (!separator || separator->kind() != Value::Kind::String)
+                        return fail("WVM1101", "Array Join requires a string separator");
+                    std::string joined;
+                    for (std::size_t index = 0; index < receiver->elementCount(); ++index)
+                    {
+                        const Value* value = receiver->element(index);
+                        if (!value || value->kind() != Value::Kind::String)
+                            return fail("WVM1102", "Array Join requires string elements");
+                        if (index != 0)
+                            joined.append(separator->asString());
+                        joined.append(value->asString());
+                    }
+                    result = Value::string(std::move(joined));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "Push" || selector == "PushFront") && instruction.operands.size() == 2)
+                {
+                    const Value* value = argument(1);
+                    if (!mutableReceiver || !value)
+                        return fail("WVM1103", "Array Push requires a mutable receiver and available value");
+                    mutableReceiver->arrayPush(*value, selector == "PushFront");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         (selector == "Pop" || selector == "PopFront"))
+                {
+                    if (!mutableReceiver || !mutableReceiver->arrayPop(result, selector == "PopFront"))
+                        return fail("WVM1104", "Array Pop requires a mutable non-empty array");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Insert" && instruction.operands.size() == 3)
+                {
+                    const std::optional<std::size_t> index = indexArgument(1);
+                    const Value* value = argument(2);
+                    if (!mutableReceiver || !index || !value || !mutableReceiver->arrayInsert(*index, *value))
+                        return fail("WVM1105", "Array Insert index is invalid or receiver is not mutable");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "RemoveAt" && instruction.operands.size() == 2)
+                {
+                    const std::optional<std::size_t> index = indexArgument(1);
+                    if (!mutableReceiver || !index || !mutableReceiver->arrayRemoveAt(*index))
+                        return fail("WVM1106", "Array RemoveAt index is invalid or receiver is not mutable");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Remove" && instruction.operands.size() == 2)
+                {
+                    const Value* value = argument(1);
+                    if (!mutableReceiver || !value)
+                        return fail("WVM1107", "Array Remove requires a mutable receiver and available value");
+                    result = Value::boolean(mutableReceiver->arrayRemove(*value));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Clear")
+                {
+                    if (!mutableReceiver)
+                        return fail("WVM1108", "Array Clear requires a mutable receiver");
+                    mutableReceiver->arrayClear();
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Extend" && instruction.operands.size() == 2)
+                {
+                    const Value* other = argument(1);
+                    if (!mutableReceiver || !other || !mutableReceiver->arrayExtend(*other))
+                        return fail("WVM1109", "Array Extend requires a mutable receiver and another array");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Reserve" && instruction.operands.size() == 2)
+                {
+                    const std::optional<std::size_t> capacity = indexArgument(1);
+                    if (!mutableReceiver || !capacity || !mutableReceiver->arrayReserve(*capacity))
+                        return fail("WVM1110", "Array Reserve requires a mutable receiver and valid capacity");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "ShrinkToFit")
+                {
+                    if (!mutableReceiver)
+                        return fail("WVM1111", "Array ShrinkToFit requires a mutable receiver");
+                    mutableReceiver->arrayShrinkToFit();
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Fill" && instruction.operands.size() == 2)
+                {
+                    const Value* value = argument(1);
+                    if (!mutableReceiver || !value)
+                        return fail("WVM1112", "Array Fill requires a mutable receiver and available value");
+                    mutableReceiver->arrayFill(*value);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Reverse")
+                {
+                    if (!mutableReceiver)
+                        return fail("WVM1113", "Array Reverse requires a mutable receiver");
+                    mutableReceiver->arrayReverse();
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Sort")
+                {
+                    if (!mutableReceiver || !mutableReceiver->arraySort())
+                        return fail("WVM1114", "Array Sort requires a mutable array of orderable values");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicArray && receiver->kind() == Value::Kind::Array &&
+                         selector == "Sorted")
+                {
+                    result = receiver->cloneOwned();
+                    if (!result.arraySort())
+                        return fail("WVM1115", "Array Sorted requires orderable values");
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Count")
+                    result = Value::unsignedInteger(receiver->dictionaryCount());
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Empty")
+                    result = Value::boolean(receiver->dictionaryCount() == 0);
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "ContainsKey" &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    result = Value::boolean(key && receiver->dictionaryValue(*key));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "ContainsValue" &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* value = read(instruction.operands[1]);
+                    result = Value::boolean(value && receiver->dictionaryContainsValue(*value));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && (selector == "Get" || selector == "At") &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* value = key ? receiver->dictionaryValue(*key) : nullptr;
+                    if (!value)
+                        return fail("WVM1080", "Dictionary key was not found");
+                    result = *value;
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "GetOr" &&
+                         instruction.operands.size() == 3)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* fallback = read(instruction.operands[2]);
+                    if (!key || !fallback)
+                        return fail("WVM1084", "Dictionary GetOr reads unavailable operands");
+                    const Value* value = receiver->dictionaryValue(*key);
+                    result = value ? *value : *fallback;
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "TryGet" &&
+                         instruction.operands.size() == 3)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* out = read(instruction.operands[2]);
+                    PlaceStorage* const outPlace = out ? out->asPlace() : nullptr;
+                    if (!key || !outPlace || !outPlace->initialized || !outPlace->mutableValue)
+                        return fail("WVM1085", "Dictionary TryGet requires a mutable initialized output place");
+                    const Value* value = receiver->dictionaryValue(*key);
+                    if (value)
+                        replaceIntrinsicValue(outPlace->storedValue(), *value);
+                    result = Value::boolean(value != nullptr);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Set" &&
+                         instruction.operands.size() == 3)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* value = read(instruction.operands[2]);
+                    if (!receiverPlace || !receiverPlace->mutableValue || !key || !value)
+                        return fail("WVM1086", "Dictionary Set requires a mutable receiver and available operands");
+                    setDictionary(*key, *value);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "GetOrAdd" &&
+                         instruction.operands.size() == 3)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* fallback = read(instruction.operands[2]);
+                    if (!receiverPlace || !receiverPlace->mutableValue || !key || !fallback)
+                        return fail("WVM1087", "Dictionary GetOrAdd requires a mutable receiver and operands");
+                    if (const Value* existing = receiver->dictionaryValue(*key))
+                        result = *existing;
+                    else
+                    {
+                        result = *fallback; // Capture before insertion can relocate a borrowed operand.
+                        setDictionary(*key, result);
+                    }
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && (selector == "Keys" || selector == "Values"))
+                {
+                    std::vector<Value> values;
+                    values.reserve(receiver->dictionaryCount());
+                    for (std::size_t index = 0; index < receiver->dictionaryCount(); ++index)
+                        values.push_back(selector == "Keys" ? *receiver->dictionaryKey(index)
+                                                            : *receiver->dictionaryValue(index));
+                    result = Value::array(std::move(values));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Clone")
+                    result = receiver->cloneOwned();
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Merge" &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* other = read(instruction.operands[1]);
+                    if (!other || other->kind() != Value::Kind::Dictionary)
+                        return fail("WVM1088", "Dictionary Merge requires another dictionary");
+                    result = receiver->cloneOwned();
+                    for (std::size_t index = 0; index < other->dictionaryCount(); ++index)
+                        result.dictionarySet(*other->dictionaryKey(index), *other->dictionaryValue(index));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Extend" &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* other = read(instruction.operands[1]);
+                    if (!receiverPlace || !receiverPlace->mutableValue || !other ||
+                        other->kind() != Value::Kind::Dictionary)
+                        return fail("WVM1089", "Dictionary Extend requires a mutable receiver and dictionary");
+                    // Source may alias the target (including projected inputs).
+                    // Snapshot operands before any replacement/cleanup/reentry.
+                    std::vector<Value> entries;
+                    entries.reserve(other->dictionaryCount() * 2);
+                    for (std::size_t index = 0; index < other->dictionaryCount(); ++index)
+                    {
+                        entries.push_back(*other->dictionaryKey(index));
+                        entries.push_back(*other->dictionaryValue(index));
+                    }
+                    for (std::size_t index = 0; index < entries.size(); index += 2)
+                        setDictionary(std::move(entries[index]), std::move(entries[index + 1]));
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Clear")
+                {
+                    if (!receiverPlace || !receiverPlace->mutableValue)
+                        return fail("WVM1090", "Dictionary Clear requires a mutable receiver");
+                    Value& target = receiverPlace->storedValue();
+                    std::vector<Value> retired;
+                    retired.reserve(target.dictionaryCount() * 2);
+                    program_->projections.retireCells(target);
+                    for (std::size_t index = 0; index < target.dictionaryCount(); ++index)
+                    {
+                        retired.push_back(std::move(*const_cast<Value*>(target.dictionaryKey(index))));
+                        retired.push_back(std::move(*target.mutableDictionaryValue(index)));
+                    }
+                    target.dictionaryClear();
+                    for (auto cell = retired.rbegin(); cell != retired.rend(); ++cell)
+                        cleanupValue(*cell, dictionaryCleanup);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary && selector == "Remove" &&
+                         instruction.operands.size() == 2)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    if (!receiverPlace || !receiverPlace->mutableValue || !key)
+                        return fail("WVM1091", "Dictionary Remove requires a mutable receiver and key");
+                    Value savedKey = *key;
+                    Value& target = receiverPlace->storedValue();
+                    // Allocate the alias snapshots before moving any owned value.
+                    DictionaryPlaceMutation mutation{program_->projections, target};
+                    Value retired;
+                    if (auto* removed = target.mutableDictionaryValue(savedKey))
+                    {
+                        program_->projections.retireCells(*removed, true);
+                        retired = std::move(*removed);
+                    }
+                    result = Value::boolean(target.dictionaryRemove(savedKey));
+                    mutation.remap(); // Other entries must be live before destructor callbacks run.
+                    cleanupValue(retired, dictionaryCleanup);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary &&
+                         (selector == "FirstKey" || selector == "FirstValue" || selector == "LastKey" ||
+                          selector == "LastValue"))
+                {
+                    if (!receiver->dictionaryIsOrdered() || receiver->dictionaryCount() == 0)
+                        return fail("WVM1092", "Ordered dictionary endpoint requires a non-empty ordered dictionary");
+                    const std::size_t index = selector.starts_with("First") ? 0 : receiver->dictionaryCount() - 1;
+                    result =
+                        selector.ends_with("Key") ? *receiver->dictionaryKey(index) : *receiver->dictionaryValue(index);
+                }
+                else if (instruction.intrinsicFamily == IntrinsicDictionary &&
+                         receiver->kind() == Value::Kind::Dictionary &&
+                         (selector == "FloorKeyOr" || selector == "CeilKeyOr") && instruction.operands.size() == 3)
+                {
+                    const Value* key = read(instruction.operands[1]);
+                    const Value* fallback = read(instruction.operands[2]);
+                    if (!key || !fallback || !receiver->dictionaryIsOrdered())
+                        return fail("WVM1093", "Ordered dictionary bound lookup has invalid operands");
+                    const Value* found = selector == "FloorKeyOr" ? receiver->dictionaryFloorKey(*key)
+                                                                  : receiver->dictionaryCeilKey(*key);
+                    result = found ? *found : *fallback;
+                }
+                else
+                    return fail("WVM1061", "Container or text intrinsic is not implemented: " + std::string{selector});
+                if (!dictionaryCleanup.cleanupFailures.empty())
+                {
+                    ExecutionError error{"WVM1211", "Dictionary mutation cleanup failed while running a destructor"};
+                    error.cleanupFailures = std::move(dictionaryCleanup.cleanupFailures);
+                    return failWithStack(std::move(error));
+                }
+                if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(result)))
+                    return fail("WVM1009", "Intrinsic result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::AnyBox)
+            {
+                const Value* payload =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                if (!payload)
+                    return fail("WVM1182", "Any boxing requires an available payload");
+                const auto handleType = anyHandlePayloadType(module, instruction.targetType);
+                const auto payloadType = handleType != bytecode::InvalidIndex ? handleType : instruction.targetType;
+                const bool nullHandle = handleType != bytecode::InvalidIndex &&
+                                        (payload->kind() == Value::Kind::Null ||
+                                         (payload->kind() == Value::Kind::Opaque && !payload->opaquePointer()));
+                if (!write(instruction.result,
+                           nullHandle ? Value::null() : Value::any(payloadType, payload->cloneOwned())))
+                    return fail("WVM1009", "Any box result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::AnyTypeTest ||
+                instruction.opcode == bytecode::Opcode::AnyCheckedCast)
+            {
+                const Value* boxed =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                if (boxed && boxed->kind() == Value::Kind::Null)
+                {
+                    if (instruction.opcode == bytecode::Opcode::AnyCheckedCast)
+                        return fail("WVM1184", "Checked any cast cannot recover a payload from null");
+                    if (!write(instruction.result, Value::boolean(false)))
+                        return fail("WVM1009", "Any type-test result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+                // Native Any copies share a producer cell. Re-read the payload
+                // after native code may have mutated that cell through a copy.
+                const auto backing = boxed && boxed->kind() == Value::Kind::RuntimeValue ? *boxed
+                                     : boxed                                             ? boxed->nativeAnyBacking()
+                                                                                         : Value{};
+                Value nativeBox;
+                if (!backing.isEmpty())
+                {
+                    std::shared_ptr<const detail::NativePodLayouts> layouts;
+                    {
+                        std::scoped_lock lock{program_->nativeMutex};
+                        layouts = program_->nativePodLayouts;
+                    }
+                    WioNativeAbiValue wire{};
+                    wire.kind = WIO_NATIVE_ABI_RUNTIME_VALUE;
+                    wire.flags = WIO_NATIVE_ABI_VALUE_BORROWED;
+                    wire.typeId = backing.foreignTypeId();
+                    wire.payload.handle = backing.foreignHandle();
+                    const auto objects = nativeObjectAccess();
+                    auto refreshed =
+                        detail::unpackNativeAny(module, wire, backing.aggregateType(), *layouts, 0, &objects);
+                    if (!refreshed.succeeded())
+                        return fail("WVM1224", "Native any payload refresh failed: " + refreshed.error);
+                    if (refreshed.value.kind() == Value::Kind::RuntimeValue)
+                        return fail("WVM1224",
+                                    "Native any payload is unsupported or absent from its descriptor closure");
+                    if (refreshed.value.kind() != Value::Kind::Any ||
+                        (boxed->kind() == Value::Kind::Any && refreshed.value.anyType() != boxed->anyType()))
+                        return fail("WVM1224", "Native any shared cell changed its payload identity");
+                    program_->pinNativeLibraries(refreshed.value);
+                    // Extraction is local: do not write another thread's VM
+                    // snapshot merely because two Any values share backing.
+                    nativeBox = std::move(refreshed.value);
+                    boxed = &nativeBox;
+                }
+                const Value* payload = boxed ? boxed->anyPayload() : nullptr;
+                if (!boxed || boxed->kind() != Value::Kind::Any || !payload)
+                    return fail("WVM1183", "Any test or cast requires a live boxed value");
+
+                const auto handleTarget = anyHandlePayloadType(module, instruction.targetType);
+                const auto payloadTarget =
+                    handleTarget != bytecode::InvalidIndex ? handleTarget : instruction.targetType;
+                bool matches = boxed->anyType() == payloadTarget;
+                const std::uint32_t targetNominal = nominalType(instruction.targetType);
+                if (const Value* object = objectValue(payload); object && targetNominal != bytecode::InvalidIndex)
+                    matches = isObjectType(object->aggregateType(), targetNominal);
+                if (instruction.opcode == bytecode::Opcode::AnyTypeTest)
+                {
+                    if (!write(instruction.result, Value::boolean(matches)))
+                        return fail("WVM1009", "Any type-test result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+                if (!matches)
+                    return fail("WVM1184", "Checked any cast failed for the requested target type");
+
+                Value result = payload->cloneOwned();
+                if (instruction.resultType < module.types.size() &&
+                    module.types[instruction.resultType].kind == TypeReference)
+                {
+                    const Value* object = objectValue(payload);
+                    if (!object)
+                        return fail("WVM1184", "Checked any cast cannot borrow a non-object payload");
+                    result = Value::objectBorrow(object->scalar_.aggregate);
+                }
+                if (!write(instruction.result, std::move(result)))
+                    return fail("WVM1009", "Any checked-cast result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::NullableWrap)
+            {
+                const Value* payload =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                if (!payload)
+                    return fail("WVM1185", "Nullable wrapping requires an available payload");
+                if (!write(instruction.result, payload->cloneOwned()))
+                    return fail("WVM1009", "Nullable wrap result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::NullableUnwrap)
+            {
+                const Value* nullable =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                if (!nullable)
+                    return fail("WVM1186", "Nullable unwrap requires an available value");
+                if (nullable->kind() == Value::Kind::Null)
+                    return fail("WVM1187", "Nullable value does not contain a payload");
+                if (!write(instruction.result, nullable->cloneOwned()))
+                    return fail("WVM1009", "Nullable unwrap result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::VariantTest ||
+                instruction.opcode == bytecode::Opcode::VariantPayload ||
+                instruction.opcode == bytecode::Opcode::ResultIsError ||
+                instruction.opcode == bytecode::Opcode::ResultValue ||
+                instruction.opcode == bytecode::Opcode::ResultUnwrap)
+            {
+                const Value* variant =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                const Value* present = variant ? variant->field(0) : nullptr;
+                if (!variant || !present || present->kind() != Value::Kind::Boolean)
+                    return fail("WVM1188", "Variant operation requires canonical option/result storage");
+                const bool hasValue = present->asBoolean();
+                if (instruction.opcode == bytecode::Opcode::VariantTest)
+                {
+                    const std::string_view selector = module.string(instruction.selector);
+                    const bool positive = selector == "Some" || selector == "Ok";
+                    if (!write(instruction.result, Value::boolean(positive ? hasValue : !hasValue)))
+                        return fail("WVM1009", "Variant-test result register is invalid");
+                }
+                else if (instruction.opcode == bytecode::Opcode::ResultIsError)
+                {
+                    if (!write(instruction.result, Value::boolean(!hasValue)))
+                        return fail("WVM1009", "Result error-test register is invalid");
+                }
+                else
+                {
+                    const bool errorPayload = instruction.opcode == bytecode::Opcode::VariantPayload &&
+                                              module.string(instruction.selector) == "Err";
+                    if (instruction.opcode == bytecode::Opcode::ResultUnwrap && !hasValue)
+                        return fail("WVM1189", "Result does not contain a success value");
+                    const Value* payload = variant->field(errorPayload ? 2 : 1);
+                    if (!payload)
+                        return fail("WVM1190", "Variant payload is outside its canonical field layout");
+                    if (!write(instruction.result, payload->cloneOwned()))
+                        return fail("WVM1009", "Variant payload result register is invalid");
+                }
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IteratorCreate)
+            {
+                const std::string_view selector = module.string(instruction.selector);
+                if (instruction.resultType >= module.types.size() ||
+                    module.types[instruction.resultType].kind != TypeIterator)
+                    return fail("WVM1191", "Iterator creation result type is not an iterator");
+                if (selector == "range.inclusive" || selector == "range.exclusive")
+                {
+                    const Value* start = instruction.operands.size() == 3 ? read(instruction.operands[0]) : nullptr;
+                    const Value* end = instruction.operands.size() == 3 ? read(instruction.operands[1]) : nullptr;
+                    const Value* step = instruction.operands.size() == 3 ? read(instruction.operands[2]) : nullptr;
+                    if (!start || !end || !step || start->kind() != end->kind() || start->kind() != step->kind() ||
+                        (start->kind() != Value::Kind::SignedInteger && start->kind() != Value::Kind::UnsignedInteger))
+                        return fail("WVM1192", "Range iterator requires three compatible integer values");
+                    const bool zero = step->kind() == Value::Kind::SignedInteger ? step->asSignedInteger() == 0
+                                                                                 : step->asUnsignedInteger() == 0;
+                    if (zero)
+                        return fail("WVM1193", "Range iterator step cannot be zero");
+                    if (!write(instruction.result, Value::rangeIterator(instruction.resultType, *start, *end, *step,
+                                                                        selector == "range.inclusive")))
+                        return fail("WVM1009", "Range iterator result register is invalid");
+                }
+                else if (selector == "array" || selector == "dictionary")
+                {
+                    const Value* source = instruction.operands.empty() ? nullptr : read(instruction.operands[0]);
+                    const Value* container = storedValue(source);
+                    if (!source || !container || (selector == "array" && container->kind() != Value::Kind::Array) ||
+                        (selector == "dictionary" && container->kind() != Value::Kind::Dictionary))
+                        return fail("WVM1194", "Container iterator source does not match its selector");
+                    std::size_t step = 1;
+                    if (instruction.operands.size() == 2)
+                    {
+                        const Value* stepValue = read(instruction.operands[1]);
+                        const std::optional<std::size_t> converted = stepValue ? valueIndex(*stepValue) : std::nullopt;
+                        if (!converted || *converted == 0)
+                            return fail("WVM1195", "Container iterator step must be a positive integer");
+                        step = *converted;
+                    }
+                    else if (instruction.operands.size() != 1)
+                        return fail("WVM1194", "Container iterator has an invalid operand shape");
+                    if (!write(instruction.result, Value::containerIterator(instruction.resultType, *source, step)))
+                        return fail("WVM1009", "Container iterator result register is invalid");
+                }
+                else
+                    return fail("WVM1196", "Iterator selector is not implemented: " + std::string{selector});
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IteratorHasNext ||
+                instruction.opcode == bytecode::Opcode::IteratorValue ||
+                instruction.opcode == bytecode::Opcode::IteratorAdvance)
+            {
+                Register* iteratorRegister =
+                    instruction.operands.size() == 1 ? readRegister(instruction.operands.front()) : nullptr;
+                Value* iterator = iteratorRegister ? &iteratorRegister->value : nullptr;
+                if (!iterator || iterator->kind() != Value::Kind::Iterator)
+                    return fail("WVM1197", "Iterator operation requires a live iterator value");
+
+                const auto containerSource = [&]() -> Value*
+                {
+                    Value* source = iterator->mutableIteratorState(0);
+                    if (!source || source->kind() != Value::Kind::Place)
+                        return source;
+                    PlaceStorage* place = source->asPlace();
+                    return place && place->initialized ? &place->storedValue() : nullptr;
+                };
+                const auto rangeHasNext = [&]() -> std::optional<bool>
+                {
+                    if (iterator->iteratorFinished())
+                        return false;
+                    const Value* current = iterator->iteratorState(0);
+                    const Value* end = iterator->iteratorState(1);
+                    const Value* step = iterator->iteratorState(2);
+                    if (!current || !end || !step || current->kind() != end->kind() || current->kind() != step->kind())
+                        return std::nullopt;
+                    if (current->kind() == Value::Kind::SignedInteger)
+                    {
+                        const std::int64_t value = current->asSignedInteger();
+                        const std::int64_t limit = end->asSignedInteger();
+                        return step->asSignedInteger() > 0
+                                   ? (iterator->iteratorInclusive() ? value <= limit : value < limit)
+                                   : (iterator->iteratorInclusive() ? value >= limit : value > limit);
+                    }
+                    if (current->kind() == Value::Kind::UnsignedInteger)
+                    {
+                        const std::uint64_t value = current->asUnsignedInteger();
+                        const std::uint64_t limit = end->asUnsignedInteger();
+                        return iterator->iteratorInclusive() ? value <= limit : value < limit;
+                    }
+                    return std::nullopt;
+                };
+                const auto containerCount = [&]() -> std::optional<std::size_t>
+                {
+                    const Value* source = containerSource();
+                    if (!source)
+                        return std::nullopt;
+                    if (source->kind() == Value::Kind::Array)
+                        return source->elementCount();
+                    if (source->kind() == Value::Kind::Dictionary)
+                        return source->dictionaryCount();
+                    return std::nullopt;
+                };
+
+                if (instruction.opcode == bytecode::Opcode::IteratorHasNext)
+                {
+                    std::optional<bool> hasNext;
+                    if (iterator->iteratorIsRange())
+                        hasNext = rangeHasNext();
+                    else if (const std::optional<std::size_t> count = containerCount())
+                        hasNext = !iterator->iteratorFinished() && iterator->iteratorPosition() < *count;
+                    if (!hasNext)
+                        return fail("WVM1198", "Iterator state is incompatible with its source");
+                    if (!write(instruction.result, Value::boolean(*hasNext)))
+                        return fail("WVM1009", "Iterator has-next result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+
+                if (instruction.opcode == bytecode::Opcode::IteratorValue)
+                {
+                    Value* selected = nullptr;
+                    bool mutableSelection = false;
+                    if (iterator->iteratorIsRange())
+                    {
+                        const std::optional<bool> hasNext = rangeHasNext();
+                        if (!hasNext || !*hasNext)
+                            return fail("WVM1199", "Range iterator has no current value");
+                        selected = iterator->mutableIteratorState(0);
+                    }
+                    else
+                    {
+                        Value* source = containerSource();
+                        const std::optional<std::size_t> count = containerCount();
+                        const std::size_t position = iterator->iteratorPosition();
+                        if (!source || !count || position >= *count)
+                            return fail("WVM1199", "Container iterator has no current value");
+                        const std::string_view selector = module.string(instruction.selector);
+                        if (selector == "__index__")
+                        {
+                            if (!write(instruction.result, Value::unsignedInteger(position)))
+                                return fail("WVM1009", "Iterator index result register is invalid");
+                            ++frame.instruction;
+                            continue;
+                        }
+                        if (source->kind() == Value::Kind::Array)
+                        {
+                            selected = source->mutableElement(position);
+                            mutableSelection = true;
+                            if (selector != "__value__")
+                            {
+                                const bytecode::Type& iteratorType = module.types[iterator->aggregateType()];
+                                const bytecode::Type* arrayType =
+                                    !iteratorType.arguments.empty() &&
+                                            iteratorType.arguments.front() < module.types.size()
+                                        ? &module.types[iteratorType.arguments.front()]
+                                        : nullptr;
+                                const bytecode::Type* itemType =
+                                    arrayType && !arrayType->arguments.empty() &&
+                                            arrayType->arguments.front() < module.types.size()
+                                        ? &module.types[arrayType->arguments.front()]
+                                        : nullptr;
+                                if (!itemType || !selected)
+                                    return fail("WVM1200", "Array iterator field projection is invalid");
+                                const auto field = std::find_if(itemType->fields.begin(), itemType->fields.end(),
+                                                                [&](const bytecode::Type::Field& candidate)
+                                                                { return module.string(candidate.name) == selector; });
+                                if (field == itemType->fields.end())
+                                    return fail("WVM1200", "Array iterator field projection is invalid");
+                                const std::size_t fieldIndex =
+                                    static_cast<std::size_t>(std::distance(itemType->fields.begin(), field));
+                                selected = selected->mutableField(fieldIndex);
+                            }
+                        }
+                        else
+                        {
+                            if (selector == "first")
+                            {
+                                selected = const_cast<Value*>(source->dictionaryKey(position));
+                                mutableSelection = false;
+                            }
+                            else if (selector == "second")
+                            {
+                                selected = const_cast<Value*>(source->dictionaryValue(position));
+                                mutableSelection = true;
+                            }
+                            else
+                                return fail("WVM1201", "Dictionary iterator projection is invalid");
+                        }
+                    }
+                    if (!selected)
+                        return fail("WVM1199", "Iterator current value is unavailable");
+
+                    if (instruction.resultType < module.types.size() &&
+                        module.types[instruction.resultType].kind == TypeReference)
+                    {
+                        auto place = std::make_unique<PlaceStorage>();
+                        place->bindProjection(nullptr, &program_->projections);
+                        place->alias = selected;
+                        if (Value* source = containerSource())
+                            place->owner = *source;
+                        place->initialized = true;
+                        place->mutableValue =
+                            mutableSelection && (module.types[instruction.resultType].flags & 0x01u) != 0;
+                        PlaceStorage* pointer = place.get();
+                        frame.localPlaces.push_back(std::move(place));
+                        if (!write(instruction.result, Value::place(pointer)))
+                            return fail("WVM1009", "Iterator reference result register is invalid");
+                    }
+                    else if (!write(instruction.result, selected->cloneOwned()))
+                        return fail("WVM1009", "Iterator value result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+
+                if (iterator->iteratorIsRange())
+                {
+                    Value* current = iterator->mutableIteratorState(0);
+                    const Value* step = iterator->iteratorState(2);
+                    const bytecode::Type& iteratorType = module.types[iterator->aggregateType()];
+                    const std::uint32_t sourceType =
+                        iteratorType.arguments.empty() ? bytecode::InvalidIndex : iteratorType.arguments.front();
+                    const std::uint8_t sourceKind =
+                        sourceType < module.types.size() ? module.types[sourceType].kind : TypeVoid;
+                    const std::uint32_t width = integerWidth(sourceKind);
+                    if (!current || !step)
+                        return fail("WVM1198", "Range iterator state is incomplete");
+                    if (current->kind() == Value::Kind::SignedInteger && step->kind() == Value::Kind::SignedInteger)
+                    {
+                        const std::int64_t value = current->asSignedInteger();
+                        const std::int64_t amount = step->asSignedInteger();
+                        const std::int64_t maximum = width == 64 ? (std::numeric_limits<std::int64_t>::max)()
+                                                                 : (std::int64_t{1} << (width - 1)) - 1;
+                        const std::int64_t minimum = width == 64 ? (std::numeric_limits<std::int64_t>::min)()
+                                                                 : -(std::int64_t{1} << (width - 1));
+                        if ((amount > 0 && value > maximum - amount) || (amount < 0 && value < minimum - amount))
+                            iterator->finishIterator();
+                        else
+                            *current = Value::signedInteger(value + amount);
+                    }
+                    else if (current->kind() == Value::Kind::UnsignedInteger &&
+                             step->kind() == Value::Kind::UnsignedInteger)
+                    {
+                        const std::uint64_t value = current->asUnsignedInteger();
+                        const std::uint64_t amount = step->asUnsignedInteger();
+                        const std::uint64_t maximum =
+                            width == 64 ? (std::numeric_limits<std::uint64_t>::max)() : (std::uint64_t{1} << width) - 1;
+                        if (value > maximum - amount)
+                            iterator->finishIterator();
+                        else
+                            *current = Value::unsignedInteger(value + amount);
+                    }
+                    else
+                        return fail("WVM1198", "Range iterator state is not integer-compatible");
+                }
+                else
+                {
+                    const std::optional<std::size_t> count = containerCount();
+                    if (!count)
+                        return fail("WVM1198", "Container iterator source is unavailable");
+                    if (iterator->iteratorStep() >
+                        (std::numeric_limits<std::size_t>::max)() - iterator->iteratorPosition())
+                        iterator->finishIterator();
+                    else
+                    {
+                        iterator->advanceIteratorPosition();
+                        if (iterator->iteratorPosition() >= *count)
+                            iterator->finishIterator();
+                    }
+                }
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::RangeContains)
+            {
+                if (instruction.operands.size() != 3)
+                    return fail("WVM1022", "Range instruction has an invalid operand shape");
+                const Value* value = read(instruction.operands[0]);
+                const Value* start = read(instruction.operands[1]);
+                const Value* end = read(instruction.operands[2]);
+                if (!value || !start || !end || value->kind() != start->kind() || value->kind() != end->kind())
+                    return fail("WVM1023", "Range instruction reads incompatible values");
+                const bool inclusive = module.string(instruction.selector) == "inclusive";
+                bool contained = false;
+                if (value->kind() == Value::Kind::SignedInteger)
+                    contained = value->asSignedInteger() >= start->asSignedInteger() &&
+                                (inclusive ? value->asSignedInteger() <= end->asSignedInteger()
+                                           : value->asSignedInteger() < end->asSignedInteger());
+                else if (value->kind() == Value::Kind::UnsignedInteger)
+                    contained = value->asUnsignedInteger() >= start->asUnsignedInteger() &&
+                                (inclusive ? value->asUnsignedInteger() <= end->asUnsignedInteger()
+                                           : value->asUnsignedInteger() < end->asUnsignedInteger());
+                else if (value->kind() == Value::Kind::Float64)
+                    contained =
+                        value->asFloat64() >= start->asFloat64() &&
+                        (inclusive ? value->asFloat64() <= end->asFloat64() : value->asFloat64() < end->asFloat64());
+                else
+                    return fail("WVM1024", "Range containment requires numeric runtime values");
+                write(instruction.result, Value::boolean(contained));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Convert)
+            {
+                const Value* operand = instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                if (!operand)
+                    return fail("WVM1025", "Conversion reads an unavailable value");
+                const std::uint8_t target = module.types[instruction.resultType].kind;
+                Value converted;
+                if (isSignedType(target))
+                {
+                    std::uint64_t bits = 0;
+                    if (operand->kind() == Value::Kind::SignedInteger)
+                        bits = std::bit_cast<std::uint64_t>(operand->asSignedInteger());
+                    else if (operand->kind() == Value::Kind::UnsignedInteger)
+                        bits = operand->asUnsignedInteger();
+                    else if (operand->kind() == Value::Kind::Float64 &&
+                             operand->asFloat64() >= -9'223'372'036'854'775'808.0 &&
+                             operand->asFloat64() < 9'223'372'036'854'775'808.0)
+                        bits = std::bit_cast<std::uint64_t>(static_cast<std::int64_t>(operand->asFloat64()));
+                    else
+                        return fail("WVM1026", "Numeric conversion is out of range or invalid");
+                    converted = Value::signedInteger(signExtend(bits, integerWidth(target)));
+                }
+                else if (isUnsignedType(target))
+                {
+                    std::uint64_t bits = 0;
+                    if (operand->kind() == Value::Kind::SignedInteger)
+                        bits = std::bit_cast<std::uint64_t>(operand->asSignedInteger());
+                    else if (operand->kind() == Value::Kind::UnsignedInteger)
+                        bits = operand->asUnsignedInteger();
+                    else if (operand->kind() == Value::Kind::Float64 && operand->asFloat64() >= 0.0 &&
+                             operand->asFloat64() < 18'446'744'073'709'551'616.0)
+                        bits = static_cast<std::uint64_t>(operand->asFloat64());
+                    else
+                        return fail("WVM1026", "Numeric conversion is out of range or invalid");
+                    converted = Value::unsignedInteger(lowBits(bits, integerWidth(target)));
+                }
+                else if (isFloatType(target))
+                {
+                    double value = 0.0;
+                    if (operand->kind() == Value::Kind::SignedInteger)
+                        value = static_cast<double>(operand->asSignedInteger());
+                    else if (operand->kind() == Value::Kind::UnsignedInteger)
+                        value = static_cast<double>(operand->asUnsignedInteger());
+                    else if (operand->kind() == Value::Kind::Float64)
+                        value = operand->asFloat64();
+                    else
+                        return fail("WVM1026", "Numeric conversion is out of range or invalid");
+                    converted =
+                        Value::floating(target == TypeF32 ? static_cast<double>(static_cast<float>(value)) : value);
+                }
+                else
+                    return fail("WVM1027", "Conversion target is not a numeric bytecode type");
+                write(instruction.result, std::move(converted));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::LocalPlace)
+            {
+                auto storage = std::make_unique<PlaceStorage>();
+                storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
+                PlaceStorage* const pointer = storage.get();
+                frame.localPlaces.push_back(std::move(storage));
+                if (!write(instruction.result, Value::place(pointer)))
+                    return fail("WVM1038", "Local place result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::GlobalPlace)
+            {
+                if (instruction.global >= program_->globals.size() ||
+                    !write(instruction.result, Value::place(program_->globals[instruction.global].get())))
+                    return fail("WVM1039", "Global place id or result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::PlaceInit || instruction.opcode == bytecode::Opcode::Store ||
+                instruction.opcode == bytecode::Opcode::Replace)
+            {
+                const Value* placeValue = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* source = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
+                if (!place || !source)
+                    return fail("WVM1040", "Place write requires an available place and source value");
+                if (instruction.opcode == bytecode::Opcode::PlaceInit && place->initialized)
+                    return fail("WVM1041", "Place can only be initialized once");
+                if (instruction.opcode != bytecode::Opcode::PlaceInit && (!place->initialized || !place->mutableValue))
+                    return fail("WVM1042", "Store requires an initialized mutable place");
+                Register* sourceRegister = readRegister(instruction.operands[1]);
+                const bool transferable = source->kind() == Value::Kind::Object ||
+                                          source->kind() == Value::Kind::ForeignObject ||
+                                          source->kind() == Value::Kind::Any || source->kind() == Value::Kind::Array ||
+                                          source->kind() == Value::Kind::Dictionary;
+                const bool objectBorrow = source->kind() == Value::Kind::ObjectBorrow;
+                Value retainedBorrow;
+                if (objectBorrow)
+                    retainedBorrow = source->retainObject();
+                else if (transferable && sourceRegister->borrowedValue)
+                    retainedBorrow = source->cloneOwned();
+                if (place->initialized &&
+                    (source->kind() == Value::Kind::Object || source->kind() == Value::Kind::ObjectBorrow ||
+                     place->storedValue().kind() == Value::Kind::Object ||
+                     source->kind() == Value::Kind::ForeignObject ||
+                     place->storedValue().kind() == Value::Kind::ForeignObject || source->kind() == Value::Kind::Any ||
+                     place->storedValue().kind() == Value::Kind::Any ||
+                     place->storedValue().kind() == Value::Kind::Array ||
+                     place->storedValue().kind() == Value::Kind::Dictionary))
+                {
+                    // Null replacement is still a release of the old object.
+                    // Protect a borrowed self-assignment before dropping it.
+                    if (place->storedValue().kind() == Value::Kind::Array ||
+                        place->storedValue().kind() == Value::Kind::Dictionary)
+                        place->retireProjections();
+                    ExecutionError cleanupError;
+                    cleanupValue(place->storedValue(), cleanupError);
+                    if (!cleanupError.cleanupFailures.empty())
+                    {
+                        cleanupValue(retainedBorrow, cleanupError);
+                        cleanupError.code = "WVM1211";
+                        cleanupError.message = "Object replacement cleanup failed while running a destructor";
+                        return failWithStack(std::move(cleanupError));
+                    }
+                }
+                if (transferable)
+                {
+                    // WIR place writes transfer an owned handle. Keeping an
+                    // extra SSA-register/container claim would defer the Wio destructor
+                    // past its lexical release until the entire frame ends.
+                    if (sourceRegister->borrowedValue)
+                        place->storedValue() = std::move(retainedBorrow);
+                    else
+                    {
+                        place->storedValue() = std::move(sourceRegister->value);
+                        sourceRegister->initialized = false;
+                    }
+                }
+                else if (objectBorrow)
+                    place->storedValue() = std::move(retainedBorrow);
+                else
+                    place->storedValue() = *source;
+                place->initialized = true;
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Load)
+            {
+                const Value* placeValue = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                // Object method receivers are represented by a direct borrowed
+                // handle, not a mutable local handle cell. deref self still uses
+                // the normal WIR Load operation.
+                if (placeValue &&
+                    (placeValue->kind() == Value::Kind::ObjectBorrow || placeValue->kind() == Value::Kind::Object))
+                {
+                    write(instruction.result, instruction.resultOwnership == 1
+                                                  ? Value::objectBorrow(placeValue->scalar_.aggregate)
+                                                  : placeValue->retainObject());
+                    ++frame.instruction;
+                    continue;
+                }
+                PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
+                if (!place || !place->initialized)
+                    return fail("WVM1043", "Load requires an initialized place");
+                const auto& loaded = place->storedValue();
+                if (instruction.resultOwnership == 1 && instruction.resultType < module.types.size() &&
+                    (loaded.kind() == Value::Kind::ForeignObject ||
+                     module.types[instruction.resultType].kind == TypeAny ||
+                     module.types[instruction.resultType].kind == TypeArray ||
+                     module.types[instruction.resultType].kind == TypeDictionary))
+                {
+                    // A borrowed foreign-object/Any/container load is a live cell reference, not an
+                    // intrusive claim held until this frame is destroyed.
+                    write(instruction.result, Value::place(place), true);
+                    ++frame.instruction;
+                    continue;
+                }
+                write(instruction.result, instruction.resultOwnership == 1 && loaded.kind() == Value::Kind::Object
+                                              ? Value::objectBorrow(loaded.scalar_.aggregate)
+                                              : loaded);
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::FieldPlace)
+            {
+                const Value* base = instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                if (!base)
+                    return fail("WVM1063", "Field place reads an unavailable base");
+                const Value* aggregate = base;
+                if (base->kind() == Value::Kind::Place)
+                {
+                    PlaceStorage* const basePlace = base->asPlace();
+                    aggregate = basePlace && basePlace->initialized ? &basePlace->storedValue() : nullptr;
+                }
+                if (!aggregate)
+                    return fail("WVM1064", "Field place base is not initialized");
+
+                auto storage = std::make_unique<PlaceStorage>();
+                storage->bindProjection(projectionRoot(instruction.operands[0]), &program_->projections);
+                if (!storage->borrowedRoot)
+                    storage->owner = *aggregate;
+                std::size_t fieldIndex = instruction.projectionIndex;
+                if (aggregate->objectIdentity())
+                {
+                    const auto* layout = program_->objectLayouts.get(aggregate->aggregateType());
+                    if (!layout)
+                        return fail("WVM1065", "Object has no field layout");
+                    const auto offset = layout->offsets.find(instruction.targetType);
+                    if (offset == layout->offsets.end() || instruction.targetType >= module.types.size() ||
+                        fieldIndex >= module.types[instruction.targetType].fields.size())
+                        return fail("WVM1065", "Field owner is outside the concrete object hierarchy");
+                    fieldIndex += offset->second;
+                }
+                storage->alias = const_cast<Value*>(aggregate)->mutableField(fieldIndex);
+                storage->initialized = storage->alias && !storage->alias->isEmpty();
+                storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
+                if (!storage->alias)
+                    return fail("WVM1065", "Field projection is outside the aggregate layout");
+                PlaceStorage* const pointer = storage.get();
+                frame.localPlaces.push_back(std::move(storage));
+                write(instruction.result, Value::place(pointer));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ArrayPlace)
+            {
+                const Value* base = instruction.operands.size() == 2 ? read(instruction.operands[0]) : nullptr;
+                const Value* rawIndex = instruction.operands.size() == 2 ? read(instruction.operands[1]) : nullptr;
+                const std::optional<std::size_t> index = rawIndex ? valueIndex(*rawIndex) : std::nullopt;
+                if (!base || !index)
+                    return fail("WVM1066", "Array place requires an available base and non-negative index");
+                const Value* array = base;
+                if (base->kind() == Value::Kind::Place)
+                {
+                    PlaceStorage* const basePlace = base->asPlace();
+                    array = basePlace && basePlace->initialized ? &basePlace->storedValue() : nullptr;
+                }
+                if (!array || array->kind() != Value::Kind::Array)
+                    return fail("WVM1067", "Array place base is not an initialized array");
+
+                auto storage = std::make_unique<PlaceStorage>();
+                storage->bindProjection(projectionRoot(instruction.operands[0]), &program_->projections);
+                if (!storage->borrowedRoot)
+                    storage->owner = *array;
+                storage->alias = const_cast<Value*>(array)->mutableElement(*index);
+                storage->initialized = storage->alias != nullptr;
+                storage->mutableValue = (module.types[instruction.resultType].flags & 0x01u) != 0;
+                if (!storage->alias)
+                    return fail("WVM1068", "Array place index is outside the array bounds");
+                PlaceStorage* const pointer = storage.get();
+                frame.localPlaces.push_back(std::move(storage));
+                write(instruction.result, Value::place(pointer));
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Borrow)
+            {
+                const Value* source = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                if (!source)
+                    return fail("WVM1044", "Borrow requires an available place or object value");
+                if (source->kind() == Value::Kind::Place)
+                    write(instruction.result, *source);
+                else if (const Value* object = objectValue(source))
+                    write(instruction.result, Value::objectBorrow(object->scalar_.aggregate));
+                else
+                    return fail("WVM1044", "Borrow requires an available place or object value");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ConstructComponent ||
+                instruction.opcode == bytecode::Opcode::ConstructObject)
+            {
+                if (instruction.resultType >= module.types.size())
+                    return fail("WVM1069", "Aggregate construction references an invalid type");
+                const bytecode::Type& type = module.types[instruction.resultType];
+                const bool object = instruction.opcode == bytecode::Opcode::ConstructObject;
+                const std::uint8_t expected = object ? NominalObject : NominalComponent;
+                if (type.kind != TypeNamed || type.nominalKind != expected)
+                    return fail("WVM1070", "Aggregate construction kind does not match its result type");
+
+                std::shared_ptr<const detail::NativePodLayouts> layouts;
+                {
+                    std::scoped_lock lock{program_->nativeMutex};
+                    layouts = program_->nativePodLayouts;
+                }
+                Value initial;
+                const bool legacyMemberwise = !object && type.nominalRepresentation == RepresentationNativePod &&
+                                              !layouts->defaults.contains(instruction.resultType) &&
+                                              instruction.callee == bytecode::InvalidIndex &&
+                                              instruction.operands.size() == type.fields.size();
+                if (legacyMemberwise)
+                    initial = constructAggregate(module, instruction.resultType, false);
+                else if (!object && type.nominalRepresentation != RepresentationNativePod &&
+                         instruction.callee == bytecode::InvalidIndex && !instruction.operands.empty())
+                {
+                    // Wio aggregate arguments directly initialize their fields,
+                    // unlike native construction's T{} followed by assignments.
+                    // Do not run producer defaults for fields replaced by args.
+                    initial = constructAggregate(module, instruction.resultType, false);
+                    for (std::size_t index = instruction.operands.size(); index < type.fields.size(); ++index)
+                    {
+                        auto initialized = runtimeDefaultValue(module, type.fields[index].type, *layouts);
+                        if (!initialized.succeeded())
+                            return fail("WVM1223", initialized.error);
+                        *initial.mutableField(index) = std::move(initialized.value);
+                    }
+                }
+                else if (!object)
+                {
+                    auto initialized = runtimeDefaultValue(module, instruction.resultType, *layouts);
+                    if (!initialized.succeeded())
+                        return fail("WVM1223", initialized.error);
+                    initial = std::move(initialized.value);
+                }
+                else
+                {
+                    std::vector<Value> fields;
+                    const auto* objectLayout = object ? program_->objectLayouts.get(instruction.resultType) : nullptr;
+                    const std::size_t count = objectLayout ? objectLayout->fieldTypes.size() : type.fields.size();
+                    fields.reserve(count);
+                    for (std::size_t index = 0; index < count; ++index)
+                    {
+                        const auto fieldType = objectLayout ? objectLayout->fieldTypes[index] : type.fields[index].type;
+                        auto initialized = runtimeDefaultValue(module, fieldType, *layouts);
+                        if (!initialized.succeeded())
+                            return fail("WVM1223", initialized.error);
+                        program_->pinNativeLibraries(initialized.value);
+                        fields.push_back(std::move(initialized.value));
+                    }
+                    initial = Value::object(instruction.resultType, std::move(fields));
+                }
+                program_->pinNativeLibraries(initial);
+                if (!write(instruction.result, std::move(initial)))
+                    return fail("WVM1009", "Aggregate result register is invalid");
+                Register& constructedRegister = frame.registers[instruction.result];
+                if (!object && instruction.callee == bytecode::InvalidIndex && !instruction.operands.empty())
+                {
+                    // Memberwise construction (native or Wio) consumes field
+                    // arguments directly, rather than ignoring them or running
+                    // the no-argument field initializer over explicit values.
+                    if (instruction.operands.size() > type.fields.size())
+                        return fail("WVM1071", "Component aggregate has more arguments than declared fields");
+                    for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                    {
+                        const Value* operand = read(instruction.operands[index]);
+                        if (!operand)
+                            return fail("WVM1071", "Component aggregate reads an unavailable field argument");
+                        *constructedRegister.value.mutableField(index) = operand->cloneOwned();
+                    }
+                    ++frame.instruction;
+                    continue;
+                }
+                Value self;
+                if (object)
+                    self = Value::objectBorrow(constructedRegister.value.scalar_.aggregate);
+                else
+                {
+                    auto selfPlace = std::make_unique<PlaceStorage>();
+                    selfPlace->alias = &constructedRegister.value;
+                    selfPlace->initialized = true;
+                    selfPlace->mutableValue = true;
+                    PlaceStorage* const pointer = selfPlace.get();
+                    frame.localPlaces.push_back(std::move(selfPlace));
+                    self = Value::place(pointer);
+                }
+
+                std::vector<Value> constructorArguments;
+                constructorArguments.reserve(instruction.operands.size() + 1);
+                constructorArguments.push_back(self);
+                for (const std::uint32_t operandId : instruction.operands)
+                {
+                    const Value* operand = read(operandId);
+                    if (!operand)
+                        return fail("WVM1071", "Aggregate constructor reads an unavailable argument");
+                    constructorArguments.push_back(*operand);
+                }
+
+                const std::uint32_t initializer = type.fieldInitializer;
+                const std::uint32_t constructor = instruction.callee;
+                if ((initializer != bytecode::InvalidIndex && initializer >= module.functions.size()) ||
+                    (constructor != bytecode::InvalidIndex && constructor >= module.functions.size()))
+                    return fail("WVM1074", "Component construction references an invalid lifecycle function");
+                // Field initializer bodies already invoke a zero-argument
+                // OnConstruct. Only parameterized constructors need a second
+                // frame after initialization (the generated C++ contract).
+                const bool invokeConstructor =
+                    constructor != bytecode::InvalidIndex &&
+                    (initializer == bytecode::InvalidIndex || module.functions[constructor].parameters.size() > 1);
+                const auto callerIndex = frames.size() - 1;
+                const auto consumeConstructorArguments = [&]
+                {
+                    if (invokeConstructor)
+                        consumeCallArguments(frames[callerIndex], module.functions[constructor], instruction.operands,
+                                             1);
+                };
+                ++frame.instruction;
+                if (object)
+                {
+                    const auto* layout = program_->objectLayouts.get(instruction.resultType);
+                    if (!layout->baseInitializers.empty())
+                    {
+                        auto functions = layout->baseInitializers;
+                        const auto ownIndex = layout->constructionOwners.size() - 1;
+                        if (initializer != bytecode::InvalidIndex)
+                            functions.push_back({initializer, ownIndex});
+                        if (invokeConstructor)
+                            functions.push_back({constructor, ownIndex});
+                        const auto first = functions.front().function;
+                        self.setObjectConstructionLimit(functions.front().ownerIndex);
+                        FrameContinuation continuation{.completion = FrameCompletion::ContinueConstruction,
+                                                       .nextArguments = constructorArguments,
+                                                       .constructionFunctions = std::move(functions),
+                                                       .nextConstruction = 1};
+                        const std::vector<Value> values = module.functions[first].parameters.size() == 1
+                                                              ? std::vector<Value>{self}
+                                                              : constructorArguments;
+                        auto pushed = pushFrame(module.functions[first], values, std::move(continuation));
+                        if (!pushed.succeeded())
+                            return pushed;
+                        consumeConstructorArguments();
+                        continue;
+                    }
+                }
+                if (initializer != bytecode::InvalidIndex)
+                {
+                    FrameContinuation continuation{.completion = invokeConstructor
+                                                                     ? FrameCompletion::ContinueConstruction
+                                                                     : FrameCompletion::Ignore,
+                                                   .nextFunction = constructor,
+                                                   .nextArguments = constructorArguments};
+                    const Value initializerArguments[] = {self};
+                    ExecutionResult pushed =
+                        pushFrame(module.functions[initializer], initializerArguments, std::move(continuation));
+                    if (!pushed.succeeded())
+                        return pushed;
+                    consumeConstructorArguments();
+                    continue;
+                }
+                if (invokeConstructor)
+                {
+                    ExecutionResult pushed = pushFrame(module.functions[constructor], constructorArguments,
+                                                       FrameContinuation{.completion = FrameCompletion::Ignore});
+                    if (!pushed.succeeded())
+                        return pushed;
+                    consumeConstructorArguments();
+                    continue;
+                }
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::CopyValue || instruction.opcode == bytecode::Opcode::Retain)
+            {
+                const Value* source = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                if (!source)
+                    return fail("WVM1045", "Copy/retain reads an unavailable value");
+                write(instruction.result, source->objectIdentity()                            ? source->retainObject()
+                                          : instruction.opcode == bytecode::Opcode::CopyValue ? source->cloneOwned()
+                                                                                              : *source);
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::MoveValue)
+            {
+                const Value* placeValue = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
+                if (!place || !place->initialized)
+                    return fail("WVM1046", "Move requires an initialized place");
+                write(instruction.result, std::move(place->storedValue()));
+                place->initialized = false;
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Release || instruction.opcode == bytecode::Opcode::ReleasePlace)
+            {
+                Register* cleanupRegister = nullptr;
+                PlaceStorage* cleanupPlace = nullptr;
+                Value* released = nullptr;
+                if (instruction.opcode == bytecode::Opcode::Release)
+                {
+                    cleanupRegister =
+                        instruction.operands.size() == 1 ? readRegister(instruction.operands.front()) : nullptr;
+                    released = cleanupRegister ? &cleanupRegister->value : nullptr;
+                }
+                else
+                {
+                    const Value* placeValue =
+                        instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                    cleanupPlace = placeValue ? placeValue->asPlace() : nullptr;
+                    released = cleanupPlace && cleanupPlace->initialized ? &cleanupPlace->storedValue() : nullptr;
+                }
+                if (!released)
+                    return fail("WVM1072", "Reference release reads an unavailable value");
+                if (released->kind() != Value::Kind::Null && released->kind() != Value::Kind::Object &&
+                    released->kind() != Value::Kind::ForeignObject && released->kind() != Value::Kind::Callable &&
+                    released->kind() != Value::Kind::AsyncTask && released->kind() != Value::Kind::Any &&
+                    released->kind() != Value::Kind::Iterator)
+                    return fail("WVM1073", "Reference release requires an owned object or callable handle");
+
+                ExecutionError cleanupError;
+                cleanupValue(*released, cleanupError);
+                if (!cleanupError.cleanupFailures.empty())
+                {
+                    ExecutionError error{"WVM1211", "Reference cleanup failed while running a destructor"};
+                    error.cleanupFailures = std::move(cleanupError.cleanupFailures);
+                    return failWithStack(std::move(error));
+                }
+                if (cleanupRegister)
+                    cleanupRegister->initialized = false;
+                else
+                    cleanupPlace->initialized = false;
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::DropValue)
+            {
+                Register* const source =
+                    instruction.operands.size() == 1 ? readRegister(instruction.operands[0]) : nullptr;
+                if (!source)
+                    return fail("WVM1047", "Value cleanup reads an unavailable value");
+                ExecutionError cleanupError;
+                cleanupValue(source->value, cleanupError);
+                if (!cleanupError.cleanupFailures.empty())
+                {
+                    ExecutionError error{"WVM1211", "Value cleanup failed while running a destructor"};
+                    error.cleanupFailures = std::move(cleanupError.cleanupFailures);
+                    return failWithStack(std::move(error));
+                }
+                source->initialized = false;
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::DropPlace)
+            {
+                const Value* placeValue = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                PlaceStorage* const place = placeValue ? placeValue->asPlace() : nullptr;
+                if (!place || !place->initialized)
+                    return fail("WVM1048", "Place cleanup requires an initialized place");
+                // Caller-rooted projections borrow the root, not its storage.
+                // Retire their cells before releasing the root's last claim.
+                place->retireProjections();
+                ExecutionError cleanupError;
+                cleanupValue(place->storedValue(), cleanupError);
+                place->initialized = false;
+                if (!cleanupError.cleanupFailures.empty())
+                {
+                    ExecutionError error{"WVM1211", "Place cleanup failed while running a destructor"};
+                    error.cleanupFailures = std::move(cleanupError.cleanupFailures);
+                    return failWithStack(std::move(error));
+                }
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::FunctionReference)
+            {
+                if (instruction.callee >= module.functions.size() || instruction.resultType >= module.types.size() ||
+                    module.types[instruction.resultType].kind != TypeFunction)
+                    return fail("WVM1139", "Function reference requires a known function and callable type");
+                if (!write(instruction.result, Value::callable(instruction.callee, {})))
+                    return fail("WVM1140", "Function reference result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ClosureCreate)
+            {
+                if (instruction.callee >= module.functions.size() || instruction.resultType >= module.types.size() ||
+                    module.types[instruction.resultType].kind != TypeFunction ||
+                    instruction.operands.size() != instruction.captureKinds.size())
+                    return fail("WVM1141", "Closure creation does not match a known callable capture layout");
+
+                std::vector<Value> captures;
+                captures.reserve(instruction.operands.size());
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    const Value* source = read(instruction.operands[index]);
+                    if (!source)
+                        return fail("WVM1142", "Closure creation reads an unavailable capture value");
+
+                    switch (instruction.captureKinds[index])
+                    {
+                    case CaptureValue:
+                        captures.push_back(source->cloneOwned());
+                        break;
+                    case CaptureReference:
+                        if (source->kind() != Value::Kind::Place)
+                            return fail("WVM1143", "Reference capture requires a live borrowed place");
+                        for (auto* place = source->asPlace(); place; place = place->borrowedRoot)
+                            if (place->callbackBorrow)
+                                return fail("WVM1225", "Invocation-scoped native callback borrows cannot be captured");
+                        captures.push_back(*source);
+                        break;
+                    case CaptureRetainedSelf:
+                    {
+                        Value retained;
+                        if (source->kind() == Value::Kind::Place)
+                        {
+                            PlaceStorage* const place = source->asPlace();
+                            if (place && place->initialized)
+                                retained = place->storedValue().cloneOwned();
+                        }
+                        else
+                            retained = source->retainObject();
+                        if (retained.isEmpty())
+                            return fail("WVM1144", "Retained-self capture requires a live component or object");
+                        captures.push_back(std::move(retained));
+                        break;
+                    }
+                    default:
+                        return fail("WVM1145", "Closure creation contains an unknown capture kind");
+                    }
+                }
+                if (!write(instruction.result, Value::callable(instruction.callee, std::move(captures))))
+                    return fail("WVM1146", "Closure result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IndirectCall)
+            {
+                const Value* callable = instruction.operands.empty() ? nullptr : read(instruction.operands.front());
+                if (!callable || callable->kind() != Value::Kind::Callable)
+                    return fail("WVM1147", "Indirect call requires an available function value");
+                if (nativeCallbackInvocation && hasBorrowedNativeCapture(*callable))
+                    return fail("WVM1225", "Native callback environment contains a borrowed capture");
+                if (callable->nativeCallback().ops)
+                {
+                    std::vector<Value> nativeArguments;
+                    nativeArguments.reserve(instruction.operands.size() - 1);
+                    for (const auto operand : std::span{instruction.operands}.subspan(1))
+                    {
+                        const auto* argument = read(operand);
+                        if (!argument)
+                            return fail("WVM1150", "Native indirect call reads an unavailable argument");
+                        nativeArguments.push_back(*argument);
+                    }
+                    auto execution = invokeNativeCallable(*callable, nativeArguments);
+                    if (!execution.succeeded())
+                        return fail(execution.error().code, execution.error().message);
+                    if (instruction.result != bytecode::InvalidIndex &&
+                        !write(instruction.result, std::move(execution.value_)))
+                        return fail("WVM1146", "Native callable result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+                const std::uint32_t target = callable->callableFunction();
+                if (target >= module.functions.size())
+                    return fail("WVM1148", "Indirect call target is outside the module");
+
+                std::vector<Value> callArguments;
+                callArguments.reserve(callable->captureCount() + instruction.operands.size() - 1);
+                for (std::size_t index = 0; index < callable->captureCount(); ++index)
+                {
+                    const Value* capture = callable->capture(index);
+                    if (!capture)
+                        return fail("WVM1149", "Indirect call lost a closure capture");
+                    callArguments.push_back(*capture);
+                }
+                for (std::size_t index = 1; index < instruction.operands.size(); ++index)
+                {
+                    const Value* argument = read(instruction.operands[index]);
+                    if (!argument)
+                        return fail("WVM1150", "Indirect call reads an unavailable argument value");
+                    callArguments.push_back(*argument);
+                }
+
+                const auto captureCount = callable->captureCount();
+                const auto operandIds = std::span{instruction.operands}.subspan(1);
+                const auto callerIndex = frames.size() - 1;
+                const std::uint32_t result = instruction.result;
+                if ((module.functions[target].flags & 0x0001u) != 0 && !module.functions[target].hasNativeBinding)
+                {
+                    if (!write(result, startTask(target, callArguments)))
+                        return fail("WVM1168", "Async indirect-call result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+                ++frame.instruction;
+                ExecutionResult pushed = pushFrame(
+                    module.functions[target], callArguments,
+                    FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result}, callable);
+                if (!pushed.succeeded())
+                    return pushed;
+                consumeCallArguments(frames[callerIndex], module.functions[target], operandIds, captureCount);
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Upcast || instruction.opcode == bytecode::Opcode::CheckedCast)
+            {
+                const Value* source = instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                const Value* object = objectValue(source);
+                if (!object)
+                    return fail("WVM1151", "Object cast requires a live object value");
+                if (!isObjectType(object->aggregateType(), instruction.targetType))
+                    return fail(instruction.opcode == bytecode::Opcode::Upcast ? "WVM1152" : "WVM1153",
+                                instruction.opcode == bytecode::Opcode::Upcast
+                                    ? "Upcast target is incompatible with the concrete object type"
+                                    : "Checked object cast failed for the concrete object type");
+
+                Value result;
+                if (instruction.resultType < module.types.size() &&
+                    module.types[instruction.resultType].kind == TypeReference)
+                    result = Value::objectBorrow(object->scalar_.aggregate);
+                else
+                    result = object->retainObject();
+                if (result.isEmpty() || !write(instruction.result, std::move(result)))
+                    return fail("WVM1154", "Object cast result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::TypeTest)
+            {
+                const Value* source = instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                const Value* object = objectValue(source);
+                const bool matches = object && isObjectType(object->aggregateType(), instruction.targetType);
+                if (!write(instruction.result, Value::boolean(matches)))
+                    return fail("WVM1155", "Object type-test result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::IdentityEqual)
+            {
+                if (instruction.operands.size() != 2)
+                    return fail("WVM1156", "Object identity comparison requires two operands");
+                const Value* left = storedValue(read(instruction.operands[0]));
+                const Value* right = storedValue(read(instruction.operands[1]));
+                if (!left || !right)
+                    return fail("WVM1157", "Object identity comparison reads an unavailable value");
+
+                const bool leftNull = left->kind() == Value::Kind::Null;
+                const bool rightNull = right->kind() == Value::Kind::Null;
+                const Value* leftObject = objectValue(left);
+                const Value* rightObject = objectValue(right);
+                if ((!leftNull && !leftObject) || (!rightNull && !rightObject))
+                    return fail("WVM1158", "Object identity comparison requires object or null operands");
+                bool equal = leftNull && rightNull;
+                if (leftObject && rightObject)
+                    equal = leftObject->scalar_.aggregate == rightObject->scalar_.aggregate;
+                if (instruction.binaryOperator == BinaryNotEqual)
+                    equal = !equal;
+                else if (instruction.binaryOperator != BinaryEqual)
+                    return fail("WVM1159", "Object identity comparison has an invalid comparison operator");
+                if (!write(instruction.result, Value::boolean(equal)))
+                    return fail("WVM1160", "Object identity comparison result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::NativeInvoke)
+            {
+                if (instruction.callee >= module.functions.size())
+                    return fail("WVM1220", "Native invocation references an invalid function declaration");
+                const bytecode::Function& declaration = module.functions[instruction.callee];
+                if (!declaration.hasNativeBinding)
+                    return fail("WVM1220", "Native invocation target has no native binding metadata");
+                if (instruction.operands.size() != declaration.nativeBinding.parameters.size())
+                    return fail("WVM1221", "Native invocation argument count does not match its ABI plan");
+
+                Program::NativeFunction native;
+                std::shared_ptr<const detail::NativePodLayouts> podLayouts;
+                const std::string stableKey{module.string(declaration.nativeBinding.stableKey)};
+                bool registeredNative = false;
+                {
+                    std::scoped_lock lock{program_->nativeMutex};
+                    const auto registered = program_->nativeFunctions.find(stableKey);
+                    if (registered != program_->nativeFunctions.end())
+                    {
+                        native = registered->second;
+                        registeredNative = true;
+                    }
+                    podLayouts = program_->nativePodLayouts;
+                }
+                if (!registeredNative)
+                {
+                    // Only exact runtime symbols with their canonical signature
+                    // may use VM services. Ordinary functions named Sleep/Spawn
+                    // still require an explicitly registered native producer.
+                    const auto& binding = declaration.nativeBinding;
+                    const auto symbol = module.string(binding.symbol);
+                    const auto resultType = binding.result.type;
+                    const bool taskResult =
+                        resultType < module.types.size() && module.types[resultType].kind == TypeAsyncTask &&
+                        module.types[resultType].arguments.size() == 1 && resultType == declaration.returnType &&
+                        binding.result.passing == 4 && binding.result.marshalling == 8 && !binding.result.nullable;
+                    const Value* operand = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                    const bool valueArgument = binding.parameters.size() == 1 && binding.parameters[0].passing == 0 &&
+                                               !binding.parameters[0].nullable &&
+                                               binding.parameters[0].type < module.types.size();
+                    Value result;
+                    bool serviced = false;
+                    if (taskResult && valueArgument && operand && symbol == "wio::runtime::AsyncSleep" &&
+                        module.types[module.types[resultType].arguments[0]].kind == TypeVoid &&
+                        module.types[binding.parameters[0].type].kind == TypeU64 &&
+                        binding.parameters[0].marshalling == 1 && operand->kind() == Value::Kind::UnsignedInteger)
+                    {
+                        constexpr auto maximum = (std::numeric_limits<std::int64_t>::max)() / 1000000;
+                        const auto milliseconds =
+                            (std::min)(operand->asUnsignedInteger(), static_cast<std::uint64_t>(maximum));
+                        result = sleepFor(std::chrono::nanoseconds{static_cast<std::int64_t>(milliseconds * 1000000)});
+                        serviced = true;
+                    }
+                    else if (taskResult && valueArgument && operand && symbol == "wio::runtime::RunAsync" &&
+                             module.types[binding.parameters[0].type].kind == TypeFunction &&
+                             module.types[binding.parameters[0].type].arguments == module.types[resultType].arguments &&
+                             binding.parameters[0].marshalling == 7 && operand->kind() == Value::Kind::Callable &&
+                             binding.parameters[0].callbackLifetime == 1 && binding.parameters[0].callbackThread == 1 &&
+                             !operand->nativeCallback().ops && !hasBorrowedNativeCapture(*operand) &&
+                             operand->callableFunction() < module.functions.size())
+                    {
+                        const auto& target = module.functions[operand->callableFunction()];
+                        bool qualifiedCaptures = true;
+                        for (std::size_t index = 0; index < operand->captureCount(); ++index)
+                        {
+                            const auto* capture = operand->capture(index);
+                            if (!capture ||
+                                (capture->kind() != Value::Kind::Boolean &&
+                                 capture->kind() != Value::Kind::SignedInteger &&
+                                 capture->kind() != Value::Kind::UnsignedInteger &&
+                                 capture->kind() != Value::Kind::Float64 && capture->kind() != Value::Kind::String &&
+                                 capture->kind() != Value::Kind::Text))
+                                qualifiedCaptures = false;
+                        }
+                        std::uint8_t payloadCodec = 0;
+                        const bool qualifiedPayload =
+                            detail::nativeValueMarshalling(module, module.types[resultType].arguments[0],
+                                                           payloadCodec) &&
+                            payloadCodec <= 3;
+                        if (!target.hasCoroutine && !target.hasNativeBinding &&
+                            target.parameters.size() == operand->captureCount() &&
+                            target.captureParameterCount == operand->captureCount() &&
+                            target.returnType == module.types[resultType].arguments[0] && qualifiedCaptures &&
+                            qualifiedPayload)
+                        {
+                            result = runTaskCallable(*operand);
+                            serviced = true;
+                        }
+                    }
+                    if (!serviced)
+                        return fail("WVM1220", "Native function is not registered: " + stableKey);
+                    if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(result)))
+                        return fail("WVM1224", "VM async service result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+
+                struct NativeToken
+                {
+                    PlaceStorage* place = nullptr;
+                    std::uint32_t type = bytecode::InvalidIndex;
+                    std::uint8_t marshalling = 0;
+                    bool mutableValue = false;
+                    bool requiresProjection = false;
+                    std::size_t projectionRoot = (std::numeric_limits<std::size_t>::max)();
+                    WioNativeAbiValue wire;
+                };
+                struct NativeFrame
+                {
+                    struct CallbackLease
+                    {
+                        NativeCallbackState* state = nullptr;
+                        bool retained = false;
+                    };
+
+                    std::vector<NativeToken> tokens;
+                    std::vector<WioNativeAbiValue> arguments;
+                    std::vector<WioNativeAbiProjection> projections;
+                    std::vector<WioNativeAbiSequenceProjection> sequenceProjections;
+                    std::vector<WioNativeAbiSequencePodProjection> sequencePodProjections;
+                    std::vector<WioNativeAbiContainerProjection> containerProjections;
+                    std::vector<std::vector<WioNativeAbiContainerStep>> containerPaths;
+                    std::vector<std::vector<std::uint64_t>> sequencePaths;
+                    std::vector<CallbackLease> callbacks;
+                    WioNativeAbiValue result;
+                    std::function<void()> cleanup;
+
+                    void expireCallCallbacks() noexcept
+                    {
+                        for (const CallbackLease& callback : callbacks)
+                        {
+                            if (callback.state && !callback.retained)
+                                callback.state->active.store(false, std::memory_order_release);
+                        }
+                    }
+
+                    void releaseCallbackArguments() noexcept
+                    {
+                        expireCallCallbacks();
+                        callbacks.clear();
+                        for (auto& argument : arguments)
+                            if (argument.kind == WIO_NATIVE_ABI_CALLBACK)
+                                WioNativeAbiReleaseValue(&argument);
+                    }
+
+                    ~NativeFrame()
+                    {
+                        expireCallCallbacks();
+                        for (WioNativeAbiValue& argument : arguments)
+                            WioNativeAbiReleaseValue(&argument);
+                        for (NativeToken& token : tokens)
+                            WioNativeAbiReleaseValue(&token.wire);
+                        WioNativeAbiReleaseValue(&result);
+                        for (auto& path : containerPaths)
+                            for (auto& step : path)
+                                WioNativeAbiReleaseValue(&step.key);
+                        if (cleanup)
+                            cleanup();
+                    }
+                } nativeFrame;
+                nativeFrame.cleanup = [this] { cleanupNativeObjects(); };
+                const auto objects = nativeObjectAccess();
+                const auto encodeArgument =
+                    [&](const Value& value, const auto& abi, WioNativeAbiValue& wire, std::string& error)
+                {
+                    if (abi.marshalling == 6 && value.objectIdentity())
+                        return encodeNativeObject(value, abi.type, wire, error, *podLayouts);
+                    return detail::encodeNativeValue(module, value, abi.type, abi.marshalling, wire, error,
+                                                     podLayouts.get(), 0, &objects);
+                };
+                nativeFrame.tokens.reserve(instruction.operands.size());
+                nativeFrame.arguments.reserve(instruction.operands.size());
+                nativeFrame.projections.reserve(instruction.operands.size());
+                nativeFrame.sequenceProjections.reserve(instruction.operands.size());
+                nativeFrame.sequencePodProjections.reserve(instruction.operands.size());
+                nativeFrame.containerProjections.reserve(instruction.operands.size());
+                nativeFrame.containerPaths.reserve(instruction.operands.size());
+                nativeFrame.sequencePaths.reserve(instruction.operands.size());
+                nativeFrame.callbacks.reserve(instruction.operands.size());
+                // Independently acquired places can name the same field cell.
+                std::unordered_map<Value*, std::size_t> aliases;
+                std::vector<const Value*> hostedObjects;
+                const auto referenceBase = [&](const std::uint32_t type)
+                {
+                    return type < module.types.size() && module.types[type].kind == TypeReference &&
+                                   !module.types[type].arguments.empty()
+                               ? module.types[type].arguments.front()
+                               : type;
+                };
+
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    const bytecode::Function::NativeAbiValue& abi = declaration.nativeBinding.parameters[index];
+                    const Value* operand = read(instruction.operands[index]);
+                    if (!operand)
+                        return fail("WVM1223", "Native invocation reads an unavailable argument value");
+                    if (abi.passing == 3 && !(native.flags & WIO_NATIVE_ABI_FUNCTION_CONSUMED_ARGUMENTS))
+                        return fail("WVM1225", "Native producer does not advertise consumed argument ownership");
+
+                    if (abi.passing == 1 || abi.passing == 2)
+                    {
+                        if (operand->kind() != Value::Kind::Place)
+                            return fail("WVM1223", "Native ref/view argument does not reference a VM place");
+                        PlaceStorage* const place = operand->asPlace();
+                        if (!place || !place->initialized || (abi.passing == 2 && !place->mutableValue))
+                            return fail("WVM1223",
+                                        "Native ref/view argument references unavailable or immutable storage");
+
+                        std::size_t tokenIndex = 0;
+                        const auto alias = aliases.find(&place->storedValue());
+                        if (alias == aliases.end())
+                        {
+                            tokenIndex = nativeFrame.tokens.size();
+                            NativeToken token{.place = place,
+                                              .type = abi.type,
+                                              .marshalling = abi.marshalling,
+                                              .mutableValue = abi.passing == 2};
+                            std::string conversionError;
+                            if (!encodeArgument(place->storedValue(), abi, token.wire, conversionError))
+                            {
+                                const auto base = referenceBase(abi.type);
+                                // Fixed-array descendants have no standalone dynamic sequence adapter.
+                                // Bind them only through a validated containing POD projection.
+                                if (base >= module.types.size() || module.types[base].kind != TypeArray ||
+                                    module.types[base].staticExtent == (std::numeric_limits<std::uint64_t>::max)())
+                                    return fail("WVM1223", "Native argument conversion failed: " + conversionError);
+                                token.requiresProjection = true;
+                            }
+                            if (abi.marshalling == 6 && place->storedValue().objectIdentity())
+                                hostedObjects.push_back(&place->storedValue());
+                            program_->pinNativeLibraries(place->storedValue());
+                            nativeFrame.tokens.push_back(std::move(token));
+                            aliases.emplace(&place->storedValue(), tokenIndex);
+                        }
+                        else
+                        {
+                            tokenIndex = alias->second;
+                            NativeToken& token = nativeFrame.tokens[tokenIndex];
+                            if (referenceBase(token.type) != referenceBase(abi.type) ||
+                                token.marshalling != abi.marshalling)
+                                return fail("WVM1223", "Aliased native references disagree on their ABI value type");
+                            token.mutableValue = token.mutableValue || abi.passing == 2;
+                        }
+
+                        WioNativeAbiValue reference;
+                        reference.kind = WIO_NATIVE_ABI_REFERENCE;
+                        reference.flags =
+                            WIO_NATIVE_ABI_VALUE_BORROWED | (abi.passing == 2 ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
+                        reference.payload.mutableSlice = {&nativeFrame.tokens[tokenIndex].wire,
+                                                          sizeof(WioNativeAbiValue)};
+                        nativeFrame.arguments.push_back(reference);
+                        continue;
+                    }
+
+                    const Value* direct = storedValue(operand);
+                    if (!direct)
+                        return fail("WVM1223", "Native value argument references unavailable storage");
+                    if (abi.marshalling == 7)
+                    {
+                        if (direct->kind() != Value::Kind::Callable || abi.type >= module.types.size() ||
+                            module.types[abi.type].kind != TypeFunction || module.types[abi.type].arguments.empty() ||
+                            abi.callbackLifetime > 1 || abi.callbackThread > 1)
+                            return fail("WVM1223", "Native callback argument has an invalid callable ABI shape");
+
+                        const bytecode::Type& callbackType = module.types[abi.type];
+                        for (std::size_t signatureIndex = 0; signatureIndex < callbackType.arguments.size();
+                             ++signatureIndex)
+                        {
+                            const auto callbackValueType = callbackType.arguments[signatureIndex];
+                            std::uint8_t ignored = 0;
+                            if (!(signatureIndex + 1 == callbackType.arguments.size()
+                                      ? detail::callbackResultMarshalling(module, callbackValueType, ignored,
+                                                                          podLayouts.get())
+                                      : detail::callbackArgumentMarshalling(module, callbackValueType, ignored,
+                                                                            podLayouts.get())))
+                                return fail("WVM1225",
+                                            "Native callbacks require scalar, string, text, qualified "
+                                            "native POD, hosted object/interface, registered container "
+                                            "or qualified value ref/view arguments; unsupported callback type #" +
+                                                std::to_string(callbackValueType));
+                        }
+
+                        WioNativeAbiValue wire{};
+                        std::string conversionError;
+                        if (!encodeNativeCallable(*direct, abi.type, abi.callbackThread == 1, wire, conversionError,
+                                                  *podLayouts))
+                            return fail("WVM1225", conversionError);
+                        nativeFrame.callbacks.push_back(
+                            {static_cast<NativeCallbackState*>(wire.payload.callback.userdata),
+                             abi.callbackLifetime == 1});
+                        nativeFrame.arguments.push_back(wire);
+                        continue;
+                    }
+                    WioNativeAbiValue wire;
+                    std::string conversionError;
+                    const bool encoded =
+                        abi.passing == 3
+                            ? detail::encodeOwnedNativeValue(module, *direct, abi.type, abi.marshalling, wire,
+                                                             conversionError, podLayouts.get(), &objects)
+                            : encodeArgument(*direct, abi, wire, conversionError);
+                    if (!encoded)
+                        return fail("WVM1223", "Native argument conversion failed: " + conversionError);
+                    if (abi.passing == 3)
+                        wire.flags = (wire.flags & ~WIO_NATIVE_ABI_VALUE_BORROWED) | WIO_NATIVE_ABI_VALUE_OWNED |
+                                     WIO_NATIVE_ABI_VALUE_CONSUMED;
+                    if (abi.marshalling == 6 && direct->objectIdentity())
+                        hostedObjects.push_back(direct);
+                    program_->pinNativeLibraries(*direct);
+                    nativeFrame.arguments.push_back(wire);
+                }
+
+                for (std::size_t childIndex = 0; childIndex < nativeFrame.tokens.size(); ++childIndex)
+                {
+                    auto& child = nativeFrame.tokens[childIndex];
+                    std::size_t rootIndex = (std::numeric_limits<std::size_t>::max)();
+                    detail::NativeSequenceProjection location;
+                    detail::NativeContainerProjection containerLocation;
+                    std::size_t bestDepth = 0;
+                    for (std::size_t candidate = 0; candidate < nativeFrame.tokens.size(); ++candidate)
+                    {
+                        const auto& root = nativeFrame.tokens[candidate];
+                        const auto rootType = referenceBase(root.type);
+                        if (candidate == childIndex ||
+                            (!podLayouts->sequences.contains(rootType) &&
+                             !podLayouts->dictionaries.contains(rootType)) ||
+                            !detail::containsNativeSequencePlace(root.place->storedValue(), child.place->storedValue()))
+                            continue;
+                        detail::NativeSequenceProjection found;
+                        if (!detail::findNativeSequenceProjection(module, root.place->storedValue(), rootType,
+                                                                  child.place->storedValue(), *podLayouts, found))
+                        {
+                            detail::NativeContainerProjection mixed;
+                            if (!detail::findNativeContainerProjection(module, root.place->storedValue(), rootType,
+                                                                       child.place->storedValue(), *podLayouts, mixed))
+                                return fail("WVM1225",
+                                            "Overlapping native container references require qualified "
+                                            "projections (map keys, bool proxies or unsupported field path)");
+                            if (mixed.steps.size() > bestDepth)
+                            {
+                                rootIndex = candidate;
+                                bestDepth = mixed.steps.size();
+                                containerLocation = std::move(mixed);
+                            }
+                            continue;
+                        }
+                        if (found.indices.size() > bestDepth)
+                        {
+                            rootIndex = candidate;
+                            bestDepth = found.indices.size();
+                            location = std::move(found);
+                            containerLocation = {};
+                        }
+                    }
+                    if (rootIndex == (std::numeric_limits<std::size_t>::max)())
+                        continue;
+                    if (!containerLocation.steps.empty())
+                    {
+                        if (!(native.flags & WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS))
+                            return fail("WVM1225", "Native producer does not support dictionary/container projections");
+                        if (containerLocation.type != referenceBase(child.type))
+                            return fail("WVM1223", "Native container projection has an incompatible value type");
+                        if (child.marshalling == 6)
+                        {
+                            auto contractType = containerLocation.type;
+                            if (module.types[contractType].kind == TypeNullable)
+                                contractType = module.types[contractType].arguments.front();
+                            const auto reflected = std::ranges::find(module.contract.reflection, contractType,
+                                                                     &bytecode::Reflection::type);
+                            if (reflected == module.contract.reflection.end() || !reflected->stableTypeId)
+                                return fail("WVM1223", "Native container object projection has no contract identity");
+                            containerLocation.typeId = reflected->stableTypeId;
+                        }
+                        auto& root = nativeFrame.tokens[rootIndex];
+                        child.projectionRoot = rootIndex;
+                        root.mutableValue = root.mutableValue || child.mutableValue;
+                        nativeFrame.containerPaths.emplace_back(containerLocation.steps.size());
+                        auto& path = nativeFrame.containerPaths.back();
+                        for (std::size_t stepIndex = 0; stepIndex < path.size(); ++stepIndex)
+                        {
+                            const auto& step = containerLocation.steps[stepIndex];
+                            path[stepIndex].kind = step.kind;
+                            path[stepIndex].containerTypeId = step.containerTypeId;
+                            path[stepIndex].index = step.index;
+                            if (step.key)
+                            {
+                                std::uint8_t keyMarshalling = 0;
+                                std::string conversionError;
+                                if (!detail::nativeValueMarshalling(module, step.keyType, keyMarshalling) ||
+                                    !detail::encodeOwnedNativeValue(module, *step.key, step.keyType, keyMarshalling,
+                                                                    path[stepIndex].key, conversionError))
+                                    return fail("WVM1223",
+                                                "Native projection key conversion failed: " + conversionError);
+                                const auto reflected = std::ranges::find(module.contract.reflection, step.keyType,
+                                                                         &bytecode::Reflection::type);
+                                if (reflected == module.contract.reflection.end() || !reflected->stableTypeId)
+                                    return fail("WVM1223", "Native projection key has no contract identity");
+                                path[stepIndex].key.typeId = reflected->stableTypeId;
+                            }
+                        }
+                        nativeFrame.containerProjections.push_back(
+                            {&root.wire, root.wire.typeId, containerLocation.typeId, path.data(), path.size(),
+                             containerLocation.podTypeId, containerLocation.offset, containerLocation.size});
+                        for (auto& argument : nativeFrame.arguments)
+                            if (argument.kind == WIO_NATIVE_ABI_REFERENCE &&
+                                argument.payload.mutableSlice.data == &child.wire)
+                            {
+                                argument.flags |= WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED;
+                                argument.typeId = containerLocation.typeId;
+                                argument.payload.mutableSlice = {&nativeFrame.containerProjections.back(),
+                                                                 sizeof(WioNativeAbiContainerProjection)};
+                            }
+                        continue;
+                    }
+                    if (!(native.flags & WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS))
+                        return fail("WVM1225", "Native producer does not support sequence reference projections");
+                    if (location.podTypeId && !(native.flags & WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS))
+                        return fail("WVM1225", "Native producer does not support sequence/POD field projections");
+                    auto& root = nativeFrame.tokens[rootIndex];
+                    if (location.type != referenceBase(child.type))
+                        return fail("WVM1223", "Native sequence projection has an incompatible element type");
+                    if (child.marshalling == 6)
+                    {
+                        auto contractType = location.type;
+                        if (module.types[contractType].kind == TypeNullable)
+                            contractType = module.types[contractType].arguments.front();
+                        const auto reflected =
+                            std::ranges::find(module.contract.reflection, contractType, &bytecode::Reflection::type);
+                        if (reflected == module.contract.reflection.end() || !reflected->stableTypeId)
+                            return fail("WVM1223", "Native sequence object projection has no contract identity");
+                        location.typeId = reflected->stableTypeId;
+                    }
+                    child.projectionRoot = rootIndex;
+                    root.mutableValue = root.mutableValue || child.mutableValue;
+                    nativeFrame.sequencePaths.push_back(std::move(location.indices));
+                    const auto& path = nativeFrame.sequencePaths.back();
+                    WioNativeAbiMutableSlice projectionPayload;
+                    std::uint32_t projectionFlag;
+                    if (location.podTypeId)
+                    {
+                        nativeFrame.sequencePodProjections.push_back(
+                            {{&root.wire, root.wire.typeId, location.typeId, path.data(), path.size()},
+                             location.podTypeId,
+                             location.offset,
+                             location.size});
+                        projectionPayload = {&nativeFrame.sequencePodProjections.back(),
+                                             sizeof(WioNativeAbiSequencePodProjection)};
+                        projectionFlag = WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED;
+                    }
+                    else
+                    {
+                        nativeFrame.sequenceProjections.push_back(
+                            {&root.wire, root.wire.typeId, location.typeId, path.data(), path.size()});
+                        projectionPayload = {&nativeFrame.sequenceProjections.back(),
+                                             sizeof(WioNativeAbiSequenceProjection)};
+                        projectionFlag = WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED;
+                    }
+                    for (auto& argument : nativeFrame.arguments)
+                        if (argument.kind == WIO_NATIVE_ABI_REFERENCE &&
+                            argument.payload.mutableSlice.data == &child.wire)
+                        {
+                            argument.flags |= projectionFlag;
+                            argument.typeId = location.typeId;
+                            argument.payload.mutableSlice = projectionPayload;
+                        }
+                }
+
+                // A scalar producer reference cell would become stale if a
+                // hosted method mutated the same VM field during this call.
+                for (const Value* object : hostedObjects)
+                    for (std::size_t field = 0; field < object->fieldCount(); ++field)
+                        for (const auto& token : nativeFrame.tokens)
+                            if (object->field(field) == &token.place->storedValue())
+                                return fail("WVM1225",
+                                            "Native object/field aliasing requires synchronized projections");
+
+                // One outermost POD slot owns every overlapping field/nested
+                // reference. Producer offsets, not VM object layout, locate
+                // projected C++ storage. Discover after collecting all args so
+                // reversed parameter order has identical alias semantics.
+                for (std::size_t childIndex = 0; childIndex < nativeFrame.tokens.size(); ++childIndex)
+                {
+                    auto& child = nativeFrame.tokens[childIndex];
+                    if (child.projectionRoot != (std::numeric_limits<std::size_t>::max)())
+                        continue;
+                    std::size_t rootIndex = (std::numeric_limits<std::size_t>::max)();
+                    detail::NativePodProjection location;
+                    for (std::size_t candidate = 0; candidate < nativeFrame.tokens.size(); ++candidate)
+                    {
+                        if (candidate == childIndex)
+                            continue;
+                        const auto& root = nativeFrame.tokens[candidate];
+                        detail::NativePodProjection found;
+                        if (detail::findNativePodProjection(module, root.place->storedValue(), referenceBase(root.type),
+                                                            child.place->storedValue(), *podLayouts, found) &&
+                            found.depth > location.depth)
+                        {
+                            rootIndex = candidate;
+                            location = found;
+                        }
+                    }
+                    if (rootIndex == (std::numeric_limits<std::size_t>::max)())
+                        continue;
+                    if (!(native.flags & WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES))
+                        return fail("WVM1225",
+                                    "Native producer does not support overlapping POD reference projections");
+                    auto& root = nativeFrame.tokens[rootIndex];
+                    if (location.type != referenceBase(child.type) || !location.typeId ||
+                        root.wire.kind != WIO_NATIVE_ABI_POD || location.offset > root.wire.payload.slice.size ||
+                        location.size > root.wire.payload.slice.size - location.offset)
+                        return fail("WVM1223",
+                                    "Overlapping native field reference has an incompatible producer layout: " +
+                                        std::string(module.string(declaration.name)) + " (field type " +
+                                        std::to_string(location.type) + ", argument type " +
+                                        std::to_string(referenceBase(child.type)) + ", identity " +
+                                        std::to_string(location.typeId) + ")");
+                    child.projectionRoot = rootIndex;
+                    root.mutableValue = root.mutableValue || child.mutableValue;
+                    nativeFrame.projections.push_back(
+                        {&root.wire, root.wire.typeId, location.typeId, location.offset, location.size});
+                    for (auto& argument : nativeFrame.arguments)
+                    {
+                        if (argument.kind == WIO_NATIVE_ABI_REFERENCE &&
+                            argument.payload.mutableSlice.data == &child.wire)
+                        {
+                            argument.flags |= WIO_NATIVE_ABI_VALUE_PROJECTED;
+                            argument.payload.mutableSlice = {&nativeFrame.projections.back(),
+                                                             sizeof(WioNativeAbiProjection)};
+                        }
+                    }
+                }
+
+                // Projected arguments now name only the outer root slot. Drop
+                // their independently packed copies before invoking native code:
+                // they must not retain old object/Any claims past root copy-back.
+                for (auto& token : nativeFrame.tokens)
+                {
+                    if (token.requiresProjection && token.projectionRoot == (std::numeric_limits<std::size_t>::max)())
+                        return fail("WVM1223", "Native fixed-array reference requires a containing POD projection");
+                    if (token.projectionRoot != (std::numeric_limits<std::size_t>::max)())
+                        WioNativeAbiReleaseValue(&token.wire);
+                }
+
+                WioNativeAbiFailure nativeFailure;
+                const auto taskInput = [&](auto&& self, std::uint32_t type, unsigned depth) -> bool
+                {
+                    if (type >= module.types.size() || depth > 64)
+                        return false;
+                    if (module.types[type].kind == 34)
+                        return true;
+                    return std::ranges::any_of(module.types[type].arguments,
+                                               [&](auto child) { return self(self, child, depth + 1); });
+                };
+                const bool permitsForeignThreadCallback =
+                    program_->retainedForeignCallbacks.load(std::memory_order_acquire) != 0 ||
+                    std::ranges::any_of(declaration.nativeBinding.parameters, [&](const auto& parameter)
+                                        { return taskInput(taskInput, parameter.type, 0); }) ||
+                    std::any_of(nativeFrame.callbacks.begin(), nativeFrame.callbacks.end(),
+                                [](const NativeFrame::CallbackLease& callback)
+                                { return callback.state && callback.state->anyThread; });
+                if (!(native.flags & WIO_NATIVE_ABI_FUNCTION_TASK_SOURCES) &&
+                    std::ranges::any_of(declaration.nativeBinding.parameters,
+                                        [&](const auto& parameter) { return taskInput(taskInput, parameter.type, 0); }))
+                    return fail("WVM1223",
+                                "Native thunk does not advertise task-source input support; rebuild its producer");
+                if (permitsForeignThreadCallback)
+                    executionLock.unlock();
+                const WioNativeAbiStatus status =
+                    native.thunk(nativeFrame.arguments.empty() ? nullptr : nativeFrame.arguments.data(),
+                                 nativeFrame.arguments.size(), &nativeFrame.result, &nativeFailure);
+                // The advertised thunk owns these claims even on decode/throw
+                // failure. Clearing is not releasing; NativeFrame still owns
+                // every argument that was not transferred.
+                for (auto& argument : nativeFrame.arguments)
+                    if (argument.flags & WIO_NATIVE_ABI_VALUE_CONSUMED)
+                        argument = {};
+                if (permitsForeignThreadCallback)
+                    executionLock.lock();
+                nativeFrame.releaseCallbackArguments();
+                ExecutionError callbackCleanup;
+                cleanupNativeObjects(false, &callbackCleanup);
+                if (!callbackCleanup.cleanupFailures.empty())
+                {
+                    ExecutionError error{"WVM1211", "Native callback cleanup failed while running a destructor"};
+                    error.cleanupFailures = std::move(callbackCleanup.cleanupFailures);
+                    return failWithStack(std::move(error));
+                }
+
+                std::string copyBackError;
+                std::vector<Value> replacements;
+                replacements.reserve(nativeFrame.tokens.size());
+                for (NativeToken& token : nativeFrame.tokens)
+                {
+                    if (!token.mutableValue || token.projectionRoot != (std::numeric_limits<std::size_t>::max)())
+                    {
+                        replacements.push_back({});
+                        continue;
+                    }
+                    detail::NativeValueResult replacement =
+                        token.marshalling == 6
+                            ? decodeNativeObject(token.wire, token.type, *podLayouts)
+                            : detail::decodeNativeValue(module, token.wire, token.type, token.marshalling,
+                                                        podLayouts.get(), 0, &objects);
+                    if (!replacement.succeeded())
+                    {
+                        if (copyBackError.empty())
+                            copyBackError = replacement.error;
+                        replacements.push_back({});
+                    }
+                    else
+                    {
+                        program_->pinNativeLibraries(replacement.value);
+                        replacements.push_back(std::move(replacement.value));
+                    }
+                }
+                if (copyBackError.empty())
+                {
+                    std::vector<detail::NativeCopyBackAction> actions;
+                    for (std::size_t index = 0; index < nativeFrame.tokens.size(); ++index)
+                    {
+                        if (nativeFrame.tokens[index].mutableValue &&
+                            nativeFrame.tokens[index].projectionRoot == (std::numeric_limits<std::size_t>::max)() &&
+                            !detail::planNativeCopyBack(nativeFrame.tokens[index].place->storedValue(),
+                                                        replacements[index], actions, copyBackError))
+                            break;
+                    }
+                    ExecutionError cleanupError;
+                    // A native resize/erase can retire hosted proxy roots.
+                    // Drain their claims while the old caller graph is live,
+                    // so its final cleanup observes unique objects and reports
+                    // destructor failures at this call boundary.
+                    cleanupNativeObjects(false, &cleanupError);
+                    if (copyBackError.empty())
+                        for (auto& action : actions)
+                        {
+                            auto& target = *action.target;
+                            auto& incoming = *action.replacement;
+                            if (action.kind == detail::NativeCopyBackAction::Kind::RefreshPod)
+                                target.setNativePodBacking(incoming.nativePodBacking());
+                            else if (action.kind == detail::NativeCopyBackAction::Kind::RebuildDictionary)
+                            {
+                                for (std::size_t oldIndex = 0; oldIndex < action.dictionaryOrder.size(); ++oldIndex)
+                                {
+                                    auto* oldKey = const_cast<Value*>(target.dictionaryKey(oldIndex));
+                                    auto* oldValue = target.mutableDictionaryValue(oldIndex);
+                                    const auto newIndex = action.dictionaryOrder[oldIndex];
+                                    if (newIndex == (std::numeric_limits<std::size_t>::max)())
+                                    {
+                                        program_->projections.retireCells(*oldKey, true);
+                                        program_->projections.retireCells(*oldValue, true);
+                                    }
+                                    else
+                                    {
+                                        auto* newKey = const_cast<Value*>(incoming.dictionaryKey(newIndex));
+                                        auto* newValue = incoming.mutableDictionaryValue(newIndex);
+                                        program_->projections.remapCell(oldKey, newKey, target, incoming);
+                                        program_->projections.remapCell(oldValue, newValue, target, incoming);
+                                        *newKey = std::move(*oldKey);
+                                        *newValue = std::move(*oldValue);
+                                    }
+                                }
+                                auto old = std::move(target);
+                                target = std::move(incoming);
+                                cleanupValue(old, cleanupError);
+                            }
+                            else
+                            {
+                                program_->projections.retireCells(target);
+                                auto old = std::move(target);
+                                target = std::move(incoming);
+                                cleanupValue(old, cleanupError);
+                            }
+                        }
+                    if (!cleanupError.cleanupFailures.empty())
+                    {
+                        ExecutionError error{"WVM1211", "Native copy-back cleanup failed while running a destructor"};
+                        error.cleanupFailures = std::move(cleanupError.cleanupFailures);
+                        return failWithStack(std::move(error));
+                    }
+                }
+
+                if (status != WIO_NATIVE_ABI_OK)
+                {
+                    nativeFailure.status = status;
+                    return fail("WVM1222", "Native invocation '" + std::string(module.string(declaration.name)) +
+                                               "' failed: " + detail::nativeFailureMessage(nativeFailure));
+                }
+                if (!copyBackError.empty())
+                    return fail("WVM1224", "Native mutable-reference copy-back failed: " + copyBackError +
+                                               " (native declaration '" + std::string(module.string(declaration.name)) +
+                                               "')");
+
+                const std::uint32_t nativeResultType = declaration.nativeBinding.result.type;
+                if (nativeResultType < module.types.size() && module.types[nativeResultType].kind == TypeFunction &&
+                    taskInput(taskInput, nativeResultType, 0) && !(native.flags & WIO_NATIVE_ABI_FUNCTION_TASK_SOURCES))
+                    return fail("WVM1223", "Native callable result requires a task-source-aware producer");
+                if (nativeResultType < module.types.size() && module.types[nativeResultType].kind == TypeReference)
+                {
+                    const auto& resultType = module.types[nativeResultType];
+                    const auto base = resultType.arguments.front();
+                    const bool mutableResult = (resultType.flags & 0x01u) != 0;
+                    auto identityType = base;
+                    if (declaration.nativeBinding.result.marshalling == 6 &&
+                        module.types[identityType].kind == TypeNullable)
+                        identityType = module.types[identityType].arguments.front();
+                    const auto reflected =
+                        std::ranges::find(module.contract.reflection, identityType, &bytecode::Reflection::type);
+                    const auto& borrowed = nativeFrame.result;
+                    const auto flags =
+                        WIO_NATIVE_ABI_VALUE_BORROWED | (mutableResult ? WIO_NATIVE_ABI_VALUE_MUTABLE : 0u);
+                    const bool argumentAlias = (borrowed.flags & WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS) != 0;
+                    if (reflected == module.contract.reflection.end() || !reflected->stableTypeId ||
+                        borrowed.kind != WIO_NATIVE_ABI_REFERENCE ||
+                        borrowed.flags != (flags | (argumentAlias ? WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS : 0u)) ||
+                        borrowed.typeId != reflected->stableTypeId || borrowed.owner.state || borrowed.owner.ops ||
+                        borrowed.owner.generation || borrowed.payload.mutableSlice.size != sizeof(WioNativeAbiValue))
+                        return fail("WVM1224", "Native borrowed result has an invalid reference contract");
+                    PlaceStorage* caller = nullptr;
+                    if (argumentAlias)
+                    {
+                        if (!(native.flags & WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS))
+                            return fail("WVM1224", "Native producer did not advertise projected borrowed results");
+                        for (std::size_t i = 0; i < nativeFrame.arguments.size(); ++i)
+                        {
+                            const auto& argument = nativeFrame.arguments[i];
+                            const auto& abi = declaration.nativeBinding.parameters[i];
+                            if (borrowed.payload.mutableSlice.data != &argument ||
+                                argument.kind != WIO_NATIVE_ABI_REFERENCE ||
+                                !(argument.flags &
+                                  (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED |
+                                   WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED |
+                                   WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED)) ||
+                                referenceBase(abi.type) != base ||
+                                abi.marshalling != declaration.nativeBinding.result.marshalling ||
+                                (mutableResult && abi.passing != 2))
+                                continue;
+                            const Value* operand = read(instruction.operands[i]);
+                            if (operand && operand->kind() == Value::Kind::Place)
+                                caller = operand->asPlace();
+                            break;
+                        }
+                    }
+                    else
+                        for (const auto& token : nativeFrame.tokens)
+                            if (borrowed.payload.mutableSlice.data == &token.wire &&
+                                referenceBase(token.type) == base &&
+                                token.marshalling == declaration.nativeBinding.result.marshalling &&
+                                token.projectionRoot == (std::numeric_limits<std::size_t>::max)() &&
+                                (!mutableResult || (token.mutableValue && token.place->mutableValue)))
+                            {
+                                caller = token.place;
+                                break;
+                            }
+                    // Match addresses, never dereference a foreign result pointer.
+                    // Returning the original caller Place also survives forwarding
+                    // through Wio frames without acquiring any ownership claim.
+                    if (!caller || !caller->initialized || (mutableResult && !caller->mutableValue))
+                        return fail("WVM1224", "Native borrowed result does not name a compatible caller reference");
+                    if (instruction.result != bytecode::InvalidIndex &&
+                        !write(instruction.result, Value::place(caller)))
+                        return fail("WVM1224", "Native borrowed result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+                if (nativeResultType < module.types.size() && module.types[nativeResultType].kind == TypeAsyncTask)
+                {
+                    if (nativeFrame.result.flags & WIO_NATIVE_ABI_VALUE_TASK_SOURCE)
+                    {
+                        auto task = decodeNativeTask(nativeFrame.result, nativeResultType);
+                        if (!task.succeeded())
+                            return fail("WVM1224", "Native task identity recovery failed: " + task.error);
+                        if (instruction.result != bytecode::InvalidIndex &&
+                            !write(instruction.result, std::move(task.value)))
+                            return fail("WVM1224", "Native task result register is invalid");
+                        ++frame.instruction;
+                        continue;
+                    }
+                    const bytecode::Type& taskType = module.types[nativeResultType];
+                    if (!native.tasks || declaration.nativeBinding.result.marshalling != 8 ||
+                        taskType.arguments.size() != 1)
+                        return fail("WVM1225", "Native async result requires a registered task bridge and one payload");
+                    std::uint8_t payloadMarshalling = 0;
+                    if (!detail::nativeValueMarshalling(module, taskType.arguments.front(), payloadMarshalling) ||
+                        payloadMarshalling == 7)
+                        return fail("WVM1225", "Native async payload cannot be represented by the VM ABI bridge");
+
+                    WioNativeAbiValue ownedTask = nativeFrame.result;
+                    nativeFrame.result = {};
+                    Value task =
+                        program_->adaptNativeTask(native, ownedTask, taskType.arguments.front(), payloadMarshalling);
+                    if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(task)))
+                        return fail("WVM1224", "Native async result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+
+                detail::NativeValueResult result =
+                    declaration.nativeBinding.result.marshalling == 6
+                        ? decodeNativeObject(nativeFrame.result, declaration.nativeBinding.result.type, *podLayouts)
+                        : detail::decodeNativeValue(module, nativeFrame.result, declaration.nativeBinding.result.type,
+                                                    declaration.nativeBinding.result.marshalling, podLayouts.get(), 0,
+                                                    &objects);
+                if (!result.succeeded())
+                    return fail("WVM1224", "Native result conversion failed: " + result.error);
+                program_->pinNativeLibraries(result.value);
+                if (instruction.result != bytecode::InvalidIndex && !write(instruction.result, std::move(result.value)))
+                    return fail("WVM1224", "Native result register is invalid");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Call || instruction.opcode == bytecode::Opcode::ExtensionCall ||
+                instruction.opcode == bytecode::Opcode::MethodCall)
+            {
+                if (instruction.callee >= module.functions.size())
+                    return fail("WVM1028", "Call target is outside the module");
+                std::vector<Value> callArguments;
+                callArguments.reserve(instruction.operands.size());
+                for (const std::uint32_t operandId : instruction.operands)
+                {
+                    const Value* operand = read(operandId);
+                    if (!operand)
+                        return fail("WVM1029", "Call reads an unavailable argument value");
+                    callArguments.push_back(*operand);
+                }
+                const std::uint32_t result = instruction.result;
+                if ((module.functions[instruction.callee].flags & 0x0001u) != 0)
+                {
+                    if (!write(result, startTask(instruction.callee, callArguments)))
+                        return fail("WVM1169", "Async call result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+                const auto callerIndex = frames.size() - 1;
+                ++frame.instruction;
+                ExecutionResult pushed =
+                    pushFrame(module.functions[instruction.callee], callArguments,
+                              FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result});
+                if (!pushed.succeeded())
+                    return pushed;
+                consumeCallArguments(frames[callerIndex], module.functions[instruction.callee], instruction.operands);
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::VirtualCall ||
+                instruction.opcode == bytecode::Opcode::InterfaceCall)
+            {
+                const Value* receiverOperand =
+                    instruction.operands.empty() ? nullptr : read(instruction.operands.front());
+                if (receiverOperand && receiverOperand->kind() == Value::Kind::Place)
+                {
+                    const auto* place = receiverOperand->asPlace();
+                    if (!place || !place->initialized)
+                        return fail("WVM1043", "Dynamic dispatch requires an initialized receiver place");
+                }
+                const Value* receiver = objectValue(receiverOperand);
+                if (!receiver)
+                    return fail("WVM1161", "Dynamic dispatch requires a live object receiver");
+                const std::uint32_t target =
+                    dispatchTarget(*receiver, instruction.targetType, instruction.projectionIndex);
+                if (target == bytecode::InvalidIndex)
+                    return fail("WVM1162", "Concrete object type has no implementation for the requested method slot");
+                if (target >= module.functions.size())
+                    return fail("WVM1163", "Dynamic dispatch resolved outside the module function table");
+
+                std::vector<Value> callArguments;
+                callArguments.reserve(instruction.operands.size());
+                for (const std::uint32_t operandId : instruction.operands)
+                {
+                    const Value* operand = read(operandId);
+                    if (!operand)
+                        return fail("WVM1029", "Dynamic call reads an unavailable argument value");
+                    callArguments.push_back(*operand);
+                }
+                const std::uint32_t result = instruction.result;
+                if ((module.functions[target].flags & 0x0001u) != 0)
+                {
+                    if (!write(result, startTask(target, callArguments)))
+                        return fail("WVM1170", "Async dynamic-call result register is invalid");
+                    ++frame.instruction;
+                    continue;
+                }
+                const auto callerIndex = frames.size() - 1;
+                ++frame.instruction;
+                ExecutionResult pushed =
+                    pushFrame(module.functions[target], callArguments,
+                              FrameContinuation{.completion = FrameCompletion::ReturnValue, .callerResult = result});
+                if (!pushed.succeeded())
+                    return pushed;
+                consumeCallArguments(frames[callerIndex], module.functions[target], instruction.operands);
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::CancellationCheck)
+            {
+                if (stateTask && stateTask->taskState() == AsyncTaskState::Cancelled)
+                    return fail("WVM1165", "Async task was cancelled at a cooperative suspension point");
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::CoroutineSuspend)
+            {
+                if (!frame.function->hasCoroutine ||
+                    instruction.projectionIndex >= frame.function->coroutine.states.size() ||
+                    instruction.targets.size() != 1)
+                    return fail("WVM1171", "Coroutine suspension does not match its function state table");
+                const bytecode::Function::CoroutineState& coroutineState =
+                    frame.function->coroutine.states[instruction.projectionIndex];
+                if (coroutineState.suspendBlock != frame.block->id ||
+                    coroutineState.resumeBlock != instruction.targets.front().block)
+                    return fail("WVM1172", "Coroutine suspension state does not match its resume edge");
+
+                frame.resumedValue = {};
+                frame.hasResumedValue = false;
+                if (instruction.asyncOperation == AsyncAwaitTask)
+                {
+                    const Value* awaited =
+                        instruction.operands.size() == 1 ? read(instruction.operands.front()) : nullptr;
+                    if (!awaited || awaited->kind() != Value::Kind::AsyncTask)
+                        return fail("WVM1173", "Coroutine await requires an async task operand");
+                    const Value awaitedTask = *awaited;
+                    bool attemptedStart = false;
+                    for (;;)
+                    {
+                        const AsyncTaskState awaitedState = awaitedTask.taskState();
+                        if (awaitedState == AsyncTaskState::Ready)
+                        {
+                            frame.resumedValue = awaitedTask.taskResult();
+                            frame.hasResumedValue = true;
+                            break;
+                        }
+                        if (awaitedState == AsyncTaskState::Cancelled)
+                            return failWithStack({"WVM1165", "Awaited async task was cancelled"});
+                        if (awaitedState == AsyncTaskState::Faulted)
+                            return failWithStack(awaitedTask.taskError());
+
+                        if (!attemptedStart && awaitedState == AsyncTaskState::Pending &&
+                            awaitedTask.taskFunction() != bytecode::InvalidIndex)
+                        {
+                            attemptedStart = true;
+                            ExecutionResult started = driveTask(awaitedTask);
+                            if (!started.succeeded() && !started.isSuspended())
+                                return failWithStack(started.error());
+                            continue;
+                        }
+
+                        if (!stateTask)
+                            return fail("WVM1209", "Coroutine await has no owning async task");
+                        state->awaitedState = instruction.projectionIndex;
+                        state->awaitedResumeBlock = coroutineState.resumeBlock;
+                        if (state->executor == ExecutorKind::Inherit)
+                            state->executor =
+                                activeExecutor != ExecutorKind::Inherit
+                                    ? activeExecutor
+                                    : (program_->executors->isMainThread() ? ExecutorKind::Main : ExecutorKind::Worker);
+                        program_->retainContinuation(*stateTask, state);
+                        const std::weak_ptr<ExecutionState> weakState = state;
+                        const std::weak_ptr<Program> weakProgram = program_;
+                        const bool registered = awaitedTask.registerTaskWaiter(
+                            [weakProgram, weakState](const AsyncTaskState terminalState, const Value& result,
+                                                     const ExecutionError& error)
+                            {
+                                if (const std::shared_ptr<Program> program = weakProgram.lock())
+                                {
+                                    Machine* const owner = program->acquireOwner();
+                                    if (!owner)
+                                        return;
+                                    try
+                                    {
+                                        owner->wakeTask(weakState, terminalState, result, error);
+                                    }
+                                    catch (...)
+                                    {
+                                        try
+                                        {
+                                            if (const std::shared_ptr<ExecutionState> state = weakState.lock())
+                                                (void)state->activeTask.failTask(
+                                                    {"WVM1210", "VM await continuation dispatch failed"});
+                                        }
+                                        catch (...)
+                                        {
+                                        }
+                                    }
+                                    program->releaseOwner();
+                                }
+                            });
+                        if (registered)
+                        {
+                            executionLock.unlock();
+                            return ExecutionResult::suspended();
+                        }
+                        program_->releaseContinuation(*stateTask);
+                    }
+                }
+                else if (instruction.asyncOperation != AsyncSwitchExecutor || !instruction.operands.empty())
+                    return fail("WVM1174", "Coroutine suspension carries an unsupported async operation");
+
+                const auto resume = program_->functions[frame.function->id].blocks.find(coroutineState.resumeBlock);
+                if (resume == program_->functions[frame.function->id].blocks.end())
+                    return fail("WVM1175", "Coroutine resume block does not exist");
+                frame.resumedState = instruction.projectionIndex;
+                frame.block = resume->second;
+                frame.instruction = 0;
+
+                if (instruction.asyncOperation == AsyncSwitchExecutor)
+                {
+                    const std::optional<ExecutorKind> target = executorKind(instruction.asyncExecutor);
+                    if (!target || !stateTask || !program_->executors)
+                        return fail("WVM1208", "Coroutine executor switch has no runnable target");
+                    executionLock.unlock();
+                    const bool scheduled = scheduleTask(state, *target);
+                    if (!scheduled)
+                        return failWithStack({"WVM1208", "Coroutine executor queue rejected its continuation",
+                                              frame.function->id, frame.block->id,
+                                              static_cast<std::uint32_t>(frame.instruction), instruction.source});
+                    return ExecutionResult::suspended();
+                }
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::CoroutineResume)
+            {
+                if (!frame.function->hasCoroutine || frame.resumedState != instruction.projectionIndex ||
+                    !frame.hasResumedValue)
+                    return fail("WVM1176", "Coroutine resume has no matching suspended payload");
+                if (!write(instruction.result, std::move(frame.resumedValue)))
+                    return fail("WVM1177", "Coroutine resume result register is invalid");
+                frame.resumedState = bytecode::InvalidIndex;
+                frame.hasResumedValue = false;
+                ++frame.instruction;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::ResultPropagate)
+            {
+                const Value* source =
+                    instruction.operands.size() == 1 ? storedValue(read(instruction.operands.front())) : nullptr;
+                const Value* present = source ? source->field(0) : nullptr;
+                const Value* error = source ? source->field(2) : nullptr;
+                if (!source || !present || present->kind() != Value::Kind::Boolean || present->asBoolean() || !error ||
+                    instruction.targetType >= module.types.size())
+                    return fail("WVM1202", "Result propagation requires a canonical error payload and target type");
+                const bytecode::Type& target = module.types[instruction.targetType];
+                const bool object = target.nominalKind == NominalObject;
+                if (target.kind != TypeNamed || (!object && target.nominalKind != NominalComponent) ||
+                    target.fields.size() < 3)
+                    return fail("WVM1202", "Result propagation target has no canonical result layout");
+                Value propagated = constructAggregate(module, instruction.targetType, object);
+                Value* targetPresent = propagated.mutableField(0);
+                Value* targetError = propagated.mutableField(2);
+                if (!targetPresent || !targetError)
+                    return fail("WVM1202", "Result propagation target fields are unavailable");
+                *targetPresent = Value::boolean(false);
+                *targetError = error->cloneOwned();
+                if (std::optional<ExecutionResult> completion = completeFrame(std::move(propagated)))
+                    return std::move(*completion);
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Jump || instruction.opcode == bytecode::Opcode::CondJump)
+            {
+                std::size_t targetIndex = 0;
+                if (instruction.opcode == bytecode::Opcode::CondJump)
+                {
+                    const Value* condition = instruction.operands.size() == 1 ? read(instruction.operands[0]) : nullptr;
+                    if (!condition || condition->kind() != Value::Kind::Boolean)
+                        return fail("WVM1030", "Conditional jump requires an available bool value");
+                    targetIndex = condition->asBoolean() ? 0 : 1;
+                }
+                const bytecode::BranchTarget& target = instruction.targets[targetIndex];
+                const auto& blocks = program_->functions[frame.function->id].blocks;
+                const auto blockEntry = blocks.find(target.block);
+                if (blockEntry == blocks.end())
+                    return fail("WVM1031", "Branch target block does not exist");
+                const bytecode::Block* block = blockEntry->second;
+                std::vector<Value> branchArguments;
+                branchArguments.reserve(target.arguments.size());
+                for (const std::uint32_t argument : target.arguments)
+                {
+                    const Value* value = read(argument);
+                    if (!value)
+                        return fail("WVM1032", "Branch reads an unavailable argument value");
+                    branchArguments.push_back(*value);
+                }
+                for (std::size_t index = 0; index < branchArguments.size(); ++index)
+                    frame.registers[block->parameters[index].value] = Register{std::move(branchArguments[index]), true};
+                frame.block = block;
+                frame.instruction = 0;
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Return ||
+                instruction.opcode == bytecode::Opcode::CoroutineComplete)
+            {
+                Value returned;
+                if (!instruction.operands.empty())
+                {
+                    const Value* value = read(instruction.operands.front());
+                    if (!value)
+                        return fail("WVM1033", "Return reads an unavailable value");
+                    returned = *value;
+                }
+                if (std::optional<ExecutionResult> completion = completeFrame(std::move(returned)))
+                    return std::move(*completion);
+                continue;
+            }
+            if (instruction.opcode == bytecode::Opcode::Unreachable)
+                return fail("WVM1035", "Execution reached an unreachable instruction");
+
+            return fail("WVM1036", "Opcode is not implemented by this VM runtime slice: " +
+                                       std::string{bytecode::opcodeName(instruction.opcode)});
+        }
+        return failWithStack({"WVM1037", "VM exited without producing a result"});
+    }
+} // namespace wio::vm

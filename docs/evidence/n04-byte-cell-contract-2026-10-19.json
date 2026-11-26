@@ -1,0 +1,279 @@
+{
+  "passed": true,
+  "processes": [
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wio",
+        "--emit-cpp",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-byte-array-borrow-contract/27ee7b2b5e9c4a1d84f174482848e28a/main.wio.cpp\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O0",
+        "-ffp-contract=off",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-borrow-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\native.exe",
+        "indirect"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-borrow-indirect-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\native.exe",
+        "fail"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: Native call 'byte_borrow::Throw' failed: byte-borrow-failure\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "-ffp-contract=off",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\native.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-borrow-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\native.exe",
+        "indirect"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-borrow-indirect-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\native.exe",
+        "fail"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "Runtime Error: Native call 'byte_borrow::Throw' failed: byte-borrow-failure\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "-ffp-contract=off",
+        "-DWIO_BENCHMARK_ALLOCATIONS",
+        "-static-libstdc++",
+        "-static-libgcc",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wio.cpp",
+        "-IF:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a",
+        "-IF:\\Projects\\wio\\runtime\\include",
+        "-IF:\\Projects\\wio\\sdk\\include",
+        "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+        "-lws2_32",
+        "-lshell32",
+        "-Wa,-mbig-obj",
+        "-o",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\memory.exe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\memory.exe",
+        "memory"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-borrow-memory-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wio",
+        "--target",
+        "shared",
+        "--native-bridge-only",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a",
+        "--output",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\bridge.dll",
+        "--bytecode-sidecar",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wiob",
+        "--backend-arg=-O0",
+        "--backend-arg=-ffp-contract=off"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-byte-array-borrow-contract/27ee7b2b5e9c4a1d84f174482848e28a/bridge.wio.cpp\nGenerated backend output: F:/Projects/wio/build/n04-byte-array-borrow-contract/27ee7b2b5e9c4a1d84f174482848e28a/bridge.dll\nGenerated bytecode output: F:/Projects/wio/build/n04-byte-array-borrow-contract/27ee7b2b5e9c4a1d84f174482848e28a/main.wiob\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\bridge.dll"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-borrow-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\bridge.dll",
+        "--",
+        "indirect"
+      ],
+      "expectedExitCode": 1,
+      "expectedKnownGap": "KI-009 indirect native function value; not fixed by this optimization",
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1003: External function requires the Sprint 20 native bridge (function 219)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\bridge.dll",
+        "--",
+        "fail"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'Throw' failed: wio.native: Native call 'byte_borrow::Throw' failed: byte-borrow-failure (function 227)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wio",
+        "--target",
+        "shared",
+        "--native-bridge-only",
+        "--include-dir",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a",
+        "--output",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\bridge.dll",
+        "--bytecode-sidecar",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wiob",
+        "--backend-arg=-O2",
+        "--backend-arg=-ffp-contract=off"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "Generated C++ output: F:/Projects/wio/build/n04-byte-array-borrow-contract/27ee7b2b5e9c4a1d84f174482848e28a/bridge.wio.cpp\nGenerated backend output: F:/Projects/wio/build/n04-byte-array-borrow-contract/27ee7b2b5e9c4a1d84f174482848e28a/bridge.dll\nGenerated bytecode output: F:/Projects/wio/build/n04-byte-array-borrow-contract/27ee7b2b5e9c4a1d84f174482848e28a/main.wiob\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\bridge.dll"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "byte-borrow-ok\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\bridge.dll",
+        "--",
+        "indirect"
+      ],
+      "expectedExitCode": 1,
+      "expectedKnownGap": "KI-009 indirect native function value; not fixed by this optimization",
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1003: External function requires the Sprint 20 native bridge (function 219)\n"
+    },
+    {
+      "command": [
+        "F:\\Projects\\wio\\build\\app\\Debug\\wio-vm.exe",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\main.wiob",
+        "--native-library",
+        "F:\\Projects\\wio\\build\\n04-byte-array-borrow-contract\\27ee7b2b5e9c4a1d84f174482848e28a\\bridge.dll",
+        "--",
+        "fail"
+      ],
+      "expectedExitCode": 1,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "VM Error WVM1222: Native invocation 'Throw' failed: wio.native: Native call 'byte_borrow::Throw' failed: byte-borrow-failure (function 227)\n"
+    }
+  ]
+}

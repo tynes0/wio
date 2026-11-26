@@ -1,0 +1,14 @@
+[
+  {
+    "mode": "indexed-integer",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"16837739234571606857\",\"elapsedNanoseconds\":1,\"operations\":10001,\"schemaVersion\":1}\n\n{\"allocations\":10001,\"available\":true,\"failures\":0,\"freedBytes\":310031,\"frees\":10001,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":1,\"peakBytes\":31,\"requestedBytes\":310031,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  },
+  {
+    "mode": "indexed-float",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"2013401644283185197\",\"elapsedNanoseconds\":1,\"operations\":10001,\"schemaVersion\":1}\n\n{\"allocations\":9201,\"available\":true,\"failures\":0,\"freedBytes\":285231,\"frees\":9201,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":1,\"peakBytes\":31,\"requestedBytes\":285231,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  }
+]

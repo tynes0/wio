@@ -1,0 +1,2820 @@
+{
+  "Schema": 1,
+  "Stage": "N01",
+  "DiagnosticOnly": true,
+  "TimingQualified": false,
+  "Flags": [
+    "-std=c++20",
+    "-O2",
+    "-fsized-deallocation"
+  ],
+  "SourcesBefore": [
+    {
+      "Path": "C:\\mingw64\\bin\\g++.exe",
+      "Bytes": 3023360,
+      "Hash": "BE663D8F7F270F816971124AACF45980AC6E814568F29E5D839B208916455998"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+      "Bytes": 19948032,
+      "Hash": "18B94A00178E09CB9BC282E52C87372E7A82E577919225BCC0B6A033E47F5F29"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+      "Bytes": 7281434,
+      "Hash": "59FF4005117CB2C7CFF701629B98D7A599D4550B18FF40B3AA402923F8863941"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\any.h",
+      "Bytes": 17462,
+      "Hash": "FA583E3FE77D5D0F8C047AFD807928A0AEFD74FF1A823FFC191D404018C6B11E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\constant_value.h",
+      "Bytes": 1580,
+      "Hash": "C7CA7492FAB3320423A89101E107606C834BD7114F64E2F75BBC1E0E6F12D8E2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\entry_args.h",
+      "Bytes": 183,
+      "Hash": "4F72CCCB7E9A90F34261E03B9BED1C4CACF091F90323E78F24198396CCBFB38F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\enum_reflection.h",
+      "Bytes": 2361,
+      "Hash": "2EFB025C1DFD83B28F77ED9AB7E228074F3D3DF6A11A0883758F7E9FCD9353E3"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\exception.h",
+      "Bytes": 1796,
+      "Hash": "F16AA38C55E6B292588CD193881B212B18CC7FD6B753DFC876969991611AED51"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\fit.h",
+      "Bytes": 3429,
+      "Hash": "456500E4F335E3418892865A20CEF5A1CB06C8EA7D404BB8D7E9A2FFE8DF3704"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\float_parse.h",
+      "Bytes": 3669,
+      "Hash": "6911991424C979FCB436302F87E69EFD3E8F1D54643B8505F828E5885903894A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\format.h",
+      "Bytes": 4636,
+      "Hash": "1B54244B42ADD0839350FA0AB9147490B0150B93A32412B473DCF95E2475F516"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\integer_format.h",
+      "Bytes": 1564,
+      "Hash": "3C5AD55F7907E2B5E3FDB6670C0C70E368F3EAFE3B0236E34FEDD2D694BE53B6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\intrinsics.h",
+      "Bytes": 50102,
+      "Hash": "E6C8FDA61E31BB99FB74611FF0073DAC8F8FD23E65129397D35379531ED5D9FB"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\io_errors.h",
+      "Bytes": 453,
+      "Hash": "C90A61C2F58E47D382D55076732817BD310E1F41649E30785C6B4DDBB9F1F130"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\meta.h",
+      "Bytes": 12897,
+      "Hash": "D2D74EBCFD29E810996CC53574A4F060D066890B1B4524EF43FEA8C24A641C4A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\ref.h",
+      "Bytes": 30864,
+      "Hash": "D0F3F8F37B5D32ABB1082A27B666B5E90847765EE56B9454FF1FB5FC91A6F7D5"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_assert.h",
+      "Bytes": 253,
+      "Hash": "0824C038FD75B97C4773B195D3627FCA6589957A7F118B7EA0E1D8DDDF6C8B74"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_async.h",
+      "Bytes": 67079,
+      "Hash": "D959E3F711FE29D876EEEFA5C69B3B8CADDFB8A7BF702E6CA5F6F3644C634D3D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_async_fs.h",
+      "Bytes": 11563,
+      "Hash": "D950B011A6CDB66C46C35588ACEC3436F805F804ECCBE017FE5BE0332B9C0037"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_async_net.h",
+      "Bytes": 10162,
+      "Hash": "7E031C6D734AB2F49EE8C01BE9BB1878E82007C572D4C39ACF76AAD8DFBE0D10"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_async_process.h",
+      "Bytes": 12811,
+      "Hash": "F7CD8C24C8510BDB10F2815EEC83330D4A84A44C735A198E1297512805263EA6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_bigint.h",
+      "Bytes": 6568,
+      "Hash": "B148F7FC029F5B0A323565BFD6A8C39A3D3A8333F21397F1D2AD05B2B53373CA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_builders.h",
+      "Bytes": 925,
+      "Hash": "D219136E750AC296B5BB5135B0A4E5DE33D8A65EE1EBC420EE4277DA598816C4"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_concurrency.h",
+      "Bytes": 4313,
+      "Hash": "EFDF77F2DADBD76E575B80A994754149989A0BEA4881928472406A1EECED5D2E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_console.h",
+      "Bytes": 131361,
+      "Hash": "D470DB8EE611AAC272AA6B9F3D1DD4308D732EF6143B562685E50D6918025468"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_convert.h",
+      "Bytes": 2136,
+      "Hash": "3ACE162A504FC364A3422625D63C1D3F00E8406DC4F8CB8F6A59262406EBFF6E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_encoding.h",
+      "Bytes": 5970,
+      "Hash": "2C533CB4EA1A29238AC1809DA5E2ED1B3C214B7B05E48513AF76054BE80D6E11"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_fs.h",
+      "Bytes": 5281,
+      "Hash": "D02BF91E4ADE2FEB69F2E0A6B597DF46CFEC39C0DF52569CE01B16A8B823BACB"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_hash.h",
+      "Bytes": 818,
+      "Hash": "23F2303B7E443E3AE6EAD1FB4D5D6F315D7A8829EFB5E224C6DA2DC25AC897E5"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_io.h",
+      "Bytes": 14203,
+      "Hash": "A6E4AC1303BD12A838254854BD6FD500432FC9FEE343C0EFC30E15804F1CAEC4"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_math.h",
+      "Bytes": 9767,
+      "Hash": "A2BE941DEC3A66C7BDAD7CD86A915ABC926D043EE956C7B88A564026F69DD2A3"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_net.h",
+      "Bytes": 2170,
+      "Hash": "F15BAF20F14E17B17B6751FCBABC8FD32CB7CF901D03FFBDDDBD38C0D93A6E92"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_process.h",
+      "Bytes": 6326,
+      "Hash": "E907816EAFBC5095D6747659B68E4CFD3C7E5707A05366AA7AF8BA9A459EFC2F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_random.h",
+      "Bytes": 1916,
+      "Hash": "EA3E5F824CB595293988AB110E8A7893011D343D2742E9E531D9A7817550D7C9"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_regex.h",
+      "Bytes": 2576,
+      "Hash": "355B3D65B3A9898D7A04316B5AB34E1B780716C578D56A974B0649F7FF6B70A1"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_serialization.h",
+      "Bytes": 5776,
+      "Hash": "AD6F516B936E1BD7A4EA111201FF2BB4F3832A791FD6487711170852E30EFCDF"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_text.h",
+      "Bytes": 7781,
+      "Hash": "C8DB214B33CA424E2BF9F0099F88B5B831DF6D48337976F4A69126E6AB573F42"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_time.h",
+      "Bytes": 1642,
+      "Hash": "41C2B879169B2FFE986CC066FC377FEF5FAB836837BBF049539F406EFFF43840"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_type_traits.h",
+      "Bytes": 4175,
+      "Hash": "49FDD13DD5C4A036B1B0C09539AEF2506259BD31641CAF79AA14523C271D0E2B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_unicode.h",
+      "Bytes": 16316,
+      "Hash": "E25345D0141383BDFE7AB2F4D27D51B44D475FF7A6BED3619F56E7A7B9FBFF91"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_utility.h",
+      "Bytes": 20944,
+      "Hash": "D8D2D859F76BF7FCAC891C84BC4758ACDC7C495C8023C86262AC759D862C87E2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_vector.h",
+      "Bytes": 256,
+      "Hash": "09665DA755187A8E3F4A08C13E2049B913A9922E4D29CA88B5C16370EA51584C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\text.h",
+      "Bytes": 5323,
+      "Hash": "9566FA33183D365BCFDC49E7FDEE80F43EB04804F56EFF53D8224D632C2AB198"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\type_reflection.h",
+      "Bytes": 15302,
+      "Hash": "EA6E1ADFCB28055601D32EF51397B44BCD885817E40A351B700B1B10C231B49E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\utf8proc.h",
+      "Bytes": 34849,
+      "Hash": "908AC5E3C2FA5EF81BEEE44A874D36FA628196FF0A82F47708DD9C407C4B8C96"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_abi.h",
+      "Bytes": 57139,
+      "Hash": "EC4B0BA87D6B0F18DEB4D8D32D608EEEA4B7B96536B7D951E9035528AC04F000"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_any_abi.h",
+      "Bytes": 4655,
+      "Hash": "2C611DC0963E4E0FC599FBFBC95FFB83764392F3051CD2C730966725A6191F73"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_application.h",
+      "Bytes": 7467,
+      "Hash": "B20EA1AD5C8D16B2B3EFE02344D6A0FF25293076CBA518442BA6A00971D1791E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_async.h",
+      "Bytes": 3171,
+      "Hash": "AAFFA3DB6F54D550B15733DBC13FF82864CA55296E00B60B3004A89B08A7F96E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_borrow_identity.h",
+      "Bytes": 4129,
+      "Hash": "622014CBC471567063D6CD0C862AC57C1156DFBD37A76943647B048CD8B2BE17"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_container_abi.h",
+      "Bytes": 1821,
+      "Hash": "0CE9F474C8D8FA0A6A4F9E457273B7EBCB094A79254E8295071EEBD7C86CA058"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_container_projection.h",
+      "Bytes": 1577,
+      "Hash": "A62354205EED6D9C7AEFCE31C5B4E2D58A136D556F2A9460AC9A73485316E0DA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_dictionary_abi.h",
+      "Bytes": 3625,
+      "Hash": "58E27C7D1C893DFE53F407591DE237701005990255600B02A195BE8C3959CE15"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_inline_place.h",
+      "Bytes": 2801,
+      "Hash": "092E3E530D01B4E467268B2C4A26DB203EFF5C71FB8DC4C9F0C7095A6707AA3F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_iterator.h",
+      "Bytes": 2720,
+      "Hash": "3DB6D492AFA1F12BE351A1E4AC33C2A4E1CC69E0E05137413E4159127DF4E55F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_native.h",
+      "Bytes": 3762,
+      "Hash": "4ED3BF7061D74AC585A965B2B9F50783B8A677527EF9E63ECD320D1181766CAE"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_object_abi.h",
+      "Bytes": 13750,
+      "Hash": "B7816C5BC048B018EE3AEA3AE27107D2692FEDBB0112B7D85C866001A7C111AF"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_sequence_abi.h",
+      "Bytes": 3432,
+      "Hash": "F3CD113E3B930F53FFAF15D4B4108833F0F5B22959B5819C62AAD7FF83FC4C90"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_sequence_projection.h",
+      "Bytes": 5358,
+      "Hash": "7CEA3050AA5A0A168A30D1D087DEEDB8A257365263AF58C9152CB24E34DE7C05"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_task_abi.h",
+      "Bytes": 8741,
+      "Hash": "0C2416DDC37C1B84588848790602F6BE8D083CD66629009327E1A38D5EF8B588"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\module_api.h",
+      "Bytes": 34681,
+      "Hash": "E393686941921B753D39D5972D80E5E8EF3B5B6D4F94BB0DCDD90DBD14851164"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_features.h",
+      "Bytes": 11383,
+      "Hash": "42F2371E7D71EF6A97AF8C0E68F18F106501E1837DDBF9C085E73CF6EE00D33E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_module_contract.h",
+      "Bytes": 4913,
+      "Hash": "86D635473758254768F181A929EE02089EDE89675CBD8FC447414FD2236A32F5"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_module_session.h",
+      "Bytes": 1781,
+      "Hash": "10EAF0E56AE1343FDBA8414A113A854FEF139F05BC234B64285A441185857BD7"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_module_tasks.h",
+      "Bytes": 1595,
+      "Hash": "CAE2016CBD2207E418CD4D5FAAFA5188A26A9D8110F61CF831386DF25A5877FA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_abi.h",
+      "Bytes": 12723,
+      "Hash": "2E57E8B2552994D781E4A31364B4F1896AA9AE3EE23966C47C762A498C67794D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_any.h",
+      "Bytes": 1223,
+      "Hash": "FD805D04CD674B7CF7527F1F0972B2A7E1B97EE46B3CBFD200DF574DEF358A1E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_dictionary.h",
+      "Bytes": 1636,
+      "Hash": "5F764C062D7753948A0DBDF58EB24EC6C77E30B1A2FF7BB164F51F83CCB28B60"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_object.h",
+      "Bytes": 2541,
+      "Hash": "F441474F09081D8E7E1E851BF46A823C29DF8F84791E8AE0BAE1B16351F18A4A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_pod.h",
+      "Bytes": 2707,
+      "Hash": "A447284705DB99C1799CC9752F2E81109D16036981E4B14068CC14D781524361"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_reflection.h",
+      "Bytes": 2650,
+      "Hash": "9AD6E80BAC824ACB5E59E96A2C0D38A6A61C6DAD2CF5F7FC75E49C66DD105A2D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_sdk.h",
+      "Bytes": 42297,
+      "Hash": "3677994BE250BBAB5CA4C7639D37192D21E883A70BEF0189FE73FA74C90053E5"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_sequence.h",
+      "Bytes": 1735,
+      "Hash": "8344B403D51905239DBD19E3001615DE4093A01BC5ED1CBBE79973A2DEA03CA6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_sdk.h",
+      "Bytes": 340748,
+      "Hash": "A841C36D9CFA26FCA5FC1EE11C048DBD11BF34BD71DC03BC4B7D97C045D5F23A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_values.h",
+      "Bytes": 37380,
+      "Hash": "BECCA6656546A0445D36A03963AAACDECE733589A41A71364C05F282EF36F5F0"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_version.h",
+      "Bytes": 797,
+      "Hash": "C246ABDF0D80153D7296E5480FF05E42B1459B9F54C0A1783BFA86791EA8A9D1"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\algorithms.wio",
+      "Bytes": 10322,
+      "Hash": "842DC484D984C432BE009E0CE3FE31CC91A05CEB620DCA91B6643B0EB6FB1851"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\assert.wio",
+      "Bytes": 7653,
+      "Hash": "EB8DC50B2D88105D3225BC472940F726F1C8EA0C8EEC48634E09E2E76B00C2DE"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\async.wio",
+      "Bytes": 25049,
+      "Hash": "D38242CECF5BE677A4AB9C31F86FAE61843DFA30B18966ED20B5BFC8CF6F2AD2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\attribute.wio",
+      "Bytes": 8409,
+      "Hash": "CB0E32CAA97F2E9C313651DEFE4A6D8E652D761059A3179CE0493B2798A5F242"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\bigint.wio",
+      "Bytes": 2362,
+      "Hash": "C2D53DED652BE30752B80B4930D77A40A8187B2A63B175D585828AEA72F286EE"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\binary.wio",
+      "Bytes": 2753,
+      "Hash": "05645A9450E7773F330A3BDAA0BFE92A9AAF69E8FF38AAD2FAC0996CA83EAEC0"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\buffer.wio",
+      "Bytes": 14328,
+      "Hash": "2AAC286EE9F3772926F703CD61DD1DA7918C108D214E717E1095876D55D3D0DA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\builders.wio",
+      "Bytes": 11156,
+      "Hash": "3A564315D5DCD48390C1F95CC00EAA6D1F2BCC6FE2C9BE9165E8DE534122C68C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\chars.wio",
+      "Bytes": 2056,
+      "Hash": "2A606F8A90A1DABBAB5F0110C6EFFF45C4B4251182E1A2603639213AF5BBE734"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\collections.wio",
+      "Bytes": 8113,
+      "Hash": "08137C4F752E2B237E896BB4A316C482FF009E1C7DE9456808E9D01E2C344D8F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\compression.wio",
+      "Bytes": 1738,
+      "Hash": "8EEE09A17B284B96AC64E4EC571261FC87722B5946A77B4AF885B29F069A39DE"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\concurrency.wio",
+      "Bytes": 11694,
+      "Hash": "2B022AEF1F8EDB81122C912FD2A4912DC760E8A2B17B287DC4A1E5B9F46FD9F8"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\config.wio",
+      "Bytes": 2574,
+      "Hash": "9F25DBF85F57D6CB12D0D34401B4D9519DAF6B1485023FBCEE7D7C07CD8A8D75"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\console.wio",
+      "Bytes": 42016,
+      "Hash": "C685183FE7E94740D7FF9185EAD1F3B6B0E3B00447352D94EBF11B1AC9CF30E0"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\convert.wio",
+      "Bytes": 17741,
+      "Hash": "43B76D1B9A5CEE411F890DDAD1AB0E26522D32183A97C3211E296C55EF096F34"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\csv.wio",
+      "Bytes": 2534,
+      "Hash": "9DEA1E25DBBA0048CF4D8357CBFE9D69E5A0F3C4109A7B58E1AEBC6A40279952"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\encoding.wio",
+      "Bytes": 891,
+      "Hash": "A386898EE659747C5530979EAF7FF2AC142702E80C9D366E788D382665593F81"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\environment.wio",
+      "Bytes": 3277,
+      "Hash": "7FBA15F0E2560EE1F86B7559F878F0228B94BA590F735B40D4FCFCBE3F1A289C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\event.wio",
+      "Bytes": 2033,
+      "Hash": "C62279A3A66327A440BCEAD654AAF674681122163908B9C351C470541B54756E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\fs.wio",
+      "Bytes": 31338,
+      "Hash": "B2F3246C4323E2DCCB611B80B6349F494CBB6C3A629F5465AF00CEC9F40AF8C2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\geometry.wio",
+      "Bytes": 1714,
+      "Hash": "61B1E242B46E000FD92B0B54289E7A59C3EC9E1447B3958B82BEEB9B2F4748E1"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\hash.wio",
+      "Bytes": 1359,
+      "Hash": "0361B37C7762658DB0B75E9E9ED81747C4DBEAD5BCC2111747E29F69750346BD"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\heap.wio",
+      "Bytes": 956,
+      "Hash": "3656D21F0C37998B45FF5E1A0A169D18F79567F1A7D449E52411D0BF0D8AC837"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\io.wio",
+      "Bytes": 21138,
+      "Hash": "AC3F8C0F7965CE85405F56F61950804F14B9242218FF8BBC83AD4E00B943D93E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\iterator.wio",
+      "Bytes": 2037,
+      "Hash": "DE8C7351C43E7A21211600B63DBDC175C9D116344F6171A6B940A78549F99397"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\json.wio",
+      "Bytes": 26876,
+      "Hash": "DEB52BEE1AD02201A9C3BE55D742647985B61B8D70F89A1BA036B1225CE3D64D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\localization.wio",
+      "Bytes": 608,
+      "Hash": "12A825C5940FCB68A9F635A80888BE36DFF80FF8804674942F0D6DDDAA51476A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\log.wio",
+      "Bytes": 5427,
+      "Hash": "59CA7F259BB04FB30E635E47103E1BD4BF3556020AA862E8AF9B9ED6EB13C48F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\math.wio",
+      "Bytes": 37983,
+      "Hash": "8FF0328263C7B6CD97DE0DE2E87C97468022B7D7F92F4467BE277CAFD2838F3E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\meta.wio",
+      "Bytes": 3936,
+      "Hash": "FAB82EC4CE5DE6C6C1EFB5C8665242294886053519F840B1E1C6E38D9301B5DE"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\mime.wio",
+      "Bytes": 1166,
+      "Hash": "09C493FC48CC88A7AFDBE1BDC474A4F9D421D677B2C8EEBF32D8D7CB0D16AFF1"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\net.wio",
+      "Bytes": 21591,
+      "Hash": "212462841D6AA0EB5DC38FCCF9FD483ED94DA4CA598375154B3A6B644373904D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\numeric.wio",
+      "Bytes": 15176,
+      "Hash": "06A088702CE119C3790597DD2F6AC3DC7A5D1391F9315219A3265747A12EEA1B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\option.wio",
+      "Bytes": 4207,
+      "Hash": "2E213A94DFD83A2161E71F4A7823804ED1AE80F01E9F1BAAB4362E854B48585A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\os.wio",
+      "Bytes": 3995,
+      "Hash": "EE2BB2EB0F46CB31399AA231E297019C0F512A1E346E7762CAFC6929AB78D7D6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\path.wio",
+      "Bytes": 8517,
+      "Hash": "202E2023855F0B7A7A903D566D6A9A3607BF76266FE1196BD3F5AC17B5130199"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\platform.wio",
+      "Bytes": 2500,
+      "Hash": "D3488F6CA8C809A1298C7D934A1E8EBB636F465D25E083625DBE74994E9E5572"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\process.wio",
+      "Bytes": 26008,
+      "Hash": "D7DDAD13E3A61EDD315E31A3468DCC598CD024BF9EE1D665E7504F7E203DA39C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\queue.wio",
+      "Bytes": 4643,
+      "Hash": "EFB0390FFBEBCA9797626EFEE6878093DDB53C671769A6DB07E8331EF4F66CED"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\random.wio",
+      "Bytes": 5983,
+      "Hash": "93B67CDB1BB112B3841E3CE58353C408448D97030D20EB065F211F755E767D6C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\range.wio",
+      "Bytes": 3840,
+      "Hash": "BDFD42C7F829BDE339DE1DE75D47735A2479E3D3F79501EAFB217F573B45A128"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\reflect.wio",
+      "Bytes": 18056,
+      "Hash": "DB0EEB71968B516F6D431BD19C6466E2C1AFA3FFA92D442340D5AA4F7E85550F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\regex.wio",
+      "Bytes": 13239,
+      "Hash": "A85CBAC447F2C996801E62EE95AC1ECF6BEB3A3DE2A11F16C7FFD5A60F102612"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\resource.wio",
+      "Bytes": 2560,
+      "Hash": "3D1CC9A30E4D4D0FCA00ACD034A35635BEB4CBDAFC152722710A27DD021B42AA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\result.wio",
+      "Bytes": 6930,
+      "Hash": "0DE8698553079010E59EF84C0185EA6651F5CB90FFADEEAFBEEFF48026AFA3CF"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\semver.wio",
+      "Bytes": 4514,
+      "Hash": "26404840C769A02C3C9884F0CAFEC2823F33529B1B29CDE0EB5E6B0EA22EFE60"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\serialization.wio",
+      "Bytes": 3460,
+      "Hash": "8F403151BC376164F99C7DFB55EEA855A1EEB4FBE305C3F86589E17571CAFEF0"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\sets.wio",
+      "Bytes": 5401,
+      "Hash": "1E94CE69FFE36A8EBF6AFD1EEBE34359A43FA2E4C919DBAE7E5D256480D9D805"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\sort.wio",
+      "Bytes": 3936,
+      "Hash": "0FF5E75027FB27EAC728A6E1CBF6410B80E23C2BF8FACB5C84591529305ED404"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\span.wio",
+      "Bytes": 4779,
+      "Hash": "C61B054CFDD7CF1E4E537CFC4D46DB94FC2BD7D761FECEDCE7941B87B02CD915"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\statistics.wio",
+      "Bytes": 2510,
+      "Hash": "F1A7ACFC6E5589484C279CAE35805A5F08BFDDADB522054E5004091EDC3FC4B0"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\stream.wio",
+      "Bytes": 2777,
+      "Hash": "16B14F626EF68094D6B6694E741042634AC539AFAEFB167C42976913E948B957"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\strings.wio",
+      "Bytes": 10290,
+      "Hash": "4AF01788AE7E1CE1D6E4EC6720087E7B8E7040FACDA769A1F92C67AEF149DC94"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\time.wio",
+      "Bytes": 6024,
+      "Hash": "18B3464FC4C885720B14C910C024BC907E46D324E7D3087D6149E189D76B61A6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\traits.wio",
+      "Bytes": 2933,
+      "Hash": "21E50A8547B0362FECB584104E54C02B209CDFD1CD0E3B3CE310141148AD8698"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\tuple.wio",
+      "Bytes": 1527,
+      "Hash": "5853AF3E3E1B089DE05037EB3A84820A37399C30AD425F751DBDE8E29A1CC592"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\unicode.wio",
+      "Bytes": 8146,
+      "Hash": "59933F8064E6E5BC7DB4D54AA38D206EB45BF3AFD4CB36F12ABCA01830824214"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\uuid.wio",
+      "Bytes": 629,
+      "Hash": "1CC08C09D1DD453C3DE4BA9F5B8E6869F1BB8E3557796EA3C08BE952C9BB2E36"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\vector.wio",
+      "Bytes": 49252,
+      "Hash": "A4FD77050DDF1AE5455493317A6AEBF8A2A68D27C7CC875EC63648445C2EF86B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\measurement.py",
+      "Bytes": 15195,
+      "Hash": "367D71149726CEC1BC2049ADDB80F08A65FC09B2448D02A3FA75510C72DC9499"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\native_costs\\memory\\costs.wio",
+      "Bytes": 2341,
+      "Hash": "DF44FA8AECF2895AE751653F9F62E13447B2B10245E25B935BF81DFC48291D40"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\native_costs\\memory\\probe.h",
+      "Bytes": 16219,
+      "Hash": "0E78A24680264BF25785BA5397623A9D16AA66D220E93ABEE5E34D744696785C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\native_costs\\memory\\run.py",
+      "Bytes": 10070,
+      "Hash": "874FA604A24055EF42AEB18DA3B98FDED954CBCDFE966A17CA0F6BFA7A7F1D07"
+    }
+  ],
+  "ArtifactsBefore": [
+    {
+      "Path": "F:\\Projects\\wio\\build\\native-memory-attribution\\cf37689310584136ab1b37da26bbdf03\\costs.wio",
+      "Bytes": 2341,
+      "Hash": "DF44FA8AECF2895AE751653F9F62E13447B2B10245E25B935BF81DFC48291D40"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\native-memory-attribution\\cf37689310584136ab1b37da26bbdf03\\costs.wio.cpp",
+      "Bytes": 141044,
+      "Hash": "C513EC8E1A8CF1CD5FBDDFC7469B91BF87D83E8540A2C2C1DCA0C00A072E9D77"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\native-memory-attribution\\cf37689310584136ab1b37da26bbdf03\\memory.exe",
+      "Bytes": 1299882,
+      "Hash": "191AD004A15CF585D97D402384918AFEC2404046E281A6ACB3C49CD15807B928"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\native-memory-attribution\\cf37689310584136ab1b37da26bbdf03\\probe.h",
+      "Bytes": 16219,
+      "Hash": "0E78A24680264BF25785BA5397623A9D16AA66D220E93ABEE5E34D744696785C"
+    }
+  ],
+  "BuildProcess": {
+    "Status": "passed",
+    "ExitCode": 0,
+    "WallSeconds": 5.943771000020206,
+    "CpuSeconds": 0.015625,
+    "CpuToWall": 0.002628802489185213,
+    "SystemBusyFraction": 0.28472679394338385,
+    "Output": "",
+    "Error": "",
+    "Pid": 38340,
+    "WallScope": "child launch through output drain; excludes Python worker startup"
+  },
+  "Revision": "195a682d30df4c20f6894c5663b447488a76191d",
+  "Worktree": " M .github/workflows/backend-closure.yml\n M playground/wio/main.wio\nAM playground/wio/mandelbrot.wio\n M std/algorithms.wio\n M std/assert.wio\n M std/async.wio\n M std/buffer.wio\n M std/config.wio\n M tests/cmake/InteropTests.cmake\n?? playground/mandelbrot.ppm\n?? tests/performance/mandelbrot_compute/csharp/obj/\n?? tests/performance/native_costs/memory/\n",
+  "Samples": [
+    {
+      "Kind": "control",
+      "Count": 1,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.07501300005242229,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.20829722833482975,
+        "SystemBusyFraction": 0.3870967741935484,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":8290304,\"ProcessLifetimePeakResidentBytes\":8290304,\"PrivateCommitBytes\":1421312}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":2,\"Frees\":0,\"RequestedBytes\":196,\"FreedBytes\":0,\"LiveBytes\":196,\"PeakBytes\":196,\"LiveBlocks\":2,\"PeakBlocks\":2,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":8314880,\"ProcessLifetimePeakResidentBytes\":8314880,\"PrivateCommitBytes\":1421312}\r\n{\"Phase\":\"released\",\"Checksum\":\"196\",\"Allocations\":2,\"Frees\":2,\"RequestedBytes\":196,\"FreedBytes\":196,\"LiveBytes\":0,\"PeakBytes\":196,\"LiveBlocks\":0,\"PeakBlocks\":2,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":8314880,\"ProcessLifetimePeakResidentBytes\":8314880,\"PrivateCommitBytes\":1421312}",
+        "Error": "",
+        "Pid": 80020,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 8290304,
+          "ProcessLifetimePeakResidentBytes": 8290304,
+          "PrivateCommitBytes": 1421312
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 2,
+          "Frees": 0,
+          "RequestedBytes": 196,
+          "FreedBytes": 0,
+          "LiveBytes": 196,
+          "PeakBytes": 196,
+          "LiveBlocks": 2,
+          "PeakBlocks": 2,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 8314880,
+          "ProcessLifetimePeakResidentBytes": 8314880,
+          "PrivateCommitBytes": 1421312
+        },
+        {
+          "Phase": "released",
+          "Checksum": "196",
+          "Allocations": 2,
+          "Frees": 2,
+          "RequestedBytes": 196,
+          "FreedBytes": 196,
+          "LiveBytes": 0,
+          "PeakBytes": 196,
+          "LiveBlocks": 0,
+          "PeakBlocks": 2,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 8314880,
+          "ProcessLifetimePeakResidentBytes": 8314880,
+          "PrivateCommitBytes": 1421312
+        }
+      ]
+    },
+    {
+      "Kind": "aligned",
+      "Count": 1,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.013668200001120567,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.1431644253609845,
+        "SystemBusyFraction": 0.1333333333333333,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7561216,\"ProcessLifetimePeakResidentBytes\":7561216,\"PrivateCommitBytes\":1392640}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":6,\"Frees\":0,\"RequestedBytes\":8500,\"FreedBytes\":0,\"LiveBytes\":8500,\"PeakBytes\":8500,\"LiveBlocks\":6,\"PeakBlocks\":6,\"AlignedAllocations\":3,\"Failures\":2,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7737344,\"ProcessLifetimePeakResidentBytes\":7737344,\"PrivateCommitBytes\":1409024}\r\n{\"Phase\":\"released\",\"Checksum\":\"8500\",\"Allocations\":6,\"Frees\":6,\"RequestedBytes\":8500,\"FreedBytes\":8500,\"LiveBytes\":0,\"PeakBytes\":8500,\"LiveBlocks\":0,\"PeakBlocks\":6,\"AlignedAllocations\":3,\"Failures\":2,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7737344,\"ProcessLifetimePeakResidentBytes\":7737344,\"PrivateCommitBytes\":1409024}",
+        "Error": "",
+        "Pid": 27516,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7561216,
+          "ProcessLifetimePeakResidentBytes": 7561216,
+          "PrivateCommitBytes": 1392640
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 6,
+          "Frees": 0,
+          "RequestedBytes": 8500,
+          "FreedBytes": 0,
+          "LiveBytes": 8500,
+          "PeakBytes": 8500,
+          "LiveBlocks": 6,
+          "PeakBlocks": 6,
+          "AlignedAllocations": 3,
+          "Failures": 2,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7737344,
+          "ProcessLifetimePeakResidentBytes": 7737344,
+          "PrivateCommitBytes": 1409024
+        },
+        {
+          "Phase": "released",
+          "Checksum": "8500",
+          "Allocations": 6,
+          "Frees": 6,
+          "RequestedBytes": 8500,
+          "FreedBytes": 8500,
+          "LiveBytes": 0,
+          "PeakBytes": 8500,
+          "LiveBlocks": 0,
+          "PeakBlocks": 6,
+          "AlignedAllocations": 3,
+          "Failures": 2,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7737344,
+          "ProcessLifetimePeakResidentBytes": 7737344,
+          "PrivateCommitBytes": 1409024
+        }
+      ]
+    },
+    {
+      "Kind": "weak",
+      "Count": 1,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.013912900350987911,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.1230584282083582,
+        "SystemBusyFraction": 0.19999999999999996,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7540736,\"ProcessLifetimePeakResidentBytes\":7540736,\"PrivateCommitBytes\":1368064}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":1,\"Frees\":0,\"RequestedBytes\":24,\"FreedBytes\":0,\"LiveBytes\":24,\"PeakBytes\":24,\"LiveBlocks\":1,\"PeakBlocks\":1,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7569408,\"ProcessLifetimePeakResidentBytes\":7569408,\"PrivateCommitBytes\":1368064}\r\n{\"Phase\":\"released\",\"Checksum\":\"2\",\"Allocations\":1,\"Frees\":1,\"RequestedBytes\":24,\"FreedBytes\":24,\"LiveBytes\":0,\"PeakBytes\":24,\"LiveBlocks\":0,\"PeakBlocks\":1,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7569408,\"ProcessLifetimePeakResidentBytes\":7569408,\"PrivateCommitBytes\":1368064}",
+        "Error": "",
+        "Pid": 53652,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7540736,
+          "ProcessLifetimePeakResidentBytes": 7540736,
+          "PrivateCommitBytes": 1368064
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 1,
+          "Frees": 0,
+          "RequestedBytes": 24,
+          "FreedBytes": 0,
+          "LiveBytes": 24,
+          "PeakBytes": 24,
+          "LiveBlocks": 1,
+          "PeakBlocks": 1,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7569408,
+          "ProcessLifetimePeakResidentBytes": 7569408,
+          "PrivateCommitBytes": 1368064
+        },
+        {
+          "Phase": "released",
+          "Checksum": "2",
+          "Allocations": 1,
+          "Frees": 1,
+          "RequestedBytes": 24,
+          "FreedBytes": 24,
+          "LiveBytes": 0,
+          "PeakBytes": 24,
+          "LiveBlocks": 0,
+          "PeakBlocks": 1,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7569408,
+          "ProcessLifetimePeakResidentBytes": 7569408,
+          "PrivateCommitBytes": 1368064
+        }
+      ]
+    },
+    {
+      "Kind": "object",
+      "Count": 1,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.014451599679887295,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.0811951857305984,
+        "SystemBusyFraction": 0.4545454545454546,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7553024,\"ProcessLifetimePeakResidentBytes\":7553024,\"PrivateCommitBytes\":1380352}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":3,\"Frees\":0,\"RequestedBytes\":88,\"FreedBytes\":0,\"LiveBytes\":88,\"PeakBytes\":88,\"LiveBlocks\":3,\"PeakBlocks\":3,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7589888,\"ProcessLifetimePeakResidentBytes\":7589888,\"PrivateCommitBytes\":1380352}\r\n{\"Phase\":\"released\",\"Checksum\":\"0\",\"Allocations\":4,\"Frees\":4,\"RequestedBytes\":120,\"FreedBytes\":120,\"LiveBytes\":0,\"PeakBytes\":120,\"LiveBlocks\":0,\"PeakBlocks\":4,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7606272,\"ProcessLifetimePeakResidentBytes\":7606272,\"PrivateCommitBytes\":1380352}",
+        "Error": "",
+        "Pid": 16576,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7553024,
+          "ProcessLifetimePeakResidentBytes": 7553024,
+          "PrivateCommitBytes": 1380352
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 3,
+          "Frees": 0,
+          "RequestedBytes": 88,
+          "FreedBytes": 0,
+          "LiveBytes": 88,
+          "PeakBytes": 88,
+          "LiveBlocks": 3,
+          "PeakBlocks": 3,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7589888,
+          "ProcessLifetimePeakResidentBytes": 7589888,
+          "PrivateCommitBytes": 1380352
+        },
+        {
+          "Phase": "released",
+          "Checksum": "0",
+          "Allocations": 4,
+          "Frees": 4,
+          "RequestedBytes": 120,
+          "FreedBytes": 120,
+          "LiveBytes": 0,
+          "PeakBytes": 120,
+          "LiveBlocks": 0,
+          "PeakBlocks": 4,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7606272,
+          "ProcessLifetimePeakResidentBytes": 7606272,
+          "PrivateCommitBytes": 1380352
+        }
+      ]
+    },
+    {
+      "Kind": "string",
+      "Count": 1,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.024248899891972542,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.18181818181818177,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7561216,\"ProcessLifetimePeakResidentBytes\":7561216,\"PrivateCommitBytes\":1388544}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":4,\"Frees\":0,\"RequestedBytes\":162,\"FreedBytes\":0,\"LiveBytes\":162,\"PeakBytes\":162,\"LiveBlocks\":4,\"PeakBlocks\":4,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7606272,\"ProcessLifetimePeakResidentBytes\":7606272,\"PrivateCommitBytes\":1388544}\r\n{\"Phase\":\"released\",\"Checksum\":\"8838008389378456641\",\"Allocations\":6,\"Frees\":6,\"RequestedBytes\":259,\"FreedBytes\":259,\"LiveBytes\":0,\"PeakBytes\":259,\"LiveBlocks\":0,\"PeakBlocks\":6,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7610368,\"ProcessLifetimePeakResidentBytes\":7610368,\"PrivateCommitBytes\":1388544}",
+        "Error": "",
+        "Pid": 71260,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7561216,
+          "ProcessLifetimePeakResidentBytes": 7561216,
+          "PrivateCommitBytes": 1388544
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 4,
+          "Frees": 0,
+          "RequestedBytes": 162,
+          "FreedBytes": 0,
+          "LiveBytes": 162,
+          "PeakBytes": 162,
+          "LiveBlocks": 4,
+          "PeakBlocks": 4,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7606272,
+          "ProcessLifetimePeakResidentBytes": 7606272,
+          "PrivateCommitBytes": 1388544
+        },
+        {
+          "Phase": "released",
+          "Checksum": "8838008389378456641",
+          "Allocations": 6,
+          "Frees": 6,
+          "RequestedBytes": 259,
+          "FreedBytes": 259,
+          "LiveBytes": 0,
+          "PeakBytes": 259,
+          "LiveBlocks": 0,
+          "PeakBlocks": 6,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7610368,
+          "ProcessLifetimePeakResidentBytes": 7610368,
+          "PrivateCommitBytes": 1388544
+        }
+      ]
+    },
+    {
+      "Kind": "bytes",
+      "Count": 1,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.020470099989324808,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 3.0532337425119493,
+        "SystemBusyFraction": null,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7565312,\"ProcessLifetimePeakResidentBytes\":7565312,\"PrivateCommitBytes\":1396736}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":2,\"Frees\":0,\"RequestedBytes\":49,\"FreedBytes\":0,\"LiveBytes\":49,\"PeakBytes\":49,\"LiveBlocks\":2,\"PeakBlocks\":2,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7602176,\"ProcessLifetimePeakResidentBytes\":7602176,\"PrivateCommitBytes\":1396736}\r\n{\"Phase\":\"released\",\"Checksum\":\"0\",\"Allocations\":2,\"Frees\":2,\"RequestedBytes\":49,\"FreedBytes\":49,\"LiveBytes\":0,\"PeakBytes\":49,\"LiveBlocks\":0,\"PeakBlocks\":2,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7606272,\"ProcessLifetimePeakResidentBytes\":7606272,\"PrivateCommitBytes\":1396736}",
+        "Error": "",
+        "Pid": 37200,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7565312,
+          "ProcessLifetimePeakResidentBytes": 7565312,
+          "PrivateCommitBytes": 1396736
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 2,
+          "Frees": 0,
+          "RequestedBytes": 49,
+          "FreedBytes": 0,
+          "LiveBytes": 49,
+          "PeakBytes": 49,
+          "LiveBlocks": 2,
+          "PeakBlocks": 2,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7602176,
+          "ProcessLifetimePeakResidentBytes": 7602176,
+          "PrivateCommitBytes": 1396736
+        },
+        {
+          "Phase": "released",
+          "Checksum": "0",
+          "Allocations": 2,
+          "Frees": 2,
+          "RequestedBytes": 49,
+          "FreedBytes": 49,
+          "LiveBytes": 0,
+          "PeakBytes": 49,
+          "LiveBlocks": 0,
+          "PeakBlocks": 2,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7606272,
+          "ProcessLifetimePeakResidentBytes": 7606272,
+          "PrivateCommitBytes": 1396736
+        }
+      ]
+    },
+    {
+      "Kind": "control",
+      "Count": 17,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.014291599858552217,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.0932995714017184,
+        "SystemBusyFraction": 0.19999999999999996,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7544832,\"ProcessLifetimePeakResidentBytes\":7544832,\"PrivateCommitBytes\":1372160}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":2,\"Frees\":0,\"RequestedBytes\":3268,\"FreedBytes\":0,\"LiveBytes\":3268,\"PeakBytes\":3268,\"LiveBlocks\":2,\"PeakBlocks\":2,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7573504,\"ProcessLifetimePeakResidentBytes\":7573504,\"PrivateCommitBytes\":1372160}\r\n{\"Phase\":\"released\",\"Checksum\":\"3268\",\"Allocations\":2,\"Frees\":2,\"RequestedBytes\":3268,\"FreedBytes\":3268,\"LiveBytes\":0,\"PeakBytes\":3268,\"LiveBlocks\":0,\"PeakBlocks\":2,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7573504,\"ProcessLifetimePeakResidentBytes\":7573504,\"PrivateCommitBytes\":1372160}",
+        "Error": "",
+        "Pid": 79432,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7544832,
+          "ProcessLifetimePeakResidentBytes": 7544832,
+          "PrivateCommitBytes": 1372160
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 2,
+          "Frees": 0,
+          "RequestedBytes": 3268,
+          "FreedBytes": 0,
+          "LiveBytes": 3268,
+          "PeakBytes": 3268,
+          "LiveBlocks": 2,
+          "PeakBlocks": 2,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7573504,
+          "ProcessLifetimePeakResidentBytes": 7573504,
+          "PrivateCommitBytes": 1372160
+        },
+        {
+          "Phase": "released",
+          "Checksum": "3268",
+          "Allocations": 2,
+          "Frees": 2,
+          "RequestedBytes": 3268,
+          "FreedBytes": 3268,
+          "LiveBytes": 0,
+          "PeakBytes": 3268,
+          "LiveBlocks": 0,
+          "PeakBlocks": 2,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7573504,
+          "ProcessLifetimePeakResidentBytes": 7573504,
+          "PrivateCommitBytes": 1372160
+        }
+      ]
+    },
+    {
+      "Kind": "aligned",
+      "Count": 17,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.013699500355869532,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.1405525452835579,
+        "SystemBusyFraction": 0.1578947368421053,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7557120,\"ProcessLifetimePeakResidentBytes\":7557120,\"PrivateCommitBytes\":1380352}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":6,\"Frees\":0,\"RequestedBytes\":8516,\"FreedBytes\":0,\"LiveBytes\":8516,\"PeakBytes\":8516,\"LiveBlocks\":6,\"PeakBlocks\":6,\"AlignedAllocations\":3,\"Failures\":2,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7733248,\"ProcessLifetimePeakResidentBytes\":7733248,\"PrivateCommitBytes\":1396736}\r\n{\"Phase\":\"released\",\"Checksum\":\"8516\",\"Allocations\":6,\"Frees\":6,\"RequestedBytes\":8516,\"FreedBytes\":8516,\"LiveBytes\":0,\"PeakBytes\":8516,\"LiveBlocks\":0,\"PeakBlocks\":6,\"AlignedAllocations\":3,\"Failures\":2,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7733248,\"ProcessLifetimePeakResidentBytes\":7733248,\"PrivateCommitBytes\":1396736}",
+        "Error": "",
+        "Pid": 31088,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7557120,
+          "ProcessLifetimePeakResidentBytes": 7557120,
+          "PrivateCommitBytes": 1380352
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 6,
+          "Frees": 0,
+          "RequestedBytes": 8516,
+          "FreedBytes": 0,
+          "LiveBytes": 8516,
+          "PeakBytes": 8516,
+          "LiveBlocks": 6,
+          "PeakBlocks": 6,
+          "AlignedAllocations": 3,
+          "Failures": 2,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7733248,
+          "ProcessLifetimePeakResidentBytes": 7733248,
+          "PrivateCommitBytes": 1396736
+        },
+        {
+          "Phase": "released",
+          "Checksum": "8516",
+          "Allocations": 6,
+          "Frees": 6,
+          "RequestedBytes": 8516,
+          "FreedBytes": 8516,
+          "LiveBytes": 0,
+          "PeakBytes": 8516,
+          "LiveBlocks": 0,
+          "PeakBlocks": 6,
+          "AlignedAllocations": 3,
+          "Failures": 2,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7733248,
+          "ProcessLifetimePeakResidentBytes": 7733248,
+          "PrivateCommitBytes": 1396736
+        }
+      ]
+    },
+    {
+      "Kind": "weak",
+      "Count": 17,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.02943019988015294,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.050000000000000044,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7544832,\"ProcessLifetimePeakResidentBytes\":7544832,\"PrivateCommitBytes\":1372160}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":1,\"Frees\":0,\"RequestedBytes\":24,\"FreedBytes\":0,\"LiveBytes\":24,\"PeakBytes\":24,\"LiveBlocks\":1,\"PeakBlocks\":1,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7569408,\"ProcessLifetimePeakResidentBytes\":7569408,\"PrivateCommitBytes\":1372160}\r\n{\"Phase\":\"released\",\"Checksum\":\"18\",\"Allocations\":1,\"Frees\":1,\"RequestedBytes\":24,\"FreedBytes\":24,\"LiveBytes\":0,\"PeakBytes\":24,\"LiveBlocks\":0,\"PeakBlocks\":1,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7569408,\"ProcessLifetimePeakResidentBytes\":7569408,\"PrivateCommitBytes\":1372160}",
+        "Error": "",
+        "Pid": 75968,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7544832,
+          "ProcessLifetimePeakResidentBytes": 7544832,
+          "PrivateCommitBytes": 1372160
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 1,
+          "Frees": 0,
+          "RequestedBytes": 24,
+          "FreedBytes": 0,
+          "LiveBytes": 24,
+          "PeakBytes": 24,
+          "LiveBlocks": 1,
+          "PeakBlocks": 1,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7569408,
+          "ProcessLifetimePeakResidentBytes": 7569408,
+          "PrivateCommitBytes": 1372160
+        },
+        {
+          "Phase": "released",
+          "Checksum": "18",
+          "Allocations": 1,
+          "Frees": 1,
+          "RequestedBytes": 24,
+          "FreedBytes": 24,
+          "LiveBytes": 0,
+          "PeakBytes": 24,
+          "LiveBlocks": 0,
+          "PeakBlocks": 1,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7569408,
+          "ProcessLifetimePeakResidentBytes": 7569408,
+          "PrivateCommitBytes": 1372160
+        }
+      ]
+    },
+    {
+      "Kind": "object",
+      "Count": 17,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.014099400024861097,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.10820318399711,
+        "SystemBusyFraction": 0.46153846153846156,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7565312,\"ProcessLifetimePeakResidentBytes\":7565312,\"PrivateCommitBytes\":1396736}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":24,\"Frees\":5,\"RequestedBytes\":1096,\"FreedBytes\":248,\"LiveBytes\":848,\"PeakBytes\":976,\"LiveBlocks\":19,\"PeakBlocks\":20,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7610368,\"ProcessLifetimePeakResidentBytes\":7610368,\"PrivateCommitBytes\":1404928}\r\n{\"Phase\":\"released\",\"Checksum\":\"10162944341744256392\",\"Allocations\":41,\"Frees\":41,\"RequestedBytes\":1640,\"FreedBytes\":1640,\"LiveBytes\":0,\"PeakBytes\":976,\"LiveBlocks\":0,\"PeakBlocks\":21,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7622656,\"ProcessLifetimePeakResidentBytes\":7622656,\"PrivateCommitBytes\":1404928}",
+        "Error": "",
+        "Pid": 30060,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7565312,
+          "ProcessLifetimePeakResidentBytes": 7565312,
+          "PrivateCommitBytes": 1396736
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 24,
+          "Frees": 5,
+          "RequestedBytes": 1096,
+          "FreedBytes": 248,
+          "LiveBytes": 848,
+          "PeakBytes": 976,
+          "LiveBlocks": 19,
+          "PeakBlocks": 20,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7610368,
+          "ProcessLifetimePeakResidentBytes": 7610368,
+          "PrivateCommitBytes": 1404928
+        },
+        {
+          "Phase": "released",
+          "Checksum": "10162944341744256392",
+          "Allocations": 41,
+          "Frees": 41,
+          "RequestedBytes": 1640,
+          "FreedBytes": 1640,
+          "LiveBytes": 0,
+          "PeakBytes": 976,
+          "LiveBlocks": 0,
+          "PeakBlocks": 21,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7622656,
+          "ProcessLifetimePeakResidentBytes": 7622656,
+          "PrivateCommitBytes": 1404928
+        }
+      ]
+    },
+    {
+      "Kind": "string",
+      "Count": 17,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.014606100041419268,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.069758522513976,
+        "SystemBusyFraction": 0.23809523809523814,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7569408,\"ProcessLifetimePeakResidentBytes\":7569408,\"PrivateCommitBytes\":1392640}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":41,\"Frees\":21,\"RequestedBytes\":3472,\"FreedBytes\":1654,\"LiveBytes\":1818,\"PeakBytes\":2330,\"LiveBlocks\":20,\"PeakBlocks\":21,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7622656,\"ProcessLifetimePeakResidentBytes\":7622656,\"PrivateCommitBytes\":1400832}\r\n{\"Phase\":\"released\",\"Checksum\":\"9238265066002145394\",\"Allocations\":75,\"Frees\":75,\"RequestedBytes\":5128,\"FreedBytes\":5128,\"LiveBytes\":0,\"PeakBytes\":2330,\"LiveBlocks\":0,\"PeakBlocks\":23,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7626752,\"ProcessLifetimePeakResidentBytes\":7626752,\"PrivateCommitBytes\":1400832}",
+        "Error": "",
+        "Pid": 12168,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7569408,
+          "ProcessLifetimePeakResidentBytes": 7569408,
+          "PrivateCommitBytes": 1392640
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 41,
+          "Frees": 21,
+          "RequestedBytes": 3472,
+          "FreedBytes": 1654,
+          "LiveBytes": 1818,
+          "PeakBytes": 2330,
+          "LiveBlocks": 20,
+          "PeakBlocks": 21,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7622656,
+          "ProcessLifetimePeakResidentBytes": 7622656,
+          "PrivateCommitBytes": 1400832
+        },
+        {
+          "Phase": "released",
+          "Checksum": "9238265066002145394",
+          "Allocations": 75,
+          "Frees": 75,
+          "RequestedBytes": 5128,
+          "FreedBytes": 5128,
+          "LiveBytes": 0,
+          "PeakBytes": 2330,
+          "LiveBlocks": 0,
+          "PeakBlocks": 23,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7626752,
+          "ProcessLifetimePeakResidentBytes": 7626752,
+          "PrivateCommitBytes": 1400832
+        }
+      ]
+    },
+    {
+      "Kind": "bytes",
+      "Count": 17,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.013321100268512964,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.19999999999999996,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7553024,\"ProcessLifetimePeakResidentBytes\":7553024,\"PrivateCommitBytes\":1388544}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":7,\"Frees\":5,\"RequestedBytes\":111,\"FreedBytes\":31,\"LiveBytes\":80,\"PeakBytes\":96,\"LiveBlocks\":2,\"PeakBlocks\":3,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7589888,\"ProcessLifetimePeakResidentBytes\":7589888,\"PrivateCommitBytes\":1388544}\r\n{\"Phase\":\"released\",\"Checksum\":\"10162944341744256392\",\"Allocations\":7,\"Frees\":7,\"RequestedBytes\":111,\"FreedBytes\":111,\"LiveBytes\":0,\"PeakBytes\":96,\"LiveBlocks\":0,\"PeakBlocks\":3,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7593984,\"ProcessLifetimePeakResidentBytes\":7593984,\"PrivateCommitBytes\":1388544}",
+        "Error": "",
+        "Pid": 48688,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7553024,
+          "ProcessLifetimePeakResidentBytes": 7553024,
+          "PrivateCommitBytes": 1388544
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 7,
+          "Frees": 5,
+          "RequestedBytes": 111,
+          "FreedBytes": 31,
+          "LiveBytes": 80,
+          "PeakBytes": 96,
+          "LiveBlocks": 2,
+          "PeakBlocks": 3,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7589888,
+          "ProcessLifetimePeakResidentBytes": 7589888,
+          "PrivateCommitBytes": 1388544
+        },
+        {
+          "Phase": "released",
+          "Checksum": "10162944341744256392",
+          "Allocations": 7,
+          "Frees": 7,
+          "RequestedBytes": 111,
+          "FreedBytes": 111,
+          "LiveBytes": 0,
+          "PeakBytes": 96,
+          "LiveBlocks": 0,
+          "PeakBlocks": 3,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7593984,
+          "ProcessLifetimePeakResidentBytes": 7593984,
+          "PrivateCommitBytes": 1388544
+        }
+      ]
+    },
+    {
+      "Kind": "control",
+      "Count": 2000,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01425099978223443,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.25,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7548928,\"ProcessLifetimePeakResidentBytes\":7548928,\"PrivateCommitBytes\":1384448}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":2,\"Frees\":0,\"RequestedBytes\":384004,\"FreedBytes\":0,\"LiveBytes\":384004,\"PeakBytes\":384004,\"LiveBlocks\":2,\"PeakBlocks\":2,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7962624,\"ProcessLifetimePeakResidentBytes\":7962624,\"PrivateCommitBytes\":1781760}\r\n{\"Phase\":\"released\",\"Checksum\":\"384004\",\"Allocations\":2,\"Frees\":2,\"RequestedBytes\":384004,\"FreedBytes\":384004,\"LiveBytes\":0,\"PeakBytes\":384004,\"LiveBlocks\":0,\"PeakBlocks\":2,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7962624,\"ProcessLifetimePeakResidentBytes\":7962624,\"PrivateCommitBytes\":1781760}",
+        "Error": "",
+        "Pid": 80316,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7548928,
+          "ProcessLifetimePeakResidentBytes": 7548928,
+          "PrivateCommitBytes": 1384448
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 2,
+          "Frees": 0,
+          "RequestedBytes": 384004,
+          "FreedBytes": 0,
+          "LiveBytes": 384004,
+          "PeakBytes": 384004,
+          "LiveBlocks": 2,
+          "PeakBlocks": 2,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7962624,
+          "ProcessLifetimePeakResidentBytes": 7962624,
+          "PrivateCommitBytes": 1781760
+        },
+        {
+          "Phase": "released",
+          "Checksum": "384004",
+          "Allocations": 2,
+          "Frees": 2,
+          "RequestedBytes": 384004,
+          "FreedBytes": 384004,
+          "LiveBytes": 0,
+          "PeakBytes": 384004,
+          "LiveBlocks": 0,
+          "PeakBlocks": 2,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7962624,
+          "ProcessLifetimePeakResidentBytes": 7962624,
+          "PrivateCommitBytes": 1781760
+        }
+      ]
+    },
+    {
+      "Kind": "aligned",
+      "Count": 2000,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.014101499691605568,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.1080381762020213,
+        "SystemBusyFraction": 0.23076923076923073,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7557120,\"ProcessLifetimePeakResidentBytes\":7557120,\"PrivateCommitBytes\":1392640}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":6,\"Frees\":0,\"RequestedBytes\":10499,\"FreedBytes\":0,\"LiveBytes\":10499,\"PeakBytes\":10499,\"LiveBlocks\":6,\"PeakBlocks\":6,\"AlignedAllocations\":3,\"Failures\":2,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7733248,\"ProcessLifetimePeakResidentBytes\":7733248,\"PrivateCommitBytes\":1409024}\r\n{\"Phase\":\"released\",\"Checksum\":\"10499\",\"Allocations\":6,\"Frees\":6,\"RequestedBytes\":10499,\"FreedBytes\":10499,\"LiveBytes\":0,\"PeakBytes\":10499,\"LiveBlocks\":0,\"PeakBlocks\":6,\"AlignedAllocations\":3,\"Failures\":2,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7733248,\"ProcessLifetimePeakResidentBytes\":7733248,\"PrivateCommitBytes\":1409024}",
+        "Error": "",
+        "Pid": 6368,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7557120,
+          "ProcessLifetimePeakResidentBytes": 7557120,
+          "PrivateCommitBytes": 1392640
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 6,
+          "Frees": 0,
+          "RequestedBytes": 10499,
+          "FreedBytes": 0,
+          "LiveBytes": 10499,
+          "PeakBytes": 10499,
+          "LiveBlocks": 6,
+          "PeakBlocks": 6,
+          "AlignedAllocations": 3,
+          "Failures": 2,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7733248,
+          "ProcessLifetimePeakResidentBytes": 7733248,
+          "PrivateCommitBytes": 1409024
+        },
+        {
+          "Phase": "released",
+          "Checksum": "10499",
+          "Allocations": 6,
+          "Frees": 6,
+          "RequestedBytes": 10499,
+          "FreedBytes": 10499,
+          "LiveBytes": 0,
+          "PeakBytes": 10499,
+          "LiveBlocks": 0,
+          "PeakBlocks": 6,
+          "AlignedAllocations": 3,
+          "Failures": 2,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7733248,
+          "ProcessLifetimePeakResidentBytes": 7733248,
+          "PrivateCommitBytes": 1409024
+        }
+      ]
+    },
+    {
+      "Kind": "weak",
+      "Count": 2000,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.013722300063818693,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.1386575083865216,
+        "SystemBusyFraction": 0.23076923076923073,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7553024,\"ProcessLifetimePeakResidentBytes\":7553024,\"PrivateCommitBytes\":1388544}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":1,\"Frees\":0,\"RequestedBytes\":24,\"FreedBytes\":0,\"LiveBytes\":24,\"PeakBytes\":24,\"LiveBlocks\":1,\"PeakBlocks\":1,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7581696,\"ProcessLifetimePeakResidentBytes\":7581696,\"PrivateCommitBytes\":1388544}\r\n{\"Phase\":\"released\",\"Checksum\":\"2001\",\"Allocations\":1,\"Frees\":1,\"RequestedBytes\":24,\"FreedBytes\":24,\"LiveBytes\":0,\"PeakBytes\":24,\"LiveBlocks\":0,\"PeakBlocks\":1,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7581696,\"ProcessLifetimePeakResidentBytes\":7581696,\"PrivateCommitBytes\":1388544}",
+        "Error": "",
+        "Pid": 80136,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7553024,
+          "ProcessLifetimePeakResidentBytes": 7553024,
+          "PrivateCommitBytes": 1388544
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 1,
+          "Frees": 0,
+          "RequestedBytes": 24,
+          "FreedBytes": 0,
+          "LiveBytes": 24,
+          "PeakBytes": 24,
+          "LiveBlocks": 1,
+          "PeakBlocks": 1,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7581696,
+          "ProcessLifetimePeakResidentBytes": 7581696,
+          "PrivateCommitBytes": 1388544
+        },
+        {
+          "Phase": "released",
+          "Checksum": "2001",
+          "Allocations": 1,
+          "Frees": 1,
+          "RequestedBytes": 24,
+          "FreedBytes": 24,
+          "LiveBytes": 0,
+          "PeakBytes": 24,
+          "LiveBlocks": 0,
+          "PeakBlocks": 1,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7581696,
+          "ProcessLifetimePeakResidentBytes": 7581696,
+          "PrivateCommitBytes": 1388544
+        }
+      ]
+    },
+    {
+      "Kind": "object",
+      "Count": 2000,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01454050000756979,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.0745847798814083,
+        "SystemBusyFraction": 0.26315789473684215,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7553024,\"ProcessLifetimePeakResidentBytes\":7553024,\"PrivateCommitBytes\":1380352}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":2013,\"Frees\":11,\"RequestedBytes\":96808,\"FreedBytes\":16376,\"LiveBytes\":80432,\"PeakBytes\":80432,\"LiveBlocks\":2002,\"PeakBlocks\":2002,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7823360,\"ProcessLifetimePeakResidentBytes\":7823360,\"PrivateCommitBytes\":1626112}\r\n{\"Phase\":\"released\",\"Checksum\":\"2025643398204006040\",\"Allocations\":4013,\"Frees\":4013,\"RequestedBytes\":160808,\"FreedBytes\":160808,\"LiveBytes\":0,\"PeakBytes\":80496,\"LiveBlocks\":0,\"PeakBlocks\":2004,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7610368,\"ProcessLifetimePeakResidentBytes\":7835648,\"PrivateCommitBytes\":1388544}",
+        "Error": "",
+        "Pid": 6336,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7553024,
+          "ProcessLifetimePeakResidentBytes": 7553024,
+          "PrivateCommitBytes": 1380352
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 2013,
+          "Frees": 11,
+          "RequestedBytes": 96808,
+          "FreedBytes": 16376,
+          "LiveBytes": 80432,
+          "PeakBytes": 80432,
+          "LiveBlocks": 2002,
+          "PeakBlocks": 2002,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7823360,
+          "ProcessLifetimePeakResidentBytes": 7823360,
+          "PrivateCommitBytes": 1626112
+        },
+        {
+          "Phase": "released",
+          "Checksum": "2025643398204006040",
+          "Allocations": 4013,
+          "Frees": 4013,
+          "RequestedBytes": 160808,
+          "FreedBytes": 160808,
+          "LiveBytes": 0,
+          "PeakBytes": 80496,
+          "LiveBlocks": 0,
+          "PeakBlocks": 2004,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7610368,
+          "ProcessLifetimePeakResidentBytes": 7835648,
+          "PrivateCommitBytes": 1388544
+        }
+      ]
+    },
+    {
+      "Kind": "string",
+      "Count": 2000,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01414889981970191,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.1875,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7548928,\"ProcessLifetimePeakResidentBytes\":7548928,\"PrivateCommitBytes\":1380352}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":4013,\"Frees\":2010,\"RequestedBytes\":304868,\"FreedBytes\":152350,\"LiveBytes\":152518,\"PeakBytes\":152518,\"LiveBlocks\":2003,\"PeakBlocks\":2003,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7921664,\"ProcessLifetimePeakResidentBytes\":7921664,\"PrivateCommitBytes\":1716224}\r\n{\"Phase\":\"released\",\"Checksum\":\"10857133546504268788\",\"Allocations\":8013,\"Frees\":8013,\"RequestedBytes\":503758,\"FreedBytes\":503758,\"LiveBytes\":0,\"PeakBytes\":152674,\"LiveBlocks\":0,\"PeakBlocks\":2006,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7663616,\"ProcessLifetimePeakResidentBytes\":7925760,\"PrivateCommitBytes\":1445888}",
+        "Error": "",
+        "Pid": 38180,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7548928,
+          "ProcessLifetimePeakResidentBytes": 7548928,
+          "PrivateCommitBytes": 1380352
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 4013,
+          "Frees": 2010,
+          "RequestedBytes": 304868,
+          "FreedBytes": 152350,
+          "LiveBytes": 152518,
+          "PeakBytes": 152518,
+          "LiveBlocks": 2003,
+          "PeakBlocks": 2003,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7921664,
+          "ProcessLifetimePeakResidentBytes": 7921664,
+          "PrivateCommitBytes": 1716224
+        },
+        {
+          "Phase": "released",
+          "Checksum": "10857133546504268788",
+          "Allocations": 8013,
+          "Frees": 8013,
+          "RequestedBytes": 503758,
+          "FreedBytes": 503758,
+          "LiveBytes": 0,
+          "PeakBytes": 152674,
+          "LiveBlocks": 0,
+          "PeakBlocks": 2006,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7663616,
+          "ProcessLifetimePeakResidentBytes": 7925760,
+          "PrivateCommitBytes": 1445888
+        }
+      ]
+    },
+    {
+      "Kind": "bytes",
+      "Count": 2000,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.014012999832630157,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 1.1150360512826238,
+        "SystemBusyFraction": 0.4,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7553024,\"ProcessLifetimePeakResidentBytes\":7553024,\"PrivateCommitBytes\":1380352}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":13,\"Frees\":11,\"RequestedBytes\":4143,\"FreedBytes\":2047,\"LiveBytes\":2096,\"PeakBytes\":3120,\"LiveBlocks\":2,\"PeakBlocks\":3,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7593984,\"ProcessLifetimePeakResidentBytes\":7593984,\"PrivateCommitBytes\":1388544}\r\n{\"Phase\":\"released\",\"Checksum\":\"9225596660580675224\",\"Allocations\":13,\"Frees\":13,\"RequestedBytes\":4143,\"FreedBytes\":4143,\"LiveBytes\":0,\"PeakBytes\":3120,\"LiveBlocks\":0,\"PeakBlocks\":3,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7598080,\"ProcessLifetimePeakResidentBytes\":7598080,\"PrivateCommitBytes\":1388544}",
+        "Error": "",
+        "Pid": 55032,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      },
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7553024,
+          "ProcessLifetimePeakResidentBytes": 7553024,
+          "PrivateCommitBytes": 1380352
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 13,
+          "Frees": 11,
+          "RequestedBytes": 4143,
+          "FreedBytes": 2047,
+          "LiveBytes": 2096,
+          "PeakBytes": 3120,
+          "LiveBlocks": 2,
+          "PeakBlocks": 3,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7593984,
+          "ProcessLifetimePeakResidentBytes": 7593984,
+          "PrivateCommitBytes": 1388544
+        },
+        {
+          "Phase": "released",
+          "Checksum": "9225596660580675224",
+          "Allocations": 13,
+          "Frees": 13,
+          "RequestedBytes": 4143,
+          "FreedBytes": 4143,
+          "LiveBytes": 0,
+          "PeakBytes": 3120,
+          "LiveBlocks": 0,
+          "PeakBlocks": 3,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7598080,
+          "ProcessLifetimePeakResidentBytes": 7598080,
+          "PrivateCommitBytes": 1388544
+        }
+      ]
+    }
+  ],
+  "Correct": true,
+  "Failure": null,
+  "Policy": "One process/window per case; requested-byte peaks are not RSS; no timing claim",
+  "SourcesAfter": [
+    {
+      "Path": "C:\\mingw64\\bin\\g++.exe",
+      "Bytes": 3023360,
+      "Hash": "BE663D8F7F270F816971124AACF45980AC6E814568F29E5D839B208916455998"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+      "Bytes": 19948032,
+      "Hash": "18B94A00178E09CB9BC282E52C87372E7A82E577919225BCC0B6A033E47F5F29"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+      "Bytes": 7281434,
+      "Hash": "59FF4005117CB2C7CFF701629B98D7A599D4550B18FF40B3AA402923F8863941"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\any.h",
+      "Bytes": 17462,
+      "Hash": "FA583E3FE77D5D0F8C047AFD807928A0AEFD74FF1A823FFC191D404018C6B11E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\constant_value.h",
+      "Bytes": 1580,
+      "Hash": "C7CA7492FAB3320423A89101E107606C834BD7114F64E2F75BBC1E0E6F12D8E2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\entry_args.h",
+      "Bytes": 183,
+      "Hash": "4F72CCCB7E9A90F34261E03B9BED1C4CACF091F90323E78F24198396CCBFB38F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\enum_reflection.h",
+      "Bytes": 2361,
+      "Hash": "2EFB025C1DFD83B28F77ED9AB7E228074F3D3DF6A11A0883758F7E9FCD9353E3"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\exception.h",
+      "Bytes": 1796,
+      "Hash": "F16AA38C55E6B292588CD193881B212B18CC7FD6B753DFC876969991611AED51"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\fit.h",
+      "Bytes": 3429,
+      "Hash": "456500E4F335E3418892865A20CEF5A1CB06C8EA7D404BB8D7E9A2FFE8DF3704"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\float_parse.h",
+      "Bytes": 3669,
+      "Hash": "6911991424C979FCB436302F87E69EFD3E8F1D54643B8505F828E5885903894A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\format.h",
+      "Bytes": 4636,
+      "Hash": "1B54244B42ADD0839350FA0AB9147490B0150B93A32412B473DCF95E2475F516"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\integer_format.h",
+      "Bytes": 1564,
+      "Hash": "3C5AD55F7907E2B5E3FDB6670C0C70E368F3EAFE3B0236E34FEDD2D694BE53B6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\intrinsics.h",
+      "Bytes": 50102,
+      "Hash": "E6C8FDA61E31BB99FB74611FF0073DAC8F8FD23E65129397D35379531ED5D9FB"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\io_errors.h",
+      "Bytes": 453,
+      "Hash": "C90A61C2F58E47D382D55076732817BD310E1F41649E30785C6B4DDBB9F1F130"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\meta.h",
+      "Bytes": 12897,
+      "Hash": "D2D74EBCFD29E810996CC53574A4F060D066890B1B4524EF43FEA8C24A641C4A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\ref.h",
+      "Bytes": 30864,
+      "Hash": "D0F3F8F37B5D32ABB1082A27B666B5E90847765EE56B9454FF1FB5FC91A6F7D5"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_assert.h",
+      "Bytes": 253,
+      "Hash": "0824C038FD75B97C4773B195D3627FCA6589957A7F118B7EA0E1D8DDDF6C8B74"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_async.h",
+      "Bytes": 67079,
+      "Hash": "D959E3F711FE29D876EEEFA5C69B3B8CADDFB8A7BF702E6CA5F6F3644C634D3D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_async_fs.h",
+      "Bytes": 11563,
+      "Hash": "D950B011A6CDB66C46C35588ACEC3436F805F804ECCBE017FE5BE0332B9C0037"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_async_net.h",
+      "Bytes": 10162,
+      "Hash": "7E031C6D734AB2F49EE8C01BE9BB1878E82007C572D4C39ACF76AAD8DFBE0D10"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_async_process.h",
+      "Bytes": 12811,
+      "Hash": "F7CD8C24C8510BDB10F2815EEC83330D4A84A44C735A198E1297512805263EA6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_bigint.h",
+      "Bytes": 6568,
+      "Hash": "B148F7FC029F5B0A323565BFD6A8C39A3D3A8333F21397F1D2AD05B2B53373CA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_builders.h",
+      "Bytes": 925,
+      "Hash": "D219136E750AC296B5BB5135B0A4E5DE33D8A65EE1EBC420EE4277DA598816C4"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_concurrency.h",
+      "Bytes": 4313,
+      "Hash": "EFDF77F2DADBD76E575B80A994754149989A0BEA4881928472406A1EECED5D2E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_console.h",
+      "Bytes": 131361,
+      "Hash": "D470DB8EE611AAC272AA6B9F3D1DD4308D732EF6143B562685E50D6918025468"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_convert.h",
+      "Bytes": 2136,
+      "Hash": "3ACE162A504FC364A3422625D63C1D3F00E8406DC4F8CB8F6A59262406EBFF6E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_encoding.h",
+      "Bytes": 5970,
+      "Hash": "2C533CB4EA1A29238AC1809DA5E2ED1B3C214B7B05E48513AF76054BE80D6E11"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_fs.h",
+      "Bytes": 5281,
+      "Hash": "D02BF91E4ADE2FEB69F2E0A6B597DF46CFEC39C0DF52569CE01B16A8B823BACB"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_hash.h",
+      "Bytes": 818,
+      "Hash": "23F2303B7E443E3AE6EAD1FB4D5D6F315D7A8829EFB5E224C6DA2DC25AC897E5"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_io.h",
+      "Bytes": 14203,
+      "Hash": "A6E4AC1303BD12A838254854BD6FD500432FC9FEE343C0EFC30E15804F1CAEC4"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_math.h",
+      "Bytes": 9767,
+      "Hash": "A2BE941DEC3A66C7BDAD7CD86A915ABC926D043EE956C7B88A564026F69DD2A3"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_net.h",
+      "Bytes": 2170,
+      "Hash": "F15BAF20F14E17B17B6751FCBABC8FD32CB7CF901D03FFBDDDBD38C0D93A6E92"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_process.h",
+      "Bytes": 6326,
+      "Hash": "E907816EAFBC5095D6747659B68E4CFD3C7E5707A05366AA7AF8BA9A459EFC2F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_random.h",
+      "Bytes": 1916,
+      "Hash": "EA3E5F824CB595293988AB110E8A7893011D343D2742E9E531D9A7817550D7C9"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_regex.h",
+      "Bytes": 2576,
+      "Hash": "355B3D65B3A9898D7A04316B5AB34E1B780716C578D56A974B0649F7FF6B70A1"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_serialization.h",
+      "Bytes": 5776,
+      "Hash": "AD6F516B936E1BD7A4EA111201FF2BB4F3832A791FD6487711170852E30EFCDF"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_text.h",
+      "Bytes": 7781,
+      "Hash": "C8DB214B33CA424E2BF9F0099F88B5B831DF6D48337976F4A69126E6AB573F42"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_time.h",
+      "Bytes": 1642,
+      "Hash": "41C2B879169B2FFE986CC066FC377FEF5FAB836837BBF049539F406EFFF43840"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_type_traits.h",
+      "Bytes": 4175,
+      "Hash": "49FDD13DD5C4A036B1B0C09539AEF2506259BD31641CAF79AA14523C271D0E2B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_unicode.h",
+      "Bytes": 16316,
+      "Hash": "E25345D0141383BDFE7AB2F4D27D51B44D475FF7A6BED3619F56E7A7B9FBFF91"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_utility.h",
+      "Bytes": 20944,
+      "Hash": "D8D2D859F76BF7FCAC891C84BC4758ACDC7C495C8023C86262AC759D862C87E2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\std_vector.h",
+      "Bytes": 256,
+      "Hash": "09665DA755187A8E3F4A08C13E2049B913A9922E4D29CA88B5C16370EA51584C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\text.h",
+      "Bytes": 5323,
+      "Hash": "9566FA33183D365BCFDC49E7FDEE80F43EB04804F56EFF53D8224D632C2AB198"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\type_reflection.h",
+      "Bytes": 15302,
+      "Hash": "EA6E1ADFCB28055601D32EF51397B44BCD885817E40A351B700B1B10C231B49E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\utf8proc.h",
+      "Bytes": 34849,
+      "Hash": "908AC5E3C2FA5EF81BEEE44A874D36FA628196FF0A82F47708DD9C407C4B8C96"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_abi.h",
+      "Bytes": 57139,
+      "Hash": "EC4B0BA87D6B0F18DEB4D8D32D608EEEA4B7B96536B7D951E9035528AC04F000"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_any_abi.h",
+      "Bytes": 4655,
+      "Hash": "2C611DC0963E4E0FC599FBFBC95FFB83764392F3051CD2C730966725A6191F73"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_application.h",
+      "Bytes": 7467,
+      "Hash": "B20EA1AD5C8D16B2B3EFE02344D6A0FF25293076CBA518442BA6A00971D1791E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_async.h",
+      "Bytes": 3171,
+      "Hash": "AAFFA3DB6F54D550B15733DBC13FF82864CA55296E00B60B3004A89B08A7F96E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_borrow_identity.h",
+      "Bytes": 4129,
+      "Hash": "622014CBC471567063D6CD0C862AC57C1156DFBD37A76943647B048CD8B2BE17"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_container_abi.h",
+      "Bytes": 1821,
+      "Hash": "0CE9F474C8D8FA0A6A4F9E457273B7EBCB094A79254E8295071EEBD7C86CA058"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_container_projection.h",
+      "Bytes": 1577,
+      "Hash": "A62354205EED6D9C7AEFCE31C5B4E2D58A136D556F2A9460AC9A73485316E0DA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_dictionary_abi.h",
+      "Bytes": 3625,
+      "Hash": "58E27C7D1C893DFE53F407591DE237701005990255600B02A195BE8C3959CE15"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_inline_place.h",
+      "Bytes": 2801,
+      "Hash": "092E3E530D01B4E467268B2C4A26DB203EFF5C71FB8DC4C9F0C7095A6707AA3F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_iterator.h",
+      "Bytes": 2720,
+      "Hash": "3DB6D492AFA1F12BE351A1E4AC33C2A4E1CC69E0E05137413E4159127DF4E55F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_native.h",
+      "Bytes": 3762,
+      "Hash": "4ED3BF7061D74AC585A965B2B9F50783B8A677527EF9E63ECD320D1181766CAE"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_object_abi.h",
+      "Bytes": 13750,
+      "Hash": "B7816C5BC048B018EE3AEA3AE27107D2692FEDBB0112B7D85C866001A7C111AF"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_sequence_abi.h",
+      "Bytes": 3432,
+      "Hash": "F3CD113E3B930F53FFAF15D4B4108833F0F5B22959B5819C62AAD7FF83FC4C90"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_sequence_projection.h",
+      "Bytes": 5358,
+      "Hash": "7CEA3050AA5A0A168A30D1D087DEEDB8A257365263AF58C9152CB24E34DE7C05"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\runtime\\include\\wir_task_abi.h",
+      "Bytes": 8741,
+      "Hash": "0C2416DDC37C1B84588848790602F6BE8D083CD66629009327E1A38D5EF8B588"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\module_api.h",
+      "Bytes": 34681,
+      "Hash": "E393686941921B753D39D5972D80E5E8EF3B5B6D4F94BB0DCDD90DBD14851164"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_features.h",
+      "Bytes": 11383,
+      "Hash": "42F2371E7D71EF6A97AF8C0E68F18F106501E1837DDBF9C085E73CF6EE00D33E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_module_contract.h",
+      "Bytes": 4913,
+      "Hash": "86D635473758254768F181A929EE02089EDE89675CBD8FC447414FD2236A32F5"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_module_session.h",
+      "Bytes": 1781,
+      "Hash": "10EAF0E56AE1343FDBA8414A113A854FEF139F05BC234B64285A441185857BD7"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_module_tasks.h",
+      "Bytes": 1595,
+      "Hash": "CAE2016CBD2207E418CD4D5FAAFA5188A26A9D8110F61CF831386DF25A5877FA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_abi.h",
+      "Bytes": 12723,
+      "Hash": "2E57E8B2552994D781E4A31364B4F1896AA9AE3EE23966C47C762A498C67794D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_any.h",
+      "Bytes": 1223,
+      "Hash": "FD805D04CD674B7CF7527F1F0972B2A7E1B97EE46B3CBFD200DF574DEF358A1E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_dictionary.h",
+      "Bytes": 1636,
+      "Hash": "5F764C062D7753948A0DBDF58EB24EC6C77E30B1A2FF7BB164F51F83CCB28B60"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_object.h",
+      "Bytes": 2541,
+      "Hash": "F441474F09081D8E7E1E851BF46A823C29DF8F84791E8AE0BAE1B16351F18A4A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_pod.h",
+      "Bytes": 2707,
+      "Hash": "A447284705DB99C1799CC9752F2E81109D16036981E4B14068CC14D781524361"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_reflection.h",
+      "Bytes": 2650,
+      "Hash": "9AD6E80BAC824ACB5E59E96A2C0D38A6A61C6DAD2CF5F7FC75E49C66DD105A2D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_sdk.h",
+      "Bytes": 42297,
+      "Hash": "3677994BE250BBAB5CA4C7639D37192D21E883A70BEF0189FE73FA74C90053E5"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_native_sequence.h",
+      "Bytes": 1735,
+      "Hash": "8344B403D51905239DBD19E3001615DE4093A01BC5ED1CBBE79973A2DEA03CA6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_sdk.h",
+      "Bytes": 340748,
+      "Hash": "A841C36D9CFA26FCA5FC1EE11C048DBD11BF34BD71DC03BC4B7D97C045D5F23A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_values.h",
+      "Bytes": 37380,
+      "Hash": "BECCA6656546A0445D36A03963AAACDECE733589A41A71364C05F282EF36F5F0"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\sdk\\include\\wio_version.h",
+      "Bytes": 797,
+      "Hash": "C246ABDF0D80153D7296E5480FF05E42B1459B9F54C0A1783BFA86791EA8A9D1"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\algorithms.wio",
+      "Bytes": 10322,
+      "Hash": "842DC484D984C432BE009E0CE3FE31CC91A05CEB620DCA91B6643B0EB6FB1851"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\assert.wio",
+      "Bytes": 7653,
+      "Hash": "EB8DC50B2D88105D3225BC472940F726F1C8EA0C8EEC48634E09E2E76B00C2DE"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\async.wio",
+      "Bytes": 25049,
+      "Hash": "D38242CECF5BE677A4AB9C31F86FAE61843DFA30B18966ED20B5BFC8CF6F2AD2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\attribute.wio",
+      "Bytes": 8409,
+      "Hash": "CB0E32CAA97F2E9C313651DEFE4A6D8E652D761059A3179CE0493B2798A5F242"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\bigint.wio",
+      "Bytes": 2362,
+      "Hash": "C2D53DED652BE30752B80B4930D77A40A8187B2A63B175D585828AEA72F286EE"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\binary.wio",
+      "Bytes": 2753,
+      "Hash": "05645A9450E7773F330A3BDAA0BFE92A9AAF69E8FF38AAD2FAC0996CA83EAEC0"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\buffer.wio",
+      "Bytes": 14328,
+      "Hash": "2AAC286EE9F3772926F703CD61DD1DA7918C108D214E717E1095876D55D3D0DA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\builders.wio",
+      "Bytes": 11156,
+      "Hash": "3A564315D5DCD48390C1F95CC00EAA6D1F2BCC6FE2C9BE9165E8DE534122C68C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\chars.wio",
+      "Bytes": 2056,
+      "Hash": "2A606F8A90A1DABBAB5F0110C6EFFF45C4B4251182E1A2603639213AF5BBE734"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\collections.wio",
+      "Bytes": 8113,
+      "Hash": "08137C4F752E2B237E896BB4A316C482FF009E1C7DE9456808E9D01E2C344D8F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\compression.wio",
+      "Bytes": 1738,
+      "Hash": "8EEE09A17B284B96AC64E4EC571261FC87722B5946A77B4AF885B29F069A39DE"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\concurrency.wio",
+      "Bytes": 11694,
+      "Hash": "2B022AEF1F8EDB81122C912FD2A4912DC760E8A2B17B287DC4A1E5B9F46FD9F8"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\config.wio",
+      "Bytes": 2574,
+      "Hash": "9F25DBF85F57D6CB12D0D34401B4D9519DAF6B1485023FBCEE7D7C07CD8A8D75"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\console.wio",
+      "Bytes": 42016,
+      "Hash": "C685183FE7E94740D7FF9185EAD1F3B6B0E3B00447352D94EBF11B1AC9CF30E0"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\convert.wio",
+      "Bytes": 17741,
+      "Hash": "43B76D1B9A5CEE411F890DDAD1AB0E26522D32183A97C3211E296C55EF096F34"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\csv.wio",
+      "Bytes": 2534,
+      "Hash": "9DEA1E25DBBA0048CF4D8357CBFE9D69E5A0F3C4109A7B58E1AEBC6A40279952"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\encoding.wio",
+      "Bytes": 891,
+      "Hash": "A386898EE659747C5530979EAF7FF2AC142702E80C9D366E788D382665593F81"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\environment.wio",
+      "Bytes": 3277,
+      "Hash": "7FBA15F0E2560EE1F86B7559F878F0228B94BA590F735B40D4FCFCBE3F1A289C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\event.wio",
+      "Bytes": 2033,
+      "Hash": "C62279A3A66327A440BCEAD654AAF674681122163908B9C351C470541B54756E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\fs.wio",
+      "Bytes": 31338,
+      "Hash": "B2F3246C4323E2DCCB611B80B6349F494CBB6C3A629F5465AF00CEC9F40AF8C2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\geometry.wio",
+      "Bytes": 1714,
+      "Hash": "61B1E242B46E000FD92B0B54289E7A59C3EC9E1447B3958B82BEEB9B2F4748E1"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\hash.wio",
+      "Bytes": 1359,
+      "Hash": "0361B37C7762658DB0B75E9E9ED81747C4DBEAD5BCC2111747E29F69750346BD"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\heap.wio",
+      "Bytes": 956,
+      "Hash": "3656D21F0C37998B45FF5E1A0A169D18F79567F1A7D449E52411D0BF0D8AC837"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\io.wio",
+      "Bytes": 21138,
+      "Hash": "AC3F8C0F7965CE85405F56F61950804F14B9242218FF8BBC83AD4E00B943D93E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\iterator.wio",
+      "Bytes": 2037,
+      "Hash": "DE8C7351C43E7A21211600B63DBDC175C9D116344F6171A6B940A78549F99397"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\json.wio",
+      "Bytes": 26876,
+      "Hash": "DEB52BEE1AD02201A9C3BE55D742647985B61B8D70F89A1BA036B1225CE3D64D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\localization.wio",
+      "Bytes": 608,
+      "Hash": "12A825C5940FCB68A9F635A80888BE36DFF80FF8804674942F0D6DDDAA51476A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\log.wio",
+      "Bytes": 5427,
+      "Hash": "59CA7F259BB04FB30E635E47103E1BD4BF3556020AA862E8AF9B9ED6EB13C48F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\math.wio",
+      "Bytes": 37983,
+      "Hash": "8FF0328263C7B6CD97DE0DE2E87C97468022B7D7F92F4467BE277CAFD2838F3E"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\meta.wio",
+      "Bytes": 3936,
+      "Hash": "FAB82EC4CE5DE6C6C1EFB5C8665242294886053519F840B1E1C6E38D9301B5DE"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\mime.wio",
+      "Bytes": 1166,
+      "Hash": "09C493FC48CC88A7AFDBE1BDC474A4F9D421D677B2C8EEBF32D8D7CB0D16AFF1"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\net.wio",
+      "Bytes": 21591,
+      "Hash": "212462841D6AA0EB5DC38FCCF9FD483ED94DA4CA598375154B3A6B644373904D"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\numeric.wio",
+      "Bytes": 15176,
+      "Hash": "06A088702CE119C3790597DD2F6AC3DC7A5D1391F9315219A3265747A12EEA1B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\option.wio",
+      "Bytes": 4207,
+      "Hash": "2E213A94DFD83A2161E71F4A7823804ED1AE80F01E9F1BAAB4362E854B48585A"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\os.wio",
+      "Bytes": 3995,
+      "Hash": "EE2BB2EB0F46CB31399AA231E297019C0F512A1E346E7762CAFC6929AB78D7D6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\path.wio",
+      "Bytes": 8517,
+      "Hash": "202E2023855F0B7A7A903D566D6A9A3607BF76266FE1196BD3F5AC17B5130199"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\platform.wio",
+      "Bytes": 2500,
+      "Hash": "D3488F6CA8C809A1298C7D934A1E8EBB636F465D25E083625DBE74994E9E5572"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\process.wio",
+      "Bytes": 26008,
+      "Hash": "D7DDAD13E3A61EDD315E31A3468DCC598CD024BF9EE1D665E7504F7E203DA39C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\queue.wio",
+      "Bytes": 4643,
+      "Hash": "EFB0390FFBEBCA9797626EFEE6878093DDB53C671769A6DB07E8331EF4F66CED"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\random.wio",
+      "Bytes": 5983,
+      "Hash": "93B67CDB1BB112B3841E3CE58353C408448D97030D20EB065F211F755E767D6C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\range.wio",
+      "Bytes": 3840,
+      "Hash": "BDFD42C7F829BDE339DE1DE75D47735A2479E3D3F79501EAFB217F573B45A128"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\reflect.wio",
+      "Bytes": 18056,
+      "Hash": "DB0EEB71968B516F6D431BD19C6466E2C1AFA3FFA92D442340D5AA4F7E85550F"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\regex.wio",
+      "Bytes": 13239,
+      "Hash": "A85CBAC447F2C996801E62EE95AC1ECF6BEB3A3DE2A11F16C7FFD5A60F102612"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\resource.wio",
+      "Bytes": 2560,
+      "Hash": "3D1CC9A30E4D4D0FCA00ACD034A35635BEB4CBDAFC152722710A27DD021B42AA"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\result.wio",
+      "Bytes": 6930,
+      "Hash": "0DE8698553079010E59EF84C0185EA6651F5CB90FFADEEAFBEEFF48026AFA3CF"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\semver.wio",
+      "Bytes": 4514,
+      "Hash": "26404840C769A02C3C9884F0CAFEC2823F33529B1B29CDE0EB5E6B0EA22EFE60"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\serialization.wio",
+      "Bytes": 3460,
+      "Hash": "8F403151BC376164F99C7DFB55EEA855A1EEB4FBE305C3F86589E17571CAFEF0"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\sets.wio",
+      "Bytes": 5401,
+      "Hash": "1E94CE69FFE36A8EBF6AFD1EEBE34359A43FA2E4C919DBAE7E5D256480D9D805"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\sort.wio",
+      "Bytes": 3936,
+      "Hash": "0FF5E75027FB27EAC728A6E1CBF6410B80E23C2BF8FACB5C84591529305ED404"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\span.wio",
+      "Bytes": 4779,
+      "Hash": "C61B054CFDD7CF1E4E537CFC4D46DB94FC2BD7D761FECEDCE7941B87B02CD915"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\statistics.wio",
+      "Bytes": 2510,
+      "Hash": "F1A7ACFC6E5589484C279CAE35805A5F08BFDDADB522054E5004091EDC3FC4B0"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\stream.wio",
+      "Bytes": 2777,
+      "Hash": "16B14F626EF68094D6B6694E741042634AC539AFAEFB167C42976913E948B957"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\strings.wio",
+      "Bytes": 10290,
+      "Hash": "4AF01788AE7E1CE1D6E4EC6720087E7B8E7040FACDA769A1F92C67AEF149DC94"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\time.wio",
+      "Bytes": 6024,
+      "Hash": "18B3464FC4C885720B14C910C024BC907E46D324E7D3087D6149E189D76B61A6"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\traits.wio",
+      "Bytes": 2933,
+      "Hash": "21E50A8547B0362FECB584104E54C02B209CDFD1CD0E3B3CE310141148AD8698"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\tuple.wio",
+      "Bytes": 1527,
+      "Hash": "5853AF3E3E1B089DE05037EB3A84820A37399C30AD425F751DBDE8E29A1CC592"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\unicode.wio",
+      "Bytes": 8146,
+      "Hash": "59933F8064E6E5BC7DB4D54AA38D206EB45BF3AFD4CB36F12ABCA01830824214"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\uuid.wio",
+      "Bytes": 629,
+      "Hash": "1CC08C09D1DD453C3DE4BA9F5B8E6869F1BB8E3557796EA3C08BE952C9BB2E36"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\std\\vector.wio",
+      "Bytes": 49252,
+      "Hash": "A4FD77050DDF1AE5455493317A6AEBF8A2A68D27C7CC875EC63648445C2EF86B"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\measurement.py",
+      "Bytes": 15195,
+      "Hash": "367D71149726CEC1BC2049ADDB80F08A65FC09B2448D02A3FA75510C72DC9499"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\native_costs\\memory\\costs.wio",
+      "Bytes": 2341,
+      "Hash": "DF44FA8AECF2895AE751653F9F62E13447B2B10245E25B935BF81DFC48291D40"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\native_costs\\memory\\probe.h",
+      "Bytes": 16219,
+      "Hash": "0E78A24680264BF25785BA5397623A9D16AA66D220E93ABEE5E34D744696785C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\tests\\performance\\native_costs\\memory\\run.py",
+      "Bytes": 10070,
+      "Hash": "874FA604A24055EF42AEB18DA3B98FDED954CBCDFE966A17CA0F6BFA7A7F1D07"
+    }
+  ],
+  "ArtifactsAfter": [
+    {
+      "Path": "F:\\Projects\\wio\\build\\native-memory-attribution\\cf37689310584136ab1b37da26bbdf03\\costs.wio",
+      "Bytes": 2341,
+      "Hash": "DF44FA8AECF2895AE751653F9F62E13447B2B10245E25B935BF81DFC48291D40"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\native-memory-attribution\\cf37689310584136ab1b37da26bbdf03\\costs.wio.cpp",
+      "Bytes": 141044,
+      "Hash": "C513EC8E1A8CF1CD5FBDDFC7469B91BF87D83E8540A2C2C1DCA0C00A072E9D77"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\native-memory-attribution\\cf37689310584136ab1b37da26bbdf03\\memory.exe",
+      "Bytes": 1299882,
+      "Hash": "191AD004A15CF585D97D402384918AFEC2404046E281A6ACB3C49CD15807B928"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\native-memory-attribution\\cf37689310584136ab1b37da26bbdf03\\probe.h",
+      "Bytes": 16219,
+      "Hash": "0E78A24680264BF25785BA5397623A9D16AA66D220E93ABEE5E34D744696785C"
+    }
+  ],
+  "SourcesUnchanged": true,
+  "ArtifactsUnchanged": true
+}

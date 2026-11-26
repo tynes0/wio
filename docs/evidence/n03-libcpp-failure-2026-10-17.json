@@ -1,0 +1,29 @@
+{
+  "passed": false,
+  "processes": [
+    {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-O2",
+        "/Users/runner/work/wio/wio/tests/floating_value_format_test.cpp",
+        "-I/Users/runner/work/wio/wio/runtime/include",
+        "-o",
+        "/Users/runner/work/wio/wio/build/n03-format-semantics/5d3fa64716e84c83a47b6a0ff9339627/format-probe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/Users/runner/work/wio/wio/build/n03-format-semantics/5d3fa64716e84c83a47b6a0ff9339627/format-probe"
+      ],
+      "expectedExitCode": 0,
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "format mismatch: -0x1.a349dp+20 expected=-1.71740e+06 actual=-1.7174e+06\nfloating output differs from default stream\n"
+    }
+  ]
+}

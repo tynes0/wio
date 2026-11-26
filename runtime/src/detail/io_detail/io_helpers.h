@@ -141,7 +141,13 @@ namespace wio::runtime::detail::io_helpers
             if (data == nullptr)
                 return MakeWriteResult(WriteError::null_data, size, 0);
 
+#if defined(__APPLE__)
+            // Darwin does not expose fwrite_unlocked. flockfile is recursive,
+            // so the caller's explicit lock remains valid with ordinary fwrite.
+            const std::size_t written = std::fwrite(data, 1, size, file);
+#else
             const std::size_t written = ::fwrite_unlocked(data, 1, size, file);
+#endif
             if (written == size)
                 return MakeWriteResult(WriteError::none, size, written);
 

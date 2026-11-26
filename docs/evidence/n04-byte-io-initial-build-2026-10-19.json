@@ -1,0 +1,12 @@
+[
+  {
+    "command": [
+      "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+      "F:\\Projects\\wio\\build\\n04-byte-io-before-2026-10-18\\main.wio",
+      "--emit-cpp"
+    ],
+    "exitCode": 1,
+    "stdout": "Error [F:\\Projects\\wio\\build\\n04-byte-io-before-2026-10-18\\main.wio:20:9]: No matching overload for 'Seek' with arguments (ref mut ref mut File, i64). Candidates: Seek(ref mut File, i64, SeekOrigin) -> void; Seek(ref mut File, i64) -> void.\nError [F:\\Projects\\wio\\build\\n04-byte-io-before-2026-10-18\\main.wio:22:29]: Argument mismatch at index 0: Expected 'ref mut File', but got 'ref mut ref mut File'. Hint: Type 'ref mut File' does not inherit from 'File'.\nError [F:\\Projects\\wio\\build\\n04-byte-io-before-2026-10-18\\main.wio:23:33]: Argument mismatch at index 0: Expected 'ref mut File', but got 'ref mut ref mut File'. Hint: Type 'ref mut File' does not inherit from 'File'.\n",
+    "stderr": ""
+  }
+]

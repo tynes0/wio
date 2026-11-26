@@ -1,0 +1,127 @@
+using cpp::header("vm_any_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_any::Sample)]
+component Sample {
+    public value: i32;
+}
+[Native, CppName(vm_any::Read)]
+fn Read(value: view any) -> i32;
+[Native, CppName(vm_any::Echo)]
+fn Echo(value: any) -> any;
+[Native, CppName(vm_any::MutateCopy)]
+fn MutateCopy(value: any);
+[Native, CppName(vm_any::Replace)]
+fn Replace(value: ref any);
+[Native, CppName(vm_any::Same)]
+fn Same(first: view any, second: ref any) -> bool;
+[Native, CppName(vm_any::MakeText)]
+fn MakeText() -> any;
+[Native, CppName(vm_any::ReadText)]
+fn ReadText(value: view any) -> bool;
+[Native, CppName(vm_any::GrowCopy)]
+fn GrowCopy(value: any);
+[Native, CppName(vm_any::SetCopy)]
+fn SetCopy(value: any);
+[Native, CppName(vm_any::MakeSample)]
+fn MakeSample() -> any;
+[Native, CppName(vm_any::ReadSample)]
+fn ReadSample(value: view any) -> bool;
+[Native, CppName(vm_any::Token)]
+fn Token() -> opaque;
+[Native, CppName(vm_any::ReadOpaque)]
+fn ReadOpaque(value: view any) -> bool;
+[Native, CppName(vm_any::IsNull)]
+fn IsNull(value: view any) -> bool;
+[Native, CppName(vm_any::Null)]
+fn Null() -> any;
+[Native, CppName(vm_any::Unsupported)]
+fn Unsupported() -> any;
+[Native, CppName(vm_any::ReadUnsupported)]
+fn ReadUnsupported(value: view any) -> i32;
+[Native, CppName(vm_any::Print)]
+fn Print(value: string);
+
+fn Escape() -> any {
+    return MakeSample();
+}
+
+fn Entry() -> i32 {
+    mut blank: any;
+    if (!IsNull(ref blank) or blank is i32) {
+        return 12;
+    }
+    Replace(ref blank);
+    if ((blank fit string) != "new\0value") {
+        return 13;
+    }
+    mut value: any = 7;
+    let alias: any = value;
+    if (Read(ref value) != 7 or !(value is i32) or value is string) {
+        return 1;
+    }
+    let echoed = Echo(value);
+    MutateCopy(value);
+    if ((value fit i32) != 17 or (alias fit i32) != 17 or (echoed fit i32) != 17) {
+        return 2;
+    }
+    if (!Same(ref value, ref value)) {
+        return 3;
+    }
+    Replace(ref value);
+    if (!(value is string) or (value fit string) != "new\0value" or (alias fit i32) != 17) {
+        return 4;
+    }
+    let unicode: any = u"İstanbul 🚀";
+    let fromNative = MakeText();
+    if (!ReadText(ref unicode) or (fromNative fit text) != u"İstanbul 🚀") {
+        return 5;
+    }
+    let numbers: i32[] = [3, 7];
+    let array: any = numbers;
+    let arrayAlias: any = array;
+    GrowCopy(array);
+    mut fitted = arrayAlias fit i32[];
+    if (fitted.Count() != 3usize or fitted[2usize] != 19 or numbers.Count() != 2usize) {
+        return 6;
+    }
+    fitted.Push(29);
+    if ((array fit i32[]).Count() != 3usize) {
+        return 7;
+    }
+    let values: Dict<string, i32> = { "local": 11 };
+    let dictionary: any = values;
+    SetCopy(dictionary);
+    let mapped = dictionary fit Dict<string, i32>;
+    if (mapped["native"] != 23 or values.ContainsKey("native")) {
+        return 8;
+    }
+    let sample: any = Sample();
+    let nativeSample = Escape();
+    if (!ReadSample(ref sample) or !ReadSample(ref nativeSample) or (nativeSample fit Sample).value != 7) {
+        return 9;
+    }
+    let pointer: any = Token();
+    if (!ReadOpaque(ref pointer) or !(pointer is opaque) or (pointer fit opaque) != Token()) {
+        return 10;
+    }
+    let empty = Null();
+    if (!IsNull(ref empty) or empty is i32 or empty != null) {
+        return 11;
+    }
+    let truth: any = true;
+    let decimal: any = 1.25;
+    let character: any = '\0';
+    let large: any = 3000000000i64;
+    if (!(Echo(truth) fit bool) or (Echo(decimal) fit f64) != 1.25 or
+        (Echo(character) fit char) != '\0' or (Echo(large) fit i64) != 3000000000i64) {
+        return 14;
+    }
+    let unknown = Unsupported();
+    let forwarded = Echo(unknown);
+    if (ReadUnsupported(ref forwarded) != 1) {
+        return 15;
+    }
+    Print("native-any-ok:17");
+    return 0;
+}

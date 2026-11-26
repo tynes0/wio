@@ -1,12 +1,19 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(wio_lang
-    VERSION 0.18.1
+    VERSION 0.19.0
     LANGUAGES C CXX
 )
 
 include(CTest)
 include(GNUInstallDirs)
+
+set(WIO_TOP_LEVEL_BUILD OFF)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(WIO_TOP_LEVEL_BUILD ON)
+    include(cmake/WioSolutionLayout.cmake)
+    wio_enable_solution_folders()
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,7 +53,9 @@ add_subdirectory(libs/frenum)
 # --- Main Project ---
 add_subdirectory(sdk)
 add_subdirectory(runtime)
+add_subdirectory(bytecode)
 add_subdirectory(compiler)
+add_subdirectory(vm)
 if (WIO_BUILD_APP)
     add_subdirectory(app)
 endif()
@@ -92,7 +101,10 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/docs/"
 )
 
 if (WIO_BUILD_APP)
-    set(WIO_DIST_DEPENDENCIES wio_app wio_runtime_backend)
+    set(WIO_DIST_DEPENDENCIES wio_app wio_runtime_backend wio_vm_runner)
+    if(TARGET wio_bench)
+        list(APPEND WIO_DIST_DEPENDENCIES wio_bench)
+    endif()
     if (TARGET wio_selfhost_cli)
         list(APPEND WIO_DIST_DEPENDENCIES wio_selfhost_cli)
     endif()
@@ -102,4 +114,9 @@ if (WIO_BUILD_APP)
         USES_TERMINAL
         VERBATIM
     )
+endif()
+
+if(WIO_TOP_LEVEL_BUILD)
+    wio_add_solution_catalogs()
+    wio_apply_solution_layout()
 endif()

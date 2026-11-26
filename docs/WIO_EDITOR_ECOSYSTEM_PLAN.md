@@ -71,6 +71,32 @@ same major/minor compatibility line, but the next Wio patch realigns it.
 
 ## 3. Delivery Plan
 
+### Immediate Backend Intermission - Rider-first Readability
+
+This slice runs after the dual-backend runtime/native-bridge core is usable and
+before the remaining v1 product blockers. It exists so the long stabilization
+work can be performed in a readable Wio editor instead of waiting for the full
+language-service program.
+
+Delivery order is intentionally user-driven:
+
+1. ship a Rider-first `wio-jetbrains` preview;
+2. verify the same core in CLion;
+3. ship the first `wio-vs` preview;
+4. continue the shared compiler-owned language-service rollout in all clients.
+
+The first JetBrains preview does not pretend to provide independent Wio
+semantics. It provides `.wio` file recognition, a lightweight lexical highlighter
+for keywords/types/comments/strings/numbers/attributes, brace matching,
+folding, indentation, manifest/project discovery, toolchain selection, and
+build/run/check/test commands. It is packaged and installable in Rider before
+semantic completion, navigation, and diagnostics are ready. The lexical layer
+remains as startup/failure fallback once semantic tokens arrive.
+
+This intermission is an ordering change, not a weakening of the v1 editor gate:
+the final Rider/CLion, Visual Studio, and VS Code releases must still converge
+on the compiler-owned protocol and shared conformance fixtures.
+
 ### v0.13.0 - Alignment Baseline
 
 - align `wio-vscode` package/VSIX version with Wio;

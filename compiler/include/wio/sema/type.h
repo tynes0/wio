@@ -40,8 +40,11 @@ namespace wio
             virtual TypeKind kind() const = 0;
             virtual std::string toString() const = 0;
             virtual std::string toCppString() const = 0;
-            
+
             static bool matchTypes(const Ref<Type>& lhs, const Ref<Type>& rhs);
+            // Nullable Any storage is qualified only for owning object/interface
+            // and opaque handles, not borrowed references or callbacks.
+            static bool isNullableAnyHandle(const Type* type);
 
             bool isNumeric() const;
             bool isCompatibleWith(const Ref<Type>& other) const;

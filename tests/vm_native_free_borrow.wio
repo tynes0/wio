@@ -1,0 +1,242 @@
+using cpp::header("vm_free_borrow_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_free_borrow::Packet)]
+component Packet {
+    public value: i32;
+}
+
+interface IRead {
+    fn Read() -> i32;
+}
+
+[From(IRead)]
+object Counter {
+    value: i32;
+    public OnConstruct(seed: i32) {
+        self.value = seed;
+        Constructed(0);
+    }
+    OnDestruct() {
+        Destroyed(0);
+    }
+    public fn Read() -> i32 {
+        return self.value;
+    }
+    public fn Set(value: i32) {
+        self.value = value;
+    }
+}
+
+object Holder<T, const Tag: usize = 7> {
+    value: T;
+    public OnConstruct(value: T) {
+        self.value = value;
+        Constructed(1);
+    }
+    OnDestruct() {
+        Destroyed(1);
+    }
+    public fn Read() -> T {
+        return self.value;
+    }
+    public fn Set(value: T) {
+        self.value = value;
+    }
+}
+
+[Native, CppName(vm_object_any::Constructed)]
+fn Constructed(kind: i32);
+[Native, CppName(vm_object_any::Destroyed)]
+fn Destroyed(kind: i32);
+[Native, CppName(vm_object_any::Constructions)]
+fn Constructions(kind: i32) -> i32;
+[Native, CppName(vm_object_any::Destructions)]
+fn Destructions(kind: i32) -> i32;
+[Native, CppName(vm_free_borrow::Borrow)]
+fn Borrow(value: ref i32) -> ref i32;
+[Native, CppName(vm_free_borrow::Observe)]
+fn Observe(value: view i32) -> view i32;
+[Native, CppName(vm_free_borrow::Choose)]
+fn Choose(first: ref i32, second: ref i32, left: bool) -> ref i32;
+[Native, CppName(vm_free_borrow::ViewChoose)]
+fn Mixed(first: view i32, second: ref i32, left: bool) -> view i32;
+[Native, CppName(vm_free_borrow::Rebind)]
+fn Rebind(target: ref Counter, source: Counter) -> ref Counter;
+[Native, CppName(vm_free_borrow::Borrow)]
+fn ObjectBorrow(value: ref Counter) -> ref Counter;
+[Native, CppName(vm_free_borrow::Borrow), Instantiate(Holder<i32, 7>)]
+fn GenericBorrow<T>(value: ref T) -> ref T;
+[Native, CppName(vm_free_borrow::Observe)]
+fn InterfaceView(value: view IRead) -> view IRead;
+[Native, CppName(vm_free_borrow::Borrow)]
+fn Nullable(value: ref Counter?) -> ref Counter?;
+[Native, CppName(vm_free_borrow::Borrow)]
+fn AnyBorrow(value: ref any) -> ref any;
+[Native, CppName(vm_free_borrow::Borrow)]
+fn ArrayBorrow(value: ref any[]) -> ref any[];
+[Native, CppName(vm_free_borrow::Observe)]
+fn ArrayView(value: view any[]) -> view any[];
+[Native, CppName(vm_free_borrow::Borrow)]
+fn MapBorrow(value: ref Dict<string, any>) -> ref Dict<string, any>;
+[Native, CppName(vm_free_borrow::Borrow)]
+fn PodBorrow(value: ref Packet) -> ref Packet;
+[Native, CppName(vm_free_borrow::Observe)]
+fn TextView(value: view text) -> view text;
+[Native, CppName(vm_free_borrow::Observe)]
+fn StringView(value: view string) -> view string;
+[Native, CppName(vm_free_borrow::Borrow)]
+fn PointerBorrow(value: ref opaque?) -> ref opaque?;
+[Native, CppName(vm_free_borrow::PointerSeed)]
+fn PointerSeed() -> opaque;
+[Native, CppName(vm_free_borrow::Set)]
+fn Set(target: ref i32, value: i32);
+[Native, CppName(vm_free_borrow::Update)]
+fn Update(target: ref Packet);
+[Native, CppName(vm_free_borrow::Hidden)]
+fn Hidden(target: view Packet) -> i32;
+[Native, CppName(vm_free_borrow::Global)]
+fn Global(value: ref i32) -> ref i32;
+[Native, CppName(vm_free_borrow::Project)]
+fn Project(target: ref Packet, field: ref i32) -> ref i32;
+[Native, CppName(vm_free_borrow::Print)]
+fn Print();
+[Native, CppName(vm_free_borrow::Reject)]
+fn Reject(action: fn() -> i32) -> bool;
+
+fn Forward(value: ref i32) -> ref i32 {
+    return Borrow(value);
+}
+
+fn GlobalProbe() -> i32 {
+    mut value = 1;
+    return deref Global(ref value);
+}
+fn ProjectProbe() -> i32 {
+    mut value = Packet();
+    return deref Project(ref value, ref value.value);
+}
+fn BorrowProbe() -> i32 {
+    mut value = 5;
+    return deref Borrow(ref value);
+}
+fn ObserveProbe() -> i32 {
+    mut value = 6;
+    return deref Observe(ref value);
+}
+fn SafePoint() -> i32 {
+    return 0;
+}
+fn Balanced() -> i32 {
+    return Constructions(0) - Destructions(0) + Constructions(1) - Destructions(1);
+}
+
+fn Entry() -> i32 {
+    mut round = 0;
+    while (round < 30) {
+        {
+            mut number = 7;
+            mut other = 8;
+            let alias: ref i32 = Forward(ref number);
+            let observed: view i32 = Observe(ref number);
+            Set(alias, 17);
+            if (number != 17 or deref observed != 17) {
+                return 1;
+            }
+            Set(Choose(ref number, ref other, false), 19);
+            if (other != 19 or number != 17 or deref Mixed(ref number, ref number, false) != 17) {
+                return 2;
+            }
+
+            mut first = Counter(21);
+            let previous = first;
+            let replacement = Counter(22);
+            let objectAlias: ref Counter = Rebind(ref first, replacement);
+            objectAlias.Set(23);
+            let identity: ref Counter = ObjectBorrow(ref first);
+            identity.Set(24);
+            if (first != replacement or first.Read() != 24 or previous.Read() != 21) {
+                return 3;
+            }
+            let contract: IRead = first fit IRead;
+            if (InterfaceView(ref contract).Read() != 24) {
+                return 4;
+            }
+            mut optional: Counter? = null;
+            let optionalAlias: ref Counter? = Nullable(ref optional);
+            if (deref optionalAlias != null) {
+                return 5;
+            }
+            optional = replacement;
+            if (deref optionalAlias != optional) {
+                return 6;
+            }
+
+            mut boxed: any = 25;
+            let boxedAlias: ref any = AnyBorrow(ref boxed);
+            boxed = 26;
+            if (((deref boxedAlias) fit i32) != 26) {
+                return 7;
+            }
+            mut values: any[] = [boxed];
+            let valuesAlias: ref any[] = ArrayBorrow(ref values);
+            let valuesView: view any[] = ArrayView(ref values);
+            valuesAlias[0usize] = 27;
+            if ((values[0usize] fit i32) != 27 or (valuesView[0usize] fit i32) != 27) {
+                return 8;
+            }
+            mut mapped: Dict<string, any> = { "value": boxed };
+            let mappedAlias: ref Dict<string, any> = MapBorrow(ref mapped);
+            mappedAlias["value"] = 28;
+            if ((mapped["value"] fit i32) != 28) {
+                return 9;
+            }
+            mut pod = Packet();
+            let podAlias: ref Packet = PodBorrow(ref pod);
+            Update(podAlias);
+            if (pod.value != 42 or Hidden(ref pod) != 92) {
+                return 10;
+            }
+            let unicode = u"Wio 🌍";
+            if (deref TextView(ref unicode) != unicode) {
+                return 11;
+            }
+            let field: ref i32 = Borrow(ref pod.value);
+            Set(field, 43);
+            if (pod.value != 43 or Hidden(ref pod) != 92) {
+                return 14;
+            }
+            mut generic = Holder<i32, 7>(31);
+            let genericAlias: ref Holder<i32, 7> = GenericBorrow<Holder<i32, 7>>(ref generic);
+            genericAlias.Set(32);
+            if (generic.Read() != 32) {
+                return 15;
+            }
+            mut word = "first";
+            let wordView: view string = StringView(ref word);
+            word = "second";
+            if (deref wordView != "second") {
+                return 16;
+            }
+            mut pointer: opaque? = PointerSeed();
+            let pointerAlias: ref opaque? = PointerBorrow(ref pointer);
+            pointer = null;
+            if (deref pointerAlias != null) {
+                return 17;
+            }
+            pointer = PointerSeed();
+            if (deref pointerAlias != pointer) {
+                return 18;
+            }
+        }
+        if (Balanced() != 0) {
+            return 12;
+        }
+        round += 1;
+    }
+    if (!Reject(GlobalProbe)) {
+        return 13;
+    }
+    Print();
+    return 0;
+}

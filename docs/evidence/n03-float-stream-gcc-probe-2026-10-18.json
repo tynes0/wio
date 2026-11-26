@@ -1,0 +1,19 @@
+{
+  "compilerFlags": "-std=c++20 -O2 -Wall -Wextra -Werror -static-libstdc++ -static-libgcc -Iruntime/include",
+  "source": "tests/stream_fallback_test.cpp",
+  "baseline": {
+    "build": "g++ <compilerFlags> tests/stream_fallback_test.cpp -o build/n03-stream-copy-before-2026-10-18.exe",
+    "buildExitCode": 0,
+    "command": "build/n03-stream-copy-before-2026-10-18.exe --observe",
+    "exitCode": 0,
+    "scope": "Compiled before production header edits; --observe skips the future copy-removal assertion"
+  },
+  "final": {
+    "build": "g++ <compilerFlags> tests/stream_fallback_test.cpp -o build/n03-stream-copy-final-2026-10-18.exe",
+    "buildExitCode": 0,
+    "command": "build/n03-stream-copy-final-2026-10-18.exe",
+    "exitCode": 0,
+    "scope": "Final guarded helper; same-image explicit copy control, reserved/growing targets, strict assertions"
+  },
+  "note": "Diagnostics only, not timing or all malloc traffic. Baseline and final probes share the reserved 128-call allocation workload; later test additions widen correctness/growing-boundary coverage. Raw stdout is retained in the paired jsonl files."
+}

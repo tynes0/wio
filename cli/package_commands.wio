@@ -294,7 +294,7 @@ realm SelfHostedPackage {
         // Build the native deliverables, then stage the already-running
         // companion and the rest of the install tree in a separate step.
         let built = SelfHostedCli::Run?(
-            "cmake", ["--build", buildDirectory, "--target", "wio_app", "wio_runtime_backend", "--config", config], repositoryRoot);
+            "cmake", ["--build", buildDirectory, "--target", "wio_app", "wio_runtime_backend", "wio_vm_runner", "--config", config], repositoryRoot);
         if (built != 0) { return std::Ok<i32>(built); }
         let installed = SelfHostedCli::Run?(
             "cmake", ["--install", buildDirectory, "--config", config, "--prefix", distRoot], repositoryRoot);

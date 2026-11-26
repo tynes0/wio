@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cinttypes>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -399,24 +400,24 @@ namespace wio::runtime::std_io
     #endif
     }
 
-    [[nodiscard]] inline std::vector<unsigned char> ReadSomeByteValues(File& file, const std::size_t maxSize)
+    [[nodiscard]] std::vector<unsigned char> ReadSomeByteValues(File& file, std::size_t maxSize);
+
+    [[nodiscard]] std::vector<unsigned char> ReadByteValues(File& file, std::size_t size);
+
+    // Write only existing elements. Neither size nor capacity changes, including
+    // on EOF/error. Exact reads may partially overwrite the destination on error.
+    [[nodiscard]] std::size_t ReadByteValuesInto(File& file, std::span<unsigned char> buffer);
+
+    [[nodiscard]] std::size_t ReadSomeByteValuesInto(File& file, std::span<unsigned char> buffer);
+
+    [[nodiscard]] inline std::size_t ReadByteValuesInto(File& file, std::vector<unsigned char>& buffer)
     {
-        const auto bytes = ReadSomeBytes(file, maxSize);
-        std::vector<unsigned char> result;
-        result.reserve(bytes.size());
-        for (const auto byteValue : bytes)
-            result.push_back(static_cast<unsigned char>(byteValue));
-        return result;
+        return ReadByteValuesInto(file, std::span<unsigned char>(buffer.data(), buffer.size()));
     }
 
-    [[nodiscard]] inline std::vector<unsigned char> ReadByteValues(File& file, const std::size_t size)
+    [[nodiscard]] inline std::size_t ReadSomeByteValuesInto(File& file, std::vector<unsigned char>& buffer)
     {
-        const auto bytes = ReadBytes(file, size);
-        std::vector<unsigned char> result;
-        result.reserve(bytes.size());
-        for (const auto byteValue : bytes)
-            result.push_back(static_cast<unsigned char>(byteValue));
-        return result;
+        return ReadSomeByteValuesInto(file, std::span<unsigned char>(buffer.data(), buffer.size()));
     }
 
     [[nodiscard]] inline std::size_t WriteByteValues(File& file, std::span<const unsigned char> bytes)
@@ -434,5 +435,32 @@ namespace wio::runtime::std_io
     [[nodiscard]] inline std::size_t WriteByteValues(File& file, const std::vector<unsigned char>& bytes)
     {
         return WriteByteValues(file, std::span<const unsigned char>(bytes.data(), bytes.size()));
+    }
+
+    // Borrow initialized elements only. Check subtraction rather than offset +
+    // count so even an overflowing caller-supplied range fails before any I/O.
+    [[nodiscard]] inline std::size_t WriteByteValuesRange(
+        File& file, const std::span<const unsigned char> bytes,
+        const std::size_t offset, const std::size_t count)
+    {
+        if (offset > bytes.size() || count > bytes.size() - offset)
+        {
+            throw std::out_of_range("WriteBytesRange range is outside the input");
+        }
+
+        // Match WriteByteValues: an empty range is a no-op, even for a closed file.
+        if (count == 0)
+        {
+            return 0;
+        }
+
+        return WriteByteValues(file, bytes.subspan(offset, count));
+    }
+
+    [[nodiscard]] inline std::size_t WriteByteValuesRange(
+        File& file, const std::vector<unsigned char>& bytes,
+        const std::size_t offset, const std::size_t count)
+    {
+        return WriteByteValuesRange(file, std::span<const unsigned char>(bytes.data(), bytes.size()), offset, count);
     }
 }

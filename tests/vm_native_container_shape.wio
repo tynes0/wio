@@ -1,0 +1,405 @@
+using cpp::header("vm_container_shape_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_shape::Sample)]
+component Sample
+{
+    public value: i32;
+}
+
+component Holder
+{
+    public rows: i32[][];
+    public untouched: i32;
+}
+
+object Item
+{
+    value: i32;
+
+    public OnConstruct(value: i32)
+    {
+        self.value = value;
+        Constructed();
+    }
+
+    OnDestruct()
+    {
+        Destroyed();
+    }
+
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+}
+
+object HeapHolder
+{
+    public values: i32[];
+    public keep: i32;
+
+    public OnConstruct()
+    {
+        self.values = [7];
+        self.keep = 71;
+    }
+}
+
+object FailingItem
+{
+    public OnConstruct()
+    {
+        Constructed();
+    }
+
+    OnDestruct()
+    {
+        Destroyed();
+        CleanupFailure();
+    }
+}
+
+[Native, CppName(vm_shape::Constructed)]
+fn Constructed();
+
+[Native, CppName(vm_shape::Destroyed)]
+fn Destroyed();
+
+[Native, CppName(vm_shape::CleanupFailure)]
+fn CleanupFailure();
+
+[Native, CppName(vm_shape::Constructions)]
+fn Constructions() -> i32;
+
+[Native, CppName(vm_shape::Destructions)]
+fn Destructions() -> i32;
+
+[Native, CppName(vm_shape::Grow)]
+fn Grow(values: ref i32[]);
+
+[Native, CppName(vm_shape::SameSize)]
+fn SameSize(values: ref i32[]);
+
+[Native, CppName(vm_shape::Aliased)]
+fn Aliased(first: view i32[], second: ref i32[]) -> bool;
+
+[Native, CppName(vm_shape::Shrink)]
+fn Shrink(values: ref i32[]);
+
+[Native, CppName(vm_shape::Words)]
+fn Words(values: ref string[]);
+
+[Native, CppName(vm_shape::Texts)]
+fn Texts(values: ref text[]);
+
+[Native, CppName(vm_shape::Bits)]
+fn Bits(values: ref bool[]);
+
+[Native, CppName(vm_shape::Samples)]
+fn Samples(values: ref Sample[]);
+
+[Native, CppName(vm_shape::Hidden)]
+fn Hidden(value: view Sample) -> i32;
+
+[Native, CppName(vm_shape::AnyValues)]
+fn AnyValues(values: ref any[]);
+
+[Native, CppName(vm_shape::Insert)]
+fn Insert(values: ref Dict<string, i32>);
+
+[Native, CppName(vm_shape::Remove)]
+fn Remove(values: ref Dict<string, i32>);
+
+[Native, CppName(vm_shape::Rename)]
+fn Rename(values: ref Dict<string, i32>);
+
+[Native, CppName(vm_shape::ClearMap)]
+fn ClearMap(values: ref Dict<string, i32>);
+
+[Native, CppName(vm_shape::Ordered)]
+fn Ordered(values: ref Tree<i32, string>);
+
+[Native, CppName(vm_shape::GrowRow)]
+fn GrowRow(values: ref Dict<string, i32[]>);
+
+[Native, CppName(vm_shape::ChangeRows)]
+fn ChangeRows(values: ref Dict<string, i32[]>);
+
+[Native, CppName(vm_shape::Nested)]
+fn Nested(values: ref i32[][]);
+
+[Native, CppName(vm_shape::Pair)]
+fn Pair(first: ref i32[], second: ref Dict<string, i32>);
+
+[Native, CppName(vm_shape::Overlap)]
+fn Overlap(values: ref i32[], item: ref i32);
+
+[Native, CppName(vm_shape::Fail)]
+fn Fail(values: ref i32[]);
+
+[Native, CppName(vm_shape::Push), Instantiate(Item), Instantiate(Item?)]
+fn Push<T>(values: ref T[], value: T);
+
+[Native, CppName(vm_shape::Clear), Instantiate(i32), Instantiate(Item), Instantiate(Item?), Instantiate(FailingItem)]
+fn Clear<T>(values: ref T[]);
+
+[Native, CppName(vm_shape::EraseFirst), Instantiate(Item)]
+fn EraseFirst<T>(values: ref T[]);
+
+[Native, CppName(vm_shape::Print)]
+fn Print();
+
+fn CleanupProbe() -> i32
+{
+    mut values: FailingItem[] = [FailingItem()];
+    Clear<FailingItem>(ref values);
+    return 0;
+}
+
+fn Balanced() -> bool
+{
+    return Constructions() == Destructions();
+}
+
+fn ExpiredArray() -> i32
+{
+    mut values: i32[] = [3, 7];
+    let item: view i32 = ref values[0usize];
+    Grow(ref values);
+    return deref item;
+}
+
+fn ExpiredPod() -> i32
+{
+    mut values: Sample[] = [Sample()];
+    let field: view i32 = ref values[0usize].value;
+    Samples(ref values);
+    return deref field;
+}
+
+fn ExpiredKey() -> i32
+{
+    mut values: Dict<string, i32> = { "keep": 7, "gone": 11 };
+    let item: view i32 = ref values["gone"];
+    Rename(ref values);
+    return deref item;
+}
+
+fn ExpiredNested() -> i32
+{
+    let row: i32[] = [3, 7];
+    mut values: Dict<string, i32[]> = { "row": row };
+    let item: view i32 = ref values["row"][0usize];
+    GrowRow(ref values);
+    return deref item;
+}
+
+fn ExpiredHeapArray() -> i32
+{
+    let holder = HeapHolder();
+    let item: view i32 = ref holder.values[0usize];
+    Grow(ref holder.values);
+    return deref item;
+}
+
+fn OverlapProbe() -> i32
+{
+    mut values: i32[] = [7];
+    Overlap(ref values, ref values[0usize]);
+    return 0;
+}
+
+fn FailureProbe() -> i32
+{
+    mut values: i32[] = [7];
+    Fail(ref values);
+    return 0;
+}
+
+fn PairProbe() -> i32
+{
+    mut values: i32[] = [7];
+    mut scores: Dict<string, i32> = { "keep": 11 };
+    Pair(ref values, ref scores);
+    return values.Count() == 2usize ? scores["new"] : -1;
+}
+
+fn SafePoint() -> i32
+{
+    return 0;
+}
+
+fn ObjectRound() -> i32
+{
+    let before = Destructions();
+    mut values: Item[] = [Item(7)];
+    Push<Item>(ref values, Item(19));
+    if (values.Count() != 2usize or values[1usize].Read() != 19 or Destructions() != before)
+    {
+        return 20;
+    }
+    EraseFirst<Item>(ref values);
+    if (values.Count() != 1usize or values[0usize].Read() != 19 or Destructions() != before + 1)
+    {
+        return 21;
+    }
+    Clear<Item>(ref values);
+    if (values.Count() != 0usize or Destructions() != before + 2)
+    {
+        return 22;
+    }
+    mut nullable: Item?[] = [null];
+    Push<Item?>(ref nullable, Item(23));
+    if (nullable.Count() != 2usize or nullable[0usize] != null)
+    {
+        return 23;
+    }
+    {
+        let present = nullable[1usize];
+        if (present == null or present.Read() != 23)
+        {
+            return 25;
+        }
+    }
+    Clear<Item?>(ref nullable);
+    return Destructions() == before + 3 ? 0 : 24;
+}
+
+fn Entry() -> i32
+{
+    mut round = 0;
+    while (round < 30)
+    {
+        mut numbers: i32[] = [3, 7];
+        let copy = numbers;
+        let stable: view i32 = ref numbers[0usize];
+        SameSize(ref numbers);
+        if (deref stable != 41)
+        {
+            return 1;
+        }
+        if (!Aliased(ref numbers, ref numbers) or numbers.Count() != 3usize or numbers[2usize] != 99 or copy[0usize] != 3)
+        {
+            return 2;
+        }
+        Shrink(ref numbers);
+        if (numbers.Count() != 1usize or numbers[0usize] != 41)
+        {
+            return 3;
+        }
+        Clear<i32>(ref numbers);
+        Grow(ref numbers);
+        if (numbers.Count() != 1usize or numbers[0usize] != 99)
+        {
+            return 4;
+        }
+        mut words: string[] = ["a"];
+        Words(ref words);
+        if (words[0usize] != "a\0tail" or words[1usize] != "n\0w")
+        {
+            return 5;
+        }
+        mut unicode: text[] = [u"İstanbul"];
+        Texts(ref unicode);
+        if (unicode[1usize] != u"🚀")
+        {
+            return 6;
+        }
+        mut bits: bool[] = [false];
+        Bits(ref bits);
+        if (bits.Count() != 2usize or !bits[1usize])
+        {
+            return 7;
+        }
+        mut samples: Sample[] = [Sample()];
+        Samples(ref samples);
+        if (samples[1usize].value != 19 or Hidden(ref samples[0usize]) != 43 or Hidden(ref samples[1usize]) != 83)
+        {
+            return 8;
+        }
+        let leaf: any = 7;
+        mut anys: any[] = [leaf];
+        AnyValues(ref anys);
+        if ((leaf fit i32) != 41 or ((anys[1usize] fit any) fit i32) != 19)
+        {
+            return 9;
+        }
+        mut scores: Dict<string, i32> = { "keep": 7, "gone": 11 };
+        let kept: ref i32 = ref scores["keep"];
+        Insert(ref scores);
+        if (deref kept != 41 or scores["new"] != 19)
+        {
+            return 10;
+        }
+        Remove(ref scores);
+        Rename(ref scores);
+        if (deref kept != 41 or scores.ContainsKey("gone") or scores["replacement"] != 23)
+        {
+            return 11;
+        }
+        kept = 67;
+        if (scores["keep"] != 67)
+        {
+            return 12;
+        }
+        ClearMap(ref scores);
+        mut tree: Tree<i32, string> = {< 3: "old" >};
+        let entry: view string = ref tree[3];
+        Ordered(ref tree);
+        if (deref entry != "changed" or tree[1] != "first" or tree[7] != "last")
+        {
+            return 13;
+        }
+        let row: i32[] = [3, 7];
+        let other: i32[] = [11];
+        mut rows: Dict<string, i32[]> = { "row": row, "gone": other };
+        let rowRoot: ref i32[] = ref rows["row"];
+        GrowRow(ref rows);
+        if (rowRoot.Count() != 3usize or rowRoot[2usize] != 99)
+        {
+            return 14;
+        }
+        let nestedItem: view i32 = ref rows["row"][0usize];
+        ChangeRows(ref rows);
+        if (deref nestedItem != 41 or rowRoot[0usize] != 41 or rows["new"][0usize] != 23)
+        {
+            return 15;
+        }
+        mut nested: i32[][] = [row, other];
+        let sibling: view i32 = ref nested[1usize][0usize];
+        Nested(ref nested);
+        if (nested[0usize].Count() != 3usize or deref sibling != 41)
+        {
+            return 16;
+        }
+        mut holder: Holder = Holder();
+        holder.rows = [row, other];
+        holder.untouched = 71;
+        let untouched: view i32 = ref holder.untouched;
+        Nested(ref holder.rows);
+        if (deref untouched != 71 or holder.rows[0usize].Count() != 3usize)
+        {
+            return 17;
+        }
+        let heapHolder = HeapHolder();
+        let heapKeep: view i32 = ref heapHolder.keep;
+        Grow(ref heapHolder.values);
+        if (deref heapKeep != 71 or heapHolder.values.Count() != 2usize)
+        {
+            return 26;
+        }
+        let objectResult = ObjectRound();
+        if (objectResult != 0)
+        {
+            return objectResult;
+        }
+        if (PairProbe() != 19 or Constructions() != Destructions())
+        {
+            return 18;
+        }
+        round += 1;
+    }
+    Print();
+    return 0;
+}

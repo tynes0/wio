@@ -1,0 +1,118 @@
+using cpp::header("vm_object_method_fixture.h");
+use std::attribute as attribute;
+
+object Badge {
+    value: i32;
+
+    public OnConstruct(seed: i32) {
+        self.value = seed;
+        Constructed(1);
+    }
+    OnDestruct() {
+        Destroyed(1);
+    }
+    public fn Read() -> i32 {
+        return self.value;
+    }
+    public fn Same() -> Badge {
+        return deref self;
+    }
+}
+
+object Counter {
+    value: i32;
+
+    public OnConstruct(seed: i32) {
+        self.value = seed;
+        Constructed(0);
+    }
+    OnDestruct() {
+        Destroyed(0);
+    }
+    public fn Read() -> i32 {
+        return self.value;
+    }
+    public fn Same() -> Counter {
+        return deref self;
+    }
+    public fn Choose(other: Counter) -> Counter {
+        return other;
+    }
+    public fn MakeBadge(seed: i32) -> Badge {
+        return Badge(seed);
+    }
+    public fn ReadFrom(badge: Badge) -> i32 {
+        return badge.Read();
+    }
+    public fn Relay(owner: Counter, badge: Badge) -> Counter {
+        let echoed = badge.Same();
+        if (echoed != badge) {
+            return deref self;
+        }
+        return owner;
+    }
+    public fn Label(value: string) -> string {
+        return value;
+    }
+    public fn EchoText(value: text) -> text {
+        return value;
+    }
+    public fn Fail(other: Counter, divisor: i32) -> Counter {
+        if (self.value / divisor > 0) {
+            return other;
+        }
+        return deref self;
+    }
+}
+
+[Native, CppName(vm_object_methods::Constructed)]
+fn Constructed(kind: i32);
+[Native, CppName(vm_object_methods::Destroyed)]
+fn Destroyed(kind: i32);
+[Native, CppName(vm_object_methods::Constructions)]
+fn Constructions(kind: i32) -> i32;
+[Native, CppName(vm_object_methods::Destructions)]
+fn Destructions(kind: i32) -> i32;
+[Native, CppName(vm_object_methods::Same)]
+fn NativeSame(value: Counter) -> bool;
+[Native, CppName(vm_object_methods::Pick)]
+fn NativePick(value: Counter, other: Counter) -> Counter;
+[Native, CppName(vm_object_methods::Exercise)]
+fn NativeExercise(value: Counter) -> i32;
+[Native, CppName(vm_object_methods::Capture)]
+fn Capture(value: Counter) -> u64;
+[Native, CppName(vm_object_methods::ClearCapture)]
+fn ClearCapture();
+[Native, CppName(vm_object_methods::Fail)]
+fn NativeFail(value: Counter) -> Counter;
+[Native, CppName(vm_object_methods::MakeForeign)]
+fn MakeForeign(value: Counter) -> Counter;
+
+fn CaptureEntry() -> u64 {
+    let value = Counter(42);
+    return Capture(value);
+}
+
+// Badge is deliberately absent from every free native signature. Its adapter
+// must be discovered through Counter's method signatures, not these roots.
+fn Entry() -> i32 {
+    {
+        let left = Counter(7);
+        let right = Counter(23);
+        if (not NativeSame(left)) {
+            return 1;
+        }
+        let chosen = NativePick(left, right);
+        if (chosen != right or chosen.Read() != 23) {
+            return 2;
+        }
+        if (NativeExercise(left) != 6225) {
+            return 3;
+        }
+    }
+    if (Constructions(0) != 2 or Destructions(0) != 2 or
+        Constructions(1) != 50 or Destructions(1) != 50) {
+        return 4;
+    }
+    return 0;
+}

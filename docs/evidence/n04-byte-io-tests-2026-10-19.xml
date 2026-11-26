@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-MSBuild"
+	tests="1"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="DESKTOP-0G3MR0G"
+	time="115"
+	timestamp="2026-10-19T00:50:42"
+	>
+	<testcase name="wio_n04_byte_io" classname="wio_n04_byte_io" time="115.615" status="run">
+		<properties>
+			<property name="cmake_labels" value="io;memory;native;optimization;ownership;vm"/>
+		</properties>
+		<system-out>F:\Projects\wio\build\n04-byte-io-contract\eb514e07cd3c4bc2950a3f79f31eee2e\results.json
+</system-out>
+	</testcase>
+</testsuite>

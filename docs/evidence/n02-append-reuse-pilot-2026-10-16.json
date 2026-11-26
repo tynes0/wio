@@ -1,0 +1,1996 @@
+{
+  "Stage": "N02",
+  "Samples": [
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 0,
+      "Seconds": 0.0019454,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.07647599978372455,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.20431246461880553,
+        "SystemBusyFraction": 0.3287671232876712,
+        "Output": "seconds=0.001945400 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 27696,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 0,
+      "Seconds": 0.0509743,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0678252000361681,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.9214864086898614,
+        "SystemBusyFraction": 0.2857142857142857,
+        "Output": "seconds=0.050974300 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 81428,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 0,
+      "Seconds": 0.000277,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.08995849965140224,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.30487804878048785,
+        "Output": "seconds=0.000277000 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 26164,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 0,
+      "Seconds": 0.0002672,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01634680014103651,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.955844560720815,
+        "SystemBusyFraction": 1.0,
+        "Output": "seconds=0.000267200 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 26128,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 0,
+      "Seconds": 0.0274918,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.043782600201666355,
+        "CpuSeconds": 0.046875,
+        "CpuToWall": 1.070630793604989,
+        "SystemBusyFraction": 0.11904761904761907,
+        "Output": "seconds=0.027491800 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 72196,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 1,
+      "Seconds": 0.0274655,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.044344000052660704,
+        "CpuSeconds": 0.046875,
+        "CpuToWall": 1.0570764916185642,
+        "SystemBusyFraction": 0.12765957446808507,
+        "Output": "seconds=0.027465500 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 59948,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 1,
+      "Seconds": 0.0002702,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.017690099775791168,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.8832624008928853,
+        "SystemBusyFraction": 0.1578947368421053,
+        "Output": "seconds=0.000270200 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 84784,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 1,
+      "Seconds": 0.000278,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016411200165748596,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.19999999999999996,
+        "Output": "seconds=0.000278000 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 58100,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 1,
+      "Seconds": 0.0546637,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.07111829984933138,
+        "CpuSeconds": 0.078125,
+        "CpuToWall": 1.0985217611432325,
+        "SystemBusyFraction": 0.2435897435897436,
+        "Output": "seconds=0.054663700 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 55544,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 1,
+      "Seconds": 0.0270452,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.043355199974030256,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7207901247997641,
+        "SystemBusyFraction": 0.15555555555555556,
+        "Output": "seconds=0.027045200 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 79096,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 2,
+      "Seconds": 0.0522389,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.06902220007032156,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.905505763889349,
+        "SystemBusyFraction": 0.35,
+        "Output": "seconds=0.052238900 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 83032,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 2,
+      "Seconds": 0.0002665,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01622080011293292,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9632693758147056,
+        "SystemBusyFraction": 0.19999999999999996,
+        "Output": "seconds=0.000266500 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 85268,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 2,
+      "Seconds": 0.0002659,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01647219993174076,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.375,
+        "Output": "seconds=0.000265900 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 82128,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 2,
+      "Seconds": 0.0082519,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.024297799915075302,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.6430623371091981,
+        "SystemBusyFraction": 0.30434782608695654,
+        "Output": "seconds=0.008251900 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 29376,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 2,
+      "Seconds": 0.0270211,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04324489971622825,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7226285690349978,
+        "SystemBusyFraction": 0.1875,
+        "Output": "seconds=0.027021100 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 20908,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 3,
+      "Seconds": 0.0272347,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0435546999797225,
+        "CpuSeconds": 0.046875,
+        "CpuToWall": 1.0762328754835486,
+        "SystemBusyFraction": 0.31999999999999995,
+        "Output": "seconds=0.027234700 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 19156,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 3,
+      "Seconds": 0.0266836,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04319179989397526,
+        "CpuSeconds": 0.046875,
+        "CpuToWall": 1.085275448466284,
+        "SystemBusyFraction": 0.2222222222222222,
+        "Output": "seconds=0.026683600 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 59500,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 3,
+      "Seconds": 0.0002785,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01649830024689436,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.375,
+        "Output": "seconds=0.000278500 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 80784,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 3,
+      "Seconds": 0.0002812,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016624100040644407,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.31034482758620685,
+        "Output": "seconds=0.000281200 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 72744,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 3,
+      "Seconds": 0.0556111,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.07248600013554096,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.8622354645466955,
+        "SystemBusyFraction": 0.1785714285714286,
+        "Output": "seconds=0.055611100 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 73020,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 4,
+      "Seconds": 0.0002771,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016478899866342545,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9481822285912059,
+        "SystemBusyFraction": 0.08333333333333337,
+        "Output": "seconds=0.000277100 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 40500,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 4,
+      "Seconds": 0.0002698,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016628199722617865,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9396687711626833,
+        "SystemBusyFraction": 0.7777777777777778,
+        "Output": "seconds=0.000269800 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 52096,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 4,
+      "Seconds": 0.0276813,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04434139980003238,
+        "CpuSeconds": 0.046875,
+        "CpuToWall": 1.057138480322982,
+        "SystemBusyFraction": 0.2777777777777778,
+        "Output": "seconds=0.027681300 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 76024,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 4,
+      "Seconds": 0.0271975,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04387630010023713,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7122296075240653,
+        "SystemBusyFraction": 0.28205128205128205,
+        "Output": "seconds=0.027197500 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 48772,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 4,
+      "Seconds": 0.0493439,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.06573869986459613,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.9507337402281005,
+        "SystemBusyFraction": 0.3508771929824561,
+        "Output": "seconds=0.049343900 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 83604,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 5,
+      "Seconds": 0.0512733,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.06799120036885142,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.9192366021034821,
+        "SystemBusyFraction": 0.22807017543859653,
+        "Output": "seconds=0.051273300 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 80136,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 5,
+      "Seconds": 0.0266029,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04275810020044446,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7308556707034229,
+        "SystemBusyFraction": 0.15000000000000002,
+        "Output": "seconds=0.026602900 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 53260,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 5,
+      "Seconds": 0.026511,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.05738209979608655,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.5445949191655626,
+        "SystemBusyFraction": 0.17391304347826086,
+        "Output": "seconds=0.026511000 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 82460,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 5,
+      "Seconds": 0.0002625,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016233600210398436,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.4117647058823529,
+        "Output": "seconds=0.000262500 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 55420,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 5,
+      "Seconds": 0.0002738,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.018071299884468317,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.8646306629789907,
+        "SystemBusyFraction": 0.18181818181818177,
+        "Output": "seconds=0.000273800 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 34612,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 6,
+      "Seconds": 0.0002668,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016057000029832125,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9730958442405483,
+        "SystemBusyFraction": 0.1428571428571429,
+        "Output": "seconds=0.000266800 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 50640,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 6,
+      "Seconds": 0.0110597,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.027531299740076065,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.5675358645438521,
+        "SystemBusyFraction": 0.2727272727272727,
+        "Output": "seconds=0.011059700 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 81320,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 6,
+      "Seconds": 0.0270662,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04351879982277751,
+        "CpuSeconds": 0.046875,
+        "CpuToWall": 1.0771206970525384,
+        "SystemBusyFraction": 0.3571428571428571,
+        "Output": "seconds=0.027066200 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 72876,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 6,
+      "Seconds": 0.0545236,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0705515998415649,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.8858764385266092,
+        "SystemBusyFraction": 0.25,
+        "Output": "seconds=0.054523600 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 61592,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 6,
+      "Seconds": 0.0002792,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01629729988053441,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9587477750631925,
+        "SystemBusyFraction": 0.4375,
+        "Output": "seconds=0.000279200 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 63112,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 7,
+      "Seconds": 0.0002789,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01660790015012026,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9408173133728083,
+        "SystemBusyFraction": 0.2222222222222222,
+        "Output": "seconds=0.000278900 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 83932,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 7,
+      "Seconds": 0.0507396,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.06704700039699674,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.9321818967280688,
+        "SystemBusyFraction": 0.328125,
+        "Output": "seconds=0.050739600 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 13564,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 7,
+      "Seconds": 0.0269396,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.043193400371819735,
+        "CpuSeconds": 0.046875,
+        "CpuToWall": 1.0852352349314507,
+        "SystemBusyFraction": 0.4482758620689655,
+        "Output": "seconds=0.026939600 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 3084,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 7,
+      "Seconds": 0.0262086,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04287429992109537,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7288748751002723,
+        "SystemBusyFraction": 0.16216216216216217,
+        "Output": "seconds=0.026208600 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 83464,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 7,
+      "Seconds": 0.0002632,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.022227900102734566,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.31818181818181823,
+        "Output": "seconds=0.000263200 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 78040,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 8,
+      "Seconds": 0.0272827,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.044276599772274494,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7057904211417878,
+        "SystemBusyFraction": 0.18181818181818177,
+        "Output": "seconds=0.027282700 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 61536,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 8,
+      "Seconds": 0.0263071,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04231770010665059,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7384616820205877,
+        "SystemBusyFraction": 0.2954545454545454,
+        "Output": "seconds=0.026307100 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 7696,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 8,
+      "Seconds": 0.0510265,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0672027999535203,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.9300207735872179,
+        "SystemBusyFraction": 0.24193548387096775,
+        "Output": "seconds=0.051026500 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 37508,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 8,
+      "Seconds": 0.0002768,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016152700409293175,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9673305146556441,
+        "SystemBusyFraction": 0.125,
+        "Output": "seconds=0.000276800 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 68848,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 8,
+      "Seconds": 0.0003455,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.018363500013947487,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.8508726543487061,
+        "SystemBusyFraction": 0.2727272727272727,
+        "Output": "seconds=0.000345500 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 73104,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 9,
+      "Seconds": 0.0002729,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01685449993237853,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9270521262979399,
+        "SystemBusyFraction": 0.19999999999999996,
+        "Output": "seconds=0.000272900 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 69992,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 9,
+      "Seconds": 0.000282,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01604590006172657,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.973768996434764,
+        "SystemBusyFraction": 0.75,
+        "Output": "seconds=0.000282000 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 28196,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 9,
+      "Seconds": 0.0535774,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.07006769999861717,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.8919944568072518,
+        "SystemBusyFraction": 0.1842105263157895,
+        "Output": "seconds=0.053577400 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 40516,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 9,
+      "Seconds": 0.0284144,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04684100020676851,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.6671505702707942,
+        "SystemBusyFraction": 0.08333333333333337,
+        "Output": "seconds=0.028414400 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 33640,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 9,
+      "Seconds": 0.0267389,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04363120021298528,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7162305837898896,
+        "SystemBusyFraction": 0.23076923076923073,
+        "Output": "seconds=0.026738900 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 41716,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 10,
+      "Seconds": 0.0274521,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04380459990352392,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.35669769920083266,
+        "SystemBusyFraction": 0.39534883720930236,
+        "Output": "seconds=0.027452100 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 14888,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 10,
+      "Seconds": 0.0537893,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.07008549990132451,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.8917679133058284,
+        "SystemBusyFraction": 0.2647058823529411,
+        "Output": "seconds=0.053789300 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 28384,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 10,
+      "Seconds": 0.0003113,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.017924599815160036,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.16666666666666663,
+        "Output": "seconds=0.000311300 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 83028,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 10,
+      "Seconds": 0.0002786,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01625940017402172,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9609825597972964,
+        "SystemBusyFraction": 0.5,
+        "Output": "seconds=0.000278600 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 62016,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 10,
+      "Seconds": 0.0264605,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.042483499739319086,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7355797001600995,
+        "SystemBusyFraction": 0.17948717948717952,
+        "Output": "seconds=0.026460500 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 68476,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 11,
+      "Seconds": 0.0268764,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.044900699984282255,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.6959802410862023,
+        "SystemBusyFraction": 0.07499999999999996,
+        "Output": "seconds=0.026876400 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 19988,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 11,
+      "Seconds": 0.0002916,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016392500139772892,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9531797997115329,
+        "SystemBusyFraction": 0.04166666666666663,
+        "Output": "seconds=0.000291600 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 15992,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 11,
+      "Seconds": 0.0002774,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.017075700219720602,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9150430025677542,
+        "SystemBusyFraction": 0.368421052631579,
+        "Output": "seconds=0.000277400 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 7692,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 11,
+      "Seconds": 0.0509185,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0670787999406457,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.9317399842469272,
+        "SystemBusyFraction": 0.14516129032258063,
+        "Output": "seconds=0.050918500 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 36180,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 11,
+      "Seconds": 0.0272481,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.043358899652957916,
+        "CpuSeconds": 0.046875,
+        "CpuToWall": 1.0810929330583743,
+        "SystemBusyFraction": 0.18000000000000005,
+        "Output": "seconds=0.027248100 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 33456,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 12,
+      "Seconds": 0.0539107,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0703316000290215,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.8886474923677282,
+        "SystemBusyFraction": 0.31746031746031744,
+        "Output": "seconds=0.053910700 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 38192,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 12,
+      "Seconds": 0.0002796,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016333400271832943,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9566287325331404,
+        "SystemBusyFraction": 0.16666666666666663,
+        "Output": "seconds=0.000279600 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 63284,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 12,
+      "Seconds": 0.0002741,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0162669001147151,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9605394936842063,
+        "SystemBusyFraction": 0.23333333333333328,
+        "Output": "seconds=0.000274100 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 37964,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 12,
+      "Seconds": 0.0270306,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.044245300348848104,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7062897020386838,
+        "SystemBusyFraction": 0.2432432432432432,
+        "Output": "seconds=0.027030600 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 24580,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 12,
+      "Seconds": 0.026839,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04314509965479374,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7243001001280083,
+        "SystemBusyFraction": 0.12121212121212122,
+        "Output": "seconds=0.026839000 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 71412,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 13,
+      "Seconds": 0.0271971,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.044433699920773506,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7032950228254591,
+        "SystemBusyFraction": 0.375,
+        "Output": "seconds=0.027197100 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 65248,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 13,
+      "Seconds": 0.0265517,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04258880019187927,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7337609854986868,
+        "SystemBusyFraction": 0.23404255319148937,
+        "Output": "seconds=0.026551700 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 42140,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 13,
+      "Seconds": 0.00027,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.017178900074213743,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.2666666666666667,
+        "Output": "seconds=0.000270000 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 60592,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 13,
+      "Seconds": 0.0003131,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016096599865704775,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9707018954537374,
+        "SystemBusyFraction": 0.25,
+        "Output": "seconds=0.000313100 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 48836,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 13,
+      "Seconds": 0.0500882,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0663264999166131,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.9423081284038228,
+        "SystemBusyFraction": 0.21311475409836067,
+        "Output": "seconds=0.050088200 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 67400,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 14,
+      "Seconds": 0.0002719,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016410400159657,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9521400970106864,
+        "SystemBusyFraction": 0.16666666666666663,
+        "Output": "seconds=0.000271900 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 72916,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 14,
+      "Seconds": 0.000269,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01722720032557845,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9069958962978129,
+        "SystemBusyFraction": 0.33333333333333337,
+        "Output": "seconds=0.000269000 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 15904,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 14,
+      "Seconds": 0.0267813,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.04294209973886609,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.7277240794007148,
+        "SystemBusyFraction": 0.13793103448275867,
+        "Output": "seconds=0.026781300 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 29756,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 14,
+      "Seconds": 0.0270644,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0434135003015399,
+        "CpuSeconds": 0.046875,
+        "CpuToWall": 1.0797332551952121,
+        "SystemBusyFraction": 0.21739130434782605,
+        "Output": "seconds=0.027064400 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 71828,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 14,
+      "Seconds": 0.055188,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.07216389989480376,
+        "CpuSeconds": 0.078125,
+        "CpuToWall": 1.0826050159967238,
+        "SystemBusyFraction": 0.31999999999999995,
+        "Output": "seconds=0.055188000 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 75164,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Round": 15,
+      "Seconds": 0.0507728,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.06696029985323548,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.9333888906857999,
+        "SystemBusyFraction": 0.33333333333333337,
+        "Output": "seconds=0.050772800 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 36128,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Round": 15,
+      "Seconds": 0.0019479,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.019395300187170506,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.8056075363213784,
+        "SystemBusyFraction": 0.33333333333333337,
+        "Output": "seconds=0.001947900 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 58340,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Round": 15,
+      "Seconds": 0.026973,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.043353499844670296,
+        "CpuSeconds": 0.03125,
+        "CpuToWall": 0.720818390948009,
+        "SystemBusyFraction": 0.16666666666666663,
+        "Output": "seconds=0.026973000 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 73544,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Round": 15,
+      "Seconds": 0.000268,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.01672259997576475,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9343642748522688,
+        "SystemBusyFraction": 0.15625,
+        "Output": "seconds=0.000268000 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 61944,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Round": 15,
+      "Seconds": 0.0002773,
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0162540003657341,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9613018117644363,
+        "SystemBusyFraction": 0.12,
+        "Output": "seconds=0.000277300 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 20344,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    }
+  ],
+  "Correct": true,
+  "TimingQualified": false,
+  "Before": [
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\bench.wio",
+      "Bytes": 1299,
+      "Hash": "AC68B9665D69BC84864C64AFFF2D7628A22EB941E0E0A6F1B3DF51EAB17D7796"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\bench.wio.cpp",
+      "Bytes": 112834,
+      "Hash": "A3BFA5E3255E6041C3E52463BC58450005003FCB074A7DFF3C25849617511869"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\build.json",
+      "Bytes": 2342,
+      "Hash": "366C6B7648910826777693EB0E8A5DF70DD22008514C217500AB24122F13FC65"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\memory.exe",
+      "Bytes": 1273950,
+      "Hash": "A867FB834FF4687B28F9974D8ED04969086B4922208696AF608AE8CDE193CA8C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\memory_probe.h",
+      "Bytes": 16219,
+      "Hash": "0E78A24680264BF25785BA5397623A9D16AA66D220E93ABEE5E34D744696785C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\plain.exe",
+      "Bytes": 1259443,
+      "Hash": "65DA1258B2F8B3F58ECF9652E7BCE706C8346EABB845EADA2BE9777A686BC5D4"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\probe.h",
+      "Bytes": 1748,
+      "Hash": "EA2E34A076CD3458D1A61BE0E53BFED83E5EFCAEF1A73FB5A701A564FE4B1EC8"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\bench.wio",
+      "Bytes": 1299,
+      "Hash": "AC68B9665D69BC84864C64AFFF2D7628A22EB941E0E0A6F1B3DF51EAB17D7796"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\bench.wio.cpp",
+      "Bytes": 112998,
+      "Hash": "F17D967FC0FAAA369FB5D118108403B351C37454101D6FA269224A040B4CCCB2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\build.json",
+      "Bytes": 2348,
+      "Hash": "85C82B628BDC9FF0179DA499860598DCB27084A4D3E0C95D9C14151BC15E7A4C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\memory.exe",
+      "Bytes": 1275998,
+      "Hash": "38622683414C766F6DD25EA968122EF73392820C2C430E473CCC79D66D641682"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\memory_probe.h",
+      "Bytes": 16219,
+      "Hash": "0E78A24680264BF25785BA5397623A9D16AA66D220E93ABEE5E34D744696785C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\plain.exe",
+      "Bytes": 1260467,
+      "Hash": "3F92201D2BCC258C5691D38EAEA57372A9949E943B2332C70E562FFD5F36DEEF"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\probe.h",
+      "Bytes": 1748,
+      "Hash": "EA2E34A076CD3458D1A61BE0E53BFED83E5EFCAEF1A73FB5A701A564FE4B1EC8"
+    }
+  ],
+  "Failure": null,
+  "Affinity": {
+    "Supported": true,
+    "LogicalProcessor": 2,
+    "Policy": "controller pinned before child launch; inherited; restored on exit"
+  },
+  "Summary": [
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Timing": {
+        "Accepted": false,
+        "Reasons": [
+          "range"
+        ],
+        "Samples": 15,
+        "Expected": 15,
+        "Median": 0.0270644,
+        "Min": 0.0019479,
+        "Max": 0.0284144,
+        "RelativeRange": 0.9779082484740101,
+        "RelativeDrift": 0.0056125389810969374,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Timing": {
+        "Accepted": true,
+        "Reasons": [],
+        "Samples": 15,
+        "Expected": 15,
+        "Median": 0.0522389,
+        "Min": 0.0493439,
+        "Max": 0.0556111,
+        "RelativeRange": 0.11997189833629716,
+        "RelativeDrift": 0.02562266816491158,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Timing": {
+        "Accepted": false,
+        "Reasons": [
+          "range"
+        ],
+        "Samples": 15,
+        "Expected": 15,
+        "Median": 0.000278,
+        "Min": 0.0002665,
+        "Max": 0.0003131,
+        "RelativeRange": 0.16762589928057553,
+        "RelativeDrift": 0.005755395683453378,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Timing": {
+        "Accepted": false,
+        "Reasons": [
+          "range"
+        ],
+        "Samples": 15,
+        "Expected": 15,
+        "Median": 0.00027,
+        "Min": 0.0002625,
+        "Max": 0.0003455,
+        "RelativeRange": 0.30740740740740746,
+        "RelativeDrift": 0.02259259259259274,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    },
+    {
+      "Lane": "control",
+      "Mode": 1,
+      "Timing": {
+        "Accepted": false,
+        "Reasons": [
+          "range"
+        ],
+        "Samples": 15,
+        "Expected": 15,
+        "Median": 0.0267389,
+        "Min": 0.0082519,
+        "Max": 0.0276813,
+        "RelativeRange": 0.7266342295307585,
+        "RelativeDrift": 0.010108867604875334,
+        "MaxRelativeRange": 0.15,
+        "MaxRelativeDrift": 0.1
+      }
+    }
+  ],
+  "Memory": [
+    {
+      "Lane": "before",
+      "Mode": 1,
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 8224768,
+          "ProcessLifetimePeakResidentBytes": 8224768,
+          "PrivateCommitBytes": 1339392
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 2002,
+          "Frees": 1999,
+          "RequestedBytes": 90047102,
+          "FreedBytes": 89956999,
+          "LiveBytes": 90103,
+          "PeakBytes": 180059,
+          "LiveBlocks": 3,
+          "PeakBlocks": 4,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 8605696,
+          "ProcessLifetimePeakResidentBytes": 8605696,
+          "PrivateCommitBytes": 1687552
+        },
+        {
+          "Phase": "released",
+          "Checksum": "4652598373662839605",
+          "Allocations": 2002,
+          "Frees": 2002,
+          "RequestedBytes": 90047102,
+          "FreedBytes": 90047102,
+          "LiveBytes": 0,
+          "PeakBytes": 180059,
+          "LiveBlocks": 0,
+          "PeakBlocks": 4,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 8609792,
+          "ProcessLifetimePeakResidentBytes": 8609792,
+          "PrivateCommitBytes": 1687552
+        }
+      ],
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0912108002230525,
+        "CpuSeconds": 0.0,
+        "CpuToWall": 0.0,
+        "SystemBusyFraction": 0.2435897435897436,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":8224768,\"ProcessLifetimePeakResidentBytes\":8224768,\"PrivateCommitBytes\":1339392}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":2002,\"Frees\":1999,\"RequestedBytes\":90047102,\"FreedBytes\":89956999,\"LiveBytes\":90103,\"PeakBytes\":180059,\"LiveBlocks\":3,\"PeakBlocks\":4,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":8605696,\"ProcessLifetimePeakResidentBytes\":8605696,\"PrivateCommitBytes\":1687552}\r\n{\"Phase\":\"released\",\"Checksum\":\"4652598373662839605\",\"Allocations\":2002,\"Frees\":2002,\"RequestedBytes\":90047102,\"FreedBytes\":90047102,\"LiveBytes\":0,\"PeakBytes\":180059,\"LiveBlocks\":0,\"PeakBlocks\":4,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":8609792,\"ProcessLifetimePeakResidentBytes\":8609792,\"PrivateCommitBytes\":1687552}\r\nseconds=0.001958900 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 83052,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "before",
+      "Mode": 2,
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7495680,
+          "ProcessLifetimePeakResidentBytes": 7495680,
+          "PrivateCommitBytes": 1306624
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 4001,
+          "Frees": 3998,
+          "RequestedBytes": 251878140,
+          "FreedBytes": 251710124,
+          "LiveBytes": 168016,
+          "PeakBytes": 419808,
+          "LiveBlocks": 3,
+          "PeakBlocks": 5,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7643136,
+          "ProcessLifetimePeakResidentBytes": 8122368,
+          "PrivateCommitBytes": 1511424
+        },
+        {
+          "Phase": "released",
+          "Checksum": "7365391080022748421",
+          "Allocations": 4001,
+          "Frees": 4001,
+          "RequestedBytes": 251878140,
+          "FreedBytes": 251878140,
+          "LiveBytes": 0,
+          "PeakBytes": 419808,
+          "LiveBlocks": 0,
+          "PeakBlocks": 5,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7647232,
+          "ProcessLifetimePeakResidentBytes": 8122368,
+          "PrivateCommitBytes": 1519616
+        }
+      ],
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.0702454000711441,
+        "CpuSeconds": 0.0625,
+        "CpuToWall": 0.8897379748239798,
+        "SystemBusyFraction": 0.15200000000000002,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7495680,\"ProcessLifetimePeakResidentBytes\":7495680,\"PrivateCommitBytes\":1306624}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":4001,\"Frees\":3998,\"RequestedBytes\":251878140,\"FreedBytes\":251710124,\"LiveBytes\":168016,\"PeakBytes\":419808,\"LiveBlocks\":3,\"PeakBlocks\":5,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7643136,\"ProcessLifetimePeakResidentBytes\":8122368,\"PrivateCommitBytes\":1511424}\r\n{\"Phase\":\"released\",\"Checksum\":\"7365391080022748421\",\"Allocations\":4001,\"Frees\":4001,\"RequestedBytes\":251878140,\"FreedBytes\":251878140,\"LiveBytes\":0,\"PeakBytes\":419808,\"LiveBlocks\":0,\"PeakBlocks\":5,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7647232,\"ProcessLifetimePeakResidentBytes\":8122368,\"PrivateCommitBytes\":1519616}\r\nseconds=0.053297700 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 63348,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 1,
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 8212480,
+          "ProcessLifetimePeakResidentBytes": 8212480,
+          "PrivateCommitBytes": 1347584
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 14,
+          "Frees": 11,
+          "RequestedBytes": 184389,
+          "FreedBytes": 92126,
+          "LiveBytes": 92263,
+          "PeakBytes": 138344,
+          "LiveBlocks": 3,
+          "PeakBlocks": 4,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 8351744,
+          "ProcessLifetimePeakResidentBytes": 8400896,
+          "PrivateCommitBytes": 1449984
+        },
+        {
+          "Phase": "released",
+          "Checksum": "4652598373662839605",
+          "Allocations": 14,
+          "Frees": 14,
+          "RequestedBytes": 184389,
+          "FreedBytes": 184389,
+          "LiveBytes": 0,
+          "PeakBytes": 138344,
+          "LiveBlocks": 0,
+          "PeakBlocks": 4,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 8355840,
+          "ProcessLifetimePeakResidentBytes": 8400896,
+          "PrivateCommitBytes": 1548288
+        }
+      ],
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.08999830018728971,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.17361439013274485,
+        "SystemBusyFraction": 0.2315789473684211,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":8212480,\"ProcessLifetimePeakResidentBytes\":8212480,\"PrivateCommitBytes\":1347584}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":14,\"Frees\":11,\"RequestedBytes\":184389,\"FreedBytes\":92126,\"LiveBytes\":92263,\"PeakBytes\":138344,\"LiveBlocks\":3,\"PeakBlocks\":4,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":8351744,\"ProcessLifetimePeakResidentBytes\":8400896,\"PrivateCommitBytes\":1449984}\r\n{\"Phase\":\"released\",\"Checksum\":\"4652598373662839605\",\"Allocations\":14,\"Frees\":14,\"RequestedBytes\":184389,\"FreedBytes\":184389,\"LiveBytes\":0,\"PeakBytes\":138344,\"LiveBlocks\":0,\"PeakBlocks\":4,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":8355840,\"ProcessLifetimePeakResidentBytes\":8400896,\"PrivateCommitBytes\":1548288}\r\nseconds=0.000292700 checksum=4652598373662839605",
+        "Error": "",
+        "Pid": 77188,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    },
+    {
+      "Lane": "after",
+      "Mode": 2,
+      "Checkpoints": [
+        {
+          "Phase": "baseline",
+          "Checksum": "0",
+          "Allocations": 0,
+          "Frees": 0,
+          "RequestedBytes": 0,
+          "FreedBytes": 0,
+          "LiveBytes": 0,
+          "PeakBytes": 0,
+          "LiveBlocks": 0,
+          "PeakBlocks": 0,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7479296,
+          "ProcessLifetimePeakResidentBytes": 7479296,
+          "PrivateCommitBytes": 1310720
+        },
+        {
+          "Phase": "live",
+          "Checksum": "0",
+          "Allocations": 14,
+          "Frees": 11,
+          "RequestedBytes": 172101,
+          "FreedBytes": 85985,
+          "LiveBytes": 86116,
+          "PeakBytes": 129125,
+          "LiveBlocks": 3,
+          "PeakBlocks": 4,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7696384,
+          "ProcessLifetimePeakResidentBytes": 7696384,
+          "PrivateCommitBytes": 1495040
+        },
+        {
+          "Phase": "released",
+          "Checksum": "7365391080022748421",
+          "Allocations": 14,
+          "Frees": 14,
+          "RequestedBytes": 172101,
+          "FreedBytes": 172101,
+          "LiveBytes": 0,
+          "PeakBytes": 129125,
+          "LiveBlocks": 0,
+          "PeakBlocks": 4,
+          "AlignedAllocations": 0,
+          "Failures": 0,
+          "MemorySource": "win32-working-set",
+          "MemoryAvailable": true,
+          "ResidentBytes": 7700480,
+          "ProcessLifetimePeakResidentBytes": 7700480,
+          "PrivateCommitBytes": 1495040
+        }
+      ],
+      "Process": {
+        "Status": "passed",
+        "ExitCode": 0,
+        "WallSeconds": 0.016557299997657537,
+        "CpuSeconds": 0.015625,
+        "CpuToWall": 0.9436925103857854,
+        "SystemBusyFraction": 0.1428571428571429,
+        "Output": "{\"Phase\":\"baseline\",\"Checksum\":\"0\",\"Allocations\":0,\"Frees\":0,\"RequestedBytes\":0,\"FreedBytes\":0,\"LiveBytes\":0,\"PeakBytes\":0,\"LiveBlocks\":0,\"PeakBlocks\":0,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7479296,\"ProcessLifetimePeakResidentBytes\":7479296,\"PrivateCommitBytes\":1310720}\r\n{\"Phase\":\"live\",\"Checksum\":\"0\",\"Allocations\":14,\"Frees\":11,\"RequestedBytes\":172101,\"FreedBytes\":85985,\"LiveBytes\":86116,\"PeakBytes\":129125,\"LiveBlocks\":3,\"PeakBlocks\":4,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7696384,\"ProcessLifetimePeakResidentBytes\":7696384,\"PrivateCommitBytes\":1495040}\r\n{\"Phase\":\"released\",\"Checksum\":\"7365391080022748421\",\"Allocations\":14,\"Frees\":14,\"RequestedBytes\":172101,\"FreedBytes\":172101,\"LiveBytes\":0,\"PeakBytes\":129125,\"LiveBlocks\":0,\"PeakBlocks\":4,\"AlignedAllocations\":0,\"Failures\":0,\"MemorySource\":\"win32-working-set\",\"MemoryAvailable\":true,\"ResidentBytes\":7700480,\"ProcessLifetimePeakResidentBytes\":7700480,\"PrivateCommitBytes\":1495040}\r\nseconds=0.000264100 checksum=7365391080022748421",
+        "Error": "",
+        "Pid": 65552,
+        "WallScope": "child launch through output drain; excludes Python worker startup"
+      }
+    }
+  ],
+  "After": [
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\bench.wio",
+      "Bytes": 1299,
+      "Hash": "AC68B9665D69BC84864C64AFFF2D7628A22EB941E0E0A6F1B3DF51EAB17D7796"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\bench.wio.cpp",
+      "Bytes": 112834,
+      "Hash": "A3BFA5E3255E6041C3E52463BC58450005003FCB074A7DFF3C25849617511869"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\build.json",
+      "Bytes": 2342,
+      "Hash": "366C6B7648910826777693EB0E8A5DF70DD22008514C217500AB24122F13FC65"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\memory.exe",
+      "Bytes": 1273950,
+      "Hash": "A867FB834FF4687B28F9974D8ED04969086B4922208696AF608AE8CDE193CA8C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\memory_probe.h",
+      "Bytes": 16219,
+      "Hash": "0E78A24680264BF25785BA5397623A9D16AA66D220E93ABEE5E34D744696785C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\plain.exe",
+      "Bytes": 1259443,
+      "Hash": "65DA1258B2F8B3F58ECF9652E7BCE706C8346EABB845EADA2BE9777A686BC5D4"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\after\\probe.h",
+      "Bytes": 1748,
+      "Hash": "EA2E34A076CD3458D1A61BE0E53BFED83E5EFCAEF1A73FB5A701A564FE4B1EC8"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\bench.wio",
+      "Bytes": 1299,
+      "Hash": "AC68B9665D69BC84864C64AFFF2D7628A22EB941E0E0A6F1B3DF51EAB17D7796"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\bench.wio.cpp",
+      "Bytes": 112998,
+      "Hash": "F17D967FC0FAAA369FB5D118108403B351C37454101D6FA269224A040B4CCCB2"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\build.json",
+      "Bytes": 2348,
+      "Hash": "85C82B628BDC9FF0179DA499860598DCB27084A4D3E0C95D9C14151BC15E7A4C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\memory.exe",
+      "Bytes": 1275998,
+      "Hash": "38622683414C766F6DD25EA968122EF73392820C2C430E473CCC79D66D641682"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\memory_probe.h",
+      "Bytes": 16219,
+      "Hash": "0E78A24680264BF25785BA5397623A9D16AA66D220E93ABEE5E34D744696785C"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\plain.exe",
+      "Bytes": 1260467,
+      "Hash": "3F92201D2BCC258C5691D38EAEA57372A9949E943B2332C70E562FFD5F36DEEF"
+    },
+    {
+      "Path": "F:\\Projects\\wio\\build\\n02-append-2026-10-16\\before\\probe.h",
+      "Bytes": 1748,
+      "Hash": "EA2E34A076CD3458D1A61BE0E53BFED83E5EFCAEF1A73FB5A701A564FE4B1EC8"
+    }
+  ],
+  "Unchanged": true,
+  "SameBinaryDifference": 0.01209962957662446
+}

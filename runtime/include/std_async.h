@@ -650,6 +650,47 @@ namespace wio::runtime
             std::function<void()> action;
         };
 
+        // A native call may wait for a task whose continuation belongs to the
+        // host's main executor. Keep that executor progressing on the calling
+        // thread; never dispatch main-affined work onto a worker to avoid a wait.
+        class AsyncForeignWaitScope final
+        {
+        public:
+            AsyncForeignWaitScope() : previous_(std::exchange(current, this))
+            {
+            }
+            ~AsyncForeignWaitScope()
+            {
+                current = previous_;
+            }
+            AsyncForeignWaitScope(const AsyncForeignWaitScope&) = delete;
+            AsyncForeignWaitScope& operator=(const AsyncForeignWaitScope&) = delete;
+
+            static void Add(std::function<void()> pump)
+            {
+                if (current)
+                    current->pumps_.push_back(std::move(pump));
+            }
+            static bool Active() noexcept
+            {
+                for (auto* scope = current; scope; scope = scope->previous_)
+                    if (!scope->pumps_.empty())
+                        return true;
+                return false;
+            }
+            static void Pump()
+            {
+                for (auto* scope = current; scope; scope = scope->previous_)
+                    for (const auto& pump : scope->pumps_)
+                        pump();
+            }
+
+        private:
+            inline static thread_local AsyncForeignWaitScope* current = nullptr;
+            AsyncForeignWaitScope* previous_;
+            std::vector<std::function<void()>> pumps_;
+        };
+
         struct AsyncTaskStateBase : std::enable_shared_from_this<AsyncTaskStateBase>
         {
             virtual ~AsyncTaskStateBase()
@@ -829,14 +870,41 @@ namespace wio::runtime
             {
                 Start();
                 std::unique_lock lock(mutex);
-                changed.wait(lock, [this] { return completed; });
+                if (!foreignWaitPump && !AsyncForeignWaitScope::Active())
+                {
+                    changed.wait(lock, [this] { return completed; });
+                    return;
+                }
+                while (!completed)
+                {
+                    lock.unlock();
+                    if (foreignWaitPump)
+                        foreignWaitPump();
+                    AsyncForeignWaitScope::Pump();
+                    lock.lock();
+                    changed.wait_for(lock, std::chrono::milliseconds{1}, [this] { return completed; });
+                }
             }
 
             bool WaitFor(const std::chrono::milliseconds timeout)
             {
                 Start();
                 std::unique_lock lock(mutex);
-                return changed.wait_for(lock, timeout, [this] { return completed; });
+                if (!foreignWaitPump && !AsyncForeignWaitScope::Active())
+                    return changed.wait_for(lock, timeout, [this] { return completed; });
+                const auto deadline = std::chrono::steady_clock::now() + timeout;
+                while (!completed && std::chrono::steady_clock::now() < deadline)
+                {
+                    lock.unlock();
+                    if (foreignWaitPump)
+                        foreignWaitPump();
+                    AsyncForeignWaitScope::Pump();
+                    lock.lock();
+                    changed.wait_until(
+                        lock, std::min(deadline, std::chrono::steady_clock::now() + std::chrono::milliseconds{1}),
+                        [this] { return completed; });
+                }
+                return completed;
             }
 
             void RethrowFailure() const
@@ -854,6 +922,7 @@ namespace wio::runtime
             std::vector<std::shared_ptr<AsyncCancellationRegistration>> cancellationCallbacks;
             std::vector<std::function<void()>> completionCallbacks;
             std::shared_ptr<AsyncTaskStateBase> selfKeepAlive;
+            std::function<void()> foreignWaitPump;
             std::exception_ptr failure;
             std::atomic<bool> cancelled{false};
             bool started = false;

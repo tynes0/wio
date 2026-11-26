@@ -54,6 +54,9 @@ The following are mandatory before `v1.0.0`:
 - reproducible Windows, Linux, and macOS release artifacts and install flows;
 - stable CLI behavior, machine-readable diagnostics, formatter support, and a
   compiler-owned language-service baseline;
+- bounded generated-C++ size, native compile time, and runtime overhead, with
+  trivial programs free of duplicated backend helpers and unnecessary dynamic
+  place/optional/callable machinery;
 - version alignment across compiler, runtime, std, CLI, SDK, VS Code extension,
   Visual Studio extension, Rider/CLion plugin, documentation, and release
   metadata;
@@ -63,9 +66,61 @@ The following are mandatory before `v1.0.0`:
 
 Broad surface expansion is not a v1 gate. A debugger, advanced refactoring,
 large official package catalog, async streams, payload enums, full HTTP stack,
-and an independent backend can ship after v1.
+and JIT compilation can ship after v1. The already-adopted native C++ and
+bytecode/VM backends, their shared semantics, and their production cost budgets
+must close before v1.
 
 ---
+
+### 2.1 Accepted Surface-Consolidation Blockers (2026-10-07)
+
+The v1 language/std contract now additionally requires the following closure
+work within the existing coherence, std, migration and performance gates:
+
+- **Result-first standard APIs:** checked retrieval and fallible std/intrinsic
+  operations return `Result<T>` with standardized errors and consistent
+  ordinary/`!()`/`?()` calls. Infallible operations keep direct returns.
+  `Option<T>` remains an opt-in user utility, not an automatically selected
+  standard-operation return type.
+- **Bracket-only attachment syntax:** migrate maintained source, then remove
+  compiler acceptance of `@Attribute(...)` and postfix attribute `with ...`.
+  Keep `[Attribute]` and scoped `using`, including `using cpp::header(...)`.
+- **Comprehensive std pass:** standardize the public API, remove the Try API
+  family, redundant Result/Raw aliases and obsolete implementations, and optimize measured
+  std/native/VM hotspots with explicit correctness and performance evidence.
+  The 2026-10-13 cleanup decision also requires the nine std source-style rules:
+  multiline bodies, post-block/declaration spacing, private object defaults and
+  explicit visibility, separate-line bracket attributes, width-based signatures,
+  no Try API family, braced control flow with the early-return exception, and
+  spaced control-flow parentheses. See the consolidation plan's std style section;
+  these are implementation-pending acceptance criteria, not completed cleanup.
+
+These are accepted blockers, not completed work. Full scope, migration rules
+and acceptance criteria are in
+[`WIO_V1_SURFACE_CONSOLIDATION_PLAN.md`](./WIO_V1_SURFACE_CONSOLIDATION_PLAN.md).
+They must close before beta and be requalified during final optimization.
+Historical release scopes below remain historical; they do not override this
+later decision or imply that the current implementation has already migrated.
+Existing backend and v1 gate identities are not renumbered by this addition.
+
+### 2.2 SDK kit scope separation (2026-10-15)
+
+Full SDK parity remains an existing mandatory v1 gate, but is not part of the
+compiler/VM/backend closure milestone. The SDK is a separately delivered
+developer kit, version-aligned with Wio and governed by
+[`WIO_SDK_EVOLUTION_PLAN.md`](./WIO_SDK_EVOLUTION_PLAN.md).
+
+Backend closure retains shared low-level ABI/native-bridge correctness,
+ownership/exception/thread boundaries, runnable/exported artifacts, CLI build
+integration, supported-platform qualification and generated/runtime cost budgets.
+Kit-specific complex/generic value adapters, ergonomic host ref/view/callback
+APIs, complex async results, application hosting, complete reflection/accessors
+and reload/capability coverage close under the SDK v1 gate instead.
+
+This reclassification does not mark any unsupported SDK shape complete, remove
+a v1 requirement, renumber the existing gates, or authorize a divergent ABI.
+Backend and kit conformance are reported separately. A backend milestone can
+close before full kit parity; Wio v1 cannot ship before the SDK gate closes.
 
 ## 3. Planned Release Train
 
@@ -263,12 +318,48 @@ Exit gate: the VS Code extension no longer needs an independent approximation
 of Wio semantics for the baseline feature set, and each maintained template is
 continuously smoke-tested from an installed toolchain.
 
+### Final Pre-Beta Stage - Heavy Optimization And Performance Acceptance
+
+The 2026-10-15 decision runs three heavy passes immediately after functional
+backend closure: generated C++/runtime (targeting 5-10% overhead versus equivalent
+optimized C++ where feasible), current non-JIT VM runtime, then the entire
+compilation/preparation pipeline. See
+[`WIO_BACKEND_OPTIMIZATION_PLAN.md`](./WIO_BACKEND_OPTIMIZATION_PLAN.md).
+After subsequent IDE/tooling, SDK kit and v1 correctness work, this final stage
+requalifies their performance budgets before beta/RC/stable. It does not postpone
+those passes or create a fourth heavy optimization package. Existing backend
+and v1 gate identities are unchanged; severe regressions are fixed when found.
+
+Required scope:
+
+- establish reproducible baselines for compiler stages, generated native code,
+  VM execution, std/Unicode, native bridges, and SDK hosts;
+- optimize measured hotspots in the semantic analyzer, Typed WIR, Lowered WIR,
+  code generation, allocations, copies, and repeated work;
+- remove avoidable generated-code/runtime machinery, string/container copies,
+  retain/release traffic, dispatch costs, and native-boundary overhead without
+  weakening ownership, lifetime, overflow, or Unicode semantics;
+- qualify cold/warm/incremental build time, generated and binary size, runtime,
+  peak memory, allocations, and startup separately in Debug and Release;
+- include Mandelbrot compute-only, formatting-only, and end-to-end workloads,
+  compared with equivalent hand-written C++ under matching build settings;
+- enforce reviewed numeric budgets and regression thresholds in release gates,
+  with reproducible commands, toolchain versions, inputs, and correctness checks.
+
+Exit gate: all agreed budgets pass on the supported platform matrix, all
+correctness/ownership gates remain green, and measured regressions have been
+fixed or explicitly reviewed against those budgets. A faster native build flag
+alone does not close this stage; usable Debug performance and VM-specific costs
+must also be qualified. JIT remains post-v1. Detailed measurement scope is in
+[`WIO_PERFORMANCE.md`](./WIO_PERFORMANCE.md#8-final-pre-v1-optimization-stage).
+
 ### v1.0.0-beta.1 - Feature Complete
 
 All mandatory v1 surface is implemented. Large new stable features stop here.
 The beta period is for real-project qualification, migration feedback,
-documentation completion, performance baselines, and fixing compatibility
-mistakes while changes are still possible.
+documentation completion, performance regression qualification against the
+pre-beta baselines, and fixing compatibility mistakes while changes are still
+possible.
 
 ### v1.0.0-rc.1 - Frozen Candidate
 
@@ -299,6 +390,8 @@ post-v1 work.
 | Reflection/reload/ABI/platform matrix | `v0.17.0` |
 | Reproducible package and installed-toolchain workflow | `v0.18.0` |
 | Formatter, diagnostics, language service, templates, docs alignment | `v0.19.0` |
+| Integrated heavy optimization and measured performance budgets | before beta |
+| Result-first std, bracket-only attachment and standardized/optimized std pass | before beta; requalified during final optimization |
 | Real-world portfolio, compatibility and migration sign-off | beta/RC |
 | Signed, checksummed, provenance-backed release artifacts | RC/stable |
 
@@ -328,7 +421,7 @@ v1 core and a post-v1 expansion:
 | Editor 1, 3, 5 | baseline in `v0.19` | advanced language-service and templates |
 | Editor 2, 4, 6 | not a v1 gate | debugger, package intelligence, advanced refactors |
 | Performance 1, 4, 5-7 | release baselines and supported-platform safety pre-v1 | deeper optimization and broader matrices |
-| Performance 2, 3, 8 | not a v1 gate | compile/runtime optimization and independent backend research |
+| Performance 2, 3, 8-9 | dual-backend parity plus bounded generated-code, native compile-time, and runtime costs are pre-v1 gates | JIT, deeper tiering, and optimization beyond the frozen budgets |
 | Product 1-5 | compatibility, site integration, governance minimum, and validation portfolio pre-v1 | package portal depth and long-term governance evolution |
 
 The detailed post-v1 destinations are in

@@ -22,6 +22,34 @@ The product version and raw ABI revision remain different concepts:
 The ABI revision changes only when the binary contract requires it. It does not
 need to increase merely because the product version increases.
 
+### 1.1 SDK kit versus backend milestone (2026-10-15)
+
+The SDK is a separately delivered developer kit with its own implementation,
+documentation and acceptance matrix. Complete kit parity belongs to the existing
+v1 SDK blocker, not to compiler/VM/backend closure. Version alignment with the
+Wio product remains mandatory; this decision does not create a second ABI or
+require an immediate physical repository split.
+
+The backend owns the shared low-level wire/ABI, native invocation and ownership
+mechanisms, callback/exception/thread boundaries, module/artifact production and
+their qualified runtime integration. The kit owns ergonomic host adapters,
+complex/nested/generic value coverage, host ref/view and callback interfaces,
+complex async task APIs, application hosting, full reflection/accessors,
+capability/reload wrappers and its product-wide conformance matrix.
+
+An unsafe backend ABI or broken declared runtime boundary still blocks backend
+closure. An unimplemented kit adapter does not: it remains explicitly unsupported
+until the separate v1 SDK gate closes. Existing bounded scalar/session/task
+adapters are foundations, not proof of full kit parity. Kit work may reveal a
+backend bug that must be fixed, but cannot silently expand the backend milestone
+with the entire kit backlog. Report these two acceptance states separately.
+
+Future ecosystem note (2026-10-18): a **Wio.NET** C# hosting library for ordinary
+.NET is recorded in the [post-v1 roadmap](WIO_POST_V1_ROADMAP.md#wionet-ordinary-net-hosting-idea-recorded-2026-10-18).
+It should reuse this SDK/ABI through a C adapter and P/Invoke/NativeLibrary,
+not depend on Mono InternalCall. It is not part of the current pre-v1 SDK parity
+gate or backend sprint, and does not yet have a scheduled implementation.
+
 ## 2. Meaning of Wio 1.0 parity
 
 Before Wio `1.0.0`, every stable, host-observable Wio language/runtime feature

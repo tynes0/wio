@@ -4,6 +4,7 @@
 #include "wio/ast/attribute_queries.h"
 #include "wio/ast/attribute_contract.h"
 #include "wio/common/utility.h"
+#include "wio/common/profiling.h"
 #include "wio/sema/intrinsic_member_resolver.h"
 #include "wio/sema/generic_support.h"
 #include "wio/sema/constant_evaluator.h"
@@ -32,6 +33,7 @@ namespace wio::wir::typed
 
         void build(const Ref<Program>& program)
         {
+            common::profiling::Scope buildScope("WIR.Typed.BuildContext");
             result_.module_.name = program && program->location().hasFile() ? program->location().file : "module";
             if (!program)
             {
@@ -53,17 +55,37 @@ namespace wio::wir::typed
             result_.module_.contract.stableId = stableModuleHash(result_.module_.contract.stableKey);
             result_.module_.contract.callTable.stableId = stableModuleHash(
                 result_.module_.contract.stableKey + ":sdk-call-table:v" + std::to_string(ModuleAbiDescriptorVersion));
+            common::profiling::Scope importsScope("WIR.Typed.CollectImports");
             collectImports(program->statements);
+            importsScope.stop();
+            common::profiling::Scope functionsScope("WIR.Typed.CollectFunctions");
             collectFunctions(program->statements);
+            functionsScope.stop();
+            common::profiling::Scope typesScope("WIR.Typed.CollectTypes");
             collectTypeDeclarations(program->statements);
+            typesScope.stop();
+            common::profiling::Scope globalsScope("WIR.Typed.CollectGlobals");
             collectGlobals(program->statements);
+            globalsScope.stop();
             nextFunctionId_ = static_cast<FunctionId::ValueType>(declarations_.size());
+            result_.module_.functions.reserve(declarations_.size() + typeDeclarations_.size() +
+                                              globalDeclarations_.size() + 1);
+            common::profiling::Scope functionBodiesScope("WIR.Typed.BuildFunctions");
             for (const DeclarationInfo& declaration : declarations_)
                 buildFunction(declaration);
-            buildObjectFieldInitializers();
+            functionBodiesScope.stop();
+            common::profiling::Scope objectInitializersScope("WIR.Typed.ObjectInitializers");
+            buildNominalFieldInitializers();
+            objectInitializersScope.stop();
+            common::profiling::Scope globalInitializersScope("WIR.Typed.GlobalInitializers");
             buildGlobalInitializers();
+            globalInitializersScope.stop();
+            common::profiling::Scope reflectionScope("WIR.Typed.Reflection");
             buildTypeExportsAndReflection();
+            reflectionScope.stop();
+            common::profiling::Scope applicationReflectionScope("WIR.Typed.ApplicationReflection");
             buildApplicationSystemAttributeReflection();
+            applicationReflectionScope.stop();
             const ModuleLifecycle& lifecycle = result_.module_.contract.lifecycle;
             if (!options_.moduleKind &&
                 (!result_.module_.contract.exports.empty() || lifecycle.apiVersion || lifecycle.load ||
@@ -585,7 +607,6 @@ namespace wio::wir::typed
                                                                  : NativeReceiverKind::ConstReference)
                                                           : NativeReceiverKind::None};
             binding.stableKey = "cpp:" + binding.symbol + ":" + functionType.toString();
-            binding.thunkSymbol = nativeThunkSymbol(binding.stableKey);
             binding.explicitTemplateArguments =
                 !function.genericParameters.empty() &&
                 (functionType.paramTypes.empty() || binding.symbol == "wio::runtime::EnumCount" ||
@@ -596,6 +617,30 @@ namespace wio::wir::typed
                  binding.symbol == "wio::runtime::EnumTryFromRaw" || binding.symbol == "wio::runtime::EnumFromRaw");
             for (const Ref<sema::Type>& parameter : functionType.paramTypes)
                 binding.parameters.push_back(nativeAbiValue(mapType(parameter, &declaration), false));
+            if (!function.genericParameters.empty() && !binding.explicitTemplateArguments)
+            {
+                std::unordered_set<std::uint32_t> deducible;
+                std::vector<TypeId> pending;
+                for (const auto& parameter : binding.parameters)
+                    pending.push_back(parameter.type);
+                while (!pending.empty())
+                {
+                    const auto id = pending.back();
+                    pending.pop_back();
+                    if (!id || !deducible.insert(id.value()).second)
+                        continue;
+                    const auto& type = result_.module_.types.get(id);
+                    pending.insert(pending.end(), type.arguments.begin(), type.arguments.end());
+                    if (type.extentParameter)
+                        pending.push_back(type.extentParameter);
+                }
+                // A native template parameter absent from every argument
+                // cannot be deduced by C++. Pin all selected arguments instead
+                // of silently dropping unused type/const identity parameters.
+                binding.explicitTemplateArguments =
+                    std::ranges::any_of(function.genericParameters,
+                                        [&](TypeId parameter) { return !deducible.contains(parameter.value()); });
+            }
             for (std::size_t index = 0; index < declaration.parameters.size() && index < binding.parameters.size();
                  ++index)
             {
@@ -606,6 +651,19 @@ namespace wio::wir::typed
                     const std::string_view name = attribute->canonicalName.empty()
                                                       ? std::string_view{attribute->qualifiedName}
                                                       : std::string_view{attribute->canonicalName};
+                    if (name == "std::attribute::NativeConsume" || name == "attribute::NativeConsume" ||
+                        name == "NativeConsume")
+                    {
+                        auto& parameter = binding.parameters[index];
+                        if (!nativeAbiCanConsume(result_.module_.types, parameter.type))
+                            report("WIR2403",
+                                   "NativeConsume requires an owning value, not ref/view, opaque, callback or task "
+                                   "storage.",
+                                   attribute.Get());
+                        else
+                            parameter.passing = NativePassingMode::Consume;
+                        continue;
+                    }
                     if (name != "std::attribute::NativeCallback" && name != "attribute::NativeCallback" &&
                         name != "NativeCallback")
                         continue;
@@ -622,6 +680,22 @@ namespace wio::wir::typed
                         report("WIR2402", "NativeCallback thread must be 'caller' or 'any'.", attribute.Get());
                 }
             }
+            // The same C++ symbol/signature may be declared with different
+            // callback leases or thread affinity. Those are different thunks:
+            // deduplication must not replace a retained callback with a call
+            // lease. Preserve existing keys for default call/caller contracts.
+            for (std::size_t index = 0; index < binding.parameters.size(); ++index)
+            {
+                const auto& parameter = binding.parameters[index];
+                if (parameter.passing == NativePassingMode::Consume)
+                    binding.stableKey += ":consume[" + std::to_string(index) + "]";
+                if (parameter.callbackLifetime != NativeCallbackLifetime::Call ||
+                    parameter.callbackThread != NativeCallbackThread::Caller)
+                    binding.stableKey += ":callback[" + std::to_string(index) +
+                                         "]:" + std::string(nativeCallbackLifetimeName(parameter.callbackLifetime)) +
+                                         ":" + std::string(nativeCallbackThreadName(parameter.callbackThread));
+            }
+            binding.thunkSymbol = nativeThunkSymbol(binding.stableKey);
             binding.result = nativeAbiValue(function.returnType, true);
             const bool needsMarshalling =
                 std::ranges::any_of(binding.parameters,
@@ -914,8 +988,10 @@ namespace wio::wir::typed
         static std::size_t createBlock(FunctionState& state, std::string name, const SourceSpan& source)
         {
             const std::size_t index = state.function->blocks.size();
-            state.function->blocks.push_back(
-                BasicBlock{.id = BlockId{state.nextBlock++}, .name = std::move(name), .source = source});
+            BasicBlock block{.id = BlockId{state.nextBlock++}, .name = std::move(name), .source = source};
+            block.parameters.reserve(2);
+            block.instructions.reserve(8);
+            state.function->blocks.push_back(std::move(block));
             return index;
         }
 
@@ -1586,7 +1662,7 @@ namespace wio::wir::typed
             return id;
         }
 
-        void buildObjectFieldInitializers()
+        void buildNominalFieldInitializers()
         {
             for (const TypeDeclarationInfo& declaration : typeDeclarations_)
             {
@@ -1596,14 +1672,13 @@ namespace wio::wir::typed
                 const Type& initialLayout = result_.module_.types.get(ownerType);
                 if (initialLayout.kind != TypeKind::Named ||
                     initialLayout.nominalRepresentation != NominalRepresentation::Wio ||
-                    initialLayout.nominalKind != NominalKind::Object)
+                    (initialLayout.nominalKind != NominalKind::Object &&
+                     initialLayout.nominalKind != NominalKind::Component))
                 {
                     continue;
                 }
                 const std::string layoutName = initialLayout.name;
                 const std::vector<FieldLayout> fields = initialLayout.fields;
-                const std::vector<MethodLayout> methods = initialLayout.methods;
-
                 std::vector<const VariableDeclaration*> initializedFields;
                 const auto collectFields = [&](const auto& members)
                 {
@@ -1621,6 +1696,20 @@ namespace wio::wir::typed
                     collectFields(object->members);
                 if (initializedFields.empty())
                     continue;
+
+                // Lifecycle functions are intentionally excluded from virtual
+                // method layouts. Resolve their already-pinned bodies instead.
+                FunctionId defaultConstructor;
+                for (const Function& candidate : result_.module_.functions)
+                {
+                    if (candidate.ownerType == ownerType && candidate.parameters.size() == 1 &&
+                        !candidate.name.starts_with("$default::") &&
+                        (candidate.name == "OnConstruct" || candidate.name.ends_with("::OnConstruct")))
+                    {
+                        defaultConstructor = candidate.id;
+                        break;
+                    }
+                }
 
                 const SourceSpan source = SourceSpan::at(declaration.declaration->location());
                 const TypeId receiverType = referenceType(ownerType, true);
@@ -1673,17 +1762,14 @@ namespace wio::wir::typed
                                     .source = SourceSpan::at(variable->location())});
                 }
 
-                const auto defaultConstructor = std::ranges::find_if(
-                    methods, [](const MethodLayout& method)
-                    { return method.name == "OnConstruct" && method.parameterTypes.empty() && !method.isAbstract; });
-                if (defaultConstructor != methods.end())
+                if (defaultConstructor)
                 {
-                    const Function* target = findFunction(defaultConstructor->function);
+                    const Function* target = findFunction(defaultConstructor);
                     currentBlock(state).instructions.push_back(
                         Instruction{.opcode = target && target->nativeBinding ? Opcode::NativeCall : Opcode::Call,
                                     .resultType = result_.module_.types.voidType(),
                                     .operands = {receiver},
-                                    .callee = defaultConstructor->function,
+                                    .callee = defaultConstructor,
                                     .signatureTypes = {receiverType},
                                     .source = source});
                 }
@@ -2050,14 +2136,14 @@ namespace wio::wir::typed
         }
 
         void appendMethodLayout(const Ref<sema::Symbol>& methodSymbol, std::vector<MethodLayout>& methods,
-                                const ASTNode* source)
+                                const ASTNode* source, const bool interfaceDefault = false)
         {
             if (!methodSymbol)
                 return;
             if (methodSymbol->kind == sema::SymbolKind::FunctionGroup)
             {
                 for (const Ref<sema::Symbol>& overload : methodSymbol->overloads)
-                    appendMethodLayout(overload, methods, source);
+                    appendMethodLayout(overload, methods, source, interfaceDefault);
                 return;
             }
             if (methodSymbol->kind != sema::SymbolKind::Function || isLifecycleMethod(methodSymbol->name))
@@ -2078,7 +2164,9 @@ namespace wio::wir::typed
                                               !isNativeFunction(*function)};
             for (const Ref<sema::Type>& parameterType : functionType->paramTypes)
                 layout.parameterTypes.push_back(mapType(parameterType, source));
-            layout.visibility = methodSymbol->flags.get_isPublic()      ? FieldVisibility::Public
+            const bool publicByDefault = interfaceDefault && !methodSymbol->flags.get_isPrivate() &&
+                                         !methodSymbol->flags.get_isProtected();
+            layout.visibility = (methodSymbol->flags.get_isPublic() || publicByDefault) ? FieldVisibility::Public
                                 : methodSymbol->flags.get_isProtected() ? FieldVisibility::Protected
                                                                         : FieldVisibility::Private;
 
@@ -2326,7 +2414,7 @@ namespace wio::wir::typed
                     identity->scopePath.empty() ? identity->name : identity->scopePath + "::" + identity->name;
                 for (std::size_t index = 0; index < structure->genericArguments.size(); ++index)
                     wirType.arguments.push_back(mapGenericArgument(structure->genericArguments[index], index));
-                if (structure->genericArguments.empty())
+                if (structure->genericArguments.empty() && !primary)
                     for (const auto& parameter : structure->genericParameterTypes)
                         wirType.arguments.push_back(mapType(parameter, source));
                 wirType.nominalKind = identity->isFlagset     ? NominalKind::Flagset
@@ -2341,6 +2429,9 @@ namespace wio::wir::typed
                     wirType.nativeBinding = NativeTypeBinding{
                         .cppName = identity->nativeCppName.empty() ? identity->name : identity->nativeCppName,
                         .header = identity->nativeCppHeader};
+                    if (primary && identity->hasGenericParameterPack && wirType.arguments.empty() &&
+                        wirType.nativeBinding->cppName.find('<') == std::string::npos)
+                        wirType.nativeBinding->cppName += "<>";
                 }
                 if (wirType.nominalKind == NominalKind::Object || wirType.nominalKind == NominalKind::Interface)
                 {
@@ -2387,7 +2478,7 @@ namespace wio::wir::typed
                 auto fieldNames = usePrimaryFields ? identity->fieldNames : structure->fieldNames;
                 auto fieldTypes = usePrimaryFields ? identity->fieldTypes : structure->fieldTypes;
                 std::vector<TypeId> parameters, arguments;
-                if (!structure->genericArguments.empty())
+                if (!structure->genericArguments.empty() || (primary && structure->hasGenericParameterPack))
                 {
                     const auto& fieldGenericParameters =
                         usePrimaryFields ? identity->genericParameterTypes : structure->genericParameterTypes;
@@ -2474,7 +2565,7 @@ namespace wio::wir::typed
                     for (const auto& [name, member] : layoutScope->getSymbols())
                     {
                         WIO_UNUSED(name);
-                        appendMethodLayout(member, methods, source);
+                        appendMethodLayout(member, methods, source, identity->isInterface);
                     }
                 }
 
@@ -2485,6 +2576,8 @@ namespace wio::wir::typed
                         parameter = substituteGenericType(parameter, parameters, arguments);
                 }
                 Type& storedType = result_.module_.types.getMutable(id);
+                storedType.hasSpecializedLayout =
+                    structure->isExplicitSpecialization || structure->isPartialSpecialization;
                 storedType.baseTypes = std::move(baseTypes);
                 storedType.fields = std::move(fields);
                 storedType.methods = std::move(methods);
@@ -2975,6 +3068,7 @@ namespace wio::wir::typed
             }
 
             Function function;
+            function.parameters.reserve(declaration.parameters.size() + (declarationInfo.ownerType ? 1u : 0u));
             function.id = functionsBySymbol_.at(symbol.Get());
             function.name = symbol->scopePath.empty() ? symbol->name : symbol->scopePath + "::" + symbol->name;
             function.returnType = mapType(functionType->returnType, &declaration);
@@ -2984,6 +3078,8 @@ namespace wio::wir::typed
             function.source = SourceSpan::at(declaration.location());
             function.isAsync = declaration.isAsync;
             function.isExternal = declaration.body == nullptr;
+            if (!function.isExternal)
+                function.blocks.reserve(8);
             function.isMethod = static_cast<bool>(function.ownerType);
             function.isExtension = declarationInfo.isExtension;
             if (function.isAsync)
@@ -3007,6 +3103,15 @@ namespace wio::wir::typed
             }
 
             FunctionState state{.function = &function};
+            const std::size_t localCapacity = declaration.parameters.size() + 8;
+            state.values.reserve(localCapacity);
+            state.valueOrder.reserve(localCapacity);
+            state.places.reserve(localCapacity);
+            state.placeOrder.reserve(localCapacity);
+            state.captureTypes.reserve(localCapacity);
+            state.ownerships.reserve(localCapacity * 2);
+            state.movedPlaces.reserve(localCapacity);
+            state.temporaryPlaces.reserve(8);
             if (!function.isExternal)
             {
                 state.blockIndex = createBlock(state, "entry", SourceSpan::at(declaration.body->location()));
@@ -3036,19 +3141,18 @@ namespace wio::wir::typed
                            parameter.name.Get());
                     continue;
                 }
-                const ValueId value{state.nextValue++};
-                function.parameters.push_back(Parameter{
-                    .id = value,
-                    .name = parameterSymbol->name,
-                    .type = mapType(functionType->paramTypes[index], parameter.name.Get()),
-                    .ownership = ownershipForType(mapType(functionType->paramTypes[index], parameter.name.Get())),
-                    .borrowLifetime = ownershipForType(mapType(functionType->paramTypes[index],
-                                                               parameter.name.Get())) == ValueOwnership::Borrowed
-                                          ? BorrowLifetime::Caller
-                                          : BorrowLifetime::None,
-                    .source = SourceSpan::at(parameter.name->location())});
                 const TypeId parameterType = mapType(functionType->paramTypes[index], parameter.name.Get());
-                rememberOwnership(state, value, ownershipForType(parameterType));
+                const ValueOwnership parameterOwnership = ownershipForType(parameterType);
+                const ValueId value{state.nextValue++};
+                function.parameters.push_back(Parameter{.id = value,
+                                                        .name = parameterSymbol->name,
+                                                        .type = parameterType,
+                                                        .ownership = parameterOwnership,
+                                                        .borrowLifetime = parameterOwnership == ValueOwnership::Borrowed
+                                                                              ? BorrowLifetime::Caller
+                                                                              : BorrowLifetime::None,
+                                                        .source = SourceSpan::at(parameter.name->location())});
+                rememberOwnership(state, value, parameterOwnership);
                 const Type* parameterTypeInfo = result_.module_.types.tryGet(parameterType);
                 if (function.isExtension && index == 0)
                 {
@@ -3081,6 +3185,19 @@ namespace wio::wir::typed
 
             if (hasBuiltinAttribute(declaration.attributes, Attribute::Native))
                 function.nativeBinding = makeNativeBinding(declaration, function, *functionType);
+            else
+                for (const auto& parameter : declaration.parameters)
+                    for (const auto& attribute : parameter.attributes)
+                        if (attribute)
+                        {
+                            const std::string_view name = attribute->canonicalName.empty()
+                                                              ? std::string_view{attribute->qualifiedName}
+                                                              : std::string_view{attribute->canonicalName};
+                            if (name == "std::attribute::NativeConsume" || name == "attribute::NativeConsume" ||
+                                name == "NativeConsume")
+                                report("WIR2404", "NativeConsume is only supported on native function parameters.",
+                                       attribute.Get());
+                        }
 
             if (!function.isExternal)
             {
@@ -3225,14 +3342,14 @@ namespace wio::wir::typed
                     return;
                 }
 
+                const TypeId valueType = mapType(symbol->type, declaration);
                 ValueId value;
                 if (declaration->initializer)
-                    value = buildExpressionAs(declaration->initializer, mapType(symbol->type, declaration), state);
+                    value = buildExpressionAs(declaration->initializer, valueType, state);
                 else
-                    value = buildDefaultValue(mapType(symbol->type, declaration), declaration, state);
+                    value = buildDefaultValue(valueType, declaration, state);
                 if (!value)
                     return;
-                const TypeId valueType = mapType(symbol->type, declaration);
                 const Type* valueTypeInfo = result_.module_.types.tryGet(valueType);
                 if (valueTypeInfo && valueTypeInfo->kind == TypeKind::Reference)
                 {
@@ -3585,6 +3702,17 @@ namespace wio::wir::typed
             return payload;
         }
 
+        ValueId materializeBeforeRhs(const ValueId left, const NodePtr<Expression>& right,
+                                     const ASTNode* source, FunctionState& state)
+        {
+            // Value operands are evaluated left-to-right. A borrowed load must
+            // become an owning value before a later expression can mutate or
+            // replace its source. Proven pure RHS expressions stay borrow-only.
+            if (!left || valueOwnership(state, left) != ValueOwnership::Borrowed || isSideEffectFree(right))
+                return left;
+            return ensureOwned(left, builtValueType(state, left), source, state);
+        }
+
         ValueId buildLeftAssociativeAddition(const BinaryExpression& expression, FunctionState& state)
         {
             std::vector<const BinaryExpression*> chain;
@@ -3606,6 +3734,7 @@ namespace wio::wir::typed
             for (auto iterator = chain.rbegin(); iterator != chain.rend(); ++iterator)
             {
                 const BinaryExpression& operation = **iterator;
+                accumulated = materializeBeforeRhs(accumulated, operation.right, operation.left.Get(), state);
                 const ValueId right = buildAutoReadableExpression(operation.right, state);
                 if (!right)
                     return {};
@@ -3735,7 +3864,9 @@ namespace wio::wir::typed
                         continue;
                     }
                     const ValueId value = buildAutoReadableExpression(part, state);
-                    const TypeId valueType = part ? mapType(part->refType.Lock(), part.Get()) : TypeId{};
+                    // Auto-readable projection can load through a view/ref.
+                    // Pin the emitted value type, not its source reference type.
+                    const TypeId valueType = value ? emittedValueType(value, state) : TypeId{};
                     if (!value || !valueType)
                         return {};
                     instruction.operands.push_back(value);
@@ -3827,7 +3958,13 @@ namespace wio::wir::typed
                         return {};
                     instruction.operands.push_back(value);
                 }
-                return appendValue(std::move(instruction));
+                const auto operands = instruction.operands;
+                const ValueId created = appendValue(std::move(instruction));
+                // The aggregate has acquired its own copies. Literal operands
+                // must not retain extra object/Any claims until frame teardown.
+                for (const auto operand : operands)
+                    releaseOwnedTemporary(operand, expression.Get(), state);
+                return created;
             }
             if (const auto* dictionary = expression->as<DictionaryLiteral>())
             {
@@ -3857,7 +3994,11 @@ namespace wio::wir::typed
                     instruction.signatureTypes.push_back(keyType);
                     instruction.signatureTypes.push_back(valueType);
                 }
-                return appendValue(std::move(instruction));
+                const auto operands = instruction.operands;
+                const ValueId created = appendValue(std::move(instruction));
+                for (const auto operand : operands)
+                    releaseOwnedTemporary(operand, expression.Get(), state);
+                return created;
             }
             if (expression->is<NullExpression>())
             {
@@ -3871,6 +4012,7 @@ namespace wio::wir::typed
                 std::vector<ValueId> operands;
                 std::vector<TypeId> signatureTypes;
                 std::vector<CaptureKind> captureKinds;
+                std::vector<ValueId> captureTemporaries;
                 for (const WeakRef<sema::Symbol>& weakSymbol : lambda->capturedSymbols)
                 {
                     const Ref<sema::Symbol> symbol = weakSymbol.Lock();
@@ -3895,7 +4037,12 @@ namespace wio::wir::typed
                                                  ? CaptureKind::Reference
                                                  : CaptureKind::Value;
                     if (kind == CaptureKind::Value)
+                    {
+                        const ValueId source = value;
                         value = ensureOwned(value, captureType, expression.Get(), state);
+                        if (value != source)
+                            captureTemporaries.push_back(value);
+                    }
                     captures.push_back(CaptureLayout{.name = symbol->name, .type = captureType, .kind = kind});
                     operands.push_back(value);
                     signatureTypes.push_back(captureType);
@@ -3918,12 +4065,18 @@ namespace wio::wir::typed
                     captureKinds.push_back(CaptureKind::RetainedSelf);
                 }
                 const FunctionId lambdaFunction = buildLambdaFunction(*lambda, captures, selfCaptureType);
-                return appendValue(Instruction{.opcode = Opcode::ClosureCreate,
-                                               .operands = std::move(operands),
-                                               .callee = lambdaFunction,
-                                               .signatureTypes = std::move(signatureTypes),
-                                               .captureKinds = std::move(captureKinds),
-                                               .source = SourceSpan::at(expression->location())});
+                const ValueId closure = appendValue(Instruction{.opcode = Opcode::ClosureCreate,
+                                                                .operands = std::move(operands),
+                                                                .callee = lambdaFunction,
+                                                                .signatureTypes = std::move(signatureTypes),
+                                                                .captureKinds = std::move(captureKinds),
+                                                                .source = SourceSpan::at(expression->location())});
+                // ClosureCreate copies captures into its own environment. The
+                // staging claims must not keep captured objects alive until
+                // the enclosing frame exits.
+                for (const ValueId temporary : captureTemporaries)
+                    releaseOwnedTemporary(temporary, expression.Get(), state);
+                return closure;
             }
             if (expression->is<SelfExpression>())
             {
@@ -3965,16 +4118,22 @@ namespace wio::wir::typed
                            expression.Get());
                     return {};
                 }
-                const ValueId operand = buildExpression(fit->operand, state);
+                const ValueId operand = buildExpressionAs(fit->operand, sourceTypeId, state);
                 if (!operand)
                     return {};
-                return appendValue(Instruction{.opcode = anyCast      ? Opcode::AnyCheckedCast
-                                                         : objectLike ? Opcode::CheckedCast
-                                                                      : Opcode::Convert,
-                                               .operands = {operand},
-                                               .conversionKind = ConversionKind::NumericFit,
-                                               .targetType = destinationTypeId,
-                                               .source = SourceSpan::at(expression->location())});
+                const auto converted = appendValue(Instruction{.opcode = anyCast      ? Opcode::AnyCheckedCast
+                                                                         : objectLike ? Opcode::CheckedCast
+                                                                                      : Opcode::Convert,
+                                                               .operands = {operand},
+                                                               .conversionKind = ConversionKind::NumericFit,
+                                                               .targetType = destinationTypeId,
+                                                               .source = SourceSpan::at(expression->location())});
+                // Owned cast results have their own claim. Do not keep an
+                // owning any/object temporary alive until function teardown.
+                // Borrow results still depend on the operand's lifetime.
+                if (result_.module_.types.get(destinationTypeId).kind != TypeKind::Reference)
+                    releaseOwnedTemporary(operand, expression.Get(), state);
+                return converted;
             }
             if (const auto* identifier = expression->as<Identifier>())
             {
@@ -4188,18 +4347,19 @@ namespace wio::wir::typed
                            expression.Get());
                     return {};
                 }
+                // Building nested expressions can intern types and relocate the
+                // type table. Keep semantic values, not pointers across it.
+                const TypeKind objectKind = objectType->kind;
                 const ValueId object = buildAutoReadableExpression(access->object, state);
                 const ValueId index = buildAutoReadableExpression(access->index, state);
                 if (!object || !index)
                     return {};
                 const ValueId result = appendValue(Instruction{
-                    .opcode = objectType->kind == TypeKind::Array        ? Opcode::ArrayGet
-                              : objectType->kind == TypeKind::Dictionary ? Opcode::DictionaryGet
-                                                                         : Opcode::IntrinsicCall,
+                    .opcode = objectKind == TypeKind::Array        ? Opcode::ArrayGet
+                              : objectKind == TypeKind::Dictionary ? Opcode::DictionaryGet
+                                                                   : Opcode::IntrinsicCall,
                     .operands = {object, index},
-                    .selector = objectType->kind == TypeKind::String || objectType->kind == TypeKind::Text
-                                    ? "Get"
-                                    : std::string{},
+                    .selector = objectKind == TypeKind::String || objectKind == TypeKind::Text ? "Get" : std::string{},
                     .signatureTypes = {objectTypeId, mapType(access->index->refType.Lock(), access->index.Get())},
                     .intrinsicFamily = intrinsicFamilyFor(objectTypeId),
                     .targetType = objectTypeId,
@@ -4467,12 +4627,41 @@ namespace wio::wir::typed
                     if (const auto commonKind = commonNumericTypeKind(leftTypeInfo->kind, rightTypeInfo->kind))
                         commonNumericType = result_.module_.types.intern(Type{.kind = *commonKind});
                 }
-                const TypeId operandType = numericResult ? expressionType : commonNumericType;
-                const ValueId left = operandType ? buildExpressionAs(binary->left, operandType, state)
+                TypeId operandType = numericResult ? expressionType : commonNumericType;
+                // Equality between a nullable handle and its inner type needs
+                // a common nullable representation, including opaque handles.
+                if (!operandType && op && (*op == BinaryOperator::Equal || *op == BinaryOperator::NotEqual))
+                {
+                    if (leftTypeInfo && leftTypeInfo->kind == TypeKind::Nullable &&
+                        leftTypeInfo->arguments.size() == 1 && leftTypeInfo->arguments.front() == rightReadableType)
+                        operandType = leftReadableType;
+                    else if (rightTypeInfo && rightTypeInfo->kind == TypeKind::Nullable &&
+                             rightTypeInfo->arguments.size() == 1 &&
+                             rightTypeInfo->arguments.front() == leftReadableType)
+                        operandType = rightReadableType;
+                }
+                // Flow analysis can narrow a nullable local's AST type while
+                // its storage/SSA value remains nullable. Honor that narrowing
+                // explicitly before identity comparison; never relax verifier
+                // requirements or evaluate either operand a second time.
+                const auto objectComparisonType = [&](TypeId id)
+                {
+                    const Type* type = result_.module_.types.tryGet(id);
+                    if (type && type->kind == TypeKind::Nullable && type->arguments.size() == 1)
+                        id = type->arguments.front();
+                    return underlyingNominalType(id) != nullptr;
+                };
+                const bool identityComparison =
+                    (binary->op.type == TokenType::opEqual || binary->op.type == TokenType::opNotEqual) &&
+                    objectComparisonType(leftReadableType) && objectComparisonType(rightReadableType);
+                ValueId left = identityComparison ? buildExpressionAs(binary->left, leftReadableType, state)
+                                     : operandType      ? buildExpressionAs(binary->left, operandType, state)
                                      : leftLiteral && !rightLiteral
                                          ? buildExpressionAs(binary->left, rightReadableType, state)
                                          : buildAutoReadableExpression(binary->left, state);
-                const ValueId right = operandType ? buildExpressionAs(binary->right, operandType, state)
+                left = materializeBeforeRhs(left, binary->right, binary->left.Get(), state);
+                const ValueId right = identityComparison ? buildExpressionAs(binary->right, rightReadableType, state)
+                                      : operandType      ? buildExpressionAs(binary->right, operandType, state)
                                       : rightLiteral && !leftLiteral
                                           ? buildExpressionAs(binary->right, leftReadableType, state)
                                           : buildAutoReadableExpression(binary->right, state);
@@ -4481,10 +4670,6 @@ namespace wio::wir::typed
                     report("WIR2303", "Binary expression could not be lowered to Typed WIR.", expression.Get());
                     return {};
                 }
-                const bool identityComparison =
-                    (binary->op.type == TokenType::opEqual || binary->op.type == TokenType::opNotEqual) &&
-                    underlyingNominalType(mapType(binary->left->refType.Lock(), binary->left.Get())) &&
-                    underlyingNominalType(mapType(binary->right->refType.Lock(), binary->right.Get()));
                 const ValueId result =
                     appendValue(Instruction{.opcode = identityComparison ? Opcode::IdentityEqual : Opcode::Binary,
                                             .operands = {left, right},
@@ -4639,14 +4824,25 @@ namespace wio::wir::typed
                         if (!appendCallArgument(instruction, argument, expectedType, state))
                             return {};
                     }
+                    // Dictionary operations copy their value inputs into the
+                    // container/result. Do not retain argument SSA owners until
+                    // function teardown after that copy has completed.
+                    const std::vector<ValueId> dictionaryArguments =
+                        instruction.intrinsicFamily == IntrinsicFamily::Dictionary
+                            ? std::vector<ValueId>{instruction.operands.begin() + 1, instruction.operands.end()}
+                            : std::vector<ValueId>{};
                     if (callResultTypeInfo && callResultTypeInfo->kind == TypeKind::Void)
                     {
                         currentBlock(state).instructions.push_back(std::move(instruction));
+                        for (const ValueId argument : dictionaryArguments)
+                            releaseOwnedTemporary(argument, expression.Get(), state);
                         if (!mutating)
                             releaseOwnedTemporary(receiver, expression.Get(), state);
                         return {};
                     }
                     const ValueId result = appendValue(std::move(instruction));
+                    for (const ValueId argument : dictionaryArguments)
+                        releaseOwnedTemporary(argument, expression.Get(), state);
                     if (!mutating)
                         releaseOwnedTemporary(receiver, expression.Get(), state);
                     return result;
@@ -4821,11 +5017,26 @@ namespace wio::wir::typed
                     const std::optional<MethodLayout> method = findMethodLayout(receiverNominalType, calleeSymbol);
                     if (receiverOwner && functionIt != functionsBySymbol_.end() && method)
                     {
+                        // Building the receiver may intern new types and relocate
+                        // the type table. Keep dispatch identity by value, not a
+                        // pointer into that table across expression lowering.
+                        const NominalKind receiverKind = receiverOwner->nominalKind;
                         const Type* methodResultType = result_.module_.types.tryGet(callResultType);
                         const bool borrowedResult = methodResultType && methodResultType->kind == TypeKind::Reference;
                         const bool temporaryReceiver = memberCallee->object->is<FunctionCallExpression>();
+                        // Existing object storage already roots a receiver borrow.
+                        // Do not create an owned SSA copy that survives lexical
+                        // cleanup merely because the method returns ref/view.
+                        // Temporaries still use their tracked backing place.
+                        const bool lexicalObjectReceiver =
+                            borrowedResult &&
+                            (receiverKind == NominalKind::Object || receiverKind == NominalKind::Interface) &&
+                            (memberCallee->object->is<Identifier>() || memberCallee->object->is<SelfExpression>() ||
+                             memberCallee->object->is<SuperExpression>());
                         const ValueId receiver = borrowedResult && temporaryReceiver
                                                      ? buildPlace(memberCallee->object, method->receiverMutable, state)
+                                                 : lexicalObjectReceiver
+                                                     ? buildAutoReadableExpression(memberCallee->object, state)
                                                      : buildExpressionAs(memberCallee->object, rawReceiverType, state);
                         if (!receiver)
                             return {};
@@ -4833,9 +5044,9 @@ namespace wio::wir::typed
                             .opcode = memberCallee->object->is<SuperExpression>() ||
                                               (calleeSymbol && !calleeSymbol->genericParameterTypes.empty())
                                           ? Opcode::MethodCall
-                                      : receiverOwner->nominalKind == NominalKind::Interface ? Opcode::InterfaceCall
-                                      : receiverOwner->nominalKind == NominalKind::Object    ? Opcode::VirtualCall
-                                                                                             : Opcode::MethodCall,
+                                      : receiverKind == NominalKind::Interface ? Opcode::InterfaceCall
+                                      : receiverKind == NominalKind::Object    ? Opcode::VirtualCall
+                                                                               : Opcode::MethodCall,
                             .operands = {receiver},
                             .callee = functionIt->second,
                             .selector = method->name,
@@ -4890,7 +5101,9 @@ namespace wio::wir::typed
                     if (const Ref<sema::Symbol> directSymbol = call->callee->referencedSymbol.Lock())
                         calleeSymbol = directSymbol;
                 }
-                const Ref<sema::Type> selectedCallableType = call->callee ? call->callee->refType.Lock() : nullptr;
+                Ref<sema::Type> selectedCallableType = call->callee ? call->callee->refType.Lock() : nullptr;
+                while (selectedCallableType && selectedCallableType->kind() == sema::TypeKind::Alias)
+                    selectedCallableType = selectedCallableType.AsFast<sema::AliasType>()->aliasedType;
                 const auto visibleFunctionType =
                     selectedCallableType && selectedCallableType->kind() == sema::TypeKind::Function
                         ? selectedCallableType.AsFast<sema::FunctionType>()
@@ -4960,17 +5173,17 @@ namespace wio::wir::typed
                                expression.Get());
                         return {};
                     }
-                    Instruction instruction{
-                        .opcode = owner->nominalKind == NominalKind::Interface ? Opcode::InterfaceCall
-                                  : owner->nominalKind == NominalKind::Object  ? Opcode::VirtualCall
-                                                                               : Opcode::MethodCall,
-                        .operands = {state.selfValue},
-                        .callee = functionIt->second,
-                        .selector = method->name,
-                        .projectionIndex = method->slot,
-                        .signatureTypes = {referenceType(calleeOwnerType, method->receiverMutable)},
-                        .targetType = calleeOwnerType,
-                        .source = SourceSpan::at(expression->location())};
+                    Instruction instruction{.opcode = owner->nominalKind == NominalKind::Interface
+                                                          ? Opcode::InterfaceCall
+                                                      : owner->nominalKind == NominalKind::Object ? Opcode::VirtualCall
+                                                                                                  : Opcode::MethodCall,
+                                            .operands = {state.selfValue},
+                                            .callee = functionIt->second,
+                                            .selector = method->name,
+                                            .projectionIndex = method->slot,
+                                            .signatureTypes = {referenceType(calleeOwnerType, method->receiverMutable)},
+                                            .targetType = calleeOwnerType,
+                                            .source = SourceSpan::at(expression->location())};
                     for (std::size_t index = 0; index < call->arguments.size(); ++index)
                     {
                         const auto& argument = call->arguments[index];
@@ -5173,13 +5386,14 @@ namespace wio::wir::typed
                            expression.Get());
                     return {};
                 }
+                const TypeKind containerKind = container->kind;
                 const ValueId base = buildPlace(access->object, needsMutable, state);
                 const ValueId index = buildAutoReadableExpression(access->index, state);
                 if (!base || !index)
                     return {};
                 const ValueId result{state.nextValue++};
                 currentBlock(state).instructions.push_back(Instruction{
-                    .opcode = container->kind == TypeKind::Dictionary ? Opcode::DictionaryPlace : Opcode::ArrayPlace,
+                    .opcode = containerKind == TypeKind::Dictionary ? Opcode::DictionaryPlace : Opcode::ArrayPlace,
                     .result = result,
                     .resultType = referenceType(mapType(expression->refType.Lock(), expression.Get()), needsMutable),
                     .operands = {base, index},
@@ -5494,6 +5708,10 @@ namespace wio::wir::typed
                 return ensureOwned(value, destinationType, expression.Get(), state);
 
             const Type* source = result_.module_.types.tryGet(sourceType);
+            // Recursive expression construction may intern additional types
+            // and reallocate the table. Never use the pre-build destination
+            // address after that point (notably nested generic POD -> Any).
+            destination = result_.module_.types.tryGet(destinationType);
             const auto packValue = [](const Type* type)
             {
                 return type && (type->kind == TypeKind::GenericParameterPack || type->kind == TypeKind::ValuePack ||
@@ -5558,24 +5776,7 @@ namespace wio::wir::typed
 
             if (destination && destination->kind == TypeKind::Any)
             {
-                if (source && source->kind == TypeKind::Array && source->staticExtent && expression->is<ArrayLiteral>())
-                {
-                    Type dynamicArray = *source;
-                    dynamicArray.staticExtent.reset();
-                    dynamicArray.extentParameter = {};
-                    sourceType = result_.module_.types.intern(std::move(dynamicArray));
-                    source = result_.module_.types.tryGet(sourceType);
-                    for (auto instruction = currentBlock(state).instructions.rbegin();
-                         instruction != currentBlock(state).instructions.rend(); ++instruction)
-                    {
-                        if (instruction->result == value)
-                        {
-                            instruction->resultType = sourceType;
-                            break;
-                        }
-                    }
-                    rememberOwnership(state, value, ownershipForType(sourceType));
-                }
+                const TypeId payloadType = canonicalAnyPayloadType(result_.module_.types, sourceType);
                 value = ensureOwned(value, sourceType, expression.Get(), state);
                 const ValueId boxed{state.nextValue++};
                 currentBlock(state).instructions.push_back(
@@ -5583,13 +5784,33 @@ namespace wio::wir::typed
                                 .result = boxed,
                                 .resultType = destinationType,
                                 .operands = {value},
-                                .signatureTypes = {sourceType},
-                                .targetType = sourceType,
+                                .signatureTypes = {payloadType},
+                                .targetType = payloadType,
                                 .resultOwnership = ValueOwnership::Owned,
                                 .source = SourceSpan::at(expression->location())});
                 rememberOwnership(state, boxed, ValueOwnership::Owned);
                 releaseOwnedTemporary(value, expression.Get(), state);
                 return boxed;
+            }
+
+            // Literal array extents are inference metadata, not std::array
+            // storage. Materialization copies the value into its canonical
+            // container type; it must never become a numeric Convert or retag
+            // the source place (which may still have live aliases).
+            if (source && destination && (source->kind == TypeKind::Array || source->kind == TypeKind::Dictionary) &&
+                isAnyPayloadTypeCompatible(result_.module_.types, sourceType, destinationType))
+            {
+                const ValueId materialized{state.nextValue++};
+                currentBlock(state).instructions.push_back(
+                    Instruction{.opcode = Opcode::Copy,
+                                .result = materialized,
+                                .resultType = destinationType,
+                                .operands = {value},
+                                .resultOwnership = ValueOwnership::Owned,
+                                .source = SourceSpan::at(expression->location())});
+                rememberOwnership(state, materialized, ValueOwnership::Owned);
+                releaseOwnedTemporary(value, expression.Get(), state);
+                return materialized;
             }
 
             if (source && destination && destination->kind == TypeKind::Nullable &&
@@ -5606,6 +5827,7 @@ namespace wio::wir::typed
                                 .resultOwnership = ownershipForType(destinationType),
                                 .source = SourceSpan::at(expression->location())});
                 rememberOwnership(state, wrapped, ownershipForType(destinationType));
+                releaseOwnedTemporary(value, expression.Get(), state);
                 return wrapped;
             }
 
@@ -5622,6 +5844,7 @@ namespace wio::wir::typed
                                 .resultOwnership = ownershipForType(destinationType),
                                 .source = SourceSpan::at(expression->location())});
                 rememberOwnership(state, unwrapped, ownershipForType(destinationType));
+                releaseOwnedTemporary(value, expression.Get(), state);
                 return unwrapped;
             }
 
@@ -5917,10 +6140,12 @@ namespace wio::wir::typed
             caseBodyIndices.reserve(expression.cases.size());
             for (std::size_t index = 0; index < expression.cases.size(); ++index)
             {
+                const MatchCase& matchCase = expression.cases[index];
                 caseEntryIndices.push_back(createBlock(state, "match.case." + std::to_string(index) + ".test",
                                                        SourceSpan::at(expression.location())));
                 caseBodyIndices.push_back(createBlock(state, "match.case." + std::to_string(index) + ".body",
-                                                      SourceSpan::at(expression.cases[index].body->location())));
+                                                      SourceSpan::at(matchCase.body ? matchCase.body->location()
+                                                                                  : expression.location())));
             }
             const std::size_t unmatchedBlockIndex =
                 createBlock(state, "match.unmatched", SourceSpan::at(expression.location()));
@@ -5976,6 +6201,9 @@ namespace wio::wir::typed
                                              : currentBlockAt(state, unmatchedBlockIndex).id;
                 const bool destructuring = !matchCase.variantName.empty();
                 const bool assumed = matchCase.matchValues.empty() && !destructuring;
+                const ASTNode* caseSource = matchCase.body
+                    ? static_cast<const ASTNode*>(matchCase.body.Get())
+                    : static_cast<const ASTNode*>(&expression);
                 std::unordered_map<const sema::Symbol*, ValueId> caseBindings;
 
                 FunctionState testState = state;
@@ -5987,7 +6215,7 @@ namespace wio::wir::typed
                     currentBlock(testState).instructions.push_back(
                         Instruction{.opcode = Opcode::Branch,
                                     .targets = {bodyBlock},
-                                    .source = SourceSpan::at(matchCase.body->location())});
+                                    .source = SourceSpan::at(caseSource->location())});
                 }
                 else
                 {
@@ -6002,14 +6230,14 @@ namespace wio::wir::typed
                     if (destructuring)
                     {
                         const ValueId matched =
-                            buildDestructuringMatchTest(matchCase, subject, *matchCase.body.Get(), testState);
+                            buildDestructuringMatchTest(matchCase, subject, *caseSource, testState);
                         if (!matched)
                             return {};
                         currentBlock(testState).instructions.push_back(
                             Instruction{.opcode = Opcode::CondBranch,
                                         .operands = {matched},
                                         .targets = {successTarget, nextCase},
-                                        .source = SourceSpan::at(matchCase.body->location())});
+                                        .source = SourceSpan::at(caseSource->location())});
                     }
                     else
                     {
@@ -7122,10 +7350,12 @@ namespace wio::wir::typed
                 return true;
             }
             if (const auto* unary = expression->as<UnaryExpression>())
-                return unary->op.type != TokenType::opIncrement && unary->op.type != TokenType::opDecrement &&
+                return unary->operatorDispatchKind == OperatorDispatchKind::None &&
+                       unary->op.type != TokenType::opIncrement && unary->op.type != TokenType::opDecrement &&
                        isSideEffectFree(unary->operand);
             if (const auto* binary = expression->as<BinaryExpression>())
-                return isSideEffectFree(binary->left) && isSideEffectFree(binary->right);
+                return binary->operatorDispatchKind == OperatorDispatchKind::None &&
+                       isSideEffectFree(binary->left) && isSideEffectFree(binary->right);
             if (const auto* conditional = expression->as<ConditionalExpression>())
             {
                 return isSideEffectFree(conditional->condition) && isSideEffectFree(conditional->whenTrue) &&
@@ -7176,6 +7406,7 @@ namespace wio::wir::typed
                 return IntegerType::isize;
             case TypeKind::U8:
             case TypeKind::Byte:
+            case TypeKind::Char:
                 return IntegerType::u8;
             case TypeKind::U16:
                 return IntegerType::u16;
@@ -7226,6 +7457,7 @@ namespace wio::wir::typed
                 return NumericTypeInfo{64, true, false};
             case TypeKind::U8:
             case TypeKind::Byte:
+            case TypeKind::Char:
                 return NumericTypeInfo{8, false, false};
             case TypeKind::U16:
                 return NumericTypeInfo{16, false, false};
@@ -7262,7 +7494,7 @@ namespace wio::wir::typed
         static bool isImplicitNumericConversion(const TypeKind sourceKind, const TypeKind destinationKind)
         {
             if (sourceKind == destinationKind)
-                return true;
+                return numericTypeInfo(sourceKind).has_value();
             const auto source = numericTypeInfo(sourceKind);
             const auto destination = numericTypeInfo(destinationKind);
             if (!source || !destination)

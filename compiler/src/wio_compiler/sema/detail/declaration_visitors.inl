@@ -783,10 +783,22 @@
             Ref<Type> nativeReturnType = unwrapAliasType(funcType->returnType);
             if (nativeReturnType && nativeReturnType->kind() == TypeKind::Reference)
             {
-                WIO_LOG_ADD_ERROR(
-                    node.location(),
-                    "@Native functions cannot return ref/view values because the native borrow lifetime cannot be proven. Return an owning value or handle instead."
-                );
+                const auto resultReference = nativeReturnType.AsFast<ReferenceType>();
+                const bool callerBound = std::ranges::any_of(funcType->paramTypes, [&](const auto& parameter)
+                {
+                    const auto resolved = unwrapAliasType(parameter);
+                    if (!resolved || resolved->kind() != TypeKind::Reference)
+                        return false;
+                    const auto reference = resolved.template AsFast<ReferenceType>();
+                    return (!resultReference->isMutable || reference->isMutable) &&
+                           sameNativeBorrowCellType(reference->referredType, resultReference->referredType);
+                });
+                if (!callerBound)
+                    WIO_LOG_ADD_ERROR(node.location(),
+                        "@Native functions cannot return ref/view values without a compatible caller reference parameter; globals, temporaries and unrelated native storage cannot be returned.");
+                if (isStructMethod || node.isExtensionMethod)
+                    WIO_LOG_ADD_ERROR(node.location(),
+                        "Native borrowed results currently require a free function with no implicit receiver.");
             }
 
             for (size_t index = 0; index < funcSym->genericParameterTypes.size(); ++index)
@@ -1664,7 +1676,7 @@
 
                     for (size_t i = 0; i < instantiatedFunctionType->paramTypes.size(); ++i)
                     {
-                        if (!isCAbiSafeExportType(instantiatedFunctionType->paramTypes[i]))
+                        if (!canonicalAbiExports_ && !isCAbiSafeExportType(instantiatedFunctionType->paramTypes[i]))
                         {
                             WIO_LOG_ADD_ERROR(
                                 node.location(),
@@ -1684,7 +1696,7 @@
                             ? resolvedTask.AsFast<AsyncTaskType>()->valueType
                             : Compiler::get().getTypeContext().getUnknown();
                     }
-                    if (!isCAbiSafeExportType(instantiatedExportResult))
+                    if (!canonicalAbiExports_ && !isCAbiSafeExportType(instantiatedExportResult))
                     {
                         WIO_LOG_ADD_ERROR(
                             node.location(),
@@ -2526,7 +2538,7 @@
                         {
                             WIO_LOG_ADD_ERROR(
                                 varDecl->location(),
-                                "Declaration-level @Native component '{}' field '{}' uses type '{}' which is not POD-native-compatible yet. Supported field types are primitives, POD-compatible static arrays, and other declaration-level @Native components.",
+                                "Declaration-level [Native] component '{}' field '{}' uses type '{}' which is not POD-native-compatible yet. Supported field types are primitives, opaque/opaque? pointers, enum/flagset scalars, POD-compatible static arrays, and other declaration-level [Native] components.",
                                 node.name->token.value,
                                 varDecl->name->token.value,
                                 memberSym->type ? memberSym->type->toString() : "<unknown>"

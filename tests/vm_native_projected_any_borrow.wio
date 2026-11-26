@@ -1,0 +1,305 @@
+using cpp::header("vm_projected_any_borrow_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_projected_any_borrow::Sample)]
+component Sample
+{
+    public value: i32;
+}
+
+object Item
+{
+    value: i32;
+    public OnConstruct(value: i32)
+    {
+        self.value = value;
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+}
+
+object FailingItem
+{
+    public OnConstruct()
+    {
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+        CleanupFailure();
+    }
+}
+
+[Native, CppName(vm_projected_any_borrow::Constructed)]
+fn Constructed();
+[Native, CppName(vm_projected_any_borrow::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_projected_any_borrow::Balanced)]
+fn Balanced() -> bool;
+[Native, CppName(vm_projected_any_borrow::CleanupFailure)]
+fn CleanupFailure();
+[Native, CppName(vm_projected_any_borrow::Array)]
+fn Array(values: ref any[], value: ref any, next: any) -> ref any;
+[Native, CppName(vm_projected_any_borrow::View)]
+fn View(value: view any, values: view any[]) -> view any;
+[Native, CppName(vm_projected_any_borrow::Repeat)]
+fn Repeat(values: view any[], first: view any, second: ref any) -> ref any;
+[Native, CppName(vm_projected_any_borrow::Distinct)]
+fn Distinct(values: view any[], first: view any, second: ref any) -> ref any;
+[Native, CppName(vm_projected_any_borrow::Dictionary)]
+fn Dictionary(values: ref Dict<string, any>, value: ref any, next: any) -> ref any;
+[Native, CppName(vm_projected_any_borrow::Mixed)]
+fn Mixed(values: ref Dict<string, any[]>, value: ref any, next: any) -> ref any;
+[Native, CppName(vm_projected_any_borrow::Payload)]
+fn Payload(value: ref any, next: i32);
+[Native, CppName(vm_projected_any_borrow::Nest)]
+fn Nest(value: any) -> any;
+[Native, CppName(vm_projected_any_borrow::Null)]
+fn Null() -> any;
+[Native, CppName(vm_projected_any_borrow::Shrink)]
+fn Shrink(values: ref any[], value: ref any) -> ref any;
+[Native, CppName(vm_projected_any_borrow::Grow)]
+fn Grow(values: ref any[], value: ref any) -> ref any;
+[Native, CppName(vm_projected_any_borrow::Erase)]
+fn Erase(values: ref Dict<string, any>, value: ref any) -> ref any;
+[Native, CppName(vm_projected_any_borrow::Foreign)]
+fn Foreign(values: ref any[], value: ref any) -> ref any;
+[Native, CppName(vm_projected_any_borrow::Fail)]
+fn Fail(values: ref any[], value: ref any) -> ref any;
+[Native, CppName(vm_projected_any_borrow::Print)]
+fn Print();
+
+fn Forward(values: ref any[]) -> ref any
+{
+    return Array(values, ref values[0usize], values[0usize]);
+}
+
+fn Probe() -> i32
+{
+    let seed: any = 7;
+    mut values: any[] = [seed];
+    return (deref Array(ref values, ref values[0usize], seed)) fit i32;
+}
+
+fn AliasProbe() -> i32
+{
+    let seed: any = 7;
+    mut values: any[] = [seed];
+    return (deref Repeat(ref values, ref values[0usize], ref values[0usize])) fit i32;
+}
+
+fn LifetimeProbe(action: i32) -> i32
+{
+    let seed: any = 7;
+    mut values: any[] = [seed, seed];
+    let held: ref any = Forward(ref values);
+    if (action == 0)
+    {
+        values.Push(seed);
+    }
+    if (action == 1)
+    {
+        values = [seed];
+    }
+    if (action == 2)
+    {
+        return (deref Shrink(ref values, held)) fit i32;
+    }
+    if (action == 3)
+    {
+        return (deref Grow(ref values, held)) fit i32;
+    }
+    if (action == 4)
+    {
+        return (deref Foreign(ref values, held)) fit i32;
+    }
+    if (action == 5)
+    {
+        return (deref Fail(ref values, held)) fit i32;
+    }
+    return (deref held) fit i32;
+}
+
+fn RemovedProbe() -> i32
+{
+    let seed: any = 7;
+    mut values: Dict<string, any> = {"kept": seed, "other": seed};
+    return (deref Erase(ref values, ref values["kept"])) fit i32;
+}
+
+fn ClearedProbe() -> i32
+{
+    let seed: any = 7;
+    mut values: Dict<string, any> = {"kept": seed};
+    let held: ref any = Dictionary(ref values, ref values["kept"], seed);
+    values.Clear();
+    return (deref held) fit i32;
+}
+
+fn CleanupProbe() -> i32
+{
+    mut values: Dict<string, any> = {"kept": FailingItem()};
+    let next: any = 11;
+    let held: ref any = Dictionary(ref values, ref values["kept"], next);
+    return (deref held) fit i32;
+}
+
+fn SafePoint() -> i32
+{
+    return 0;
+}
+fn LifecycleBalanced() -> bool
+{
+    return Balanced();
+}
+
+fn OwnedEscape() -> any
+{
+    mut values: any[] = [Item(73)];
+    return deref Array(ref values, ref values[0usize], values[0usize]);
+}
+
+fn ObjectRound() -> i32
+{
+    let original: any = Item(61);
+    mut values: Dict<string, any> = {"kept": original};
+    let next: any = Item(67);
+    let held: ref any = Dictionary(ref values, ref values["kept"], next);
+    if (((deref held) fit Item).Read() != 67 or (original fit Item).Read() != 61)
+    {
+        return 10;
+    }
+    values.Set("kept", Null());
+    if ((deref held) is Item)
+    {
+        return 11;
+    }
+    let optional: Item? = Item(79);
+    deref held = optional;
+    if (!((deref held) is Item?) or ((deref held) fit Item).Read() != 79)
+    {
+        return 14;
+    }
+    let absent: Item? = null;
+    let erasedAbsent: any = absent;
+    let nullBorrow: ref any = Dictionary(ref values, held, erasedAbsent);
+    if ((deref held) != null or (deref held) is Item? or (deref nullBorrow) != null)
+    {
+        return 15;
+    }
+    deref held = next;
+    if ((values["kept"] fit Item).Read() != 67)
+    {
+        return 12;
+    }
+    return 0;
+}
+
+fn Entry() -> i32
+{
+    mut round = 0;
+    while (round < 30)
+    {
+        {
+            let original: any = 7;
+            mut values: any[] = [original];
+            let next: any = 13;
+            let held: ref any = Array(ref values, ref values[0usize], next);
+            let observed: view any = View(ref values[0usize], ref values);
+            if (((deref held) fit i32) != 13 or ((deref observed) fit i32) != 13 or (original fit i32) != 7)
+            {
+                return 1;
+            }
+            deref held = u"İstanbul 🚀";
+            if ((values[0usize] fit text) != u"İstanbul 🚀")
+            {
+                return 2;
+            }
+            let repeat: ref any = Repeat(ref values, ref values[0usize], ref values[0usize]);
+            if (((deref repeat) fit i32) != 19 or ((deref observed) fit i32) != 19)
+            {
+                return 3;
+            }
+            let shared: any = deref repeat;
+            Payload(repeat, 23);
+            if ((shared fit i32) != 23 or (values[0usize] fit i32) != 23)
+            {
+                return 4;
+            }
+            let forwarded: ref any = Forward(ref values);
+            deref forwarded = "new\0value";
+            if (((deref held) fit string) != "new\0value")
+            {
+                return 5;
+            }
+        }
+        {
+            let seed: any = 7;
+            mut values: any[] = [seed, seed];
+            let held: ref any = Distinct(ref values, ref values[0usize], ref values[1usize]);
+            deref held = 83;
+            if ((values[0usize] fit i32) != 7 or (values[1usize] fit i32) != 83)
+            {
+                return 16;
+            }
+        }
+        {
+            let seed: any = 29;
+            mut values: Dict<string, any> = {"kept": seed, "removed": seed};
+            let nested = Nest(seed);
+            let held: ref any = Dictionary(ref values, ref values["kept"], nested);
+            if ((((deref held) fit any) fit i32) != 29 or values.ContainsKey("removed"))
+            {
+                return 6;
+            }
+            values.Set("intrinsic", seed);
+            values.Remove("intrinsic");
+            deref held = Sample();
+            if ((values["kept"] fit Sample).value != 37)
+            {
+                return 7;
+            }
+        }
+        {
+            let seed: any = 31;
+            mut values: Dict<string, any[]> = {"kept": [seed]};
+            let held: ref any = Mixed(ref values, ref values["kept"][0usize], Nest(seed));
+            if ((((deref held) fit any) fit i32) != 31)
+            {
+                return 8;
+            }
+            deref held = "mixed";
+            if ((values["kept"][0usize] fit string) != "mixed")
+            {
+                return 9;
+            }
+        }
+        let objectResult = ObjectRound();
+        if (objectResult != 0)
+        {
+            return objectResult;
+        }
+        {
+            let escaped = OwnedEscape();
+            if ((escaped fit Item).Read() != 73)
+            {
+                return 17;
+            }
+        }
+        if (!Balanced())
+        {
+            return 13;
+        }
+        round += 1;
+    }
+    Print();
+    return 0;
+}

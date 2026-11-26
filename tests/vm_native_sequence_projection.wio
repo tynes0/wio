@@ -1,0 +1,252 @@
+using cpp::header("vm_sequence_projection_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_sequence_projection::Sample)]
+component Sample
+{
+    public value: i32;
+}
+
+object Item
+{
+    value: i32;
+
+    public OnConstruct(value: i32)
+    {
+        self.value = value;
+        Constructed();
+    }
+
+    OnDestruct()
+    {
+        Destroyed();
+    }
+
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+}
+
+object FailingItem
+{
+    public OnConstruct()
+    {
+        Constructed();
+    }
+
+    OnDestruct()
+    {
+        Destroyed();
+        CleanupFailure();
+    }
+}
+
+[Native, CppName(vm_sequence_projection::Constructed)]
+fn Constructed();
+
+[Native, CppName(vm_sequence_projection::Destroyed)]
+fn Destroyed();
+
+[Native, CppName(vm_sequence_projection::Balanced)]
+fn Balanced() -> bool;
+
+[Native, CppName(vm_sequence_projection::CleanupFailure)]
+fn CleanupFailure();
+
+[Native, CppName(vm_sequence_projection::Mutate)]
+fn Mutate(values: ref i32[], item: ref i32) -> bool;
+
+[Native, CppName(vm_sequence_projection::Reverse)]
+fn Reverse(item: ref i32, values: view i32[]) -> bool;
+
+[Native, CppName(vm_sequence_projection::ReadOnly)]
+fn ReadOnly(item: view i32, values: view i32[]) -> bool;
+
+[Native, CppName(vm_sequence_projection::Pair)]
+fn Pair(values: ref i32[], first: ref i32, second: ref i32) -> bool;
+
+[Native, CppName(vm_sequence_projection::Alias)]
+fn Alias(first: ref i32, values: ref i32[], second: ref i32) -> bool;
+
+[Native, CppName(vm_sequence_projection::Nested)]
+fn Nested(cell: ref i32, row: ref i32[], values: ref i32[][]) -> bool;
+
+[Native, CppName(vm_sequence_projection::Words)]
+fn Words(word: ref string, values: ref string[]) -> bool;
+
+[Native, CppName(vm_sequence_projection::Texts)]
+fn Texts(values: ref text[], item: ref text) -> bool;
+
+[Native, CppName(vm_sequence_projection::Samples)]
+fn Samples(values: ref Sample[], item: ref Sample) -> bool;
+
+[Native, CppName(vm_sequence_projection::Hidden)]
+fn Hidden(item: view Sample) -> i32;
+
+[Native, CppName(vm_sequence_projection::Anys)]
+fn Anys(values: ref any[], item: ref any) -> bool;
+
+[Native, CppName(vm_sequence_projection::Replace), Instantiate(Item), Instantiate(Item?), Instantiate(FailingItem)]
+fn Replace<T>(values: ref T[], item: ref T, next: T) -> bool;
+
+[Native, CppName(vm_sequence_projection::Borrow), Instantiate(i32)]
+fn Borrow<T>(values: ref T[], item: ref T) -> ref T;
+
+[Native, CppName(vm_sequence_projection::BorrowRoot)]
+fn BorrowRoot(values: ref i32[], item: ref i32) -> ref i32[];
+
+[Native, CppName(vm_sequence_projection::Fail)]
+fn Fail(values: ref i32[], item: ref i32);
+
+[Native, CppName(vm_sequence_projection::PodField)]
+fn PodField(values: ref Sample[], field: ref i32);
+
+[Native, CppName(vm_sequence_projection::Calls)]
+fn Calls() -> i32;
+
+[Native, CppName(vm_sequence_projection::Print)]
+fn Print();
+
+fn Probe() -> i32
+{
+    mut values: i32[] = [7, 11];
+    return Mutate(ref values, ref values[0usize]) ? values[0usize] : -1;
+}
+
+fn FailureProbe() -> i32
+{
+    mut values: i32[] = [7];
+    Fail(ref values, ref values[0usize]);
+    return 0;
+}
+
+fn ExpiredProbe() -> i32
+{
+    let row: i32[] = [3, 7];
+    mut values: i32[][] = [row];
+    let old: view i32 = ref values[0usize][1usize];
+    Nested(ref values[0usize][1usize], ref values[0usize], ref values);
+    return deref old;
+}
+
+fn PodFieldProbe() -> i32
+{
+    mut values: Sample[] = [Sample()];
+    PodField(ref values, ref values[0usize].value);
+    return 0;
+}
+
+fn SafePoint() -> i32
+{
+    return 0;
+}
+
+fn ReadCalls() -> i32
+{
+    return Calls();
+}
+
+fn LifecycleBalanced() -> bool
+{
+    return Balanced();
+}
+
+fn CleanupProbe() -> i32
+{
+    mut values: FailingItem[] = [FailingItem()];
+    Replace<FailingItem>(ref values, ref values[0usize], FailingItem());
+    return 0;
+}
+
+fn BorrowProbe() -> i32
+{
+    mut values: i32[] = [7];
+    let borrowed: ref i32 = Borrow<i32>(ref values, ref values[0usize]);
+    return deref borrowed;
+}
+
+fn Entry() -> i32
+{
+    mut round = 0;
+    while (round < 30)
+    {
+        mut values: i32[] = [7, 11];
+        let copy = values;
+        let stable: view i32 = ref values[0usize];
+        if (!Mutate(ref values, ref values[0usize]) or deref stable != 41 or values[1usize] != 19 or copy[0usize] != 7)
+        {
+            return 1;
+        }
+        if (!Reverse(ref values[1usize], ref values) or values[1usize] != 67 or !ReadOnly(ref values[0usize], ref values))
+        {
+            return 2;
+        }
+        if (!Pair(ref values, ref values[0usize], ref values[1usize]) or values[0usize] != 23 or values[1usize] != 29)
+        {
+            return 3;
+        }
+        if (!Alias(ref values[0usize], ref values, ref values[0usize]) or values[0usize] != 31)
+        {
+            return 4;
+        }
+        let borrowed: ref i32[] = BorrowRoot(ref values, ref values[0usize]);
+        if (borrowed[0usize] != 53)
+        {
+            return 13;
+        }
+        let row: i32[] = [3, 7];
+        let other: i32[] = [11];
+        mut nested: i32[][] = [row, other];
+        let sibling: view i32 = ref nested[1usize][0usize];
+        if (!Nested(ref nested[0usize][1usize], ref nested[0usize], ref nested) or
+            nested[0usize].Count() != 3usize or nested[0usize][1usize] != 37 or deref sibling != 11)
+        {
+            return 5;
+        }
+        mut words: string[] = ["a"];
+        if (!Words(ref words[0usize], ref words) or words[0usize] != "a\0tail")
+        {
+            return 6;
+        }
+        mut texts: text[] = [u"a"];
+        if (!Texts(ref texts, ref texts[0usize]) or texts[0usize] != u"İ🚀")
+        {
+            return 7;
+        }
+        mut samples: Sample[] = [Sample()];
+        let field: view i32 = ref samples[0usize].value;
+        if (!Samples(ref samples, ref samples[0usize]) or deref field != 41 or Hidden(ref samples[0usize]) != 83)
+        {
+            return 8;
+        }
+        let leaf: any = 7;
+        mut anys: any[] = [leaf];
+        if (!Anys(ref anys, ref anys[0usize]) or (anys[0usize] fit i32) != 19 or (leaf fit i32) != 7)
+        {
+            return 9;
+        }
+        mut objects: Item[] = [Item(7)];
+        if (!Replace<Item>(ref objects, ref objects[0usize], Item(19)) or objects[0usize].Read() != 19)
+        {
+            return 10;
+        }
+        mut nullable: Item?[] = [null];
+        if (!Replace<Item?>(ref nullable, ref nullable[0usize], Item(23)))
+        {
+            return 11;
+        }
+        let present = nullable[0usize];
+        if (present == null or present.Read() != 23)
+        {
+            return 12;
+        }
+        round += 1;
+    }
+    if (!Balanced())
+    {
+        return 14;
+    }
+    Print();
+    return 0;
+}

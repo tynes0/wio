@@ -1,0 +1,187 @@
+using cpp::header("vm_pod_template_fixture.h");
+use std::attribute as attribute;
+
+const Extent: usize = 1usize + 2usize;
+const Tag: i32 = 7;
+
+component LocalRecord<T> {
+    public value: T;
+}
+
+[Specialize(i32)]
+component LocalRecord {
+    public value: i32;
+    public bonus: i32;
+}
+
+fn EchoLocal<T>(value: LocalRecord<T>) -> LocalRecord<T> {
+    return value;
+}
+
+component LocalDefault {
+    public value: i32 = 13;
+}
+
+component LocalConstructed {
+    public value: i32 = 17;
+
+    public fn OnConstruct(value: i32) {
+        self.value = value;
+    }
+}
+
+component LocalDefaultConstructed {
+    public value: i32 = 13;
+
+    public fn OnConstruct() {
+        self.value += 10;
+    }
+}
+
+object LocalObject {
+    public value: i32 = 13;
+
+    public fn OnConstruct() {
+        self.value += 10;
+    }
+}
+
+[Native, CppName(vm_pod_template::Buffer)]
+component Buffer<T, const N: usize = 3> {
+    public values: [T; N];
+}
+
+[Specialize(T, 4)]
+component Buffer<T> {
+    public values: [T; 4];
+    public bonus: i32;
+}
+
+[Native, CppName(vm_pod_template::Tagged)]
+component Tagged<T, const Tag: i32> {
+    public value: T;
+}
+
+[Specialize(i32, 7)]
+component Tagged {
+    public value: i32;
+    public bonus: i32;
+}
+
+[Native, CppName(vm_pod_template::Head)]
+component Head<T, Tail...> {
+    public value: T;
+}
+
+// Template argument types need not themselves be stored in the C++ POD.
+[Native, CppName(vm_pod_template::Marker)]
+component Marker<Types...> {
+    public tag: i32;
+}
+
+[Native, CppName(vm_pod_template::Nested)]
+component Nested<T, const N: usize> {
+    public copies: [Buffer<T, N>; 2];
+    public buffer: Buffer<T, N>;
+}
+
+[Native, CppName(vm_pod_template::Echo), instantiate(i32, 3), instantiate(i32, 0), instantiate(f64, 2), instantiate(i32, 4)]
+fn Echo<T, const N: usize>(value: Buffer<T, N>) -> Buffer<T, N>;
+[Native, CppName(vm_pod_template::Bump), instantiate(i32, 3), instantiate(i32, 4)]
+fn Bump<T, const N: usize>(value: ref Buffer<T, N>);
+[Native, CppName(vm_pod_template::Hidden), instantiate(i32, 3), instantiate(i32, 0), instantiate(i32, 4)]
+fn Hidden<T, const N: usize>(value: view Buffer<T, N>) -> i32;
+[Native, CppName(vm_pod_template::EchoTagged), instantiate(i32, 7)]
+fn EchoTagged<T, const Tag: i32>(value: Tagged<T, Tag>) -> Tagged<T, Tag>;
+[Native, CppName(vm_pod_template::TagValue), instantiate(i32, 7)]
+fn TagValue<T, const Tag: i32>(value: view Tagged<T, Tag>) -> i32;
+[Native, CppName(vm_pod_template::EchoHead)]
+fn EchoHead(value: Head<i32, f64, char>) -> Head<i32, f64, char>;
+[Native, CppName(vm_pod_template::TailCount)]
+fn TailCount(value: view Head<i32, f64, char>) -> i32;
+[Native, CppName(vm_pod_template::EchoMarker)]
+fn EchoMarker(value: Marker<string, text>) -> Marker<string, text>;
+[Native, CppName(vm_pod_template::MarkerCount)]
+fn MarkerCount(value: view Marker<string, text>) -> i32;
+[Native, CppName(vm_pod_template::EchoMarker)]
+fn EchoEmpty(value: Marker) -> Marker;
+[Native, CppName(vm_pod_template::MarkerCount)]
+fn EmptyCount(value: view Marker) -> i32;
+[Native, CppName(vm_pod_template::EchoNested)]
+fn EchoNested(value: Nested<i32, 3>) -> Nested<i32, 3>;
+[Native, CppName(vm_pod_template::Delayed)]
+async fn Delayed() -> Buffer<i32, 3>;
+[Native, CppName(vm_pod_template::Print)]
+fn Print(value: string);
+
+async fn Entry() -> i32 {
+    let localRecord = EchoLocal<i32>(LocalRecord<i32>(41, 59));
+    if (localRecord.value != 41 or localRecord.bonus != 59) {
+        return 11;
+    }
+    let defaultRecord = LocalDefault();
+    let memberwiseRecord = LocalDefault(31);
+    let constructedRecord = LocalConstructed(29);
+    let defaultConstructed = LocalDefaultConstructed();
+    let defaultObject = LocalObject();
+    if (defaultRecord.value != 13 or memberwiseRecord.value != 31 or constructedRecord.value != 29 or
+        defaultConstructed.value != 23 or defaultObject.value != 23) {
+        return 12;
+    }
+
+    mut local = Buffer<i32>([1, 2, 3]);
+    let copy = Echo<i32, Extent>(local);
+    let borrowed: view i32 = ref local.values[0usize];
+    Bump<i32, 3>(ref local);
+    if (deref borrowed != 11 or copy.values[0usize] != 1 or Hidden<i32, 3>(ref local) != 18) {
+        return 1;
+    }
+
+    let empty = Echo<i32, 0>(Buffer<i32, 0>([]));
+    if (empty.values.Count() != 0usize or Hidden<i32, 0>(ref empty) != 17) {
+        return 2;
+    }
+
+    let pair = Echo<f64, 2>(Buffer<f64, 2>([1.5f64, 2.5f64]));
+    if (pair.values[1usize] != 2.5f64) {
+        return 3;
+    }
+
+    mut specialized = Echo<i32, 4>(Buffer<i32, 4>([1, 2, 3, 4], 23));
+    Bump<i32, 4>(ref specialized);
+    if (specialized.values[0usize] != 11 or specialized.bonus != 23 or Hidden<i32, 4>(ref specialized) != 28) {
+        return 10;
+    }
+
+    let tagged = EchoTagged<i32, Tag>(Tagged<i32, Tag>(42, 19));
+    if (tagged.value != 42 or tagged.bonus != 19 or TagValue<i32, Tag>(ref tagged) != 7) {
+        return 4;
+    }
+
+    let head = EchoHead(Head<i32, f64, char>(29));
+    if (head.value != 29 or TailCount(ref head) != 2) {
+        return 5;
+    }
+
+    let marker = EchoMarker(Marker<string, text>(31));
+    if (marker.tag != 31 or MarkerCount(ref marker) != 2) {
+        return 6;
+    }
+
+    let emptyMarker = EchoEmpty(Marker(9));
+    if (emptyMarker.tag != 9 or EmptyCount(ref emptyMarker) != 0) {
+        return 9;
+    }
+
+    let nested = EchoNested(Nested<i32, 3>([local, copy], local));
+    if (nested.copies[0usize].values[0usize] != 11 or Hidden<i32, 3>(ref nested.buffer) != 18) {
+        return 7;
+    }
+
+    let delayed = await Delayed();
+    if (delayed.values[2usize] != 3 or Hidden<i32, 3>(ref delayed) != 73) {
+        return 8;
+    }
+    Print("native-pod-template-ok:const/default/zero/signed/specialized/variadic/empty-pack/unused-types/nested/ref/borrow/copy/async");
+    return 0;
+}

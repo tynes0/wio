@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-MSBuild"
+	tests="2"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="DESKTOP-0G3MR0G"
+	time="278"
+	timestamp="2026-10-19T03:27:37"
+	>
+	<testcase name="wio_n04_byte_io" classname="wio_n04_byte_io" time="136.385" status="run">
+		<properties>
+			<property name="cmake_labels" value="io;memory;native;optimization;ownership;vm"/>
+		</properties>
+		<system-out>F:\Projects\wio\build\n04-byte-io-contract\255332f2cd9d40ba8642e01b53a446c7\results.json
+</system-out>
+	</testcase>
+	<testcase name="wio_n04_byte_array_borrow_semantics" classname="wio_n04_byte_array_borrow_semantics" time="141.961" status="run">
+		<properties>
+			<property name="cmake_labels" value="io;memory;native;optimization;ownership;vm"/>
+		</properties>
+		<system-out>F:\Projects\wio\build\n04-byte-array-borrow-contract\27ee7b2b5e9c4a1d84f174482848e28a\results.json
+</system-out>
+	</testcase>
+</testsuite>

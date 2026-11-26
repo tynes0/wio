@@ -1,13 +1,18 @@
 #include "wio/wir/generic_specializer.h"
 #include "wio/wir/native_abi_types.h"
 #include "wio/sema/generic_support.h"
+#include "wio/common/profiling.h"
 
 #include <algorithm>
 #include <charconv>
+#include <cstdint>
 #include <functional>
+#include <limits>
 #include <map>
-#include <set>
+#include <ranges>
 #include <sstream>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace wio::wir
 {
@@ -15,6 +20,14 @@ namespace wio::wir
     {
         using namespace typed;
         using Bindings = std::map<TypeId, TypeId>;
+
+        struct IdHash
+        {
+            template <typename Tag> std::size_t operator()(const Id<Tag> id) const noexcept
+            {
+                return id.value();
+            }
+        };
 
         struct ExpandedPackValue
         {
@@ -33,6 +46,12 @@ namespace wio::wir
         public:
             Materializer(Module& module, std::size_t maximumBodies) : module_(module), maximumBodies_(maximumBodies)
             {
+                templates_.reserve(module.functions.size());
+                lifecycleTemplates_.reserve(module.functions.size() / 8 + 1);
+                processedMethods_.reserve(module.types.size());
+                instances_.reserve(module.functions.size() / 4 + 1);
+                instanceKeys_.reserve(module.functions.size() / 4 + 1);
+                instanceCounts_.reserve(module.functions.size() / 4 + 1);
                 for (const Function& function : module.functions)
                 {
                     templates_.emplace(function.id, function);
@@ -78,92 +97,121 @@ namespace wio::wir
                 }
                 // Appending a body grows this worklist. Cache entries are registered
                 // before visiting it, so self/mutual recursion closes on existing IDs.
+                common::profiling::Scope worklistScope("WIR.Specialize.Worklist");
                 materializeMethods();
-                for (std::size_t index = 0; index < module_.functions.size() && diagnostics_.empty(); ++index)
+                std::size_t index = 0;
+                while (diagnostics_.empty())
                 {
-                    if (openFunction(module_.functions[index]))
-                        continue;
-                    Function function = module_.functions[index];
-                    for (auto& block : function.blocks)
-                        for (auto& instruction : block.instructions)
-                        {
-                            if (!instruction.callee)
-                                continue;
-                            const auto source = templates_.find(instruction.callee);
-                            if (source == templates_.end() ||
-                                (source->second.isExternal && !source->second.nativeBinding) ||
-                                !openFunction(source->second))
-                                continue;
-                            instruction.callee = instantiate(instruction);
-                            if (const auto key = instanceKeys_.find(instruction.callee); key != instanceKeys_.end())
-                                instruction.specializationKey = key->second;
-                            const auto concrete =
-                                std::ranges::find(module_.functions, instruction.callee, &Function::id);
-                            if (concrete == module_.functions.end() ||
-                                concrete->parameters.size() != instruction.operands.size() ||
-                                instruction.signatureTypes.size() != instruction.operands.size())
-                                continue;
-                            for (std::size_t argumentIndex = 0; argumentIndex < instruction.operands.size();
-                                 ++argumentIndex)
+                    for (; index < module_.functions.size() && diagnostics_.empty(); ++index)
+                    {
+                        if (openFunction(module_.functions[index]))
+                            continue;
+                        Function function = module_.functions[index];
+                        for (auto& block : function.blocks)
+                            for (auto& instruction : block.instructions)
                             {
-                                const TypeId oldType = instruction.signatureTypes[argumentIndex];
-                                // A closure body's hidden parameters are references to its capture storage,
-                                // while ClosureCreate consumes the captured values themselves.  Reconcile
-                                // those operands against the concrete capture layout, not the hidden ABI.
-                                const TypeId concreteType = instruction.opcode == Opcode::ClosureCreate &&
-                                                                    argumentIndex < concrete->captures.size()
-                                                                ? concrete->captures[argumentIndex].type
-                                                                : concrete->parameters[argumentIndex].type;
-                                if (oldType == concreteType)
+                                if (!instruction.callee)
                                     continue;
-                                instruction.signatureTypes[argumentIndex] = concreteType;
-                                for (auto& definingBlock : function.blocks)
+                                const auto source = templates_.find(instruction.callee);
+                                if (source == templates_.end() ||
+                                    (source->second.isExternal && !source->second.nativeBinding) ||
+                                    !openFunction(source->second))
+                                    continue;
+                                instruction.callee = instantiate(instruction);
+                                if (const auto key = instanceKeys_.find(instruction.callee); key != instanceKeys_.end())
+                                    instruction.specializationKey = key->second;
+                                const auto concrete =
+                                    std::ranges::find(module_.functions, instruction.callee, &Function::id);
+                                if (concrete == module_.functions.end() ||
+                                    concrete->parameters.size() != instruction.operands.size() ||
+                                    instruction.signatureTypes.size() != instruction.operands.size())
+                                    continue;
+                                for (std::size_t argumentIndex = 0; argumentIndex < instruction.operands.size();
+                                     ++argumentIndex)
                                 {
-                                    const auto definition =
-                                        std::ranges::find(definingBlock.instructions,
-                                                          instruction.operands[argumentIndex], &Instruction::result);
-                                    if (definition == definingBlock.instructions.end() ||
-                                        definition->resultType != oldType)
+                                    const TypeId oldType = instruction.signatureTypes[argumentIndex];
+                                    // A closure body's hidden parameters are references to its capture storage,
+                                    // while ClosureCreate consumes the captured values themselves. Reconcile
+                                    // those operands against the concrete capture layout, not the hidden ABI.
+                                    const TypeId concreteType = instruction.opcode == Opcode::ClosureCreate &&
+                                                                        argumentIndex < concrete->captures.size()
+                                                                    ? concrete->captures[argumentIndex].type
+                                                                    : concrete->parameters[argumentIndex].type;
+                                    if (oldType == concreteType)
                                         continue;
-                                    definition->resultType = concreteType;
-                                    if (definition->targetType == oldType)
-                                        definition->targetType = concreteType;
-                                    break;
+                                    instruction.signatureTypes[argumentIndex] = concreteType;
+                                    for (auto& definingBlock : function.blocks)
+                                    {
+                                        const auto definition = std::ranges::find(definingBlock.instructions,
+                                                                                  instruction.operands[argumentIndex],
+                                                                                  &Instruction::result);
+                                        if (definition == definingBlock.instructions.end() ||
+                                            definition->resultType != oldType)
+                                            continue;
+                                        definition->resultType = concreteType;
+                                        if (definition->targetType == oldType)
+                                            definition->targetType = concreteType;
+                                        break;
+                                    }
                                 }
                             }
-                        }
-                    module_.functions[index] = std::move(function);
+                        module_.functions[index] = std::move(function);
+                    }
+
+                    const std::size_t functionCount = module_.functions.size();
                     materializeMethods();
+                    if (module_.functions.size() == functionCount)
+                        break;
                 }
+                worklistScope.stop();
                 if (diagnostics_.empty())
+                {
+                    common::profiling::Scope ownershipScope("WIR.Specialize.FinalizeOwnership");
                     for (Function& function : module_.functions)
                         materializeOwnedLoads(function);
+                }
                 if (diagnostics_.empty())
+                {
+                    common::profiling::Scope reflectionScope("WIR.Specialize.RefreshReflection");
                     refreshReflectionLayouts();
+                }
                 return std::move(diagnostics_);
             }
 
         private:
-            void materializeMethods()
+            using OpenNominalIndex = std::unordered_map<std::string, std::vector<TypeId>>;
+
+            OpenNominalIndex indexOpenNominals() const
             {
-                for (std::size_t i = 0; i < module_.types.size() && diagnostics_.empty(); ++i)
+                OpenNominalIndex result;
+                result.reserve(module_.types.size() / 4);
+                for (std::size_t i = 0; i < module_.types.size(); ++i)
                 {
-                    TypeId id{static_cast<TypeId::ValueType>(i)};
-                    if (openType(id) || openMethodLayouts(id))
+                    const TypeId id{static_cast<TypeId::ValueType>(i)};
+                    const Type& type = module_.types.get(id);
+                    if (type.kind == TypeKind::Named && openType(id))
+                        result[type.name].push_back(id);
+                }
+                return result;
+            }
+
+            void materializeTypeMethods(TypeId id, const OpenNominalIndex& openNominalsByName)
+            {
+                if (openType(id) || openMethodLayouts(id))
+                {
+                    const Type candidate = module_.types.get(id);
+                    const bool concreteNominalArguments =
+                        candidate.kind == TypeKind::Named && !candidate.arguments.empty() &&
+                        std::ranges::none_of(candidate.arguments,
+                                             [&](const TypeId argument) { return openType(argument); });
+                    if (concreteNominalArguments)
                     {
-                        const Type candidate = module_.types.get(id);
-                        const bool concreteNominalArguments =
-                            candidate.kind == TypeKind::Named && !candidate.arguments.empty() &&
-                            std::ranges::none_of(candidate.arguments,
-                                                 [&](const TypeId argument) { return openType(argument); });
-                        if (concreteNominalArguments)
+                        const auto primaries = openNominalsByName.find(candidate.name);
+                        if (primaries != openNominalsByName.end())
                         {
-                            for (std::size_t primaryIndex = 0; primaryIndex < module_.types.size(); ++primaryIndex)
+                            for (const TypeId primaryId : primaries->second)
                             {
-                                const TypeId primaryId{static_cast<TypeId::ValueType>(primaryIndex)};
-                                const Type& primary = module_.types.get(primaryId);
-                                if (primaryId == id || primary.kind != TypeKind::Named ||
-                                    primary.name != candidate.name || !openType(primaryId))
+                                if (primaryId == id)
                                     continue;
                                 Bindings bindings;
                                 if (!bind(primaryId, id, bindings))
@@ -174,157 +222,293 @@ namespace wio::wir
                             }
                         }
                     }
-                    if (openType(id))
+                }
+                if (openType(id))
+                    return;
+
+                const Type& currentType = module_.types.get(id);
+                if (const auto found = processedMethods_.find(id);
+                    found != processedMethods_.end() && found->second == currentType.methods)
+                    return;
+                const bool hasLifecycle =
+                    currentType.nominalKind == NominalKind::Object && lifecycleTemplates_.contains(currentType.name);
+                if (currentType.methods.empty() && !hasLifecycle)
+                    return;
+
+                auto methods = currentType.methods;
+                for (auto& method : methods)
+                {
+                    const auto source = templates_.find(method.function);
+                    if (method.isAbstract || source == templates_.end() ||
+                        (source->second.isExternal && !source->second.nativeBinding) || !openFunction(source->second) ||
+                        !source->second.genericParameters.empty())
                         continue;
-                    auto methods = module_.types.get(id).methods;
-                    if (const auto found = processedMethods_.find(id);
-                        found != processedMethods_.end() && found->second == methods)
-                        continue;
-                    for (auto& method : methods)
+                    TypeId owner = id;
+                    const std::string ownerName = module_.types.get(source->second.ownerType).name;
+                    std::unordered_set<TypeId, IdHash> visited;
+                    std::function<TypeId(TypeId)> findOwner = [&](TypeId candidate) -> TypeId
                     {
-                        const auto source = templates_.find(method.function);
-                        if (method.isAbstract || source == templates_.end() || source->second.isExternal ||
-                            !openFunction(source->second) || !source->second.genericParameters.empty())
-                            continue;
-                        TypeId owner = id;
-                        const std::string ownerName = module_.types.get(source->second.ownerType).name;
-                        std::set<TypeId> visited;
-                        std::function<TypeId(TypeId)> findOwner = [&](TypeId candidate) -> TypeId
-                        {
-                            if (!visited.insert(candidate).second)
-                                return {};
-                            const auto type = module_.types.get(candidate);
-                            if (type.name == ownerName)
-                                return candidate;
-                            for (TypeId base : type.baseTypes)
-                                if (TypeId found = findOwner(base))
-                                    return found;
+                        if (!visited.insert(candidate).second)
                             return {};
-                        };
-                        owner = findOwner(id);
-                        if (!owner)
-                            continue;
-
-                        Bindings ownerBindings;
-                        if (!bind(source->second.ownerType, owner, ownerBindings))
-                            continue;
-                        Bindings cache;
-                        // A concrete semantic type can be interned before its
-                        // generic declaration has finished populating every
-                        // layout snapshot. The source function is the stable
-                        // callable contract; derive the concrete method
-                        // signature from it instead of re-specializing a
-                        // possibly stale method-layout copy.
-                        method.returnType = substitute(source->second.returnType, ownerBindings, cache);
-                        std::vector<TypeId> concreteParameters;
-                        for (std::size_t parameterIndex = 1; parameterIndex < source->second.parameters.size();
-                             ++parameterIndex)
-                        {
-                            const TypeId parameter = source->second.parameters[parameterIndex].type;
-                            const TypeId concrete = substitute(parameter, ownerBindings, cache);
-                            const Type& concreteType = module_.types.get(concrete);
-                            if ((concreteType.kind == TypeKind::TypePack || concreteType.kind == TypeKind::ValuePack) &&
-                                !concreteType.arguments.empty())
-                                concreteParameters.insert(concreteParameters.end(), concreteType.arguments.begin(),
-                                                          concreteType.arguments.end());
-                            else
-                                concreteParameters.push_back(concrete);
-                        }
-                        method.parameterTypes = std::move(concreteParameters);
-                        if (openType(method.returnType) ||
-                            std::ranges::any_of(method.parameterTypes,
-                                                [&](const TypeId parameter) { return openType(parameter); }))
-                            continue;
-
-                        Type receiver = module_.types.get(source->second.parameters.front().type);
-                        receiver.arguments = {owner};
-                        Instruction request;
-                        request.callee = method.function;
-                        request.signatureTypes = {module_.types.intern(std::move(receiver))};
-                        request.signatureTypes.insert(request.signatureTypes.end(), method.parameterTypes.begin(),
-                                                      method.parameterTypes.end());
-                        request.resultType = method.returnType;
-                        method.function = instantiate(request);
-                    }
-                    module_.types.getMutable(id).methods = std::move(methods);
-                    processedMethods_[id] = module_.types.get(id).methods;
-                    const auto concrete = module_.types.get(id);
-                    if (concrete.nominalKind != NominalKind::Object)
+                        const Type& type = module_.types.get(candidate);
+                        if (type.name == ownerName)
+                            return candidate;
+                        for (TypeId base : type.baseTypes)
+                            if (TypeId found = findOwner(base))
+                                return found;
+                        return {};
+                    };
+                    owner = findOwner(id);
+                    if (!owner)
                         continue;
-                    for (const auto functionId : lifecycleTemplates_[concrete.name])
+
+                    Bindings ownerBindings;
+                    if (!bind(source->second.ownerType, owner, ownerBindings))
+                        continue;
+                    Bindings cache;
+                    // A concrete semantic type can be interned before its
+                    // generic declaration has finished populating every
+                    // layout snapshot. The source function is the stable
+                    // callable contract; derive the concrete method
+                    // signature from it instead of re-specializing a
+                    // possibly stale method-layout copy.
+                    method.returnType = substitute(source->second.returnType, ownerBindings, cache);
+                    std::vector<TypeId> concreteParameters;
+                    for (std::size_t parameterIndex = 1; parameterIndex < source->second.parameters.size();
+                         ++parameterIndex)
                     {
-                        const auto& source = templates_.at(functionId);
-                        if (!source.ownerType || source.parameters.size() != 1 || source.isExternal ||
-                            !openFunction(source) || module_.types.get(source.ownerType).name != concrete.name ||
-                            (source.name != "OnDestruct" && source.name != "OnConstruct" &&
-                             !source.name.ends_with("::OnDestruct") && !source.name.ends_with("::OnConstruct")))
-                            continue;
-                        Type receiver = module_.types.get(source.parameters.front().type);
-                        receiver.arguments = {id};
-                        Instruction request;
-                        request.callee = functionId;
-                        request.signatureTypes = {module_.types.intern(std::move(receiver))};
-                        request.resultType = module_.types.voidType();
-                        (void)instantiate(request);
+                        const TypeId parameter = source->second.parameters[parameterIndex].type;
+                        const TypeId concrete = substitute(parameter, ownerBindings, cache);
+                        const Type& concreteType = module_.types.get(concrete);
+                        if ((concreteType.kind == TypeKind::TypePack || concreteType.kind == TypeKind::ValuePack) &&
+                            !concreteType.arguments.empty())
+                            concreteParameters.insert(concreteParameters.end(), concreteType.arguments.begin(),
+                                                      concreteType.arguments.end());
+                        else
+                            concreteParameters.push_back(concrete);
                     }
+                    method.parameterTypes = std::move(concreteParameters);
+                    if (openType(method.returnType) ||
+                        std::ranges::any_of(method.parameterTypes,
+                                            [&](const TypeId parameter) { return openType(parameter); }))
+                        continue;
+
+                    Type receiver = module_.types.get(source->second.parameters.front().type);
+                    receiver.arguments = {owner};
+                    Instruction request;
+                    request.callee = method.function;
+                    request.signatureTypes = {module_.types.intern(std::move(receiver))};
+                    request.signatureTypes.insert(request.signatureTypes.end(), method.parameterTypes.begin(),
+                                                  method.parameterTypes.end());
+                    request.resultType = method.returnType;
+                    method.function = instantiate(request);
+                }
+                if (module_.types.get(id).methods != methods)
+                {
+                    module_.types.getMutable(id).methods = methods;
+                    noteTypeMutation();
+                }
+                processedMethods_[id] = std::move(methods);
+
+                const Type concrete = module_.types.get(id);
+                if (concrete.nominalKind != NominalKind::Object)
+                    return;
+                const auto lifecycle = lifecycleTemplates_.find(concrete.name);
+                if (lifecycle == lifecycleTemplates_.end())
+                    return;
+                for (const auto functionId : lifecycle->second)
+                {
+                    const auto& source = templates_.at(functionId);
+                    if (!source.ownerType || source.parameters.size() != 1 || source.isExternal ||
+                        !openFunction(source) || module_.types.get(source.ownerType).name != concrete.name ||
+                        (source.name != "OnDestruct" && source.name != "OnConstruct" &&
+                         !source.name.ends_with("::OnDestruct") && !source.name.ends_with("::OnConstruct")))
+                        continue;
+                    Type receiver = module_.types.get(source.parameters.front().type);
+                    receiver.arguments = {id};
+                    Instruction request;
+                    request.callee = functionId;
+                    request.signatureTypes = {module_.types.intern(std::move(receiver))};
+                    request.resultType = module_.types.voidType();
+                    (void)instantiate(request);
                 }
             }
 
+            void materializeMethods()
+            {
+                if (materializedTypeCount_ == module_.types.size() &&
+                    materializedTypeGeneration_ == typeMutationGeneration_)
+                    return;
+
+                common::profiling::Scope scope("WIR.Specialize.MaterializeMethods");
+                std::size_t observedTypeCount = 0;
+                std::uint64_t observedGeneration = 0;
+                do
+                {
+                    observedTypeCount = module_.types.size();
+                    observedGeneration = typeMutationGeneration_;
+                    const OpenNominalIndex openNominalsByName = indexOpenNominals();
+                    for (std::size_t i = 0; i < module_.types.size() && diagnostics_.empty(); ++i)
+                    {
+                        materializeTypeMethods(TypeId{static_cast<TypeId::ValueType>(i)}, openNominalsByName);
+                    }
+                } while (diagnostics_.empty() &&
+                         (observedTypeCount != module_.types.size() || observedGeneration != typeMutationGeneration_));
+
+                materializedTypeCount_ = module_.types.size();
+                materializedTypeGeneration_ = typeMutationGeneration_;
+            }
+
             Module& module_;
-            std::map<FunctionId, Function> templates_;
-            std::map<std::string, std::vector<FunctionId>> lifecycleTemplates_;
-            std::map<TypeId, std::vector<MethodLayout>> processedMethods_;
-            std::map<std::string, FunctionId> instances_;
-            std::map<FunctionId, std::string> instanceKeys_;
-            std::map<FunctionId, std::size_t> instanceCounts_;
+            std::unordered_map<FunctionId, Function, IdHash> templates_;
+            std::unordered_map<std::string, std::vector<FunctionId>> lifecycleTemplates_;
+            std::unordered_map<TypeId, std::vector<MethodLayout>, IdHash> processedMethods_;
+            std::unordered_map<std::string, FunctionId> instances_;
+            std::unordered_map<FunctionId, std::string, IdHash> instanceKeys_;
+            std::unordered_map<FunctionId, std::size_t, IdHash> instanceCounts_;
             std::vector<SpecializationDiagnostic> diagnostics_;
             std::string lastBindMismatch_;
             FunctionId::ValueType nextId_ = 0;
             std::size_t maximumBodies_;
+            std::size_t materializedTypeCount_ = (std::numeric_limits<std::size_t>::max)();
+            std::uint64_t typeMutationGeneration_ = 0;
+            std::uint64_t materializedTypeGeneration_ = (std::numeric_limits<std::uint64_t>::max)();
+            mutable std::vector<std::uint8_t> openTypeCache_;
+            mutable std::size_t openTypeCacheTypeCount_ = 0;
+            mutable std::uint64_t openTypeCacheGeneration_ = (std::numeric_limits<std::uint64_t>::max)();
+
+            void noteTypeMutation()
+            {
+                ++typeMutationGeneration_;
+            }
 
             void refreshReflectionLayouts()
             {
+                std::unordered_map<FunctionId, const Function*, IdHash> implementations;
+                implementations.reserve(module_.functions.size());
+                for (const auto& function : module_.functions)
+                    implementations.emplace(function.id, &function);
+                std::unordered_map<FunctionId, std::vector<std::uint64_t>, IdHash> declarationAttributes;
+                for (const auto& descriptor : module_.contract.reflection)
+                    for (const auto& method : descriptor.methods)
+                        declarationAttributes.try_emplace(method.function, method.attributes);
                 for (ReflectionDescriptor& descriptor : module_.contract.reflection)
                 {
                     const Type* type = module_.types.tryGet(descriptor.type);
-                    if (!type || type->kind != TypeKind::Named || !descriptor.fields.empty() || type->fields.empty())
+                    if (!type || type->kind != TypeKind::Named)
                         continue;
 
-                    descriptor.fields.reserve(type->fields.size());
-                    for (const FieldLayout& field : type->fields)
-                        descriptor.fields.push_back(ReflectedFieldDescriptor{
-                            .stableId =
-                                stableModuleHash(std::to_string(descriptor.stableTypeId) + ":field:" + field.name),
-                            .name = field.name,
-                            .type = field.type,
-                            .visibility = field.visibility,
-                            .isMutable = field.isMutable});
+                    if (descriptor.fields.empty())
+                    {
+                        descriptor.fields.reserve(type->fields.size());
+                        for (const FieldLayout& field : type->fields)
+                            descriptor.fields.push_back(ReflectedFieldDescriptor{
+                                .stableId =
+                                    stableModuleHash(std::to_string(descriptor.stableTypeId) + ":field:" + field.name),
+                                .name = field.name,
+                                .type = field.type,
+                                .visibility = field.visibility,
+                                .isMutable = field.isMutable});
+                    }
+                    if (openType(descriptor.type))
+                        continue;
+                    for (const auto& method : type->methods)
+                    {
+                        const auto found = implementations.find(method.function);
+                        if (found == implementations.end())
+                            continue;
+                        const auto* implementation = found->second;
+                        auto reflected = std::ranges::find_if(
+                            descriptor.methods, [&](const auto& existing)
+                            { return existing.name == method.name && existing.slot == method.slot; });
+                        if (reflected != descriptor.methods.end() && reflected->function == method.function)
+                            continue;
+                        std::string key = std::to_string(descriptor.stableTypeId) + ":method:" + method.name + "(";
+                        std::vector<TypeId> parameters;
+                        for (const auto& parameter : implementation->parameters | std::views::drop(1))
+                        {
+                            parameters.push_back(parameter.type);
+                            key += nativeAbiTypeKey(module_.types, parameter.type) + ";";
+                        }
+                        key += ")->" + nativeAbiTypeKey(module_.types, implementation->returnType);
+                        ReflectedMethodDescriptor updated{.stableId = stableModuleHash(key),
+                                                          .name = method.name,
+                                                          .function = method.function,
+                                                          .returnType = implementation->returnType,
+                                                          .parameterTypes = std::move(parameters),
+                                                          .slot = method.slot,
+                                                          .isAsync = implementation->isAsync,
+                                                          .visibility = method.visibility};
+                        const auto origin =
+                            implementation->genericOrigin ? implementation->genericOrigin : method.function;
+                        if (const auto attributes = declarationAttributes.find(origin);
+                            attributes != declarationAttributes.end())
+                            updated.attributes = attributes->second;
+                        if (reflected == descriptor.methods.end())
+                            descriptor.methods.push_back(std::move(updated));
+                        else
+                            *reflected = std::move(updated);
+                    }
                 }
             }
 
-            bool openType(TypeId id, std::set<TypeId>& visiting) const
+            struct OpenTypeResult
+            {
+                bool open = false;
+                bool encounteredCycle = false;
+            };
+
+            OpenTypeResult openTypeCached(TypeId id) const
             {
                 const Type* type = module_.types.tryGet(id);
-                if (!type || !visiting.insert(id).second)
-                    return false;
+                if (!type)
+                    return {};
+                std::uint8_t& state = openTypeCache_[id.value()];
+                if (state == 3)
+                    return {.open = true};
+                if (state == 2)
+                    return {};
+                if (state == 1)
+                    return {.encounteredCycle = true};
+                state = 1;
                 if (parameterKind(type->kind))
-                    return true;
+                {
+                    state = 3;
+                    return {.open = true};
+                }
                 if ((type->kind == TypeKind::ValuePack || type->kind == TypeKind::TypePack ||
                      type->kind == TypeKind::PackStorage) &&
                     type->arguments.empty())
-                    return !type->name.empty();
-                return openType(type->extentParameter, visiting) ||
-                       std::ranges::any_of(type->arguments,
-                                           [&](TypeId nested) { return openType(nested, visiting); }) ||
-                       std::ranges::any_of(type->baseTypes,
-                                           [&](TypeId nested) { return openType(nested, visiting); }) ||
-                       std::ranges::any_of(type->fields,
-                                           [&](const FieldLayout& field) { return openType(field.type, visiting); });
+                {
+                    const bool open = !type->name.empty();
+                    state = open ? 3 : 2;
+                    return {.open = open};
+                }
+
+                bool encounteredCycle = false;
+                const auto observe = [&](const TypeId nested)
+                {
+                    const OpenTypeResult result = openTypeCached(nested);
+                    encounteredCycle |= result.encounteredCycle;
+                    return result.open;
+                };
+                const bool open =
+                    observe(type->extentParameter) || std::ranges::any_of(type->arguments, observe) ||
+                    std::ranges::any_of(type->baseTypes, observe) ||
+                    std::ranges::any_of(type->fields, [&](const FieldLayout& field) { return observe(field.type); });
+                state = open ? 3 : encounteredCycle ? 0 : 2;
+                return {.open = open, .encounteredCycle = encounteredCycle};
             }
             bool openType(TypeId id) const
             {
-                std::set<TypeId> visiting;
-                return openType(id, visiting);
+                if (openTypeCacheTypeCount_ != module_.types.size() ||
+                    openTypeCacheGeneration_ != typeMutationGeneration_)
+                {
+                    openTypeCache_.assign(module_.types.size(), 0);
+                    openTypeCacheTypeCount_ = module_.types.size();
+                    openTypeCacheGeneration_ = typeMutationGeneration_;
+                }
+                return openTypeCached(id).open;
             }
             bool openMethodLayouts(TypeId id) const
             {
@@ -338,7 +522,8 @@ namespace wio::wir
                                                                           { return openType(parameter); });
                                            });
             }
-            bool typeReferencesBindings(TypeId id, const Bindings& bindings, std::set<TypeId>& visiting) const
+            bool typeReferencesBindings(TypeId id, const Bindings& bindings,
+                                        std::unordered_set<TypeId, IdHash>& visiting) const
             {
                 if (!id)
                     return false;
@@ -362,17 +547,17 @@ namespace wio::wir
                 return std::ranges::any_of(type->methods,
                                            [&](const MethodLayout& method)
                                            {
-                                               std::set<TypeId> visiting;
+                                               std::unordered_set<TypeId, IdHash> visiting;
                                                if (typeReferencesBindings(method.returnType, bindings, visiting))
                                                    return true;
-                                               return std::ranges::any_of(method.parameterTypes,
-                                                                          [&](const TypeId parameter)
-                                                                          {
-                                                                              std::set<TypeId> parameterVisiting;
-                                                                              return typeReferencesBindings(
-                                                                                  parameter, bindings,
-                                                                                  parameterVisiting);
-                                                                          });
+                                               return std::ranges::any_of(
+                                                   method.parameterTypes,
+                                                   [&](const TypeId parameter)
+                                                   {
+                                                       std::unordered_set<TypeId, IdHash> parameterVisiting;
+                                                       return typeReferencesBindings(parameter, bindings,
+                                                                                     parameterVisiting);
+                                                   });
                                            });
             }
             bool openFunction(const Function& function) const
@@ -553,8 +738,17 @@ namespace wio::wir
                 TypeId result;
                 if (type.kind == TypeKind::Named)
                 {
+                    const std::size_t oldTypeCount = module_.types.size();
                     result = module_.types.internNominal(type);
+                    if (module_.types.size() != oldTypeCount)
+                        noteTypeMutation();
                     cache[id] = result;
+                    // Sema may already have selected a different field layout
+                    // for these concrete arguments (e.g. Buffer<T, 4>). The
+                    // primary signature supplies identity, not that layout.
+                    const Type& selected = module_.types.get(result);
+                    if (selected.hasSpecializedLayout && !openType(result))
+                        type = selected;
                 }
                 for (TypeId& base : type.baseTypes)
                     base = substitute(base, bindings, cache);
@@ -596,21 +790,28 @@ namespace wio::wir
                 }
                 if (result)
                 {
-                    // This path starts from an open nominal declaration. Its
-                    // fully substituted layout is authoritative even when the
-                    // nominal identity was interned earlier from a signature;
-                    // that earlier snapshot can otherwise carry fields or
-                    // method types from a different instantiation.
+                    // Refresh ordinary signature snapshots with the substituted
+                    // declaration layout. Semantically selected specializations
+                    // were preserved above and remain authoritative instead.
                     const Type& existing = module_.types.get(result);
                     const bool hasMaterializedMethods =
                         std::ranges::any_of(existing.methods, [&](const MethodLayout& method)
                                             { return !templates_.contains(method.function); });
                     if (hasMaterializedMethods)
                         type.methods = existing.methods;
-                    module_.types.getMutable(result) = std::move(type);
+                    if (existing != type)
+                    {
+                        module_.types.getMutable(result) = std::move(type);
+                        noteTypeMutation();
+                    }
                 }
                 else
+                {
+                    const std::size_t oldTypeCount = module_.types.size();
                     result = module_.types.intern(std::move(type));
+                    if (module_.types.size() != oldTypeCount)
+                        noteTypeMutation();
+                }
                 cache[id] = result;
                 return result;
             }
@@ -640,6 +841,7 @@ namespace wio::wir
             bool expandPackParameters(Function& function, const Bindings& bindings)
             {
                 ValueId::ValueType nextValue = 0;
+                std::size_t instructionCount = 0;
                 const auto observe = [&](const ValueId value)
                 {
                     if (value)
@@ -649,14 +851,17 @@ namespace wio::wir
                     observe(parameter.id);
                 for (const BasicBlock& block : function.blocks)
                 {
+                    instructionCount += block.instructions.size();
                     for (const Parameter& parameter : block.parameters)
                         observe(parameter.id);
                     for (const Instruction& instruction : block.instructions)
                         observe(instruction.result);
                 }
 
-                std::map<ValueId, ExpandedPackValue> expansions;
+                std::unordered_map<ValueId, ExpandedPackValue, IdHash> expansions;
+                expansions.reserve(function.parameters.size() + instructionCount / 8 + 1);
                 std::vector<Parameter> parameters;
+                parameters.reserve(function.parameters.size());
                 for (const Parameter& parameter : function.parameters)
                 {
                     const Type* parameterType = module_.types.tryGet(parameter.type);
@@ -695,8 +900,11 @@ namespace wio::wir
                 for (BasicBlock& block : function.blocks)
                 {
                     std::vector<Instruction> instructions;
-                    std::map<ValueId, TypeId> specializedValues;
-                    std::map<ValueId, TypeId> specializedPlaces;
+                    instructions.reserve(block.instructions.size());
+                    std::unordered_map<ValueId, TypeId, IdHash> specializedValues;
+                    std::unordered_map<ValueId, TypeId, IdHash> specializedPlaces;
+                    specializedValues.reserve(block.instructions.size());
+                    specializedPlaces.reserve(block.instructions.size() / 4 + 1);
                     for (Instruction instruction : block.instructions)
                     {
                         if (instruction.opcode == Opcode::PlaceInit && instruction.operands.size() == 2)
@@ -930,6 +1138,33 @@ namespace wio::wir
 
             void materializeOwnedLoads(Function& function)
             {
+                bool requiresRewrite = false;
+                for (BasicBlock& block : function.blocks)
+                {
+                    for (Instruction& instruction : block.instructions)
+                    {
+                        if (instruction.opcode != Opcode::Load || !instruction.result)
+                            continue;
+                        const Type& loaded = module_.types.get(instruction.resultType);
+                        if (loaded.cleanup != CleanupKind::None)
+                        {
+                            requiresRewrite |= instruction.resultOwnership != ValueOwnership::Borrowed;
+                            continue;
+                        }
+                        instruction.resultOwnership =
+                            loaded.ownership == OwnershipModel::Borrowed  ? ValueOwnership::Borrowed
+                            : loaded.ownership == OwnershipModel::Trivial ? ValueOwnership::Trivial
+                                                                          : ValueOwnership::Owned;
+                        if (instruction.resultOwnership != ValueOwnership::Borrowed)
+                        {
+                            instruction.borrowLifetime = BorrowLifetime::None;
+                            instruction.borrowOrigin = {};
+                        }
+                    }
+                }
+                if (!requiresRewrite)
+                    return;
+
                 ValueId::ValueType nextValue = 0;
                 const auto observe = [&](const ValueId value)
                 {
@@ -949,22 +1184,9 @@ namespace wio::wir
                 for (BasicBlock& block : function.blocks)
                 {
                     std::vector<Instruction> instructions;
+                    instructions.reserve(block.instructions.size());
                     for (Instruction instruction : block.instructions)
                     {
-                        if (instruction.opcode == Opcode::Load && instruction.result &&
-                            module_.types.get(instruction.resultType).cleanup == CleanupKind::None)
-                        {
-                            const Type& loaded = module_.types.get(instruction.resultType);
-                            instruction.resultOwnership =
-                                loaded.ownership == OwnershipModel::Borrowed  ? ValueOwnership::Borrowed
-                                : loaded.ownership == OwnershipModel::Trivial ? ValueOwnership::Trivial
-                                                                              : ValueOwnership::Owned;
-                            if (instruction.resultOwnership != ValueOwnership::Borrowed)
-                            {
-                                instruction.borrowLifetime = BorrowLifetime::None;
-                                instruction.borrowOrigin = {};
-                            }
-                        }
                         const bool copyRequired =
                             instruction.opcode == Opcode::Load && instruction.result &&
                             instruction.resultOwnership != ValueOwnership::Borrowed &&
@@ -1002,7 +1224,11 @@ namespace wio::wir
                 function.returnType = replace(function.returnType);
                 function.ownerType = replace(function.ownerType);
                 function.genericParameters.clear();
-                std::map<ValueId, TypeId> values;
+                std::size_t valueCapacity = function.parameters.size();
+                for (const BasicBlock& block : function.blocks)
+                    valueCapacity += block.parameters.size() + block.instructions.size();
+                std::unordered_map<ValueId, TypeId, IdHash> values;
+                values.reserve(valueCapacity);
                 const auto parameter = [&](Parameter& p)
                 {
                     p.type = replace(p.type);
@@ -1132,6 +1358,11 @@ namespace wio::wir
                         }
                         for (TypeId& type : instruction.signatureTypes)
                             type = replace(type);
+                        if (instruction.opcode == Opcode::AnyBox)
+                        {
+                            instruction.targetType = canonicalAnyPayloadType(module_.types, instruction.targetType);
+                            instruction.signatureTypes = {instruction.targetType};
+                        }
                         std::vector<TypeId> genericArguments;
                         for (const TypeId argument : instruction.genericArguments)
                         {
@@ -1160,7 +1391,8 @@ namespace wio::wir
                     }
                 }
                 materializeOwnedLoads(function);
-                std::map<ValueId, ValueId> aliases;
+                std::unordered_map<ValueId, ValueId, IdHash> aliases;
+                aliases.reserve(valueCapacity / 8 + 1);
                 for (auto& block : function.blocks)
                 {
                     std::erase_if(block.instructions,

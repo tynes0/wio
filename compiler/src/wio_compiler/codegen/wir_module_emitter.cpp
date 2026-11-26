@@ -1,7 +1,10 @@
 #include "wio/codegen/wir_module_emitter.h"
+#include "wio/codegen/wir_native_object_emitter.h"
 #include "wio/codegen/wir_application_emitter.h"
 #include "wio/codegen/wir_cpp_text.h"
 #include "wio/codegen/wir_reflection_emitter.h"
+#include "wio/codegen/wir_native_pod_emitter.h"
+#include "wio/codegen/wir_native_container_emitter.h"
 #include "wio/wir/native_abi_types.h"
 #include <algorithm>
 #include <functional>
@@ -197,7 +200,133 @@ namespace wio::codegen
             std::optional<std::string> constValue;
         };
     } // namespace
-    std::string WirModuleEmitter::emit(const wir::lowered::Module& module, const TypeSpelling& type)
+    std::string WirModuleEmitter::nativeValueCodec(const wir::lowered::Module& module, wir::TypeId id,
+                                                   const TypeSpelling& type)
+    {
+        using namespace wir;
+        const auto wireId = [&](TypeId value)
+        {
+            if (module.types.get(value).kind == TypeKind::Nullable && module.types.get(value).arguments.size() == 1 &&
+                (module.types.get(module.types.get(value).arguments.front()).kind == TypeKind::Function ||
+                 module.types.get(module.types.get(value).arguments.front()).kind == TypeKind::Reference))
+                value = module.types.get(value).arguments.front();
+            if (module.types.get(value).kind == TypeKind::Reference)
+                value = module.types.get(value).arguments.front();
+            if (module.types.get(value).kind == TypeKind::Nullable &&
+                (module.types.get(module.types.get(value).arguments.front()).kind == TypeKind::Function ||
+                 module.types.get(module.types.get(value).arguments.front()).kind == TypeKind::Opaque))
+                value = module.types.get(value).arguments.front();
+            if (const auto object = nativeAbiObjectType(module.types, value))
+                value = object;
+            for (const auto& reflected : module.contract.reflection)
+                if (reflected.type == value)
+                    return reflected.stableTypeId;
+            return stableModuleHash(nativeAbiTypeKey(module.types, value));
+        };
+        const auto& signature = module.types.get(id);
+        if (signature.kind != TypeKind::Function || signature.arguments.empty())
+            return "wio::wir_backend::abi::Codec<" + type(id) + ", " + std::to_string(wireId(id)) + "ULL>";
+        const auto reference = [&](TypeId value) -> const wir::Type&
+        {
+            const auto& shape = module.types.get(value);
+            return shape.kind == TypeKind::Nullable ? module.types.get(shape.arguments.front()) : shape;
+        };
+        std::string result = "wio::wir_backend::abi::CallbackCodecWithResultBorrow<" + type(id) + ", " +
+                             std::to_string(wireId(id)) + "ULL, " + std::to_string(wireId(signature.arguments.back())) +
+                             "ULL, " + (reference(signature.arguments.back()).isMutable ? "true" : "false") +
+                             ", std::integer_sequence<bool";
+        for (std::size_t index = 0; index + 1 < signature.arguments.size(); ++index)
+        {
+            const auto& argument = reference(signature.arguments[index]);
+            result += argument.kind == TypeKind::Reference && argument.isMutable ? ", true" : ", false";
+        }
+        result += ">";
+        for (std::size_t index = 0; index + 1 < signature.arguments.size(); ++index)
+            result += ", " + std::to_string(wireId(signature.arguments[index])) + "ULL";
+        return result + ">";
+    }
+
+    std::string WirModuleEmitter::emitCallableCodecs(const wir::lowered::Module& module, const TypeSpelling& cpp,
+                                                     const std::span<const wir::TypeId> dynamicPayloadTypes)
+    {
+        using namespace wir;
+        std::set<TypeId> visited;
+        std::vector<TypeId> ordered;
+        const auto concrete = [&](auto&& self, TypeId id, unsigned depth) -> bool
+        {
+            const auto* type = module.types.tryGet(id);
+            if (!type || depth > 64 || type->kind == TypeKind::GenericParameter ||
+                type->kind == TypeKind::ConstGenericParameter || type->kind == TypeKind::GenericParameterPack ||
+                type->kind == TypeKind::TypePack || type->kind == TypeKind::ValuePack)
+                return false;
+            return std::ranges::all_of(type->arguments, [&](TypeId child) { return self(self, child, depth + 1); });
+        };
+        const auto collect = [&](auto&& self, TypeId id) -> void
+        {
+            if (!visited.insert(id).second || !concrete(concrete, id, 0))
+                return;
+            const auto& type = module.types.get(id);
+            for (const auto child : type.arguments)
+                self(self, child);
+            if ((type.kind == TypeKind::Function || type.kind == TypeKind::AsyncTask) && !type.arguments.empty())
+                ordered.push_back(id);
+        };
+        for (const auto& function : module.functions)
+            if (function.nativeBinding && function.genericParameters.empty())
+            {
+                collect(collect, function.nativeBinding->result.type);
+                for (const auto& argument : function.nativeBinding->parameters)
+                    collect(collect, argument.type);
+            }
+        for (const auto owner : WirNativeObjectEmitter::eligibleTypes(module, dynamicPayloadTypes))
+            for (const auto& function : module.functions)
+                if (function.isMethod && function.ownerType == owner)
+                {
+                    collect(collect, function.returnType);
+                    for (const auto& argument : function.parameters)
+                        collect(collect, argument.type);
+                }
+        if (ordered.empty())
+            return {};
+        std::ostringstream out;
+        out << "namespace wio::wir_backend::abi {\n";
+        for (const auto id : ordered)
+        {
+            const auto reflected = std::ranges::find(module.contract.reflection, id, &ReflectionDescriptor::type);
+            const auto identity = reflected == module.contract.reflection.end()
+                                      ? stableModuleHash(nativeAbiTypeKey(module.types, id))
+                                      : reflected->stableTypeId;
+            if (module.types.get(id).kind == TypeKind::AsyncTask)
+            {
+                auto payload = module.types.get(id).arguments.front();
+                if (const auto object = nativeAbiObjectType(module.types, payload))
+                    payload = object;
+                const auto result = std::ranges::find(module.contract.reflection, payload, &ReflectionDescriptor::type);
+                const auto resultIdentity = result == module.contract.reflection.end()
+                                                ? stableModuleHash(nativeAbiTypeKey(module.types, payload))
+                                                : result->stableTypeId;
+                out << "template<> struct Codec<" << cpp(id) << ", " << identity << "ULL> : TaskCodec<"
+                    << cpp(module.types.get(id).arguments.front()) << ", " << identity << "ULL, " << resultIdentity
+                    << "ULL> {};\n";
+                continue;
+            }
+            out << "template<> struct Codec<" << cpp(id) << ", " << identity
+                << "ULL> : " << nativeValueCodec(module, id, cpp) << " {\n"
+                << "    using Base = " << nativeValueCodec(module, id, cpp) << ";\n"
+                << "    static " << cpp(id) << " read(const WioNativeAbiValue& value) {\n"
+                << "        require(value.kind == WIO_NATIVE_ABI_CALLBACK && value.typeId == " << identity
+                << "ULL && value.flags == WIO_NATIVE_ABI_VALUE_OWNED && !value.owner.state && !value.owner.ops && "
+                   "value.payload.callback.userdata && value.payload.callback.ops && "
+                   "value.payload.callback.ops->retain && value.payload.callback.ops->release);\n"
+                << "        return Base::read(value);\n    }\n};\n";
+        }
+        out << "} // namespace wio::wir_backend::abi\n";
+        return out.str();
+    }
+
+    std::string WirModuleEmitter::emit(const wir::lowered::Module& module, const TypeSpelling& type,
+                                       const bool nativeTaskSidecars,
+                                       const std::span<const wir::TypeId> dynamicPayloadTypes)
     {
         std::ostringstream out;
         std::map<FunctionId, const lowered::Function*> functions;
@@ -205,13 +334,14 @@ namespace wio::codegen
             functions[f.id] = &f;
         const auto wireId = [&](TypeId id)
         {
+            if (const auto object = nativeAbiObjectType(module.types, id))
+                id = object;
             for (const auto& reflected : module.contract.reflection)
                 if (reflected.type == id)
                     return reflected.stableTypeId;
             return stableModuleHash(nativeAbiTypeKey(module.types, id));
         };
-        const auto codec = [&](TypeId id)
-        { return "wio::wir_backend::abi::Codec<" + type(id) + ", " + std::to_string(wireId(id)) + "ULL>"; };
+        const auto codec = [&](TypeId id) { return nativeValueCodec(module, id, type); };
         std::function<bool(TypeId)> concrete = [&](TypeId id)
         {
             const auto& t = module.types.get(id);
@@ -237,6 +367,8 @@ namespace wio::codegen
         { return module.types.get(id).nominalKind == NominalKind::Object ? nominalCppType(id) : type(id); };
         out << "#if defined(_WIN32)\n#define WIO_WIR_EXPORT __declspec(dllexport)\n#else\n#define WIO_WIR_EXPORT "
                "__attribute__((visibility(\"default\")))\n#endif\n";
+        out << WirNativePodEmitter::emitProjectionAccess(module, type);
+        out << WirNativeContainerEmitter::emit(module, type, dynamicPayloadTypes);
         const auto thunk = [&](const lowered::Function& f, const std::string& name)
         {
             out << "static WioNativeAbiStatus " << name
@@ -247,20 +379,64 @@ namespace wio::codegen
                 << f.parameters.size()
                 << " || (count && !args) || !result) return WIO_NATIVE_ABI_INVALID_ARGUMENT;\n"
                    "  *result = {}; wio::wir_backend::abi::Frame frame;\n  try {\n";
+            out << "    wio::wir_backend::abi::ConsumedArguments consumed(args, count, {";
+            bool firstConsumed = true;
+            const auto hiddenParameters =
+                f.nativeBinding ? f.parameters.size() - f.nativeBinding->parameters.size() : 0;
+            if (f.nativeBinding)
+                for (std::size_t i = 0; i < f.nativeBinding->parameters.size(); ++i)
+                    if (f.nativeBinding->parameters[i].passing == NativePassingMode::Consume)
+                    {
+                        if (!firstConsumed)
+                            out << ", ";
+                        out << i + hiddenParameters;
+                        firstConsumed = false;
+                    }
+            out << "});\n";
+            // Bind aggregate roots before projections, regardless of parameter
+            // order. Projected nested POD arguments use their outer root slot.
+            for (std::size_t i = 0; i < f.parameters.size(); ++i)
+            {
+                const auto& parameter = module.types.get(f.parameters[i].type);
+                if (parameter.kind != TypeKind::Reference || parameter.arguments.empty())
+                    continue;
+                const auto base = parameter.arguments.front();
+                const auto& target = module.types.get(base);
+                if (target.kind == TypeKind::Array || target.kind == TypeKind::Dictionary ||
+                    (target.kind == TypeKind::Named && target.nominalKind == NominalKind::Component &&
+                     target.nominalRepresentation == NominalRepresentation::NativePod))
+                    out << "    if (!(args[" << i
+                        << "].flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED | "
+                           "WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED | WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED))) "
+                        << "(void)frame.borrow<" << type(base) << ", " << wireId(base) << "ULL>(args[" << i << "], "
+                        << (parameter.isMutable ? "true" : "false") << ");\n";
+            }
             for (std::size_t i = 0; i < f.parameters.size(); ++i)
             {
                 auto id = f.parameters[i].type;
                 const auto& t = module.types.get(id);
+                const bool consume =
+                    f.nativeBinding && i >= hiddenParameters &&
+                    f.nativeBinding->parameters[i - hiddenParameters].passing == NativePassingMode::Consume;
+                const auto input = consume ? "input" + std::to_string(i) : "args[" + std::to_string(i) + "]";
+                if (consume)
+                    out << "    auto " << input << " = args[" << i << "]; " << input
+                        << ".flags &= ~WIO_NATIVE_ABI_VALUE_CONSUMED; if (" << input << ".kind == WIO_NATIVE_ABI_VOID) "
+                        << input << ".flags &= ~WIO_NATIVE_ABI_VALUE_OWNED;\n";
                 out << "    auto p" << i << " = ";
                 if (t.kind == TypeKind::Reference)
                 {
                     auto base = t.arguments.front();
                     out << type(id) << (t.isMutable ? "::borrow(" : "::borrowView(") << "frame.borrow<" << type(base)
-                        << ", " << wireId(base) << "ULL>(args[" << i << "], " << (t.isMutable ? "true" : "false")
-                        << "))";
+                        << ", " << wireId(base) << "ULL";
+                    const auto& placeType = module.types.get(base);
+                    if (placeType.kind == TypeKind::Nullable && placeType.arguments.size() == 1 &&
+                        module.types.get(placeType.arguments.front()).kind == TypeKind::Opaque)
+                        out << ", " << wireId(placeType.arguments.front()) << "ULL";
+                    out << ">(args[" << i << "], " << (t.isMutable ? "true" : "false") << "))";
                 }
                 else
-                    out << codec(id) << "::read(args[" << i << "])";
+                    out << codec(id) << "::read(" << input << ")";
                 out << ";\n";
             }
             const auto& r = module.types.get(f.returnType);
@@ -272,13 +448,47 @@ namespace wio::codegen
             {
                 if (i)
                     out << ',';
-                out << "p" << i;
+                const bool consume =
+                    f.nativeBinding && i >= hiddenParameters &&
+                    f.nativeBinding->parameters[i - hiddenParameters].passing == NativePassingMode::Consume;
+                out << (consume ? "std::move(p" : "p") << i << (consume ? ")" : "");
             }
             out << ");\n    frame.commit();\n";
             if (r.kind == TypeKind::AsyncTask)
                 out << "    wio::wir_backend::abi::Tasks::get().track(value);\n";
             if (r.kind != TypeKind::Void && r.kind != TypeKind::Reference)
                 out << "    *result = " << codec(f.returnType) << "::write(std::move(value));\n";
+            else if (r.kind == TypeKind::Reference && f.nativeBinding)
+            {
+                const auto base = r.arguments.front();
+                // A free native result can borrow an input cell, never this
+                // thunk's frame storage or a producer-owned/global address.
+                for (std::size_t i = 0; i < f.parameters.size(); ++i)
+                {
+                    const auto& parameter = module.types.get(f.parameters[i].type);
+                    if (parameter.kind != TypeKind::Reference || parameter.arguments.front() != base ||
+                        (r.isMutable && !parameter.isMutable))
+                        continue;
+                    out << "    if (value.borrowIdentity() && value.borrowIdentity() == p" << i
+                        << ".borrowIdentity() && frame.aliasesLiveBorrow<" << type(base) << ", " << wireId(base)
+                        << "ULL>(args[" << i << "], value.borrowIdentity())"
+                        << (r.isMutable ? " && value.canRebind()" : "") << ") {\n"
+                        << "      result->kind = WIO_NATIVE_ABI_REFERENCE; result->typeId = " << wireId(base)
+                        << "ULL;\n      result->flags = WIO_NATIVE_ABI_VALUE_BORROWED"
+                        << (r.isMutable ? " | WIO_NATIVE_ABI_VALUE_MUTABLE" : "") << ";\n"
+                        << "      if (args[" << i
+                        << "].flags & (WIO_NATIVE_ABI_VALUE_PROJECTED | WIO_NATIVE_ABI_VALUE_SEQUENCE_PROJECTED | "
+                           "WIO_NATIVE_ABI_VALUE_SEQUENCE_POD_PROJECTED | WIO_NATIVE_ABI_VALUE_CONTAINER_PROJECTED)) "
+                           "{\n"
+                        << "        result->flags |= WIO_NATIVE_ABI_VALUE_ARGUMENT_ALIAS;\n"
+                        << "        result->payload.mutableSlice = {const_cast<WioNativeAbiValue*>(&args[" << i
+                        << "]), sizeof(WioNativeAbiValue)};\n"
+                        << "      } else result->payload.mutableSlice = args[" << i << "].payload.mutableSlice;\n"
+                        << "      return WIO_NATIVE_ABI_OK;\n    }\n";
+                }
+                out << "    return wio::wir_backend::abi::failure(failure, WIO_NATIVE_ABI_TYPE_MISMATCH, "
+                       "\"native borrowed result must alias a compatible caller reference\");\n";
+            }
             else if (r.kind != TypeKind::Void)
                 out << "    return WIO_NATIVE_ABI_TYPE_MISMATCH;\n";
             out << "    return WIO_NATIVE_ABI_OK;\n"
@@ -295,7 +505,9 @@ namespace wio::codegen
         std::vector<const lowered::Function*> natives;
         std::set<std::string> nativeKeys;
         for (const auto& f : module.functions)
-            if (f.nativeBinding && f.genericParameters.empty() && concrete(f.callableType))
+            if (f.nativeBinding && f.genericParameters.empty() && concrete(f.callableType) &&
+                (!f.ownerType || concrete(f.ownerType)) &&
+                std::ranges::all_of(f.parameters, [&](const auto& parameter) { return concrete(parameter.type); }))
             {
                 // Multiple Wio aliases may name the same concrete C++ binding.
                 if (!nativeKeys.insert(f.nativeBinding->stableKey).second)
@@ -309,8 +521,14 @@ namespace wio::codegen
             for (auto* f : natives)
             {
                 const auto& b = *f->nativeBinding;
-                out << "{WIO_NATIVE_ABI_VERSION,0," << stableModuleHash(b.stableKey) << "ULL," << quoted(b.stableKey)
-                    << ',' << quoted(b.symbol) << ',' << quoted(b.thunkSymbol) << ",&" << b.thunkSymbol << "},\n";
+                out << "{WIO_NATIVE_ABI_VERSION,WIO_NATIVE_ABI_FUNCTION_PROJECTED_REFERENCES | "
+                       "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_PROJECTIONS | "
+                       "WIO_NATIVE_ABI_FUNCTION_SEQUENCE_POD_PROJECTIONS | "
+                       "WIO_NATIVE_ABI_FUNCTION_CONTAINER_PROJECTIONS | "
+                       "WIO_NATIVE_ABI_FUNCTION_PROJECTED_BORROWED_RESULTS | "
+                       "WIO_NATIVE_ABI_FUNCTION_CONSUMED_ARGUMENTS | WIO_NATIVE_ABI_FUNCTION_TASK_SOURCES,"
+                    << stableModuleHash(b.stableKey) << "ULL," << quoted(b.stableKey) << ',' << quoted(b.symbol) << ','
+                    << quoted(b.thunkSymbol) << ",&" << b.thunkSymbol << "},\n";
             }
             out << "};\n";
         }
@@ -320,13 +538,27 @@ namespace wio::codegen
                "extern \"C\" WIO_WIR_EXPORT const WioNativeAbiRegistry* WioGetNativeAbiRegistry() noexcept { return "
                "&_native_registry; }\n";
         out << WirApplicationEmitter::emit(module, type);
+        out << WirNativePodEmitter::emit(module, type);
         out << WirReflectionEmitter::emit(module, type, thunk);
-        if (module.contract.kind != ModuleKind::WioLibrary)
+        if (module.contract.kind != ModuleKind::WioLibrary && !nativeTaskSidecars)
             return out.str();
         std::set<TypeId> taskTypes;
+        const auto collectTasks = [&](auto&& self, TypeId id) -> void
+        {
+            const auto& shape = module.types.get(id);
+            if (!concrete(id))
+                return;
+            if (shape.kind == TypeKind::AsyncTask)
+                taskTypes.insert(id);
+            for (auto child : shape.arguments)
+                self(self, child);
+        };
         for (const auto& f : module.functions)
-            if (module.types.get(f.returnType).kind == TypeKind::AsyncTask && concrete(f.returnType))
-                taskTypes.insert(f.returnType);
+        {
+            collectTasks(collectTasks, f.returnType);
+            for (const auto& parameter : f.parameters)
+                collectTasks(collectTasks, parameter.type);
+        }
         for (const std::string action : {"ready", "cancel", "read"})
         {
             out << "static WioNativeAbiStatus _task_" << action << "(const WioNativeAbiValue* task"
@@ -362,6 +594,22 @@ namespace wio::codegen
                 << (action == "read" ? "error" : "nullptr")
                 << ",WIO_NATIVE_ABI_EXCEPTION,e.what()); } catch (...) { return WIO_NATIVE_ABI_EXCEPTION; } }\n";
         }
+        out << "static WioNativeAbiStatus _task_on_complete(const WioNativeAbiValue* task,"
+               "WioNativeTaskCompletionFn callback,void* userData) noexcept {\n"
+               " if (!task || !callback) return WIO_NATIVE_ABI_INVALID_ARGUMENT;\n try {\n";
+        for (auto id : taskTypes)
+        {
+            out << " if (task->typeId==" << wireId(id) << "ULL) { auto value=" << codec(id)
+                << "::read(*task); value.SharedState()->AddCompletionCallback([value,callback,userData]() mutable { "
+                   "WioNativeAbiStatus status=WIO_NATIVE_ABI_OK; try { if (value.IsCancelled()) "
+                   "status=WIO_NATIVE_ABI_CANCELLED; } catch (...) { status=WIO_NATIVE_ABI_EXCEPTION; } "
+                   "callback(userData,status); }); return WIO_NATIVE_ABI_OK; }\n";
+        }
+        out << " return WIO_NATIVE_ABI_TYPE_MISMATCH;\n } catch (...) { return WIO_NATIVE_ABI_EXCEPTION; } }\n"
+               "static const WioNativeTaskCompletionApi _task_completion_api{WIO_NATIVE_ABI_VERSION,"
+               "&_task_on_complete};\n"
+               "extern \"C\" WIO_WIR_EXPORT const WioNativeTaskCompletionApi* "
+               "WioGetNativeTaskCompletionApi() noexcept { return &_task_completion_api; }\n";
         out << "static const WioNativeTaskApi _task_api{WIO_NATIVE_ABI_VERSION,&_task_ready,&_task_cancel,&_task_read,"
                "+[]() noexcept { try { wio::runtime::BindAsyncMainExecutor(); } catch (...) {} },"
                "+[]() noexcept -> std::uint64_t { try { return wio::runtime::DrainAsyncMainExecutor(); } catch (...) { "
@@ -370,6 +618,8 @@ namespace wio::codegen
                "extern \"C\" WIO_WIR_EXPORT const WioNativeTaskApi* WioGetNativeTaskApi() noexcept { return "
                "&_task_api; "
                "}\n";
+        if (module.contract.kind != ModuleKind::WioLibrary)
+            return out.str();
         const auto& exports = module.contract.exports;
         std::set<std::uint64_t> directExports;
         for (const auto& entry : exports)

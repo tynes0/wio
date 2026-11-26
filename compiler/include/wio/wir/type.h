@@ -8,6 +8,8 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace wio::wir
@@ -396,6 +398,9 @@ namespace wio::wir
         std::vector<EnumCaseLayout> enumCases;
         bool hasConstructor = false;
         bool hasDestructor = false;
+        // Layout selected by semantic explicit/partial specialization. Generic
+        // substitution must not replace it with the primary declaration's fields.
+        bool hasSpecializedLayout = false;
         OwnershipModel ownership = OwnershipModel::Trivial;
         CleanupKind cleanup = CleanupKind::None;
         std::optional<NativeTypeBinding> nativeBinding;
@@ -440,7 +445,14 @@ namespace wio::wir
         }
 
     private:
+        [[nodiscard]] static std::size_t fingerprint(const Type& type);
+        void refreshDirtyIndex();
+        void indexType(TypeId id, const Type& type);
+
         std::vector<Type> types_;
+        std::unordered_multimap<std::size_t, TypeId> typeIndex_;
+        std::vector<std::size_t> fingerprints_;
+        std::unordered_set<TypeId::ValueType> dirtyTypes_;
         TypeId voidType_;
         TypeId boolType_;
         TypeId i32Type_;
@@ -469,4 +481,10 @@ namespace wio::wir
     [[nodiscard]] std::string_view nativeThunkKindName(NativeThunkKind kind);
     [[nodiscard]] std::string_view nativeReceiverKindName(NativeReceiverKind receiver);
     [[nodiscard]] bool requiresCleanup(const Type& type);
+    // A trivially-copyable native POD has an owned SSA claim without a drop.
+    [[nodiscard]] bool supportsOwnedCopy(const Type& type);
+    // Literal extents describe inference, not a fixed-size runtime value.
+    // Any stores the materialized container identity without changing SSA types.
+    [[nodiscard]] TypeId canonicalAnyPayloadType(TypeTable& types, TypeId source);
+    [[nodiscard]] bool isAnyPayloadTypeCompatible(const TypeTable& types, TypeId source, TypeId payload);
 } // namespace wio::wir

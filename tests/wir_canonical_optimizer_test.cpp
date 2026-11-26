@@ -318,10 +318,11 @@ int main()
                  "LoweringPipeline must run canonical optimization before final verification");
     ok &= expect(pipeline.completedPasses() ==
                      std::vector<std::string>{
-                         "verify-typed-wir", "materialize-generic-functions", "verify-specialized-wir",
-                         "lower-canonical-control-flow", "lower-object-hierarchy", "fold-canonical-constants",
-                         "simplify-control-flow", "propagate-trivial-values", "eliminate-dead-values",
-                         "classify-storage-and-escapes", "eliminate-proven-bounds-checks", "verify-lowered-wir"},
+                         "verify-typed-wir", "materialize-generic-functions", "materialize-formatting-calls",
+                         "verify-specialized-wir", "lower-canonical-control-flow", "lower-object-hierarchy",
+                         "fold-canonical-constants", "simplify-control-flow", "propagate-trivial-values",
+                         "eliminate-dead-values", "classify-storage-and-escapes", "eliminate-proven-bounds-checks",
+                         "verify-lowered-wir"},
                  "LoweringPipeline must publish deterministic optimization pass order");
 
     return ok ? 0 : 1;

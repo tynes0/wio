@@ -1100,6 +1100,28 @@ namespace wio::runtime::std_io
         return result;
     }
 
+    std::vector<unsigned char> ReadSomeByteValues(File& file, const std::size_t maxSize)
+    {
+        if (maxSize == 0)
+            return {};
+
+        std::vector<unsigned char> result(maxSize);
+        const std::size_t bytesRead = ReadSomeInto(file, result.data(), maxSize);
+        if (bytesRead == 0)
+            return {};
+
+        result.resize(bytesRead);
+        // Preserve owning snapshots without retaining an arbitrarily large
+        // speculative request in a small result. Use subtraction to avoid
+        // overflow in the capacity > 2 * size comparison.
+        if (result.capacity() - bytesRead > bytesRead)
+        {
+            return std::vector<unsigned char>(result.begin(), result.end());
+        }
+
+        return result;
+    }
+
     std::string Read(File& file, const std::size_t size)
     {
         std::string result;
@@ -1142,6 +1164,32 @@ namespace wio::runtime::std_io
         }
 
         return result;
+    }
+
+    std::vector<unsigned char> ReadByteValues(File& file, const std::size_t size)
+    {
+        if (size == 0)
+            return {};
+
+        std::vector<unsigned char> result(size);
+        (void)ReadExactInto(file, result.data(), size);
+        return result;
+    }
+
+    std::size_t ReadByteValuesInto(File& file, const std::span<unsigned char> buffer)
+    {
+        if (buffer.empty())
+            return 0;
+
+        return ReadExactInto(file, buffer.data(), buffer.size());
+    }
+
+    std::size_t ReadSomeByteValuesInto(File& file, const std::span<unsigned char> buffer)
+    {
+        if (buffer.empty())
+            return 0;
+
+        return ReadSomeInto(file, buffer.data(), buffer.size());
     }
 
     char ReadChar(File& file)

@@ -1,0 +1,10 @@
+use std::attribute as attribute;
+
+object Resource {}
+
+[Native, CppName(InvalidNullableObject)]
+component InvalidNullableObject {
+    public value: Resource?;
+}
+
+fn Entry() -> i32 { return 0; }

@@ -1,0 +1,421 @@
+{
+  "Revision": "d6cdbd324ffa606c90cea4ffbb217fdf2fe142a3",
+  "Compiler": "g++.exe (x86_64-posix-seh-rev0, Built by MinGW-Builds project) 15.2.0",
+  "VmConfiguration": "MSVC Release, non-JIT, 10 billion instruction benchmark-only budget",
+  "CompilerHash": "18B94A00178E09CB9BC282E52C87372E7A82E577919225BCC0B6A033E47F5F29",
+  "VmHostHash": "715F44B50E6FFA84E8018566D6D776A9637861568A3AA5A4D482C8C4AB41618D",
+  "RuntimeHash": "59FF4005117CB2C7CFF701629B98D7A599D4550B18FF40B3AA402923F8863941",
+  "Flags": [
+    "-std=c++20",
+    "-O2",
+    "-ffp-contract=off",
+    "-static",
+    "-Wa,-mbig-obj"
+  ],
+  "TimeoutSeconds": 180,
+  "Repetitions": 5,
+  "VmRepetitions": 3,
+  "Sources": [
+    {
+      "Path": "tests/performance/mandelbrot_compute/compute.wio",
+      "Hash": "B526C768105B20624B2B14EEFBEA05DE30BB7096C1275894865EDEE01BD71C9E"
+    },
+    {
+      "Path": "tests/performance/mandelbrot_compute/benchmark_clock.h",
+      "Hash": "CBCEBFC64EE2D3BE46A76415A3AC549F0FE13C30614E9DC5DEF622EDE6AF6F77"
+    },
+    {
+      "Path": "tests/performance/mandelbrot_compute/vm_host.cpp",
+      "Hash": "ECFBDD7539BB1581650BFB6E0C1E7AFCC0A1B1325F8B6FE28FA2710EF7900F41"
+    },
+    {
+      "Path": "runtime/include/integer_format.h",
+      "Hash": "3C5AD55F7907E2B5E3FDB6670C0C70E368F3EAFE3B0236E34FEDD2D694BE53B6"
+    },
+    {
+      "Path": "compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "Hash": "3D2D4D97705932E2B896ECF8405B9C9CB78F3CA17DD1455918BCD7A5E2B03DF3"
+    },
+    {
+      "Path": "compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
+      "Hash": "3E15B79F50D13775537090DB218206478E3FE818F164A9AC21DB276DF53C69F0"
+    },
+    {
+      "Path": "compiler/include/wio/codegen/wir_cpp_storage_plan.h",
+      "Hash": "6E4CF71F66592A02330DBA9BF4258BA566265D58DF74B275E36FC98C9DCF1FF7"
+    }
+  ],
+  "Artifacts": [
+    {
+      "Path": "compute/bridge.dll",
+      "Hash": "74E7E13D193E723C315AF9046D45009BD340A7EEC04686A2D97F6E56884E1867"
+    },
+    {
+      "Path": "compute/main.wio",
+      "Hash": "B526C768105B20624B2B14EEFBEA05DE30BB7096C1275894865EDEE01BD71C9E"
+    },
+    {
+      "Path": "compute/main.wio.cpp",
+      "Hash": "45871F04814799CA61CB3BF6EB6F3A96F66B5B1C4DEF1E1E0C4201D6F242DF8B"
+    },
+    {
+      "Path": "compute/main.wiob",
+      "Hash": "D30007DD33171425F67B89A36CD53F40558F564A13AB4EA692FB7A5079B12BF8"
+    },
+    {
+      "Path": "compute/native.exe",
+      "Hash": "80A35B0F7ABBC53B13F131444AE1D960E35665F6D58E33FE8202AE55E2494322"
+    },
+    {
+      "Path": "full/bridge.dll",
+      "Hash": "32F84EB1B16F75594D95F7FB5BF64B2E4DA141491D6A95B772601B899C64E933"
+    },
+    {
+      "Path": "full/main.wio",
+      "Hash": "BF0EF3870ACB568551D00704958880BB1A803F1C5433FA980C4457B2AFD73D9E"
+    },
+    {
+      "Path": "full/main.wio.cpp",
+      "Hash": "2EE9C839CB91B4F91B40DD893565CE2DA0DD5AC77A5DDE83D3B590BF9BCB77FD"
+    },
+    {
+      "Path": "full/main.wiob",
+      "Hash": "7043B95B268D71D343BF9AD7D3CF4DCE9379425F457BA34DE7FDFDBFA40E7E00"
+    },
+    {
+      "Path": "full/mandelbrot.wio",
+      "Hash": "4E701B4C781B1EC77BF749F9472BE6711AE8D254F3AAB86028F8EE6B60CE8AF9"
+    },
+    {
+      "Path": "full/native.exe",
+      "Hash": "33FAD1D38DFB58C02399E29E8B7B4DEF0E417FFAD147A20B1BCF23AD0F60B1F4"
+    },
+    {
+      "Path": "full/previous.exe",
+      "Hash": "DD333F30BEA096FF752E302B221DB8847A3830E15661CC65C3F387A3B98CA461"
+    },
+    {
+      "Path": "full/previous.wio.cpp",
+      "Hash": "39A8BFDA7B2F940D421CABC742C2363D303673C585CE674ECA26F004129C62DF"
+    }
+  ],
+  "Samples": [
+    {
+      "Name": "compute-native",
+      "Round": 0,
+      "Warmup": true,
+      "Status": "passed",
+      "WallSeconds": 0.1732482,
+      "KernelSeconds": 0.022901,
+      "Output": "seconds=0.022901000 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": ""
+    },
+    {
+      "Name": "full-native",
+      "Round": 0,
+      "Warmup": true,
+      "Status": "passed",
+      "WallSeconds": 0.3905723,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "full-previous",
+      "Round": 0,
+      "Warmup": true,
+      "Status": "passed",
+      "WallSeconds": 0.4148367,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "compute-native",
+      "Round": 1,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.0417824,
+      "KernelSeconds": 0.0236802,
+      "Output": "seconds=0.023680200 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": ""
+    },
+    {
+      "Name": "compute-vm",
+      "Round": 1,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 19.2281593,
+      "KernelSeconds": 19.1963073,
+      "Output": "seconds=19.196307300 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": ""
+    },
+    {
+      "Name": "full-native",
+      "Round": 1,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.135108,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "full-previous",
+      "Round": 1,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.1343475,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "full-vm",
+      "Round": 1,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 20.5709231,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "compute-native",
+      "Round": 2,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.0447166,
+      "KernelSeconds": 0.0239276,
+      "Output": "seconds=0.023927600 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": ""
+    },
+    {
+      "Name": "compute-vm",
+      "Round": 2,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 19.0405775,
+      "KernelSeconds": 19.0155573,
+      "Output": "seconds=19.015557300 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": ""
+    },
+    {
+      "Name": "full-native",
+      "Round": 2,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.1350353,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "full-previous",
+      "Round": 2,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.1338238,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "full-vm",
+      "Round": 2,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 20.5867059,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "compute-native",
+      "Round": 3,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.0441984,
+      "KernelSeconds": 0.0239167,
+      "Output": "seconds=0.023916700 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": ""
+    },
+    {
+      "Name": "compute-vm",
+      "Round": 3,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 19.102339,
+      "KernelSeconds": 19.0779206,
+      "Output": "seconds=19.077920600 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": ""
+    },
+    {
+      "Name": "full-native",
+      "Round": 3,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.1384647,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "full-previous",
+      "Round": 3,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.1328543,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "full-vm",
+      "Round": 3,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 20.5174435,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "compute-native",
+      "Round": 4,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.0439967,
+      "KernelSeconds": 0.022995,
+      "Output": "seconds=0.022995000 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": ""
+    },
+    {
+      "Name": "full-native",
+      "Round": 4,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.1307979,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "full-previous",
+      "Round": 4,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.1325871,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "compute-native",
+      "Round": 5,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.0441501,
+      "KernelSeconds": 0.0238496,
+      "Output": "seconds=0.023849600 iterations=11613930 weighted=3721766287256 interior=94440",
+      "Error": ""
+    },
+    {
+      "Name": "full-native",
+      "Round": 5,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.1309895,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    },
+    {
+      "Name": "full-previous",
+      "Round": 5,
+      "Warmup": false,
+      "Status": "passed",
+      "WallSeconds": 0.1316853,
+      "KernelSeconds": null,
+      "Output": "Mandelbrot (800x800) hesaplanıyor... Motoru ısıt!\r\r\nHesaplama bitti, disk üzerine yazılıyor...\r\r\nHarika! 'mandelbrot.ppm' dosyası başarıyla oluşturuldu. Resmi açıp bakabilirsin.",
+      "Error": "",
+      "Bytes": 5156528,
+      "Hash": "1984A4F3A3575BD438EBD79F6EC3D0EB571BD141E5A9CBD29DFABA37941FF733"
+    }
+  ],
+  "Summary": [
+    {
+      "Name": "compute-native",
+      "Samples": 5,
+      "Passed": 5,
+      "Metric": "KernelSeconds",
+      "Median": 0.0238496,
+      "Min": 0.022995,
+      "Max": 0.0239276
+    },
+    {
+      "Name": "compute-vm",
+      "Samples": 3,
+      "Passed": 3,
+      "Metric": "KernelSeconds",
+      "Median": 19.0779206,
+      "Min": 19.0155573,
+      "Max": 19.1963073
+    },
+    {
+      "Name": "full-native",
+      "Samples": 5,
+      "Passed": 5,
+      "Metric": "WallSeconds",
+      "Median": 0.1350353,
+      "Min": 0.1307979,
+      "Max": 0.1384647
+    },
+    {
+      "Name": "full-previous",
+      "Samples": 5,
+      "Passed": 5,
+      "Metric": "WallSeconds",
+      "Median": 0.1328543,
+      "Min": 0.1316853,
+      "Max": 0.1343475
+    },
+    {
+      "Name": "full-vm",
+      "Samples": 3,
+      "Passed": 3,
+      "Metric": "WallSeconds",
+      "Median": 20.5709231,
+      "Min": 20.5174435,
+      "Max": 20.5867059
+    }
+  ]
+}

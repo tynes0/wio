@@ -1,0 +1,98 @@
+{
+  "baseline": "970c03bc81ef0884524adf1bb27764b427354e49",
+  "sourceFiles": [
+    {
+      "file": "main.wio",
+      "before": "4A1A0EB0DA28E55CD248A6035E8ED65373B4359473543F25F320641329B89445",
+      "after": "4A1A0EB0DA28E55CD248A6035E8ED65373B4359473543F25F320641329B89445",
+      "identical": true
+    },
+    {
+      "file": "probe.h",
+      "before": "F7B8ADD6AF620CE47221124A9584F88CEC6B173E7FB0D02B09DB39822CB274DE",
+      "after": "F7B8ADD6AF620CE47221124A9584F88CEC6B173E7FB0D02B09DB39822CB274DE",
+      "identical": true
+    },
+    {
+      "file": "main.cpp",
+      "before": "BB7CFB1F08E77165003BA68343A9D7933B012AEE85FFC4B4A2B707B01B7DA8E8",
+      "after": "BB7CFB1F08E77165003BA68343A9D7933B012AEE85FFC4B4A2B707B01B7DA8E8",
+      "identical": true
+    },
+    {
+      "file": "Program.cs",
+      "before": "678BB18BD16D40D29B722E3F933B235918342A4C95277D6DFE88D8462BEFA84E",
+      "after": "678BB18BD16D40D29B722E3F933B235918342A4C95277D6DFE88D8462BEFA84E",
+      "identical": true
+    },
+    {
+      "file": "StreamOwnership.csproj",
+      "before": "8E501C306708E3BE925F454229B06AE8FED13221DAF84CACB07E60721F9D7A0F",
+      "after": "8E501C306708E3BE925F454229B06AE8FED13221DAF84CACB07E60721F9D7A0F",
+      "identical": true
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "F:\\Projects\\wio\\build\\n03-stream-own-before-v2-2026-10-18\\native.exe",
+      "bytes": 6377353,
+      "sha256": "D276AD17BADEAE23534138064583061DD65796B657F5176238A9BC1B214DA205"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\n03-stream-own-before-v2-2026-10-18\\memory.exe",
+      "bytes": 9523398,
+      "sha256": "51B7CFC3C93F9D546FD027D4E393171E1F066FB348189FD99FDBD3CCD9F9C8CF"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\n03-stream-own-before-v2-2026-10-18\\cpp.exe",
+      "bytes": 67786,
+      "sha256": "5E2EC41BEB77F5E8A8B59A941AFD03E0F7C2639EC6338A194300E84052625493"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\n03-stream-own-before-v2-2026-10-18\\frozen.cpp",
+      "bytes": 3255947,
+      "sha256": "4AF25A509100AC416D7962C78E05AC18AE35515D2870FAF887E9B169AE34F5BF"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\n03-stream-own-after-2026-10-18\\native.exe",
+      "bytes": 6378649,
+      "sha256": "6F0F96D94C1C562128E65826658483D6E3A588E7DE8A8BC61F6C620F06C8A848"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\n03-stream-own-after-2026-10-18\\memory.exe",
+      "bytes": 9523398,
+      "sha256": "B623AD182BC75E06FE1B0029A4511D6FE1E2D87CB044591F4B27162358E0EF0D"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\n03-stream-own-after-2026-10-18\\cpp.exe",
+      "bytes": 67786,
+      "sha256": "130EC516558AD379CA05727A084E6C61B0ACEB84524961A0BC84DC1F51BFA150"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\n03-stream-own-after-2026-10-18\\frozen.cpp",
+      "bytes": 3255943,
+      "sha256": "5F8B381A2222DBE4AA3BBAAC7556DC5EB41E407E171818D31619ED78A1C976CA"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\app\\Debug\\wio.exe",
+      "bytes": 20424704,
+      "sha256": "2655B12A9968619EA5CDFEF52D993391D023CABB739433D2893EA3F09ABDF549"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\app\\Release\\wio-vm.exe",
+      "bytes": 1306112,
+      "sha256": "D5897FA48BBF346C5B3C2F5F979DCABF66E589534AED6CAB5D92CB7B9B035879"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\tools\\wio-bench\\Debug\\wio-bench.exe",
+      "bytes": 12501644,
+      "sha256": "D281D70686E6585D4382770C283ACBC3C54580ED81C00DAFACFA93726EBE6362"
+    },
+    {
+      "path": "F:\\Projects\\wio\\build\\runtime\\backend\\libwio_runtime.a",
+      "bytes": 7281434,
+      "sha256": "59FF4005117CB2C7CFF701629B98D7A599D4550B18FF40B3AA402923F8863941"
+    }
+  ],
+  "normalizedGeneratedCppIdentical": true
+}

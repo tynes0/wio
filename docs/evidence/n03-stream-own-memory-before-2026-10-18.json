@@ -1,0 +1,14 @@
+[
+  {
+    "mode": "stream-192",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"3874378050843431552\",\"elapsedNanoseconds\":1,\"operations\":2001,\"schemaVersion\":1}\n\n{\"allocations\":4004,\"available\":true,\"failures\":0,\"freedBytes\":1466872,\"frees\":4004,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":4,\"peakBytes\":983,\"requestedBytes\":1466872,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  },
+  {
+    "mode": "stream-8192",
+    "exitCode": 0,
+    "stdout": "{\"checksum\":\"11823186543361776969\",\"elapsedNanoseconds\":1,\"operations\":2001,\"schemaVersion\":1}\n\n{\"allocations\":14009,\"available\":true,\"failures\":0,\"freedBytes\":81012621,\"frees\":14009,\"liveBlocks\":0,\"liveBytes\":0,\"peakBlocks\":4,\"peakBytes\":32855,\"requestedBytes\":81012621,\"scope\":\"diagnostic C++ global new/delete window; not RSS or malloc traffic\"}\n\n",
+    "stderr": ""
+  }
+]

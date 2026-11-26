@@ -1,0 +1,62 @@
+use std::async as futures;
+use std::console as console;
+
+object Label
+{
+    public value: string;
+    public calls: i32;
+
+    public fn OnConstruct(value: string)
+    {
+        self.value = value;
+    }
+
+    public fn ToString() -> string
+    {
+        self.calls += 1;
+        return $"${self.value}:${self.calls}";
+    }
+}
+
+object Box<T>
+{
+    public value: T;
+
+    public fn OnConstruct(value: T)
+    {
+        self.value = value;
+    }
+
+    public fn ToString() -> string
+    {
+        return $"box(${self.value})";
+    }
+}
+
+async fn AsyncRender(label: Label) -> string
+{
+    let before = $"${label}";
+    await futures::Sleep(1u64);
+    let values: Label[] = [label];
+    return $"${before}/${values}";
+}
+
+fn Entry() -> i32
+{
+    let label = Label("🌍\0");
+    let values: Label[] = [label, label];
+    if ($"${values}" != "[🌍\0:1, 🌍\0:2]") return 1;
+    let empty: Label[] = [];
+    if ($"${empty}" != "[]") return 2;
+    let nested: Label[][] = [values, empty];
+    if ($"${nested}" != "[[🌍\0:3, 🌍\0:4], []]") return 3;
+    let dictionary: Tree<string, Label> = {< "b": label, "a": label >};
+    if ($"${dictionary}" != "{a: 🌍\0:5, b: 🌍\0:6}") return 4;
+    let boxed = Box<i32>(17);
+    if ($"${boxed}" != "box(17)") return 5;
+    let task = AsyncRender(label);
+    if (futures::BlockOn<string>(task) != "🌍\0:7/[🌍\0:8]") return 6;
+    if (console::Format("{{{1:D4}}}/{0,-4}", "x", 12) != "{0012}/x   ") return 7;
+    if (console::Format("{0:X4}/{0:D3}/{1:F2}", 31, 1.25f64) != "001F/031/1.25") return 8;
+    return 0;
+}

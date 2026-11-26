@@ -5,7 +5,11 @@ void SemanticAnalyzer::visit(ExpressionStatement& node)
 {
     if (isDeclarationPass_)
         return;
+
+    const Expression* previousDiscardedExpression = discardedExpression_;
+    discardedExpression_ = node.expression.Get();
     node.expression->accept(*this);
+    discardedExpression_ = previousDiscardedExpression;
 }
 
 void SemanticAnalyzer::visit(AttributeStatement& node)

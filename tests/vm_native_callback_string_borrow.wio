@@ -1,0 +1,174 @@
+using cpp::header("vm_callback_string_borrow_fixture.h");
+use std::attribute as attribute;
+
+fn ModifyString(readonly: view string, writable: ref string) -> string
+{
+    writable = readonly + "\0z";
+    return readonly;
+}
+fn ModifyReverse(writable: ref string, readonly: view string) -> string
+{
+    writable = readonly + "\0z";
+    return readonly;
+}
+fn AppendString(readonly: view string, writable: ref string) -> string
+{
+    writable.Append("\0z");
+    return readonly;
+}
+fn ModifyText(readonly: view text, writable: ref text) -> text
+{
+    writable = readonly + u"\0z";
+    return readonly;
+}
+fn FailAfterWrite(readonly: view string, writable: ref string) -> string
+{
+    writable = "changed\0🌍";
+    let values: i32[] = [1];
+    let invalid = values[9];
+    return readonly;
+}
+object Processor
+{
+    bytes: string;
+    unicode: text;
+    public OnConstruct()
+    {
+        self.bytes = "original";
+        self.unicode = u"original";
+    }
+    public fn ApplyString(callback: fn(view string, ref string) -> string) -> string
+    {
+        mut value: string = "a\0🌍";
+        let answer = callback(ref value, ref value);
+        if (answer != value)
+        {
+            return "alias-lost";
+        }
+        return answer;
+    }
+    public fn ApplyText(callback: fn(view text, ref text) -> text) -> text
+    {
+        mut value: text = u"İ\0🌍";
+        let answer = callback(ref value, ref value);
+        if (answer != value)
+        {
+            return u"alias-lost";
+        }
+        return answer;
+    }
+    public fn Forwarded(callback: fn(view string, ref string) -> string) -> i32
+    {
+        return String(callback, "a\0🌍");
+    }
+    public fn Pair(callback: fn(ref string, ref text) -> i32) -> i32
+    {
+        return callback(ref self.bytes, ref self.unicode);
+    }
+    public fn ReadString() -> string
+    {
+        return self.bytes;
+    }
+    public fn ReadText() -> text
+    {
+        return self.unicode;
+    }
+}
+[Native, CppName(vm_callback_string_borrow::String)]
+fn String(callback: fn(view string, ref string) -> string, initial: string) -> i32;
+[Native, CppName(vm_callback_string_borrow::Large)]
+fn Large(callback: fn(view string, ref string) -> string) -> i32;
+[Native, CppName(vm_callback_string_borrow::Reverse)]
+fn Reverse(callback: fn(ref string, view string) -> string) -> i32;
+[Native, CppName(vm_callback_string_borrow::Text)]
+fn Text(callback: fn(view text, ref text) -> text, initial: text) -> i32;
+[Native, CppName(vm_callback_string_borrow::RememberString)]
+fn RememberString([attribute::NativeCallback("retained", "caller")] callback: fn(view string, ref string) -> string);
+[Native, CppName(vm_callback_string_borrow::RememberText)]
+fn RememberText([attribute::NativeCallback("retained", "caller")] callback: fn(view text, ref text) -> text);
+[Native, CppName(vm_callback_string_borrow::Run)]
+fn Run() -> i32;
+[Native, CppName(vm_callback_string_borrow::Clear)]
+fn Clear();
+[Native, CppName(vm_callback_string_borrow::Capture)]
+fn CaptureString([attribute::NativeCallback("retained", "caller")] callback: fn(view string, ref string) -> string);
+[Native, CppName(vm_callback_string_borrow::Capture)]
+fn CaptureText([attribute::NativeCallback("retained", "caller")] callback: fn(view text, ref text) -> text);
+[Native, CppName(vm_callback_string_borrow::Hosted)]
+fn Hosted(processor: Processor) -> i32;
+[Native, CppName(vm_callback_string_borrow::AtomicProbe)]
+fn AtomicProbe(callback: fn(ref string, ref text) -> i32) -> i32;
+[Native, CppName(vm_callback_string_borrow::CaptureHost)]
+fn CaptureHost(processor: Processor) -> u64;
+[Native, CppName(vm_callback_string_borrow::ClearHost)]
+fn ClearHost();
+[Native, CppName(vm_callback_string_borrow::Print)]
+fn Print();
+
+fn HostString()
+{
+    CaptureString(ModifyString);
+}
+fn HostText()
+{
+    CaptureText(ModifyText);
+}
+fn HostFailure()
+{
+    CaptureString(FailAfterWrite);
+}
+fn HostReceiver() -> u64
+{
+    return CaptureHost(Processor());
+}
+fn HostClear()
+{
+    ClearHost();
+}
+fn SafePoint() -> i32
+{
+    return 7;
+}
+fn Pair(bytes: ref string, unicode: ref text) -> i32
+{
+    return 0;
+}
+fn Entry() -> i32
+{
+    mut round: i32 = 0;
+    while (round < 30)
+    {
+        if (String(ModifyString, "a\0🌍") != 0 or String(ModifyString, "") != 0 or Large(ModifyString) != 0
+            or String(AppendString, "a\0🌍") != 0 or Large(AppendString) != 0)
+        {
+            return 1;
+        }
+        if (Reverse(ModifyReverse) != 0)
+        {
+            return 2;
+        }
+        if (Text(ModifyText, u"İ\0🌍") != 0 or Text(ModifyText, u"") != 0
+            or Text(ModifyText, u"👩‍💻é\0") != 0)
+        {
+            return 3;
+        }
+        RememberString(ModifyString);
+        RememberText(ModifyText);
+        if (Run() != 0 or Run() != 0)
+        {
+            return 4;
+        }
+        Clear();
+        if (Hosted(Processor()) != 0)
+        {
+            return 5;
+        }
+        round += 1;
+    }
+    if (AtomicProbe(Pair) != 0)
+    {
+        return 6;
+    }
+    Print();
+    return 0;
+}

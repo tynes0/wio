@@ -1,0 +1,621 @@
+{
+  "Revision": "79568bd6fe4310b73178297819c6ff7322c176e3",
+  "Compiler": "g++.exe (x86_64-posix-seh-rev0, Built by MinGW-Builds project) 15.2.0",
+  "Flags": [
+    "-std=c++20",
+    "-O2",
+    "-ffp-contract=off",
+    "-static"
+  ],
+  "Repetitions": 15,
+  "CompilerHash": "48AEC957EDB57E08721EE70984A591382319F62E16D99DA6949D4849924E9D57",
+  "RuntimeHash": "59FF4005117CB2C7CFF701629B98D7A599D4550B18FF40B3AA402923F8863941",
+  "Sources": [
+    {
+      "Path": "std/builders.wio",
+      "Hash": "3A564315D5DCD48390C1F95CC00EAA6D1F2BCC6FE2C9BE9165E8DE534122C68C"
+    },
+    {
+      "Path": "std/binary.wio",
+      "Hash": "05645A9450E7773F330A3BDAA0BFE92A9AAF69E8FF38AAD2FAC0996CA83EAEC0"
+    },
+    {
+      "Path": "runtime/include/std_builders.h",
+      "Hash": "D219136E750AC296B5BB5135B0A4E5DE33D8A65EE1EBC420EE4277DA598816C4"
+    },
+    {
+      "Path": "runtime/include/wir_inline_place.h",
+      "Hash": "092E3E530D01B4E467268B2C4A26DB203EFF5C71FB8DC4C9F0C7095A6707AA3F"
+    },
+    {
+      "Path": "compiler/src/wio_compiler/codegen/wir_cpp_backend.cpp",
+      "Hash": "EAE2E8E735FD80D846211C6AF9219FCFA8F324AFE9746B42F77B5F49A4298956"
+    },
+    {
+      "Path": "compiler/src/wio_compiler/codegen/wir_cpp_storage_plan.cpp",
+      "Hash": "17611A73856CCA29EC9A2D38AAB45BA5953EB22884F893E06CB174E930A9C479"
+    },
+    {
+      "Path": "vm/src/string_intrinsics.cpp",
+      "Hash": "36E2F41FB32FCD68693238308DFD139E2015C45153003AE256E9DF5FF45A855C"
+    },
+    {
+      "Path": "vm/src/value.cpp",
+      "Hash": "1913B1D8B0CCF6E043F5C6AE937C548CB5A1A4231F8C747E4B76F2D3EE77D2F4"
+    },
+    {
+      "Path": "tests/native/builder_benchmark.h",
+      "Hash": "4398C4B0893EEFD0A05C3C0A1F4270F9D03FCAC33428FD343732D02D14102A81"
+    },
+    {
+      "Path": "tests/performance/std_builders/append.wio",
+      "Hash": "3E4C6B21AC01A22516AB016E755B337930A419D9D66236CF860A4E4EABE96B8C"
+    },
+    {
+      "Path": "tests/performance/std_builders/append.cpp",
+      "Hash": "1F183F0C8E9014E1B6F109381723277F1A6DC04DEAC297E2E4D4A674484CD022"
+    }
+  ],
+  "Artifacts": [
+    {
+      "Name": "baseline",
+      "GeneratedHash": "A625B9E2CB63AA08988C5B58B2ABBB473E2B625EB7319686128E7A1C69ABC65F",
+      "BinaryHash": "585750929D27D3E728D53AD96EC46EEC9BC166E10FDAC95136C3C32591C69B2B"
+    },
+    {
+      "Name": "previous",
+      "GeneratedHash": "353081C0E25DE3CDB43B516F691FF982D8B8FA20D991406B9749A23BB234A344",
+      "BinaryHash": "7738EDCED1E3FAC273CD76AA2E7DC70A62E86D0ABE6DBDE4EFA44B5BBF6B11BA"
+    },
+    {
+      "Name": "current",
+      "GeneratedHash": "D87276661D74B690AF9DA7BA81E7E87192C15015E3692F4256BADCDBBCF25F38",
+      "BinaryHash": "B1D0A2CC6599EE94A7334F70F75F924DA5D86DD8BD44D505464369EC1105139D"
+    },
+    {
+      "Name": "cpp",
+      "GeneratedHash": "1F183F0C8E9014E1B6F109381723277F1A6DC04DEAC297E2E4D4A674484CD022",
+      "BinaryHash": "051FB283A3A5CA97176E00CF29AFF4E1530D35E805ECF9CFF27E1E41D0845AA3"
+    }
+  ],
+  "Samples": [
+    {
+      "Name": "baseline",
+      "Round": 0,
+      "Warmup": true,
+      "Seconds": 0.522104,
+      "WallSeconds": 0.7037007,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 0,
+      "Warmup": true,
+      "Seconds": 0.0049497,
+      "WallSeconds": 0.1803611,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 0,
+      "Warmup": true,
+      "Seconds": 0.0031593,
+      "WallSeconds": 0.1244322,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 0,
+      "Warmup": true,
+      "Seconds": 0.0005441,
+      "WallSeconds": 0.0424988,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 1,
+      "Warmup": false,
+      "Seconds": 0.5272864,
+      "WallSeconds": 0.5373986,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 1,
+      "Warmup": false,
+      "Seconds": 0.0050269,
+      "WallSeconds": 0.0159651,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 1,
+      "Warmup": false,
+      "Seconds": 0.0033034,
+      "WallSeconds": 0.0137084,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 1,
+      "Warmup": false,
+      "Seconds": 0.0005725,
+      "WallSeconds": 0.0087042,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 2,
+      "Warmup": false,
+      "Seconds": 0.5459622,
+      "WallSeconds": 0.5554837,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 2,
+      "Warmup": false,
+      "Seconds": 0.0048932,
+      "WallSeconds": 0.0153115,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 2,
+      "Warmup": false,
+      "Seconds": 0.0032211,
+      "WallSeconds": 0.0136863,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 2,
+      "Warmup": false,
+      "Seconds": 0.0005215,
+      "WallSeconds": 0.0084973,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 3,
+      "Warmup": false,
+      "Seconds": 0.5395601,
+      "WallSeconds": 0.5490672,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 3,
+      "Warmup": false,
+      "Seconds": 0.0054444,
+      "WallSeconds": 0.0173453,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 3,
+      "Warmup": false,
+      "Seconds": 0.0031156,
+      "WallSeconds": 0.0130735,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 3,
+      "Warmup": false,
+      "Seconds": 0.0005315,
+      "WallSeconds": 0.0080308,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 4,
+      "Warmup": false,
+      "Seconds": 0.5429139,
+      "WallSeconds": 0.5526915,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 4,
+      "Warmup": false,
+      "Seconds": 0.0050948,
+      "WallSeconds": 0.0147631,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 4,
+      "Warmup": false,
+      "Seconds": 0.0031717,
+      "WallSeconds": 0.0136458,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 4,
+      "Warmup": false,
+      "Seconds": 0.0005274,
+      "WallSeconds": 0.0082106,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 5,
+      "Warmup": false,
+      "Seconds": 0.5447503,
+      "WallSeconds": 0.5542492,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 5,
+      "Warmup": false,
+      "Seconds": 0.0049411,
+      "WallSeconds": 0.0151337,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 5,
+      "Warmup": false,
+      "Seconds": 0.0032509,
+      "WallSeconds": 0.0137377,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 5,
+      "Warmup": false,
+      "Seconds": 0.0005709,
+      "WallSeconds": 0.0080385,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 6,
+      "Warmup": false,
+      "Seconds": 0.5437568,
+      "WallSeconds": 0.5537691,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 6,
+      "Warmup": false,
+      "Seconds": 0.0050993,
+      "WallSeconds": 0.0154537,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 6,
+      "Warmup": false,
+      "Seconds": 0.0032356,
+      "WallSeconds": 0.0133626,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 6,
+      "Warmup": false,
+      "Seconds": 0.0005536,
+      "WallSeconds": 0.0083398,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 7,
+      "Warmup": false,
+      "Seconds": 0.5408641,
+      "WallSeconds": 0.5508719,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 7,
+      "Warmup": false,
+      "Seconds": 0.0051282,
+      "WallSeconds": 0.0153096,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 7,
+      "Warmup": false,
+      "Seconds": 0.0031855,
+      "WallSeconds": 0.012873,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 7,
+      "Warmup": false,
+      "Seconds": 0.0006117,
+      "WallSeconds": 0.0081456,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 8,
+      "Warmup": false,
+      "Seconds": 0.5579402,
+      "WallSeconds": 0.5678852,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 8,
+      "Warmup": false,
+      "Seconds": 0.0048552,
+      "WallSeconds": 0.0230649,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 8,
+      "Warmup": false,
+      "Seconds": 0.0032636,
+      "WallSeconds": 0.0127054,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 8,
+      "Warmup": false,
+      "Seconds": 0.0005398,
+      "WallSeconds": 0.0080939,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 9,
+      "Warmup": false,
+      "Seconds": 0.536107,
+      "WallSeconds": 0.5458448,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 9,
+      "Warmup": false,
+      "Seconds": 0.0050683,
+      "WallSeconds": 0.0147037,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 9,
+      "Warmup": false,
+      "Seconds": 0.0031521,
+      "WallSeconds": 0.0130531,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 9,
+      "Warmup": false,
+      "Seconds": 0.0005324,
+      "WallSeconds": 0.0081431,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 10,
+      "Warmup": false,
+      "Seconds": 0.5555117,
+      "WallSeconds": 0.5653055,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 10,
+      "Warmup": false,
+      "Seconds": 0.0050764,
+      "WallSeconds": 0.0148491,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 10,
+      "Warmup": false,
+      "Seconds": 0.0032144,
+      "WallSeconds": 0.0152616,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 10,
+      "Warmup": false,
+      "Seconds": 0.0005974,
+      "WallSeconds": 0.0081764,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 11,
+      "Warmup": false,
+      "Seconds": 0.5269461,
+      "WallSeconds": 0.5364321,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 11,
+      "Warmup": false,
+      "Seconds": 0.0052833,
+      "WallSeconds": 0.0154417,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 11,
+      "Warmup": false,
+      "Seconds": 0.0032939,
+      "WallSeconds": 0.0130304,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 11,
+      "Warmup": false,
+      "Seconds": 0.0005644,
+      "WallSeconds": 0.0078227,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 12,
+      "Warmup": false,
+      "Seconds": 0.5524452,
+      "WallSeconds": 0.5623829,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 12,
+      "Warmup": false,
+      "Seconds": 0.0048519,
+      "WallSeconds": 0.0150478,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 12,
+      "Warmup": false,
+      "Seconds": 0.0031293,
+      "WallSeconds": 0.012893,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 12,
+      "Warmup": false,
+      "Seconds": 0.0005518,
+      "WallSeconds": 0.0077013,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 13,
+      "Warmup": false,
+      "Seconds": 0.5191812,
+      "WallSeconds": 0.52929,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 13,
+      "Warmup": false,
+      "Seconds": 0.005341,
+      "WallSeconds": 0.0149957,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 13,
+      "Warmup": false,
+      "Seconds": 0.003371,
+      "WallSeconds": 0.0141446,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 13,
+      "Warmup": false,
+      "Seconds": 0.0005423,
+      "WallSeconds": 0.0088286,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 14,
+      "Warmup": false,
+      "Seconds": 0.5518873,
+      "WallSeconds": 0.5620232,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 14,
+      "Warmup": false,
+      "Seconds": 0.0053866,
+      "WallSeconds": 0.0152988,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 14,
+      "Warmup": false,
+      "Seconds": 0.0031277,
+      "WallSeconds": 0.0123119,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 14,
+      "Warmup": false,
+      "Seconds": 0.0005291,
+      "WallSeconds": 0.007889,
+      "Allocations": 17
+    },
+    {
+      "Name": "baseline",
+      "Round": 15,
+      "Warmup": false,
+      "Seconds": 0.5518014,
+      "WallSeconds": 0.5615738,
+      "Allocations": 120004
+    },
+    {
+      "Name": "previous",
+      "Round": 15,
+      "Warmup": false,
+      "Seconds": 0.0052113,
+      "WallSeconds": 0.0158413,
+      "Allocations": 90020
+    },
+    {
+      "Name": "current",
+      "Round": 15,
+      "Warmup": false,
+      "Seconds": 0.0033091,
+      "WallSeconds": 0.0131761,
+      "Allocations": 30020
+    },
+    {
+      "Name": "cpp",
+      "Round": 15,
+      "Warmup": false,
+      "Seconds": 0.0005824,
+      "WallSeconds": 0.0086936,
+      "Allocations": 17
+    }
+  ],
+  "Summary": [
+    {
+      "Name": "baseline",
+      "Median": 0.5437568,
+      "Min": 0.5191812,
+      "Max": 0.5579402
+    },
+    {
+      "Name": "previous",
+      "Median": 0.0050948,
+      "Min": 0.0048519,
+      "Max": 0.0054444
+    },
+    {
+      "Name": "current",
+      "Median": 0.0032211,
+      "Min": 0.0031156,
+      "Max": 0.003371
+    },
+    {
+      "Name": "cpp",
+      "Median": 0.0005518,
+      "Min": 0.0005215,
+      "Max": 0.0006117
+    }
+  ]
+}

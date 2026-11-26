@@ -1,0 +1,162 @@
+using cpp::header("vm_native_task_inputs_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_task_inputs::Point)] component Point { public x: i32; }
+object Item {
+    value: i32;
+    public OnConstruct(value: i32) { self.value = value; }
+    public fn Read() -> i32 { return self.value; }
+}
+
+[Native, CppName(vm_task_inputs::Forward), Instantiate(i32), Instantiate(string), Instantiate(text),
+ Instantiate(i32[]), Instantiate(void), Instantiate(Point), Instantiate(Item), Instantiate(any),
+ Instantiate(coroutine<i32>)]
+fn Forward<T>(task: coroutine<T>) -> coroutine<T>;
+[Native, CppName(vm_task_inputs::RelayTask)]
+fn RelayTask(callback: fn(coroutine<i32>) -> coroutine<i32>, task: coroutine<i32>) -> coroutine<i32>;
+[Native, CppName(vm_task_inputs::EchoTasks)]
+fn EchoTasks(tasks: coroutine<i32>[]) -> coroutine<i32>[];
+[Native, CppName(vm_task_inputs::Print)] fn Print(message: string);
+[Native, CppName(vm_task_inputs::BlockForward)] fn BlockForward(task: coroutine<i32>) -> i32;
+[Native, CppName(vm_task_inputs::Keep)] fn Keep(task: coroutine<i32>);
+[Native, CppName(vm_task_inputs::ReturnKept)] fn ReturnKept() -> coroutine<i32>;
+[Native, CppName(vm_task_inputs::KeptCancelled)] fn KeptCancelled() -> bool;
+[Native, CppName(vm_task_inputs::DropKept)] fn DropKept();
+
+// Same runtime entry points used by std::async, without importing unrelated
+// user-edited std files into this focused interop fixture.
+[Native, CppName(wio::runtime::AsyncSleep)] fn Sleep(milliseconds: u64) -> coroutine<void>;
+[Native, CppName(wio::runtime::AsyncReady), Instantiate(i32)] fn Ready<T>(task: coroutine<T>) -> bool;
+[Native, CppName(wio::runtime::AsyncCancelledStatus), Instantiate(i32)] fn Cancelled<T>(task: coroutine<T>) -> bool;
+[Native, CppName(wio::runtime::AsyncFaulted), Instantiate(i32)] fn Faulted<T>(task: coroutine<T>) -> bool;
+[Native, CppName(wio::runtime::AsyncFailureMessage), Instantiate(i32)] fn Failure<T>(task: coroutine<T>) -> string;
+[Native, CppName(wio::runtime::BlockOn), Instantiate(i32)] fn Block<T>(task: coroutine<T>) -> T;
+[Native, CppName(wio::runtime::StartAsync), Instantiate(i32)] fn Start<T>(task: coroutine<T>) -> coroutine<T>;
+[Native, CppName(wio::runtime::CancelAsync), Instantiate(i32)] fn Cancel<T>(task: coroutine<T>);
+[Native, CppName(wio::runtime::WhenAll), Instantiate(i32)] fn All<T>(tasks: coroutine<T>[]) -> coroutine<T[]>;
+[Native, CppName(wio::runtime::WhenAny), Instantiate(i32)] fn Any<T>(tasks: coroutine<T>[]) -> coroutine<usize>;
+[Native, CppName(wio::runtime::Race), Instantiate(i32)] fn Race<T>(tasks: coroutine<T>[]) -> coroutine<T>;
+[Native, CppName(wio::runtime::WithTimeout), Instantiate(i32)] fn Timeout<T>(task: coroutine<T>, milliseconds: u64) -> coroutine<T>;
+[Native, CppName(wio::runtime::RunAsync), Instantiate(i32)]
+fn Run<T>([attribute::NativeCallback("retained", "any")] action: fn() -> T) -> coroutine<T>;
+[Native, CppName(wio::runtime::RunBlockingAsync), Instantiate(i32)]
+fn RunBlocking<T>([attribute::NativeCallback("retained", "any")] action: fn() -> T) -> coroutine<T>;
+[Native, CppName(wio::runtime::AsyncWaitFor), Instantiate(i32)]
+fn WaitFor<T>(task: coroutine<T>, milliseconds: u64) -> bool;
+[Native, CppName(wio::runtime::CancelAfter), Instantiate(i32)]
+fn CancelAfter<T>(task: coroutine<T>, milliseconds: u64) -> coroutine<void>;
+[Native, CppName(wio::runtime::DetachAsync), Instantiate(i32)] fn Detach<T>(task: coroutine<T>);
+[Native, CppName(wio::runtime::WhenAll)] fn AllVoid(tasks: coroutine<void>[]) -> coroutine<void>;
+[Native, CppName(wio::runtime::WithTimeout)] fn TimeoutVoid(task: coroutine<void>, milliseconds: u64) -> coroutine<void>;
+[Native, CppName(wio::runtime::BlockOn)] fn BlockVoid(task: coroutine<void>);
+[Native, CppName(wio::runtime::AsyncScopeCreate)] fn ScopeCreate() -> opaque;
+[Native, CppName(wio::runtime::AsyncScopeDestroy)] fn ScopeDestroy(scope: opaque);
+[Native, CppName(wio::runtime::AsyncScopeSpawn), Instantiate(i32)]
+fn ScopeSpawn<T>(scope: opaque, task: coroutine<T>) -> coroutine<T>;
+[Native, CppName(wio::runtime::AsyncScopeJoin)] fn ScopeJoin(scope: opaque) -> coroutine<void>;
+[Native, CppName(wio::runtime::AsyncScopeCancel)] fn ScopeCancel(scope: opaque);
+[Native, CppName(wio::runtime::AsyncScopeCount)] fn ScopeCount(scope: opaque) -> u64;
+[Native, CppName(wio::runtime::AsyncScopeClosed)] fn ScopeClosed(scope: opaque) -> bool;
+
+async fn Number(value: i32, delay: u64) -> i32 {
+    await Sleep(delay);
+    return value;
+}
+fn WorkerValue() -> i32 { return 41; }
+async fn Worker() -> i32 {
+    async scope {
+        let task = spawn worker WorkerValue();
+        return await task;
+    }
+}
+async fn Words() -> string { await Sleep(1); return "task-input"; }
+async fn Unicode() -> text { await Sleep(1); return u"Wio 🌍"; }
+async fn ArrayValue() -> i32[] { await Sleep(1); return [13, 17]; }
+async fn Nothing() { await Sleep(1); }
+async fn PodValue() -> Point {
+    await Sleep(1);
+    mut point: Point;
+    point.x = 107;
+    return point;
+}
+async fn ObjectValue() -> Item { await Sleep(1); return Item(109); }
+async fn AnyValue() -> any { await Sleep(1); return [113, 127]; }
+async fn Nested() -> coroutine<i32> { await Sleep(1); return Number(131, 1); }
+async fn Broken() -> i32 {
+    let empty: i32[] = [];
+    return empty[0];
+}
+
+fn HostKeepPending() -> coroutine<i32> {
+    let task = Number(101, 60000);
+    Keep(task);
+    return task;
+}
+fn HostEcho(task: coroutine<i32>) -> coroutine<i32> { return Start<i32>(task); }
+fn HostReturnKept() -> coroutine<i32> { return ReturnKept(); }
+fn HostKeptCancelled() -> bool { return KeptCancelled(); }
+fn HostDropKept() { DropKept(); }
+
+async fn Entry() -> i32 {
+    if (await Forward<i32>(Number(23, 1)) != 23) { return 1; }
+    if (await Forward<string>(Words()) != "task-input") { return 2; }
+    if (await Forward<text>(Unicode()) != u"Wio 🌍") { return 3; }
+    if ((await Forward<i32[]>(ArrayValue()))[1] != 17) { return 4; }
+    await Forward<void>(Nothing());
+    if ((await Forward<Point>(PodValue())).x != 107) { return 25; }
+    if ((await Forward<Item>(ObjectValue())).Read() != 109) { return 26; }
+    let boxed = (await Forward<any>(AnyValue())) fit i32[];
+    if (boxed[1] != 127) { return 27; }
+    let nested = await Forward<coroutine<i32>>(Nested());
+    if (await nested != 131) { return 28; }
+    if (await RelayTask((task: coroutine<i32>) => task, Number(137, 1)) != 137) { return 29; }
+
+    let tasks: coroutine<i32>[] = [Number(5, 1), Number(7, 2)];
+    let results = await All<i32>(tasks);
+    if (results[0] != 5 or results[1] != 7) { return 5; }
+    let echoed = EchoTasks([Number(11, 1), Number(19, 2)]);
+    if (await echoed[0] != 11 or await echoed[1] != 19) { return 6; }
+    if (await Any<i32>([Number(29, 0), Number(31, 2)]) != 0usize) { return 7; }
+    if (await Race<i32>([Number(37, 0), Number(43, 10)]) != 37) { return 8; }
+    if (await Timeout<i32>(Number(47, 1), 500) != 47) { return 9; }
+    if (Block<i32>(Worker()) != 41) { return 10; }
+    if (BlockForward(Worker()) != 41) { return 15; }
+    let complete = Number(53, 0);
+    Start<i32>(complete);
+    if (await complete != 53 or not Ready<i32>(complete)) { return 11; }
+    let cancelled = Number(59, 1000);
+    Cancel<i32>(cancelled);
+    if (not Cancelled<i32>(cancelled)) { return 12; }
+    if (Faulted<i32>(complete) or Failure<i32>(complete) != "") { return 13; }
+    if (await Run<i32>(() => 61) != 61) { return 14; }
+    let broken = Broken();
+    if (not Faulted<i32>(broken) or Failure<i32>(broken) == "") { return 16; }
+    let slow = Number(67, 1000);
+    let timed = Timeout<i32>(slow, 1);
+    await Sleep(25);
+    if (not Faulted<i32>(timed) or not Cancelled<i32>(slow)) { return 17; }
+    if (not WaitFor<i32>(Worker(), 500)) { return 18; }
+    let delayed = Number(71, 1000);
+    await CancelAfter<i32>(delayed, 1);
+    if (not Cancelled<i32>(delayed)) { return 19; }
+    let detached = Number(79, 1);
+    Detach<i32>(detached);
+    if (await detached != 79) { return 20; }
+    await AllVoid([Nothing(), Nothing()]);
+    await TimeoutVoid(Nothing(), 500);
+    BlockVoid(Sleep(1));
+    if (await RunBlocking<i32>(() => 83) != 83) { return 21; }
+    let scope = ScopeCreate();
+    let grouped = ScopeSpawn<i32>(scope, Number(89, 1));
+    if (ScopeCount(scope) != 1u64) { return 22; }
+    await ScopeJoin(scope);
+    if (await grouped != 89 or not ScopeClosed(scope)) { return 23; }
+    ScopeDestroy(scope);
+    let cancelledScope = ScopeCreate();
+    let cancelledChild = ScopeSpawn<i32>(cancelledScope, Number(97, 1000));
+    ScopeCancel(cancelledScope);
+    if (not Cancelled<i32>(cancelledChild)) { return 24; }
+    ScopeDestroy(cancelledScope);
+    Print("native-task-inputs-ok");
+    return 0;
+}

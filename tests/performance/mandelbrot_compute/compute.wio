@@ -1,0 +1,51 @@
+using cpp::header("benchmark_clock.h");
+
+[native, CppName(mandelbrot_audit::Now)]
+fn Now() -> i64;
+
+[native, CppName(mandelbrot_audit::Report)]
+fn Report(start: i64, end: i64, iterations: u64, weighted: u64, interior: u64) -> i32;
+
+component Totals {
+    public iterations: u64;
+    public weighted: u64;
+    public interior: u64;
+}
+
+fn Compute(width: i32, height: i32, maxIterations: i32) -> Totals {
+    mut iterations = 0u64;
+    mut weighted = 0u64;
+    mut interior = 0u64;
+    for mut py in 0..<height {
+        for mut px in 0..<width {
+            let x0 = ((px fit f64) / (width fit f64)) * 3.5f64 - 2.5f64;
+            let y0 = ((py fit f64) / (height fit f64)) * 3.0f64 - 1.5f64;
+            mut x = 0.0f64;
+            mut y = 0.0f64;
+            mut iteration = 0;
+            while (x * x + y * y <= 4.0f64 and iteration < maxIterations) {
+                let xtemp = x * x - y * y + x0;
+                y = 2.0f64 * x * y + y0;
+                x = xtemp;
+                iteration += 1;
+            }
+            iterations += iteration fit u64;
+            weighted += (iteration fit u64) * ((py fit u64) * (width fit u64) + (px fit u64) + 1u64);
+            if (iteration == maxIterations) {
+                interior += 1u64;
+            }
+        }
+    }
+    mut totals = Totals();
+    totals.iterations = iterations;
+    totals.weighted = weighted;
+    totals.interior = interior;
+    return totals;
+}
+
+fn Entry() -> i32 {
+    let start = Now();
+    let totals = Compute(800, 800, 100);
+    let end = Now();
+    return Report(start, end, totals.iterations, totals.weighted, totals.interior);
+}

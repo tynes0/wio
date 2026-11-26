@@ -1,0 +1,143 @@
+using cpp::header("vm_callback_borrow_fixture.h");
+use std::attribute as attribute;
+
+[Native, CppName(vm_callback_borrow::Packet)]
+component Packet
+{
+    public value: i32;
+    public weight: f64;
+    public tag: u8;
+}
+
+fn Modify(readonly: view i32, writable: ref i32) -> i32
+{
+    writable = readonly + 5;
+    return readonly;
+}
+fn ModifyReverse(writable: ref i32, readonly: view i32) -> i32
+{
+    writable = readonly + 5;
+    return readonly;
+}
+fn ModifyPod(readonly: view Packet, writable: ref Packet) -> i32
+{
+    writable.value = readonly.value + 5;
+    return readonly.value;
+}
+fn FailAfterWrite(readonly: view i32, writable: ref i32) -> i32
+{
+    writable = 23;
+    let values: i32[] = [1];
+    return values[5];
+}
+fn ModifyMixed(writable: ref i32, readonly: view u32) -> i32
+{
+    writable = 23;
+    return (deref readonly) fit i32;
+}
+fn EscapeBorrow(readonly: view i32, writable: ref i32) -> i32
+{
+    Remember((a: view i32, b: ref i32) =>
+    {
+        return writable + 5;
+    });
+    return 0;
+}
+object Processor
+{
+    public fn Apply(callback: fn(view i32, ref i32) -> i32) -> i32
+    {
+        mut value: i32 = 7;
+        let answer = callback(ref value, ref value);
+        return answer + value;
+    }
+    public fn Forwarded(callback: fn(view i32, ref i32) -> i32) -> i32
+    {
+        return Scalar(callback);
+    }
+    public fn ApplyPod(callback: fn(view Packet, ref Packet) -> i32) -> i32
+    {
+        mut value: Packet;
+        let answer = callback(ref value, ref value);
+        return answer + value.value;
+    }
+}
+[Native, CppName(vm_callback_borrow::Scalar)]
+fn Scalar(callback: fn(view i32, ref i32) -> i32) -> i32;
+[Native, CppName(vm_callback_borrow::CodecProbe)]
+fn CodecProbe(callback: fn(view i32, ref i32) -> i32) -> i32;
+[Native, CppName(vm_callback_borrow::Reverse)]
+fn Reverse(callback: fn(ref i32, view i32) -> i32) -> i32;
+[Native, CppName(vm_callback_borrow::Pod)]
+fn Pod(callback: fn(view Packet, ref Packet) -> i32) -> i32;
+[Native, CppName(vm_callback_borrow::Remember)]
+fn Remember([attribute::NativeCallback("retained", "caller")] callback: fn(view i32, ref i32) -> i32);
+[Native, CppName(vm_callback_borrow::Capture)]
+fn Capture([attribute::NativeCallback("retained", "caller")] callback: fn(view i32, ref i32) -> i32);
+[Native, CppName(vm_callback_borrow::Capture)]
+fn CaptureMixed([attribute::NativeCallback("retained", "caller")] callback: fn(ref i32, view u32) -> i32);
+[Native, CppName(vm_callback_borrow::Run)]
+fn Run() -> i32;
+[Native, CppName(vm_callback_borrow::Clear)]
+fn Clear();
+[Native, CppName(vm_callback_borrow::Hosted)]
+fn Hosted(processor: Processor) -> i32;
+[Native, CppName(vm_callback_borrow::Print)]
+fn Print();
+
+fn HostCapture()
+{
+    Capture(Modify);
+}
+fn HostFailure()
+{
+    Capture(FailAfterWrite);
+}
+fn HostMixed()
+{
+    CaptureMixed(ModifyMixed);
+}
+fn HostEscape()
+{
+    Capture(EscapeBorrow);
+}
+fn SafePoint() -> i32
+{
+    return 7;
+}
+fn Entry() -> i32
+{
+    mut round: i32 = 0;
+    while (round < 30)
+    {
+        if (Scalar(Modify) != 0)
+        {
+            return 1;
+        }
+        if (Reverse(ModifyReverse) != 0)
+        {
+            return 2;
+        }
+        if (Pod(ModifyPod) != 0)
+        {
+            return 3;
+        }
+        Remember(Modify);
+        if (Run() != 0 or Run() != 0)
+        {
+            return 4;
+        }
+        Clear();
+        if (Hosted(Processor()) != 0)
+        {
+            return 5;
+        }
+        round += 1;
+    }
+    if (CodecProbe(Modify) != 0)
+    {
+        return 6;
+    }
+    Print();
+    return 0;
+}

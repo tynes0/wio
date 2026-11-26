@@ -1,0 +1,5 @@
+fn Entry() -> i32 {
+    let callback: (fn(i32) -> i32)? = null;
+    let erased: any = callback;
+    return 0;
+}

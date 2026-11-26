@@ -1,0 +1,414 @@
+using cpp::header("vm_projected_object_borrow_fixture.h");
+use std::attribute as attribute;
+
+interface IRead
+{
+    fn Read() -> i32;
+}
+
+[From(IRead)]
+object Item
+{
+    value: i32;
+    public OnConstruct(value: i32)
+    {
+        self.value = value;
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Read() -> i32
+    {
+        return self.value;
+    }
+    public fn Set(value: i32)
+    {
+        self.value = value;
+    }
+}
+
+object Holder<T, const Tag: usize = 7>
+{
+    value: T;
+    public OnConstruct(value: T)
+    {
+        self.value = value;
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+    }
+    public fn Read() -> T
+    {
+        return self.value;
+    }
+}
+
+object FailingItem
+{
+    public OnConstruct()
+    {
+        Constructed();
+    }
+    OnDestruct()
+    {
+        Destroyed();
+        CleanupFailure();
+    }
+}
+
+[Native, CppName(vm_projected_object_borrow::Constructed)]
+fn Constructed();
+[Native, CppName(vm_projected_object_borrow::Destroyed)]
+fn Destroyed();
+[Native, CppName(vm_projected_object_borrow::Balanced)]
+fn Balanced() -> bool;
+[Native, CppName(vm_projected_object_borrow::CleanupFailure)]
+fn CleanupFailure();
+[Native, CppName(vm_projected_object_borrow::Print)]
+fn Print();
+[Native, CppName(vm_projected_object_borrow::Array)]
+fn Array(values: ref Item[], value: ref Item, next: Item) -> ref Item;
+[Native, CppName(vm_projected_object_borrow::View)]
+fn View(value: view Item, values: view Item[]) -> view Item;
+[Native, CppName(vm_projected_object_borrow::Repeat)]
+fn Repeat(values: view Item[], first: view Item, second: ref Item) -> ref Item;
+[Native, CppName(vm_projected_object_borrow::Distinct)]
+fn Distinct(values: view Item[], first: view Item, second: ref Item, next: Item) -> ref Item;
+[Native, CppName(vm_projected_object_borrow::Touch)]
+fn Touch(value: ref Item);
+[Native, CppName(vm_projected_object_borrow::Array), Instantiate(Item?), Instantiate(Holder<i32, 9>),
+    Instantiate(Holder<string, 5>), Instantiate(Holder<i32, 9>?), Instantiate(IRead), Instantiate(IRead?), Instantiate(FailingItem)]
+fn GenericArray<T>(values: ref T[], value: ref T, next: T) -> ref T;
+[Native, CppName(vm_projected_object_borrow::View), Instantiate(Item?), Instantiate(Holder<i32, 9>?), Instantiate(IRead), Instantiate(IRead?)]
+fn GenericView<T>(value: view T, values: view T[]) -> view T;
+[Native, CppName(vm_projected_object_borrow::Dictionary), Instantiate(Item?), Instantiate(Holder<i32, 9>?), Instantiate(IRead?), Instantiate(FailingItem)]
+fn Dictionary<T>(values: ref Dict<string, T>, value: ref T, next: T) -> ref T;
+[Native, CppName(vm_projected_object_borrow::Mixed), Instantiate(Holder<string, 5>?), Instantiate(IRead?)]
+fn Mixed<T>(values: ref Dict<string, T[]>, value: ref T, next: T) -> ref T;
+[Native, CppName(vm_projected_object_borrow::Shrink)]
+fn Shrink(values: ref Item[], value: ref Item) -> ref Item;
+[Native, CppName(vm_projected_object_borrow::Grow)]
+fn Grow(values: ref Item[], value: ref Item) -> ref Item;
+[Native, CppName(vm_projected_object_borrow::Foreign)]
+fn Foreign(values: ref Item[], value: ref Item) -> ref Item;
+[Native, CppName(vm_projected_object_borrow::Erase)]
+fn Erase(values: ref Dict<string, Item>, value: ref Item) -> ref Item;
+[Native, CppName(vm_projected_object_borrow::Fail)]
+fn Fail(values: ref Item[], value: ref Item, next: Item) -> ref Item;
+[Native, CppName(vm_projected_object_borrow::MixedContract)]
+fn MixedContract(values: ref Item[], required: ref Item, optional: ref Item?, nullable: ref Item?[]) -> ref Item;
+
+fn Forward(values: ref Item[]) -> ref Item
+{
+    return Array(values, ref values[0usize], values[0usize]);
+}
+
+fn Probe() -> i32
+{
+    mut values: Item[] = [Item(7)];
+    return Array(ref values, ref values[0usize], values[0usize]).Read();
+}
+
+fn AliasProbe() -> i32
+{
+    mut values: Item[] = [Item(7)];
+    return Repeat(ref values, ref values[0usize], ref values[0usize]).Read();
+}
+
+fn MixedContractProbe() -> i32
+{
+    mut required: Item[] = [Item(7)];
+    mut optional: Item?[] = [null];
+    return MixedContract(ref required, ref required[0usize], ref optional[0usize], ref optional).Read();
+}
+
+fn LifetimeProbe(action: i32) -> i32
+{
+    mut values: Item[] = [Item(7), Item(9)];
+    let held: ref Item = Forward(ref values);
+    if (action == 0)
+    {
+        values.Push(values[1usize]);
+    }
+    if (action == 1)
+    {
+        values = [values[0usize]];
+    }
+    if (action == 2)
+    {
+        return Shrink(ref values, held).Read();
+    }
+    if (action == 3)
+    {
+        return Grow(ref values, held).Read();
+    }
+    if (action == 4)
+    {
+        return Foreign(ref values, held).Read();
+    }
+    if (action == 5)
+    {
+        return Fail(ref values, held, Item(11)).Read();
+    }
+    return held.Read();
+}
+
+fn RemovedProbe() -> i32
+{
+    mut values: Dict<string, Item> = {"kept": Item(7), "other": Item(9)};
+    return Erase(ref values, ref values["kept"]).Read();
+}
+
+fn ClearedProbe() -> i32
+{
+    mut values: Item?[] = [null];
+    let held: view Item? = GenericView<Item?>(ref values[0usize], ref values);
+    values.Clear();
+    if (deref held == null)
+    {
+        return 1;
+    }
+    return 0;
+}
+
+fn CleanupProbe(action: i32) -> i32
+{
+    if (action == 0)
+    {
+        mut values: FailingItem[] = [FailingItem()];
+        GenericArray<FailingItem>(ref values, ref values[0usize], FailingItem());
+    }
+    else
+    {
+        mut values: Dict<string, FailingItem> = {"kept": FailingItem()};
+        Dictionary<FailingItem>(ref values, ref values["kept"], FailingItem());
+    }
+    return 0;
+}
+
+fn InterfaceExpiredProbe() -> i32
+{
+    let first: IRead = Item(7) fit IRead;
+    let next: IRead = Item(9) fit IRead;
+    mut values: IRead[] = [first];
+    let held: ref IRead = GenericArray<IRead>(ref values, ref values[0usize], next);
+    values.Clear();
+    return held.Read();
+}
+
+fn OwnedEscape() -> Item
+{
+    mut values: Item[] = [Item(73)];
+    return deref Array(ref values, ref values[0usize], values[0usize]);
+}
+
+fn SafePoint() -> i32
+{
+    return 0;
+}
+fn LifecycleBalanced() -> bool
+{
+    return Balanced();
+}
+
+fn Entry() -> i32
+{
+    mut round = 0;
+    while (round < 30)
+    {
+        {
+            let original = Item(7);
+            let next = Item(11);
+            mut values: Item[] = [original, original];
+            let second: ref Item = Distinct(ref values, ref values[0usize], ref values[1usize], next);
+            if (values[0usize] != original or deref second != next)
+            {
+                return 1;
+            }
+            let held: ref Item = Array(ref values, ref values[0usize], next);
+            let observed: view Item = View(ref values[0usize], ref values);
+            Touch(held);
+            if (held.Read() != 23 or observed.Read() != 23 or next.Read() != 23 or original.Read() != 7)
+            {
+                return 2;
+            }
+            let repeated: ref Item = Repeat(ref values, ref values[0usize], ref values[0usize]);
+            deref repeated = original;
+            if (held.Read() != 7 or observed.Read() != 7 or second.Read() != 23)
+            {
+                return 3;
+            }
+        }
+        {
+            let next: Item? = Item(29);
+            mut values: Item?[] = [null];
+            let held: ref Item? = GenericArray<Item?>(ref values, ref values[0usize], next);
+            let observed: view Item? = GenericView<Item?>(ref values[0usize], ref values);
+            let seen = deref observed;
+            if (seen == null)
+            {
+                return 4;
+            }
+            if (deref held != next or seen.Read() != 29)
+            {
+                return 4;
+            }
+            let absent: Item? = null;
+            let cleared: ref Item? = GenericArray<Item?>(ref values, held, absent);
+            if (deref held != null or deref observed != null or deref cleared != null)
+            {
+                return 5;
+            }
+            deref held = next;
+            let restored = deref observed;
+            if (restored == null)
+            {
+                return 6;
+            }
+            if (restored.Read() != 29)
+            {
+                return 6;
+            }
+        }
+        {
+            let first = Holder<i32, 9>(31);
+            let next = Holder<i32, 9>(37);
+            mut values: Holder<i32, 9>[] = [first];
+            let held: ref Holder<i32, 9> = GenericArray<Holder<i32, 9>>(ref values, ref values[0usize], next);
+            if (held.Read() != 37 or first.Read() != 31)
+            {
+                return 7;
+            }
+            mut optional: Dict<string, Holder<i32, 9>?> = {"kept": null};
+            let present: Holder<i32, 9>? = next;
+            mut nullable: Holder<i32, 9>?[] = [null];
+            let nullableCell: ref Holder<i32, 9>? = GenericArray<Holder<i32, 9>?>(ref nullable, ref nullable[0usize], present);
+            let nullableView: view Holder<i32, 9>? = GenericView<Holder<i32, 9>?>(ref nullable[0usize], ref nullable);
+            let seen = deref nullableView;
+            if (seen == null)
+            {
+                return 17;
+            }
+            if (seen.Read() != 37)
+            {
+                return 17;
+            }
+            deref nullableCell = null;
+            if (deref nullableView != null)
+            {
+                return 17;
+            }
+            let cell: ref Holder<i32, 9>? = Dictionary<Holder<i32, 9>?>(ref optional, ref optional["kept"], present);
+            let mapped = deref cell;
+            if (mapped == null)
+            {
+                return 8;
+            }
+            if (mapped.Read() != 37)
+            {
+                return 8;
+            }
+            optional.Set("kept", null);
+            if (deref cell != null)
+            {
+                return 9;
+            }
+        }
+        {
+            let first = Holder<string, 5>("old");
+            let next = Holder<string, 5>("new\0value");
+            mut values: Holder<string, 5>[] = [first];
+            let held: ref Holder<string, 5> = GenericArray<Holder<string, 5>>(ref values, ref values[0usize], next);
+            if (held.Read() != "new\0value")
+            {
+                return 10;
+            }
+            mut rows: Dict<string, Holder<string, 5>?[]> = {"kept": [null]};
+            let present: Holder<string, 5>? = next;
+            let mixed: ref Holder<string, 5>? = Mixed<Holder<string, 5>?>(ref rows, ref rows["kept"][0usize], present);
+            let mapped = deref mixed;
+            if (mapped == null)
+            {
+                return 11;
+            }
+            if (mapped.Read() != "new\0value")
+            {
+                return 11;
+            }
+        }
+        {
+            let first: IRead = Item(41) fit IRead;
+            let next: IRead = Item(43) fit IRead;
+            mut values: IRead[] = [first];
+            let held: ref IRead = GenericArray<IRead>(ref values, ref values[0usize], next);
+            let observed: view IRead = GenericView<IRead>(ref values[0usize], ref values);
+            if (held.Read() != 43 or observed.Read() != 43 or first.Read() != 41)
+            {
+                return 12;
+            }
+            let present: IRead? = next;
+            mut nullable: IRead?[] = [null];
+            let nullableCell: ref IRead? = GenericArray<IRead?>(ref nullable, ref nullable[0usize], present);
+            let nullableView: view IRead? = GenericView<IRead?>(ref nullable[0usize], ref nullable);
+            let seen = deref nullableView;
+            if (seen == null)
+            {
+                return 18;
+            }
+            if (seen.Read() != 43)
+            {
+                return 18;
+            }
+            deref nullableCell = null;
+            if (deref nullableView != null)
+            {
+                return 18;
+            }
+            mut mappedValues: Dict<string, IRead?> = {"kept": null};
+            let mappedCell: ref IRead? = Dictionary<IRead?>(ref mappedValues, ref mappedValues["kept"], present);
+            let dictionaryValue = deref mappedCell;
+            if (dictionaryValue == null)
+            {
+                return 19;
+            }
+            if (dictionaryValue.Read() != 43)
+            {
+                return 19;
+            }
+            mut rows: Dict<string, IRead?[]> = {"kept": [null]};
+            let optional: ref IRead? = Mixed<IRead?>(ref rows, ref rows["kept"][0usize], present);
+            let mapped = deref optional;
+            if (mapped == null)
+            {
+                return 13;
+            }
+            if (mapped.Read() != 43)
+            {
+                return 13;
+            }
+            deref optional = null;
+            if (deref optional != null)
+            {
+                return 14;
+            }
+        }
+        {
+            let escaped = OwnedEscape();
+            if (escaped.Read() != 73)
+            {
+                return 15;
+            }
+        }
+        if (!Balanced())
+        {
+            return 16;
+        }
+        round += 1;
+    }
+    Print();
+    return 0;
+}

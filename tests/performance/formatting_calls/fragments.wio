@@ -1,0 +1,59 @@
+using cpp::header("fragment_probe.h");
+
+[native, cpp::name(fragment_probe::SetMode)]
+fn SetMode(mode: i32);
+
+[native, cpp::name(fragment_probe::Reset)]
+fn Reset();
+
+[native, cpp::name(fragment_probe::Calls)]
+fn Calls() -> i32;
+
+object Switch
+{
+    private mode: i32;
+
+    public fn OnConstruct(mode: i32)
+    {
+        self.mode = mode;
+    }
+
+    public fn ToString() -> string
+    {
+        SetMode(self.mode);
+        return "hook";
+    }
+}
+
+fn Entry(args: string[]) -> i32
+{
+    for (index in 0..<32)
+    {
+        // A VM host and its native bridge may use different C++ runtimes.
+        // Locale-facet mutation is a native-generated-code contract here.
+        if (args.Count() == 1usize)
+        {
+            SetMode(0);
+            let first = $"${1234567i64}|${Switch(1)}|${1234567i64}|${true}";
+            SetMode(0);
+            if (first != "1234567|hook|1_234_567|true") return 1;
+            SetMode(1);
+            let second = $"${1234567i64}|${Switch(0)}|${1234567i64}|${false}";
+            SetMode(0);
+            if (second != "1_234_567|hook|1234567|false") return 2;
+            Reset();
+            SetMode(2);
+            let third = $"${7i64}|${Switch(2)}|${8i64}";
+            SetMode(0);
+            if (third != "N1:7|hook|N2:8" or Calls() != 2) return 3;
+        }
+
+        let bytes = $"prefix\0${index}|${Switch(0)}|${false}|${255u8}|${'\0'}";
+        let expected = $"prefix\0${index}|hook|false|255|\0";
+        if (bytes != expected) return 4;
+        let unicode = u$"🌍${index}|${Switch(0)}|${true}日本";
+        if (unicode != u$"🌍${index}|hook|true日本") return 5;
+    }
+
+    return 0;
+}

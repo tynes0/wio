@@ -1,0 +1,105 @@
+realm pac {
+    realm rl {
+        using cpp::header("pacman_raylib.h");
+
+        [native, cpp::name(Color)]
+        component Color {
+            r: u8;
+            g: u8;
+            b: u8;
+            a: u8;
+        }
+
+        [native, cpp::name(Vector2)]
+        component Vec2 {
+            x: f32;
+            y: f32;
+        }
+
+        [native, cpp::name(Rectangle)]
+        component Rect {
+            x: f32;
+            y: f32;
+            width: f32;
+            height: f32;
+        }
+
+        [native, cpp::name(pacman_raylib::Open)]
+        fn Open(width: i32, height: i32, title: string);
+
+        [native, cpp::name(pacman_raylib::Close)]
+        fn Close();
+
+        [native, cpp::name(WindowShouldClose)]
+        fn ShouldClose() -> bool;
+
+        [native, cpp::name(GetScreenWidth)]
+        fn Width() -> i32;
+
+        [native, cpp::name(GetScreenHeight)]
+        fn Height() -> i32;
+
+        [native, cpp::name(SetWindowSize)]
+        fn Resize(width: i32, height: i32);
+
+        [native, cpp::name(GetFrameTime)]
+        fn Delta() -> f32;
+
+        [native, cpp::name(GetTime)]
+        fn Time() -> f64;
+
+        [native, cpp::name(IsKeyDown)]
+        fn KeyDown(key: i32) -> bool;
+
+        [native, cpp::name(IsKeyPressed)]
+        fn KeyPressed(key: i32) -> bool;
+
+        [native, cpp::name(BeginDrawing)]
+        fn Begin();
+
+        [native, cpp::name(EndDrawing)]
+        fn End();
+
+        [native, cpp::name(ClearBackground)]
+        fn Clear(color: Color);
+
+        [native, cpp::name(DrawRectangleRec)]
+        fn Box(rect: Rect, color: Color);
+
+        [native, cpp::name(DrawRectangleLinesEx)]
+        fn Outline(rect: Rect, thickness: f32, color: Color);
+
+        [native, cpp::name(DrawCircleV)]
+        fn Circle(center: Vec2, radius: f32, color: Color);
+
+        [native, cpp::name(DrawCircleSector)]
+        fn Sector(center: Vec2, radius: f32, start: f32, end: f32, segments: i32, color: Color);
+
+        [native, cpp::name(DrawLineEx)]
+        fn Line(start: Vec2, end: Vec2, thickness: f32, color: Color);
+
+        [native, cpp::name(DrawTriangle)]
+        fn Triangle(a: Vec2, b: Vec2, c: Vec2, color: Color);
+
+        [native, cpp::name(pacman_raylib::Text)]
+        fn Text(value: string, x: f32, y: f32, size: i32, color: Color);
+
+        [native, cpp::name(pacman_raylib::TextWidth)]
+        fn TextWidth(value: string, size: i32) -> i32;
+
+        [native, cpp::name(pacman_raylib::TextHeight)]
+        fn TextHeight(value: string, size: i32) -> i32;
+
+        [native, cpp::name(pacman_raylib::Screenshot)]
+        fn Screenshot(path: string);
+
+        [native, cpp::name(std::sin)]
+        fn Sin(value: f32) -> f32;
+
+        fn Rgb(r: u8, g: u8, b: u8) -> Color {
+            return Color(r, g, b, 255u8);
+        }
+
+    }
+
+}

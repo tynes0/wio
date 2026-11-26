@@ -1,6 +1,7 @@
 #include "compiler.h"
 #include "entry_args.h"
 #include "std_process.h"
+#include "vm_runner.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -49,7 +50,7 @@ namespace
         if (command.empty() || command.front() == '-')
             return false;
 
-        const std::filesystem::path possibleSource{ std::string(command) };
+        const std::filesystem::path possibleSource = std::filesystem::u8path(command);
         if (possibleSource.extension() == ".wio")
             return false;
 
@@ -62,21 +63,20 @@ namespace
 
     std::filesystem::path selfHostedCliPath(const char* executableArgument)
     {
-        std::filesystem::path executable =
-            wio::runtime::std_process::CurrentExecutablePath();
+        std::filesystem::path executable = std::filesystem::u8path(wio::runtime::std_process::CurrentExecutablePath());
 
         if (executable.empty() && executableArgument != nullptr && executableArgument[0] != '\0')
         {
             const std::string resolved =
                 wio::runtime::std_process::WhichExecutable(executableArgument);
             if (!resolved.empty())
-                executable = resolved;
+                executable = std::filesystem::u8path(resolved);
         }
 
         if (executable.empty() && executableArgument != nullptr && executableArgument[0] != '\0')
         {
             std::error_code ec;
-            executable = std::filesystem::absolute(executableArgument, ec);
+            executable = std::filesystem::absolute(std::filesystem::u8path(executableArgument), ec);
             if (ec)
                 executable.clear();
         }
@@ -106,8 +106,9 @@ namespace
         std::string message;
         wio::runtime::std_process::ProcessError error =
             wio::runtime::std_process::ProcessError::none;
-        if (wio::runtime::std_process::TryRunResult(
-                companion.string(), args, {}, exitCode, error, nativeError, message))
+        const auto encoded = companion.u8string();
+        if (wio::runtime::std_process::TryRunResult(std::string(encoded.begin(), encoded.end()), args, {}, exitCode,
+                                                    error, nativeError, message))
         {
             return exitCode;
         }
@@ -139,6 +140,19 @@ int main(int argc, char* argv[])
     {
         std::cout << WIO_VERSION << '\n';
         return 0;
+    }
+
+    if (argc >= 2 && argv[1] != nullptr && std::string_view(argv[1]) == "--vm-run-bytecode")
+    {
+        try
+        {
+            return wio::app::runVmBytecode(argc, argv);
+        }
+        catch (const std::exception& error)
+        {
+            std::cerr << "VM runner: " << error.what() << '\n';
+            return EXIT_FAILURE;
+        }
     }
 
     if (shouldUseSelfHostedCli(argc, argv))

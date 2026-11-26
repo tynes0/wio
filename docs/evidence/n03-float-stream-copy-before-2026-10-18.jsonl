@@ -1,0 +1,2 @@
+{"kind":"integer","iterations":128,"copyAllocations":256,"currentAllocations":256,"copyRequestedBytes":99200,"currentRequestedBytes":99200,"copyPeakBytes":775,"currentPeakBytes":775,"currentLiveBytes":0}
+{"kind":"floating","iterations":128,"copyAllocations":256,"currentAllocations":256,"copyRequestedBytes":99200,"currentRequestedBytes":99200,"copyPeakBytes":775,"currentPeakBytes":775,"currentLiveBytes":0}
