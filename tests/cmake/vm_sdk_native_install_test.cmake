@@ -41,6 +41,8 @@ endif()
 set(build_args)
 if(WIO_GENERATOR MATCHES "Visual Studio")
     set(build_args -- /m:1 /nodeReuse:false)
+elseif(WIO_GENERATOR MATCHES "Ninja")
+    set(build_args -- -d explain)
 endif()
 function(build_target target)
     execute_process(COMMAND "${CMAKE_COMMAND}" --build "${root}/host" --config "${WIO_CONFIG}" --target "${target}" ${build_args}
