@@ -928,10 +928,13 @@ int main(int argc, char** argv)
             "enum reflection helpers should be emitted from canonical layout metadata");
         ok &= expect(languageGenerated.code().find("Result does not contain a success value") != std::string::npos,
             "Result unwrap should preserve its checked failure boundary");
-        ok &= expect(languageGenerated.code().find("switch (_block)") != std::string::npos,
-            "multi-block functions should preserve canonical CFG dispatch");
-        ok &= expect(compileGeneratedCode(languageGenerated.code()),
-            "generated enum/variant/Result C++ should compile with the configured host compiler");
+        ok &= expect(languageGenerated.code().find("goto _b") != std::string::npos &&
+                         languageGenerated.code().find("switch (_block)") == std::string::npos,
+            "synchronous multi-block functions should use direct canonical CFG edges");
+        const std::string harness = "#define main wio_fixture_main\n" + languageGenerated.code() +
+            "\n#undef main\nint main() { return wio_fixture_main() == 13 ? 0 : 1; }\n";
+        ok &= expect(compileGeneratedCode(harness, true),
+            "direct CFG must execute enum/Option/Result branches and propagation with the expected result");
     }
 
     const auto unsupported = WirCppBackend{}.generate(makeUnsupportedModule());
