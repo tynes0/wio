@@ -44,7 +44,7 @@ jobs:
       - name: Validate runner adjacency, launcher profiles and deployed artifacts
         run: >-
           ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --no-tests=error -j 1
-          -R "^(wio_vm_(native_project_cli|executable_cohort|executable_artifact|platform_qualification)|wio_playground_launcher_(options|profiles|signature))$"
+          -R "^(wio_vm_(native_project_cli|executable_cohort|executable_artifact|platform_qualification|sdk_native_install)|wio_playground_launcher_(options|profiles|signature))$"
       - name: Preserve targeted evidence
         if: always()
         uses: actions/upload-artifact@v4
