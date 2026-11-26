@@ -433,7 +433,9 @@ target_include_directories(wio_vm_runner PRIVATE "${CMAKE_SOURCE_DIR}/app" "${CM
 target_link_libraries(wio_vm_runner PRIVATE wio_vm wio_runtime_host)
 set_target_properties(wio_vm_runner PROPERTIES
     OUTPUT_NAME "wio-vm" FOLDER "runtime"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/app/$<CONFIG>")
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/app")
+# Match wio_app's layout: single-config generators use app/, while
+# multi-config generators append their configuration automatically.
 install(TARGETS wio_vm_runner RUNTIME DESTINATION bin COMPONENT WioVmRuntime)
 
 if(BUILD_TESTING)

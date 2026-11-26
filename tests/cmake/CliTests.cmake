@@ -34,6 +34,7 @@ add_test(
     NAME wio_vm_native_project_cli
     COMMAND ${CMAKE_COMMAND}
         "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_VM_RUNNER=$<TARGET_FILE:wio_vm_runner>"
         "-DWIO_ROOT=${CMAKE_SOURCE_DIR}"
         "-DWIO_OUTPUT_DIR=${CMAKE_BINARY_DIR}/vm-native-project-cli-test"
         -P "${CMAKE_SOURCE_DIR}/tests/cmake/vm_native_project_cli_test.cmake"

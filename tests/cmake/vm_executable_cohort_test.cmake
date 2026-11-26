@@ -20,7 +20,7 @@ run(0 "${CMAKE_COMMAND}" -S "${WIO_ROOT}/tests/projects/vm_executable_cohort" -B
     -G "${WIO_GENERATOR}" ${platform} "-DWIO_ROOT=${WIO_ROOT}")
 run(0 "${CMAKE_COMMAND}" --build "${root}/build" --config "${WIO_CONFIG}" --parallel 1)
 include("${root}/build/paths-${WIO_CONFIG}.cmake")
-set(runner "${WIO_BUILD_DIR}/app/${WIO_CONFIG}/wio-vm${WIO_EXECUTABLE_SUFFIX}")
+set(runner "${WIO_VM_RUNNER}")
 run(0 "${CMAKE_COMMAND}" -E env "WIO_ROOT=${WIO_ROOT}" "${WIO_EXECUTABLE}"
     "${WIO_ROOT}/tests/vm_executable_cohort.wio" --no-builtin --emit-bytecode --bytecode-output "${root}/native.wiob")
 set(app "${root}/Native Türkçe 🚀/app${WIO_EXECUTABLE_SUFFIX}")

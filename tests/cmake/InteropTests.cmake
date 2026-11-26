@@ -1513,6 +1513,7 @@ set_tests_properties(wio_vm_project_record_policy PROPERTIES TIMEOUT 30)
 add_test(NAME wio_vm_executable_cohort
     COMMAND ${CMAKE_COMMAND}
         "-DWIO_EXECUTABLE=$<TARGET_FILE:wio_app>"
+        "-DWIO_VM_RUNNER=$<TARGET_FILE:wio_vm_runner>"
         "-DWIO_BUILD_DIR=${CMAKE_BINARY_DIR}"
         "-DWIO_CONFIG=$<CONFIG>"
         "-DWIO_GENERATOR=${CMAKE_GENERATOR}"

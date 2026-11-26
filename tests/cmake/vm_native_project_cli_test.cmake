@@ -1,8 +1,14 @@
-foreach(required WIO_EXECUTABLE WIO_ROOT WIO_OUTPUT_DIR)
+foreach(required WIO_EXECUTABLE WIO_VM_RUNNER WIO_ROOT WIO_OUTPUT_DIR)
     if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
         message(FATAL_ERROR "VM project CLI test requires ${required}")
     endif()
 endforeach()
+
+get_filename_component(compiler_directory "${WIO_EXECUTABLE}" DIRECTORY)
+get_filename_component(runner_directory "${WIO_VM_RUNNER}" DIRECTORY)
+if(NOT compiler_directory STREQUAL runner_directory OR NOT EXISTS "${WIO_VM_RUNNER}")
+    message(FATAL_ERROR "wio-vm must be built beside wio: ${WIO_VM_RUNNER} vs ${WIO_EXECUTABLE}")
+endif()
 
 set(project "${WIO_ROOT}/tests/projects/vm_native_cli")
 
