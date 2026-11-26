@@ -17,7 +17,7 @@ if(WIO_GENERATOR_PLATFORM)
     set(platform -A "${WIO_GENERATOR_PLATFORM}")
 endif()
 run(0 "${CMAKE_COMMAND}" -S "${WIO_ROOT}/tests/projects/vm_executable_cohort" -B "${root}/build"
-    -G "${WIO_GENERATOR}" ${platform} "-DWIO_ROOT=${WIO_ROOT}")
+    -G "${WIO_GENERATOR}" ${platform} "-DCMAKE_BUILD_TYPE=${WIO_CONFIG}" "-DWIO_ROOT=${WIO_ROOT}")
 run(0 "${CMAKE_COMMAND}" --build "${root}/build" --config "${WIO_CONFIG}" --parallel 1)
 include("${root}/build/paths-${WIO_CONFIG}.cmake")
 set(runner "${WIO_VM_RUNNER}")
