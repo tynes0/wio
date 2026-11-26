@@ -24,6 +24,16 @@ the VM optimization pass, SDK-kit parity, or the v1 blocker list.
 
 ## Correctness fixes
 
+### GNU/Ninja incremental native deployment
+
+The installed runtime CMake package avoids optional GNU linker-generated
+depfiles by default when SDK/project paths contain whitespace. Those depfiles
+can split archive paths into nonexistent inputs and force redundant relinks
+even though the image bytes are unchanged. Normal CMake target/file dependency
+tracking remains enabled, and explicit consumer settings are preserved. The
+native-install regression still requires repair without changing image bytes
+or timestamps, and separately verifies that real native changes rebuild.
+
 ### Native POD enum fields and nullable opaque handles
 
 POD projection discovery now walks physical component/array subobjects once.

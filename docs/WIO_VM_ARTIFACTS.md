@@ -201,6 +201,13 @@ thread/dynamic-loader dependencies. MSVC consumers must match the archive's
 static/dynamic CRT and Debug/Release configuration; an MSVC runtime archive
 cannot be linked into a MinGW wrapper merely because both use a C-shaped ABI.
 
+For GNU/Ninja consumers whose SDK or project path contains whitespace, the
+package defaults `CMAKE_LINK_DEPENDS_USE_LINKER` to `FALSE`. GNU ld's optional
+make-style link depfiles can otherwise split archive paths and cause an
+unchanged image to relink on every build. CMake's declared target and file
+dependencies remain active, including real native-generation changes. An
+explicit consumer setting is respected; users with a fixed linker can opt in.
+
 ## VM-backed SDK shared and static modules
 
 The initial module adapter publishes the existing stable SDK contract and
