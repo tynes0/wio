@@ -12,6 +12,11 @@ foreach(target IN ITEMS cohort_calc cohort_registry)
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/native/$<CONFIG>"
         BUILD_RPATH_USE_ORIGIN TRUE)
 endforeach()
+if(APPLE)
+    # BUILD_RPATH_USE_ORIGIN is ELF-specific. Mach-O producers must also keep
+    # resolving their sibling dependency after the original build tree is gone.
+    set_target_properties(cohort_calc cohort_registry PROPERTIES BUILD_RPATH "@loader_path")
+endif()
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/paths-$<CONFIG>.cmake" CONTENT
 "set(producer [==[$<TARGET_FILE:cohort_registry>]==])
 set(helper [==[$<TARGET_FILE:cohort_calc>]==])
