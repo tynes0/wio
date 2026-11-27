@@ -120,6 +120,12 @@ int main()
         Snapshot customLinker(config, runner);
         customLinker.captureBeforeBuild();
         require(customLinker.linkerCaptureArguments().empty(), "do not probe a different linker than the build uses");
+#ifdef __APPLE__
+        config.linkArguments = {"-Xlinker", "-install_name", "-Xlinker", "@rpath/fixture.dylib"};
+        Snapshot installName(config, runner);
+        installName.captureBeforeBuild();
+        require(!installName.linkerCaptureArguments().empty(), "Apple install-name values are not response files");
+#endif
         std::cout << "Native dependency codec checks passed\n";
         return 0;
     }

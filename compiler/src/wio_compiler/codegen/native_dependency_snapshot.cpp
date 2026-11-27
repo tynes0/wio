@@ -323,6 +323,13 @@ namespace wio::codegen
     {
         for (const auto& argument : config_.linkArguments)
         {
+#ifdef __APPLE__
+            const auto index = static_cast<std::size_t>(&argument - config_.linkArguments.data());
+            // This is an ld install-name value, not a driver response file.
+            if (argument.starts_with("@rpath/") && index >= 3 && config_.linkArguments[index - 1] == "-Xlinker" &&
+                config_.linkArguments[index - 2] == "-install_name" && config_.linkArguments[index - 3] == "-Xlinker")
+                continue;
+#endif
             if (argument.starts_with("-fuse-ld") || argument.starts_with("--ld-path") || argument.starts_with("-B") ||
                 argument.starts_with("-specs") || argument.starts_with("--specs") || argument.starts_with("@"))
             {
