@@ -65,6 +65,23 @@ use std::vector;
 // its concrete native specializations remain in the exported registry.
 fn StandardNativeCoverage()
 {
+    std::console::Print!("");
+    std::console::Print!(false);
+    std::console::Print!('x');
+    std::console::Print!(0i8);
+    std::console::Print!(0i16);
+    std::console::Print!(0i32);
+    std::console::Print!(0i64);
+    std::console::Print!(0isize);
+    std::console::Print!(0u8);
+    std::console::Print!(0u16);
+    std::console::Print!(0u32);
+    std::console::Print!(0u64);
+    std::console::Print!(0usize);
+    std::console::Print!(0f32);
+    std::console::Print!(0f64);
+    std::console::Print!(u"");
+
     std::console::PrintLine!("");
     std::console::PrintLine!(false);
     std::console::PrintLine!('x');

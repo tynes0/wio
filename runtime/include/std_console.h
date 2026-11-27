@@ -2859,6 +2859,29 @@ namespace wio::runtime::std_console
     std::int32_t WriteLineValue(const std::string& value);
     std::int32_t WriteLineValue(std::string_view value);
     std::int32_t WriteLineValue(const wio::runtime::Text& value);
+
+    // Pointer-sized integers can be distinct from int64_t/uint64_t on LP64
+    // platforms (notably Darwin). Preserve exact overload selection there.
+    template <typename T>
+        requires (std::is_integral_v<T> && sizeof(T) <= sizeof(std::uint64_t))
+    inline std::int32_t WriteValue(const T value)
+    {
+        if constexpr (std::is_signed_v<T>)
+            return WriteValue(static_cast<std::int64_t>(value));
+        else
+            return WriteValue(static_cast<std::uint64_t>(value));
+    }
+
+    template <typename T>
+        requires (std::is_integral_v<T> && sizeof(T) <= sizeof(std::uint64_t))
+    inline std::int32_t WriteLineValue(const T value)
+    {
+        if constexpr (std::is_signed_v<T>)
+            return WriteLineValue(static_cast<std::int64_t>(value));
+        else
+            return WriteLineValue(static_cast<std::uint64_t>(value));
+    }
+
     std::int32_t WriteSegment(std::string_view value, std::size_t index, std::size_t count);
     std::int32_t WriteBuffer(const char* buffer, int index, int count) noexcept;
     std::int32_t WriteTextDecimal(std::string_view value);

@@ -96,6 +96,8 @@ fn Entry() -> i32 {
     console::PrintLine!($"bytecode-first:${number}");
     console::PrintLine!(u"Unicode 🌍");
     console::PrintLine!(42usize);
+    console::Print!(-42isize);
+    console::PrintLine!(18446744073709551615usize);
     return number == 42 ? 0 : 9;
 }
 ''')
@@ -103,6 +105,7 @@ fn Entry() -> i32 {
         self.assert_no_project_cpp(output)
         self.assertIn("bytecode-first:42", output)
         self.assertIn("Unicode 🌍", output)
+        self.assertIn("-4218446744073709551615", output)
         self.assertEqual((self.root / "result.txt").read_text(encoding="utf-8"), "standard-adapter")
 
     def test_async_wio_body_uses_bytecode(self):

@@ -45,6 +45,9 @@ seeded explicitly. Windows standard adapters and MinGW VM runners link their
 compiler runtimes statically so deployed applications do not need a compiler's
 DLL search path merely to start.
 
+Console integral forwarding also handles platforms where `usize/isize` have
+different C++ identities from fixed-width 64-bit types, including Darwin.
+
 The shared adapter is deliberately conservative and monolithic. Deployment
 still copies the selected native producer into each self-contained bundle;
 adapter splitting and footprint optimization are future work, not claimed here.
