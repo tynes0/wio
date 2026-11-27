@@ -178,6 +178,7 @@ PUBLIC
     coco
 PRIVATE
     argonaut
+    wio_hash_support
 )
 
 target_compile_definitions(wio_compiler
@@ -469,6 +470,10 @@ if(BUILD_TESTING)
     )
     add_executable(wio_wir_native_bridge_plan_test
         "${CMAKE_SOURCE_DIR}/tests/wir_native_bridge_plan_test.cpp")
+    add_executable(wio_wir_native_requirements_test "${CMAKE_SOURCE_DIR}/tests/wir_native_requirements_test.cpp")
+    target_link_libraries(wio_wir_native_requirements_test PRIVATE wio_compiler)
+    add_test(NAME wio_wir_native_requirements COMMAND wio_wir_native_requirements_test)
+    set_tests_properties(wio_wir_native_requirements PROPERTIES LABELS "wir;native;identity;build")
     target_link_libraries(wio_wir_native_bridge_plan_test PRIVATE wio_compiler)
     target_compile_definitions(wio_wir_native_bridge_plan_test PRIVATE
         WIO_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

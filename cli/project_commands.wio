@@ -135,7 +135,7 @@ realm SelfHostedProject {
             return Failure<std::ResultUnit>($"The standalone VM runner is missing: ${info.vmRunner}. Install or build wio-vm beside wio.");
         }
 
-        mut outputs: string[] = [info.vmBytecodeOutput, info.vmBridgeOutput, VmBytecodeCandidate(info),
+        mut outputs: string[] = [info.vmBytecodeOutput, info.vmBridgeOutput, info.vmNativeRequirementsOutput, VmBytecodeCandidate(info),
             VmBytecodeCandidate(info) + ".publish", VmBytecodeCandidate(info) + ".build-args"];
         outputs.Push(info.wioTarget == "exe" ? info.vmExecutableOutput : info.vmModuleOutput);
         if (info.hostEnabled) { outputs.Push(info.vmHostOutput); }
@@ -433,6 +433,8 @@ realm SelfHostedProject {
             compileArgs.Push("--native-bridge-only");
             compileArgs.Push("--bytecode-sidecar");
             compileArgs.Push(info.vmBytecodeOutput);
+            compileArgs.Push("--native-requirements-output");
+            compileArgs.Push(info.vmNativeRequirementsOutput);
             if (info.wioTarget != "exe")
             {
                 compileArgs.Push("--bytecode-sidecar-kind");
@@ -456,7 +458,7 @@ realm SelfHostedProject {
         mut outputCurrent = OutputUpToDate(info.wioOutput, compilerInputs);
         if (backend == "vm") {
             outputCurrent = OutputUpToDate(info.vmBytecodeOutput, compilerInputs) and
-                OutputUpToDate(info.vmBridgeOutput, compilerInputs);
+                OutputUpToDate(info.vmBridgeOutput, compilerInputs) and fs::IsFile(info.vmNativeRequirementsOutput);
         }
         mut signature = serialization::QuoteJson(info.config) + "\n";
         for argument in compileArgs
@@ -816,7 +818,7 @@ realm SelfHostedProject {
 
             mut protectedFiles: string[] = [
                 info.manifestFile, info.wioEntry, info.nativeCore, info.vmRunner,
-                info.vmExecutableOutput, info.vmBytecodeOutput, info.vmBridgeOutput, info.vmStandardNativeLibrary,
+                info.vmExecutableOutput, info.vmBytecodeOutput, info.vmBridgeOutput, info.vmNativeRequirementsOutput, info.vmStandardNativeLibrary,
                 info.vmStandardNativeCatalog, info.sdkIncludeDirectory
             ];
             protectedFiles.Push(info.vmModuleOutput);

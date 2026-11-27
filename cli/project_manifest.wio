@@ -33,6 +33,7 @@ realm SelfHostedProject {
         wioBackendArgs: string[];
         vmBytecodeOutput: string;
         vmBridgeOutput: string;
+        vmNativeRequirementsOutput: string;
         vmExecutableOutput: string;
         vmRunner: string;
         vmStandardNativeLibrary: string;
@@ -457,6 +458,7 @@ realm SelfHostedProject {
                 path::Join(info.outputDirectory, wioName + ".vm-native" + process::SharedLibrarySuffix())
             )
         );
+        info.vmNativeRequirementsOutput = info.vmBridgeOutput + ".requirements.json";
         info.vmNativeLibraries = ResolvePaths(info.projectRoot, ManifestArray(manifest, "vm.nativeLibraries"));
         info.vmExecutableOutput = path::AbsoluteFromRaw(
             info.projectRoot,
@@ -571,6 +573,7 @@ realm SelfHostedProject {
         description += ", \"output\": " + serialization::QuoteJson(info.wioOutput) + "},\n";
         description += "  \"vm\": {\"bytecode\": " + serialization::QuoteJson(info.vmBytecodeOutput);
         description += ", \"bridge\": " + serialization::QuoteJson(info.vmBridgeOutput);
+        description += ", \"nativeRequirements\": " + serialization::QuoteJson(info.vmNativeRequirementsOutput);
         description += ", \"executable\": " + serialization::QuoteJson(info.vmExecutableOutput);
         description += ", \"runner\": " + serialization::QuoteJson(info.vmRunner);
         description += ", \"standardNativeLibrary\": " + serialization::QuoteJson(info.vmStandardNativeLibrary);
