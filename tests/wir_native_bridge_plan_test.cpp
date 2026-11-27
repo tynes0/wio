@@ -1,5 +1,6 @@
 #include "wio/codegen/wir_cpp_backend.h"
 #include "wio/codegen/wir_native_bridge_plan.h"
+#include "wio/codegen/wir_native_requirements.h"
 #include "wio/common/logger.h"
 #include "wio/lexer/lexer.h"
 #include "wio/parser/parser.h"
@@ -96,6 +97,17 @@ int main()
     for (const auto& diagnostic : verification.diagnostics())
         std::cerr << diagnostic.code << ": " << diagnostic.message << '\n';
     bool ok = expect(verification.succeeded(), "pruned dependency closure must verify");
+    try
+    {
+        const auto requirements = codegen::WirNativeRequirements::build(module);
+        ok &= expect(!requirements.nativeBindings.empty() && !requirements.dynamicAnyPayloads.empty(),
+                     "complex native bridge requires bindings and Any metadata");
+    }
+    catch (const std::exception& error)
+    {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
     ok &= expect(wir::lowered::Printer{}.print(module) == original, "selection must not mutate VM module");
     ok &= expect(!plan.module.contract.application && plan.module.contract.exports.empty(),
                  "bridge must not export application or SDK program dispatch");

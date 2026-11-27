@@ -1,5 +1,10 @@
 set(WIO_RUNTIME_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
+# Pure hashing support for compiler-side identities without linking OS/runtime services.
+add_library(wio_hash_support STATIC "${CMAKE_CURRENT_SOURCE_DIR}/src/std_hash.cpp")
+target_include_directories(wio_hash_support PUBLIC "${WIO_RUNTIME_INCLUDE_DIR}")
+set_target_properties(wio_hash_support PROPERTIES FOLDER "compiler" POSITION_INDEPENDENT_CODE ON)
+
 set(WIO_RUNTIME_HEADERS
     "${WIO_RUNTIME_INCLUDE_DIR}/std_benchmark.h"
     "${WIO_RUNTIME_INCLUDE_DIR}/benchmark_memory.h"

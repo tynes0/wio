@@ -2,6 +2,22 @@
 
 All notable user-facing changes to Wio are recorded here.
 
+## [0.20.3] - 2026-11-27
+
+### Added
+
+- Native adapter requirement reports reuse the existing bridge closure planner
+  and fingerprint its normalized ABI/layout/generic/thunk/body inputs with SHA-256.
+- `--native-requirements-output` supports bytecode emission and native-only bridge
+  builds. Project VM bridges publish a report exposed by `project describe`.
+- Ordinary VM-only bodies are excluded; Wio bodies retained in C++ and dynamic
+  Any codecs remain covered. Reports explicitly do not authorize adapter reuse.
+
+Native file dependency tracking and actual adapter cache reuse remain the next
+separate patches. Module ABI descriptor 11 and bytecode format 1.1 are unchanged.
+
+See [scope and usage](docs/WIO_0_20_3_RELEASE_NOTES.md).
+
 ## [0.20.2] - 2026-11-27
 
 ### Added

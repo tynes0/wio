@@ -5,8 +5,8 @@
 
 #define WIO_SDK_VERSION_MAJOR 0
 #define WIO_SDK_VERSION_MINOR 20
-#define WIO_SDK_VERSION_PATCH 2
-#define WIO_SDK_VERSION_STRING "0.20.2"
+#define WIO_SDK_VERSION_PATCH 3
+#define WIO_SDK_VERSION_STRING "0.20.3"
 
 namespace wio::sdk
 {

@@ -173,6 +173,12 @@ backend functionality.
   Native-project ABI/dependency-closure cache separation remains open for the next
   narrow patch; do not mark this entire blocker closed. See
   [implemented scope](WIO_0_20_2_RELEASE_NOTES.md).
+  **0.20.3 preparation:** native bridge requirement identities separate ABI,
+  layouts, instantiations, dynamic Any codecs and retained C++ bodies from
+  ordinary VM bodies. Reports do not enable reuse or include native file
+  dependency validity. The next slices are 0.20.4 dependency tracking and
+  0.20.5 safe adapter cache integration. See
+  [identity scope](WIO_0_20_3_RELEASE_NOTES.md).
 
 The first blocker belongs to VM runtime/CLI correctness and pass 2; the second
 belongs to the existing generated-build-cost gate and pass 3. Under the approved
