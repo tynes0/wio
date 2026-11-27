@@ -168,6 +168,12 @@ earlier backend cost work; serious slowdowns should be investigated immediately,
 not deferred until the final stage. This work is mandatory before v1, while JIT
 remains post-v1.
 
+The approved 2026-11-27 train assigns the remaining heavy passes to native
+`0.24.x`, non-JIT VM `0.25.x`, and compiler/build preparation `0.26.x`, after
+the `0.20.x`-`0.23.x` usability/contract/IDE/SDK closure. Existing measured work
+is retained. Final integrated qualification is not a fourth heavy pass. See
+[the release plan](WIO_V1_RELEASE_PLAN.md#approved-remaining-order-2026-11-27).
+
 ### 8.1 Mandelbrot Qualification Workload
 
 The current user-owned `playground/wio/mandelbrot.wio` is a motivating workload,
@@ -224,16 +230,17 @@ baseline results in this document.
 
 1. Capture reproducible baselines and profiles; record hardware, toolchain,
    configuration, commands, inputs, cache state, repetitions, median, and spread.
-2. Optimize measured semantic-analyzer, Typed-WIR, and Lowered-WIR hotspots;
-   remove repeated traversal, lookup, construction, and allocation work.
-3. Optimize C++ emission and build scalability, then emitted runtime code:
-   unnecessary dynamic places/wrappers, copies, call indirection, retain/release,
-   helper duplication, dependency pruning, caching, and measured precompilation.
-4. Optimize std/Unicode and native/SDK paths, including formatting, builders,
-   containers, ownership transfer, and boundary marshalling.
-5. Optimize VM execution, value storage, dispatch, calls, cleanup, and scheduler
-   overhead under the same correctness and ownership contracts.
-6. Repeat integrated qualification with realistic installed-toolchain projects
+2. Complete heavy native/generated-runtime optimization in `0.24.x`: unnecessary
+   dynamic places/wrappers, copies, call indirection, retain/release, std/Unicode,
+   formatting/builders/containers and native/SDK boundary runtime costs. Preserve
+   N01-N14 progress and the stabilized user-facing contracts.
+3. Optimize VM execution in `0.25.x`: value storage, dispatch, calls, cleanup
+   and scheduler work under the same correctness and ownership contracts.
+4. Optimize compiler/build preparation in `0.26.x`: lexer/parser/semantic
+   analysis, Typed/Lowered WIR, C++/bytecode emission, native compilation/linking
+   and VM load/verify/index; address repeated work/allocations, pruning, caching,
+   sharding and measured precompilation.
+5. Repeat integrated qualification with realistic installed-toolchain projects
    and supported platforms; lock numeric budgets into regression/release gates.
 
 Track cold, warm, and incremental builds separately; track runtime/startup,

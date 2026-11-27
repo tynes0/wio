@@ -13,9 +13,9 @@ Status markers:
 - `[ ]` not started
 - `[~]` partially implemented or implemented but not sufficiently hardened
 
-The priorities below reflect the state of Wio at the `v0.13.0` release-candidate
-freeze, including the P0/P1 language, std, native-interoperability,
-structured-async, language-coherence, and SDK-parity sprints.
+The priorities below grew from the `v0.13.0` release-candidate freeze and include
+later backend, std, native/SDK and release updates. Historical slice notes do
+not override the current accepted release order or establish fresh qualification.
 Completed work is recorded in `COMPLETED.md`; this file contains only the
 remaining work. The
 application/system and language-coherence direction is expanded in
@@ -32,6 +32,15 @@ This backlog is intentionally broader than the `v1.0.0` release gate. Use:
 Some numbered items contain both a pre-v1 correctness core and a post-v1
 expansion. The release plan routes those parts explicitly; an unchecked item
 here does not by itself mean that v1 cannot ship.
+
+Approved remaining order (2026-11-27): `0.20.x` daily usability/correctness ->
+`0.21.x` language/std contracts -> `0.22.x` IDE/tooling -> `0.23.x`
+SDK/native/application/module/product closure -> `0.24.x` remaining heavy native
+optimization -> `0.25.x` non-JIT VM optimization -> `0.26.x` compiler/build
+optimization -> beta/RC/stable. Use small single-purpose releases and the
+accepted patch/minor test policy. N01-N14 and existing measured gains are not
+reset; continue baseline/regression checks and fix serious regressions when
+found. The canonical family table is in `docs/WIO_V1_RELEASE_PLAN.md`, section 3.
 
 ## P1 - Language Semantics and Type System
 
@@ -310,11 +319,12 @@ here does not by itself mean that v1 cannot ship.
     restrictions; source migration and syntax-aware formatter checks must agree.
     This is an accepted v1 blocker; final integrated optimization still follows.
     Scope and acceptance: `docs/WIO_V1_SURFACE_CONSOLIDATION_PLAN.md`, sections 1/3.
-    On 2026-10-15 this work was integrated module by module into the first heavy
-    generated-C++/runtime optimization pass. Builders and the binary consumer
-    have the first Result/style migration and native/VM append-capacity slice;
-    the rest of std, builtin checked retrieval and broad migration/tooling remain
-    open. See `docs/WIO_STD_BUILDERS_CONSOLIDATION.md`.
+    The 2026-10-15 plan combined this work with native optimization. The approved
+    2026-11-27 train instead closes remaining std API/style/attribute contracts
+    in 0.21.x and heavy native internals in 0.24.x. Existing builders/binary
+    Result/style and append-capacity work remains accepted; other std, builtin
+    retrieval and migration/tooling work stays open. See
+    `docs/WIO_STD_BUILDERS_CONSOLIDATION.md`.
 
 ## P1 - Native Interop, SDK, and Ecosystem
 
@@ -477,7 +487,8 @@ here does not by itself mean that v1 cannot ship.
    requires splitting/re-scoping or explicit larger-scope review, not dropping
    required tests. CI/label-based automation remains implementation-pending; see
    `docs/WIO_V1_RELEASE_PLAN.md`, section 4.1. This does not change optimization
-   benchmark sample/reporting policy or finalize the proposed release reordering.
+   benchmark sample/reporting policy. The release-family order is now approved
+   in `docs/WIO_V1_RELEASE_PLAN.md`, section 3.
 
 9. [ ] Add project migration and doctor commands.
    Detect obsolete manifests/std APIs, explain environment problems, verify
@@ -1432,18 +1443,20 @@ Rider, and CLion are defined in
 
 ### Final Pre-v1 Optimization And Performance Acceptance
 
-- [ ] Execute the accepted three heavy passes after functional backend closure:
+- [ ] Complete the remaining three heavy passes after 0.20.x-0.23.x contract,
+  IDE/tooling and SDK/product closure, as approved on 2026-11-27:
   (1) generated C++/runtime, targeting 5-10% overhead versus equivalent optimized
   C++ where feasible; (2) best practical current non-JIT VM runtime performance;
   (3) full compilation/preparation throughput from lexer/parser/analyzer through
   Typed/Lowered WIR, C++/bytecode emission and VM load/verify/index work, including
   native compilation/linking. Keep original/previous/current measured baselines.
-  See `docs/WIO_BACKEND_OPTIMIZATION_PLAN.md`. The final pre-v1 checkpoint below
-  requalifies these budgets after later kit/std/IDE work; it does not postpone
-  these passes or add a fourth heavy optimization package.
+  Their release families are native 0.24.x, VM 0.25.x, compile/build 0.26.x.
+  See `docs/WIO_BACKEND_OPTIMIZATION_PLAN.md`. Preserve existing N01-N14 work
+  and evidence; final integrated acceptance is not a fourth heavy pass.
 
 - [ ] Close VM long-running execution policy (v1 blocker accepted 2026-11-26;
-  existing VM runtime/CLI correctness gate and optimization pass 2). The default
+  existing VM runtime/CLI correctness gate and optimization pass 2). Implement
+  the usable policy in 0.20.x; requalify/tune it during 0.25.x. The default
   10,000,000-instruction execution-state budget currently accumulates across
   calls/application frames and terminates legitimate game/app loops with
   WVM1008. Separate trusted long-lived execution from explicitly bounded
@@ -1455,7 +1468,8 @@ Rider, and CLion are defined in
   location, not necessarily a defective function. No implementation is claimed.
 
 - [ ] Close bytecode-first VM project builds (v1 blocker accepted 2026-11-26;
-  existing generated-build-cost gate and optimization pass 3). Pure executable
+  existing generated-build-cost gate and optimization pass 3). Required build
+  architecture belongs to 0.20.x; throughput tuning is 0.26.x. Pure executable
   paths must not generate/compile/link a per-project C++ bridge; use bytecode
   and prebuilt VM/runtime support. Current project VM commands always prepare
   a shared native bridge producer and sidecar, even for pure programs. Native
@@ -1485,8 +1499,8 @@ Rider, and CLion are defined in
 
 - [ ] Requalify the three heavy passes' budgets after the IDE/tooling/SDK/v1
   correctness gates, before beta/RC. Keep the existing backend and v1 gate
-  identities intact; this final checkpoint does not defer the three passes or
-  create a fourth heavy optimization package. Fix severe performance defects
+  identities intact; this final checkpoint follows the approved 0.24.x-0.26.x
+  heavy passes and does not create a fourth pass. Fix severe performance defects
   when discovered rather than postponing them to this checkpoint.
   Profile semantic analysis, Typed/Lowered WIR, C++ emission/build/runtime,
   VM, std/Unicode, native bridges, and SDK hosts. Measure compiler-stage time,

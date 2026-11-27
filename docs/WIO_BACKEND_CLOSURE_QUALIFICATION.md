@@ -78,8 +78,11 @@ qualification, not a new full-corpus claim from this pass. Other CPU/OS/config
 combinations, sanitizer/fuzzer depth and complete SDK kit parity are not inferred
 from these gates. Broad portability hardening remains a separate roadmap item.
 
-Functional closure tasks are now complete: project CLI integration, declared
-native distribution policy, and this platform/behavioral pass. Next is heavy
-optimization pass 1 (generated C++ + runtime), then pass 2 (non-JIT VM runtime),
-then pass 3 (compiler/preparation/build throughput). This qualification does not
-claim any performance improvement or release-budget acceptance.
+Functional closure tasks are complete within the matrix above: project CLI
+integration, declared native distribution policy, and this platform/behavioral
+pass. The original next-work schedule has been superseded by the accepted
+2026-11-27 train: 0.20.x-0.23.x usability/contracts/IDE/SDK/product closure, then
+remaining native optimization in 0.24.x, VM in 0.25.x and compiler/build in
+0.26.x. This does not change the historical test evidence or claim performance
+improvement/release-budget acceptance. See
+[the approved train](WIO_V1_RELEASE_PLAN.md#approved-remaining-order-2026-11-27).

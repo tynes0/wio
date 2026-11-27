@@ -1,14 +1,18 @@
 # Backend Optimization Passes
 
-Accepted order: 2026-10-15. First finish the three functional closure tasks:
-VM project CLI library/host integration, native distribution policy, and platform/
-behavioral qualification. SDK kit parity remains a separate v1 blocker.
+Current scheduling decision: **2026-11-27**. Complete the approved `0.20.x`
+usability/correctness, `0.21.x` language/std, `0.22.x` IDE/tooling and `0.23.x`
+SDK/product closure before remaining heavy optimization: pass 1 in `0.24.x`,
+pass 2 in `0.25.x`, pass 3 in `0.26.x`. See the
+[canonical release train](WIO_V1_RELEASE_PLAN.md#approved-remaining-order-2026-11-27).
+This supersedes the 2026-10-15 immediate-after-functional-closure schedule, not
+the three pass definitions, N01-N14, historical evidence or SDK's separate gate.
 
 Status 2026-10-15: all three functional tasks are complete within the qualified
 artifact matrix. The final four new gates passed on clean Windows Debug, Linux
 Release and macOS Release builds (12/12 executions). See
-[qualification evidence](WIO_BACKEND_CLOSURE_QUALIFICATION.md). The next work is
-pass 1 below; none of the optimization targets is claimed achieved by this gate.
+[qualification evidence](WIO_BACKEND_CLOSURE_QUALIFICATION.md). These completed
+functional tasks do not establish optimization-budget acceptance.
 
 Pass 1 has started: `722e836` promotes proven closed scalar cells, uses plain
 primitive SSA and direct synchronous CFG edges. The paired Mandelbrot compute
@@ -29,12 +33,13 @@ Std consolidation also removes unnecessary/duplicate surfaces and evaluates
 merging focused modules (for example `sort` into `algorithms`), with import/API
 migration and native/VM behavior qualified before removal.
 
-Accepted extension on 2026-10-15: do the std source rules, Result-first API
-standardization and implementation optimization module by module within this
-pass, rather than optimizing APIs that will immediately be replaced later.
-Capture behavior/performance first; keep readability, API and hot-path changes
-in reviewable commits and qualify native/VM semantics together. This does not
-move full SDK kit parity or language-wide legacy-attribute removal into pass 1.
+The earlier 2026-10-15 plan combined std source/API consolidation with pass 1.
+Under the approved 2026-11-27 train, remaining std style/API/attribute migration
+closes in `0.21.x` as single-purpose patches; pass 1 in `0.24.x` optimizes those
+stabilized implementations. Preserve already completed combined slices and
+their evidence. Keep baseline/regression checks and fix severe scaling or
+performance defects before the heavy pass when found. Full SDK kit parity
+remains separate and closes in `0.23.x` rather than being absorbed into pass 1.
 
 Start with builders/string/text, byte/buffer output and containers, then expand
 through the remaining std inventory. `builders` and its `binary` consumer have
@@ -104,6 +109,9 @@ execution, and publish baseline-relative gains with the same inputs/checksums.
 
 ### Required VM execution-policy closure (accepted 2026-11-26)
 
+Scheduling update 2026-11-27: implement the runtime/CLI policy in `0.20.x`;
+pass 2 in `0.25.x` optimizes/requalifies that stabilized execution model.
+
 This subsection is part of pass 2 above, not a new pass. WVM1008 currently
 terminates execution after the default 10,000,000-instruction cumulative budget
 is consumed; ordinary application frames do not replenish that execution-state
@@ -120,6 +128,10 @@ as a runtime-cost consideration; no policy change is implemented by this note.
 ## 3. Compilation and preparation time
 
 ### Bytecode-first builds and native adapter reuse (accepted 2026-11-26)
+
+Scheduling update 2026-11-27: required bytecode-first architecture and elimination
+of unnecessary project bridge work belong to `0.20.x`; pass 3 in `0.26.x` tunes
+and qualifies compiler/build throughput rather than delaying that usability fix.
 
 This is an open v1 blocker within pass 3. The current VM project command always
 selects a shared native producer with `--native-bridge-only` plus a bytecode
@@ -186,7 +198,8 @@ For each pass, report the original baseline, previous revision and current
 revision, workload/checksum, measured change, remaining hotspots and acceptance
 status. Do not conflate a narrow benchmark win with complete backend closure.
 
-These three passes follow functional backend closure; the final pre-v1
-performance checkpoint still requalifies their budgets after later SDK/std/IDE
-changes. It is not a fourth heavy optimization scope and does not move these
-three passes behind the SDK kit work. JIT remains post-v1.
+Under the approved 2026-11-27 train, remaining heavy passes follow the
+`0.20.x`-`0.23.x` contract/tooling/SDK closure in native -> VM -> compile/build
+order (`0.24.x` -> `0.25.x` -> `0.26.x`). Final integrated acceptance rechecks
+their budgets before beta/RC; it is not a fourth heavy pass. Earlier measured
+work and N01-N14 identities remain intact. JIT remains post-v1.

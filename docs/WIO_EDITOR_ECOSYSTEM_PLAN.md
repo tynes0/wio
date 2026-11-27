@@ -121,12 +121,21 @@ same major/minor compatibility line, but the next Wio patch realigns it.
 
 ## 3. Delivery Plan
 
-### Immediate Backend Intermission - Rider-first Readability
+Scheduling decision accepted 2026-11-27: necessary compiler-stage separation
+and analysis-only project-check preparation belong to `0.20.x`; shared
+frontend/language-service, Rider-first clients, formatter and diagnostics
+close in `0.22.x`, followed by product/SDK qualification in `0.23.x`. This is
+the current [release train](WIO_V1_RELEASE_PLAN.md#approved-remaining-order-2026-11-27).
+The v0.13-v0.18 targets below are historical planning scopes, not claims of
+completed delivery. The Rider -> CLion -> Visual Studio preview priority and
+compiler-owned semantics remain unchanged.
 
-This slice runs after the dual-backend runtime/native-bridge core is usable and
-before the remaining v1 product blockers. It exists so the long stabilization
-work can be performed in a readable Wio editor instead of waiting for the full
-language-service program.
+### 0.22.x - Rider-first Readability and Shared Service
+
+This slice runs in `0.22.x`, after daily usability and language/std contract
+closure and before `0.23.x` SDK/product qualification. The Rider-first lexical
+preview remains an independently usable delivery within that family instead
+of waiting for every semantic language-service feature to finish.
 
 Delivery order is intentionally user-driven:
 

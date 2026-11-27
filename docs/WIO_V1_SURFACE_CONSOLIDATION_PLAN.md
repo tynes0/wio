@@ -245,6 +245,15 @@ optimization stage requalifies the combined compiler/runtime/std product.
 
 ## Delivery boundaries
 
+Scheduling decision accepted 2026-11-27: remaining language/std API, attribute
+and source-style contracts close in `0.21.x`; coordinated heavy native/std
+internal optimization follows in `0.24.x`, after IDE/tooling `0.22.x` and
+SDK/product closure `0.23.x`. Preserve existing combined migration/performance
+slices and investigate serious regressions earlier. This supersedes the earlier
+decision to do all remaining std consolidation inside native optimization;
+the three consolidation workstreams and their acceptance criteria are unchanged.
+See [the approved train](WIO_V1_RELEASE_PLAN.md#approved-remaining-order-2026-11-27).
+
 ### Single-purpose, independently released patches (accepted 2026-11-27)
 
 Do not bundle the std migration into one large release. Deliver small, coherent

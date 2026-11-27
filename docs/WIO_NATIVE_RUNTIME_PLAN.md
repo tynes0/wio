@@ -5,6 +5,14 @@ renumbering of historical backend sprints, v1 blockers, or the three main passes
 After native generated code/runtime/coordinated std comes pass 2 (non-JIT VM),
 then pass 3 (compiler and build throughput). SDK remains a separate v1 blocker.
 
+Scheduling update accepted 2026-11-27: remaining heavy native work is `0.24.x`,
+after `0.20.x` usability/correctness, `0.21.x` language/std, `0.22.x` IDE/tooling
+and `0.23.x` SDK/product closure. Passes 2 and 3 follow in `0.25.x`/`0.26.x`.
+Existing N01-N14 identities, N04's open status and earlier gains remain intact;
+do not restart completed slices or infer acceptance from the schedule change.
+Keep baseline checks and fix serious regressions during earlier families.
+See [the approved train](WIO_V1_RELEASE_PLAN.md#approved-remaining-order-2026-11-27).
+
 ## Fixed execution order
 
 | ID | Scope | Completion evidence |

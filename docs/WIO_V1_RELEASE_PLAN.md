@@ -1,7 +1,8 @@
 # Wio v1 Release Plan
 
-This document is the finite delivery plan from the released `v0.13.0` baseline
-to `v1.0.0`. It answers a different question from the active backlog:
+This document is the finite delivery plan from the `v0.19.0` interim release
+to `v1.0.0`, retaining the earlier `v0.13`-`v0.19` planning history. It answers
+a different question from the active backlog:
 
 - [`../TODOLIST.md`](../TODOLIST.md) records every unfinished item;
 - this document records which unfinished items block `v1` and when they are
@@ -164,12 +165,56 @@ backend functionality.
   cold/warm/incremental builds, bytecode/native parity and deployment behavior.
 
 The first blocker belongs to VM runtime/CLI correctness and pass 2; the second
-belongs to the existing generated-build-cost gate and pass 3. Required behavior
-must close before beta even if a narrow performance result has already passed.
+belongs to the existing generated-build-cost gate and pass 3. Under the approved
+2026-11-27 train, execution policy and bytecode-first build architecture are
+`0.20.x` correctness/usability preparation, not work to postpone until `0.25.x`
+or `0.26.x`. Those later passes optimize and requalify the stabilized paths.
+Required behavior must close before beta even if a narrow performance result
+has already passed.
 See [the optimization plan](WIO_BACKEND_OPTIMIZATION_PLAN.md) and the matching
 open entries in [the active backlog](../TODOLIST.md).
 
 ## 3. Planned Release Train
+
+### Approved remaining order (2026-11-27)
+
+This is the accepted execution order, superseding the earlier decision to run
+all three heavy optimization passes immediately after functional backend closure.
+Existing v1 gates, the three pass identities and N01-N14 are preserved. The
+`0.19.0` release is an interim checkpoint, not proof that the historical product
+closure themes below were completed.
+
+| Release family | Required theme |
+| --- | --- |
+| **0.20.x** | Daily usability and near-term correctness: analysis-only project checks, VM execution policy, necessary compiler-stage separation and removal of unnecessary build-path work |
+| **0.21.x** | Language/std contract closure: Result-first APIs, bracket-only attributes, std API/style cleanup, lifetime and initialization rules |
+| **0.22.x** | IDE/tooling: shared frontend, language service, Rider-first clients, formatter and diagnostics |
+| **0.23.x** | SDK/native/application/module contracts, compatibility, packaging and real-project acceptance gates |
+| **0.24.x** | Remaining heavy native optimization: generated C++, runtime and std internals; continue existing N01-N14 progress |
+| **0.25.x** | Heavy non-JIT VM optimization |
+| **0.26.x** | Heavy compiler/build/preparation-time optimization |
+| **1.0.0-beta -> RC -> stable** | Real-project qualification, final cross-language comparisons, migration and release validation |
+
+Deliver each family as the independently usable, single-purpose releases in
+section 4.2, using section 4.1 patch/minor validation. This does not require a
+monolithic update per row or freeze arbitrary patch counts. Preserve aligned
+compiler/runtime/std/CLI/SDK/editor/site delivery and explicit compatibility
+notes; actual publication still requires the applicable release gates.
+
+Stabilize user-visible semantics/API and required architecture before the heavy
+passes, not internal representations that optimization must remain free to
+change. Preserve existing measured improvements and evidence; N04 is not reset
+or marked complete by this reorder. Keep baselines/regression checks during
+earlier families and fix severe correctness, scaling or performance regressions
+when found rather than waiting for `0.24.x`. Remaining lifecycle/borrow/cleanup
+and compatibility hardening belongs to the existing gates, not new feature scope.
+
+### Historical planning scopes (v0.13-v0.19)
+
+The former release-number assignments below are retained for provenance and
+their original qualification notes. Route unfinished requirements through the
+approved table above; these historical headings do not override that order or
+assert what a newer release actually shipped.
 
 ### v0.13.0 - Language Coherence
 
@@ -367,15 +412,16 @@ continuously smoke-tested from an installed toolchain.
 
 ### Final Pre-Beta Stage - Heavy Optimization And Performance Acceptance
 
-The 2026-10-15 decision runs three heavy passes immediately after functional
-backend closure: generated C++/runtime (targeting 5-10% overhead versus equivalent
-optimized C++ where feasible), current non-JIT VM runtime, then the entire
-compilation/preparation pipeline. See
+The approved 2026-11-27 train places remaining heavy optimization after the
+`0.20.x`-`0.23.x` usability, contract, IDE/tooling and SDK/product closure:
+generated C++/runtime in `0.24.x` (targeting 5-10% overhead versus equivalent
+optimized C++ where feasible), current non-JIT VM runtime in `0.25.x`, then the
+compilation/preparation pipeline in `0.26.x`. See
 [`WIO_BACKEND_OPTIMIZATION_PLAN.md`](./WIO_BACKEND_OPTIMIZATION_PLAN.md).
-After subsequent IDE/tooling, SDK kit and v1 correctness work, this final stage
-requalifies their performance budgets before beta/RC/stable. It does not postpone
-those passes or create a fourth heavy optimization package. Existing backend
-and v1 gate identities are unchanged; severe regressions are fixed when found.
+This explicitly supersedes their former immediate-after-backend scheduling;
+existing progress and gate identities are unchanged. Final integrated acceptance
+requalifies their combined budgets before beta/RC/stable, not a fourth heavy
+optimization package. Severe regressions are fixed when found.
 
 Required scope:
 
@@ -430,15 +476,15 @@ post-v1 work.
 
 | Gate | Required by |
 | --- | --- |
-| Normative language/std contract matches implementation | `v0.13.0` onward |
-| Stable value SDK round trips | `v0.14.0` |
-| Typed metadata/validation/derive/behavioral attributes | `v0.15.0` |
-| Ownership/callback/async/application host acceptance | `v0.16.0` |
-| Reflection/reload/ABI/platform matrix | `v0.17.0` |
-| Reproducible package and installed-toolchain workflow | `v0.18.0` |
-| Formatter, diagnostics, language service, templates, docs alignment | `v0.19.0` |
-| Integrated heavy optimization and measured performance budgets | before beta |
-| Result-first std, bracket-only attachment and standardized/optimized std pass | before beta; requalified during final optimization |
+| Normative language/std contract matches implementation | `0.21.x`; maintained throughout later releases |
+| Stable value SDK round trips | `0.23.x` |
+| Typed metadata/validation/derive/behavioral attributes | `0.21.x` language contract; `0.23.x` host closure |
+| Ownership/callback/async/application host acceptance | `0.21.x` language rules; `0.23.x` host acceptance |
+| Reflection/reload/ABI/platform matrix | `0.23.x` |
+| Reproducible package and installed-toolchain workflow | `0.23.x` |
+| Formatter, diagnostics, language service, templates, docs alignment | `0.22.x`; product qualification in `0.23.x` |
+| Integrated heavy optimization and measured performance budgets | native `0.24.x`, VM `0.25.x`, compile/build `0.26.x`; accepted before beta |
+| Result-first std, bracket-only attachment and standardized/optimized std pass | contract/style/API `0.21.x`; native internals `0.24.x`; final requalification |
 | Real-world portfolio, compatibility and migration sign-off | beta/RC |
 | Signed, checksummed, provenance-backed release artifacts | RC/stable |
 
@@ -491,8 +537,8 @@ triage, not an unsupported assertion that no tests can be affected.
 Benchmark sampling/per-update optimization evidence remains governed separately
 by [the optimization plan](WIO_BACKEND_OPTIMIZATION_PLAN.md); this test-selection
 decision alone does not reduce sample counts or turn old measurements into fresh
-performance evidence. The phase/release-family reordering discussed for the
-remaining pre-v1 work is not finalized by this validation-policy decision.
+performance evidence. The approved remaining release-family order is recorded
+in section 3; validation policy does not change its scope or completion state.
 
 ---
 
@@ -514,7 +560,7 @@ legacy syntax/API support remains a distinct approved migration step. Small
 diffs do not automatically imply a small test dependency closure. See
 [the std patch boundaries](WIO_V1_SURFACE_CONSOLIDATION_PLAN.md#single-purpose-independently-released-patches-accepted-2026-11-27).
 
-This records delivery granularity, not finalized future release-family numbers,
+This records delivery granularity within the approved section 3 families, not
 a new v1 gate, a code migration, or a release tag for this documentation change.
 
 ## 5. Backlog Routing
@@ -524,14 +570,14 @@ v1 core and a post-v1 expansion:
 
 | Backlog area | Pre-v1 routing | Post-v1 remainder |
 | --- | --- | --- |
-| Language 1, 3, 13, 15, 17 | `v0.13`-`v0.17` | value kinds beyond frozen v1 |
+| Language 1, 3, 13, 15, 17 | remaining language contracts in `0.21.x` | value kinds beyond frozen v1 |
 | Language 5, 6, 7, 8, 12, 14 | current behavior hardens pre-v1 | advanced meta, ADTs, extension properties, behavioral interception, parallel scheduler |
-| Std 1, 3-6, 8 | correctness and stable contracts in `v0.14`-`v0.15` | streaming codecs, schema/patch expansion, time zones, advanced regex backend, streams |
+| Std 1, 3-6, 8 | correctness/stable APIs in `0.21.x`; remaining native internals in `0.24.x` | streaming codecs, schema/patch expansion, time zones, advanced regex backend, streams |
 | Std 7, 9, 10 | portable stable foundations qualify pre-v1 | TLS/HTTP/WebSocket, broad OS GUI services, databases/archives/TOML |
-| Native/SDK 1-8 | minimal package ecosystem and complete stable SDK/ABI in `v0.14`-`v0.18` | larger package catalog and importer convenience surface |
-| CLI 1-4, 7-12 | stable daily/release workflow in `v0.18`-`v0.19` | richer generated-doc portal features |
+| Native/SDK 1-8 | remaining stable SDK/ABI/package/product closure in `0.23.x` | larger package catalog and importer convenience surface |
+| CLI 1-4, 7-12 | usability `0.20.x`, tooling `0.22.x`, release workflow `0.23.x` | richer generated-doc portal features |
 | CLI 5-6, 8 | correctness-critical cache/test pieces pre-v1 | REPL and advanced incremental/test UX |
-| Editor 1, 3, 5 | baseline in `v0.19` | advanced language-service and templates |
+| Editor 1, 3, 5 | shared frontend/language service and client closure in `0.22.x` | advanced language-service and templates |
 | Editor 2, 4, 6 | not a v1 gate | debugger, package intelligence, advanced refactors |
 | Performance 1, 4, 5-7 | release baselines and supported-platform safety pre-v1 | deeper optimization and broader matrices |
 | Performance 2, 3, 8-9 | dual-backend parity plus bounded generated-code, native compile-time, and runtime costs are pre-v1 gates | JIT, deeper tiering, and optimization beyond the frozen budgets |
