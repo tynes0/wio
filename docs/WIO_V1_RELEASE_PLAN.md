@@ -449,6 +449,51 @@ Every release also requires:
 - changelog, specification, reference docs, examples, and editor surface updated;
 - compiler/runtime/std/CLI/SDK/editor/site version metadata checked together.
 
+### 4.1 Impact-based release validation (accepted 2026-11-27)
+
+Validation follows the change's actual dependency/behavior impact, not simply
+the number of modified files or the fact that a release tag is being created.
+This decision changes test-selection policy, not the v1 feature gates, backend
+pass identities, or a claim that CI selection is already implemented.
+
+- **Focused patch releases**, such as `0.19.N`: run affected existing tests and
+  new/updated regressions on the platforms/backends the change affects. A full
+  suite is not required merely because this is a release. Include transitive
+  consumers of shared semantic, IR, runtime, ABI or build infrastructure, not
+  only tests next to the changed file.
+- **Broader patch releases**: plan a bounded relevant regression set, normally
+  about **50-100 tests**, covering the affected subsystems and their boundaries.
+  This is a planning budget, not a minimum to fill with unrelated tests or an
+  arbitrary cutoff that permits dropping required coverage. If the impact cannot
+  be qualified within that budget, split the patch, move the broad change to a
+  minor release, or explicitly review a larger validation scope before release.
+- **Minor transitions**, such as `0.19.N -> 0.20.0`: run the full maintained test
+  suite against the new contract and supported release platform/configuration
+  matrix, including applicable native/VM and installed-artifact gates. Record
+  intentional exclusions/unsupported cases; do not silently count them as passes.
+- **No affected executable behavior**: runtime/compiler tests need not be rerun
+  when an impact assessment establishes that their code, inputs, dependencies
+  and configuration are unchanged. Use relevant documentation/link/schema or
+  packaging checks instead where applicable. A behavior-preserving refactor can
+  still affect compilation, linking or execution and needs corresponding checks.
+- **Changed/removed contracts**: migrate affected fixtures and expectations to
+  the approved new behavior, adding explicit rejection/migration tests for retired
+  features as appropriate. Preserve coverage of surviving semantics; do not
+  weaken assertions or delete regressions merely to obtain a green run.
+
+For every release, record the base/tested commit, affected areas, selected test
+names or labels and rationale, actual platform/backend execution counts/results,
+and deliberately omitted suites. Reused evidence must identify its revision and
+why the relevant execution inputs remain unchanged; a selective patch pass must
+not be reported as a new full-suite pass. An unknown or broad impact requires
+triage, not an unsupported assertion that no tests can be affected.
+
+Benchmark sampling/per-update optimization evidence remains governed separately
+by [the optimization plan](WIO_BACKEND_OPTIMIZATION_PLAN.md); this test-selection
+decision alone does not reduce sample counts or turn old measurements into fresh
+performance evidence. The phase/release-family reordering discussed for the
+remaining pre-v1 work is not finalized by this validation-policy decision.
+
 ---
 
 ## 5. Backlog Routing

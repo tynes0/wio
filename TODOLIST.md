@@ -457,6 +457,18 @@ here does not by itself mean that v1 cannot ship.
    tests, timeouts, fixtures, temporary directories, snapshots, coverage,
    benchmarks, JUnit/JSON output, and package-installed integration suites.
 
+   Release selection policy accepted 2026-11-27: focused patch releases run
+   affected existing/new/updated tests; broader patches target a relevant 50-100
+   test budget; minor transitions such as 0.20.0 run the full maintained suite
+   and supported release matrix. Unaffected tests may reuse identified prior
+   evidence when inputs/dependencies are unchanged. Migrate tests with accepted
+   contract removals/changes without losing surviving coverage. Record selected
+   tests, impact rationale, platforms/results and omitted scopes. Budget overflow
+   requires splitting/re-scoping or explicit larger-scope review, not dropping
+   required tests. CI/label-based automation remains implementation-pending; see
+   `docs/WIO_V1_RELEASE_PLAN.md`, section 4.1. This does not change optimization
+   benchmark sample/reporting policy or finalize the proposed release reordering.
+
 9. [ ] Add project migration and doctor commands.
    Detect obsolete manifests/std APIs, explain environment problems, verify
    native libraries/architectures, migrate versions, and produce shareable

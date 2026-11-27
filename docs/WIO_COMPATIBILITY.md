@@ -102,6 +102,21 @@ When a stable surface truly needs a user-visible change after `v1.0.0`, prefer:
 3. providing an explicit migration note,
 4. then removing it in a planned release instead of silently drifting.
 
+### Test migration and release qualification (accepted 2026-11-27)
+
+Tests follow the approved source/API contract. When an old feature is intentionally
+removed or changed, update its affected fixtures and expectations, retain tests
+for surviving behavior, and test useful rejection/migration diagnostics rather
+than keeping obsolete behavior alive solely for an old test. This is not
+permission to erase a regression or silently weaken assertions.
+
+Patch releases qualify affected behavior; broader patches normally budget 50-100
+relevant tests, while minor transitions run the full maintained suite on the
+supported release matrix. Unaffected tests need not be rerun when execution inputs
+are unchanged and the impact assessment is recorded. The count budget cannot
+justify omitting necessary coverage: split/re-scope the change or explicitly
+review a larger run. See [the canonical validation policy](WIO_V1_RELEASE_PLAN.md#41-impact-based-release-validation-accepted-2026-11-27).
+
 ## 6. Current `v1` Reading
 
 For the `v1` cycle, use this simple reading:
