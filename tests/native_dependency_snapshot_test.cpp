@@ -115,6 +115,11 @@ int main()
         require(unknown.linkerCaptureArguments().empty(), "do not change an unclassified link invocation");
         unknown.captureAfterBuild(artifact);
         require(unknown.toJson().find("unclassified-compile-option") != std::string::npos, "unknown input reason");
+        config.compileArguments.pop_back();
+        config.linkArguments = {"-fuse-ld=custom"};
+        Snapshot customLinker(config, runner);
+        customLinker.captureBeforeBuild();
+        require(customLinker.linkerCaptureArguments().empty(), "do not probe a different linker than the build uses");
         std::cout << "Native dependency codec checks passed\n";
         return 0;
     }

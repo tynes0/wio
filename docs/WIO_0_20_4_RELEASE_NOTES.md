@@ -38,8 +38,9 @@ The schema-version-1 report contains SHA-256 fingerprints for the generated
 translation unit, extra native sources, transitively included user and system
 headers, explicit native libraries, resolved linker inputs, the Wio generator,
 compiler and discoverable toolchain executables. It records ordered compilation
-and link options, target, product version, working directory and compiler probes.
-Relevant environment values are hashed rather than copied into the report.
+and link options, target, product version, working directory and compiler query
+hashes. The environment map stores hashes rather than raw values. Actual input
+paths and explicitly supplied command-line options remain visible in the record.
 
 Preprocessor-only probes include system headers and hash the preprocessed
 translation units. They use compiler-produced Make dependencies rather than a

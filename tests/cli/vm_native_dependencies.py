@@ -94,7 +94,8 @@ fn Entry() -> i32 { return Answer(41) == 42 ? 0 : 9; }
         self.assertTrue(any(entry["role"] == "toolchain-tool" for entry in report["inputs"]))
         self.assertTrue(any(entry["role"] == "linker-input" for entry in report["inputs"]), report["incompleteReasons"])
         self.assertEqual(len(report["preprocessedSha256"]), 2)
-        self.assertIn("-dumpmachine", report["toolchainProbes"])
+        self.assertIn("-dumpmachine", report["toolchainProbeSha256"])
+        self.assertTrue(any(entry["role"] == "compiler" for entry in report["inputs"]))
         self.assertIn("-std=c++20", report["compileArguments"])
 
     def test_header_change_is_separate_from_requirements_identity(self):
@@ -131,8 +132,10 @@ fn Entry() -> i32 { return Answer(41) == 42 ? 0 : 9; }
         secret = str(self.root / "private-environment-marker")
         Path(secret).mkdir()
         self.environment["CPATH"] = secret
+        self.environment["LIBRARY_PATH"] = secret
         report = self.build()
         self.assertEqual(report["environmentSha256"]["CPATH"], hashlib.sha256(("set:" + secret).encode()).hexdigest())
+        self.assertEqual(report["environmentSha256"]["LIBRARY_PATH"], hashlib.sha256(("set:" + secret).encode()).hexdigest())
         self.assertNotIn("private-environment-marker", json.dumps(report))
 
     def test_missing_report_is_regenerated(self):

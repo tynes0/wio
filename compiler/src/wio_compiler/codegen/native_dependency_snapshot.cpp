@@ -10,15 +10,42 @@
 #include <fstream>
 #include <set>
 #include <sstream>
+#include <stdexcept>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace wio::codegen
 {
     namespace
     {
-        constexpr std::size_t FileLimit = 256 * 1024 * 1024;
+        constexpr std::size_t FileLimit = 512 * 1024 * 1024;
         constexpr std::size_t TotalLimit = 1024 * 1024 * 1024;
         constexpr std::size_t DependencyLimit = 4 * 1024 * 1024;
         constexpr std::size_t InputLimit = 16384;
+
+        std::pair<bool, std::string> environmentValue(const char* name)
+        {
+#ifdef _WIN32
+            std::wstring key;
+            for (const char* c = name; *c; ++c)
+                key += static_cast<wchar_t>(*c);
+            SetLastError(ERROR_SUCCESS);
+            const auto required = GetEnvironmentVariableW(key.c_str(), nullptr, 0);
+            if (required == 0)
+                return {GetLastError() != ERROR_ENVVAR_NOT_FOUND, {}};
+            std::wstring value(required, L'\0');
+            const auto copied = GetEnvironmentVariableW(key.c_str(), value.data(), required);
+            if (copied >= required)
+                throw std::runtime_error("Native dependency environment changed while being read");
+            value.resize(copied);
+            return {true, common::filesystem::toUtf8(std::filesystem::path(value))};
+#else
+            const auto* value = std::getenv(name);
+            return {value != nullptr, value ? value : ""};
+#endif
+        }
 
         std::string pathText(const std::filesystem::path& path)
         {
@@ -71,6 +98,8 @@ namespace wio::codegen
     NativeDependencySnapshot::NativeDependencySnapshot(NativeDependencyConfig config, Runner runner)
         : config_(std::move(config)), runner_(std::move(runner))
     {
+        if (const auto resolved = resolveTool(common::filesystem::toUtf8(config_.compiler)); !resolved.empty())
+            config_.compiler = resolved;
     }
 
     void NativeDependencySnapshot::reason(std::string message)
@@ -124,7 +153,8 @@ namespace wio::codegen
         if (name.has_parent_path())
             return std::filesystem::absolute(name);
         std::vector<std::filesystem::path> directories{config_.compiler.parent_path()};
-        if (const auto* environment = std::getenv("PATH"))
+        const auto [hasPath, environment] = environmentValue("PATH");
+        if (hasPath)
         {
             std::stringstream parts(environment);
             std::string part;
@@ -159,8 +189,8 @@ namespace wio::codegen
             reason("toolchain-probe-failed: " + argument);
             return {};
         }
-        probes_[argument] = trim(result.output);
-        return probes_[argument];
+        probes_[argument] = runtime::std_hash::Sha256(trim(result.output));
+        return trim(result.output);
     }
 
     bool NativeDependencySnapshot::preprocessingArguments(std::vector<std::string>& result)
@@ -225,16 +255,20 @@ namespace wio::codegen
                                 "COMPILER_PATH", "GCC_EXEC_PREFIX", "SDKROOT", "DEVELOPER_DIR", "INCLUDE", "LIB",
                                 "LANG", "LC_ALL", "SOURCE_DATE_EPOCH", "MACOSX_DEPLOYMENT_TARGET"})
         {
-            const auto* value = std::getenv(key);
-            environment_[key] = value ? runtime::std_hash::Sha256(std::string("set:") + value) : "unset";
+            const auto [present, value] = environmentValue(key);
+            environment_[key] = present ? runtime::std_hash::Sha256(std::string("set:") + value) : "unset";
         }
         const auto version = probe("--version");
         const bool clang = version.find("clang") != std::string::npos;
         probe("-dumpmachine");
         probe("-print-search-dirs");
-        probe("-print-sysroot");
-        if (!clang)
+        if (clang)
+            probe("-print-resource-dir");
+        else
+        {
+            probe("-print-sysroot");
             probe("-dumpspecs");
+        }
         for (const char* tool : {"cc1plus", "as", "ld", "collect2"})
         {
             if (clang && (std::string_view(tool) == "cc1plus" || std::string_view(tool) == "collect2"))
@@ -284,6 +318,15 @@ namespace wio::codegen
 
     std::vector<std::string> NativeDependencySnapshot::linkerCaptureArguments()
     {
+        for (const auto& argument : config_.linkArguments)
+        {
+            if (argument.starts_with("-fuse-ld") || argument.starts_with("--ld-path") || argument.starts_with("-B") ||
+                argument.starts_with("-specs") || argument.starts_with("--specs") || argument.starts_with("@"))
+            {
+                reason("linker-capture-skipped-for-tool-selection-option: " + argument);
+                return {};
+            }
+        }
         if (!optionsUnderstood_)
         {
             reason("linker-capture-skipped-for-unclassified-options");
@@ -297,7 +340,12 @@ namespace wio::codegen
         }
 #ifdef __APPLE__
         const auto help = runner_({common::filesystem::toUtf8(tool), "-help"});
-        if (help.output.find("-dependency_info") != std::string::npos)
+        // Apple ld does not consistently advertise this established diagnostic
+        // option in -help. Recognize its own version identity as well; do not
+        // assume that every executable named ld is Apple's linker.
+        const auto version = runner_({common::filesystem::toUtf8(tool), "-v"});
+        if (help.output.find("-dependency_info") != std::string::npos ||
+            version.output.find("PROJECT:ld") != std::string::npos)
         {
             linkerFormat_ = "darwin-dependency-info";
             linkerDependencies_ = workspace_.file("linker-dependencies");
@@ -405,7 +453,7 @@ namespace wio::codegen
             }
             out += "\n  }";
         };
-        object("toolchainProbes", probes_);
+        object("toolchainProbeSha256", probes_);
         object("environmentSha256", environment_);
         out += ",\n  \"inputs\": [";
         bool first = true;
