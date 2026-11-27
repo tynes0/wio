@@ -128,7 +128,7 @@ fn Entry() -> i32 { return Answer(41) == 42 ? 0 : 9; }
         self.execute("project", "build", "--project", self.root, "--backend", "vm", "--rebuild", success=False)
         self.assertEqual(before, self.report_path.read_bytes())
 
-    def test_environment_is_hashed_not_exposed(self):
+    def test_environment_map_and_toolchain_probes_are_hashed(self):
         secret = str(self.root / "private-environment-marker")
         Path(secret).mkdir()
         self.environment["CPATH"] = secret
@@ -136,7 +136,11 @@ fn Entry() -> i32 { return Answer(41) == 42 ? 0 : 9; }
         report = self.build()
         self.assertEqual(report["environmentSha256"]["CPATH"], hashlib.sha256(("set:" + secret).encode()).hexdigest())
         self.assertEqual(report["environmentSha256"]["LIBRARY_PATH"], hashlib.sha256(("set:" + secret).encode()).hexdigest())
-        self.assertNotIn("private-environment-marker", json.dumps(report))
+        self.assertNotIn("private-environment-marker", json.dumps(report["environmentSha256"]))
+        for value in report["toolchainProbeSha256"].values():
+            self.assertRegex(value, "^[0-9a-f]{64}$")
+        # Actual dependency paths (including Apple's negative linker lookups)
+        # remain visible by design; they are not raw environment-map values.
 
     def test_missing_report_is_regenerated(self):
         self.build()
