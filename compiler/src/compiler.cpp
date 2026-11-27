@@ -38,6 +38,7 @@
 #include "wio/codegen/cpp_generator.h"
 #include "wio/codegen/wir_cpp_backend.h"
 #include "wio/codegen/wir_native_requirements.h"
+#include "wio/codegen/native_dependency_snapshot.h"
 #include "wio/bytecode/codec.h"
 #include "wio/bytecode/compiler.h"
 #include "wio/bytecode/disassembler.h"
@@ -603,6 +604,15 @@ namespace wio
             }
             const auto bridgeOnlyFlags = gAppData.argParser.GetValuesOf<bool>("NATIVE-BRIDGE-ONLY");
             const auto requirements = gAppData.argParser.GetValuesOf<std::string>("NATIVE-REQUIREMENTS-OUTPUT");
+            const auto dependencies = gAppData.argParser.GetValuesOf<std::string>("NATIVE-DEPENDENCIES-OUTPUT");
+            if (!dependencies.empty() &&
+                (dependencies.size() != 1 || dependencies.front().empty() || gAppData.cppBackend != "wir" ||
+                 bridgeOnlyFlags.empty() || !bridgeOnlyFlags.front() || emitsIntermediate ||
+                 gAppData.flags.get_EmitCpp() || gAppData.flags.get_DryRun()))
+            {
+                WIO_LOG_FATAL("--native-dependencies-output requires a canonical native bridge compilation.");
+                return false;
+            }
             if (!requirements.empty() &&
                 (requirements.size() != 1 || requirements.front().empty() || gAppData.cppBackend != "wir" ||
                  (!emitBytecode && (bridgeOnlyFlags.empty() || !bridgeOnlyFlags.front()))))
@@ -665,7 +675,7 @@ namespace wio
                 return false;
             }
             if (hasBytecodeSidecar && (gAppData.buildTarget != BuildTarget::SharedLibrary ||
-                                      gAppData.flags.get_EmitCpp() || gAppData.flags.get_DryRun()))
+                                       gAppData.flags.get_EmitCpp() || gAppData.flags.get_DryRun()))
             {
                 WIO_LOG_FATAL("--bytecode-sidecar requires a compiled --target shared native bridge.");
                 return false;
@@ -791,7 +801,7 @@ namespace wio
         }
 
         int writeBytecode(const wir::lowered::Module& module, const std::filesystem::path& outputPath,
-                           const bool logOutput = true)
+                          const bool logOutput = true)
         {
             bytecode::CompileResult compilation = bytecode::Compiler{}.compile(module);
             for (const bytecode::CompileDiagnostic& diagnostic : compilation.diagnostics())
@@ -836,9 +846,10 @@ namespace wio
         }
 
         std::filesystem::path nativeRequirementsPath(const std::filesystem::path& sourcePath,
-                                                     std::initializer_list<std::filesystem::path> reserved)
+                                                     std::initializer_list<std::filesystem::path> reserved,
+                                                     const char* argument = "NATIVE-REQUIREMENTS-OUTPUT")
         {
-            const auto values = gAppData.argParser.GetValuesOf<std::string>("NATIVE-REQUIREMENTS-OUTPUT");
+            const auto values = gAppData.argParser.GetValuesOf<std::string>(argument);
             if (values.empty())
                 return {};
             const auto output = std::filesystem::absolute(filesystem::fromUtf8(values.front())).lexically_normal();
@@ -864,11 +875,12 @@ namespace wio
                 collision |= same(path);
             if (collision)
                 throw std::runtime_error(
-                    "Native requirements output must be distinct from source, compiler and backend outputs.");
+                    "Native report output must be distinct from source, compiler and backend outputs.");
             return output;
         }
 
-        int writeNativeRequirements(const std::string& json, const std::filesystem::path& output)
+        int writeNativeRequirements(const std::string& json, const std::filesystem::path& output,
+                                    const char* kind = "requirements")
         {
             std::error_code error;
             if (output.has_parent_path())
@@ -879,11 +891,11 @@ namespace wio
                 !replaceBackendOutputWithRetry(staging, output, detail))
             {
                 std::filesystem::remove(staging, error);
-                WIO_LOG_FATAL("Native requirements output could not be published: {} ({})", filesystem::toUtf8(output),
+                WIO_LOG_FATAL("Native {} output could not be published: {} ({})", kind, filesystem::toUtf8(output),
                               detail);
                 return EXIT_FAILURE;
             }
-            WIO_LOG_INFO("Generated native requirements: {}", filesystem::toGenericUtf8(output));
+            WIO_LOG_INFO("Generated native {}: {}", kind, filesystem::toGenericUtf8(output));
             return EXIT_SUCCESS;
         }
 
@@ -923,10 +935,12 @@ namespace wio
             WIO_LOG_PROCESS_ERRORS(CompilationError);
 
             const auto requirementsPath = nativeRequirementsPath(sourcePath, {outputPath});
-            const auto requirements = requirementsPath.empty() ? std::string{} :
-                codegen::WirNativeRequirements::build(loweringResult.module()).toJson();
+            const auto requirements = requirementsPath.empty()
+                                          ? std::string{}
+                                          : codegen::WirNativeRequirements::build(loweringResult.module()).toJson();
             const auto written = writeBytecode(loweringResult.module(), outputPath);
-            if (written != EXIT_SUCCESS || requirementsPath.empty()) return written;
+            if (written != EXIT_SUCCESS || requirementsPath.empty())
+                return written;
             return writeNativeRequirements(requirements, requirementsPath);
         }
 
@@ -938,8 +952,7 @@ namespace wio
                 WIO_LOG_FATAL("Bytecode file is empty or could not be read: {}", filesystem::toUtf8(inputPath));
                 return EXIT_FAILURE;
             }
-            const auto bytes = std::span{
-                reinterpret_cast<const std::byte*>(binary.data()), binary.size()};
+            const auto bytes = std::span{reinterpret_cast<const std::byte*>(binary.data()), binary.size()};
             bytecode::DecodeResult decoded = bytecode::decode(bytes);
             if (!decoded.succeeded())
             {
@@ -2841,11 +2854,10 @@ namespace wio
                 std::error_code ec;
                 if (std::filesystem::exists(candidatePath, ec) && !ec)
                 {
-                    std::filesystem::path resolvedPath = isStdLib
-                                                             ? candidatePath.lexically_normal().make_preferred()
-                                                             : filesystem::getCanonicalPath(
-                                                                   std::filesystem::absolute(candidatePath))
-                                                                   .make_preferred();
+                    std::filesystem::path resolvedPath =
+                        isStdLib
+                            ? candidatePath.lexically_normal().make_preferred()
+                            : filesystem::getCanonicalPath(std::filesystem::absolute(candidatePath)).make_preferred();
                     gAppData.resolvedModulePaths.emplace(std::move(cacheKey), resolvedPath);
                     return resolvedPath;
                 }
@@ -2957,7 +2969,11 @@ namespace wio
                      .SetDescription("Overrides the .wiob output path used by --emit-bytecode."))
             .Add(Argonaut::Argument("NATIVE-REQUIREMENTS-OUTPUT")
                      .AddAlias("--native-requirements-output")
-                     .SetDescription("Writes a native bridge requirements identity report; this does not enable cache reuse."))
+                     .SetDescription(
+                         "Writes a native bridge requirements identity report; this does not enable cache reuse."))
+            .Add(Argonaut::Argument("NATIVE-DEPENDENCIES-OUTPUT")
+                     .AddAlias("--native-dependencies-output")
+                     .SetDescription("Records native bridge file/toolchain dependencies without enabling cache reuse."))
             .Add(Argonaut::Argument("BYTECODE-SIDECAR")
                      .AddAlias("--bytecode-sidecar")
                      .SetDescription(
@@ -3399,7 +3415,10 @@ namespace wio
             // 4. Code Generation
             std::string cppCode;
             std::string nativeRequirements;
+            std::string nativeRequirementsSha256;
+            std::string nativeDependencies;
             std::filesystem::path nativeRequirementsOutputPath;
+            std::filesystem::path nativeDependenciesOutputPath;
             std::filesystem::path bytecodeOutputPath;
             struct BytecodeStaging final
             {
@@ -3455,8 +3474,15 @@ namespace wio
 
                 nativeRequirementsOutputPath =
                     nativeRequirementsPath(sourcePath, {outputPath, cppPath, bytecodeOutputPath});
-                if (!nativeRequirementsOutputPath.empty())
-                    nativeRequirements = codegen::WirNativeRequirements::build(loweringResult.module()).toJson();
+                nativeDependenciesOutputPath = nativeRequirementsPath(
+                    sourcePath, {outputPath, cppPath, bytecodeOutputPath, nativeRequirementsOutputPath},
+                    "NATIVE-DEPENDENCIES-OUTPUT");
+                if (!nativeRequirementsOutputPath.empty() || !nativeDependenciesOutputPath.empty())
+                {
+                    const auto requirements = codegen::WirNativeRequirements::build(loweringResult.module());
+                    nativeRequirements = requirements.toJson();
+                    nativeRequirementsSha256 = requirements.sha256;
+                }
 
                 codegen::WirCppBackendOptions backendOptions;
                 backendOptions.emitMain = gAppData.buildTarget == BuildTarget::Executable;
@@ -3616,6 +3642,79 @@ namespace wio
                 }
                 else
                 {
+                    std::unique_ptr<codegen::NativeDependencySnapshot> dependencies;
+                    if (!nativeDependenciesOutputPath.empty())
+                    {
+                        codegen::NativeDependencyConfig config;
+                        config.compiler = backendCompilerPath;
+                        config.generator = getExecutablePath();
+                        config.generatedSource = cppPath;
+                        config.requirementsSha256 = nativeRequirementsSha256;
+                        config.version = WIO_VERSION;
+                        config.target = buildTargetToString(gAppData.buildTarget);
+                        config.compileArguments = {"-std=c++20", "-shared"};
+#ifndef _WIN32
+                        config.compileArguments.push_back("-fPIC");
+                        config.compileArguments.push_back("-pthread");
+#else
+                        if (backendCompilerLooksGnuLike(backendCompiler))
+                            config.compileArguments.push_back("-Wa,-mbig-obj");
+#endif
+                        for (const auto& path : systemIncludeDirs)
+                            config.compileArguments.push_back("-I" + filesystem::toUtf8(path));
+                        for (const auto& path : includeDirs)
+                            config.compileArguments.push_back("-I" + path);
+                        for (const auto& arg : backendArgs)
+                        {
+                            if (isSourceFilePath(arg))
+                                config.sources.push_back(filesystem::fromUtf8(arg));
+                            else
+                                config.compileArguments.push_back(arg);
+                        }
+                        config.linkArguments = backendArgs;
+                        for (const auto& dir : linkDirs)
+                            config.linkArguments.push_back("-L" + dir);
+                        for (const auto& library : linkLibraries)
+                        {
+                            config.linkArguments.push_back(library);
+                            const auto path = filesystem::fromUtf8(library);
+                            if (path.is_absolute())
+                                config.explicitInputs.push_back(path);
+                        }
+                        config.explicitInputs.push_back(runtimeLibraryPath);
+                        config.linkArguments.push_back(filesystem::toUtf8(runtimeLibraryPath));
+#ifdef _WIN32
+                        if (backendCompilerLooksGnuLike(backendCompiler))
+                            config.linkArguments.insert(config.linkArguments.end(), {"-lws2_32", "-lshell32"});
+#else
+                        config.linkArguments.push_back("-pthread");
+#ifdef __APPLE__
+                        config.linkArguments.insert(config.linkArguments.end(),
+                                                    {"-Xlinker", "-install_name", "-Xlinker",
+                                                     "@rpath/" + filesystem::toUtf8(outputPath.filename())});
+#endif
+#endif
+                        dependencies = std::make_unique<codegen::NativeDependencySnapshot>(
+                            std::move(config),
+                            [&](const std::vector<std::string>& arguments)
+                            {
+                                std::stringstream command;
+                                command << quoteCommand(arguments.front());
+                                appendBackendArguments(command, {arguments.begin() + 1, arguments.end()});
+                                const auto result =
+                                    runCommandCaptureOutput(command.str(), {backendCompilerPath.parent_path()});
+                                return codegen::NativeProbeResult{result.exitCode, result.output};
+                            });
+                        dependencies->captureBeforeBuild();
+                        if (dependencies->containsInput(nativeDependenciesOutputPath) ||
+                            (!nativeRequirementsOutputPath.empty() &&
+                             dependencies->containsInput(nativeRequirementsOutputPath)))
+                        {
+                            WIO_LOG_FATAL("Native reports must not overwrite native source, header, library or "
+                                          "toolchain inputs.");
+                            return EXIT_FAILURE;
+                        }
+                    }
                     std::stringstream cmd;
                     cmd << quoteCommand(backendCompiler);
                     cmd << " -std=c++20 ";
@@ -3660,6 +3759,8 @@ namespace wio
 #else
                     cmd << " -pthread";
 #endif
+                    if (dependencies)
+                        appendBackendArguments(cmd, dependencies->linkerCaptureArguments());
                     cmd << " -o " << quotePath(nativeArtifact);
 
                     const CommandResult backendResult =
@@ -3671,6 +3772,18 @@ namespace wio
                         reportBackendCommandFailure("Backend compilation failed", exitCode, backendResult.output,
                                                     backendResult.command);
                         return EXIT_FAILURE;
+                    }
+                    if (dependencies)
+                    {
+                        dependencies->captureAfterBuild(nativeArtifact);
+                        if (dependencies->containsInput(nativeDependenciesOutputPath) ||
+                            (!nativeRequirementsOutputPath.empty() &&
+                             dependencies->containsInput(nativeRequirementsOutputPath)))
+                        {
+                            WIO_LOG_FATAL("Native reports must not overwrite linker inputs.");
+                            return EXIT_FAILURE;
+                        }
+                        nativeDependencies = dependencies->toJson();
                     }
                 }
 
@@ -3734,6 +3847,10 @@ namespace wio
                 }
                 WIO_LOG_INFO("Generated bytecode output: {}", filesystem::toGenericUtf8(bytecodeOutputPath));
             }
+            if (backendPhaseResult == EXIT_SUCCESS && !nativeDependenciesOutputPath.empty() &&
+                writeNativeRequirements(nativeDependencies, nativeDependenciesOutputPath, "dependencies") !=
+                    EXIT_SUCCESS)
+                return EXIT_FAILURE;
             if (backendPhaseResult == EXIT_SUCCESS && !nativeRequirementsOutputPath.empty())
                 return writeNativeRequirements(nativeRequirements, nativeRequirementsOutputPath);
             return backendPhaseResult;

@@ -135,7 +135,7 @@ realm SelfHostedProject {
             return Failure<std::ResultUnit>($"The standalone VM runner is missing: ${info.vmRunner}. Install or build wio-vm beside wio.");
         }
 
-        mut outputs: string[] = [info.vmBytecodeOutput, info.vmBridgeOutput, info.vmNativeRequirementsOutput, VmBytecodeCandidate(info),
+        mut outputs: string[] = [info.vmBytecodeOutput, info.vmBridgeOutput, info.vmNativeRequirementsOutput, info.vmNativeDependenciesOutput, VmBytecodeCandidate(info),
             VmBytecodeCandidate(info) + ".publish", VmBytecodeCandidate(info) + ".build-args"];
         outputs.Push(info.wioTarget == "exe" ? info.vmExecutableOutput : info.vmModuleOutput);
         if (info.hostEnabled) { outputs.Push(info.vmHostOutput); }
@@ -435,6 +435,11 @@ realm SelfHostedProject {
             compileArgs.Push(info.vmBytecodeOutput);
             compileArgs.Push("--native-requirements-output");
             compileArgs.Push(info.vmNativeRequirementsOutput);
+            if (emitMode == "")
+            {
+                compileArgs.Push("--native-dependencies-output");
+                compileArgs.Push(info.vmNativeDependenciesOutput);
+            }
             if (info.wioTarget != "exe")
             {
                 compileArgs.Push("--bytecode-sidecar-kind");
@@ -458,7 +463,8 @@ realm SelfHostedProject {
         mut outputCurrent = OutputUpToDate(info.wioOutput, compilerInputs);
         if (backend == "vm") {
             outputCurrent = OutputUpToDate(info.vmBytecodeOutput, compilerInputs) and
-                OutputUpToDate(info.vmBridgeOutput, compilerInputs) and fs::IsFile(info.vmNativeRequirementsOutput);
+                OutputUpToDate(info.vmBridgeOutput, compilerInputs) and fs::IsFile(info.vmNativeRequirementsOutput) and
+                fs::IsFile(info.vmNativeDependenciesOutput);
         }
         mut signature = serialization::QuoteJson(info.config) + "\n";
         for argument in compileArgs
@@ -818,7 +824,7 @@ realm SelfHostedProject {
 
             mut protectedFiles: string[] = [
                 info.manifestFile, info.wioEntry, info.nativeCore, info.vmRunner,
-                info.vmExecutableOutput, info.vmBytecodeOutput, info.vmBridgeOutput, info.vmNativeRequirementsOutput, info.vmStandardNativeLibrary,
+                info.vmExecutableOutput, info.vmBytecodeOutput, info.vmBridgeOutput, info.vmNativeRequirementsOutput, info.vmNativeDependenciesOutput, info.vmStandardNativeLibrary,
                 info.vmStandardNativeCatalog, info.sdkIncludeDirectory
             ];
             protectedFiles.Push(info.vmModuleOutput);

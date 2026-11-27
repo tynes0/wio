@@ -34,6 +34,7 @@ realm SelfHostedProject {
         vmBytecodeOutput: string;
         vmBridgeOutput: string;
         vmNativeRequirementsOutput: string;
+        vmNativeDependenciesOutput: string;
         vmExecutableOutput: string;
         vmRunner: string;
         vmStandardNativeLibrary: string;
@@ -459,6 +460,7 @@ realm SelfHostedProject {
             )
         );
         info.vmNativeRequirementsOutput = info.vmBridgeOutput + ".requirements.json";
+        info.vmNativeDependenciesOutput = info.vmBridgeOutput + ".dependencies.json";
         info.vmNativeLibraries = ResolvePaths(info.projectRoot, ManifestArray(manifest, "vm.nativeLibraries"));
         info.vmExecutableOutput = path::AbsoluteFromRaw(
             info.projectRoot,
@@ -574,6 +576,7 @@ realm SelfHostedProject {
         description += "  \"vm\": {\"bytecode\": " + serialization::QuoteJson(info.vmBytecodeOutput);
         description += ", \"bridge\": " + serialization::QuoteJson(info.vmBridgeOutput);
         description += ", \"nativeRequirements\": " + serialization::QuoteJson(info.vmNativeRequirementsOutput);
+        description += ", \"nativeDependencies\": " + serialization::QuoteJson(info.vmNativeDependenciesOutput);
         description += ", \"executable\": " + serialization::QuoteJson(info.vmExecutableOutput);
         description += ", \"runner\": " + serialization::QuoteJson(info.vmRunner);
         description += ", \"standardNativeLibrary\": " + serialization::QuoteJson(info.vmStandardNativeLibrary);

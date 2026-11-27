@@ -179,6 +179,12 @@ backend functionality.
   dependency validity. The next slices are 0.20.4 dependency tracking and
   0.20.5 safe adapter cache integration. See
   [identity scope](WIO_0_20_3_RELEASE_NOTES.md).
+  **0.20.4 preparation:** native bridge builds record transitive preprocessing
+  dependencies, linker inputs, toolchain/options/environment and artifact hashes.
+  Incomplete observations remain explicit; reports do not authorize reuse.
+  Fresh preprocessing and link resolution are required for future cache validity.
+  The next slice remains 0.20.5 safe adapter cache integration, not SDK closure.
+  See [dependency scope](WIO_0_20_4_RELEASE_NOTES.md).
 
 The first blocker belongs to VM runtime/CLI correctness and pass 2; the second
 belongs to the existing generated-build-cost gate and pass 3. Under the approved

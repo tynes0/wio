@@ -2,6 +2,8 @@
 
 This directory is the main documentation map for Wio.
 
+Wio 0.20.4: [native dependency records](WIO_0_20_4_RELEASE_NOTES.md).
+
 Wio 0.20.3: [native adapter requirements identities](WIO_0_20_3_RELEASE_NOTES.md).
 
 Wio 0.20.2: [bytecode-first VM executable builds](WIO_0_20_2_RELEASE_NOTES.md).
