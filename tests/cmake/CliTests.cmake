@@ -2,6 +2,12 @@
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
+    add_test(NAME wio_vm_native_dependencies
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/cli/vm_native_dependencies.py"
+            --wio "$<TARGET_FILE:wio_app>" --wio-root "${CMAKE_SOURCE_DIR}"
+            --scratch "${CMAKE_BINARY_DIR}/vm-native-dependencies-tests")
+    wio_test_labels(wio_vm_native_dependencies cli project vm native dependency build)
+    set_tests_properties(wio_vm_native_dependencies PROPERTIES TIMEOUT 300)
     add_test(NAME wio_vm_native_requirements
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/cli/vm_native_requirements.py"
             --wio "$<TARGET_FILE:wio_app>" --wio-root "${CMAKE_SOURCE_DIR}"

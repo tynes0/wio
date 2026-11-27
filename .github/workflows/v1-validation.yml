@@ -3,6 +3,10 @@ name: release validation
 on:
   workflow_dispatch:
     inputs:
+      vm_native_dependencies_only:
+        description: "Scoped 0.20.4 native dependency observation validation"
+        type: boolean
+        default: false
       vm_native_requirements_only:
         description: "Scoped 0.20.3 native adapter requirements validation"
         type: boolean
@@ -44,7 +48,7 @@ concurrency:
 
 jobs:
   vm-project-release:
-    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.vm_budget_only || inputs.vm_bytecode_first_only || inputs.vm_native_requirements_only) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.vm_budget_only || inputs.vm_bytecode_first_only || inputs.vm_native_requirements_only || inputs.vm_native_dependencies_only) }}
     strategy:
       fail-fast: false
       matrix:
@@ -78,10 +82,11 @@ jobs:
           wio_vm_artifact_cohort_test wio_vm_artifact_generation_test
           wio_vm_artifact_extra_registry wio_sdk_version_contract_test wio_vm_native_preflight_test
           wio_wir_native_requirements_test wio_wir_native_bridge_plan_test
+          wio_native_dependency_snapshot_test
       - name: Qualify execution policy and affected regressions
         run: >
           ctest --test-dir build -C Release --output-on-failure --no-tests=error
-          -R "^(wio_vm_(native_requirements|bytecode_first|native_preflight|execution_budget|scalar_execution|coroutine_execution|exceptional_cleanup|artifact_codec|artifact_cohort|artifact_generation|executable_artifact|project_artifact|executable_cohort|native_bridge_project|native_project_cli)|wio_wir_native_(requirements|bridge_plan)|wio_project_analysis_check|wio_sdk_version_contract)$"
+          -R "^(wio_vm_(native_dependencies|native_requirements|bytecode_first|native_preflight|execution_budget|scalar_execution|coroutine_execution|exceptional_cleanup|artifact_codec|artifact_cohort|artifact_generation|executable_artifact|project_artifact|executable_cohort|native_bridge_project|native_project_cli)|wio_wir_native_(requirements|bridge_plan)|wio_native_dependency_snapshot|wio_project_analysis_check|wio_sdk_version_contract)$"
       - name: Preserve focused test evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -151,7 +156,7 @@ jobs:
     uses: ./.github/workflows/release-layout-validation.yml
 
   validate:
-    if: ${{ !inputs.layout_only && !inputs.native_install_probe && !inputs.project_check_only && !inputs.vm_budget_only && !inputs.vm_bytecode_first_only && !inputs.vm_native_requirements_only }}
+    if: ${{ !inputs.layout_only && !inputs.native_install_probe && !inputs.project_check_only && !inputs.vm_budget_only && !inputs.vm_bytecode_first_only && !inputs.vm_native_requirements_only && !inputs.vm_native_dependencies_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -227,7 +232,7 @@ jobs:
           -R "^(wio_vm_(artifact_codec|artifact_generation|artifact_cohort|executable_cohort|executable_artifact|project_artifact|sdk_module_adapter|sdk_module_artifacts|sdk_session_lifecycle|sdk_session_artifacts|task_source_shutdown|task_source_import|sdk_async_artifacts|sdk_task_inputs_artifacts|module_native_paths|sdk_native_dependencies|native_bundle_policy|sdk_native_install|project_library_cli|project_record_policy)|wio_process_utf8_project)$"
 
   sanitizers:
-    if: ${{ !inputs.layout_only && !inputs.native_install_probe && !inputs.project_check_only && !inputs.vm_budget_only && !inputs.vm_bytecode_first_only && !inputs.vm_native_requirements_only }}
+    if: ${{ !inputs.layout_only && !inputs.native_install_probe && !inputs.project_check_only && !inputs.vm_budget_only && !inputs.vm_bytecode_first_only && !inputs.vm_native_requirements_only && !inputs.vm_native_dependencies_only }}
     runs-on: ubuntu-latest
 
     steps:

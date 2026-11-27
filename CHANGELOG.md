@@ -2,6 +2,20 @@
 
 All notable user-facing changes to Wio are recorded here.
 
+## [0.20.4] - 2026-11-28
+
+### Added
+
+- Native VM adapter builds publish a dependency record covering native sources,
+  transitive preprocessing inputs, available linker inputs and toolchain context.
+- `--native-dependencies-output` and `project describe` expose the record, its
+  artifact/requirements hashes and explicit incomplete-observation reasons.
+- Failed builds preserve prior reports; known native input/report collisions are
+  rejected. Unknown options and unsupported dependency formats never enable reuse.
+
+Adapter reuse remains disabled until 0.20.5. Module ABI descriptor 11 and bytecode
+format 1.1 are unchanged. See [scope and usage](docs/WIO_0_20_4_RELEASE_NOTES.md).
+
 ## [0.20.3] - 2026-11-27
 
 ### Added
