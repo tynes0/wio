@@ -227,9 +227,9 @@ Use this to see what Wio thinks the project root, manifest, sources, outputs,
 and native/host pieces are. When no project path is supplied, Wio searches the
 current directory and its ancestors for `wio.makewio` or `makewio`.
 
-### `project check` — analysis without building (unreleased)
+### `project check` — analysis without building (since 0.20.0)
 
-Available in development sources after 0.19.0; use a rebuilt matching CLI.
+Requires Wio 0.20.0 or newer.
 
 ```sh
 wio project check

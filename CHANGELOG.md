@@ -2,13 +2,22 @@
 
 All notable user-facing changes to Wio are recorded here.
 
-## [Unreleased]
+## [0.20.0] - 2026-11-27
 
 ### Added
 
 - `wio project check`: manifest-aware syntax/semantic analysis with no generated
   artifacts, native/host compilation, VM packaging or build-signature changes.
   Preserves executable/library targets and manifest import/include settings.
+
+### Release qualification
+
+- The project owner explicitly waived the full minor-transition suite for this
+  narrow release on 2026-11-27. Qualify affected CLI/editor tests, SDK version
+  consistency and installed-package checks instead; this does not change the
+  standing full-suite policy for later minor transitions or claim a full pass.
+- Module ABI descriptor remains 11. VM instruction-budget policy, bytecode-first
+  build architecture, frontend splitting and the remaining v1 work stay open.
 
 ## [0.14.0] - 2026-08-23
 

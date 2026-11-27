@@ -2,6 +2,8 @@
 
 This directory is the main documentation map for Wio.
 
+Wio 0.20.0: [analysis-only project checks and release qualification](WIO_0_20_RELEASE_NOTES.md).
+
 Wio 0.19.0: [release scope](WIO_0_19_RELEASE_NOTES.md) and
 [preparation evidence](WIO_0_19_RELEASE_CHECKLIST.md). Published versions and
 downloads are listed on [GitHub Releases](https://github.com/tynes0/wio/releases).
