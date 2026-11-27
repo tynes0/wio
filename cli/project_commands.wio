@@ -2,11 +2,14 @@ use project_manifest;
 use project_vm;
 use std::console as console;
 use std::fs as fs;
+use std::hash as hash;
 use std::path as path;
 use std::process as process;
 use std::regex as regex;
+use std::resource as resource;
 use std::result as result;
 use std::serialization as serialization;
+use std::uuid as uuid;
 
 realm SelfHostedProject {
     fn HasFlag(args: string[], name: string) -> bool {
@@ -132,12 +135,13 @@ realm SelfHostedProject {
             return Failure<std::ResultUnit>($"The standalone VM runner is missing: ${info.vmRunner}. Install or build wio-vm beside wio.");
         }
 
-        mut outputs: string[] = [info.vmBytecodeOutput, info.vmBridgeOutput];
+        mut outputs: string[] = [info.vmBytecodeOutput, info.vmBridgeOutput, VmBytecodeCandidate(info),
+            VmBytecodeCandidate(info) + ".publish", VmBytecodeCandidate(info) + ".build-args"];
         outputs.Push(info.wioTarget == "exe" ? info.vmExecutableOutput : info.vmModuleOutput);
         if (info.hostEnabled) { outputs.Push(info.vmHostOutput); }
 
         let protectedInputs: string[] = [info.wioEntry, info.manifestFile, info.nativeCore, info.vmRunner,
-            info.wioOutput, info.hostOutput];
+            info.vmStandardNativeLibrary, info.vmStandardNativeCatalog, info.wioOutput, info.hostOutput];
         mut index = 0usize;
         while (index < outputs.Count())
         {
@@ -167,9 +171,157 @@ realm SelfHostedProject {
         return std::OkUnit();
     }
 
-    fn PackageVmExecutable(info: ProjectInfo, forceRebuild: bool) -> std::Result<i32>
+    fn BytecodeCompilerInputs(info: ProjectInfo) -> string[]
     {
-        mut inputs: string[] = [info.manifestFile, info.vmRunner, info.vmBytecodeOutput, info.vmBridgeOutput];
+        mut inputs: string[] = [info.manifestFile, info.nativeCore, info.wioEntry];
+        for source in FilesWithExtensions([path::Join(info.toolchainRoot, "std")], [".wio"])
+        {
+            inputs.Push(source);
+        }
+
+        // Module roots may contain the build directory. Track source files, not
+        // directory timestamps that include our own bytecode/package outputs.
+        for source in FilesWithExtensions(info.wioSourceRoots, [".wio"])
+        {
+            inputs.Push(source);
+        }
+
+        // Relative imports beside the entry remain legal even when the
+        // manifest supplies a different explicit module search root.
+        for source in FilesWithExtensions([path::ParentPath(info.wioEntry)], [".wio"])
+        {
+            if (not inputs.Contains(source)) inputs.Push(source);
+        }
+
+        return inputs;
+    }
+
+    fn VmBytecodeCandidate(info: ProjectInfo) -> string
+    {
+        // Keep the final filename: it determines the logical bytecode module name.
+        return path::Join3(path::ParentPath(info.vmBytecodeOutput), ".vm-bytecode-stage",
+            path::FileName(info.vmBytecodeOutput));
+    }
+
+    fn VmBytecodeArguments(info: ProjectInfo, noBuiltin: bool, output: string) -> string[]
+    {
+        mut arguments: string[] = [info.wioEntry, "--target", "exe", "--emit-bytecode",
+            "--bytecode-output", output];
+        AppendFrontendArguments(ref arguments, info, "");
+        if (noBuiltin) arguments.Push("--no-builtin");
+        return arguments;
+    }
+
+    fn VmBytecodeSignature(info: ProjectInfo, noBuiltin: bool) -> string
+    {
+        let arguments = VmBytecodeArguments(info, noBuiltin, info.vmBytecodeOutput);
+        mut signature = serialization::QuoteJson(info.config) + "\n";
+        for argument in arguments
+        {
+            signature += serialization::QuoteJson(argument) + "\n";
+        }
+
+        for input in BytecodeCompilerInputs(info)
+        {
+            signature += serialization::QuoteJson(input) + "\n";
+            if (fs::IsFile(input)) signature += hash::Sha256(fs::ReadTextRaw(input)) + "\n";
+        }
+
+        return signature;
+    }
+
+    fn PrepareVmBytecode(info: ProjectInfo, forceRebuild: bool, noBuiltin: bool, working: string) -> std::Result<i32>
+    {
+        let signature = VmBytecodeSignature(info, noBuiltin);
+        let candidate = VmBytecodeCandidate(info);
+        let signatureFile = candidate + ".build-args";
+        if (not forceRebuild)
+        {
+            let cached = fs::ReadText(candidate);
+            let metadata = fs::ReadText(signatureFile);
+            if (cached.IsOk() and metadata.IsOk() and
+                metadata.Value() == signature + "bytecode:" + hash::Sha256(cached.Value()))
+            {
+                fs::WriteText?(working, cached.Value());
+                console::PrintLine!("Project VM bytecode: up to date, skipping compiler invocation.");
+                return std::Ok<i32>(0);
+            }
+        }
+
+        let compiled = RunProcess?(info.nativeCore, VmBytecodeArguments(info, noBuiltin, working), info.projectRoot);
+        if (compiled != 0) return std::Ok<i32>(compiled);
+        if (VmBytecodeSignature(info, noBuiltin) != signature)
+        {
+            return Failure<i32>("Project inputs changed during bytecode compilation; retry the build.");
+        }
+
+        // Each invocation owns its working module. A concurrent cache update
+        // can only cause a benign miss: metadata includes the exact byte digest.
+        if (fs::EnsureDirectory(path::ParentPath(candidate)).IsOk())
+        {
+            let cacheCopy = working + ".cache";
+            let cacheMetadata = working + ".signature";
+            if (fs::CopyFile(working, cacheCopy).IsOk() and fs::ReplaceFileAtomic(cacheCopy, candidate).IsOk())
+            {
+                if (fs::WriteText(cacheMetadata, signature + "bytecode:" + hash::Sha256(fs::ReadTextRaw(working))).IsOk())
+                {
+                    fs::ReplaceFileAtomic(cacheMetadata, signatureFile);
+                }
+            }
+        }
+        return std::Ok<i32>(0);
+    }
+
+    fn PublishVmBytecode(info: ProjectInfo, working: string) -> std::UnitResult
+    {
+        if (fs::IsFile(info.vmBytecodeOutput) and
+            hash::Sha256(fs::ReadTextRaw(working)) == hash::Sha256(fs::ReadTextRaw(info.vmBytecodeOutput)))
+        {
+            return std::OkUnit();
+        }
+
+        let publication = working + ".publish";
+        fs::CopyFile?(working, publication);
+        fs::ReplaceFileAtomic?(publication, info.vmBytecodeOutput);
+        return std::OkUnit();
+    }
+
+    fn CleanupVmBytecodeStage(directory: string)
+    {
+        fs::TryRemoveAll(directory);
+    }
+
+    fn BuildVmStandardWorking(info: ProjectInfo, forceRebuild: bool, noBuiltin: bool, working: string) -> std::Result<i32>
+    {
+        let bytecodeResult = PrepareVmBytecode?(info, forceRebuild, noBuiltin, working);
+        if (bytecodeResult != 0) return std::Ok<i32>(bytecodeResult);
+        let supported = process::Capture?(info.vmRunner,
+            ["--check-native", working, "--standard-library", info.vmStandardNativeLibrary], info.projectRoot);
+        if (supported.exitCode == 0)
+        {
+            PublishVmBytecode?(info, working);
+            console::PrintLine!("Project VM native support: reusing the standard adapter; no project C++ build.");
+            return PackageVmExecutable(info, forceRebuild, info.vmStandardNativeLibrary, working);
+        }
+
+        console::PrintLine!(supported.text.Trim());
+        return std::Ok<i32>(supported.exitCode);
+    }
+
+    fn BuildVmStandard(info: ProjectInfo, forceRebuild: bool, noBuiltin: bool) -> std::Result<i32>
+    {
+        let directory = path::Join3(path::ParentPath(info.vmBytecodeOutput), ".wbc", uuid::NewV4());
+        let cleanup = resource::Owned<string>(directory, CleanupVmBytecodeStage);
+        fs::EnsureDirectory?(directory);
+        let outcome = BuildVmStandardWorking(info, forceRebuild, noBuiltin,
+            path::Join(directory, path::FileName(info.vmBytecodeOutput)));
+        cleanup.Dispose();
+        return outcome;
+    }
+
+    fn PackageVmExecutable(info: ProjectInfo, forceRebuild: bool, producer: string, bytecode: string) -> std::Result<i32>
+    {
+        mut inputs: string[] = [info.manifestFile, info.vmRunner, info.vmBytecodeOutput, producer];
         for library in info.vmNativeLibraries
         {
             inputs.Push(library);
@@ -182,8 +334,22 @@ realm SelfHostedProject {
 
         if (not forceRebuild and OutputUpToDate(info.vmExecutableOutput, inputs))
         {
-            let verified = process::Capture?(info.vmRunner,
-                ["--verify", info.vmExecutableOutput, "--expect-instruction-limit", $"${info.vmInstructionLimit}"], info.projectRoot);
+            mut verification: string[] = ["--verify", info.vmExecutableOutput,
+                "--expect-instruction-limit", $"${info.vmInstructionLimit}", "--expect-bytecode", bytecode,
+                "--expect-native-library", producer];
+            for library in info.vmNativeLibraries
+            {
+                verification.Push("--expect-native-library");
+                verification.Push(library);
+            }
+
+            for library in info.vmRuntimeLibraries
+            {
+                verification.Push("--expect-runtime-library");
+                verification.Push(library);
+            }
+
+            let verified = process::Capture?(info.vmRunner, verification, info.projectRoot);
             if (verified.exitCode == 0)
             {
                 console::PrintLine!("Project VM executable: up to date, skipping package invocation.");
@@ -194,8 +360,8 @@ realm SelfHostedProject {
         }
 
         mut arguments: string[] = [
-            "--package", info.vmBytecodeOutput, "--output", info.vmExecutableOutput,
-            "--replace", "--version-libraries", "--native-library", info.vmBridgeOutput,
+            "--package", bytecode, "--output", info.vmExecutableOutput,
+            "--replace", "--version-libraries", "--native-library", producer,
             "--instruction-limit", $"${info.vmInstructionLimit}"
         ];
         for library in info.vmNativeLibraries
@@ -239,6 +405,18 @@ realm SelfHostedProject {
         }
         if (backend == "vm") {
             ValidateVmProject?(info);
+        }
+
+        // Explicit native build inputs retain their established producer path.
+        // Ordinary executable projects first compile bytecode, then query the
+        // trusted, reusable standard adapter without executing application code.
+        if (backend == "vm" and info.wioTarget == "exe" and info.wioNativeSources.Count() == 0usize and
+            info.wioLinkLibraries.Count() == 0usize and info.wioBackendArgs.Count() == 0usize and
+            info.vmNativeLibraries.Count() == 0usize and (cppBackend == "" or cppBackend == "wir"))
+        {
+            let standard = BuildVmStandard?(info, forceRebuild, noBuiltin);
+            if (standard != 3) return std::Ok<i32>(standard);
+            console::PrintLine!("Project VM native support: building a project-specific adapter.");
         }
         let compileTarget = backend == "vm" ? "shared" : info.wioTarget;
         let compileOutput = backend == "vm" ? info.vmBridgeOutput : info.wioOutput;
@@ -307,7 +485,7 @@ realm SelfHostedProject {
         if (emitMode != "") { return std::Ok<i32>(0); }
         if (backend == "vm")
         {
-            return info.wioTarget == "exe" ? PackageVmExecutable(info, forceRebuild) : BuildVmLibrary(info, forceRebuild);
+            return info.wioTarget == "exe" ? PackageVmExecutable(info, forceRebuild, info.vmBridgeOutput, info.vmBytecodeOutput) : BuildVmLibrary(info, forceRebuild);
         }
         if (not info.hostEnabled) { return std::Ok<i32>(0); }
 
@@ -638,7 +816,8 @@ realm SelfHostedProject {
 
             mut protectedFiles: string[] = [
                 info.manifestFile, info.wioEntry, info.nativeCore, info.vmRunner,
-                info.vmExecutableOutput, info.vmBytecodeOutput, info.vmBridgeOutput, info.sdkIncludeDirectory
+                info.vmExecutableOutput, info.vmBytecodeOutput, info.vmBridgeOutput, info.vmStandardNativeLibrary,
+                info.vmStandardNativeCatalog, info.sdkIncludeDirectory
             ];
             protectedFiles.Push(info.vmModuleOutput);
             protectedFiles.Push(info.vmHostOutput);

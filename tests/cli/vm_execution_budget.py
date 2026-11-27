@@ -136,11 +136,12 @@ instructionLimit = "{budget}"
             [*command, "run", *selection, "--no-build"], success=False))
         self.assertIn("differs", self.execute(
             [*command, "run", *selection, "--no-build", "--vm-instruction-limit", "0"], success=False))
-        bridge = next(path for path in (project / ".wio-build" / "interop").glob("*.vm-native.*")
-                      if path.suffix in (".dll", ".so", ".dylib"))
-        before = bridge.stat().st_mtime_ns
+        build_outputs = project / ".wio-build" / "interop"
+        compiler_outputs = {path: path.stat().st_mtime_ns for path in build_outputs.iterdir()
+                            if path.suffix in (".wiob", ".dll", ".so", ".dylib")}
         self.execute([*command, "run", *selection, "--vm-instruction-limit", "0"])
-        self.assertEqual(bridge.stat().st_mtime_ns, before, "Policy-only override rebuilt the native bridge")
+        self.assertEqual({path: path.stat().st_mtime_ns for path in compiler_outputs}, compiler_outputs,
+                         "Policy-only override rebuilt bytecode or a project bridge")
         self.execute([*command, "run", *selection, "--no-build", "--vm-instruction-limit", "0"])
         description = json.loads(self.execute([*command, "describe", "--project", project]))
         self.assertEqual(description["vm"]["instructionLimit"], 1)

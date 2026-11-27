@@ -30,6 +30,10 @@ namespace wio::vm::artifact
     // Verify before loading any registry or running Wio code. Version-1 images
     // have presence checks only; version-2 cohorts also bind every file's bytes.
     void verifyDependencies(const std::filesystem::path& executable, const Payload& payload);
+    void verifyExpectedBytecode(const Payload& payload, const std::filesystem::path& expected);
+    void verifyExpectedLibraries(const std::filesystem::path& executable, const Payload& payload,
+                                 std::span<const std::filesystem::path> registries,
+                                 std::span<const std::filesystem::path> runtimeLibraries);
     struct PackageOptions
     {
         bool replace = false;

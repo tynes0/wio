@@ -1,5 +1,13 @@
 # Wio VM Executable Artifacts
 
+Since 0.20.2, standard-covered VM executable projects emit bytecode and reuse the
+toolchain's precompiled standard-native producer, without project C++ generation
+or compilation. The producer is copied into the self-contained bundle; its ABI
+catalog is only a build-time input. Native-backed projects and shared/static
+wrappers keep their established build paths. Native-only dependency-closure
+caching remains a follow-up, not a completed part of this patch. See
+[build selection and limitations](WIO_0_20_2_RELEASE_NOTES.md).
+
 Since 0.20.1, executable applications default to unlimited instructions. Pass
 `--instruction-limit N` to the raw packager, or set a VM project's
 `--vm-instruction-limit N` / `[vm] instructionLimit = N`, to embed a finite

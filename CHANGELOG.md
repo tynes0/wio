@@ -2,6 +2,24 @@
 
 All notable user-facing changes to Wio are recorded here.
 
+## [0.20.2] - 2026-11-27
+
+### Added
+
+- Bytecode-first VM executable builds reuse a precompiled standard-native adapter
+  instead of generating/compiling a per-project C++ bridge when its ABI catalog
+  covers the program. Native-backed projects retain the explicit adapter path.
+- Non-executing native preflight checks concrete function/header identities and
+  required layouts, excluding open template signatures. The toolchain publishes
+  the shared std producer and companion catalog with its runtime files.
+- Independent bytecode cache inputs no longer treat generated outputs beneath a
+  module root as source-directory changes. Existing budgets/deployment checks
+  and native-project behavior are preserved.
+- Windows std adapters and MinGW standalone VM runners avoid compiler-runtime
+  DLL search-path dependencies. Module ABI descriptor remains 11.
+
+See [scope and remaining native-cache work](docs/WIO_0_20_2_RELEASE_NOTES.md).
+
 ## [0.20.1] - 2026-11-27
 
 ### Fixed

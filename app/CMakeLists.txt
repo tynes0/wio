@@ -73,6 +73,41 @@ install(TARGETS wio_app
     RUNTIME DESTINATION bin
 )
 
+# One shared standard-native producer per toolchain, not per VM application.
+# Keep this out of the runtime library/runner link graph: a runtime-only build
+# must not acquire a transitive compiler dependency.
+if(CMAKE_CONFIGURATION_TYPES)
+    set(WIO_VM_STD_NATIVE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
+else()
+    set(WIO_VM_STD_NATIVE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+set(WIO_VM_STD_NATIVE_OUTPUT "${WIO_VM_STD_NATIVE_DIRECTORY}/wio-std-native${CMAKE_SHARED_LIBRARY_SUFFIX}")
+set(WIO_VM_STD_NATIVE_BYTECODE "${WIO_VM_STD_NATIVE_DIRECTORY}/wio-std-native.wiob")
+file(GLOB_RECURSE WIO_VM_STD_NATIVE_INPUTS CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/std/*.wio" "${CMAKE_SOURCE_DIR}/runtime/include/*.h"
+    "${CMAKE_SOURCE_DIR}/sdk/include/*.h")
+set(WIO_VM_STD_NATIVE_LINK_ARGUMENTS)
+if(WIN32)
+    # The reusable producer must not depend on a user's MinGW DLL search path.
+    list(APPEND WIO_VM_STD_NATIVE_LINK_ARGUMENTS --backend-arg -static)
+endif()
+add_custom_command(
+    OUTPUT "${WIO_VM_STD_NATIVE_OUTPUT}" "${WIO_VM_STD_NATIVE_BYTECODE}"
+    COMMAND ${CMAKE_COMMAND} -E env "WIO_ROOT=${CMAKE_SOURCE_DIR}"
+        $<TARGET_FILE:wio_app> "${CMAKE_SOURCE_DIR}/vm/stdlib/native.wio"
+        --target shared --native-bridge-only --bytecode-sidecar-kind library
+        --bytecode-sidecar "${WIO_VM_STD_NATIVE_BYTECODE}" --output "${WIO_VM_STD_NATIVE_OUTPUT}"
+        ${WIO_VM_STD_NATIVE_LINK_ARGUMENTS}
+    DEPENDS wio_app "${WIO_BACKEND_RUNTIME_LIBRARY}"
+        "${CMAKE_SOURCE_DIR}/vm/stdlib/native.wio" ${WIO_VM_STD_NATIVE_INPUTS}
+    COMMENT "Building reusable VM standard-library native adapter..."
+    VERBATIM)
+add_custom_target(wio_vm_std_native ALL DEPENDS "${WIO_VM_STD_NATIVE_OUTPUT}" "${WIO_VM_STD_NATIVE_BYTECODE}"
+    SOURCES "${CMAKE_SOURCE_DIR}/vm/stdlib/native.wio")
+set_target_properties(wio_vm_std_native PROPERTIES FOLDER "runtime")
+install(FILES "${WIO_VM_STD_NATIVE_OUTPUT}" "${WIO_VM_STD_NATIVE_BYTECODE}"
+    DESTINATION bin COMPONENT WioVmRuntime)
+
 if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURCE}")
     set(WIO_SELFHOST_CLI_DEPENDENCIES
         "${WIO_SELFHOST_CLI_SOURCE}"
@@ -123,7 +158,7 @@ if(EXISTS "${WIO_SELFHOST_CLI_SOURCE}" AND EXISTS "${WIO_SELFHOST_ARGONAUT_SOURC
     add_custom_target(wio_selfhost_cli ALL
         DEPENDS "${WIO_SELFHOST_CLI_OUTPUT}"
     )
-    add_dependencies(wio_selfhost_cli wio_vm_runner)
+    add_dependencies(wio_selfhost_cli wio_vm_runner wio_vm_std_native)
     set_target_properties(wio_selfhost_cli PROPERTIES FOLDER "app")
 
     install(

@@ -152,7 +152,7 @@ backend functionality.
   the policy change, not the later non-JIT VM performance qualification.
 - **Bytecode-first VM builds:** pure-Wio executable compilation/execution must
   not require per-project C++ generation/compilation/linking; use bytecode and
-  a prebuilt compatible VM/runtime. The current project VM path always prepares
+  a prebuilt compatible VM/runtime. Before 0.20.2 the project VM path always prepared
   a native bridge producer with `--native-bridge-only` and a bytecode sidecar,
   even for pure programs. Native-backed projects must compile only the required
   adapter/dependency closure and reuse it when a Wio-only change leaves that
@@ -167,6 +167,12 @@ backend functionality.
   pure executable path and zero bridge rebuilds for binding-preserving script
   edits, with rebuild/invalidation for changed native requirements. Qualify
   cold/warm/incremental builds, bytecode/native parity and deployment behavior.
+  **0.20.2 delivery:** standard-covered executable projects select bytecode plus
+  the precompiled std producer, with concrete ABI/header/layout preflight.
+  Explicit native inputs and unsupported specializations keep the project bridge.
+  Native-project ABI/dependency-closure cache separation remains open for the next
+  narrow patch; do not mark this entire blocker closed. See
+  [implemented scope](WIO_0_20_2_RELEASE_NOTES.md).
 
 The first blocker belongs to VM runtime/CLI correctness and pass 2; the second
 belongs to the existing generated-build-cost gate and pass 3. Under the approved

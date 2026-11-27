@@ -3,6 +3,7 @@
 #include "wio/bytecode/codec.h"
 #include "wio/vm/machine.h"
 
+#include <algorithm>
 #include <charconv>
 #include <cstddef>
 #include <cstdlib>
@@ -13,6 +14,8 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace wio::app
@@ -158,6 +161,93 @@ namespace wio::app
             std::cerr << '\n';
         }
     } // namespace
+
+    int checkVmNativeSupport(const std::filesystem::path& bytecodePath, const std::filesystem::path& standardLibrary)
+    {
+        bytecode::Module module;
+        bytecode::Module catalog;
+        std::string error;
+        if (!readModule(bytecodePath, module, error))
+        {
+            std::cerr << "VM native preflight: " << error << '\n';
+            return EXIT_FAILURE;
+        }
+        auto catalogPath = standardLibrary;
+        catalogPath.replace_extension(".wiob");
+        if (!readModule(catalogPath, catalog, error))
+        {
+            std::cerr << "VM standard adapter catalog: " << error << '\n';
+            return EXIT_FAILURE;
+        }
+        // A matching C++ symbol/signature must not accidentally replace a user
+        // definition from another header. The verified companion catalog also
+        // identifies the native declaration's header, not just its stable key.
+        std::unordered_set<std::string> nativeImports;
+        const auto importKey = [](const bytecode::Module& owner, const bytecode::Import& entry)
+        { return std::to_string(entry.kind) + ":" + std::string(owner.string(entry.logicalName)); };
+        for (const auto& entry : catalog.contract.imports)
+            if (entry.kind == 2 || entry.kind == 3)
+                nativeImports.insert(importKey(catalog, entry));
+        for (const auto& entry : module.contract.imports)
+            if ((entry.kind == 2 || entry.kind == 3) && !nativeImports.contains(importKey(module, entry)))
+            {
+                // A header may have C++ global initialization even without an
+                // explicit native function. Do not discard its producer.
+                std::cout << "native import requires a project adapter: " << module.string(entry.logicalName) << '\n';
+                return 3;
+            }
+        std::unordered_multimap<std::string_view, std::string_view> headers;
+        const auto openTypes = module.openTypes();
+        const auto catalogOpenTypes = catalog.openTypes();
+        for (const auto& function : catalog.functions)
+            if (function.hasNativeBinding && !function.hasOpenSignature(catalogOpenTypes))
+                headers.emplace(catalog.string(function.nativeBinding.stableKey),
+                                catalog.string(function.nativeBinding.header));
+        for (const auto& function : module.functions)
+        {
+            if (!function.hasNativeBinding || function.hasOpenSignature(openTypes))
+                continue;
+            const auto key = module.string(function.nativeBinding.stableKey);
+            const auto [begin, end] = headers.equal_range(key);
+            if (std::none_of(begin, end, [&](const auto& entry)
+                             { return entry.second == module.string(function.nativeBinding.header); }))
+            {
+                std::cout << "native declaration requires a project adapter: " << key << '\n';
+                return 3;
+            }
+        }
+        std::unordered_multimap<std::string_view, std::string_view> typeHeaders;
+        for (const auto& type : catalog.types)
+            if (type.hasNativeBinding)
+                typeHeaders.emplace(catalog.string(type.nativeBinding.cppName),
+                                    catalog.string(type.nativeBinding.header));
+        for (std::size_t index = 0; index < module.types.size(); ++index)
+        {
+            const auto& type = module.types[index];
+            if (type.kind != 28 || !type.hasNativeBinding || openTypes[index] ||
+                (type.nominalKind != 1 && type.nominalKind != 2))
+                continue;
+            const auto [begin, end] = typeHeaders.equal_range(module.string(type.nativeBinding.cppName));
+            if (std::none_of(begin, end, [&](const auto& entry)
+                             { return entry.second == module.string(type.nativeBinding.header); }))
+            {
+                std::cout << "native type declaration requires a project adapter\n";
+                return 3;
+            }
+        }
+        vm::Machine machine{module};
+        if (!machine.loadNativeLibrary(standardLibrary, &error))
+        {
+            std::cerr << "VM standard adapter: " << error << '\n';
+            return EXIT_FAILURE;
+        }
+        if (!machine.nativeBindingsAvailable(&error))
+        {
+            std::cout << error << '\n';
+            return 3;
+        }
+        return EXIT_SUCCESS;
+    }
 
     int runVmBytecode(const int argc, char* argv[])
     {

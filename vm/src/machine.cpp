@@ -3199,6 +3199,67 @@ namespace wio::vm
         return true;
     }
 
+    bool Machine::nativeBindingsAvailable(std::string* error) const
+    {
+        const auto missing = [&](std::string message)
+        {
+            if (error)
+                *error = std::move(message);
+            return false;
+        };
+        if (!program_)
+            return missing("native preflight requires a live VM machine");
+        const auto& module = *program_->module;
+        const auto openTypes = module.openTypes();
+        std::scoped_lock lock{program_->nativeMutex};
+        bool nativeAny = false;
+        const auto containsAny = [&](const auto& self, const std::uint32_t type, unsigned depth) -> bool
+        {
+            if (type >= module.types.size() || depth > 32)
+                return false;
+            if (module.types[type].kind == TypeAny)
+                return true;
+            for (const auto argument : module.types[type].arguments)
+                if (self(self, argument, depth + 1))
+                    return true;
+            return false;
+        };
+        for (const auto& function : module.functions)
+        {
+            if (!function.hasNativeBinding || function.hasOpenSignature(openTypes))
+                continue;
+            const auto key = module.string(function.nativeBinding.stableKey);
+            if (!program_->nativeFunctions.contains(std::string(key)))
+                return missing("native function requires a project adapter: " + std::string(key));
+            nativeAny |= containsAny(containsAny, function.returnType, 0);
+            for (const auto& parameter : function.parameters)
+                nativeAny |= containsAny(containsAny, parameter.type, 0);
+        }
+        for (std::uint32_t index = 0; index < module.types.size(); ++index)
+        {
+            const auto& type = module.types[index];
+            if (type.kind != TypeNamed || !type.hasNativeBinding || openTypes[index])
+                continue;
+            const auto& layouts = program_->nativePodLayouts;
+            if (type.nominalKind == NominalComponent && type.nominalRepresentation == RepresentationNativePod &&
+                (!layouts || !layouts->types.contains(index)))
+                return missing("native POD requires a project adapter: " + std::string(module.string(type.name)));
+            if (type.nominalKind == NominalObject && (!layouts || !layouts->objectContracts.contains(index)))
+                return missing("native object requires a project adapter: " + std::string(module.string(type.name)));
+        }
+        if (nativeAny)
+            for (const auto& function : module.functions)
+                for (const auto& block : function.blocks)
+                    for (const auto& instruction : block.instructions)
+                        if ((instruction.opcode == bytecode::Opcode::AnyBox ||
+                             instruction.opcode == bytecode::Opcode::AnyCheckedCast) &&
+                            instruction.targetType < module.types.size() &&
+                            module.types[instruction.targetType].kind >= TypeNamed &&
+                            !openTypes[instruction.targetType])
+                            return missing("native Any payload requires a project-specific adapter");
+        return true;
+    }
+
     bool Machine::registerNativeRegistryImpl(const WioNativeAbiRegistry& registry, const WioNativeTaskApi* tasks,
                                              const WioNativeTaskCompletionApi* completions, std::string* error,
                                              const WioNativePodLayoutApi* pods, const WioNativePodDefaultApi* defaults,
