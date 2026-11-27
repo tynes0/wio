@@ -372,6 +372,81 @@ namespace wio::vm::artifact
 
     namespace
     {
+        bool matchesBytes(const std::filesystem::path& path, std::span<const std::byte> expected)
+        {
+            std::ifstream input{path, std::ios::binary | std::ios::ate};
+            if (!input || input.tellg() != static_cast<std::streamoff>(expected.size()))
+                return false;
+            input.seekg(0);
+            std::array<char, 65536> buffer{};
+            for (std::size_t offset = 0; offset < expected.size();)
+            {
+                const auto count = std::min(buffer.size(), expected.size() - offset);
+                if (!input.read(buffer.data(), count) ||
+                    !std::equal(expected.begin() + offset, expected.begin() + offset + count,
+                                reinterpret_cast<const std::byte*>(buffer.data())))
+                    return false;
+                offset += count;
+            }
+            return input.peek() == std::char_traits<char>::eof() && !input.bad();
+        }
+
+        bool sameFileBytes(const std::filesystem::path& left, const std::filesystem::path& right)
+        {
+            std::ifstream first{left, std::ios::binary | std::ios::ate};
+            std::ifstream second{right, std::ios::binary | std::ios::ate};
+            if (!first || !second || first.tellg() <= 0 || first.tellg() != second.tellg() ||
+                static_cast<std::uint64_t>(first.tellg()) > Limit)
+                return false;
+            auto remaining = static_cast<std::uint64_t>(first.tellg());
+            first.seekg(0);
+            second.seekg(0);
+            std::array<char, 65536> firstBuffer{};
+            std::array<char, 65536> secondBuffer{};
+            while (remaining != 0)
+            {
+                const auto count = std::min<std::uint64_t>(firstBuffer.size(), remaining);
+                if (!first.read(firstBuffer.data(), count) || !second.read(secondBuffer.data(), count) ||
+                    !std::equal(firstBuffer.begin(), firstBuffer.begin() + count, secondBuffer.begin()))
+                    return false;
+                remaining -= count;
+            }
+            return first.peek() == std::char_traits<char>::eof() && !first.bad() &&
+                   second.peek() == std::char_traits<char>::eof() && !second.bad();
+        }
+    } // namespace
+
+    void verifyExpectedBytecode(const Payload& payload, const std::filesystem::path& expected)
+    {
+        require(matchesBytes(expected, payload.bytecode), "VM executable bytecode differs from the current build");
+    }
+
+    void verifyExpectedLibraries(const std::filesystem::path& executable, const Payload& payload,
+                                 std::span<const std::filesystem::path> registries,
+                                 std::span<const std::filesystem::path> runtimeLibraries)
+    {
+        require(registries.size() == payload.libraries.size(),
+                "VM executable registry plan differs from the current build");
+        const auto directory = std::filesystem::absolute(executable).parent_path();
+        for (std::size_t index = 0; index < registries.size(); ++index)
+            require(sameFileBytes(registries[index], inside(directory, payload.libraries[index])),
+                    "VM executable registry differs from the current build");
+        std::size_t index = 0;
+        for (const auto& dependency : payload.dependencies)
+        {
+            if (dependency.registry)
+                continue;
+            require(index < runtimeLibraries.size() &&
+                        sameFileBytes(runtimeLibraries[index], inside(directory, dependency.path)),
+                    "VM executable runtime dependency differs from the current build");
+            ++index;
+        }
+        require(index == runtimeLibraries.size(),
+                "VM executable runtime dependency plan differs from the current build");
+    }
+
+    namespace
+    {
         void packageImage(const std::filesystem::path& runner, std::span<const std::byte> code,
                           std::span<const std::filesystem::path> registries,
                           std::span<const std::filesystem::path> runtimeLibraries,

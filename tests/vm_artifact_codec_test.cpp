@@ -124,6 +124,17 @@ int main(int argc, char* argv[])
                    payload.libraries == std::vector<std::string>{"bridge.dll"},
                "embedded module round trip failed");
         expect(read(root / "deployed" / "bridge.dll") == read(library), "native library was not copied");
+        artifact::verifyExpectedBytecode(payload, code);
+        artifact::verifyExpectedLibraries(app, payload, libraries, {});
+        write(root / "different.wiob", Bytes{std::byte{9}});
+        rejects([&] { artifact::verifyExpectedBytecode(payload, root / "different.wiob"); }, "bytecode differs");
+        rejects([&] { artifact::verifyExpectedBytecode(payload, root / "missing.wiob"); }, "bytecode differs");
+        rejects([&] { artifact::verifyExpectedLibraries(app, payload, {}, {}); }, "registry plan");
+        write(root / "different.dll", Bytes{std::byte{1}, std::byte{9}});
+        const std::vector<fs::path> differentLibraries{root / "different.dll"};
+        rejects([&] { artifact::verifyExpectedLibraries(app, payload, differentLibraries, {}); }, "registry differs");
+        rejects([&] { artifact::verifyExpectedLibraries(app, payload, libraries, libraries); },
+                "runtime dependency plan");
         expect(!fs::exists(root / "deployed" / ".wio-vm-package.lock"), "successful package retained its lock");
         fs::create_directory(root / "deployed" / ".wio-vm-package.lock");
         rejects([&] { artifact::package(runner, code, libraries, root / "deployed" / "second"); }, "locked");

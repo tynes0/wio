@@ -1,0 +1,84 @@
+// Built once per toolchain release, never once per user project.
+use std::algorithms;
+use std::assert;
+use std::async;
+use std::attribute;
+use std::benchmark;
+use std::bigint;
+use std::binary;
+use std::buffer;
+use std::builders;
+use std::chars;
+use std::collections;
+use std::compression;
+use std::concurrency;
+use std::config;
+use std::console;
+use std::convert;
+use std::csv;
+use std::encoding;
+use std::environment;
+use std::event;
+use std::fs;
+use std::geometry;
+use std::hash;
+use std::heap;
+use std::io;
+use std::iterator;
+use std::json;
+use std::localization;
+use std::log;
+use std::math;
+use std::meta;
+use std::mime;
+use std::net;
+use std::numeric;
+use std::option;
+use std::os;
+use std::path;
+use std::platform;
+use std::process;
+use std::queue;
+use std::random;
+use std::range;
+use std::reflect;
+use std::regex;
+use std::resource;
+use std::result;
+use std::semver;
+use std::serialization;
+use std::sets;
+use std::sort;
+use std::span;
+use std::statistics;
+use std::stream;
+use std::strings;
+use std::time;
+use std::traits;
+use std::tuple;
+use std::unicode;
+use std::uuid;
+use std::vector;
+
+// Instantiate the standard console's borrowed scalar/string call surfaces.
+// This body is never executed and is removed from the native-only producer;
+// its concrete native specializations remain in the exported registry.
+fn StandardNativeCoverage()
+{
+    std::console::PrintLine!("");
+    std::console::PrintLine!(false);
+    std::console::PrintLine!('x');
+    std::console::PrintLine!(0i8);
+    std::console::PrintLine!(0i16);
+    std::console::PrintLine!(0i32);
+    std::console::PrintLine!(0i64);
+    std::console::PrintLine!(0isize);
+    std::console::PrintLine!(0u8);
+    std::console::PrintLine!(0u16);
+    std::console::PrintLine!(0u32);
+    std::console::PrintLine!(0u64);
+    std::console::PrintLine!(0usize);
+    std::console::PrintLine!(0f32);
+    std::console::PrintLine!(0f64);
+    std::console::PrintLine!(u"");
+}

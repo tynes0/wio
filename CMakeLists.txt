@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(wio_lang
-    VERSION 0.20.1
+    VERSION 0.20.2
     LANGUAGES C CXX
 )
 

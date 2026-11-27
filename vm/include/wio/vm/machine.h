@@ -155,6 +155,11 @@ namespace wio::vm
         bool resumeDebugExecution();
         bool abortDebugExecution();
 
+        // Conservative preflight only; does not initialize globals or execute Wio.
+        // Open templates are excluded. Missing native bindings/layouts require a
+        // project-specific producer rather than an unsafe shared-adapter guess.
+        [[nodiscard]] bool nativeBindingsAvailable(std::string* error = nullptr) const;
+
         // Registry descriptors are copied; the registry array may be released
         // after this call. Native thunk code and its containing library must
         // remain loaded while the machine can execute registered functions.

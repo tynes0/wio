@@ -2,6 +2,8 @@
 
 This directory is the main documentation map for Wio.
 
+Wio 0.20.2: [bytecode-first VM executable builds](WIO_0_20_2_RELEASE_NOTES.md).
+
 Wio 0.20.1: [VM application execution policy](WIO_0_20_1_RELEASE_NOTES.md).
 
 Wio 0.20.0: [analysis-only project checks and release qualification](WIO_0_20_RELEASE_NOTES.md).

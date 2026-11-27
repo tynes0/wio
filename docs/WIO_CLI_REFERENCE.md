@@ -304,6 +304,20 @@ C++ host, rejects `--cpp-backend legacy` and explicit emission modes, and checks
 both artifacts for incremental reuse. See
 [the VM native bridge contract](./WIO_VM_NATIVE_BRIDGE.md).
 
+### VM executable build selection (since 0.20.2)
+
+`project build/run/package --backend vm` emits bytecode first for executable
+projects without explicit native build inputs. If the toolchain's precompiled
+standard-native producer and ABI catalog cover the program, no project C++ source
+or bridge is generated/compiled. `project describe` exposes both standard files.
+The CLI reports standard-adapter reuse or selection of a project-specific adapter.
+
+Native declarations/layouts or specializations outside that catalog retain the
+existing bridge path. Explicit native sources, link libraries, backend arguments
+and additional native producers also retain that path. Shared/static VM library
+wrappers are unchanged. The default execution backend remains native C++.
+See [scope and remaining native cache work](WIO_0_20_2_RELEASE_NOTES.md).
+
 ### VM instruction budgets (since 0.20.1)
 
 VM executable projects default to unlimited instruction execution. Set

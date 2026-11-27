@@ -208,6 +208,22 @@ namespace wio::bytecode
         bool hasCoroutine = false;
         CoroutineLayout coroutine;
 
+        [[nodiscard]] bool hasOpenSignature(const std::vector<bool>& openTypes) const noexcept
+        {
+            if (!genericParameters.empty() || (flags & FunctionTemplateDeclaration) != 0)
+                return true;
+            const auto open = [&](const std::uint32_t type) { return type < openTypes.size() && openTypes[type]; };
+            if (open(returnType) || open(ownerType))
+                return true;
+            for (const auto& parameter : parameters)
+                if (open(parameter.type))
+                    return true;
+            for (const auto type : nativeBinding.templateArguments)
+                if (open(type))
+                    return true;
+            return false;
+        }
+
         auto operator<=>(const Function&) const = default;
     };
 

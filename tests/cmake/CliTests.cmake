@@ -2,6 +2,12 @@
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
+    add_test(NAME wio_vm_bytecode_first
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/cli/vm_bytecode_first.py"
+            --wio "$<TARGET_FILE:wio_app>" --wio-root "${CMAKE_SOURCE_DIR}"
+            --scratch "${CMAKE_BINARY_DIR}/vm-bytecode-first-tests")
+    wio_test_labels(wio_vm_bytecode_first cli project vm bytecode native build)
+    set_tests_properties(wio_vm_bytecode_first PROPERTIES TIMEOUT 300)
     add_test(NAME wio_vm_execution_budget
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/cli/vm_execution_budget.py"
             --wio "$<TARGET_FILE:wio_app>" --runner "$<TARGET_FILE:wio_vm_runner>"

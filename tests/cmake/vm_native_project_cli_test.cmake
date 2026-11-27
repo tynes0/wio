@@ -72,7 +72,7 @@ file(SHA256 "${bytecode}" previous_bytecode)
 file(SHA256 "${bridge}" previous_bridge)
 run_checked("Failed native build preserves bytecode" 1 "${project}/wio/main.wio"
     --target shared --output "${bridge}" --bytecode-sidecar "${bytecode}"
-    --include-dir "${project}/native/include" --backend-arg "-WioTestForcedFailure")
+    --include-dir "${project}/native/include" --backend-arg "-fno-wio-test-forced-failure")
 file(SHA256 "${bytecode}" current_bytecode)
 file(SHA256 "${bridge}" current_bridge)
 if(NOT previous_bytecode STREQUAL current_bytecode OR NOT previous_bridge STREQUAL current_bridge)

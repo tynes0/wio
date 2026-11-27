@@ -136,9 +136,13 @@ Scheduling update 2026-11-27: required bytecode-first architecture and eliminati
 of unnecessary project bridge work belong to `0.20.x`; pass 3 in `0.26.x` tunes
 and qualifies compiler/build throughput rather than delaying that usability fix.
 
-This is an open v1 blocker within pass 3. The current VM project command always
-selects a shared native producer with `--native-bridge-only` plus a bytecode
-sidecar; pruning unrelated bodies does not remove that C++ build dependency.
+This remains an open v1 blocker within pass 3. Since 0.20.2, standard-covered
+executable projects emit bytecode and reuse the precompiled std adapter, avoiding
+per-project C++ generation/compilation. Project-specific native producers and
+shared/static wrappers still use their existing path. Separating native adapter
+ABI/dependency caches from ordinary Wio body changes is the next narrow patch;
+do not infer that this full blocker has closed. See
+[implemented scope](WIO_0_20_2_RELEASE_NOTES.md).
 Required outcomes:
 
 - pure-Wio executable builds use bytecode and prebuilt VM/runtime support,

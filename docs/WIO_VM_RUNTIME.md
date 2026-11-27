@@ -27,6 +27,17 @@ Branch arguments are copied to the target block parameters before control is
 transferred. This preserves canonical Lowered WIR phi semantics without a
 second language-specific control-flow model.
 
+## Standard native support
+
+Since 0.20.2 the toolchain also builds a reusable `wio-std-native` producer and
+companion `.wiob` ABI catalog. Executable project builds can reuse these instead
+of compiling a project bridge. Native ABI/header/layout preflight runs without
+invoking application entry/global code or native thunks. Unknown specializations
+and project-specific native code retain their adapter path. The runner/runtime
+link graph remains independent of the compiler; producing the std adapter from
+Wio sources is a toolchain build step. See
+[bytecode-first build selection](WIO_0_20_2_RELEASE_NOTES.md).
+
 ## Instruction execution policy
 
 Since 0.20.1, normal raw-bytecode runners and packaged VM applications default

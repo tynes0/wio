@@ -23,19 +23,53 @@ int main(int argc, char* argv[])
             return wio::app::runVmModule(decoded.module, self, libraries, {args.begin() + 1, args.end()},
                                          payload.instructionLimit);
         }
+        if (args.size() > 1 && args[1] == "--check-native")
+        {
+            if (args.size() != 5 || args[3] != "--standard-library")
+                throw std::runtime_error("usage: wio-vm --check-native MODULE.wiob --standard-library LIBRARY");
+            return wio::app::checkVmNativeSupport(std::filesystem::u8path(args[2]), std::filesystem::u8path(args[4]));
+        }
         if (args.size() > 1 && args[1] == "--verify")
         {
             std::uint64_t expectedLimit = 0;
-            if (args.size() != 3 && (args.size() != 5 || args[3] != "--expect-instruction-limit" ||
-                                     !wio::app::parseVmInstructionLimit(args[4], expectedLimit)))
-                throw std::runtime_error("usage: wio-vm --verify APPLICATION [--expect-instruction-limit UINT64]");
+            bool hasLimit = false;
+            std::filesystem::path expectedBytecode;
+            std::vector<std::filesystem::path> expectedRegistries;
+            std::vector<std::filesystem::path> expectedRuntime;
+            if (args.size() < 3)
+                throw std::runtime_error("usage: wio-vm --verify APPLICATION [expectation options]");
+            for (std::size_t index = 3; index < args.size(); ++index)
+            {
+                const auto option = args[index];
+                if (++index >= args.size() || args[index].empty())
+                    throw std::runtime_error("VM verification option requires a nonempty value");
+                if (option == "--expect-instruction-limit" && !hasLimit)
+                {
+                    if (!wio::app::parseVmInstructionLimit(args[index], expectedLimit))
+                        throw std::runtime_error(
+                            "--expect-instruction-limit requires an unsigned decimal 64-bit value");
+                    hasLimit = true;
+                }
+                else if (option == "--expect-bytecode" && expectedBytecode.empty())
+                    expectedBytecode = std::filesystem::u8path(args[index]);
+                else if (option == "--expect-native-library")
+                    expectedRegistries.push_back(std::filesystem::u8path(args[index]));
+                else if (option == "--expect-runtime-library")
+                    expectedRuntime.push_back(std::filesystem::u8path(args[index]));
+                else
+                    throw std::runtime_error("unknown or repeated VM verification option: " + option);
+            }
             const auto application = std::filesystem::absolute(std::filesystem::u8path(args[2]));
             if (!wio::vm::artifact::read(application, payload))
                 throw std::runtime_error("verification input is not a VM executable artifact");
             wio::vm::artifact::verifyDependencies(application, payload);
-            if (args.size() == 5 && payload.instructionLimit != expectedLimit)
+            if (hasLimit && payload.instructionLimit != expectedLimit)
                 throw std::runtime_error(
                     "VM executable instruction limit differs from the requested policy; rebuild it");
+            if (!expectedBytecode.empty())
+                wio::vm::artifact::verifyExpectedBytecode(payload, expectedBytecode);
+            if (!expectedRegistries.empty() || !expectedRuntime.empty())
+                wio::vm::artifact::verifyExpectedLibraries(application, payload, expectedRegistries, expectedRuntime);
             return 0;
         }
         if (args.size() > 1 && (args[1] == "--package" || args[1] == "--deploy"))
@@ -101,6 +135,9 @@ int main(int argc, char* argv[])
                          "              [--instruction-limit UINT64]\n"
                          "       wio-vm --deploy APPLICATION --output EXECUTABLE\n"
                          "       wio-vm --verify APPLICATION [--expect-instruction-limit UINT64]\n"
+                         "              [--expect-bytecode MODULE.wiob] [--expect-native-library LIBRARY ...]\n"
+                         "              [--expect-runtime-library LIBRARY ...]\n"
+                         "       wio-vm --check-native MODULE.wiob --standard-library LIBRARY\n"
                          "Instruction limit: 0 = unlimited (application default); positive = per-invocation budget.\n";
             return 0;
         }

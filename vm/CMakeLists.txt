@@ -284,6 +284,11 @@ if(BUILD_TESTING)
     target_link_libraries(wio_vm_scalar_execution_test PRIVATE wio_vm)
     add_test(NAME wio_vm_scalar_execution COMMAND wio_vm_scalar_execution_test)
 
+    add_executable(wio_vm_native_preflight_test "${CMAKE_SOURCE_DIR}/tests/vm_native_preflight_test.cpp")
+    target_link_libraries(wio_vm_native_preflight_test PRIVATE wio_vm)
+    add_test(NAME wio_vm_native_preflight COMMAND wio_vm_native_preflight_test)
+    set_tests_properties(wio_vm_native_preflight PROPERTIES LABELS "vm;native;build;preflight")
+
     add_executable(wio_vm_unicode_container_execution_test
         "${CMAKE_SOURCE_DIR}/tests/vm_unicode_container_execution_test.cpp"
     )
@@ -431,6 +436,11 @@ add_executable(wio_vm_runner
     "${CMAKE_SOURCE_DIR}/app/vm_runner.cpp")
 target_include_directories(wio_vm_runner PRIVATE "${CMAKE_SOURCE_DIR}/app" "${CMAKE_SOURCE_DIR}/runtime/include")
 target_link_libraries(wio_vm_runner PRIVATE wio_vm wio_runtime_host)
+if(MINGW)
+    # Packaged VM applications must not need a native compiler installation's
+    # libstdc++/libgcc/pthread DLLs merely to start their prebuilt interpreter.
+    target_link_options(wio_vm_runner PRIVATE -static)
+endif()
 set_target_properties(wio_vm_runner PROPERTIES
     OUTPUT_NAME "wio-vm" FOLDER "runtime"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/app")

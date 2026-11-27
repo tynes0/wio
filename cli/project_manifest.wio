@@ -35,6 +35,8 @@ realm SelfHostedProject {
         vmBridgeOutput: string;
         vmExecutableOutput: string;
         vmRunner: string;
+        vmStandardNativeLibrary: string;
+        vmStandardNativeCatalog: string;
         vmInstructionLimit: u64;
         vmNativeLibraries: string[];
         vmRuntimeLibraries: string[];
@@ -382,6 +384,9 @@ realm SelfHostedProject {
         info.wioOutput = path::Join(info.outputDirectory, wioName + wioSuffix);
         info.nativeCore = path::Join(path::ParentPath(path::AbsoluteRaw(args[0usize])), "wio" + process::ExecutableSuffix());
         info.vmRunner = path::Join(path::ParentPath(info.nativeCore), "wio-vm" + process::ExecutableSuffix());
+        info.vmStandardNativeLibrary = path::Join(path::ParentPath(info.nativeCore),
+            "wio-std-native" + process::SharedLibrarySuffix());
+        info.vmStandardNativeCatalog = path::Join(path::ParentPath(info.nativeCore), "wio-std-native.wiob");
         let runnerOverride = OptionValue(args, "--vm-runner", "");
         if (runnerOverride != "")
         {
@@ -568,6 +573,8 @@ realm SelfHostedProject {
         description += ", \"bridge\": " + serialization::QuoteJson(info.vmBridgeOutput);
         description += ", \"executable\": " + serialization::QuoteJson(info.vmExecutableOutput);
         description += ", \"runner\": " + serialization::QuoteJson(info.vmRunner);
+        description += ", \"standardNativeLibrary\": " + serialization::QuoteJson(info.vmStandardNativeLibrary);
+        description += ", \"standardNativeCatalog\": " + serialization::QuoteJson(info.vmStandardNativeCatalog);
         description += $", \"instructionLimit\": ${info.vmInstructionLimit}";
         description += ", \"module\": " + serialization::QuoteJson(info.vmModuleOutput);
         description += ", \"host\": " + serialization::QuoteJson(info.vmHostOutput);
