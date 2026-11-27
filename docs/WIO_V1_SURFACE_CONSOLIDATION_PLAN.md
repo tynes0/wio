@@ -245,6 +245,56 @@ optimization stage requalifies the combined compiler/runtime/std product.
 
 ## Delivery boundaries
 
+### Single-purpose, independently released patches (accepted 2026-11-27)
+
+Do not bundle the std migration into one large release. Deliver small, coherent
+patches with a single stated purpose; split again by module/family when a
+whole-library sweep would make its dependency/test scope too broad. Each
+completed, independently usable release slice receives its own version and
+changelog instead of waiting for the entire std pass. A work-in-progress commit
+or this planning note alone does not create a release tag.
+
+Separate these kinds of work rather than combining them in one diff:
+
+- **Attribute migration:** move a bounded set of std declarations to accepted
+  bracket syntax without unrelated formatting, API or implementation changes.
+  Retiring compiler acceptance of old syntax is a separate migration gate after
+  maintained consumers are ready, not an automatic part of the first std patch.
+- **Style-profile definition:** confirm the nine already accepted rules and
+  settle remaining profile details, such as line width and wrapping fixtures.
+  Do not invent a competing std style; apply the agreed profile in later slices.
+- **Mechanical formatting:** apply that profile to bounded module groups without
+  changing logic, public signatures, visibility or ownership. Visibility/access
+  corrections with semantic effects require their own reviewed migration.
+- **Code organization:** relocate/group helpers or declarations as a separate
+  structural change when needed, preserving initialization and declaration-order
+  semantics. Do not duplicate a formatting sweep under a different patch name.
+- **Unused-file/helper removal:** prove that removed internal files are unused
+  by imports, build/install manifests, tests, examples and maintained consumers.
+  Public API retirement requires the approved migration path; untracked files
+  or old-looking names are not evidence that deletion is safe.
+- **Module/implementation consolidation:** combine one justified overlap at a
+  time, update its imports/consumers/docs atomically or preserve a deliberate
+  compatibility path, and verify that packaging installs the intended modules.
+- **Semantic/API migration and optimization:** keep Result-first/error-contract
+  changes module-scoped and separate from mechanical edits. Later performance
+  changes use comparable before/after workloads and do not hide API redesign.
+
+Every published patch must build and work on its own. Do not publish a broken
+half-migration, accumulate unrelated changes just to fill a release, or call a
+source-breaking API removal harmless merely because the diff is small. Version
+and migration implications must be explicit before publication. Keep required
+consumer updates, regression tests and documentation with the change they enable.
+
+Use [impact-based validation](WIO_V1_RELEASE_PLAN.md#41-impact-based-release-validation-accepted-2026-11-27):
+affected tests for a focused patch, a normally 50-100-test relevant budget for a
+broader patch, and the full maintained suite at a minor transition. Include
+transitive build/import/ABI consumers; splitting commits cannot conceal a broad
+combined impact. Even formatting requires appropriate parsing/build checks when
+code is changed. Record actual executed/omitted scope, never infer a full-suite
+pass from a small patch's green result. The goal is smaller test scope per
+delivery, not a claim that total validation cost necessarily decreases.
+
 This is a planning decision, not a completed migration. Existing reference
 signatures continue to describe current implementation until changed by tested
 implementation slices. Complete source migration and both-backend/SDK parity

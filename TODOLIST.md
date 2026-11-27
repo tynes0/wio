@@ -288,6 +288,16 @@ here does not by itself mean that v1 cannot ship.
     profile and optimize allocations/copies, algorithms, containers, builders
     and byte/buffer I/O with reproducible native/VM performance gates.
     Publish migration diagnostics/docs and keep IDE/SDK interfaces aligned.
+    Accepted 2026-11-27: deliver independently usable, single-purpose versioned
+    patches for bracket-attribute migration, confirmation of the existing style
+    profile, mechanical formatting, structural organization, proven unused-file
+    removal and justified module consolidation. Keep Result/API and performance
+    changes separate; split further by module if needed. Include required
+    consumers/tests/docs atomically, preserve surviving behavior and use the
+    impact-based patch/minor validation policy. Legacy syntax/API retirement is
+    a separate migration step, not implied by a spelling-only std patch. See
+    `docs/WIO_V1_SURFACE_CONSOLIDATION_PLAN.md`, Delivery boundaries.
+
     Std cleanup also has nine accepted source-style/access requirements:
     multiline function/method bodies; one blank line after each block closing
     brace; private object defaults with explicit public/private signatures and

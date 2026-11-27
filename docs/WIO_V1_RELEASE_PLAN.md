@@ -496,6 +496,27 @@ remaining pre-v1 work is not finalized by this validation-policy decision.
 
 ---
 
+### 4.2 Single-purpose versioned delivery (accepted 2026-11-27)
+
+Prefer small independently usable patch releases over monolithic std/tooling
+updates. Separate attribute spelling migration, style-profile decisions,
+mechanical formatting, structural code organization, unused-file removal,
+module consolidation and semantic/API or performance changes. Split further
+by module when needed; reuse the accepted nine std rules rather than creating
+a second style contract. Each completed release slice has its own version,
+scope/changelog and section 4.1 validation record. It need not wait for the
+entire std workstream to finish, but it must not leave an unusable migration.
+
+Keep directly required consumer/test/docs changes together. Confirm deletion
+and import/install dependencies before removing files; expose compatibility
+impacts rather than hiding breaking changes under a patch number. Retiring
+legacy syntax/API support remains a distinct approved migration step. Small
+diffs do not automatically imply a small test dependency closure. See
+[the std patch boundaries](WIO_V1_SURFACE_CONSOLIDATION_PLAN.md#single-purpose-independently-released-patches-accepted-2026-11-27).
+
+This records delivery granularity, not finalized future release-family numbers,
+a new v1 gate, a code migration, or a release tag for this documentation change.
+
 ## 5. Backlog Routing
 
 The active backlog contains mixed items, so a single item may have a required
