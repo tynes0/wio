@@ -27,6 +27,24 @@ Branch arguments are copied to the target block parameters before control is
 transferred. This preserves canonical Lowered WIR phi semantics without a
 second language-specific control-flow model.
 
+## Instruction execution policy
+
+Since 0.20.1, normal raw-bytecode runners and packaged VM applications default
+to unlimited instructions. Direct C++ `MachineOptions` embedding retains a
+10,000,000-instruction default. Zero disables the instruction budget; positive
+values bound one execution state, including synchronous calls and coroutine
+suspension/resumption, not the entire process or one application frame.
+Separate invocations, child execution states and native callback entries receive
+their own budgets. This is not a wall-clock timeout or a sandbox for native code.
+
+Use `wio-vm module.wiob --instruction-limit N`, project build/run/package
+`--backend vm --vm-instruction-limit N`, or `[vm] instructionLimit = N`.
+Executable packages preserve this setting through deployment, and `--no-build`
+checks that the requested policy matches the image. WVM1008 includes the limit;
+owned values unwind on exhaustion. Cancellation, debugger abort and other VM
+resource guards are independent of the instruction limit. See
+[execution policy examples](WIO_0_20_1_RELEASE_NOTES.md).
+
 ## Module initialization and native declaration entries
 
 From 0.19, module globals run their verified zero-argument initializers once,

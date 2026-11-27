@@ -605,6 +605,17 @@ int main(const int argc, const char* const* argv)
     ok &= expect(!cancelled.succeeded() && cancelled.error().code == "WVM1165",
                  "Waiting a cancelled task must produce a stable cancellation diagnostic");
 
+    vm::Machine boundedResume{decoded.module, vm::MachineOptions{.instructionLimit = 3}};
+    const auto boundedTask = boundedResume.invoke(3);
+    const auto budgetResult = boundedTask.succeeded() ? boundedResume.wait(boundedTask.value()) : boundedTask;
+    ok &= expect(!budgetResult.succeeded() && budgetResult.error().code == "WVM1008",
+                 "Suspending and resuming on another executor must not reset the instruction budget");
+    vm::Machine exactResume{decoded.module, vm::MachineOptions{.instructionLimit = 4}};
+    const auto exactTask = exactResume.invoke(3);
+    const auto exactResult = exactTask.succeeded() ? exactResume.wait(exactTask.value()) : exactTask;
+    ok &= expect(exactResult.succeeded() && exactResult.value().asSignedInteger() == 9,
+                 "A coroutine must complete when its cumulative instruction budget exactly fits");
+
     bytecode::Module malformed = decoded.module;
     malformed.functions[1].coroutine.states[0].resumeBlock = 99;
     const bytecode::VerificationResult malformedVerification = bytecode::Verifier{}.verify(malformed);

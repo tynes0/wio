@@ -182,7 +182,8 @@ realm SelfHostedProject {
 
         if (not forceRebuild and OutputUpToDate(info.vmExecutableOutput, inputs))
         {
-            let verified = process::Capture?(info.vmRunner, ["--verify", info.vmExecutableOutput], info.projectRoot);
+            let verified = process::Capture?(info.vmRunner,
+                ["--verify", info.vmExecutableOutput, "--expect-instruction-limit", $"${info.vmInstructionLimit}"], info.projectRoot);
             if (verified.exitCode == 0)
             {
                 console::PrintLine!("Project VM executable: up to date, skipping package invocation.");
@@ -194,7 +195,8 @@ realm SelfHostedProject {
 
         mut arguments: string[] = [
             "--package", info.vmBytecodeOutput, "--output", info.vmExecutableOutput,
-            "--replace", "--version-libraries", "--native-library", info.vmBridgeOutput
+            "--replace", "--version-libraries", "--native-library", info.vmBridgeOutput,
+            "--instruction-limit", $"${info.vmInstructionLimit}"
         ];
         for library in info.vmNativeLibraries
         {
@@ -471,7 +473,8 @@ realm SelfHostedProject {
         if (backend == "vm") {
             executable = info.wioTarget == "exe" ? info.vmExecutableOutput : info.vmHostOutput;
             let verified = info.wioTarget == "exe"
-                ? RunProcess?(info.vmRunner, ["--verify", executable], info.projectRoot)
+                ? RunProcess?(info.vmRunner,
+                    ["--verify", executable, "--expect-instruction-limit", $"${info.vmInstructionLimit}"], info.projectRoot)
                 : VerifyVmLibrary?(info);
             if (verified != 0) { return std::Ok<i32>(verified); }
             if (info.hostEnabled and info.passLibraryPath and info.wioTarget == "shared")
@@ -628,7 +631,8 @@ realm SelfHostedProject {
         if (backend == "vm")
         {
             let verified = info.wioTarget == "exe"
-                ? RunProcess?(info.vmRunner, ["--verify", info.vmExecutableOutput], info.projectRoot)
+                ? RunProcess?(info.vmRunner,
+                    ["--verify", info.vmExecutableOutput, "--expect-instruction-limit", $"${info.vmInstructionLimit}"], info.projectRoot)
                 : VerifyVmLibrary?(info);
             if (verified != 0) return std::Ok<i32>(verified);
 

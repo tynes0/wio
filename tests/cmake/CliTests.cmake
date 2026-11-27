@@ -2,6 +2,13 @@
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
+    add_test(NAME wio_vm_execution_budget
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/cli/vm_execution_budget.py"
+            --wio "$<TARGET_FILE:wio_app>" --runner "$<TARGET_FILE:wio_vm_runner>"
+            --wio-root "${CMAKE_SOURCE_DIR}"
+            --scratch "${CMAKE_BINARY_DIR}/vm-execution-budget-tests")
+    wio_test_labels(wio_vm_execution_budget cli project vm policy artifact)
+    set_tests_properties(wio_vm_execution_budget PROPERTIES TIMEOUT 300)
     add_test(NAME wio_project_analysis_check
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/cli/project_check.py"
             --wio "$<TARGET_FILE:wio_app>"

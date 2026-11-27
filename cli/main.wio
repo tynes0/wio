@@ -71,6 +71,10 @@ fn ProjectParser(command: string) -> std::Result<Argonaut::Parser> {
         AddOption?(ref parser, "BACKEND", ["--backend"], "Select project execution backend: native or vm.");
     }
 
+    if (command == "build" or command == "run" or command == "package") {
+        AddOption?(ref parser, "VM-INSTRUCTION-LIMIT", ["--vm-instruction-limit"], "VM executable instruction budget per invocation; 0 = unlimited (default).");
+    }
+
     if (command == "build") {
         AddFlag?(ref parser, "EMIT-CPP", ["--emit-cpp"], "Keep generated C++ and stop before backend compilation.");
         AddFlag?(ref parser, "EMIT-TYPED-WIR", ["--emit-typed-wir"], "Emit analyzed Typed WIR and stop before lowering.");

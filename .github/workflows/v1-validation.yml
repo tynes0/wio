@@ -3,6 +3,10 @@ name: release validation
 on:
   workflow_dispatch:
     inputs:
+      vm_budget_only:
+        description: "Scoped 0.20.1 VM execution-policy patch validation"
+        type: boolean
+        default: false
       project_check_only:
         description: "Scoped 0.20.0 project-check release validation; full suite waived by owner"
         type: boolean
@@ -26,6 +30,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  vm-budget-release:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.vm_budget_only }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows'
+        with:
+          msystem: UCRT64
+          update: false
+          install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-binutils
+      - name: Select Windows generated-code toolchain
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '"C:/msys64/ucrt64/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append'
+      - name: Configure release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build affected VM, CLI, artifact and version gates
+        run: >
+          cmake --build build --parallel 2 --target wio_selfhost_cli
+          wio_vm_scalar_execution_test wio_vm_coroutine_execution_test
+          wio_vm_exceptional_cleanup_test wio_vm_artifact_codec_test
+          wio_vm_artifact_cohort_test wio_vm_artifact_generation_test
+          wio_vm_artifact_extra_registry wio_sdk_version_contract_test
+      - name: Qualify execution policy and affected regressions
+        run: >
+          ctest --test-dir build -C Release --output-on-failure --no-tests=error
+          -R "^(wio_vm_(execution_budget|scalar_execution|coroutine_execution|exceptional_cleanup|artifact_codec|artifact_cohort|artifact_generation|executable_artifact|project_artifact|executable_cohort)|wio_project_analysis_check|wio_sdk_version_contract)$"
+      - name: Preserve focused test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-budget-${{ matrix.os }}
+          path: build/Testing/Temporary/
+
   project-check-release:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.project_check_only }}
     strategy:
@@ -88,7 +137,7 @@ jobs:
     uses: ./.github/workflows/release-layout-validation.yml
 
   validate:
-    if: ${{ !inputs.layout_only && !inputs.native_install_probe && !inputs.project_check_only }}
+    if: ${{ !inputs.layout_only && !inputs.native_install_probe && !inputs.project_check_only && !inputs.vm_budget_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -164,7 +213,7 @@ jobs:
           -R "^(wio_vm_(artifact_codec|artifact_generation|artifact_cohort|executable_cohort|executable_artifact|project_artifact|sdk_module_adapter|sdk_module_artifacts|sdk_session_lifecycle|sdk_session_artifacts|task_source_shutdown|task_source_import|sdk_async_artifacts|sdk_task_inputs_artifacts|module_native_paths|sdk_native_dependencies|native_bundle_policy|sdk_native_install|project_library_cli|project_record_policy)|wio_process_utf8_project)$"
 
   sanitizers:
-    if: ${{ !inputs.layout_only && !inputs.native_install_probe && !inputs.project_check_only }}
+    if: ${{ !inputs.layout_only && !inputs.native_install_probe && !inputs.project_check_only && !inputs.vm_budget_only }}
     runs-on: ubuntu-latest
 
     steps:

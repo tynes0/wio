@@ -112,7 +112,7 @@ run_app("${app}" 43)
 # A compiler failure must leave the previously deployed bundle runnable.
 file(SHA256 "${app}" good_image)
 file(READ "${project}/wio.makewio" manifest)
-string(REPLACE "includeDirs = [\"native\"]" "includeDirs = [\"native\"]\nbackendArgs = [\"-WioTestForcedFailure\"]" bad "${manifest}")
+string(REPLACE "includeDirs = [\"native\"]" "includeDirs = [\"native\"]\nbackendArgs = [\"-fno-wio-test-forced-failure\"]" bad "${manifest}")
 file(WRITE "${project}/wio.makewio" "${bad}")
 cli(1 project build --backend vm --build-dir "${build}" --rebuild)
 file(WRITE "${project}/wio.makewio" "${manifest}")

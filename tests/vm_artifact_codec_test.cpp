@@ -6,6 +6,11 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
+
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 namespace
 {
@@ -127,6 +132,39 @@ int main(int argc, char* argv[])
         artifact::package(runner, code, libraries, root / "deployed" / "second");
         expect(read(root / "deployed" / "bridge.dll") == read(library), "identical existing library was changed");
         const auto original = read(app);
+        expect(payload.instructionLimit == 0, "legacy artifact must default to unlimited application execution");
+        const auto limited = root / "limited" / "app";
+        artifact::package(runner, code, libraries, limited, artifact::PackageOptions{.instructionLimit = 123});
+        expect(artifact::read(limited, payload) && payload.instructionLimit == 123 && payload.bytecode == codeBytes,
+               "finite instruction policy did not survive packaging");
+        const auto limitedBytes = read(limited);
+#if defined(_WIN32)
+        const HANDLE lockedImage = CreateFileW(limited.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                               FILE_ATTRIBUTE_NORMAL, nullptr);
+        expect(lockedImage != INVALID_HANDLE_VALUE, "could not acquire fixture image sharing lock");
+        {
+            std::jthread unlock{[lockedImage]
+                                {
+                                    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+                                    CloseHandle(lockedImage);
+                                }};
+            artifact::package(runner, code, libraries, limited,
+                              artifact::PackageOptions{.replace = true, .instructionLimit = 123});
+        }
+        expect(read(limited) == limitedBytes, "transient image lock changed the republished application");
+#endif
+        auto invalidLayout = limitedBytes;
+        integer(invalidLayout, 72, 9, 4);
+        checksum(invalidLayout);
+        write(root / "invalid-policy-layout", invalidLayout);
+        rejects([&] { artifact::read(root / "invalid-policy-layout", payload); }, "dependency layout");
+        artifact::deploy(runner, limited, root / "limited-deployed" / "app");
+        expect(artifact::read(root / "limited-deployed" / "app", payload) && payload.instructionLimit == 123,
+               "deploy reset the embedded instruction policy");
+        artifact::package(runner, code, {}, root / "maximum-limit",
+                          artifact::PackageOptions{.instructionLimit = UINT64_MAX});
+        expect(artifact::read(root / "maximum-limit", payload) && payload.instructionLimit == UINT64_MAX,
+               "artifact truncated a 64-bit instruction limit");
         rejects([&] { artifact::package(runner, code, {}, app); }, "already exists");
         expect(read(app) == original, "existing application was overwritten");
         rejects([&] { artifact::package(app, code, {}, root / "nested"); }, "runner template");

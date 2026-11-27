@@ -20,16 +20,22 @@ int main(int argc, char* argv[])
             std::vector<std::filesystem::path> libraries;
             for (const auto& name : payload.libraries)
                 libraries.push_back(self.parent_path() / std::filesystem::u8path(name));
-            return wio::app::runVmModule(decoded.module, self, libraries, {args.begin() + 1, args.end()});
+            return wio::app::runVmModule(decoded.module, self, libraries, {args.begin() + 1, args.end()},
+                                         payload.instructionLimit);
         }
         if (args.size() > 1 && args[1] == "--verify")
         {
-            if (args.size() != 3)
-                throw std::runtime_error("usage: wio-vm --verify APPLICATION");
+            std::uint64_t expectedLimit = 0;
+            if (args.size() != 3 && (args.size() != 5 || args[3] != "--expect-instruction-limit" ||
+                                     !wio::app::parseVmInstructionLimit(args[4], expectedLimit)))
+                throw std::runtime_error("usage: wio-vm --verify APPLICATION [--expect-instruction-limit UINT64]");
             const auto application = std::filesystem::absolute(std::filesystem::u8path(args[2]));
             if (!wio::vm::artifact::read(application, payload))
                 throw std::runtime_error("verification input is not a VM executable artifact");
             wio::vm::artifact::verifyDependencies(application, payload);
+            if (args.size() == 5 && payload.instructionLimit != expectedLimit)
+                throw std::runtime_error(
+                    "VM executable instruction limit differs from the requested policy; rebuild it");
             return 0;
         }
         if (args.size() > 1 && (args[1] == "--package" || args[1] == "--deploy"))
@@ -41,6 +47,7 @@ int main(int argc, char* argv[])
             std::vector<std::filesystem::path> libraries;
             std::vector<std::filesystem::path> runtimeLibraries;
             wio::vm::artifact::PackageOptions options;
+            bool sawInstructionLimit = false;
             for (std::size_t index = 3; index < args.size(); ++index)
             {
                 const auto option = args[index];
@@ -60,6 +67,12 @@ int main(int argc, char* argv[])
                     libraries.push_back(std::filesystem::u8path(args[index]));
                 else if (option == "--runtime-library")
                     runtimeLibraries.push_back(std::filesystem::u8path(args[index]));
+                else if (option == "--instruction-limit" && !sawInstructionLimit)
+                {
+                    if (!wio::app::parseVmInstructionLimit(args[index], options.instructionLimit))
+                        throw std::runtime_error("--instruction-limit requires an unsigned decimal 64-bit value");
+                    sawInstructionLimit = true;
+                }
                 else
                     throw std::runtime_error("unknown or repeated VM package option: " + option);
             }
@@ -67,7 +80,8 @@ int main(int argc, char* argv[])
                 throw std::runtime_error("VM package requires --output");
             if (args[1] == "--deploy")
             {
-                if (!libraries.empty() || !runtimeLibraries.empty() || options.replace || options.versionLibraries)
+                if (!libraries.empty() || !runtimeLibraries.empty() || options.replace || options.versionLibraries ||
+                    sawInstructionLimit)
                     throw std::runtime_error("--deploy accepts only its application and --output");
                 wio::vm::artifact::deploy(self, std::filesystem::u8path(args[2]), output);
             }
@@ -80,11 +94,14 @@ int main(int argc, char* argv[])
         }
         if (args.size() < 2 || args[1] == "--help" || args[1] == "-h")
         {
-            std::cout << "Usage: wio-vm MODULE.wiob [--native-library LIBRARY ...] [-- application args...]\n"
+            std::cout << "Usage: wio-vm MODULE.wiob [--instruction-limit UINT64] [--native-library LIBRARY ...]\n"
+                         "              [-- application args...]\n"
                          "       wio-vm --package MODULE.wiob --output EXECUTABLE [--native-library LIBRARY ...]\n"
                          "              [--runtime-library LIBRARY ...] [--replace] [--version-libraries]\n"
+                         "              [--instruction-limit UINT64]\n"
                          "       wio-vm --deploy APPLICATION --output EXECUTABLE\n"
-                         "       wio-vm --verify APPLICATION\n";
+                         "       wio-vm --verify APPLICATION [--expect-instruction-limit UINT64]\n"
+                         "Instruction limit: 0 = unlimited (application default); positive = per-invocation budget.\n";
             return 0;
         }
         args.insert(args.begin() + 1, "--vm-run-bytecode");

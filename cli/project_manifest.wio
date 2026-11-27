@@ -1,6 +1,7 @@
 use argonaut;
 use project_new;
 use std::console as console;
+use std::convert as convert;
 use std::environment as environment;
 use std::fs as fs;
 use std::path as path;
@@ -34,6 +35,7 @@ realm SelfHostedProject {
         vmBridgeOutput: string;
         vmExecutableOutput: string;
         vmRunner: string;
+        vmInstructionLimit: u64;
         vmNativeLibraries: string[];
         vmRuntimeLibraries: string[];
         vmModuleOutput: string;
@@ -265,7 +267,7 @@ realm SelfHostedProject {
             value == "--working-directory" or value == "--arg" or value == "--filter" or
             value == "--output-dir" or value == "--backend" or value == "--cpp-backend" or
             value == "--ir-output" or value == "--bytecode-output" or
-            value == "--backend-arg" or value == "--vm-runner";
+            value == "--backend-arg" or value == "--vm-runner" or value == "--vm-instruction-limit";
     }
 
     fn OptionValues(args: string[], name: string) -> string[]
@@ -316,6 +318,20 @@ realm SelfHostedProject {
         return ".";
     }
 
+    fn VmInstructionLimit(value: string) -> std::Result<u64>
+    {
+        if (value == "") return Failure<u64>("VM instruction limit requires an unsigned decimal 64-bit value (0 = unlimited).");
+        mut index = 0usize;
+        while (index < value.Count())
+        {
+            let digit = value[index];
+            if (digit < '0' or digit > '9') return Failure<u64>("VM instruction limit requires an unsigned decimal 64-bit value (0 = unlimited).");
+            index += 1usize;
+        }
+
+        return convert::ParseU64(value);
+    }
+
     fn ResolveInfo(args: string[]) -> std::Result<ProjectInfo> {
         mut info = ProjectInfo();
         info.manifestFile = ResolveManifest?(ProjectValue(args));
@@ -339,6 +355,19 @@ realm SelfHostedProject {
             ManifestValue(manifest, "wio.entry", "wio/module.wio")
         );
         info.wioTarget = ManifestValue(manifest, "wio.target", "shared");
+        let budgetOverrides = OptionValues(args, "--vm-instruction-limit");
+        if (budgetOverrides.Count() > 1usize) return Failure<ProjectInfo>("--vm-instruction-limit may only be specified once.");
+        if (budgetOverrides.Count() != 0usize and OptionValue(args, "--backend", "native") != "vm")
+        {
+            return Failure<ProjectInfo>("--vm-instruction-limit requires --backend vm.");
+        }
+
+        info.vmInstructionLimit = VmInstructionLimit?(OptionValue(args, "--vm-instruction-limit",
+            ManifestValue(manifest, "vm.instructionLimit", "0")));
+        if (info.wioTarget != "exe" and (info.vmInstructionLimit != 0u64 or budgetOverrides.Count() != 0usize))
+        {
+            return Failure<ProjectInfo>("vm.instructionLimit applies to executables only; VM library hosts select MachineOptions themselves.");
+        }
         if (info.wioTarget != "exe" and info.wioTarget != "shared" and info.wioTarget != "static") {
             return Failure<ProjectInfo>(
                 $"Unsupported wio.target '${info.wioTarget}'. Expected exe, shared, or static."
@@ -539,6 +568,7 @@ realm SelfHostedProject {
         description += ", \"bridge\": " + serialization::QuoteJson(info.vmBridgeOutput);
         description += ", \"executable\": " + serialization::QuoteJson(info.vmExecutableOutput);
         description += ", \"runner\": " + serialization::QuoteJson(info.vmRunner);
+        description += $", \"instructionLimit\": ${info.vmInstructionLimit}";
         description += ", \"module\": " + serialization::QuoteJson(info.vmModuleOutput);
         description += ", \"host\": " + serialization::QuoteJson(info.vmHostOutput);
         description += ", \"runtimePrefix\": " + serialization::QuoteJson(info.vmRuntimePrefix);

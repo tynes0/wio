@@ -2985,6 +2985,14 @@ Definitions: [vm/src/machine.cpp:3942](../vm/src/machine.cpp#L3942).
 
 - VM instruction limit exceeded
 
+The selected finite execution-state budget was consumed. Since 0.20.1 normal
+application runners default to unlimited instructions; direct `MachineOptions`
+embedding remains bounded by default. Set `--instruction-limit` on the raw
+runner or `--vm-instruction-limit` on a VM project, or configure
+`[vm] instructionLimit`. Zero disables the budget. The function ID identifies
+the exhaustion point, not necessarily an invalid function. See
+[VM execution policy](WIO_0_20_1_RELEASE_NOTES.md).
+
 Definitions: [vm/src/machine.cpp:3944](../vm/src/machine.cpp#L3944).
 
 ### WVM1009
