@@ -1,5 +1,16 @@
 # Cli test registrations. Included in the app directory scope.
 
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME wio_project_analysis_check
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/cli/project_check.py"
+            --wio "$<TARGET_FILE:wio_app>"
+            --wio-root "${CMAKE_SOURCE_DIR}"
+            --scratch "${CMAKE_BINARY_DIR}/project-analysis-check-tests")
+    wio_test_labels(wio_project_analysis_check cli project analysis)
+    set_tests_properties(wio_project_analysis_check PROPERTIES TIMEOUT 180)
+endif()
+
 add_test(NAME wio_playground_launcher_options
     COMMAND ${CMAKE_COMMAND} "-DWIO_LAUNCHER=$<TARGET_FILE:wio_playground>"
         "-DWIO_CONFIG=$<CONFIG>" "-DWIO_MULTI_CONFIG=${WIO_PLAYGROUND_MULTI_CONFIG}"

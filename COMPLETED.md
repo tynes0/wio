@@ -10,6 +10,27 @@ Notes:
 - Anything that still needs hardening continues to be tracked as `[~]` in
   `TODOLIST.md`.
 
+## Analysis-only project checks — 2026-11-27 (unreleased)
+
+- [x] Add `wio project check`, using manifest entry/import/include settings and
+  executable/library target with the compiler's frontend-only dry-run path.
+  No C++/WIR/bytecode outputs, native/host builds, VM packaging, output-directory
+  creation or build-signature mutation. Preserve normal exit/error propagation.
+- [x] Route VS Code project diagnostics/save checks to the new command; retain
+  explicit build/run/C++ emission and standalone-library check paths.
+- [x] Focused Windows qualification: 19 CLI integration test methods pass against
+  a rebuilt Wio CLI companion and the installed 0.19 native compiler, with both
+  installed-root and source-root configurations. Includes Unicode/space paths,
+  imports/native headers, intentionally unbuildable native inputs, library and
+  hybrid targets, VM selection without runner and unchanged artifact snapshots.
+  A focused explicit-build emission case also preserves the existing build path.
+  Editor qualification: 13 command/planner tests and four actual-CLI check
+  fixtures passed; JavaScript/JSON validation passed too. The registered CTest
+  gate runs the 19 CLI methods and passed with the same staged toolchain.
+- Qualification boundary: not a full-suite/minor-release or Linux/macOS
+  qualification. No runtime/backend semantics, incremental service or native-C++
+  type checking is added. The current Pacman project also passed frontend check.
+
 ## N04 ByteBuffer block writes — 2026-10-20
 
 - [x] Add borrowed WriteBlock with checked native tail insertion/overwrite,

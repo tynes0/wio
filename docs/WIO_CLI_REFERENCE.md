@@ -227,6 +227,41 @@ Use this to see what Wio thinks the project root, manifest, sources, outputs,
 and native/host pieces are. When no project path is supplied, Wio searches the
 current directory and its ancestors for `wio.makewio` or `makewio`.
 
+### `project check` — analysis without building (since 0.20.0)
+
+Requires Wio 0.20.0 or newer.
+
+```sh
+wio project check
+wio project check --project path/to/wio.makewio
+wio project check --backend vm --config Release
+```
+
+Resolve the project exactly as build does, then analyze its declared Wio entry
+and import closure using manifest source roots and native include directories.
+The manifest's executable/library target is preserved: executable projects still
+need an entry, while static/shared libraries do not. Manifest discovery also
+works from nested project directories. `--no-builtin` is available for focused
+frontend inspection.
+
+Check always reanalyzes current sources. It does not generate C++/WIR/bytecode,
+compile or link native/host sources, package a VM bridge, execute the program,
+create build directories, or alter existing artifacts/cache signatures.
+`--backend native|vm` is accepted for shared project configurations; neither
+selection builds or requires a VM runner. Build/emission/run-only flags such as
+`--rebuild`, `--emit-cpp` and `--no-build` are rejected.
+
+This is a frontend check, not a replacement for build: it detects Wio syntax,
+name/type errors and missing declared C++ headers, but does not type-check C++
+header bodies, instantiate native templates, verify link symbols or run the
+WIR/backend pipeline. Only frontend-relevant module/include settings are passed;
+native source files, link directories/libraries and C++ backend arguments do not
+need to exist or be buildable for a Wio check. They remain manifest-owned build
+inputs and are validated during explicit builds.
+Use explicit build for diagnostics from those later stages. Only modules in the
+declared entry's import closure are analyzed; this is not yet a persistent or
+incremental language service and does not check unrelated unimported files.
+
 ### 5.3 `project build`
 
 ```powershell

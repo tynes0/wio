@@ -33,7 +33,7 @@ realm SelfHostedProject {
         return values;
     }
 
-    fn AppendCompilerArguments(command: ref string[], info: ProjectInfo, extraModuleDirectory: string) {
+    fn AppendFrontendArguments(command: ref string[], info: ProjectInfo, extraModuleDirectory: string) {
         if (extraModuleDirectory != "") {
             command.Push("--module-dir");
             command.Push(extraModuleDirectory);
@@ -46,6 +46,10 @@ realm SelfHostedProject {
             command.Push("--include-dir");
             command.Push(directory);
         }
+    }
+
+    fn AppendCompilerArguments(command: ref string[], info: ProjectInfo, extraModuleDirectory: string) {
+        AppendFrontendArguments(command, info, extraModuleDirectory);
         for directory in info.wioLinkDirs {
             command.Push("--link-dir");
             command.Push(directory);
@@ -349,6 +353,40 @@ realm SelfHostedProject {
         }
         console::PrintLine!("Project host compile: up to date, skipping host compiler invocation.");
         return std::Ok<i32>(0);
+    }
+
+    fn Check(args: string[]) -> std::Result<i32>
+    {
+        let info = ResolveInfo?(args);
+        if (not fs::IsFile(info.wioEntry))
+        {
+            return Failure<i32>($"Wio entry file was not found: ${info.wioEntry}");
+        }
+
+        let backend = OptionValue(args, "--backend", "native");
+        if (backend != "native" and backend != "vm")
+        {
+            return Failure<i32>($"Unknown project backend '${backend}'. Expected native or vm.");
+        }
+
+        mut command: string[] = [info.wioEntry, "--target", info.wioTarget, "--dry-run"];
+        AppendFrontendArguments(ref command, info, "");
+        let cppBackend = OptionValue(args, "--cpp-backend", "");
+        if (cppBackend != "")
+        {
+            command.Push("--cpp-backend");
+            command.Push(cppBackend);
+        }
+
+        if (HasFlag(args, "--no-builtin") or HasFlag(args, "-B"))
+        {
+            command.Push("--no-builtin");
+        }
+
+        // No output/cache directories, signatures, native bridge or host build.
+        // The compiler checks syntax/semantics and declared header availability;
+        // WIR/backend, C++ type checking and linking remain explicit build work.
+        return RunProcess(info.nativeCore, command, info.projectRoot);
     }
 
     fn Build(args: string[]) -> std::Result<i32> {
@@ -759,6 +797,7 @@ realm SelfHostedProject {
 
     fn Execute(command: string, args: string[]) -> std::Result<i32> {
         if (command == "describe") { return Describe(args); }
+        if (command == "check") { return Check(args); }
         if (command == "build") { return Build(args); }
         if (command == "run") { return Run(args); }
         if (command == "test") { return Test(args); }

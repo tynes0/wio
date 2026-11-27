@@ -424,6 +424,13 @@ found. The canonical family table is in `docs/WIO_V1_RELEASE_PLAN.md`, section 3
 ## P1 - CLI, Build, and Release Engineering
 
 1. [~] Continue general CLI hardening.
+   The 2026-11-27 first 0.20.x preparation slice adds analysis-only
+   `project check` and routes VS Code project diagnostics to it. It preserves
+   manifest entry/import/include/target context and does not build native/host
+   code, emit artifacts or alter cache signatures. This does not close WIR/
+   backend validation, unrelated-file checking, persistent incremental service,
+   frontend-library separation, or the remaining CLI hardening below. The
+   matching CLI/editor changes are unreleased until release qualification.
    The primary command families and argument forwarding are substantially
    improved. Finish consistent exit codes, JSON/machine output, quiet/verbose
    modes, color policy, progress, cancellation, typo suggestions, help

@@ -11,8 +11,9 @@ and verified bytecode. Write application logic in Wio, reuse native libraries,
 or embed Wio modules in an existing C++ application.
 
 > **Reading this README:** this is the product-oriented introduction to the
-> intended Wio 1.0 surface, not an announcement that 1.0 has shipped. The latest
-> release at this documentation update is the **0.19.0 interim release**.
+> intended Wio 1.0 surface, not an announcement that 1.0 has shipped. The release
+> line covered here is **0.20.0**; see Downloads for published artifacts.
+> Remaining 0.20.x family goals are not all completed by this first slice.
 > Parenthetical **(v1 target; pending)** labels identify accepted work that is
 > not yet complete. Examples use implemented syntax; performance figures are
 > dated measurements, not promises about every program or the latest release.
@@ -112,9 +113,12 @@ function instead.
 wio project new HelloWio --output-dir . --template wio-app
 cd HelloWio
 wio project describe
+wio project check
 wio project run
 wio project run -- "two words" --verbose
 ```
+
+`project check` requires Wio 0.20.0 or newer; it is not part of 0.19.0.
 
 The primary manifest is `wio.makewio`. Project commands discover it in the current
 directory or its ancestors. Arguments after `--` belong to your application;

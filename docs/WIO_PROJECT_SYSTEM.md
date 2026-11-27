@@ -51,6 +51,7 @@ The `v1` command surface that should now be treated as stable is:
 - `wio test`
 - `wio file`
 - `wio project`
+- `wio project check` (manifest-aware frontend analysis; no artifacts or native build)
 - `wio bind`
 - `wio env`
 - `wio package`
