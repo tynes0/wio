@@ -1,5 +1,15 @@
 # Wio VM Executable Artifacts
 
+Since 0.20.1, executable applications default to unlimited instructions. Pass
+`--instruction-limit N` to the raw packager, or set a VM project's
+`--vm-instruction-limit N` / `[vm] instructionLimit = N`, to embed a finite
+budget. Zero means unlimited. `--deploy` preserves the policy and
+`--verify APP --expect-instruction-limit N` checks it. Application arguments
+are never interpreted as runtime policy overrides. Finite policies use envelope
+version 3; its dependency layout remains version 1 or 2. Bytecode and module ABI
+are unchanged. See [execution policy](WIO_0_20_1_RELEASE_NOTES.md) for host
+defaults, counter scope, compatibility and limitations.
+
 Status: executable/project-command slices and bounded VM-backed shared/static
 **Wio module** adapters are implemented. Functional artifact/platform closure
 is qualified on Windows Debug, Linux Release and macOS Release; see

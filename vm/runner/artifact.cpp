@@ -10,6 +10,7 @@
 #include <set>
 #include <stdexcept>
 #include <string_view>
+#include <thread>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -511,7 +512,21 @@ namespace wio::vm::artifact
                 // partially visible destination, including concurrent writers.
 #if defined(_WIN32)
                 const DWORD flags = MOVEFILE_WRITE_THROUGH | (options.replace ? MOVEFILE_REPLACE_EXISTING : 0);
-                require(MoveFileExW(temporary.c_str(), output.c_str(), flags) != 0, "could not publish VM executable");
+                DWORD publishError = ERROR_SUCCESS;
+                for (unsigned attempt = 0;; ++attempt)
+                {
+                    if (MoveFileExW(temporary.c_str(), output.c_str(), flags) != 0)
+                        break;
+                    publishError = GetLastError();
+                    // A just-exited executable or antivirus scanner may briefly
+                    // retain the image. Retry only transient sharing/access errors;
+                    // never remove the old image or weaken exclusive publication.
+                    if (attempt == 19 || (publishError != ERROR_SHARING_VIOLATION &&
+                                          publishError != ERROR_LOCK_VIOLATION && publishError != ERROR_ACCESS_DENIED))
+                        throw std::runtime_error("could not publish VM executable (Windows error " +
+                                                 std::to_string(publishError) + ")");
+                    std::this_thread::sleep_for(std::chrono::milliseconds{25});
+                }
 #else
                 // Same directory/filesystem by construction. link is exclusive;
                 // removing the temporary name does not remove the published file.

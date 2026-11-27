@@ -34,6 +34,10 @@ packaging and `wio-vm --deploy`. A policy-only CLI override repackages an existi
 build without recompiling an otherwise up-to-date native bridge. `--no-build`
 rejects an image whose embedded policy differs from the requested policy.
 
+On Windows, atomic publication briefly retries transient image sharing/access
+locks after an application exits. It never deletes the old image to force an
+update; persistent errors preserve the prior application and report the OS code.
+
 ```sh
 wio-vm --package game.wiob --output game --instruction-limit 50000000
 wio-vm --verify game --expect-instruction-limit 50000000

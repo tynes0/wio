@@ -117,8 +117,7 @@ int main(int argc, char* argv[])
         artifact::verifyDependencies(app, first);
         const auto original = read(app);
         const auto bounded = root / "bounded" / "app";
-        artifact::package(runner, code, registries, runtime, bounded,
-                          artifact::PackageOptions{.instructionLimit = 37});
+        artifact::package(runner, code, registries, runtime, bounded, artifact::PackageOptions{.instructionLimit = 37});
         artifact::Payload boundedPayload;
         expect(artifact::read(bounded, boundedPayload) && boundedPayload.instructionLimit == 37 &&
                    boundedPayload.dependencies.size() == first.dependencies.size(),
@@ -194,13 +193,16 @@ int main(int argc, char* argv[])
             std::cout << "Symlink fixture unavailable: " << symlinkError.message() << '\n';
 
 #if !defined(_WIN32)
-        // Filename collision policy is portable/case-folded, but filesystem
-        // containment must remain case-sensitive on Unix.
+        // Test distinct case-only paths only on a case-sensitive filesystem.
+        // macOS volumes can alias these names even though the host is Unix.
         fs::create_directories(root / "case-package");
-        fs::create_directories(root / "CASE-PACKAGE" / "wio-native");
-        fs::create_directory_symlink(root / "CASE-PACKAGE" / "wio-native", root / "case-package" / "wio-native");
-        rejects([&] { artifact::package(runner, code, registries, runtime, root / "case-package" / "app"); },
-                "escapes");
+        if (!fs::exists(root / "CASE-PACKAGE"))
+        {
+            fs::create_directories(root / "CASE-PACKAGE" / "wio-native");
+            fs::create_directory_symlink(root / "CASE-PACKAGE" / "wio-native", root / "case-package" / "wio-native");
+            rejects([&] { artifact::package(runner, code, registries, runtime, root / "case-package" / "app"); },
+                    "escapes");
+        }
 #endif
 
         const auto legacy = root / "legacy" / "app";
