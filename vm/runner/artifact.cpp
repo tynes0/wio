@@ -381,7 +381,7 @@ namespace wio::vm::artifact
             std::array<char, 65536> buffer{};
             for (std::size_t offset = 0; offset < expected.size();)
             {
-                const auto count = std::min(buffer.size(), expected.size() - offset);
+                const auto count = (std::min)(buffer.size(), expected.size() - offset);
                 if (!input.read(buffer.data(), count) ||
                     !std::equal(expected.begin() + offset, expected.begin() + offset + count,
                                 reinterpret_cast<const std::byte*>(buffer.data())))

@@ -3,6 +3,11 @@ name: release validation
 on:
   workflow_dispatch:
     inputs:
+      vm_project_platform:
+        description: "Platform for scoped VM patch validation; retain other platform evidence separately"
+        type: choice
+        options: [all, windows-latest, ubuntu-latest, macos-15]
+        default: all
       vm_bytecode_first_only:
         description: "Scoped 0.20.2 bytecode-first VM project validation"
         type: boolean
@@ -39,7 +44,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15]
+        os: ${{ fromJSON((inputs.vm_project_platform == '' || inputs.vm_project_platform == 'all') && '["ubuntu-latest","windows-latest","macos-15"]' || format('["{0}"]', inputs.vm_project_platform)) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
