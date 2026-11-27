@@ -186,6 +186,13 @@ realm SelfHostedProject {
             inputs.Push(source);
         }
 
+        // Relative imports beside the entry remain legal even when the
+        // manifest supplies a different explicit module search root.
+        for source in FilesWithExtensions([path::ParentPath(info.wioEntry)], [".wio"])
+        {
+            if (not inputs.Contains(source)) inputs.Push(source);
+        }
+
         return inputs;
     }
 
