@@ -22,6 +22,7 @@ namespace wio::vm::artifact
         std::vector<std::byte> bytecode;
         std::vector<std::string> libraries;
         std::vector<NativeDependency> dependencies;
+        std::uint64_t instructionLimit = 0;
     };
     // No footer means an ordinary runner. A recognized but malformed footer
     // throws; it must never fall through to command-line tooling.
@@ -33,6 +34,7 @@ namespace wio::vm::artifact
     {
         bool replace = false;
         bool versionLibraries = false;
+        std::uint64_t instructionLimit = 0;
     };
     void package(const std::filesystem::path& runner, const std::filesystem::path& bytecode,
                  std::span<const std::filesystem::path> libraries, const std::filesystem::path& output,

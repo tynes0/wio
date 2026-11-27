@@ -12,7 +12,7 @@ or embed Wio modules in an existing C++ application.
 
 > **Reading this README:** this is the product-oriented introduction to the
 > intended Wio 1.0 surface, not an announcement that 1.0 has shipped. The release
-> line covered here is **0.20.0**; see Downloads for published artifacts.
+> line covered here is **0.20.1**; see Downloads for published artifacts.
 > Remaining 0.20.x family goals are not all completed by this first slice.
 > Parenthetical **(v1 target; pending)** labels identify accepted work that is
 > not yet complete. Examples use implemented syntax; performance figures are

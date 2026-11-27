@@ -112,8 +112,8 @@ execution, and publish baseline-relative gains with the same inputs/checksums.
 Scheduling update 2026-11-27: implement the runtime/CLI policy in `0.20.x`;
 pass 2 in `0.25.x` optimizes/requalifies that stabilized execution model.
 
-This subsection is part of pass 2 above, not a new pass. WVM1008 currently
-terminates execution after the default 10,000,000-instruction cumulative budget
+This subsection is part of pass 2 above, not a new pass. Before 0.20.1 WVM1008
+terminated normal execution after the default 10,000,000-instruction cumulative budget
 is consumed; ordinary application frames do not replenish that execution-state
 counter. Long-lived applications must have an explicit suitable policy instead
 of eventually failing merely because they continue running. Separate trusted
@@ -122,8 +122,11 @@ expose/document CLI, manifest and host controls, and define counter scope,
 suspension and disabled-limit semantics. Preserve finite-budget WVM1008 tests,
 cancellation/debugger abort, other resource guards and correct cleanup. Include
 a multi-frame application that exceeds the former total limit. Increasing the
-constant alone is not closure. This is an open v1 correctness blocker as well
-as a runtime-cost consideration; no policy change is implemented by this note.
+constant alone is not closure. The correctness policy is implemented in 0.20.1:
+normal applications select unlimited execution, embedding keeps finite defaults,
+and explicit budgets survive packaging/deployment with no-build verification.
+See [scope and semantics](WIO_0_20_1_RELEASE_NOTES.md). The later VM pass still
+owns performance qualification; this policy fix does not claim a VM speedup.
 
 ## 3. Compilation and preparation time
 

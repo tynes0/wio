@@ -287,12 +287,12 @@ namespace
         globalResource.global = 2;
         bytecode::Instruction storeResource = instruction(bytecode::Opcode::Store);
         storeResource.operands = {1, 0};
-        bytecode::Instruction releaseResource = instruction(bytecode::Opcode::Release);
-        releaseResource.operands = {0};
+        // Store transfers this temporary's ownership into the global. Releasing
+        // the consumed register would be an invalid second release (WVM1072).
         module.functions.push_back(
             function(11, Void, {},
                      {construct(bytecode::Opcode::ConstructObject, 0, Resource), std::move(globalResource),
-                      std::move(storeResource), std::move(releaseResource), instruction(bytecode::Opcode::Return)}));
+                      std::move(storeResource), instruction(bytecode::Opcode::Return)}));
         return module;
     }
 } // namespace
@@ -302,6 +302,25 @@ int main()
     bool ok = true;
     const bytecode::Module module = makeModule();
     vm::Machine machine{module};
+
+    {
+        auto budgetModule = module;
+        auto& budgetInstructions = budgetModule.functions[4].blocks.front().instructions;
+        for (std::uint32_t index = 1; index <= 16; ++index)
+        {
+            auto value = instruction(bytecode::Opcode::Constant);
+            value.result = index;
+            value.resultType = I32;
+            value.constant = 1;
+            budgetInstructions.insert(budgetInstructions.end() - 1, value);
+        }
+        vm::Machine budgetMachine{budgetModule, vm::MachineOptions{.instructionLimit = 10}};
+        const auto budgetFailure = budgetMachine.invoke(4);
+        const auto budgetDrops = budgetMachine.invoke(7);
+        ok &= expect(!budgetFailure.succeeded() && budgetFailure.error().code == "WVM1008" && budgetDrops.succeeded() &&
+                         budgetDrops.value().asSignedInteger() == 1,
+                     "Budget exhaustion must unwind owned objects and run their destructor exactly once");
+    }
 
     const vm::ExecutionResult dropped = machine.invoke(3);
     const vm::ExecutionResult componentCount = machine.invoke(6);
@@ -344,7 +363,10 @@ int main()
     DestructorObserver shutdownObserver;
     {
         vm::Machine shutdownMachine{module, vm::MachineOptions{.debugObserver = &shutdownObserver}};
-        ok &= expect(shutdownMachine.invoke(11).succeeded(),
+        const auto storedGlobal = shutdownMachine.invoke(11);
+        if (!storedGlobal.succeeded())
+            std::cerr << storedGlobal.error().code << ": " << storedGlobal.error().message << '\n';
+        ok &= expect(storedGlobal.succeeded(),
                      "Shutdown cleanup fixture must store its final object in module-global storage");
         ok &= expect(shutdownObserver.entries == 0, "A live module global must retain its object until shutdown");
     }

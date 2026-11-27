@@ -130,9 +130,9 @@ existing runtime/CLI correctness and compilation-cost gates. They do not add a
 fourth optimization pass, renumber the existing gates, or reopen all qualified
 backend functionality.
 
-- **Long-running VM execution:** ordinary application/game/service execution
+- **Long-running VM execution (implemented in 0.20.1):** ordinary application/game/service execution
   must not eventually fail solely because a process-wide execution reaches a
-  small fixed instruction count. The current runner uses the default
+  small fixed instruction count. The pre-0.20.1 runner used the default
   `MachineOptions::instructionLimit` of 10,000,000; the counter accumulates in
   an execution state across calls/loop iterations rather than resetting each
   application frame, and exhaustion reports WVM1008. Separate trusted
@@ -146,6 +146,10 @@ backend functionality.
   retain a deterministic finite-budget WVM1008 test, and qualify error/exit
   cleanup. Report the exhausted location and policy usefully; a function ID
   identifies where the budget ran out, not proof that that function is broken.
+  The 0.20.1 policy selects unlimited normal application execution while keeping
+  bounded embedding defaults, explicit CLI/manifest budgets and packaged policy
+  verification. See [policy and scope](WIO_0_20_1_RELEASE_NOTES.md). This closes
+  the policy change, not the later non-JIT VM performance qualification.
 - **Bytecode-first VM builds:** pure-Wio executable compilation/execution must
   not require per-project C++ generation/compilation/linking; use bytecode and
   a prebuilt compatible VM/runtime. The current project VM path always prepares

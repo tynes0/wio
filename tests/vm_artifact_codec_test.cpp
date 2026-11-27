@@ -127,6 +127,24 @@ int main(int argc, char* argv[])
         artifact::package(runner, code, libraries, root / "deployed" / "second");
         expect(read(root / "deployed" / "bridge.dll") == read(library), "identical existing library was changed");
         const auto original = read(app);
+        expect(payload.instructionLimit == 0, "legacy artifact must default to unlimited application execution");
+        const auto limited = root / "limited" / "app";
+        artifact::package(runner, code, libraries, limited, artifact::PackageOptions{.instructionLimit = 123});
+        expect(artifact::read(limited, payload) && payload.instructionLimit == 123 && payload.bytecode == codeBytes,
+               "finite instruction policy did not survive packaging");
+        const auto limitedBytes = read(limited);
+        auto invalidLayout = limitedBytes;
+        integer(invalidLayout, 72, 9, 4);
+        checksum(invalidLayout);
+        write(root / "invalid-policy-layout", invalidLayout);
+        rejects([&] { artifact::read(root / "invalid-policy-layout", payload); }, "dependency layout");
+        artifact::deploy(runner, limited, root / "limited-deployed" / "app");
+        expect(artifact::read(root / "limited-deployed" / "app", payload) && payload.instructionLimit == 123,
+               "deploy reset the embedded instruction policy");
+        artifact::package(runner, code, {}, root / "maximum-limit",
+                          artifact::PackageOptions{.instructionLimit = UINT64_MAX});
+        expect(artifact::read(root / "maximum-limit", payload) && payload.instructionLimit == UINT64_MAX,
+               "artifact truncated a 64-bit instruction limit");
         rejects([&] { artifact::package(runner, code, {}, app); }, "already exists");
         expect(read(app) == original, "existing application was overwritten");
         rejects([&] { artifact::package(app, code, {}, root / "nested"); }, "runner template");

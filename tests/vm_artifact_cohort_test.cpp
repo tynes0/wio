@@ -116,6 +116,19 @@ int main(int argc, char* argv[])
                "native import filenames were renamed");
         artifact::verifyDependencies(app, first);
         const auto original = read(app);
+        const auto bounded = root / "bounded" / "app";
+        artifact::package(runner, code, registries, runtime, bounded,
+                          artifact::PackageOptions{.instructionLimit = 37});
+        artifact::Payload boundedPayload;
+        expect(artifact::read(bounded, boundedPayload) && boundedPayload.instructionLimit == 37 &&
+                   boundedPayload.dependencies.size() == first.dependencies.size(),
+               "version-3 policy did not preserve the version-2 dependency layout");
+        artifact::verifyDependencies(bounded, boundedPayload);
+        const auto boundedDeploy = root / "bounded-deploy" / "app";
+        artifact::deploy(runner, bounded, boundedDeploy);
+        expect(artifact::read(boundedDeploy, boundedPayload) && boundedPayload.instructionLimit == 37,
+               "cohort deployment lost its finite instruction budget");
+        artifact::verifyDependencies(boundedDeploy, boundedPayload);
         artifact::package(runner, code, registries, runtime, app, replace);
         expect(read(app) == original, "identical cohort was not deterministic");
 

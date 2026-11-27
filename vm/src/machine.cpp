@@ -3940,9 +3940,11 @@ namespace wio::vm
             if (frame.instruction >= frame.block->instructions.size())
                 return failWithStack(
                     {"WVM1007", "Instruction cursor escaped its basic block", frame.function->id, frame.block->id});
-            if (executed++ >= options_.instructionLimit)
-                return failWithStack({"WVM1008", "VM instruction limit exceeded", frame.function->id, frame.block->id,
-                                      static_cast<std::uint32_t>(frame.instruction)});
+            if (options_.instructionLimit != 0 && executed++ >= options_.instructionLimit)
+                return failWithStack(
+                    {"WVM1008",
+                     "VM instruction limit exceeded (limit " + std::to_string(options_.instructionLimit) + ")",
+                     frame.function->id, frame.block->id, static_cast<std::uint32_t>(frame.instruction)});
 
             const bytecode::Instruction& instruction = frame.block->instructions[frame.instruction];
             if (options_.debugObserver)

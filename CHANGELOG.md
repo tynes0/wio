@@ -2,6 +2,26 @@
 
 All notable user-facing changes to Wio are recorded here.
 
+## [0.20.1] - 2026-11-27
+
+### Fixed
+
+- Normal VM runners and executable projects default to unlimited instruction
+  execution. Direct embedding retains its finite 10,000,000-instruction default.
+- Explicit raw-runner/project/manifest budgets survive executable packaging and
+  deployment; no-build detects policy mismatches. Policy-only CLI overrides reuse
+  up-to-date native bridges. WVM1008 reports the selected finite limit.
+- Coroutine resumes preserve cumulative budgets; budget exhaustion unwinds owned
+  values. Correct the existing shutdown fixture's release of an already-moved
+  object register without changing the ownership contract.
+
+### Compatibility
+
+- Finite executable policies use envelope version 3. Version 1/2 artifacts remain
+  readable; bytecode format and module ABI descriptor 11 are unchanged.
+- See [0.20.1 release notes](docs/WIO_0_20_1_RELEASE_NOTES.md). This is a scoped
+  execution-policy patch, not the bytecode-first build or VM optimization pass.
+
 ## [0.20.0] - 2026-11-27
 
 ### Added

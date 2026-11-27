@@ -3,6 +3,7 @@
 #include "wio/bytecode/codec.h"
 #include "wio/vm/machine.h"
 
+#include <charconv>
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
@@ -16,6 +17,21 @@
 
 namespace wio::app
 {
+    bool parseVmInstructionLimit(const std::string_view value, std::uint64_t& limit)
+    {
+        if (value.empty())
+            return false;
+        for (const char character : value)
+            if (character < '0' || character > '9')
+                return false;
+        std::uint64_t parsed = 0;
+        const auto result = std::from_chars(value.data(), value.data() + value.size(), parsed);
+        if (result.ec != std::errc{} || result.ptr != value.data() + value.size())
+            return false;
+        limit = parsed;
+        return true;
+    }
+
     namespace
     {
         struct RunOptions final
@@ -23,6 +39,7 @@ namespace wio::app
             std::filesystem::path bytecode;
             std::vector<std::filesystem::path> nativeLibraries;
             std::vector<std::string> arguments;
+            std::uint64_t instructionLimit = 0;
         };
 
         bool parseOptions(const int argc, char* argv[], RunOptions& options, std::string& error)
@@ -34,6 +51,7 @@ namespace wio::app
             }
             options.bytecode = std::filesystem::u8path(argv[2]);
             bool applicationArguments = false;
+            bool sawInstructionLimit = false;
             for (int index = 3; index < argc; ++index)
             {
                 const std::string_view argument = argv[index] ? argv[index] : "";
@@ -55,6 +73,17 @@ namespace wio::app
                         return false;
                     }
                     options.nativeLibraries.push_back(std::filesystem::u8path(argv[index]));
+                    continue;
+                }
+                if (argument == "--instruction-limit")
+                {
+                    if (sawInstructionLimit || ++index >= argc || !argv[index] ||
+                        !parseVmInstructionLimit(argv[index], options.instructionLimit))
+                    {
+                        error = "--instruction-limit requires one unsigned decimal 64-bit value (0 = unlimited)";
+                        return false;
+                    }
+                    sawInstructionLimit = true;
                     continue;
                 }
                 error = "unknown VM runner option: " + std::string(argument);
@@ -147,11 +176,13 @@ namespace wio::app
             return EXIT_FAILURE;
         }
 
-        return runVmModule(module, options.bytecode, options.nativeLibraries, std::move(options.arguments));
+        return runVmModule(module, options.bytecode, options.nativeLibraries, std::move(options.arguments),
+                           options.instructionLimit);
     }
 
     int runVmModule(const bytecode::Module& module, const std::filesystem::path& argumentPath,
-                    std::span<const std::filesystem::path> libraries, std::vector<std::string> applicationArguments)
+                    std::span<const std::filesystem::path> libraries, std::vector<std::string> applicationArguments,
+                    const std::uint64_t instructionLimit)
     {
         std::string error;
         const std::uint32_t entry = findEntry(module);
@@ -161,7 +192,7 @@ namespace wio::app
             return EXIT_FAILURE;
         }
 
-        vm::Machine machine{module};
+        vm::Machine machine{module, vm::MachineOptions{.instructionLimit = instructionLimit}};
         for (const std::filesystem::path& library : libraries)
         {
             if (!machine.loadNativeLibrary(library, &error))

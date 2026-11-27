@@ -284,9 +284,10 @@ namespace wio::vm::artifact
         std::size_t cursor = Magic.size();
         const auto length = readInteger(footer, cursor, 8);
         const auto checksum = readInteger(footer, cursor, 8);
-        const auto version = readInteger(footer, cursor, 4);
+        auto version = readInteger(footer, cursor, 4);
         const auto reserved = readInteger(footer, cursor, 4);
-        require((version == 1 || version == 2) && reserved == 0, "unsupported VM executable artifact version");
+        require((version == 1 || version == 2 || version == 3) && reserved == 0,
+                "unsupported VM executable artifact version");
         require(length >= 12 && length <= Limit && length < std::uint64_t(fileSize) - FooterSize,
                 "invalid VM executable payload bounds");
         std::vector<std::byte> data(static_cast<std::size_t>(length));
@@ -294,6 +295,12 @@ namespace wio::vm::artifact
         require(bool(input.read(reinterpret_cast<char*>(data.data()), data.size())), "VM payload read failed");
         require(hash(data) == checksum, "VM executable payload checksum mismatch");
         cursor = 0;
+        if (version == 3)
+        {
+            payload.instructionLimit = readInteger(data, cursor, 8);
+            version = readInteger(data, cursor, 4);
+            require(version == 1 || version == 2, "unsupported VM executable dependency layout");
+        }
         const auto moduleLength = readInteger(data, cursor, 8);
         const auto libraryCount = readInteger(data, cursor, 4);
         require(libraryCount <= 64, "VM executable has too many native libraries");
@@ -390,6 +397,11 @@ namespace wio::vm::artifact
             auto prefix = bytes(runner);
             verify(code);
             std::vector<std::byte> data;
+            if (options.instructionLimit != 0)
+            {
+                appendInteger(data, options.instructionLimit, 8);
+                appendInteger(data, cohort ? 2 : 1, 4);
+            }
             appendInteger(data, code.size(), 8);
             appendInteger(data, libraries.size(), 4);
             if (cohort)
@@ -437,7 +449,7 @@ namespace wio::vm::artifact
             std::vector<std::byte> footer(Magic.begin(), Magic.end());
             appendInteger(footer, data.size(), 8);
             appendInteger(footer, hash(data), 8);
-            appendInteger(footer, cohort ? 2 : 1, 4);
+            appendInteger(footer, options.instructionLimit != 0 ? 3 : (cohort ? 2 : 1), 4);
             appendInteger(footer, 0, 4);
             std::filesystem::create_directories(output.parent_path());
             // Serialize cooperating packagers in one deployment directory. Without
@@ -555,6 +567,7 @@ namespace wio::vm::artifact
             if (!dependency.registry)
                 runtimeLibraries.push_back(std::filesystem::absolute(application).parent_path() /
                                            std::filesystem::u8path(dependency.path));
-        packageImage(runner, source.bytecode, libraries, runtimeLibraries, output, {});
+        packageImage(runner, source.bytecode, libraries, runtimeLibraries, output,
+                     PackageOptions{.instructionLimit = source.instructionLimit});
     }
 } // namespace wio::vm::artifact

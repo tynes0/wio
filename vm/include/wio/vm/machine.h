@@ -70,7 +70,9 @@ namespace wio::vm
 
     struct MachineOptions
     {
-        std::uint64_t instructionLimit = 10'000'000;
+        // Per invocation, including nested calls and coroutine suspension/resumption.
+        // Embedders remain bounded by default; trusted application runners select 0.
+        std::uint64_t instructionLimit = 10'000'000; // 0 = unlimited
         std::uint32_t callDepthLimit = 1'024;
         std::uint32_t registerLimitPerFrame = 1'000'000;
         DebugObserver* debugObserver = nullptr;

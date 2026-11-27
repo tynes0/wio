@@ -303,6 +303,21 @@ int main()
     const vm::ExecutionResult endless = bounded.invoke(5);
     ok &= expect(!endless.succeeded() && endless.error().code == "WVM1008",
                  "Instruction budget must stop non-terminating bytecode");
+    ok &= expect(endless.error().message.find("limit 8") != std::string::npos,
+                 "Budget exhaustion must identify the configured limit");
+    ok &= expect(vm::MachineOptions{}.instructionLimit == 10'000'000,
+                 "Direct embedding must retain its finite safety default");
+    vm::Machine unlimited{decoded.module, vm::MachineOptions{.instructionLimit = 0}};
+    const auto unlimitedResult = unlimited.invoke(2, std::span{&five, 1});
+    ok &= expect(unlimitedResult.succeeded() && unlimitedResult.value().asSignedInteger() == 11,
+                 "Zero must disable the instruction budget instead of rejecting the first instruction");
+    vm::Machine exact{decoded.module, vm::MachineOptions{.instructionLimit = 3}};
+    ok &= expect(exact.invoke(0, std::span{&five, 1}).succeeded() && exact.invoke(0, std::span{&five, 1}).succeeded(),
+                 "An exact budget must succeed and independent invocations must receive fresh budgets");
+    vm::Machine shortBudget{decoded.module, vm::MachineOptions{.instructionLimit = 2}};
+    const auto exhausted = shortBudget.invoke(0, std::span{&five, 1});
+    ok &= expect(!exhausted.succeeded() && exhausted.error().code == "WVM1008",
+                 "The next instruction after the configured budget must be rejected");
 
     const vm::ExecutionResult wrongArity = machine.invoke(0);
     ok &=

@@ -304,6 +304,29 @@ C++ host, rejects `--cpp-backend legacy` and explicit emission modes, and checks
 both artifacts for incremental reuse. See
 [the VM native bridge contract](./WIO_VM_NATIVE_BRIDGE.md).
 
+### VM instruction budgets (since 0.20.1)
+
+VM executable projects default to unlimited instruction execution. Set
+`[vm] instructionLimit = 50000000` in the manifest, or pass
+`--vm-instruction-limit 50000000` to project build/run/package with `--backend vm`.
+Zero explicitly disables the budget. Values must be decimal unsigned 64-bit
+integers. Libraries leave budget selection to their embedding host.
+
+The selected policy is embedded in the executable and preserved by deployment.
+Changing only the CLI policy can repackage up-to-date build outputs. `--no-build`
+rejects mismatched policy rather than running an old image silently.
+
+For raw modules use `wio-vm file.wiob --instruction-limit 50000000`; application
+arguments follow `--`. For raw packaging use `wio-vm --package file.wiob --output
+app --instruction-limit 50000000`. Embedded applications forward all arguments
+unchanged instead of interpreting runtime switches.
+
+Direct `MachineOptions` retains its 10,000,000-instruction embedding default;
+hosts can explicitly select zero. The quota follows one execution state through
+loops, synchronous calls and coroutine resumes, not individual frames or the
+whole process. WVM1008 includes the exhausted limit. It does not time out native
+calls. See [execution policy and compatibility](WIO_0_20_1_RELEASE_NOTES.md).
+
 ### 5.4 `project run`
 
 ```powershell
