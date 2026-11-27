@@ -66,8 +66,8 @@ fn AddProjectBase(parser: ref Argonaut::Parser, rebuild: bool) -> std::UnitResul
 
 fn ProjectParser(command: string) -> std::Result<Argonaut::Parser> {
     mut parser = Argonaut::Parser();
-    AddProjectBase?(ref parser, command != "describe");
-    if (command == "build" or command == "run" or command == "package") {
+    AddProjectBase?(ref parser, command != "describe" and command != "check");
+    if (command == "check" or command == "build" or command == "run" or command == "package") {
         AddOption?(ref parser, "BACKEND", ["--backend"], "Select project execution backend: native or vm.");
     }
 
@@ -79,6 +79,9 @@ fn ProjectParser(command: string) -> std::Result<Argonaut::Parser> {
         AddOption?(ref parser, "IR-OUTPUT", ["--ir-output"], "Override the emitted WIR output path.");
         AddOption?(ref parser, "BYTECODE-OUTPUT", ["--bytecode-output"], "Override the emitted .wiob output path.");
         AddFlag?(ref parser, "NO-BUILTIN", ["--no-builtin", "-B"], "Do not merge built-in Wio modules into the inspected program.");
+    }
+    else if (command == "check") {
+        AddFlag?(ref parser, "NO-BUILTIN", ["--no-builtin", "-B"], "Do not merge built-in Wio modules during analysis.");
     }
     else if (command == "describe") {
     }
@@ -241,7 +244,7 @@ fn Entry(args: string[]) -> i32 {
     }
 
     let command = cliArgs[2usize];
-    if (command != "describe" and command != "build" and command != "run" and
+    if (command != "describe" and command != "check" and command != "build" and command != "run" and
         command != "test" and command != "package") {
         return SelfHostedGlobal::PrintUnknownProject(command);
     }

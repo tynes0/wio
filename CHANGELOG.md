@@ -4,6 +4,12 @@ All notable user-facing changes to Wio are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- `wio project check`: manifest-aware syntax/semantic analysis with no generated
+  artifacts, native/host compilation, VM packaging or build-signature changes.
+  Preserves executable/library targets and manifest import/include settings.
+
 ## [0.14.0] - 2026-08-23
 
 ### Added

@@ -112,9 +112,13 @@ function instead.
 wio project new HelloWio --output-dir . --template wio-app
 cd HelloWio
 wio project describe
+wio project check
 wio project run
 wio project run -- "two words" --verbose
 ```
+
+`project check` is available in development sources after 0.19.0; it requires a
+rebuilt matching CLI and is not part of the published 0.19.0 package.
 
 The primary manifest is `wio.makewio`. Project commands discover it in the current
 directory or its ancestors. Arguments after `--` belong to your application;
